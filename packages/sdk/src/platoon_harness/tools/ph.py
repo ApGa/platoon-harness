@@ -2,7 +2,7 @@
 """ph: an agent's coordination tools as a command, on its PATH only.
 
     ph --help                    what this agent may do
-    ph task.claim --help         the arguments of one op
+    ph task.claim --help         the arguments of one tool
     ph task.claim --queue tasks  do it
 
 Arguments are `--name value` or `--name=value`. Repeat a flag to build a list. A flag that takes true or false can stand
@@ -17,7 +17,8 @@ Exit codes:
     78  no url or token: ph works only inside an agent the runtime spawned
 
 This file runs on any python3, imports only the standard library, and decides nothing: argv and help come from what the
-runtime says this token may do, and even what it does not list goes to the runtime, which refuses and journals it.
+runtime says this token may do, and even what it does not list goes to the runtime, which refuses it. A tool this token
+does not hold is journaled as a try. A name that is no tool at all answers `no such tool`.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ import os
 import sys
 import textwrap
 import uuid
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
 URL_VARIABLE = "PLATOON_HARNESS_URL"
@@ -45,7 +46,7 @@ def _say(stream: Any, text: str) -> None:
     stream.flush()
 
 
-def _die(code: int, text: str) -> None:
+def _die(code: int, text: str) -> NoReturn:
     _say(sys.stderr, text)
     raise SystemExit(code)
 
@@ -120,7 +121,7 @@ def _summary(tool: dict[str, Any]) -> str:
 def _overview(held: dict[str, dict[str, Any]]) -> str:
     width = max((len(name) for name in held), default=0)
     rows = [f"  {name:<{width}}  {_summary(tool)}" for name, tool in sorted(held.items())]
-    return "\n".join(["usage: ph <op> [--flag value ...]", "", "What this agent may do:", *rows, "", __doc__ or ""])
+    return "\n".join(["usage: ph <tool> [--flag value ...]", "", "What this agent may do:", *rows, "", __doc__ or ""])
 
 
 def _details(name: str, tool: dict[str, Any]) -> str:
@@ -136,7 +137,7 @@ def _details(name: str, tool: dict[str, Any]) -> str:
 def main(argv: list[str]) -> None:
     url, token = os.environ.get(URL_VARIABLE), os.environ.get(TOKEN_VARIABLE)
     if not url or not token:
-        return _die(_UNCONFIGURED, f"ph: no token: the runtime sets {URL_VARIABLE} and {TOKEN_VARIABLE} for its agents")
+        _die(_UNCONFIGURED, f"ph: no token: the runtime sets {URL_VARIABLE} and {TOKEN_VARIABLE} for its agents")
     listed = _rpc(url, token, "tools/list", {})["tools"]
     held = {tool["title"]: tool for tool in listed}
     if not argv or argv[0] in ("-h", "--help"):
@@ -144,8 +145,8 @@ def main(argv: list[str]) -> None:
         raise SystemExit(0 if argv else _USAGE)
     name, flags = argv[0], argv[1:]
     tool = held.get(name)
-    if tool is not None and ("-h" in flags or "--help" in flags):
-        _say(sys.stdout, _details(name, tool))
+    if "-h" in flags or "--help" in flags:
+        _say(sys.stdout, _overview(held) if tool is None else _details(name, tool))
         return
     schema = {} if tool is None else tool["inputSchema"]
     params = {

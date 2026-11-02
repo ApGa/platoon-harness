@@ -10,12 +10,12 @@ from http import HTTPStatus
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refused, first
+from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, first
 from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.rpc import strict_loads
 from platoon_harness.version import __version__
 
-from .surface import Surface, body_fields, list_tools, named_surface, notices_text, refusal_text, tool_name
+from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text, tool_name
 
 log = logging.getLogger("platoon_harness.tools")
 
@@ -167,9 +167,12 @@ class _Tool(NamedTuple):
 
 
 class _Request(NamedTuple):
+    """One request. `told` collects the waits its answer says have closed."""
+
     principal: Principal
     surface: Surface
     body: bytes
+    told: list[int]
 
 
 class ToolServer:
@@ -217,20 +220,23 @@ class ToolServer:
         task = asyncio.current_task()
         assert task is not None
         self._serving.add(task)
+        kernel, told = self._kernel, []
         try:
-            reply = await self._reply(reader)
-            await _unless(self._kernel.clock.sleep(_IO_SECONDS), _send(writer, reply))
+            reply = await self._reply(reader, told)
+            await _unless(kernel.clock.sleep(_IO_SECONDS), _send(writer, reply))
+            for id in told:  # Only now is anyone told. A wait left open closes with its turn, and wakes its agent.
+                await kernel.submit(kernel.runtime, "wait.release", {"id": id, "told": True})
         except (_Cut, ConnectionError, asyncio.IncompleteReadError):
             pass  # A client that stalled or left is owed nothing.
         finally:
             writer.transport.abort()
             self._serving.discard(task)
 
-    async def _reply(self, reader: asyncio.StreamReader) -> bytes:
+    async def _reply(self, reader: asyncio.StreamReader, told: list[int]) -> bytes:
         if self._server is None or len(self._serving) > _CONNECTION_LIMIT:
             return _response(503)
         try:
-            request = await _unless(self._kernel.clock.sleep(_IO_SECONDS), self._receive(reader))
+            request = await _unless(self._kernel.clock.sleep(_IO_SECONDS), self._receive(reader, told))
             return await _unless(_hung_up(reader), self._answer(request))
         except _Rejected as rejected:
             return rejected.reply
@@ -240,7 +246,7 @@ class ToolServer:
             log.exception("a tool request failed")
             return _response(500)
 
-    async def _receive(self, reader: asyncio.StreamReader) -> _Request:
+    async def _receive(self, reader: asyncio.StreamReader, told: list[int]) -> _Request:
         """Read one request. Nothing past the head is read for a client that has not proved who it is."""
         try:
             head = await reader.readuntil(b"\r\n\r\n")
@@ -258,7 +264,7 @@ class ToolServer:
             surface = named_surface(parse_qs(query).get("surface", ["mcp"])[0])
         except ValueError:
             raise _Rejected(400) from None
-        return _Request(principal, surface, await reader.readexactly(_length(headers)))
+        return _Request(principal, surface, await reader.readexactly(_length(headers)), told)
 
     def _check_site(self, headers: Mapping[str, str]) -> None:
         """Refuse what a browser could be tricked into sending: only this address may be named."""
@@ -349,14 +355,15 @@ class ToolServer:
         try:
             outcome = await self._run(request.principal, tool, arguments, key, native)
             if outcome.refusal is None:
-                finished = await self._finish(request.principal, tool, arguments, outcome.result)
+                finished = await self._finish(request, tool, arguments, outcome.result)
                 outcome = outcome.model_copy(update={"result": finished})
         except Refused as refused:
             outcome = Outcome(op=tool.op.name, args_hash="", refusal=refused.refusal)
         if outcome.refusal is None:
             blocks = [json.dumps(outcome.result, ensure_ascii=False)]
         else:
-            blocks = [refusal_text(outcome.refusal, request.surface, kernel.ops)]
+            held = held_tools(kernel, request.principal)
+            blocks = [refusal_text(outcome.refusal, request.surface, kernel.ops, held)]
         if native is None and outcome.seq is not None and outcome.seq <= head:
             blocks.append(_REPEATED)
         if (notices := await self._notices(request)) is not None:
@@ -377,6 +384,11 @@ class ToolServer:
         outcome = kernel.query(principal, name, arguments)
         if principal.kind == "agent" and outcome.refusal is not None and outcome.refusal.code == "invalid":
             await kernel.submit(principal, name, arguments, key=key, native=native)
+        if outcome.refusal is None and (size := _size(outcome.result)) > _RESULT_LIMIT:
+            detail = (
+                f"this answer is {size} bytes, and a result holds {_RESULT_LIMIT}: ask a human, or carry on without it"
+            )
+            return Outcome(op=name, args_hash="", refusal=Refusal(code="unsupported", detail=detail))
         return outcome
 
     async def _stored(self, tool: _Tool, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -393,11 +405,14 @@ class ToolServer:
                 stored[field] = f"sha256:{await self._kernel.put_body(data)}"
         return stored
 
-    async def _finish(self, principal: Principal, tool: _Tool, arguments: dict[str, Any], result: Any) -> Any:
+    async def _finish(self, request: _Request, tool: _Tool, arguments: dict[str, Any], result: Any) -> Any:
         """Do what only this layer can do with a result: hold a wait open, and read what no op may."""
         if tool.op.name == "wait" and result["state"] == "pending":
-            return await hold_open(self._kernel, result)
-        await self._fill(principal, result, arguments)
+            held = await hold_open(self._kernel, result)
+            if held["state"] == "released":
+                request.told.append(held["id"])
+            return held
+        await self._fill(request.principal, result, arguments)
         return result
 
     async def _fill(self, principal: Principal, result: Any, arguments: dict[str, Any]) -> None:

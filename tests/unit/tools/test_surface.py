@@ -199,13 +199,13 @@ async def test_the_preamble_journals_nothing(kernel, lead):
 
 def test_every_refusal_code_has_words():
     for code in RefusalCode.__value__.__args__:
-        text = refusal_text(Refusal(code=code), tool_name, OPS)
+        text = refusal_text(Refusal(code=code), tool_name, OPS, OPS)
         assert text.startswith(f"Refused {code}: ") and "Next: " in text
 
 
 def test_a_refusal_names_only_ops_that_exist():
     for code in RefusalCode.__value__.__args__:
-        words = BACKTICKED.findall(refusal_text(Refusal(code=code), lambda op: f"<{op}>", OPS))
+        words = BACKTICKED.findall(refusal_text(Refusal(code=code), lambda op: f"<{op}>", OPS, OPS))
         assert [word for word in words if word.startswith("<") and word[1:-1] not in OPS] == []
         assert [word for word in words if "." in word and not word.startswith("<")] == []
 
@@ -213,7 +213,7 @@ def test_a_refusal_names_only_ops_that_exist():
 def test_a_refusal_carries_everything_it_was_given():
     refusal = Refusal(code="busy", object="queue/tasks", retry_after=1.5, reachable=("@a", "@b"), detail={"depth": 3})
 
-    assert refusal_text(refusal, tool_name, OPS).splitlines() == [
+    assert refusal_text(refusal, tool_name, OPS, OPS).splitlines() == [
         "Refused busy on queue/tasks: The session is too busy to take this now, and nothing ran.",
         'Why: {"depth": 3}',
         "Next: Try the same call again shortly.",
@@ -241,3 +241,16 @@ def test_a_delivery_reads_in_the_words_of_its_surface_and_names_its_input():
         "- inbox/a@1 from @lead: read this",
         "  Its body is sha256:abc: pass that as `ref` to `mcp__ph__blob_get`.",
     ]
+
+
+def test_a_refusal_never_sends_a_model_to_a_tool_it_does_not_hold():
+    text = refusal_text(Refusal(code="not_permitted"), tool_name, OPS, {"message.send"})
+
+    assert "channel_list" not in text and "peers" not in text
+    assert text.splitlines()[-1] == "Next: Carry on without it, and say so."
+
+
+def test_a_refusal_keeps_a_next_step_a_model_can_take():
+    text = refusal_text(Refusal(code="queue_empty"), tool_name, OPS, {"wait"})
+
+    assert "Next: Call `wait` with `queue` and end your turn." in text

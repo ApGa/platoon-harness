@@ -98,8 +98,11 @@ exit ends the turn and the agent. It coordinates through `ph`, which is on its `
 It cannot park, take a delivery or resume, and every one of those is refused with the reason. All it reports is what stdout and an
 exit can show: the model it ran stays unknown, and nothing pretends otherwise. A `command` in a project file needs explicit trust.
 
-It needs a goal to start, so set `count = 0` on the role and spawn it with one. Its agent ends with its turn: `finished` if the turn
-`stopped`, and `failed` otherwise.
+It needs a goal to start, so set `count = 0` on the role and spawn it with one, and `team check` refuses it otherwise. Its agent ends
+with its turn: `finished` if the turn `stopped`, and `failed` otherwise.
+
+`{goal}` standing alone as an argument reaches the program's option parser, so a goal that starts with `-` is refused, since a model
+may have written it. Inside an argument, as in `--task={goal}`, it cannot be taken for an option.
 
 ## A program: the wire
 
@@ -108,8 +111,12 @@ bounded log, and nothing else may reach stdout. In a team file:
 
 ```toml
 [roles.worker]
-harness = { command = ["python", "my_driver.py"], mode = "wire" }
+harness = { command = ["python", "/opt/my-agent/my_driver.py"], mode = "wire" }
 ```
+
+Use an absolute path. A relative one resolves against the session's `cwd` when the harness runs, and against your own directory when
+it describes itself, so it can pass one and fail the other. If the program dies, the reason is in the agent's `stderr.log`, which the
+error names.
 
 ### In Python
 
@@ -282,13 +289,19 @@ client: it takes a handler for inbound calls, and `jsonrpc=False` for a peer tha
 in the first request" means the tool was in the request, and "connected" counts for nothing. An unsupported check is a skip with a
 reason, and a skip is never a pass.
 
+<!-- example: the conformance test a test runs -->
 ```python
+import sys
+from pathlib import Path
+
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import check_driver
 
+PROGRAM = str(Path(__file__).with_name("my_driver.py"))
+
 
 async def test_my_driver_conforms(tmp_path):
-    result = await check_driver(lambda: WireDriver(["python", "my_driver.py"]), folder=tmp_path)
+    result = await check_driver(lambda: WireDriver([sys.executable, PROGRAM]), folder=tmp_path)
 
     assert result.failed == (), str(result)
 ```
@@ -363,6 +376,17 @@ from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
 driver = ScriptedDriver([[Say("on it"), Call("task_claim", {"queue": "tasks"})], [Ask("run the migration?"), Hang()]])
 ```
+
+A role's `harness` is a name, so a team reaches one through a function that makes a driver per agent:
+
+```python
+def lead():
+    return ScriptedDriver([[Say("done")]])
+
+team = Team(roles={"lead": Role(harness="my_tests:lead")})
+```
+
+The module is imported by that name, so keep a script behind `if __name__ == "__main__"`, or importing it runs it again.
 
 The steps are `Say`, `Think`, `Call`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
 until the model only talks.

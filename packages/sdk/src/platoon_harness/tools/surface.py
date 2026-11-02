@@ -12,6 +12,7 @@ type Surface = Callable[[str], str]
 
 _NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
 _OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
+_NO_NEXT_STEP = "Carry on without it, and say so."
 _REFUSALS = {
     "not_permitted": (
         "You may not do this.",
@@ -127,6 +128,11 @@ def _input_schema(schema: dict[str, Any], surface: Surface, ops: Collection[str]
     return {**shown, "properties": fields, "additionalProperties": False}
 
 
+def held_tools(kernel: Kernel, principal: Principal) -> set[str]:
+    """The tool ops this principal holds now. An ended agent holds none."""
+    return {op["name"] for op in kernel.query(principal, "ops.list", {}).result or () if op["tool"]}
+
+
 def _held(kernel: Kernel, principal: Principal) -> list[dict[str, Any]]:
     outcome = kernel.query(principal, "ops.list", {})
     if outcome.refusal is not None:
@@ -177,9 +183,12 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> 
     return "\n".join(lines)
 
 
-def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str]) -> str:
-    """A refusal as a model can act on it: the code, what it means, what to do next, and the reason given."""
+def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
+    """A refusal as a model can act on it: the code, what it means, what to do next, and the reason given. A next step
+    that names a tool outside `held` would send a model to something it cannot call, so it is left out."""
     meaning, next_step = _REFUSALS[refusal.code]
+    if not {name for name in _OP_NAMED.findall(next_step) if name in ops} <= {*held}:
+        next_step = _NO_NEXT_STEP
     detail = refusal.detail if isinstance(refusal.detail, str) else json.dumps(refusal.detail, ensure_ascii=False)
     lines = [f"Refused {refusal.code}{f' on {refusal.object}' if refusal.object else ''}: {meaning}"]
     if detail:

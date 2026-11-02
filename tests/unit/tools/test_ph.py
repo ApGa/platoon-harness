@@ -88,6 +88,13 @@ async def test_help_on_an_op_shows_its_arguments(worker):
     assert "`ph wait`" in run.stdout, "a description is in the words of its surface"
 
 
+async def test_help_for_a_tool_nobody_has_shows_what_there_is(lead):
+    run = await ph(lead[1], "nosuch.tool", "--help")
+
+    assert run.code == 0
+    assert "usage: ph <tool>" in run.stdout and "message.send" in run.stdout
+
+
 async def test_a_bare_ph_prints_usage_and_fails(lead):
     run = await ph(lead[1])
 

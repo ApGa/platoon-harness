@@ -4,8 +4,6 @@ from .conformance import chat_access, check_driver
 from .extension import check_extension
 from .model import FakeModel, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
-    API_KEY,
-    BASE_URL,
     Ask,
     AskModel,
     Call,
@@ -22,8 +20,6 @@ from .scripted import (
 from .tools import TOOL, FakeTools
 
 __all__ = [
-    "API_KEY",
-    "BASE_URL",
     "TOOL",
     "Ask",
     "AskModel",

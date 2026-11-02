@@ -262,10 +262,8 @@ platoon_harness.team.Command
 platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
-platoon_harness.testing.API_KEY
 platoon_harness.testing.Ask
 platoon_harness.testing.AskModel
-platoon_harness.testing.BASE_URL
 platoon_harness.testing.Call
 platoon_harness.testing.EndTurn
 platoon_harness.testing.Exit

@@ -65,6 +65,9 @@
 - A root another user owns or can write is refused, a session folder is built aside so a crash burns no name, an unusable
   `XDG_RUNTIME_DIR` falls through, and a detached runtime runs from its folder with `-P`.
 - `team_check` refuses a one-shot role that starts with the session, and says nothing of a `count` of zero, which was said on purpose.
+- A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
+- A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
+- `ph <tool> --help` for an unknown tool shows what there is.
 
 ### Changed
 
@@ -72,7 +75,7 @@
   `cancel()` stops the session and `cancel_agent(agent)` one agent. `finish`, `join`, `wait_any` and `broadcast` are gone, as `wait` and
   `send` state them. `spawn` says `role`. `put_body` returns a ref, and `get_body` and `tombstone` take one.
 - `Link.submit` takes no `expected_version`. Ops that need one take it as an argument.
-- `ConfigError` is at the top of the package.
+- `ConfigError` is at the top of the package, and `testing` no longer exports `API_KEY` and `BASE_URL`.
 - `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
 - `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do.
 - `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.

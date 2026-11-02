@@ -1064,3 +1064,59 @@ async def test_a_busy_refusal_says_when_to_retry(kernel, lead, monkeypatch):
     monkeypatch.setattr(kernel, "submit", busy)
 
     assert "Retry after 0.250 seconds." in text_of(await lead[1].call("task_add", {"queue": "tasks", "gist": "x"}))
+
+
+# What a held wait owes, and what a result may hold.
+
+
+async def test_a_held_wait_closes_once_its_answer_has_left(kernel, server, lead, worker, clock):
+    await start_turn(kernel, "w1")
+    held = asyncio.create_task(worker[1].call("wait", {"from": ["lead"], "hold": 20.0}))
+    await slept_until(clock, 1020.0)
+
+    await send(kernel, lead[0], "@w1", "in time")
+
+    assert value_of(await held)["state"] == "released"
+    await drained(server)
+    assert len(of_type(kernel, "wait.released")) == 1
+    assert [event.gist for event in of_type(kernel, "message.sent")] == ["in time"]
+
+
+async def test_an_answer_that_cannot_be_sent_costs_no_wake(kernel, server, lead, worker, clock, monkeypatch):
+    async def lost(writer: asyncio.StreamWriter, reply: bytes) -> None:
+        raise ConnectionResetError
+
+    monkeypatch.setattr(tool_server, "_send", lost)
+    await start_turn(kernel, "w1")
+    message = tool_call("wait", {"from": ["lead"], "hold": 20.0})
+    _, writer = await connect(server.url)
+    writer.write(request(server.url, json.dumps(message).encode(), token=worker[1].token))
+    await writer.drain()
+    await slept_until(clock, 1020.0)
+
+    await send(kernel, lead[0], "@w1", "in time")
+    await drained(server)
+    writer.close()
+
+    wait = of_type(kernel, "wait.registered")[-1].seq
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": wait}))["state"] == "open"
+    await end_turn(kernel, "w1")
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": wait}))
+    assert [event.gist for event in of_type(kernel, "message.sent")][-1] == "Your wait holds."
+
+
+async def test_an_answer_too_big_for_a_result_is_refused_and_says_so(lead, monkeypatch):
+    monkeypatch.setattr(tool_server, "_RESULT_LIMIT", 1)
+
+    result = await lead[1].call("peers")
+
+    assert result["isError"] and "Refused unsupported" in text_of(result)
+    assert "a result holds 1:" in text_of(result)
+
+
+async def test_a_refusal_names_only_tools_the_token_holds(kernel, server, lead):
+    _, client = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    result = await client.call("message_send", {"to": "@nobody", "gist": "hello"})
+
+    assert result["isError"] and "agent_list" not in text_of(result) and "channel_list" not in text_of(result)

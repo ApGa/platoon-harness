@@ -638,6 +638,19 @@ async def test_hold_keeps_a_call_open_and_returns_when_the_wait_holds(kernel, cl
     assert of_type(kernel, "agent.woken", after=head) == []
 
 
+async def test_a_wait_a_held_call_found_holding_stays_open_until_someone_is_told(kernel, clock):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob", ready={"tool_timeout_s": 300.0})
+    await start_turn(kernel, "bob")
+    placed = await wait(kernel, bob, condition("inbox/bob"), hold=20.0)
+    await send(kernel, alice, "@bob", "in time")
+
+    await hold_open(kernel, placed)
+
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "open"
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"], "told": True}))
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "released"
+
+
 async def test_hold_returns_pending_on_expiry(kernel, clock):
     bob = await spawn(kernel, "bob", ready={"tool_timeout_s": 300.0})
     await start_turn(kernel, "bob")

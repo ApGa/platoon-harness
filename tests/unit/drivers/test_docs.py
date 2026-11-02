@@ -38,6 +38,17 @@ async def test_the_guide_s_wire_driver_conforms(tmp_path):
     } <= passed
 
 
+async def test_the_guide_s_conformance_test_passes_as_written(tmp_path):
+    driver = TEXT.partition("<!-- example: the wire driver a test runs -->\n```python\n")[2].partition("```\n")[0]
+    block = TEXT.partition("<!-- example: the conformance test a test runs -->\n```python\n")[2].partition("```\n")[0]
+    (tmp_path / "my_driver.py").write_text(driver)
+    written = {"__file__": str(tmp_path / "test_it.py")}
+
+    exec(compile(block, written["__file__"], "exec"), written)
+
+    await written["test_my_driver_conforms"](tmp_path / "run")
+
+
 def test_the_guide_names_every_check():
     table = TEXT.partition("| Check | What it proves |")[2].partition("\n\n")[0]
 

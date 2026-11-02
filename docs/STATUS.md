@@ -115,6 +115,9 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | A `body` argument offered as text on the tool plane | tested | `tests/unit/tools/test_mcp.py`, `test_ph.py`: stored first, cited by hash, the same for a retry |
 | Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`, and `tests/unit/tools/test_surface.py` rendered for MCP, `mcp__<ns>__` and `ph` |
 | `lineage`, `exposure` | deferred | Provenance queries, after the host |
+| `topology.patch`, `topology.show` | planned | Named in architecture sections 6 and 8. Neither is in the registry yet |
+| `platoon_harness.patterns`, the library tier of architecture section 6 | planned | |
+| `doctor`, `docs/security.md`, and guides for training, the TUI and SwarmChat | planned | The architecture holds their promises until then |
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | tested | `tests/unit/runtime/test_opening.py` |
 | An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |
 | A one-shot agent ending with its turn | tested | `test_lifecycle.py`, and on the `exec` driver in `tests/integration/test_independence.py` |
@@ -134,10 +137,13 @@ socket on port 0. No real harness has run against this server: the spike's proto
 | Bounded HTTP: head and body limits, a body read only after the token, deadlines on the kernel's clock, a connection limit, hostile bytes | tested | `test_mcp.py`. A client that will not read its answer is bounded by the same deadline, which no test reaches, since an answer fits a socket buffer |
 | Identity from the token alone, `tools/list` filtered and enforced again at call time, undeclared arguments journaled, an agent's refused query journaled, an ended agent's token refused | tested | `test_mcp.py` |
 | The idempotency key: one operation for a retry, the turn with no id, a label on a repeat, anchors kept in `native` as evidence only | tested | `test_mcp.py`. Anchors were read from the spike's log, not from a live client |
-| Refusals a model can act on: code, what it means, what to do next, in the words of its surface | tested | `test_surface.py`, `test_mcp.py` |
+| Refusals a model can act on: code, what it means, what to do next, in the words of its surface, and no next step that names a tool its token does not hold | tested | `test_surface.py`, `test_mcp.py` |
 | Results capped, with `rest` saying where the rest of a body is, and reading on reaching the end | tested | `test_mcp.py` |
+| A query's answer past 32 KiB refused with its size | tested | `test_mcp.py` |
+| `agent.list`, `channel.list` and `peers` paged | deferred | They are not. A team that outgrows one result gets the refusal above, from a model's side. A human reads them whole |
+| A held wait closing as told only once its answer has left | tested | `test_mcp.py`, with an answer that cannot be sent |
 | An idle client costs nothing, and one that vanishes during a held wait frees its server task and keeps its wait | tested | `test_mcp.py` |
-| `ph`: argv and help from `tools/list`, JSON on stdout, a plain refusal on stderr, exit codes in its help | tested | `test_ph.py`, real processes, on the test interpreter and on the host's `python3` from the default path, skipped where there is none |
+| `ph`: argv and help from `tools/list`, JSON on stdout, a plain refusal on stderr, exit codes in its help | tested | `test_ph.py`, real processes, on the test interpreter and on the host's `python3` from the default path, skipped where there is none. A name that is no tool answers `no such tool` and journals nothing: only a tool the token does not hold is evidence |
 | The stdio shim, with a call waiting out a hold beside others | tested | `test_shim.py`, real processes, on both interpreters. No real harness has run it |
 | The official MCP client | tested | `tests/conformance/test_mcp_client.py`, slow, through `uv run --isolated --with 'mcp>=2.3,<3'`. `mcp` 2.3.0 connected in `auto`, which took -32601 for `server/discover` and fell back to `initialize`, and in `legacy`, negotiated `2025-11-25`, pinged, listed closed schemas and `readOnlyHint`, called tools, read a refused spoof as `isError`, and kept a `?surface=` in its URL. It sent no `GET` or `DELETE`. Its `2026-07-28` mode is not claimed and not run |
 | Real Claude Code and Codex against this server | planned | Needs the drivers. The spike's prototype passed both |
@@ -221,6 +227,7 @@ has run on macOS. The fast suite covers everything below except a second crash d
 | A guest's leaving changes nothing, an owner's leaves no process, attaching to a closed session writes nothing | tested | `test_detached.py`, `test_vertical_slice.py`, with the journal's bytes compared |
 | `Authority` and `LocalAuthority` | tested | `test_host.py`, `test_opening.py`, `test_recovery.py`. `Admission` holds a token and model access: tool endpoints, workspace and attribution arrive with `PlatoonAuthority` |
 | Workspaces other than `shared` | planned | A role naming one fails its spawn with the reason |
+| A plan login refused for headless multi-agent, exit 78 | planned | Architecture section 15. `prepare` will refuse it, from each role's `DriverInfo.login`, so `Session` and the CLI share the rule. No driver reports `plan` yet, so nothing can reach it |
 | Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from. The CLI does not exist yet, so history names `Session.resume` |
 | The turn-end probe behind `changes` | planned | Arrives with workspaces |
 

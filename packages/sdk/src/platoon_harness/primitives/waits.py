@@ -452,7 +452,9 @@ async def hold_open(kernel: Kernel, placed: dict[str, Any]) -> dict[str, Any]:
     """Keep a `wait` call open as a tool surface does, given its `pending` result. It returns how the wait stands: the
     way it closed, or `pending` with the wait still registered, so the agent may call again or end its turn.
 
-    The call was authorized when it was placed, so this asks as the runtime.
+    A wait that holds comes back `released` and still open: the surface closes it with `wait.release{told}` once its
+    answer has left, so an answer that is lost costs no wake. The call was authorized when it was placed, so this asks
+    as the runtime.
     """
     expiry = kernel.clock.now() + placed["hold"]
     while True:
@@ -464,7 +466,6 @@ async def hold_open(kernel: Kernel, placed: dict[str, Any]) -> dict[str, Any]:
         if shown["state"] != "open":
             return {**placed, **shown}
         if shown["holds"]:
-            await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"], "told": True})
             return {**placed, **shown, "state": "released"}
         remaining = expiry - kernel.clock.now()
         if remaining <= 0:

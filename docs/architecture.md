@@ -316,7 +316,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names
   the gap `crash_window`; the incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
-- **The host** is the daemon that performs these kinds, on public names. It reads `effect.ready`, level-triggered, and gives each
+- **The host** is the daemon that performs these kinds, but for `erase`, which the kernel's own eraser does, on public names. It reads `effect.ready`, level-triggered, and gives each
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
   daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
   agent's reports are heard in order, one at a time, and a driver waits for its turn: `Process`'s own queue is what keeps a pipe
@@ -385,7 +385,7 @@ whole journal. A page holding a `principal.revoked` goes by SQL, so a follower i
 | Pressure | Answer |
 |---|---|
 | Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}`, which is not journaled. `runtime` has no per-principal limit and 256 more |
-| Payloads | Op names and keys 256 chars, stream names 512, `gist` 280, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list paged |
+| Payloads | Op names and keys 256 chars, stream names 512, `gist` 280, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list a command returns paged |
 | Readers | They pull, so a slow client costs only its own lag |
 | Live text | One 256-frame ring per agent, each frame cut at 64 KiB; overflow drops frames with a `lag` marker. The final `item` is authoritative |
 | Harness output | Pipes always drain. A driver that stalls its harness's stdout stalls the harness. Reports buffer in a bounded queue; a quota breach stops that agent with a gap |
@@ -789,7 +789,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
-  resolve, and a setting no primitive enforces yet.
+  resolve, and a setting no primitive enforces yet. It refuses a one-shot role that starts with the session, which has no goal to start on,
+and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
 
 ## 9. Drivers
 
@@ -915,7 +916,7 @@ shim for harnesses without HTTP. It is ours rather than the `mcp` package becaus
 with `platoon[ors]` or OpenHands, and because we need strict argument refusal and token-only identity. It is contract-tested
 against the official client and against each real harness.
 
-- Tokens are per `(session, agent)`, short-lived, revoked at `agent.ended`, and hashed in the journal. Re-supplied on resume.
+- Tokens are per `(session, agent)` and per incarnation, revoked at `agent.ended`, and hashed in the journal. Re-supplied on resume.
 - Identity never comes from `clientInfo`, `_meta` or arguments. `_meta` anchors are correlation evidence only.
 - `tools/list` is filtered by authorization and enforced again at call time.
 - Coordination state uses explicit handles (`cursor`, `lease`, `version`). No session semantics.
@@ -933,13 +934,15 @@ against the official client and against each real harness.
   descriptions and refusals, never what a token may do. No real harness has been run through a URL with a query yet.
 - `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
   which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
-- A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A row with a null `text` beside a
+- A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A query's answer past that, which only
+  a list as long as a team can be, is refused `unsupported` with its size, and nothing runs. A row with a null `text` beside a
   body's ref is a body its op could not read: the surface reads up to 16 MiB of it, shows the lines that fit, says in `rest` where
   the rest is, and journals what it showed with `blob.offer` before the text leaves. `text` stays null for a binary, redacted or
   larger body, or one line too long to show.
 - `hold` runs `hold_open` as the runtime, which is right: a held call must close its wait with `wait.release`, a runtime-only op, and
   a role's `tools` can leave out `wait.progress`. Nothing a client sends reaches it: its id comes from the `wait` the agent was
-  authorized to place. Holding is bounded by `tool_timeout_s` when `wait` is placed, and by the client hanging up.
+  authorized to place. Holding is bounded by `tool_timeout_s` when `wait` is placed, and by the client hanging up. A wait that holds
+  closes as `told` only once its answer has left, so an answer that is lost costs no wake: the wait stays open, and closes with its turn.
 
 **Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools, by exact name, because no harness's
 tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to
@@ -1050,12 +1053,12 @@ op references with `expected_version`, so any client can draw the buttons.
 
 - **TUI.** Textual. One 15 Hz coalescer between the journal and widgets drops render frames, never events. `TranscriptView` is on
   the Line API with paging from the journal, so history is virtual. Untrusted text crosses one `SafeText` boundary, and a lint
-  bans bare `str` in label-like widgets. Approvals never take focus. See [tui.md](tui.md).
+  bans bare `str` in label-like widgets. Approvals never take focus.
 - **SwarmChat.** A follower folds the journal into its own rebuildable `swarmchat.sqlite` and serves the pinned, hash-checked
   frontend assets, the `view_*` replies, an overlay, and one `/x/command` route into the same ops. Upstream's server never runs,
   and nothing re-ingests the projection, so two authorities and echo loops have no path. Direct chats key on the unordered
   participant pair, with both inboxes merged in journal order; channel chats key on the channel. One session per port avoids
-  the `localStorage` collision. "Read by" becomes "Delivered to". See [swarmchat.md](swarmchat.md).
+  the `localStorage` collision. "Read by" becomes "Delivered to".
 
 ## 13. Workspaces
 
@@ -1094,8 +1097,7 @@ lives in the `platoon-harness-platoon` extension, built on Platoon's stable func
   default sandbox blocks the shell client. It stays out of trainable teams unless a role grants network access as a journaled trust
   decision.
 - **Limits at Platoon 0.5.** `AgentGraph`, `RewardEvent` and attribution levels are draft-only there, so they are not integration
-  targets. See [training.md](training.md) for the bridge, the RAO golden fixture, the no-extra-rollout baseline and the proposed
-  amendments.
+  targets. A guide will hold the bridge, the RAO golden fixture, the no-extra-rollout baseline and the proposed amendments.
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|
@@ -1124,7 +1126,7 @@ Threat tiers stay separate, in docs and in events.
 - **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
   No model-access credential reaches a log, event, artifact, export or resolved config.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an
-  offline rewrite that produces a new session. See [security.md](security.md).
+  offline rewrite that produces a new session.
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan
   login exits 78 and names the fix unless the user opts in. `web --remote` refuses a second person on a plan-login session.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
