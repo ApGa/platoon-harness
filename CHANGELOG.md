@@ -83,6 +83,7 @@
 - A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
   mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
+- A resume under other SDK or extension versions leaves a record on `runtime.started`. It left none.
 - A model on a long team can still find its peers: `peers` and `channel.list` go a page at a time, where one past 32 KiB was refused
   with nothing left to try.
 - A description or a handover no longer names a tool its reader does not hold, and a refused query leaves its line out of the preamble.
@@ -118,6 +119,7 @@
 
 - `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
   page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
+- `runtime.start` takes `changed`, and `Kernel.recover` takes it as arguments. `Manifest.changed()` says what differs from a manifest.
 - `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
 - `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have
   `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`.

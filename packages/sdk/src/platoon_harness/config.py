@@ -9,7 +9,7 @@ from typing import Any, Literal, NoReturn, Self
 from pydantic import GetCoreSchemaHandler, ValidationError
 from pydantic_core import CoreSchema, core_schema
 
-from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component, find
+from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component, discover, find
 from platoon_harness.schema import ConfigError, Model, Problem, problems_in
 from platoon_harness.team import Team
 from platoon_harness.version import __version__
@@ -213,3 +213,14 @@ class Manifest(Model):
             *(find(EXTENSIONS, name) for name in team.extensions),
         )
         return cls(team=sanitized(team, environ), topology_hash=team.topology.hash, components=components, **started)
+
+    def changed(self) -> tuple[str, ...]:
+        """What is installed now that differs from what was recorded, in words. Nothing is imported. A resume is
+        labelled with this and not refused, since a session survives an upgrade."""
+        installed = {(component.group, component.name): component.version for component in discover()}
+        changes = [] if self.sdk_version == __version__ else [f"the SDK {self.sdk_version} is now {__version__}"]
+        for component in self.components:
+            now = installed.get((component.group, component.name))
+            if component.version is not None and now != component.version:
+                changes.append(f"{component.name} {component.version} is now {now or 'gone'}")
+        return tuple(changes)

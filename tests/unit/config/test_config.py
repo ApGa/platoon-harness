@@ -5,6 +5,7 @@ import json
 import pickle
 import tomllib
 import traceback
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -24,7 +25,7 @@ from platoon_harness.config import (
     merge,
     sanitized,
 )
-from platoon_harness.extensions import DRIVERS, EXTENSIONS
+from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component
 from platoon_harness.schema import ConfigError, dumps, seconds
 from platoon_harness.team import Command, Role, Team
 from platoon_harness.topology import Queue, manager_worker
@@ -266,6 +267,23 @@ def installed_team() -> Team:
         roles={"lead": Role(harness="a_kit:Driver", may_spawn=["worker"]), "worker": Role(harness="a_kit:Driver")},
         topology=manager_worker("lead", "worker"),
         extensions=["a_kit:extension"],
+    )
+
+
+def test_a_manifest_says_what_has_changed_since_it_was_written(monkeypatch):
+    then = Component(DRIVERS, "kept", "a:b", "kit", "1.0")
+    gone = Component(EXTENSIONS, "gone", "a:b", "kit", "1.0")
+    written = Manifest.of(installed_team()).model_copy(
+        update={"components": (then, gone, Component(EXTENSIONS, "a_kit:extension", "a_kit:extension"))}
+    )
+
+    monkeypatch.setattr("platoon_harness.config.discover", lambda: (then,))
+    assert written.changed() == ("gone 1.0 is now gone",)
+
+    monkeypatch.setattr("platoon_harness.config.discover", lambda: (replace(then, version="2.0"), gone))
+    assert written.model_copy(update={"sdk_version": "0.0.1"}).changed() == (
+        f"the SDK 0.0.1 is now {__version__}",
+        "kept 1.0 is now 2.0",
     )
 
 

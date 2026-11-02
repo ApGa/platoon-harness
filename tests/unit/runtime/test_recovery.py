@@ -2,13 +2,14 @@
 the journal as a crash leaves it, so each row can be reached at will. `test_crash.py` does it on real processes."""
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from platoon_harness import Refused, Session, Team
+from platoon_harness import Refused, Session, Team, __version__
 from platoon_harness.drivers import (
     AgentSpec,
     Capabilities,
@@ -24,10 +25,11 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.kernel import is_held
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
+from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
-from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, until
+from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -1067,3 +1069,30 @@ async def test_a_group_an_ended_agent_left_is_named(tmp_path, monkeypatch):
 
     assert "process group 4242" in recorded[0].data["raw"]
     assert gaps[0].data["what"] == "crash_window"
+
+
+async def test_a_resume_under_other_versions_is_labelled_and_goes_on(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = session.folder
+    manifest = json.loads((folder / MANIFEST).read_text())
+    (folder / MANIFEST).write_text(json.dumps({**manifest, "sdk_version": "0.0.1"}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = await of_type(session, "runtime.started")
+
+    assert started[0].data["changed"] == []
+    assert started[-1].data["changed"] == [f"the SDK 0.0.1 is now {__version__}"]
+    assert f"the SDK 0.0.1 is now {__version__}" in started[-1].gist
+
+
+async def test_a_resume_under_the_same_versions_says_nothing(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = await of_type(session, "runtime.started")
+
+    assert [event.gist for event in started] == ["runtime started", "runtime started"]

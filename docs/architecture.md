@@ -158,7 +158,8 @@ can both be watched. Leaving only disconnects.
 - **One path up.** `Session.start` checks the team and writes the manifest before any cost, and that folder is all a runtime
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
-  through opening is finished by the next runtime.
+  through opening is finished by the next runtime. A resume under an SDK or component version other than the manifest's is labelled
+  on `runtime.started`, in its `gist` and its `changed`, and never refused, since a session survives an upgrade.
 - **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
