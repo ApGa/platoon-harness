@@ -779,6 +779,24 @@ async def test_an_ask_a_guest_could_answer_waits_for_it(tmp_path):
         await guest.leave()
 
 
+async def test_cancel_stops_the_session_and_cannot_be_handed_an_agent_by_accident(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        with pytest.raises(TypeError):
+            await session.cancel(None)
+
+        assert (await session.status())["state"] == "open"
+
+
+async def test_cancelling_one_agent_says_which(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+        await session.cancel_agent("@bob")
+
+        await in_state(session, "bob", "ended")
+        assert (await session.status())["state"] == "open"
+
+
 async def test_cancelling_is_exit_130(tmp_path):
     async with Session.start(solo([Hang()]), root=tmp_path) as session:
         await session.send("@bob", "go")
@@ -975,14 +993,7 @@ async def test_a_detached_runtime_cannot_be_fooled_by_a_module_in_the_working_di
     marker = tmp_path / "ran"
     (planted / "secrets.py").write_text(f"open({str(marker)!r}, 'w').close()\nraise SystemExit(9)\n")
     monkeypatch.chdir(planted)
-    team = Team.model_validate(
-        {
-            "roles": {
-                "bob": {"harness": {"command": ["cat"], "mode": "oneshot"}, "count": 0},
-                "z": {"harness": wire("saying")},
-            }
-        }
-    )
+    team = Team.model_validate({"roles": {"bob": {"harness": wire("saying")}}})
 
     guest = await Session.start(team, root=tmp_path / "root", detach=True)
     await guest.cancel()

@@ -35,13 +35,15 @@ class Work(NamedTuple):
 def _stranded(txn: Txn) -> list[tuple[str, str]]:
     """Agents nothing more can come of: a spawn with a step that failed, so what depended on it will never start, and an
     agent out of a turn whose harness has refused handover after handover."""
-    found = []
-    for agent in txn.view(Agents).live():
-        if agent.state == "spawning" and agent.failure is not None:
-            found.append((agent.name, f"its spawn failed: {agent.failure}"))
-        elif agent.state in ("idle", "waiting") and agent.failures >= _HANDOVERS:
-            found.append((agent.name, f"{agent.failures} handovers failed: {agent.failure}"))
-    return found
+    return [
+        (
+            agent.name,
+            f"its spawn failed: {agent.failure}"
+            if agent.state == "spawning"
+            else f"{agent.failures} handovers failed: {agent.failure}",
+        )
+        for agent in txn.view(Agents).failing(_HANDOVERS)
+    ]
 
 
 def work(txn: Txn) -> Work:

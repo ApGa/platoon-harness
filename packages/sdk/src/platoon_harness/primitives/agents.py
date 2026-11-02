@@ -253,5 +253,17 @@ class Agents(View):
         rows = self.db.execute("SELECT * FROM v_agents WHERE parent = ? AND state != 'ended' ORDER BY name", (parent,))
         return [self._load(row) for row in rows]
 
+    def failing(self, handovers: int) -> list[Agent]:
+        """Agents still spawning that an effect failed for, and those out of a turn past `handovers` failed in a row."""
+        rows = self.db.execute(
+            """
+            SELECT * FROM v_agents
+            WHERE (state = 'spawning' AND failure IS NOT NULL) OR (state IN ('idle', 'waiting') AND failures >= ?)
+            ORDER BY name
+            """,
+            (handovers,),
+        )
+        return [self._load(row) for row in rows]
+
     def count_live(self) -> int:
         return self.db.execute("SELECT count(*) AS n FROM v_agents WHERE state != 'ended'").fetchone()["n"]

@@ -14,7 +14,18 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Delta, DriverError, Exited, GapReport, Item, Native, Ready
-from platoon_harness.drivers.process import _SH, _TRAMPOLINE, LOG, LOG_LIMIT, RECORD, Process, Record, _started, reap
+from platoon_harness.drivers.process import (
+    _SH,
+    _TRAMPOLINE,
+    LOG,
+    LOG_LIMIT,
+    RECORD,
+    Process,
+    Record,
+    _gone,
+    _started,
+    reap,
+)
 from platoon_harness.rpc import read_lines
 
 from .support import Heard, group_of, make_spec, running, spawn_group
@@ -591,6 +602,7 @@ def test_a_closed_loop_leaves_no_process_behind(tmp_path, ending):
 
     record = Record.read(tmp_path)
     assert record is not None
+    assert asyncio.run(_gone(record.pid, 10.0))  # A signal sent as an interpreter exits lands a moment later.
     assert record.state() == "gone"
     assert 'drivers/process.py", line' not in done.stderr, done.stderr
     assert done.stderr == "" or ending != "asyncio.run(main())", done.stderr

@@ -90,7 +90,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | Injection ladder, coalesce, steer degrading visibly, digests with a gap notice | tested | `test_delivery.py`. Boundaries are whatever a test's `ready` report declares |
 | `steer` notices on a tool result | tested | `test_delivery.py`, and `tests/unit/tools/test_mcp.py` over a real socket, with a call that has none journaling nothing extra. No real harness |
 | At-least-once handover: a failed `deliver` is queued again under a new input, even past a newer offer | tested | `test_delivery.py` |
-| Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
+| Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves, back-off after a failed handover, and an agent lost after six in a row | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
@@ -104,12 +104,14 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | `delivery` on queues and boards, as an entry on the channel | tested | `test_tasks.py`, `test_boards.py` |
 | Lease renewal from observed harness activity | tested | `test_tasks.py` for `lease.due`, and `tests/unit/runtime/test_host.py` from a harness's reports on a manual clock, up to `lease_max`. Activity is reports: a tool call alone renews nothing |
 | Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor on every ending, a final report kept in the journal | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
+| `agent.finish` in a turn ending the agent with that turn, so usage and a last message count, cut off after a minute | tested | `test_lifecycle.py`, and on a harness in `tests/unit/runtime/test_session.py`. A real harness's turn end after the tool call has not been observed |
+| An interrupt reaching a wake whose turn has not begun | tested | `test_lifecycle.py`, `tests/unit/runtime/test_host.py` |
 | A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
 | Completion: `settled`, `until`, `session.close`, `session.cancel`, resuming a stopped session, episodes | tested | `test_lifecycle.py` |
 | Closing a headless session at `until` | tested | `tests/unit/runtime/test_session.py`: `settled()` closes, and waits for it to drain |
-| Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |
+| Approvals: four facts, one winner, per-role policy journaled at open, moot with the turn that asked | tested | `test_approvals.py`, `tests/unit/runtime/test_recovery.py` |
 | An `ask` no human can answer | tested | `settled()` returns `needs_human`, never a hang: `test_session.py`. The exit code itself arrives with the headless CLI |
-| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
+| Budgets: limits, reservations, reconciliation, labels with `counted` for what the runtime counts, no amount for a unit nobody measured, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
 | `blob.get`, by a ref that can name lines, and `blob.offer` for what a surface showed | tested | `test_lifecycle.py`. A surface stores the bytes first |
 | A `body` argument offered as text on the tool plane | tested | `tests/unit/tools/test_mcp.py`, `test_ph.py`: stored first, cited by hash, the same for a retry |
@@ -122,7 +124,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |
 | A one-shot agent ending with its turn | tested | `test_lifecycle.py`, and on the `exec` driver in `tests/integration/test_independence.py` |
 | A resumed harness back on the agent as it stood | tested | `test_lifecycle.py`, `tests/unit/runtime/test_recovery.py` |
-| `session.ending`: the reason, each agent, usage with labels, gaps | tested | `test_lifecycle.py`, `tests/unit/runtime/test_session.py` |
+| `session.ending`: the reason, each agent and its last report, usage with labels, gaps | tested | `test_lifecycle.py`, `tests/unit/runtime/test_session.py` |
 
 ### Tool plane (`platoon_harness.tools`)
 
@@ -187,7 +189,8 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 
 Rows marked tested have tests in `tests/unit/runtime` and `tests/integration`, on real sockets and real subprocesses on Linux, with
 scripted harnesses on the real tool plane and wire programs as processes. **No real harness has run in a session,** and nothing here
-has run on macOS. The fast suite covers everything below except a second crash during recovery, which is marked `slow`.
+has run on macOS. The fast suite covers everything below except a second crash during recovery and the kill matrix, which are marked
+`slow`.
 
 | Capability | State | Evidence |
 |---|---|---|

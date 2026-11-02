@@ -194,7 +194,8 @@ daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
-`is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live.
+`is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, and `first(work, *rivals)`
+races awaitables and drops what lost, which is how anything here sleeps on two things.
 
 ### 5.1 One write
 
