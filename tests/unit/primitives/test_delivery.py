@@ -157,6 +157,19 @@ async def test_a_tool_result_carries_pending_steer_notices(kernel):
     assert result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"})) == []
 
 
+async def test_steer_notices_can_be_counted_without_a_trace(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await channel(kernel, "urgent", delivery="steer")
+    assert result_of(kernel.query(kernel.runtime, "delivery.pending", {"agent": "bob"})) == 0
+
+    await send(kernel, alice, "#urgent", "stop that")
+    head = kernel.head
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.pending", {"agent": "bob"})) == 1
+    assert kernel.head == head
+
+
 async def test_coalesce_merges_wakes_into_one_turn(kernel, clock):
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob")

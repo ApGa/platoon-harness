@@ -157,7 +157,7 @@ can both be watched. Leaving only disconnects.
 ```python
 class Kernel:
     def open(path, *, clock=None, extensions=(), read_only=False) -> Kernel: ...
-    async def submit(self, principal, op, args, *, key=None, expected_version=None) -> Outcome: ...
+    async def submit(self, principal, op, args, *, key=None, expected_version=None, native=None) -> Outcome: ...
     def query(self, principal, op, args) -> Outcome: ...      # a read-only op on a read connection
     def read(self, principal, *, after, match=None, limit=512) -> Page: ...  # never for agent principals
     async def follow(self, principal, *, after, match=None) -> AsyncIterator[Page]: ...
@@ -170,7 +170,8 @@ is; those are primitives, written as `Extension` values on the same contract a t
 daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime`, `op` and `ops` are taken names.
 
 `submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. `read` and
-`follow`, which are not ops, raise `Refused`. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash)`,
+`follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
+read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `session_id` and `closed`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 
@@ -262,7 +263,7 @@ such as the monitor; it can name nobody else. The kernel takes the rest from che
   refuses a second `conflict`. A boundary event that does not name what it opens is `invalid`.
 
 `refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
-refuses. A ref is `stream@version`, with an optional `#range`, or `sha256:<hash>` for a body. `cause`, `based_on`, `native` and
+refuses. A ref is `stream@version`, or `sha256:<hash>` for a body, either with an optional `#range`. `cause`, `based_on`, `native` and
 `correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
 
 ### 5.4 Effects
@@ -447,15 +448,15 @@ to do next.
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` |
+| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` `delivery.pending` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
 Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
 requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
 body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
-comes back as its hash, for the surface to fetch. A hash is a capability: `blob.get` checks no stream, so whoever holds a hash may
-read that body. A ref names where content is, and that it exists is no secret: `based_on` is checked to exist and nothing more.
+comes back as its hash beside a null `text`, for the surface to fetch, and `blob.offer` records what the surface showed. A hash is
+a capability: `blob.get` checks no stream, so whoever holds a hash may read that body. A ref names where content is, and that it exists is no secret: `based_on` is checked to exist and nothing more.
 
 ### Library tier
 
@@ -516,7 +517,7 @@ Objects have stable names and immutable versions (`board/<board>/<name>`). A rea
 `wait` counts only versions it has not seen. `board.post` makes version 1, and on a taken name
 conflicts as a stale `board.revise` does. `board.revise` requires `expected_version`; a
 conflict returns the current version and silently overwrites nothing. `board.get` returns a ref naming exactly what it gave, so
-a body too long for one result comes back cut, with a ref saying where. `board.query` is structured; results carry exact
+a body too long for one result comes back cut, with `rest`, a ref that `blob.get` reads on from. `board.query` is structured; results carry exact
 refs, the true total and a cursor. Text search uses SQLite FTS5 when present, over names, gists and fields and never bodies: a
 fold cannot read a body, and a tombstoned body must leave nothing behind. Without FTS5 it is refused `unsupported`. Semantic
 search is an extension. A board object version with a body is also how artifacts are stored.

@@ -4,7 +4,7 @@ import json
 import re
 from collections.abc import Iterable, Sequence
 from hashlib import sha256
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import AfterValidator, BaseModel, Field
 
@@ -18,7 +18,8 @@ def _bare(name: str) -> str:
 Name = Annotated[str, Field(pattern=f"^{NAME}$", max_length=128)]
 AgentName = Annotated[str, Field(pattern=f"^(@|agent:)?{NAME}$", max_length=134), AfterValidator(_bare)]
 Gist = Annotated[str, Field(max_length=GIST_LIMIT, description="What readers see first, at most 280 characters.")]
-BodyRef = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+BODY_REF = r"^sha256:[0-9a-f]{64}$"
+BodyRef = Annotated[str, Field(pattern=BODY_REF)]
 Body = Annotated[BodyRef | None, Field(description="Anything longer than the gist.")]
 Seq = Annotated[int, Field(ge=0, lt=2**63)]
 BasedOn = Annotated[tuple[str, ...], Field(description="Refs this rests on, such as a `ref` you read.")]
@@ -30,6 +31,8 @@ DIGEST_ITEMS = 32
 RESULT_LIMIT = (
     12 * 1024
 )  # The kernel refuses a command's result past 16 KiB; this leaves room for what frames the rows.
+
+LINE_RANGE = r"L([1-9]\d*)-([1-9]\d*)"
 
 _ADDRESS = re.compile(rf"([@#+])({NAME})")
 _STREAMS = {"@": "inbox/", "#": "channel/", "+": "channel/+"}
@@ -70,6 +73,44 @@ def fitted[T](rows: Iterable[T], *, show: Any = lambda row: row) -> list[T]:
             break
         kept.append(row)
     return kept
+
+
+class Lines(NamedTuple):
+    """What a result can show of a text body. `text` is None if one line alone will not fit, `total` counts every line,
+    `span` is `#L<first>-<last>` unless this is the whole body, and `rest` is the ref of the lines after these."""
+
+    text: str | None
+    total: int
+    span: str = ""
+    rest: str | None = None
+
+    def shown(self) -> dict[str, Any]:
+        return {"text": self.text, "lines": self.total, "rest": self.rest}
+
+
+def lines_of(body: str, text: str, wanted: str | None, room: int) -> Lines:
+    """The lines of `wanted` that fit in `room`, from the text of the body whose ref is `body`. A range no line stands
+    in is refused with how many there are."""
+    lines = text.splitlines(keepends=True)
+    match = re.fullmatch(LINE_RANGE, wanted) if wanted else None
+    first = int(match[1]) if match else 1
+    last = min(int(match[2]) if match else len(lines), len(lines))
+    if first > max(last, 1):
+        raise Refused("invalid", {"lines": len(lines), "detail": f"no lines {wanted}"})
+    if not lines:
+        return Lines("", 0)
+    size = 0
+    kept = first - 1
+    for line in lines[first - 1 : last]:
+        size += size_of(line)
+        if size > room:
+            break
+        kept += 1
+    if kept < first:
+        return Lines(None, len(lines))
+    whole = first == 1 and kept == len(lines) and match is None
+    rest = None if kept == len(lines) else f"{body}#L{kept + 1}-{len(lines)}"
+    return Lines("".join(lines[first - 1 : kept]), len(lines), "" if whole else f"#L{first}-{kept}", rest)
 
 
 def inline_body(txn: Txn, ref: str) -> bytes | None:

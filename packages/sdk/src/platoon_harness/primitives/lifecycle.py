@@ -418,12 +418,12 @@ def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)
 def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
-    """Show one agent's state, live or ended. Refused `not_found` when no such agent ever existed: call `agent.list`.
-    `not_permitted` when it is not below you."""
+    """Show one agent's state, live or ended, and its open `turn`. Refused `not_found` when no such agent ever existed:
+    call `agent.list`. `not_permitted` when it is not below you."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
-    return _public(agent)
+    return {**_public(agent), "turn": txn.view(Stamps).turn(agent.name)}
 
 
 @op("peers", query=True, tool=True)

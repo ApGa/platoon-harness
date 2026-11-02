@@ -140,6 +140,16 @@ def offer(txn: Txn, a: Offer) -> dict[str, Any] | None:
     return handed
 
 
+class Pending(Args):
+    agent: Name
+
+
+@op("delivery.pending", query=True, runtime=True)
+def pending(txn: Txn, a: Pending) -> int:
+    """Count the steer notices a tool result could carry, so a call with none to carry journals nothing."""
+    return txn.view(Deliveries).queued(a.agent, ("steer",))[1]
+
+
 class Confirm(Args):
     input: Seq
     boundary: str | None = None

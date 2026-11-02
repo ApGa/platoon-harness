@@ -24,7 +24,7 @@ from .view import View, fold
 _STREAM = re.compile(r"[^\s@#]+")
 _STREAM_LIMIT = 512
 _REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>\d{1,18})(#\S+)?")
-_BODY_REF = re.compile(r"sha256:(?P<sha256>[0-9a-f]{64})")
+_BODY_REF = re.compile(r"sha256:(?P<sha256>[0-9a-f]{64})(#\S+)?")
 
 
 def _named(payload: Any, field: str) -> str:
@@ -92,11 +92,19 @@ class Stamps(View):
 class Txn:
     """What an op receives, and all an op receives. Fixed for one command: `me` and `now`."""
 
-    __slots__ = ("_apply", "_db", "_fault", "_held", "me", "now")
+    __slots__ = ("_apply", "_db", "_fault", "_held", "_native", "me", "now")
 
-    def __init__(self, db: sqlite3.Connection, me: Principal, now: float, apply: Callable[[Event], None] | None = None):
+    def __init__(
+        self,
+        db: sqlite3.Connection,
+        me: Principal,
+        now: float,
+        apply: Callable[[Event], None] | None = None,
+        native: Mapping[str, str] | None = None,
+    ):
         self._db = db
         self._apply = apply
+        self._native = native
         self._held: tuple[Event, str] | None = None
         self._fault: BaseException | None = None
         self.me = me
@@ -138,6 +146,7 @@ class Txn:
         text = self._encode(data)
         cause = tuple(cause)
         based_on = tuple(based_on)
+        native = self._native if native is None else native
         self._encode((cause, based_on, native, correlation))
 
         db = self._db

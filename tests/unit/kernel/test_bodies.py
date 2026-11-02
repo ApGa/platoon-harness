@@ -8,7 +8,7 @@ import pytest
 
 from platoon_harness.kernel import Refused
 
-from .support import events_of, refusal_of, refused_code, result_of, supervised, until
+from .support import HUMAN, enroll, events_of, grant, refusal_of, refused_code, result_of, supervised, until
 
 SMALL = b"small body"
 LARGE = b"x" * (64 * 1024 + 1)
@@ -178,3 +178,27 @@ async def test_only_a_tombstoned_body_can_be_erased(kernel):
         await kernel.erase_body(sha256)
     assert refused_code(error) == "conflict"
     assert kernel.get_body(sha256) == SMALL
+
+
+async def test_a_body_past_a_readers_limit_is_refused_before_it_is_read(kernel, folder):
+    sha256 = await kernel.put_body(b"x" * 100_000)
+    next(folder.glob("blobs/*/*")).unlink()
+
+    with pytest.raises(Refused) as refused:
+        kernel.get_body(sha256, limit=99_999)
+
+    assert refused_code(refused) == "unsupported"
+
+
+async def test_a_body_at_a_readers_limit_is_read(kernel):
+    sha256 = await kernel.put_body(b"small")
+
+    assert kernel.get_body(sha256, limit=5) == b"small"
+
+
+async def test_a_ref_can_name_lines_of_a_body(kernel):
+    await enroll(kernel, HUMAN)
+    await grant(kernel, HUMAN.id)
+    sha256 = await kernel.put_body(b"one\ntwo\n")
+
+    result_of(await kernel.submit(HUMAN, "note.add", {"refs": [f"sha256:{sha256}#L1-2"]}))

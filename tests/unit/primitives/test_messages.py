@@ -314,7 +314,7 @@ async def test_a_body_that_fits_no_result_leaves_its_hash(kernel):
     page = await read(kernel, bob, "@bob", bodies=True)
 
     assert gists(page) == ["see the body"] and page["behind"] == 0
-    assert page["entries"][0]["body"] == f"sha256:{body}" and "text" not in page["entries"][0]
+    assert page["entries"][0]["body"] == f"sha256:{body}" and page["entries"][0]["text"] is None
 
 
 async def test_a_filtered_read_can_page_past_its_scan_window(kernel):
@@ -765,4 +765,4 @@ async def test_a_redacted_body_leaves_the_rest_of_a_read_alone(kernel):
 
     page = await read(kernel, bob, "@bob", bodies=True)
 
-    assert gists(page) == ["redacted later", "plain"] and "text" not in page["entries"][0]
+    assert gists(page) == ["redacted later", "plain"] and page["entries"][0]["text"] is None

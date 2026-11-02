@@ -16,3 +16,6 @@
 - `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.
 - `message.send` takes no `cause`: a program carries a chain with `reply_to`.
 - `load_team(trust_commands=)` is now `trust_project=`, and covers `module:attr` references and auth profiles.
+- `Kernel.submit` takes `native`, stamped on a command's events, and `Kernel.get_body` takes `limit`.
+- `blob.get` takes one `ref`, which can name lines. A cut body says `rest`, and `text` is null where an op could not read a body.
+- `agent.status` names the open `turn`.

@@ -71,6 +71,8 @@ power loss. Nothing here has run on macOS.
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Effects cancelled before they start, and effects that wait for another to finish | tested | `test_effects.py` |
+| `native` ids stamped on a command's events and read by nothing | tested | `test_commands.py` |
+| A reader's limit on a body, and refs that name lines of a body | tested | `test_bodies.py` |
 
 ### Primitives (`platoon_harness.primitives`)
 
@@ -109,7 +111,7 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
 | Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
-| `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
+| `blob.get`, by a ref that can name lines, and `blob.offer` for what a surface showed | tested | `test_lifecycle.py`. A surface stores the bytes first |
 | A `body` argument offered as text on the tool plane | planned | Architecture section 10. No tool plane exists, so only `Kernel.put_body` makes a body today |
 | Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`. Rendering op names per surface arrives with the tool plane |
 | `lineage`, `exposure` | deferred | Provenance queries, after drivers |

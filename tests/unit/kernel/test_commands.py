@@ -320,3 +320,22 @@ async def test_a_query_has_no_command_form_and_a_command_no_query_form(kernel):
 async def test_a_closed_kernel_refuses_commands(kernel):
     kernel.close()
     assert refusal_of(await kernel.submit(kernel.runtime, "note.silence", {})) == "unavailable"
+
+
+async def test_native_ids_are_stamped_on_every_event_of_a_command(kernel):
+    await granted(kernel, HUMAN)
+
+    result_of(await kernel.submit(HUMAN, "note.add", {"copies": 2}, native={"callId": "exec-1"}))
+    refused = await kernel.submit(HUMAN, "note.add", {"undeclared": 1}, native={"callId": "exec-2"})
+
+    assert refusal_of(refused) == "invalid"
+    assert [event.native for event in events_of(kernel)[-3:]] == [{"callId": "exec-1"}] * 2 + [{"callId": "exec-2"}]
+
+
+async def test_native_ids_are_no_part_of_a_commands_identity(kernel):
+    await granted(kernel, HUMAN)
+
+    first = await kernel.submit(HUMAN, "note.add", {}, key="k", native={"callId": "exec-1"})
+    again = await kernel.submit(HUMAN, "note.add", {}, key="k", native={"callId": "exec-2"})
+
+    assert first.seq == again.seq

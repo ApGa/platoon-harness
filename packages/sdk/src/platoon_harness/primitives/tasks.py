@@ -228,11 +228,12 @@ class Claim(Args):
 
 @op("task.claim", on=lambda a: f"queue/{a.queue}", tool=True)
 def claim(txn: Txn, a: Claim) -> dict[str, Any]:
-    """Claim the next open task, or `task` by id. Keep working: the runtime renews your lease while you are active, and
-    `task.complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it
-    safe to repeat. Refused `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks:
-    claim another, or finish one first. `queue_empty` when nothing is open: call `wait` with `queue` and end your turn.
-    `not_found` when no such task or queue exists."""
+    """Claim the next open task, or `task` by id. `text` is its body; a long one comes back cut, with `rest` a ref for
+    `blob.get`. Keep working: the runtime renews your lease while you are active, and `task.complete` finds the task
+    without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused
+    `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks: claim another, or finish
+    one first. `queue_empty` when nothing is open: call `wait` with `queue` and end your turn. `not_found` when no such
+    task or queue exists."""
     channel = _queue(txn, a.queue)
     tasks = txn.view(Tasks)
     for lapsed in tasks.lapsed(a.queue, txn.now):
@@ -262,6 +263,7 @@ def claim(txn: Txn, a: Claim) -> dict[str, Any]:
         "lease_until": until,
         "gist": task.gist,
         "body": task.body,
+        "text": None,  # A surface fetches what an op may not read.
         "attempt": task.attempts + 1,
     }
 

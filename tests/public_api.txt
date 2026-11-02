@@ -56,6 +56,7 @@ platoon_harness.primitives.Agents
 platoon_harness.primitives.Approval
 platoon_harness.primitives.Approvals
 platoon_harness.primitives.Attention
+platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boards
 platoon_harness.primitives.Budgets
 platoon_harness.primitives.Changes
@@ -66,6 +67,7 @@ platoon_harness.primitives.Deliveries
 platoon_harness.primitives.Delivery
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Groups
+platoon_harness.primitives.Lines
 platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.Session
 platoon_harness.primitives.Settings
@@ -76,6 +78,7 @@ platoon_harness.primitives.Waits
 platoon_harness.primitives.Why
 platoon_harness.primitives.channel_grants
 platoon_harness.primitives.hold_open
+platoon_harness.primitives.lines_of
 platoon_harness.primitives.on
 platoon_harness.primitives.stream_of
 platoon_harness.schema.ConfigError

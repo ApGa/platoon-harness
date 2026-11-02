@@ -77,6 +77,7 @@ class _Command:
     args_hash: str
     key: str | None = None
     expected_version: int | None = None
+    native: Mapping[str, str] | None = None
 
     @classmethod
     def of(
@@ -86,12 +87,13 @@ class _Command:
         args: Mapping[str, Any],
         key: str | None = None,
         expected_version: int | None = None,
+        native: Mapping[str, str] | None = None,
     ) -> Self:
         try:
             text = canonical(jsonable(args))
         except (TypeError, ValueError, RecursionError):
             text = ""  # Decoding refuses this.
-        return cls(principal, op, text, args_hash(op, text), key, expected_version)
+        return cls(principal, op, text, args_hash(op, text), key, expected_version, native)
 
     def check(self) -> None:
         """Refuse what could never be journaled, even as a refusal."""
@@ -243,9 +245,13 @@ class Kernel:
         *,
         key: str | None = None,
         expected_version: int | None = None,
+        native: Mapping[str, str] | None = None,
     ) -> Outcome:
-        """Run one command and return its outcome once durable. A refusal is an outcome, not an exception."""
-        command = _Command.of(principal, op, args, key, expected_version)
+        """Run one command and return its outcome once durable. A refusal is an outcome, not an exception.
+
+        `native` holds a backend's ids for this command, stamped on its events as evidence and read by nothing.
+        """
+        command = _Command.of(principal, op, args, key, expected_version, native)
         operation = self.ops.get(op)
         if operation is not None and operation.exposes and principal.kind != "agent":
             if expected_version is None:
@@ -291,7 +297,7 @@ class Kernel:
                 current = stream_version(db, target)
                 if current != command.expected_version:
                     raise Refused("conflict", {"expected": command.expected_version, "current": current})
-            txn = Txn(db, me, now, self._apply)
+            txn = Txn(db, me, now, self._apply, command.native)
             result = jsonable(operation.fn(txn, args))
             if len(canonical(result).encode()) > DATA_LIMIT:
                 raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
@@ -310,7 +316,7 @@ class Kernel:
         """End a command on `op.refused`. If even that fails, nothing happened and a retry may run."""
         outcome = command.refused(refusal, target)
         try:
-            txn = Txn(db, command.principal, now, self._apply)
+            txn = Txn(db, command.principal, now, self._apply, command.native)
             txn.emit(
                 "op.refused",
                 f"commands/{command.principal.id}",
@@ -359,12 +365,17 @@ class Kernel:
             raise
         return sha256
 
-    def get_body(self, sha256: str) -> bytes:
-        """Read a body, or refuse `not_found` with the reason. An op decides who may; this checks no grant."""
+    def get_body(self, sha256: str, *, limit: int | None = None) -> bytes:
+        """Read a body, or refuse `not_found` with the reason. An op decides who may; this checks no grant.
+
+        One past `limit` bytes is refused `unsupported` before any of it is read.
+        """
         with self._reading() as db:
-            data = bodies.lookup(db, sha256)["data"]
-        if data is not None:
-            return data
+            found = bodies.lookup(db, sha256)
+        if limit is not None and found["size"] > limit:
+            raise Refused("unsupported", f"this body is {found['size']} bytes, past the {limit} this reader takes")
+        if found["data"] is not None:
+            return found["data"]
         try:
             return self._blobs.read(sha256)
         except FileNotFoundError:

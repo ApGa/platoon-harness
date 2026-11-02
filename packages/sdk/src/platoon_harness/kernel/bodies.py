@@ -102,7 +102,7 @@ def lookup(db: sqlite3.Connection, sha256: str) -> sqlite3.Row:
     """Find a readable body's row, or say why there is none."""
     if Tombstones(db).has(sha256):
         raise Refused("not_found", "this body was tombstoned")
-    row = db.execute("SELECT data FROM bodies WHERE sha256 = ?", (sha256,)).fetchone()
+    row = db.execute("SELECT size, data FROM bodies WHERE sha256 = ?", (sha256,)).fetchone()
     if row is None:
         raise Refused("not_found", f"no body {sha256}")
     return row

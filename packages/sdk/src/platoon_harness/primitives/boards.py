@@ -1,7 +1,6 @@
 """Boards: named objects with immutable versions, found by structured query."""
 
 import json
-import re
 import sqlite3
 from typing import Annotated, Any
 
@@ -11,6 +10,7 @@ from platoon_harness.kernel import Args, Event, Refused, Txn, View, fold, op
 
 from .channels import Channel, Channels
 from .common import (
+    LINE_RANGE,
     RESULT_LIMIT,
     AgentName,
     BasedOn,
@@ -24,11 +24,11 @@ from .common import (
     expose_read,
     fitted,
     inline_body,
+    lines_of,
     size_of,
 )
 from .messages import announce
 
-_RANGE = re.compile(r"L([1-9]\d*)-([1-9]\d*)")
 _FIELDS_LIMIT = 4096
 
 Scalar = str | int | float | bool | None
@@ -198,34 +198,15 @@ class Get(Args):
     board: BoardName
     name: ObjectName
     version: Annotated[Seq | None, Field(ge=1, description="A version; the latest if left out.")] = None
-    range: Annotated[str | None, Field(pattern=_RANGE.pattern, description="Lines of the body, as `L10-40`.")] = None
-
-
-def _slice(text: str, wanted: str | None, room: int) -> tuple[str, int, int] | None:
-    """The lines of `wanted` that fit in `room`: text, first and last. A line too long to fit gives nothing, and a range
-    no line stands in is refused with how many there are."""
-    lines = text.splitlines(keepends=True)
-    match = _RANGE.fullmatch(wanted) if wanted else None
-    first = int(match[1]) if match else 1
-    last = min(int(match[2]) if match else len(lines), len(lines))
-    if first > max(last, 1):
-        raise Refused("invalid", {"lines": len(lines), "detail": f"no lines {wanted}"})
-    size = 0
-    kept = first - 1
-    for line in lines[first - 1 : last]:
-        size += size_of(line)
-        if size > room:
-            break
-        kept += 1
-    return None if kept < first else ("".join(lines[first - 1 : kept]), first, kept)
+    range: Annotated[str | None, Field(pattern=LINE_RANGE, description="Lines of the body, as `L10-40`.")] = None
 
 
 @op("board.get", on=lambda a: f"board/{a.board}/{a.name}", exposes=True, tool=True)
 def get(txn: Txn, a: Get) -> dict[str, Any]:
     """Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`. A
-    long body comes back cut: `ref` says which lines you got and `lines` how many exist, so ask for the next range. Cite
-    `ref`. `text` is absent for a binary body or one stored outside the journal. Refused `invalid`, with `lines`, for a
-    range past the end. `not_found` when the board, object or version does not exist."""
+    long body comes back cut: `lines` says how many exist and `rest` is a ref for `blob.get` to read on. Cite `ref`.
+    `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the
+    board, object or version does not exist."""
     _board(txn, a.board)
     row = txn.view(Boards).get(a.board, a.name, a.version)
     if row is None:
@@ -239,18 +220,16 @@ def get(txn: Txn, a: Get) -> dict[str, Any]:
         "body": row["body"],
     }
     exposed = [Exposed.of(ref, "gist", row["gist"])]
-    data = None if row["body"] is None else inline_body(txn, row["body"])
-    text = None if data is None else decoded(data)
-    if text is not None:
-        total = len(text.splitlines())
-        shown["lines"] = total
-        cut = _slice(text, a.range, RESULT_LIMIT - size_of(shown))
-        if cut is not None:
-            content, first, last = cut
-            whole = first == 1 and last == total and a.range is None
-            ref = ref if whole else f"{ref}#L{first}-{last}"
-            shown |= {"ref": ref, "text": content}
-            exposed.append(Exposed.of(ref, "body", content))
+    if row["body"] is not None:
+        shown["text"] = None  # A surface fetches what an op may not read.
+        data = inline_body(txn, row["body"])
+        text = None if data is None else decoded(data)
+        if text is not None:
+            cut = lines_of(row["body"], text, a.range, RESULT_LIMIT - size_of(shown))
+            shown |= cut.shown()
+            if cut.text is not None:
+                ref = shown["ref"] = f"{ref}{cut.span}"
+                exposed.append(Exposed.of(ref, "body", cut.text))
     expose_read(txn, exposed, positions={f"board/{a.board}/{a.name}": row["seq"]})
     return shown
 

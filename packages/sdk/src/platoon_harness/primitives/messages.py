@@ -544,7 +544,7 @@ class Read(Args):
     limit: Annotated[int, Field(ge=1, le=DIGEST_ITEMS, description="The most entries to return.")] = DIGEST_ITEMS
     sender: Annotated[AgentName | None, Field(description="Only entries from this agent.")] = None
     thread: Annotated[str | None, Field(description="Only entries of this thread.")] = None
-    bodies: Annotated[bool, Field(description="Add each body's `text` where it fits.")] = False
+    bodies: Annotated[bool, Field(description="Add each body's `text`.")] = False
 
 
 class _Shown(NamedTuple):
@@ -559,6 +559,7 @@ def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
     row = entry.shown()
     exposed = [Exposed.of(entry.ref, "gist", entry.gist)]
     if bodies and entry.body is not None:
+        row["text"] = None  # A surface fetches what an op may not read.
         data = inline_body(txn, entry.body)
         text = None if data is None else decoded(data)
         if data is not None and text is not None and size_of({**row, "text": text}) <= RESULT_LIMIT:
@@ -571,9 +572,10 @@ def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
 def read(txn: Txn, a: Read) -> dict[str, Any]:
     """Read your inbox, or `#channel` or `+group`, from where you left off. Passing `after`, a `cursor` from an earlier
     read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it
-    skipped. `bodies` adds body `text` where it fits, recorded apart from gists; a body too long keeps only its hash.
-    `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel: call
-    `channel.list`. `invalid` for an `after` past every event: leave it out."""
+    skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref for
+    `blob.get`, and past what one result holds `text` is null: pass `body` to `blob.get`. `behind` counts what is left,
+    up to 4096. Refused `not_permitted` when you do not read this channel: call `channel.list`. `invalid` for an `after`
+    past every event: leave it out."""
     stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
     txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)

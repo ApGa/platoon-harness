@@ -211,7 +211,7 @@ async def test_a_body_in_blobs_comes_back_as_its_hash(kernel, notes):
 
     got = result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
 
-    assert got["body"] == body and "text" not in got
+    assert got["body"] == body and got["text"] is None
     assert [item["form"] for item in of_type(kernel, "context.offered")[-1].data["items"]] == ["gist"]
 
 
@@ -224,7 +224,7 @@ async def test_a_redacted_body_stops_at_commit(kernel, notes):
 
     got = result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
 
-    assert got["body"] == body and "text" not in got
+    assert got["body"] == body and got["text"] is None
 
 
 async def test_an_agents_get_is_a_command_and_a_humans_is_a_query(kernel, notes, ada):
