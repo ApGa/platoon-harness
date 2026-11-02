@@ -65,6 +65,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
+    version = 2
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,

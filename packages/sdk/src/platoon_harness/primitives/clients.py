@@ -43,6 +43,7 @@ def _settle_actions(event: Event) -> list[dict[str, Any]]:
 class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away."""
 
+    version = 2
     schema = """
     CREATE TABLE v_attention(
         id TEXT PRIMARY KEY,

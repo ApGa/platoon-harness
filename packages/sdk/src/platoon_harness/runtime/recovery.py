@@ -125,11 +125,17 @@ async def _reconcile(host: Host, cwd: Path, effect: Effect, agents: dict[str, di
             await _reconcile_answer(host, effect)
 
 
+def _asked(kernel: Kernel, op: str, args: dict[str, Any]) -> Any:
+    outcome = kernel.query(kernel.runtime, op, args)
+    if outcome.refusal is not None:
+        raise Refused.of(outcome.refusal)
+    return outcome.result
+
+
 async def recover_agents(kernel: Kernel, host: Host, folder: Path, cwd: Path) -> None:
     """Take a session up again. A session that has stopped accepting work spends nothing: it is reaped and no more."""
-    runtime = kernel.runtime
-    agents = {row["name"]: row for row in kernel.query(runtime, "agent.records", {}).result}
-    accepting = kernel.query(runtime, "session.status", {}).result["state"] == "open"
+    agents = {row["name"]: row for row in _asked(kernel, "agent.records", {})}
+    accepting = _asked(kernel, "session.status", {})["state"] == "open"
     await asyncio.gather(*(_take_up(host, folder, agent, accepting) for agent in agents.values()))
-    for row in kernel.query(runtime, "effect.list", {"state": "uncertain"}).result:
+    for row in _asked(kernel, "effect.list", {"state": "uncertain"}):
         await _reconcile(host, cwd, Effect.model_validate(row), agents)

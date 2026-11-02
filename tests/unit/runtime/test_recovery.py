@@ -3,6 +3,7 @@ the journal as a crash leaves it, so each row can be reached at will. `test_cras
 
 import asyncio
 import json
+import sqlite3
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ from platoon_harness.drivers import (
     TurnStarted,
 )
 from platoon_harness.kernel import is_held
-from platoon_harness.primitives import CUT_OFF
+from platoon_harness.primitives import CUT_OFF, Agents
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
@@ -938,6 +939,38 @@ async def test_a_lost_turn_stays_in_attention_until_its_agent_is_back_in_a_turn(
 
         await until(lambda: of_type(session, "turn.started"), session, lambda found: len(found) == 2)
         assert "turn/bob" not in {row["id"] for row in await session.attention()}
+
+
+# A session from before a change.
+
+
+def older(folder: Path, *, version: int) -> None:
+    """Leave a journal's `v_agents` as an SDK with one column fewer left it, under that SDK's view version."""
+    db = sqlite3.connect(folder / "journal.sqlite")
+    db.execute("ALTER TABLE v_agents DROP COLUMN stopped")
+    db.execute("UPDATE v_folds SET version = ? WHERE view = 'agents'", (version,))
+    db.commit()
+    db.close()
+
+
+async def test_a_session_from_before_a_view_changed_resumes_and_tells_its_agent(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back())
+    older(tmp_path / "sessions" / "s", version=Agents.version - 1)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+
+    assert items[-1].gist == "I looked first"
+
+
+async def test_agents_nobody_can_read_stop_a_resume_loudly(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back())
+    older(tmp_path / "sessions" / "s", version=Agents.version)
+
+    with pytest.raises(Refused, match="ValidationError"):
+        await Session.resume("s", root=tmp_path)
+
+    assert not is_held(tmp_path / "sessions" / "s")
 
 
 # What nobody may wait on for ever.

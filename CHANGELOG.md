@@ -86,6 +86,8 @@
 - A stop that comes to `SIGKILL` reports `crash_window`. `stop_leaves_no_process` could not see a tool, and a tool that leads its own
   group outlives a kill of its harness.
 - A resume under other SDK or extension versions leaves a record on `runtime.started`. It left none.
+- A session from before `v_agents` changed resumes: `Agents` and `Attention` are at version 2, and a test pins each view's schema to its
+  version. Such a session used to die in recovery on a `TypeError`, and agents nobody can read now stop a resume with the refusal.
 - A model on a long team can still find its peers: `peers` and `channel.list` go a page at a time, where one past 32 KiB was refused
   with nothing left to try.
 - A description or a handover no longer names a tool its reader does not hold, and a refused query leaves its line out of the preamble.

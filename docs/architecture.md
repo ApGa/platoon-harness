@@ -355,7 +355,9 @@ failed, stays set and is tried again. Any op can emit `timer.set`, and `timer.cl
 A `View` is a class with a schema, `@fold` methods, and typed query methods. Core and extension views are identical
 in kind. Other code reads a view through `txn.view(Tasks).open_in(queue)`, never through its SQL, so a table layout is
 not an API. Its tables are named `v_<name>`, or start with that and `_`, and no two views share one. A version bump drops and
-refolds that view, and so does finding its high-water mark behind the journal, which is what a toggled extension leaves. Folds
+refolds that view, and so does finding its high-water mark behind the journal, which is what a toggled extension leaves. A change to
+a view's table or to what its folds write bumps its version, or an older session's table stands and its resume fails. A test pins each
+schema to its version. Folds
 ignore unknown types, which is why unknown events survive. `@fold("*")` sees every event, for a view that cannot name what it
 counts, as `Waits` cannot. CI compares live views to a rebuild after every scenario.
 

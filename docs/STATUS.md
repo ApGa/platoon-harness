@@ -55,7 +55,7 @@ power loss. Nothing here has run on macOS.
 | Bodies: inline, `blobs/`, fsync before citation, tombstones, erased bytes gone from the journal, the WAL and `blobs/`, redacted content kept out | tested | `test_bodies.py` on Linux. Bytes on the device below the filesystem are out of scope |
 | Effects: lifecycle, timeouts, `on_uncertain`, priority, attempt fence, recovery of the journal side including `turn.lost`, a list by state, an incarnation's number | tested | `test_effects.py` |
 | Timers and the clock daemon on an injected clock, unjournaled firings kept | tested | `test_timers.py` |
-| Views: versions, per-view rebuild, high-water marks, `rebuild_all` | tested | `test_views.py`, properties |
+| Views: versions, per-view rebuild, high-water marks, `rebuild_all`, each schema pinned to its version | tested | `test_views.py`, properties, `tests/unit/primitives/test_extensions.py`. What a fold writes has no pin: a change there needs its bump by hand |
 | Readers: `read`, `follow` with one shared read per pulse, `query`, lossy `deltas` from a frame, live principals only, a follower stopped at its revocation, no wake on a batch with no events | tested | `test_readers.py` |
 | Read-only kernels: schema check, staleness per query, a moving head, a closed journal refused once a writer touches it | tested | `test_journal.py` |
 | Daemon supervision with backoff | tested | `test_daemon.py` |
@@ -94,7 +94,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves, back-off after a failed handover, and an agent lost after six in a row | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
-| A resume under other SDK or component versions labelled on `runtime.started`, not refused | tested | `test_recovery.py`, `test_config.py`. Harness versions are on `agent.resumed` |
+| A resume under other SDK or component versions labelled on `runtime.started`, not refused, and a session from before a view changed refolded and resumed | tested | `test_recovery.py`, `test_config.py`. Harness versions are on `agent.resumed`. A journal that was stopped under the old reason for a stop is not told |
 | A compaction's `forgotten` and `summary` stored as bodies, with `compaction_opaque` recorded for an unknown `forgotten` | tested | `test_reports.py`, and a long list through a host in `test_host.py`. No compaction has been observed on a real harness |
 | `call_id` on `item.recorded` and `usage.reported`, `purpose` on `model.called`, `native_id` on `context.delivered`, and a closed `Item.phase` | tested | `test_reports.py`. `call.joined` for the late case is not built |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
