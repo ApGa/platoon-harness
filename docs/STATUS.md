@@ -92,7 +92,7 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
-| Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py` |
+| Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py`. A task that reopens after a lapse releases no such wait: pass a `timeout` |
 | `hold` as a surface keeps it | implemented | `hold_open` is tested. No tool plane calls it yet |
 | One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |
 | Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors, a wait counting only versions unread | tested | `test_boards.py` |
@@ -107,7 +107,7 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Closing a headless session at `until` | deferred | `session.status` reports `done`. The owner that acts on it arrives with `Session` |
 | Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |
 | Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
-| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budget` has no role for it |
+| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
 | `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
 | A `body` argument offered as text on the tool plane | planned | Architecture section 10. No tool plane exists, so only `Kernel.put_body` makes a body today |
@@ -125,7 +125,7 @@ against a real kernel with stand-in ops, and nothing yet journals a team at open
 | `Role`, `Team`, `Topology` as frozen models, with TOML and Python building one object | tested | `test_presets.py` |
 | The nine presets, with the worked examples of the research note as tests | tested | `test_presets.py` |
 | Union: commutative, associative, a stable hash, conflicts naming both sources, no `deny` | tested | `test_union.py`, properties |
-| `compile`: edges, channels, groups, `may_spawn`, lifecycle, `wait` and scopes, enforced by the real `authorize` | tested | `test_compile.py` against stand-in ops. The object names match `primitives` by reading its source, not by running it |
+| `compile`: edges, channels, groups, `may_spawn`, lifecycle, `wait` and scopes, enforced by the real `authorize` | tested | `test_compile.py` against stand-in ops, `test_compiled_grants.py` against the real ones. Channel verbs come from one table in `primitives` |
 | `next`, `prev` and groups expanded over roles | tested | `test_compile.py` |
 | `team_check`: refusals, warnings, did-you-mean, every problem at once, recursion through a written grant, relations no `may_spawn` makes true | tested | `test_check.py` |
 | A preset nobody knows, refused at load unless the team names an extension | tested | `test_check.py` |

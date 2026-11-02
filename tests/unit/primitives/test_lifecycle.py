@@ -652,6 +652,16 @@ async def test_agent_list_shows_no_content(kernel):
     assert [row["name"] for row in rows] == ["@bob"] and "goal" not in rows[0] and "activity" not in rows[0]
 
 
+@pytest.mark.parametrize("spelling", ["bob", "@bob", "agent:bob"])
+async def test_an_agent_has_one_address_and_takes_any_spelling(kernel, spelling):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", by=alice)
+
+    shown = result_of(kernel.query(alice, "agent.status", {"agent": spelling}))
+
+    assert (shown["name"], shown["parent"]) == ("@bob", "@alice")
+
+
 async def test_agent_status_of_nobody_is_refused(kernel):
     assert refusal(kernel.query(kernel.runtime, "agent.status", {"agent": "ghost"})).code == "not_found"
 

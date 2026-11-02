@@ -264,7 +264,7 @@ class Wait(Args):
     tasks: Annotated[tuple[str, ...], Field(description="Tasks to settle, each `queue/id`.")] = ()
     board: Annotated[tuple[str, ...], Field(description="Objects to change, each `board/name`.")] = ()
     channels: Annotated[tuple[str, ...], Field(description="`#channel` or `+group`, for a new entry.")] = ()
-    queue: Annotated[tuple[str, ...], Field(description="Queues to have open work.")] = ()
+    queue: Annotated[tuple[str, ...], Field(description="Queues with open work now, or to get a new task.")] = ()
     mode: Annotated[Literal["all", "any"], Field(description="Whether everything must hold, or one thing.")] = "all"
     after: Annotated[Seq | None, Field(description="A `cursor` to count from, instead of what you have read.")] = None
     timeout: Annotated[float | None, Field(gt=0, description="Seconds until the wait gives up.")] = None
@@ -345,8 +345,8 @@ def _ack_all(txn: Txn, reader: str | None, streams: Iterable[str], after: int | 
 @op("wait", on=lambda a: None, tool=True)
 def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
     """Wait without spending a turn: for `agents` to end, a message `from` each named agent, `tasks` to settle, a
-    version of `board` newer than you read, a new entry on `channels`, or `queue` to have open work. `mode` is `all` or
-    `any`. One wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
+    version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`. One
+    wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
     runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran
     out, call again or end your turn. Refused `not_permitted` for what you may not watch, and `unsupported` when this
     harness cannot park: pass `timeout` and a `hold` at least as long. `invalid` for an `after` past every event: leave

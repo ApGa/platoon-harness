@@ -312,12 +312,12 @@ A rebuild runs under an SQLite authorizer limited to the view's own tables, so a
 never sees `outcome`, which does not exist yet when a live fold runs.
 
 **One event, many folds** is how a transition stays atomic. `agent.ended` is one event. In that one transaction `Waits`
-cancels the agent's waits, `Budget` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
+cancels the agent's waits, `Budgets` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
 input undeliverable, `Approvals` closes pending requests as moot, and `Principals` revokes the token. The op adds one
 message to the monitoring agent's inbox, cancels the effects the agent had still to start, and keeps its final report on the event,
 so a root agent's report stays in the journal and, unheard, in attention. A failed handover has the same shape: `effect.failed` on a
 `deliver` queues its entries again in `Deliveries`, returns the agent to `idle` in `Agents`, and gives a wake's reservation back in
-`Budget`; a failed steer leaves the running turn its own.
+`Budgets`; a failed steer leaves the running turn its own.
 
 ### 5.6 Readers
 
@@ -559,7 +559,8 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 - **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`, `channels`, `queue`) and compile to `on(...)`, which no tool
   schema shows, so a model never learns stream names. `from` counts by subject, so a monitor's report counts as its child's, and a
   human or a program by name. `queue` holds on the oldest open task, or else wherever the next will land, so a task added after
-  `queue_empty` cannot slip by. The Python sugar is `lead.finished()`.
+  `queue_empty` cannot slip by. A task that reopens after a lapse releases no such wait, so pass a `timeout` where that matters. The
+  Python sugar is `lead.finished()`.
 - A parked agent whose harness cannot resume is `lost` through the normal ended transition.
 
 **Barrier** is library code: a topic plus `wait(on(..., n=members, distinct="actor"))`, with member snapshot and generation
@@ -601,7 +602,7 @@ agent can never carry an approval.
 
 ### Budgets
 
-`Budget` holds limits for `tokens`, `usd`, `turns`, `agents`, `wall`, shared and per role.
+`Budgets` holds limits for `tokens`, `usd`, `turns`, `agents`, `wall`, shared and per role.
 
 A wake reserves an estimate; turn end reconciles it. An agent holds one turn's reservation. So overshoot is bounded by the
 largest turn's cost times the live agents. Spawn reserves in the admission transaction, and a wake refused for budget is an
