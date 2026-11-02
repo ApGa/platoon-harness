@@ -70,7 +70,8 @@ For extension and training authors:
 
 ### Naming law
 
-Checked by a test.
+Checked by a test, and by the kernel at load and at `emit`: an op may not be past tense, an event must be, and the namespace
+must equal the extension's name. `effect.uncertain` is the one event named for a state.
 
 - Ops are imperative (`task.claim`); events are past tense (`task.claimed`).
 - The extension's name is the namespace. Collisions are refused at load. There is no `x.` prefix.
@@ -94,8 +95,8 @@ Each law is a sentence, and each has a test of the same name.
 4. **Ack follows commit.** A caller learns a result only after the fsync that made it durable.
 5. **Replay executes nothing.** Work starts only from `effect.requested` rows and live views. Refolding runs no
    effect, and rendering history to a UI never re-executes a tool.
-6. **Identity comes from a credential.** No tool schema has an identity, role, session or policy field.
-   Undeclared arguments are refused and journaled, because a spoof attempt is evidence.
+6. **Identity comes from a credential.** No tool schema has a field claiming the caller's identity, role, session or
+   policy. Undeclared arguments are refused and journaled, because a spoof attempt is evidence.
 7. **References point backward.** `cause`, `based_on` and every ref in an event resolve to a lower `seq`. So the
    dependency graph is acyclic by construction. `seq` is the order the journal learned things; dependency comes
    only from references. A relation learned later is a new event citing both sides.
@@ -151,9 +152,9 @@ can both be watched. Leaving only disconnects.
 
 ```python
 class Kernel:
-    def open(path, *, clock, ops, views) -> Kernel: ...
-    async def submit(self, principal, op, args, *, key=None, expected_version=None) -> Result: ...
-    def query(self, principal, op, args) -> Result: ...       # a read-only op on a read connection
+    def open(path, *, clock=None, extensions=(), read_only=False) -> Kernel: ...
+    async def submit(self, principal, op, args, *, key=None, expected_version=None) -> Outcome: ...
+    def query(self, principal, op, args) -> Outcome: ...      # a read-only op on a read connection
     def read(self, principal, *, after, match=None, limit=512) -> Page: ...  # never for agent principals
     async def follow(self, principal, *, after, match=None) -> AsyncIterator[Page]: ...
     def deltas(self, agent) -> AsyncIterator[Delta]: ...      # lossy live text; never journaled
@@ -161,7 +162,12 @@ class Kernel:
 ```
 
 The kernel knows streams, principals, grants and effects. It does not know what a message, board, task or harness
-is; those are primitives, written as `Extension` values on the same contract a third party uses.
+is; those are primitives, written as `Extension` values on the same contract a third party uses. Its own ops, views and
+daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime` and `ops` are taken names.
+
+`submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. `read` and
+`follow`, which are not ops, raise `Refused`. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash)`,
+`recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)` and `push_delta(agent, text)`.
 
 ### 5.1 One write
 
@@ -181,20 +187,26 @@ through `submit` too, so no second path exists.
    - each `emit` inserts into `events` and runs folds inline.
 
    A refusal rolls back the savepoint, then commits one `op.refused` event, so a retry gets the same answer and a
-   denial stays evidence. A command always ends on one event carrying its `outcome`.
-4. **Commit.** One fsync per batch. Only then are futures resolved, and the head pulses.
+   denial stays evidence. A command always ends on one event carrying its `outcome`: the last event an op emits is
+   folded at once but held back from `events` until the op returns, and an op that emits nothing ends on `op.completed`.
+   `op.refused` and `op.completed` go on the stream `commands/<actor>`, so a failed attempt moves no object's version.
+4. **Commit.** One fsync per batch. Only then are futures resolved, and the head pulses. If the commit fails, no command
+   in the batch happened: each gets `unavailable`, journals nothing, and may retry under its key.
 
 ### 5.2 Tables
 
 | Table | Kind | Why it cannot be removed |
 |---|---|---|
 | `events` | truth | The journal. `UNIQUE(stream, version)` is optimistic concurrency. |
-| `bodies` | content | `sha256 → bytes`, for anything under 64 KiB. Separate from `events` so redaction can tombstone a body while the event and its hash survive. |
+| `bodies` | content | `sha256 → bytes`, inline up to 64 KiB; a larger body has a row and a file in `blobs/`. Separate from `events` so redaction can erase a body while the event and its hash survive. |
 | `meta` | fixed | Schema version, session id, creation time. Written once. |
 | `v_commands(actor, key, op, args_hash, outcome, seq)` | fold | A retry must receive the first answer, including a refusal. |
 | `v_principals(id, kind, role, parent, path, state, token_hash, scopes)` | fold | `authorize` needs the live graph in-transaction. `path` makes `descendants` a prefix test. |
 | `v_grants(who, ops, on, rev)` | fold | The compiled topology. |
-| `v_effects(id, kind, state, on_uncertain, deadline, data)` | fold | The outbox and the input to recovery. |
+| `v_effects(id, kind, state, on_uncertain, timeout, deadline, priority, agent, attempts, data, seq)` | fold | The outbox and the input to recovery. |
+| `v_timers(key, due, op, args, seq)` | fold | The clock daemon's work, which must survive a restart. |
+| `v_stamps(scope, value)` | fold | The open turn per agent and the open episode, read at every `emit`. |
+| `v_tombstones(sha256, seq)` | fold | Reads of a redacted body stop at commit, before its bytes are gone. |
 | `v_folds(view, version, high_water)` | fold bookkeeping | Lets one view rebuild alone, and stops a toggled extension leaving a stale view. |
 
 Everything else belongs to a primitive. Group generation, topology revision, board version and context version need
@@ -210,7 +222,7 @@ class Event(BaseModel, frozen=True):
     version: int                     # gapless per stream
     type: str                        # "task.claimed"; unknown types survive export and replay
     actor: str                       # authenticated: "agent:worker-1", "human:ada", "runtime", "program:map_reduce"
-    agent: str | None                # the agent this is about, when that differs or actor is runtime
+    agent: str | None                # the agent this is about; defaults to the acting agent
     turn: str | None
     context_version: int | None      # the agent's context version at commit; every agent event has one
     episode: str | None
@@ -222,17 +234,26 @@ class Event(BaseModel, frozen=True):
     model: ModelRef | None           # policy, version, call_id, tool_call_id, token span: only when real
     wall_time: float                 # for humans; never orders anything
     gist: str                        # at most 280 chars; what any client can show for any event
-    data: JsonValue                  # at most 16 KiB; larger content goes by body hash
+    data: Any                        # JSON, at most 16 KiB; larger content goes by body hash
     outcome: Outcome | None          # on a command's last event: op, key, args_hash, result or refusal
 ```
 
-The session id is a constant of the file and is added only at export.
+The session id is a constant of the file and is added only at export. An op cannot pass `seq`, `version`, `actor`,
+`wall_time` or the stamps, which the kernel takes from cheap state at `emit`:
+
+- `context_version` is the version of the stream `context/<agent>`, and `topology_rev` the version of the stream `topology`.
+- `turn` is open from `turn.started{turn}` through `turn.ended` or `turn.lost`, per agent, and those boundary events carry it.
+- `episode` is open from `episode.opened{episode}` through `episode.closed`. A session has one open at a time.
+
+`refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
+refuses. A ref is `stream@version`, with an optional `#range`, or `sha256:<hash>` for a body.
 
 ### 5.4 Effects
 
-An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=...)` appends `effect.requested`. A
-daemon commits `effect.started`, acts, then commits `effect.finished` or `effect.failed`. Daemons read `v_effects`, so
-they are level-triggered and hold no durable position.
+An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=..., priority=...)` appends
+`effect.requested` and returns the effect's id, which is that event's `seq`. A daemon commits `effect.start`, acts, then
+commits `effect.finish` or `effect.fail`. Daemons read `v_effects`, so they are level-triggered and hold no durable
+position. One agent's effects start in order. A `priority` above zero starts first and ignores that order.
 
 | Kind | Key sent outward | After a crash |
 |---|---|---|
@@ -243,19 +264,32 @@ they are level-triggered and hold no durable position.
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs |
 
-- **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash.
+- **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
+  sets a timer for it, and `effect.finish` clears that timer.
 - **Recovery** is one function: take `lock`, write `runtime.started{incarnation}`, then per agent **reap, resume,
   reconcile, dispatch**. Every `started` row becomes `effect.uncertain` and its declared policy applies: `retry`,
   `reconcile` or `surface`. `reconcile` needs a live link, so it runs after resume, and it is `unknown` when resume is
   unavailable. A turn in flight becomes `turn.lost` plus a gap, because its tool effects are unknown and never re-run.
+  `retry` appends `effect.retried`, which returns the effect to `requested`. `reconcile` and `surface` stay `uncertain` until
+  `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this; the incarnation is the version of
+  `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
+
+**Timers.** A `timer.set` event sets one: `{due, op, args, key}`, where `key` names one firing. The clock daemon sleeps on the
+injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then submits `timer.clear`. A crash between the two
+fires again under the same key, which answers from `v_commands`, so the op runs once. A refused firing is still cleared and stays
+journaled. Any op can emit `timer.cleared` to cancel.
 
 ### 5.5 Views
 
 A `View` is a class with a schema, `@fold` methods, and typed query methods. Core and extension views are identical
 in kind. Other code reads a view through `txn.view(Tasks).open_in(queue)`, never through its SQL, so a table layout is
-not an API. A version bump drops and refolds that view. Folds ignore unknown types, which is why unknown events
-survive. CI compares live views to a rebuild after every scenario.
+not an API. Its tables are named `v_<name>`, or start with that and `_`. A version bump drops and refolds that view, and so
+does finding its high-water mark behind the journal, which is what a toggled extension leaves. Folds ignore unknown types,
+which is why unknown events survive. CI compares live views to a rebuild after every scenario.
+
+A rebuild runs under an SQLite authorizer limited to the view's own tables, so a fold that reaches out fails loudly. A fold
+never sees `outcome`, which does not exist yet when a live fold runs; only `v_commands` is written from it.
 
 **One event, many folds** is how a transition stays atomic. `agent.ended` is one event. In that one transaction `Waits`
 cancels the agent's waits, `Budget` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
@@ -266,7 +300,13 @@ message to the monitoring agent's inbox.
 
 A subscription is repeated `read(after, match, limit)` plus a shared head pulse. One writer means `seq` order is commit
 order, so a cursor cannot skip a late commit. Each page is its own short read transaction, so a slow client cannot pin
-the WAL. Catch-up and live are one loop.
+the WAL. Catch-up and live are one loop. `match` is a glob over stream names, a filtered page scans at most 4,096 events,
+and `Page.cursor` is where to continue, so a page can be empty with more to come.
+
+Followers at the tail share one read per pulse into a bounded tail and take a slice; a lagging follower pages by SQL through
+a small bounded pool. A private read per follower does not keep up at 100 followers, and slows the writer. A reader takes one
+short transaction per page and never holds a cursor, because a half-read cursor pins the WAL while `in_transaction` says false.
+The checkpoint thread alarms when unbackfilled frames pass 16,000.
 
 Clients may rely on per-stream order only. Agents never get `read`: their reads are ops, checked per page against
 grants. Runtime-only ops are excluded by principal kind, so no grant glob can reach them.
@@ -275,7 +315,7 @@ grants. Runtime-only ops are excluded by principal kind, so no grant glob can re
 
 | Pressure | Answer |
 |---|---|
-| Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}` |
+| Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}`, which is not journaled. `runtime` has no per-principal limit and 256 more |
 | Payloads | `gist` 280 chars, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list paged |
 | Readers | They pull, so a slow client costs only its own lag |
 | Live text | One 256-frame ring per agent; overflow drops frames with a `lag` marker. The final `item` is authoritative |
@@ -286,11 +326,29 @@ grants. Runtime-only ops are excluded by principal kind, so no grant glob can re
 
 ### 5.8 Durability and portability
 
-WAL, `synchronous=FULL`, `fullfsync` and `checkpoint_fullfsync` on macOS, blob file and directory fsynced before citation.
-An ack means durable against a process crash on every platform, and against power loss where the OS and disk honor
-fsync. A closed session is portable: `session.close` checkpoints the WAL to empty, so the folder can be copied anywhere
+Pragmas: `journal_mode=WAL`, `synchronous=FULL`, `cache_size=-8192`, `mmap_size=0`, `temp_store=MEMORY`,
+`wal_autocheckpoint=16000`, `journal_size_limit=67108864`, plus `fullfsync=ON` and `checkpoint_fullfsync=ON` on macOS. Blob file
+and directory are fsynced before citation. Checkpoints stay off the commit path: a background thread runs `PASSIVE` every second
+on its own connection, with `wal_autocheckpoint` as the writer's hard cap, because the thread alone lets the WAL grow without
+bound at saturation. A rebuild runs with `FULL` in one transaction; `OFF` saves little and risks the file that holds the journal.
+A client that misses an ack retries under the same key, since a commit without an ack is expected.
+
+| Storage | An ack means | Status |
+|---|---|---|
+| Linux, local disk | Synced. Survives a process crash, and power loss if the device honors flush | Process crash tested, power loss not |
+| macOS, local disk | The same, only because `fullfsync` is on | Not yet measured |
+| tmpfs | Survives a process crash, not a reboot. Warned | |
+| Network filesystem | Refused for live writers, on guarantee rather than speed: SQLite does not support WAL across hosts | |
+| WSL | Linux rules inside the distro filesystem; `/mnt/c` is 9p and refused | Not run |
+
+A closed session is portable: `session.close` checkpoints the WAL to empty, so the folder can be copied anywhere
 and opened read-only with `immutable=1`. Estimators and exports use this form; a live journal is never read over a
-network filesystem.
+network filesystem. `Kernel.open(path, read_only=True)` picks between the two by whether `lock` is held or the WAL has
+content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it holds is behind the journal.
+
+`filesystem(path)` says what holds a path, from `statfs(2)` so that links and bind mounts resolve, and from the mount table by
+device for a FUSE subtype. A live journal is refused on a network filesystem with the name of a local directory to use, and
+warned on tmpfs or a type not known to be local.
 
 ## 6. Operations
 
@@ -307,6 +365,11 @@ def claim(txn: Txn, a: Claim) -> Lease:
 ```
 
 `Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `emit`, `effect`, `refuse`.
+
+`Op` holds `name`, `fn`, `input`, `on`, `query`, `exposes`, `tool` and `runtime`. `on` gives the object: the stream that
+grants are matched against and `expected_version` is checked on, or `session` when an op has none. `query` keeps an op out of
+history. `exposes` marks a read that is a command for agents and a query for everyone else; its body checks `txn.me.kind`,
+because a query cannot emit. `runtime` is the runtime-only marker. The runtime principal takes no grant.
 
 One definition reaches every surface.
 
@@ -341,7 +404,8 @@ to do next.
 | Wait | `wait` `wait.cancel` | |
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.put` | `blob.get` `lineage` `exposure` |
-| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `wait.release` `lease.expire` | |
+| Evidence, kernel | `body.tombstone` | |
+| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` | `effect.ready` `timer.next` |
 
 An agent's `board.get`, `board.query`, `message.read` and `task.claim` are commands; for a human or a program they run
 as queries and write nothing. `reply` is `send(reply_to=)`. Broadcast is `send("+group")`. `join` and `wait_any` are
@@ -529,7 +593,9 @@ non-commutative. Two sources defining one channel differently is a load error. A
 out. A preset that behaves differently from its expansion is a bug.
 
 **Compilation.** Topology compiles to one `(who, ops, on)` table, with relations in `on` (`inbox/{children}`). Grants name
-ops by glob, so an extension's op is authorized with no new vocabulary.
+ops by glob, so an extension's op is authorized with no new vocabulary. `who` is a principal id, a kind, `role:x` or `all`.
+`authorize` evaluates `self parent children siblings ancestors descendants human program all role:x`. `next`, `prev` and
+`group:x` have no evaluator yet, so `grant.add` refuses them `unsupported`.
 
 | Config | Enforcement | Shown to the agent | UI |
 |---|---|---|---|

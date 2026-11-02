@@ -13,3 +13,4 @@ htmlcov/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+.hypothesis/
