@@ -569,12 +569,19 @@ still reports back, and it stops at `max_hops`; past either, its message waits f
 So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
 
 A report also waits for the next turn when waking would tell the parent nothing. A parent that ended the child itself did it. A
-report the parent is counting does not wake it, unless the child ended badly: the wait wakes it when it holds, so a join of N costs
-one turn, and a failure still breaks in, which is fail-fast with no new wait grammar. A parent counts a child when a wait of its stands
-on the child's end, on a message from it, or on what it has already counted of it, such as a task it settled. A turn end is no end,
-so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it. A turn that did not stop on
-its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. An `interrupted` turn was someone's own doing,
-so it wakes nobody, and any other reason wakes the parent, even one counting that child.
+report the parent is counting does not wake it: the wait wakes it when it holds, so a join of N costs one turn. A parent counts a
+child when a wait of its stands on the child's end or on a message from it. It also counts one whose doing it has already counted,
+such as a task it settled, but only while someone else below it is at work, or it would sleep on what nobody is left to do. A turn
+end is no end, so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it, once per chain
+like any report.
+
+A turn that did not stop on its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. One that an
+interrupt or its owner's stop ended was someone's own doing, so it wakes nobody. Any other, and a child that ended badly, breaks in on
+a parent with a wait open, whatever that wait counts and whatever the chain has spent, since that wait may now never hold. This is
+fail-fast with no new wait grammar, and `max_hops` is what bounds it.
+
+A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, wakes its reader if a report is queued for
+its next turn: that report may have counted on the wait to wake it, and no other turn may come.
 
 ### Boards
 

@@ -126,11 +126,27 @@ def _monitor(
     return True
 
 
-def _counted(txn: Txn, agent: Agent, *, ended: bool = False) -> bool:
-    """Whether a wait of the parent is counting this agent. Its report need not wake anyone: the wait does, when it
-    holds, so a join of N costs one turn."""
-    waits = () if agent.parent is None else txn.view(Waits).open_for(agent.parent)
-    return any(wait.counts(agent.name, ended=ended) for wait in waits)
+def _others_at_work(txn: Txn, agent: Agent, parent: str) -> bool:
+    """Whether anyone else below this agent's parent is at work."""
+    principals = txn.view(Principals)
+    below = {found.name for found in principals.select(principals.live(parent), "descendants")}
+    return bool(_at_work(txn) & below - {agent.name})
+
+
+def _wakes(txn: Txn, agent: Agent, *, ended: bool = False, badly: bool = False) -> bool | None:
+    """Whether a report wakes the parent: True whatever its chain has spent, False not at all, None as its inbox says.
+    What went badly breaks in on a parent with a wait open, which may now never hold. Else a wait that is counting this
+    agent wakes the parent when it holds, so a join of N costs one turn. But one that has only counted something of its
+    doing, such as a task it settled, may need what nobody is left to do, so that takes someone else still at work."""
+    if agent.parent is None:
+        return None
+    waits = txn.view(Waits).open_for(agent.parent)
+    if badly:
+        return True if waits else None
+    if any(wait.awaits(agent.name, ended=ended) for wait in waits):
+        return False
+    counted = any(wait.counted(agent.name) for wait in waits)
+    return False if counted and _others_at_work(txn, agent, agent.parent) else None
 
 
 def end(
@@ -152,8 +168,8 @@ def end(
     ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
     body = body or agent.final_body
-    quiet = txn.me.id == agent.parent or (status == "finished" and _counted(txn, agent, ended=True))
-    heard = _monitor(txn, agent, report, body, wake=False if quiet else None)
+    wake = False if txn.me.id == agent.parent else _wakes(txn, agent, ended=True, badly=status != "finished")
+    heard = _monitor(txn, agent, report, body, wake=wake)
     txn.emit(
         "agent.ended",
         f"agent/{name}",
@@ -435,13 +451,13 @@ class AgentReport(Args):
 
 def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
     """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and one
-    stopped on purpose wakes nobody. A failure wakes the parent, even one counting this agent."""
+    stopped on purpose wakes nobody."""
     if reason == "stopped":
-        _monitor(txn, agent, wake=False if _counted(txn, agent) else None)
+        _monitor(txn, agent, wake=_wakes(txn, agent))
     else:
         said = f": {agent.final_gist}" if agent.final_gist else ""
         gist = f"{agent.name} turn {reason}{said}"[:GIST_LIMIT]
-        _monitor(txn, agent, gist, wake=False if reason in _ON_PURPOSE else None)
+        _monitor(txn, agent, gist, wake=False if reason in _ON_PURPOSE else _wakes(txn, agent, badly=True))
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:

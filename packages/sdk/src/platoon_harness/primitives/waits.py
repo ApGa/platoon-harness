@@ -30,6 +30,7 @@ from .messages import Deliveries, ack, post
 from .tasks import Tasks
 
 _END_TURN = "The wait is registered. End your turn: the runtime starts your next turn when it holds."
+_HELD_BACK = "A report came in during your wait."
 _TASK_SETTLED = ("task.completed", "task.died")
 _BOARD_VERSIONED = ("board.posted", "board.revised")
 _OUT_OF_TURN = ("idle", "waiting")
@@ -101,9 +102,14 @@ class Progress(BaseModel, frozen=True):
         lacking = tuple(f"{prefix}{value}" for value in self.expected if value not in self.seen)
         return lacking or (_label(self.stream),)
 
-    def stands_on(self, agent: str) -> bool:
-        """Whether this condition names `agent`, or has already counted something of its doing."""
-        return agent in self.expected or agent in self.seen or f"agent:{agent}" in self.seen
+    def awaits(self, agent: str, *, ended: bool) -> bool:
+        """Whether this condition is waiting to hear from `agent`, or for its end if it has `ended`."""
+        ending = ended and self.stream == f"agent/{agent}" and (not self.types or "agent.ended" in self.types)
+        return ending or agent in self.expected
+
+    def counted(self, agent: str) -> bool:
+        """Whether this condition has counted something of `agent`'s doing, such as a task it settled."""
+        return agent in self.seen or f"agent:{agent}" in self.seen
 
     def _news(self, event: Event) -> bool:
         """Whether an event is news to the waiter: not its own doing, and no entry it was never meant to see."""
@@ -159,12 +165,11 @@ class WaitRecord(BaseModel, frozen=True):
     def missing(self) -> tuple[str, ...]:
         return () if self.left <= 0 else tuple(value for condition in self.conditions for value in condition.missing)
 
-    def counts(self, agent: str, *, ended: bool) -> bool:
-        """Whether this wait is counting `agent`: its end, if it has `ended`, what it says, or what it has done."""
-        return any(
-            condition.stands_on(agent) or (ended and condition.stream == f"agent/{agent}")
-            for condition in self.conditions
-        )
+    def awaits(self, agent: str, *, ended: bool) -> bool:
+        return any(condition.awaits(agent, ended=ended) for condition in self.conditions)
+
+    def counted(self, agent: str) -> bool:
+        return any(condition.counted(agent) for condition in self.conditions)
 
     def shown(self) -> dict[str, Any]:
         return {"id": self.id, "have": self.have, "need": self.need, "missing": self.missing}
@@ -355,6 +360,14 @@ def _close(txn: Txn, waiter: str, id: int, kind: str) -> None:
     txn.emit(kind, stream, gist=f"wait {id} {kind.removeprefix('wait.')}", data={"id": id})
 
 
+def _wake_for_reports(txn: Txn, wait: WaitRecord) -> None:
+    """A report a wait held back counted on that wait to wake its reader. One closed with no notice cannot, so this
+    does, or the report waits on a turn nothing will start."""
+    reader = _reader(wait.waiter)
+    if reader is not None and txn.view(Deliveries).report_queued(reader):
+        post(txn, f"inbox/{reader}", _HELD_BACK, wake=True, follows=wait.hops)
+
+
 def _ack_all(txn: Txn, reader: str | None, streams: Iterable[str], after: int | None) -> None:
     """A wait that returned satisfied moved past what came before it. One cut off confirms nothing."""
     if reader is not None:
@@ -366,12 +379,12 @@ def _ack_all(txn: Txn, reader: str | None, streams: Iterable[str], after: int | 
 def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
     """Wait, spending no turn until it holds: for `agents` to end, a message `from` each named agent, `tasks` to settle,
     a version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`.
-    One wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
-    runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran
-    out, call again or end your turn. An agent you count that ends badly starts your next turn early, and the wait
-    stays open. Refused `not_permitted` for what you may not watch, `not_found` for an agent
-    nobody spawned. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least
-    as long. `invalid` for an `after` past every event: leave it out."""
+    One wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the runtime
+    starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran out, call
+    again or end your turn. A child of yours that ends badly starts your next turn early, and the wait stays open.
+    Refused `not_permitted` for what you may not watch, `not_found` for an agent nobody spawned. `unsupported` when this
+    harness cannot park: pass `timeout` and a `hold` at least as long. `invalid` for an `after` past every event: leave
+    it out."""
     _check_call(txn, a)
     after = checked_after(txn, a.after)
     asked = _conditions(txn, a)
@@ -425,6 +438,7 @@ def cancel(txn: Txn, a: WaitId) -> None:
     if wait is None or wait.waiter != txn.me.id or wait.closed is not None:
         raise Refused("not_found", "no open wait of yours")
     _close(txn, wait.waiter, wait.id, "wait.cancelled")
+    _wake_for_reports(txn, wait)
 
 
 class Release(Args):
@@ -444,7 +458,9 @@ def release(txn: Txn, a: Release) -> None:
     reader = _reader(wait.waiter)
     if holds:
         _ack_all(txn, reader, (condition.stream for condition in wait.conditions), wait.after)
-    if reader is not None and not a.told:
+    if a.told:
+        _wake_for_reports(txn, wait)
+    elif reader is not None:
         gist = "Your wait holds." if holds else f"Your wait timed out, missing {', '.join(wait.missing)}."
         post(txn, f"inbox/{reader}", gist[:GIST_LIMIT], wake=True, follows=wait.hops)
 

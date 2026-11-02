@@ -3,7 +3,7 @@
 import pytest
 
 from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
-from platoon_harness.primitives import OWNER_STOP, PRIMITIVES
+from platoon_harness.primitives import OWNER_STOP, PRIMITIVES, hold_open
 from platoon_harness.tools import shell_name
 from platoon_harness.tools.surface import refusal_text
 
@@ -1129,6 +1129,7 @@ async def test_a_join_on_tasks_costs_one_wake(kernel):
     await end_turn(kernel, "lead")
 
     first, second = workers
+    await start_turn(kernel, "b")
     result_of(await kernel.submit(first, "task.claim", {"queue": "q"}))
     result_of(await kernel.submit(first, "task.complete", {"queue": "q"}))
     await finished(kernel, first)
@@ -1136,11 +1137,13 @@ async def test_a_join_on_tasks_costs_one_wake(kernel):
     assert ready(kernel)["agents"] == []
     result_of(await kernel.submit(second, "task.claim", {"queue": "q"}))
     result_of(await kernel.submit(second, "task.complete", {"queue": "q"}))
-    await start_turn(kernel, "b")
     await end_turn(kernel, "b")
 
-    assert ready(kernel)["agents"] == []
     assert ready(kernel)["waits"] == [placed["id"]]
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    assert ready(kernel)["agents"] == []
+    assert len(of_type(kernel, "agent.woken")) == 1
 
 
 async def test_a_task_a_child_left_undone_is_no_report_the_wait_counts(kernel):
@@ -1202,21 +1205,161 @@ async def test_a_turn_the_parent_was_waiting_to_hear_of_does_not_wake_it(kernel)
     assert ready(kernel)["agents"] == []
 
 
-async def test_a_turn_that_did_a_counted_task_does_not_wake_the_parent(kernel):
+async def on_two_tasks(kernel: Kernel, *others: str) -> Principal:
+    """A lead parked on two tasks, of which its worker `a` has settled one, and these others below it."""
     lead = await spawn(kernel, "lead", role="lead", goal="")
     await channel(kernel, "q", "queue")
     worker = await spawn(kernel, "a", by=lead, goal="")
+    for name in others:
+        await spawn(kernel, name, by=lead, goal="")
     ids = [result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do"}))["task"] for _ in "ab"]
     await start_turn(kernel, "lead")
     result_of(await kernel.submit(lead, "wait", {"tasks": [f"q/{id}" for id in ids]}))
     await end_turn(kernel, "lead")
-
     await start_turn(kernel, "a")
     result_of(await kernel.submit(worker, "task.claim", {"queue": "q"}))
     result_of(await kernel.submit(worker, "task.complete", {"queue": "q"}))
+    return lead
+
+
+async def test_a_report_of_a_counted_task_leaves_the_wake_to_those_still_at_work(kernel):
+    await on_two_tasks(kernel, "b")
+    await start_turn(kernel, "b")
+
     await end_turn(kernel, "a")
 
     assert ready(kernel)["agents"] == []
+
+
+async def test_the_last_worker_at_work_wakes_a_join_on_tasks_it_left_open(kernel):
+    await on_two_tasks(kernel, "b")
+
+    await end_turn(kernel, "a")
+
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def test_a_worker_that_finishes_with_a_task_open_wakes_a_join_it_cannot_end(kernel):
+    await on_two_tasks(kernel)
+
+    await finished(kernel, agent("a"))
+    await end_turn(kernel, "a")
+
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def test_someone_at_work_elsewhere_is_no_reason_to_stay_quiet(kernel):
+    await on_two_tasks(kernel)
+    await spawn(kernel, "stranger", goal="")
+    await start_turn(kernel, "stranger")
+
+    await end_turn(kernel, "a")
+
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def test_a_wait_on_other_events_of_a_child_does_not_count_its_end(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    child = await spawn(kernel, "a", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "wait", {"on": [{"stream": "agent/a", "types": ["gap.recorded"]}]}))
+    await end_turn(kernel, "lead")
+
+    await finished(kernel, child)
+
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def report_held_back(kernel: Kernel, **wait: object) -> tuple[Principal, dict]:
+    """A lead in a turn with a wait open on its child, whose report that wait held back."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    child = await spawn(kernel, "a", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    placed = result_of(await kernel.submit(lead, "wait", {"agents": ["a"], **wait}))
+    await finished(kernel, child)
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "next-turn"
+    return lead, placed
+
+
+async def test_a_report_a_wait_held_back_reaches_a_turn_after_wait_cancel(kernel):
+    lead, _ = await report_held_back(kernel)
+
+    result_of(await kernel.submit(lead, "wait.cancel", {}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == ["lead"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    assert "a is done" in [item["gist"] for item in handed["items"]]
+
+
+async def test_a_report_a_held_wait_held_back_reaches_a_turn_after_its_answer(kernel):
+    _, placed = await report_held_back(kernel, hold=30.0)
+
+    shown = await hold_open(kernel, placed)
+    assert shown["state"] == "released"
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"], "told": True}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == ["lead"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    assert "a is done" in [item["gist"] for item in handed["items"]]
+
+
+async def test_a_wait_cancelled_with_nothing_held_back_wakes_nobody(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "a", by=lead, goal="")
+    await channel(kernel, "t")
+    await channel(kernel, "news", "topic", delivery="next-turn")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
+    await send(kernel, agent("a"), "#news", "not for waking")
+
+    result_of(await kernel.submit(lead, "wait.cancel", {}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == []
+
+
+async def spent_chain(kernel: Kernel) -> None:
+    """A child that reported, spending its chain's wake, and a lead that replied and parked on its end."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "a", by=lead, goal="")
+    await start_turn(kernel, "a")
+    await report(kernel, "a", "item", kind="message", gist="first go")
+    await end_turn(kernel, "a")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    await start_turn(kernel, "lead")
+    await send(kernel, lead, "@a", "again")
+    result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
+    await end_turn(kernel, "lead")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "a"}))
+    await start_turn(kernel, "a", "t2")
+
+
+async def test_a_failed_turn_breaks_in_on_a_parked_parent_past_a_spent_chain(kernel):
+    await spent_chain(kernel)
+
+    await end_turn(kernel, "a", "rate limited")
+
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def test_a_spent_chain_still_stops_a_turn_that_went_well(kernel):
+    await spent_chain(kernel)
+
+    await end_turn(kernel, "a")
+
+    assert ready(kernel)["agents"] == []
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 1}])
+async def test_max_hops_stops_a_failed_turn_breaking_in(kernel, limits):
+    await spent_chain(kernel)
+
+    await end_turn(kernel, "a", "rate limited")
+
+    assert ready(kernel)["agents"] == []
+    assert of_type(kernel, "wake.refused")[-1].data["why"] == "hops"
 
 
 @pytest.mark.parametrize("limits", [{"max_hops": 0}])

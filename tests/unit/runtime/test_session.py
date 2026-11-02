@@ -846,6 +846,42 @@ async def test_two_agents_waiting_on_each_other_is_exit_4_and_never_a_hang(tmp_p
     assert ending.reason == "needs_human"
 
 
+def lead_over(lead: str, worker: str) -> Team:
+    roles = {"lead": {"harness": lead, "may_spawn": ["worker"]}, "worker": {"harness": worker, "count": 0}}
+    return Team.model_validate(
+        {"roles": roles, "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}}}
+    )
+
+
+async def said(session: Session, text: str) -> None:
+    await until(
+        lambda: of_type(session, "item.recorded"), session, lambda found: text in [event.gist for event in found]
+    )
+
+
+async def test_a_report_a_held_wait_held_back_reaches_a_turn(tmp_path):
+    spawned = Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "go"})
+    lead = scripted([spawned, Call("wait", {"agents": ["w1"], "hold": 5.0})], [Say("the lead heard it")])
+    worker = scripted([Call("agent_finish", {"gist": "the answer is 42"})])
+
+    async with Session.start(lead_over(lead, worker), root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await said(session, "the lead heard it")
+
+
+async def test_a_join_on_tasks_whose_only_worker_stops_short_wakes_the_lead(tmp_path):
+    added = [Call("task_add", {"queue": "tasks", "gist": gist}) for gist in ("one", "two")]
+    spawned = Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "do one"})
+    joined = Call("wait", {"tasks": ["tasks/1", "tasks/2"]})
+    lead = scripted([*added, spawned, joined], [Say("the lead heard it")])
+    claimed = Call("task_claim", {"queue": "tasks"})
+    worker = scripted([claimed, Call("task_complete", {"queue": "tasks"}), Call("agent_finish", {"gist": "enough"})])
+
+    async with Session.start(lead_over(lead, worker), root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await said(session, "the lead heard it")
+
+
 async def test_a_wall_limit_to_come_is_waited_for_and_ends_the_session(tmp_path):
     clock = ManualClock(1000.0)
     team = until_lead([Say("I think we are done")], budget={"wall": "1m"})

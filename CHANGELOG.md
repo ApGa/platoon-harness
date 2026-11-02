@@ -76,10 +76,13 @@
 - `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
   It says `needs_human`. A wake the budget refused keeps a session from closing as `settled`.
 - A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
-- A report the parent is counting no longer wakes it, unless the child ended badly, so a join of N costs one turn and not N. The same
-  goes for a join on tasks.
+- A report the parent is counting no longer wakes it, so a join of N costs one turn and not N. The same goes for a join on tasks, while
+  someone else below the parent is at work: the last worker's report wakes it, or it would sleep on what nobody is left to do.
 - A turn that did not stop on its own says so to the parent, as `<name> turn <reason>: <text>`, and an `interrupted` one wakes nobody.
-  It used to read as a final answer and wake the parent.
+  It used to read as a final answer and wake the parent. A failed turn or a bad end breaks in on a parent with a wait open, even once
+  its chain's wake is spent.
+- A report a wait held back reaches a turn when that wait closes with no notice, by `wait.cancel` or a held call's answer.
+- A wait on other events of a child's stream no longer counts its end.
 - A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, a wake that is due and a wait that holds among them, naming them
   and what to do next. They used to cancel a child mid-turn in silence, or with a message unread. `team_check` warns of a one-shot role over children that would end with its turn.

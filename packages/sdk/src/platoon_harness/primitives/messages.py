@@ -321,6 +321,21 @@ class Deliveries(View):
         )
         return [(row["reader"], row["due"], bool(row["steer"])) for row in rows]
 
+    def report_queued(self, reader: str) -> bool:
+        """Whether a report of a child waits for this reader's next turn."""
+        return (
+            self.db.execute(
+                f"""
+                SELECT 1 {_QUEUED}
+                WHERE c.reader = ? AND c.closed = 0 AND e.delivery = 'next-turn'
+                    AND json_extract(e.entry, '$.subject') IS NOT NULL
+                LIMIT 1
+                """,
+                (reader,),
+            ).fetchone()
+            is not None
+        )
+
     def unread(self, reader: str) -> int:
         return self.db.execute(
             f"SELECT count(*) AS n {_QUEUED} WHERE c.reader = ? AND c.closed = 0", (reader,)
@@ -425,9 +440,9 @@ def post(
     wake: bool | None = None,
     follows: int = -1,
 ) -> Event:
-    """Journal one entry for its audience. The runtime posts here too, about a `subject`, or to `wake` the reader or,
-    with False, to leave it for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can
-    say so, as for a wait's notice."""
+    """Journal one entry for its audience. The runtime posts here too, about a `subject`, or to `wake` the reader,
+    whatever a chain has spent, or with False to leave it for the reader's next turn. `follows` is the hops of what a
+    post follows when no `cause` can say so, as for a wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake is not None
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
@@ -441,7 +456,7 @@ def post(
     past_hops = max_hops is not None and hops > max_hops
     setting = "wake" if wake else channel.delivery
     wants = setting in WAKING and wake is not False
-    wakes = wants and not past_hops and subject not in spent
+    wakes = wants and not past_hops and (wake or subject not in spent)
     event = txn.emit(
         "message.sent",
         stream,
