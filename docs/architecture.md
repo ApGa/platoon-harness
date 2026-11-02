@@ -336,6 +336,9 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   refuses leaves `native` plus a gap first, unless its agent has ended, when it is no loss. An approval the journal refuses is answered
   `deny`, since a harness is blocked on it. A `deliver` that wakes an agent stays open until the turn begins, so `waking` always has
   an effect behind it and recovery needs no second path: past a minute, or at an interrupt, it fails, and its entries are queued again.
+  What a driver wrote stays in the pipe of a harness that has stopped reading, and lands if it reads again, so that is at-least-once. An
+  `interrupt` or an `answer` that does not come back in a minute fails too, which leaves the turn open and the approval unanswered, and
+  only a wall limit ends a harness that stays that way.
 - **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
   `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. `agent.retell` then tells
   it what it cannot know, a goal that never began or a turn that was cut off (§7). With no native id, no

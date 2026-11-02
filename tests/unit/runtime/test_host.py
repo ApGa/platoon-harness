@@ -35,6 +35,7 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
+from platoon_harness.primitives import Verdict
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
@@ -863,6 +864,60 @@ async def test_a_delivery_that_hangs_is_cut_off_and_queued_again(tmp_path):
 
         await in_state(session, "bob", "idle")
         assert (await of_type(session, "effect.failed"))[0].data["error"] == "its harness did not take it in time"
+
+
+async def test_an_interrupt_a_harness_never_takes_is_cut_off_and_leaves_the_turn_open(tmp_path):
+    class Deaf(ScriptedDriver):
+        async def interrupt(self) -> Receipt:
+            await asyncio.Event().wait()
+            raise AssertionError
+
+    clock = ManualClock(1000.0)
+
+    async with Session.start(solo_with(lambda: Deaf([[Hang()]])), root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+        clock.advance(1.0)  # So that its minute is its own, and no sleeper left from the handover can stand in for it.
+        await session.interrupt("@bob")
+        await until(
+            lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "interrupt"
+        )
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1061.0)
+
+        clock.advance(60.0)
+
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+        assert failed[0].data["error"] == "its harness did not take it in time"
+        assert (await session.status("@bob"))["state"] == "running"
+        await session.cancel_agent("@bob")
+
+
+async def test_an_answer_a_harness_never_takes_is_cut_off_and_stays_unanswered(tmp_path):
+    class Deaf(ScriptedDriver):
+        async def answer(self, approval: str, verdict: Verdict) -> None:
+            await asyncio.Event().wait()
+
+    clock = ManualClock(1000.0)
+
+    async with Session.start(solo_with(lambda: Deaf([[Ask("run it?")]])), root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+        asked = (await until(session.approvals, session))[0]
+        clock.advance(1.0)  # So that its minute is its own, and no sleeper left from the handover can stand in for it.
+        await session.resolve(asked["id"], "allow", expected_version=asked["version"])
+        await until(
+            lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "answer"
+        )
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1061.0)
+
+        clock.advance(60.0)
+
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+        assert failed[0].data["error"] == "its harness did not take it in time"
 
 
 async def test_a_harness_that_takes_a_delivery_and_begins_no_turn_is_cut_off(tmp_path):

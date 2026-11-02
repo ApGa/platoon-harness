@@ -5,7 +5,7 @@ import contextlib
 import json
 import logging
 import shutil
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -357,10 +357,17 @@ class Host:
             return None
         if link.handing is not None:
             link.handing.set()
-        return (await link.driver.interrupt()).model_dump(mode="json")
+        return (await self._within(link.driver.interrupt())).model_dump(mode="json")
 
     async def _answer(self, effect: Effect) -> None:
-        await self._required(effect).driver.answer(effect.data["approval"], effect.data["verdict"])
+        await self._within(self._required(effect).driver.answer(effect.data["approval"], effect.data["verdict"]))
+
+    async def _within[T](self, asked: Coroutine[Any, Any, T]) -> T:
+        """A harness that has stopped reading fails what was asked of it, rather than hold it open for ever."""
+        answering = asyncio.ensure_future(asked)
+        if await first(answering, self._kernel.clock.sleep(_HANDOVER_SECONDS)):
+            return answering.result()
+        raise DriverError("its harness did not take it in time")
 
     async def _stop(self, effect: Effect) -> None:
         """End what an ended agent left. With no link, a crash may have left it, and `reap` proves what is ours. A link

@@ -33,7 +33,9 @@ method promises:
   for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default. `spec.instructions` holds
   the role's words and the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
-  answer after a crash.
+  answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
+  after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
+  again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
 - **`interrupt`** stops the turn. The agent lives on.
 - **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
   harness, so ask a harness to end first, and with real grace. `Process` reports the gap `crash_window` when it comes to `SIGKILL`,
