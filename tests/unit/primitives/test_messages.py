@@ -712,11 +712,24 @@ async def test_channel_list_shows_what_a_caller_may_use(kernel):
     await channel(kernel, "news", readers=["role:lead"])
     await channel(kernel, "notes", kind="board", writers=["role:lead"])
 
-    assert result_of(kernel.query(alice, "channel.list", {})) == []
-    assert result_of(kernel.query(bob, "channel.list", {})) == [
-        {"name": "notes", "kind": "board"},
+    assert result_of(kernel.query(alice, "channel.list", {}))["channels"] == []
+    assert result_of(kernel.query(bob, "channel.list", {}))["channels"] == [
         {"name": "#news", "kind": "topic"},
+        {"name": "notes", "kind": "board"},
     ]
+
+
+async def test_channels_go_a_page_at_a_time(kernel):
+    bob = await spawn(kernel, "bob")
+    names = [f"a-channel-with-a-long-name-of-its-own-{number:03}" for number in range(300)]
+    for name in names:
+        await channel(kernel, name, kind="board")
+
+    first = result_of(kernel.query(bob, "channel.list", {}))
+    second = result_of(kernel.query(bob, "channel.list", {"after": first["cursor"]}))
+
+    assert first["total"] == second["total"] == 300 and second["cursor"] is None
+    assert [row["name"] for row in (*first["channels"], *second["channels"])] == names
 
 
 async def test_channel_list_gives_what_the_next_call_takes(kernel):
@@ -725,11 +738,12 @@ async def test_channel_list_gives_what_the_next_call_takes(kernel):
     await channel(kernel, "tasks", kind="queue")
     result_of(await kernel.submit(kernel.runtime, "group.define", {"name": "crew", "roles": ["worker"]}))
 
-    names = {row["kind"]: [] for row in result_of(kernel.query(bob, "channel.list", {}))}
-    for row in result_of(kernel.query(bob, "channel.list", {})):
+    rows = result_of(kernel.query(bob, "channel.list", {}))["channels"]
+    names = {row["kind"]: [] for row in rows}
+    for row in rows:
         names[row["kind"]].append(row["name"])
 
-    assert names == {"topic": ["+crew", "#news"], "queue": ["tasks"]}
+    assert names == {"topic": ["#news", "+crew"], "queue": ["tasks"]}
     assert result_of(await kernel.submit(bob, "message.send", {"to": "#news", "gist": "hi"}))["audience"] == 0
     assert result_of(await kernel.submit(bob, "task.add", {"queue": "tasks", "gist": "go"}))["task"] == "1"
 

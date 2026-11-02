@@ -6,7 +6,7 @@ from typing import Any
 
 from .daemon import Daemon
 from .model import Refused
-from .naming import check_event_type, check_op_name
+from .naming import check_event_type, check_op_name, tool_name
 from .op import Op
 from .view import View, tables_of
 
@@ -49,6 +49,8 @@ def load(extensions: Iterable[Extension]) -> Loaded:
         for operation in extension.ops:
             check_op_name(operation.name, owner)
             claim("op", operation.name, owner)
+            if operation.tool:
+                claim("tool", tool_name(operation.name), operation.name)
             ops[operation.name] = operation
         for view in extension.views:
             claim("view", view.name, owner)

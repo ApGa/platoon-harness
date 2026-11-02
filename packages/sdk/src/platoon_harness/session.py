@@ -476,11 +476,11 @@ class Session:
             "message.read", channel=channel, after=after, limit=limit, sender=sender, thread=thread, bodies=bodies
         )
 
-    async def channels(self) -> list[dict[str, Any]]:
-        return await self._ask("channel.list")
+    async def channels(self, *, after: str | None = None) -> dict[str, Any]:
+        return await self._ask("channel.list", after=after)
 
-    async def peers(self) -> list[dict[str, Any]]:
-        return await self._ask("peers")
+    async def peers(self, *, after: str | None = None) -> dict[str, Any]:
+        return await self._ask("peers", after=after)
 
     async def create_channel(
         self,

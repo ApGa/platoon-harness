@@ -2,7 +2,6 @@
 
 import ast
 import inspect
-import re
 import sqlite3
 from collections.abc import Awaitable, Callable, Iterable, Iterator
 from pathlib import Path
@@ -12,9 +11,9 @@ from platoon_harness import kernel as kernel_package
 from platoon_harness.drivers.levels import Check, Checks
 from platoon_harness.kernel import Extension, Kernel, ManualClock, Op, Refused
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.tools.surface import OP_NAMED
 
 _JOURNAL = "journal.sqlite"
-_OP_NAMED = re.compile(r"`([a-z]+\.[a-z]+)`")
 
 Scenario = Callable[[Kernel], Awaitable[Any]]
 
@@ -59,7 +58,11 @@ def _private_uses(source: str) -> Iterator[str]:
     tree = ast.parse(Path(source).read_text())
     yield from (f"{Path(source).name} reaches {name}" for name in private_reaches(tree))
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("platoon_harness.kernel"):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("platoon_harness.kernel."):
+                    yield f"{Path(source).name} reaches into {alias.name}"
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("platoon_harness.kernel"):
             if node.module != "platoon_harness.kernel":
                 yield f"{Path(source).name} reaches into {node.module}"
             for alias in node.names:
@@ -80,8 +83,8 @@ def _description_problems(tool: Op, loaded: Iterable[str]) -> Iterator[str]:
     text = tool.fn.__doc__ or ""
     if "Refused" not in text:
         yield f"{tool.name} does not say what a refusal means"
-    for name in _OP_NAMED.findall(text):
-        if name not in loaded:
+    for name in OP_NAMED.findall(text):
+        if "." in name and name not in loaded:
             yield f"{tool.name} names {name}, which is not an op"
 
 

@@ -36,11 +36,11 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token
+from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token, tool_name
 from platoon_harness.primitives import OWNER_STOP
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Team
-from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, list_tools, preamble, shell_name
+from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, held_tools, preamble, shell_name
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
 from .opening import make_driver
@@ -78,7 +78,7 @@ class DriverLink:
         self.refused: str | None = None
         self.handing: asyncio.Event | None = None
         self.redact = Redactor(())
-        self.ours: tuple[str, ...] = ()
+        self.held: set[str] = set()
         self.order = asyncio.Lock()
         self.renewal = 0.0
 
@@ -294,7 +294,7 @@ class Host:
             surface = harness_name(NAMESPACE) if paths & _MCP else shell_name
             principal = self._kernel.authenticate(admission.token.reveal())
             teaching = preamble(self._kernel, principal, surface)
-            link.ours = tuple(tool["name"] for tool in list_tools(self._kernel, principal))
+            link.held = held_tools(self._kernel, principal)
             binding = self._binding(folder, admission.token, surface=f"mcp__{NAMESPACE}" if paths & _MCP else "ph")
         return AgentSpec(
             agent=link.agent,
@@ -330,7 +330,7 @@ class Host:
         delivery = Delivery(
             input=str(data["input"]),
             boundary=data["boundary"],
-            text=delivery_text(data, surface, self._kernel.ops),
+            text=delivery_text(data, surface, self._kernel.ops, link.held),
             items=tuple(Offered(**item) for item in data["items"]),
             behind=data["behind"],
         )
@@ -460,7 +460,7 @@ class Host:
             driver=info.name,
             version=ready.version or info.version,
             login=info.login,
-            tools=tool_visibility(ready.tools_visible, link.ours),
+            tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
         )
         args = {
             "agent": link.agent,

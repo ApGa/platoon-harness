@@ -12,6 +12,7 @@ from .extension import Extension
 from .journal import Filesystem, filesystem, is_held
 from .kernel import Kernel
 from .model import GIST_LIMIT, NAME, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
+from .naming import tool_name
 from .op import Args, Op, op
 from .pulse import first
 from .timers import Timer, Timers
@@ -55,4 +56,5 @@ __all__ = [
     "hash_token",
     "is_held",
     "op",
+    "tool_name",
 ]

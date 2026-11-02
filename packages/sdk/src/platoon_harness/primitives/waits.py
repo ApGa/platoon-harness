@@ -364,13 +364,13 @@ def _ack_all(txn: Txn, reader: str | None, streams: Iterable[str], after: int | 
 
 @op("wait", on=lambda a: None, tool=True)
 def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
-    """Wait without spending a turn: for `agents` to end, a message `from` each named agent, `tasks` to settle, a
-    version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`. One
-    wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
+    """Wait, spending no turn until it holds: for `agents` to end, a message `from` each named agent, `tasks` to settle,
+    a version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`.
+    One wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
     runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran
     out, call again or end your turn. An agent you count that ends badly starts your next turn early, and the wait
     stays open. Refused `not_permitted` for what you may not watch, `not_found` for an agent
-    nobody spawned: call `agent.list`. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least
+    nobody spawned. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least
     as long. `invalid` for an `after` past every event: leave it out."""
     _check_call(txn, a)
     after = checked_after(txn, a.after)

@@ -1,17 +1,19 @@
 """One derivation from `ops.list`: what each surface shows a model, for the token that asks."""
 
+import json
 import re
 
 import pytest
 
-from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Principal, Refusal, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Principal, Refusal, Txn, op
 from platoon_harness.kernel.model import RefusalCode
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools import Surface, harness_name, list_tools, preamble, shell_name, tool_name
 from platoon_harness.tools.surface import delivery_text, describe, named_surface, notices_text, refusal_text
 
 from ..kernel.support import grant
-from .support import enrolled
+from ..primitives.support import spawn
+from .support import BUILT, enrolled
 
 SURFACES: dict[str, Surface] = {"mcp": tool_name, "harness": harness_name("coord"), "shell": shell_name}
 TOOLS = [operation for extension in PRIMITIVES for operation in extension.ops if operation.tool]
@@ -89,7 +91,7 @@ async def test_every_argument_a_surface_shows_is_described(every_tool, surface, 
 
 
 async def test_a_description_says_what_a_refusal_means_on_every_surface(every_tool):
-    never_refused = {"agent.finish", "agent.list", "channel.list", "peers", "session.status", "wait.progress"}
+    never_refused = {"agent.finish", "channel.list", "peers", "session.status", "wait.progress"}
 
     for surface in SURFACES.values():
         for tool in list_tools(*every_tool, surface):
@@ -113,7 +115,7 @@ async def test_a_schema_shows_only_what_a_model_should_see(every_tool):
 
     assert "on" not in shown["wait"]["properties"] and "from" in shown["wait"]["properties"]
     assert set(shown["channel.create"]["properties"]) == {"name", "kind", "readers", "writers", "delivery"}
-    assert "title" not in str(shown["wait"]) and "description" not in shown["agent.list"]
+    assert "title" not in str(shown["wait"]) and "description" not in shown["session.status"]
 
 
 async def test_a_body_is_offered_as_text(every_tool):
@@ -145,9 +147,27 @@ async def test_a_field_called_body_that_cites_no_hash_is_left_alone(tmp_path):
 async def test_read_only_is_set_honestly(every_tool):
     hints = {tool["title"]: tool["annotations"]["readOnlyHint"] for tool in list_tools(*every_tool)}
 
-    assert hints["peers"] and hints["agent.list"] and hints["wait.progress"]
+    assert hints["peers"] and hints["session.status"] and hints["wait.progress"]
     assert not hints["task.claim"] and not hints["message.send"]
     assert not hints["message.read"], "an agent's read moves its cursor and records exposure"
+
+
+CEILINGS = {"lead": 23_500, "worker": 23_500, "narrow": 7_000}
+
+
+@pytest.mark.parametrize("role", CEILINGS)
+async def test_a_tool_list_stays_under_its_ceiling(kernel, server, lead, role):
+    """This text is in every request of every agent, so it has a ceiling, just above where it stands: `json.dumps` of
+    `list_tools` on the surface a harness reads. A wording fix passes. A new tool has to argue for its bytes."""
+    principal = lead[0] if role == "lead" else (await enrolled(kernel, server, "n1", role=role, by=lead[0]))[0]
+
+    size = len(json.dumps(list_tools(kernel, principal, harness_name("ph"))))
+
+    assert size <= CEILINGS[role], f"{BUILT.roles[role].tools} now costs {size} bytes in every request"
+
+
+async def test_the_default_roles_do_not_carry_what_only_a_program_needs(every_tool):
+    assert not {tool["title"] for tool in list_tools(*every_tool)} & {"task.renew", "agent.list"}
 
 
 async def test_tools_keep_the_op_as_a_title(every_tool):
@@ -189,12 +209,60 @@ async def test_the_preamble_points_a_shell_at_help(kernel, lead):
     assert "`ph --help`" not in preamble(kernel, lead[0])
 
 
+@pytest.mark.parametrize("query", ["peers", "channel.list"])
+async def test_a_refused_query_leaves_its_line_out_of_the_preamble(kernel, lead, query, monkeypatch):
+    real = kernel.query
+
+    def refusing(principal, op, args):
+        return (
+            Outcome(op=op, args_hash="", refusal=Refusal(code="unavailable"))
+            if op == query
+            else real(principal, op, args)
+        )
+
+    monkeypatch.setattr(kernel, "query", refusing)
+
+    text = preamble(kernel, lead[0])
+
+    assert ("You can message" in text) == (query != "peers") and ("Channels" in text) == (query != "channel.list")
+
+
+async def test_the_preamble_says_when_there_are_more_than_it_shows(kernel, server, lead):
+    for number in range(300):
+        await spawn(kernel, f"worker-with-a-long-name-{number:03}", by=lead[0])
+
+    text = preamble(kernel, lead[0])
+
+    assert "and more: call `peers`." in text
+
+
 async def test_the_preamble_journals_nothing(kernel, lead):
     head = kernel.head
 
     preamble(kernel, lead[0])
 
     assert kernel.head == head
+
+
+async def test_a_description_names_only_tools_its_reader_holds(kernel, server, lead, worker):
+    narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    for principal in (lead[0], worker[0], narrow):
+        tools = list_tools(kernel, principal)
+        held = {tool["name"] for tool in tools}
+        for tool in tools:
+            for text in _texts(tool):
+                named = {word for word in BACKTICKED.findall(text) if word in {*map(tool_name, kernel.ops)} - {"wait"}}
+                assert named <= held, f"{principal.id} is told of {sorted(named - held)} by {tool['title']}"
+
+
+async def test_no_description_leaves_a_sentence_half_said(kernel, server, lead):
+    narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    described = {tool["title"]: tool["description"] for tool in list_tools(kernel, narrow)}
+
+    assert "Refused `not_permitted` when you cannot reach the target." in described["message.send"]
+    assert "Call `peers`" not in described["message.send"]
 
 
 def test_every_refusal_code_has_words():
@@ -225,16 +293,24 @@ def test_a_refusal_carries_everything_it_was_given():
 def test_notices_say_how_many_more_are_waiting():
     handed = {"items": [{"ref": "inbox/a@1", "gist": "stop", "sender": "@a", "body": None}], "behind": 2}
 
-    assert notices_text(handed, shell_name, OPS).splitlines()[1:] == [
+    assert notices_text(handed, shell_name, OPS, OPS).splitlines()[1:] == [
         "- inbox/a@1 from @a: stop",
         "2 more are waiting: call `ph message.read`.",
     ]
 
 
+def test_a_handover_points_only_at_tools_its_reader_holds():
+    item = {"ref": "inbox/a@1", "gist": "read this", "sender": "@lead", "body": "sha256:abc"}
+
+    text = delivery_text({"input": 41, "items": [item], "behind": 2}, tool_name, OPS, {"wait"})
+
+    assert text.splitlines() == ["New messages (delivery 41):", "- inbox/a@1 from @lead: read this"]
+
+
 def test_a_delivery_reads_in_the_words_of_its_surface_and_names_its_input():
     item = {"ref": "inbox/a@1", "gist": "read this", "sender": "@lead", "body": "sha256:abc"}
 
-    text = delivery_text({"input": 41, "items": [item], "behind": 0}, harness_name("ph"), OPS)
+    text = delivery_text({"input": 41, "items": [item], "behind": 0}, harness_name("ph"), OPS, OPS)
 
     assert text.splitlines() == [
         "New messages (delivery 41):",

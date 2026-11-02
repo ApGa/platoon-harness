@@ -10,12 +10,12 @@ from http import HTTPStatus
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, first
+from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, first, tool_name
 from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.rpc import strict_loads
 from platoon_harness.version import __version__
 
-from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text, tool_name
+from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text
 
 log = logging.getLogger("platoon_harness.tools")
 
@@ -181,13 +181,11 @@ class ToolServer:
 
     def __init__(self, kernel: Kernel) -> None:
         self._kernel = kernel
-        self._tools: dict[str, _Tool] = {}
-        for operation in kernel.ops.values():
-            if operation.tool:
-                name = tool_name(operation.name)
-                if name in self._tools:
-                    raise ValueError(f"{operation.name} and {self._tools[name].op.name} are both the tool {name}")
-                self._tools[name] = _Tool(operation, body_fields(operation.input.model_json_schema()))
+        self._tools = {
+            tool_name(operation.name): _Tool(operation, body_fields(operation.input.model_json_schema()))
+            for operation in kernel.ops.values()
+            if operation.tool
+        }
         self._server: asyncio.Server | None = None
         self._port = 0
         self._serving: set[asyncio.Task[None]] = set()
@@ -386,7 +384,7 @@ class ToolServer:
             await kernel.submit(principal, name, arguments, key=key, native=native)
         if outcome.refusal is None and (size := _size(outcome.result)) > _RESULT_LIMIT:
             detail = (
-                f"this answer is {size} bytes, and a result holds {_RESULT_LIMIT}: ask a human, or carry on without it"
+                f"this answer is {size} bytes, and a result holds {_RESULT_LIMIT}: ask for less, or carry on without it"
             )
             return Outcome(op=name, args_hash="", refusal=Refusal(code="unsupported", detail=detail))
         return outcome
@@ -454,4 +452,6 @@ class ToolServer:
         if not kernel.query(kernel.runtime, "delivery.pending", agent).result:
             return None
         handed = (await kernel.submit(kernel.runtime, "delivery.offer", {**agent, "boundary": "tool"})).result
-        return None if handed is None else notices_text(handed, request.surface, kernel.ops)
+        return (
+            None if handed is None else notices_text(handed, request.surface, kernel.ops, held_tools(kernel, principal))
+        )

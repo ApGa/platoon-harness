@@ -792,7 +792,7 @@ async def test_retiring_removes_an_agent_from_relations_never_from_history(kerne
     await grant(kernel, "role:lead", "message.send", "inbox/{children}")
     await grant(kernel, "role:lead", "peers")
 
-    assert [peer["address"] for peer in result_of(kernel.query(lead, "peers", {}))] == ["@w2"]
+    assert [peer["address"] for peer in result_of(kernel.query(lead, "peers", {}))["peers"]] == ["@w2"]
     assert state_of(kernel, "w1")["state"] == "ended"
     assert any(event.agent == "w1" for event in events_of(kernel))
 
@@ -1279,8 +1279,8 @@ async def test_peers_lists_whom_you_may_reach_now(kernel):
     await grant(kernel, "agent", "peers")
     await grant(kernel, "role:lead", "message.send", "inbox/{children}")
 
-    assert [peer["address"] for peer in result_of(kernel.query(lead, "peers", {}))] == ["@w1"]
-    assert result_of(kernel.query(outsider, "peers", {})) == []
+    assert [peer["address"] for peer in result_of(kernel.query(lead, "peers", {}))["peers"]] == ["@w1"]
+    assert result_of(kernel.query(outsider, "peers", {}))["peers"] == []
 
 
 async def test_agent_list_shows_no_content(kernel):
@@ -1772,7 +1772,7 @@ async def test_a_spawned_agent_is_a_principal_at_once_with_no_credential(kernel)
     lead = await spawn(kernel, "lead", role="lead")
     result_of(await kernel.submit(lead, "agent.spawn", spawning("w1")))
 
-    assert any(peer["address"] == "@w1" for peer in result_of(kernel.query(lead, "peers", {})))
+    assert any(peer["address"] == "@w1" for peer in result_of(kernel.query(lead, "peers", {}))["peers"])
     with pytest.raises(Refused):
         kernel.authenticate("tok")
 

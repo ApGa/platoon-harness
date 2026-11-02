@@ -541,7 +541,7 @@ async def test_lifecycle_through_the_facade(tmp_path):
         rows = {row["agent"]: row["status"] for row in await session.agents()}
         assert rows["ada"] == "retired" and rows["eve"] == "cancelled"
         assert await session.peers() is not None
-        assert await session.channels() == []
+        assert (await session.channels())["channels"] == []
         assert "session.status" in {op["name"] for op in await session.ops()}
         assert (await session.manifest())["manifest"].startswith("sha256:")
 
@@ -553,7 +553,7 @@ async def test_channels_and_budgets_through_the_facade(tmp_path):
         await session.open_episode("first")
         await session.close_episode({"score": 1})
 
-        assert [row["name"] for row in await session.channels()] == ["#later"]
+        assert [row["name"] for row in (await session.channels())["channels"]] == ["#later"]
         assert (await session.budgets())[0]["limit"] == 10.0
 
 

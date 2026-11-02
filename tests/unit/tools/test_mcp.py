@@ -9,12 +9,12 @@ import pytest
 from pydantic import Field
 
 from platoon_harness import __version__
-from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Refusal, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Refusal, Refused, Txn, op
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools import ToolServer
 from platoon_harness.tools import mcp as tool_server
 
-from ..primitives.support import end_turn, events_of, grant, of_type, result_of, send, start_turn
+from ..primitives.support import end_turn, events_of, grant, of_type, result_of, send, spawn, start_turn
 from .support import Client, connect, drained, enrolled, exchange, request, slept_until, text_of, tool_call, value_of
 
 INITIALIZE = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}}
@@ -378,11 +378,9 @@ async def test_two_ops_that_read_as_one_tool_are_refused(tmp_path):
         """Second."""
 
     extensions = (Extension("a", ops=[first]), Extension("a_b", ops=[second]))
-    kernel = Kernel.open(tmp_path / "session", clock=ManualClock(1.0), extensions=extensions)
 
-    with pytest.raises(ValueError, match="a_b_c"):
-        ToolServer(kernel)
-    kernel.close()
+    with pytest.raises(Refused, match=r"a_b_c is defined by both a\.b_c and a_b\.c"):
+        Kernel.open(tmp_path / "session", clock=ManualClock(1.0), extensions=extensions)
 
 
 async def test_an_extensions_op_is_a_tool_with_no_core_edit(tmp_path):
@@ -402,6 +400,7 @@ async def test_an_extensions_op_is_a_tool_with_no_core_edit(tmp_path):
     result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": {"worker": {}}}))
     await grant(kernel, "all", "ops.list")
     await grant(kernel, "agent", "ballot.*")
+    await grant(kernel, "agent", "peers")
     _, client = await enrolled(kernel, server, "voter")
 
     listed = {tool["name"]: tool for tool in await client.list_tools()}
@@ -461,7 +460,7 @@ async def test_a_query_that_decoding_refuses_is_journaled(kernel, lead):
 async def test_a_query_that_passes_decoding_journals_nothing(kernel, lead):
     head = kernel.head
 
-    assert value_of(await lead[1].call("peers")) == []
+    assert value_of(await lead[1].call("peers"))["peers"] == []
     assert kernel.head == head
 
 
@@ -1112,6 +1111,32 @@ async def test_an_answer_too_big_for_a_result_is_refused_and_says_so(lead, monke
 
     assert result["isError"] and "Refused unsupported" in text_of(result)
     assert "a result holds 1:" in text_of(result)
+
+
+async def test_a_team_too_long_for_one_result_can_still_be_read_to_its_end(kernel, server, lead):
+    """A refusal over the limit would leave a model with no way to find anyone, so `peers` goes a page at a time."""
+    names = [f"worker-{number:03}" for number in range(600)]
+    for name in names:
+        await spawn(kernel, name, by=lead[0])
+
+    found, after = [], None
+    while True:
+        page = value_of(await lead[1].call("peers", {"after": after} if after else {}))
+        found += page["peers"]
+        after = page["cursor"]
+        if after is None:
+            break
+
+    assert sorted(row["address"] for row in found) == [f"@{name}" for name in names]
+    assert page["total"] == len(names)
+
+
+async def test_a_query_past_the_limit_is_refused_saying_what_is_left(kernel, lead, monkeypatch):
+    monkeypatch.setattr(tool_server, "_RESULT_LIMIT", 1)
+
+    result = await lead[1].call("session_status")
+
+    assert result["isError"] and "ask for less" in text_of(result)
 
 
 async def test_a_refusal_names_only_tools_the_token_holds(kernel, server, lead):

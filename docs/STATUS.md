@@ -142,7 +142,10 @@ socket on port 0. No real harness has run against this server: the spike's proto
 | Capability | State | Evidence |
 |---|---|---|
 | One derivation from `ops.list`, per token: names per surface, closed schemas showing only what a model should see, an honest `readOnlyHint` | tested | `test_surface.py` |
-| The turn preamble: exact tools, who can be reached now, how to park | tested | `test_surface.py`. It reaches a harness at launch, in `AgentSpec.instructions`: `tests/unit/runtime/test_host.py`. It is not refreshed per turn, so who can be reached goes stale until `peers` is asked |
+| The preamble: exact tools, who can be reached, how to park | tested | `test_surface.py`. It reaches a harness once, at launch, in `AgentSpec.instructions`: `tests/unit/runtime/test_host.py`. It is fixed there, so who can be reached goes stale until `peers` is asked |
+| A sentence naming a tool its reader does not hold left out, in descriptions and handovers. No agent holds `agent.list` or `task.renew` | tested | `test_surface.py` |
+| `peers` and `channel.list` a page at a time, a generic refusal of a query past 32 KiB | tested | `test_mcp.py`, with a 600 agent team |
+| A ceiling on each default role's tool list | tested | `test_surface.py`: 22,737 bytes for a lead, 22,592 for a worker, 6,290 for a narrow role, as `json.dumps` of `list_tools` on a harness's surface |
 | The server: Streamable HTTP, JSON replies, no sessions, `initialize` at `2025-11-25` and `2025-06-18`, 405, -32601, 202, -32600, 401, 403 | tested | `test_mcp.py`, `test_replay.py`, which replays every non-tool request of the spike's log |
 | Bounded HTTP: head and body limits, a body read only after the token, deadlines on the kernel's clock, a connection limit, hostile bytes | tested | `test_mcp.py`. A client that will not read its answer is bounded by the same deadline, which no test reaches, since an answer fits a socket buffer |
 | Identity from the token alone, `tools/list` filtered and enforced again at call time, undeclared arguments journaled, an agent's refused query journaled, an ended agent's token refused | tested | `test_mcp.py` |
@@ -150,7 +153,6 @@ socket on port 0. No real harness has run against this server: the spike's proto
 | Refusals a model can act on: code, what it means, what to do next, in the words of its surface, and no next step that names a tool its token does not hold | tested | `test_surface.py`, `test_mcp.py` |
 | Results capped, with `rest` saying where the rest of a body is, and reading on reaching the end | tested | `test_mcp.py` |
 | A query's answer past 32 KiB refused with its size | tested | `test_mcp.py` |
-| `agent.list`, `channel.list` and `peers` paged | deferred | They are not. A team that outgrows one result gets the refusal above, from a model's side. A human reads them whole |
 | A held wait closing as told only once its answer has left | tested | `test_mcp.py`, with an answer that cannot be sent |
 | An idle client costs nothing, and one that vanishes during a held wait frees its server task and keeps its wait | tested | `test_mcp.py` |
 | `ph`: argv and help from `tools/list`, JSON on stdout, a plain refusal on stderr, exit codes in its help | tested | `test_ph.py`, real processes, on the test interpreter and on the host's `python3` from the default path, skipped where there is none. A name that is no tool answers `no such tool` and journals nothing: only a tool the token does not hold is evidence |

@@ -75,7 +75,7 @@ Checked by a test and by the kernel. At load, an op may not be past tense and it
 `effect.uncertain` is the one event named for a state.
 
 - Ops are imperative (`task.claim`); events are past tense (`task.claimed`).
-- The extension's name is the namespace. Collisions are refused at load. There is no `x.` prefix.
+- The extension's name is the namespace. Collisions are refused at load, of the names ops take as tools too. There is no `x.` prefix.
 - No abbreviations in a public op table: `message.*`, `channel.*`.
 - `call` means a model call and nothing else. An `Operation` is a definition; a `Command` is one invocation.
 - `settled` is a session state. A turn `ended`.
@@ -814,7 +814,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `delivery`** sets the ladder for its agents' inboxes, `wake` unless stated.
 - **Role `count`** is how many agents start with the session. Left out, that is one, or none if another role spawns this one.
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so `peers`
-  and the turn preamble list them; tool schemas never enumerate them.
+  and the preamble list them; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
   it makes, and may name only readers and writers within its own reach. For an agent each selector means those it covers at that
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
@@ -973,8 +973,9 @@ against the official client and against each real harness.
   descriptions and refusals, never what a token may do. No real harness has been run through a URL with a query yet.
 - `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
   which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
-- A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A query's answer past that, which only
-  a list as long as a team can be, is refused `unsupported` with its size, and nothing runs. A row with a null `text` beside a
+- A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A list as long as a team, `peers` or
+  `channel.list`, goes a page at a time, since a refusal would leave a model no other way to find anyone. So only an extension's query
+  can answer past that, and it is refused `unsupported` with its size, and nothing runs. A row with a null `text` beside a
   body's ref is a body its op could not read: the surface reads up to 16 MiB of it, shows the lines that fit, says in `rest` where
   the rest is, and journals what it showed with `blob.offer` before the text leaves. `text` stays null for a binary, redacted or
   larger body, or one line too long to show.
@@ -983,10 +984,13 @@ against the official client and against each real harness.
   authorized to place. Holding is bounded by `tool_timeout_s` when `wait` is placed, and by the client hanging up. A wait that holds
   closes as `told` only once its answer has left, so an answer that is lost costs no wake: the wait stays open, and closes with its turn.
 
-**Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools, by exact name, because no harness's
-tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to
+**Everyday instruction surface.** The preamble and the tool descriptions teach the tools, by exact name, because no harness's
+tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool.
+A sentence that names a tool its reader does not hold is left out, so what a model is told it can do. A test holds every argument to
 a description, every description to what a refusal means, and every op it names to one that exists. Tool schemas leave out what is
-for programs and team files, such as `on` and a queue's lease. We append through each harness's
+for programs and team files, such as `on` and a queue's lease. The tool list and the preamble are fixed at launch, and go once to each
+harness: what changes later, such as who can be reached, travels in a delivery. That text is in every request of every agent, so
+a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in
 [compatibility.md](compatibility.md).

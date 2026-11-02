@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 import pytest
 
+from platoon_harness.drivers import env as harness
 from platoon_harness.tools import PH, shim
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
@@ -49,9 +50,7 @@ def test_ph_and_the_shim_read_the_same_variables():
 
 
 def test_ph_reads_the_variables_a_harness_is_given():
-    env = pytest.importorskip("platoon_harness.drivers.env")
-
-    assert (env.URL_VARIABLE, env.TOKEN_VARIABLE) == (URL_VARIABLE, TOKEN_VARIABLE)
+    assert (harness.URL_VARIABLE, harness.TOKEN_VARIABLE) == (URL_VARIABLE, TOKEN_VARIABLE)
 
 
 async def test_spawned_with_no_token_it_says_so(lead):
@@ -245,7 +244,7 @@ async def test_notices_go_to_stderr_and_leave_stdout_as_json(kernel, server, lea
     run = await ph(client, "channel.list")
 
     assert run.code == 0
-    assert json.loads(run.stdout) == [{"name": "notes", "kind": "board"}]
+    assert json.loads(run.stdout)["channels"] == [{"name": "notes", "kind": "board"}]
     assert "stop that" in run.stderr
 
 

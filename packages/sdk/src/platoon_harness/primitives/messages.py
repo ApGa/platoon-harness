@@ -515,7 +515,7 @@ def _replied(txn: Txn, ref: str) -> Entry:
 def send(txn: Txn, a: Send) -> dict[str, Any]:
     """Send to `@agent`, `#channel` or `+group`. `gist`, at most 280 characters, is what readers see first; put anything
     longer in `body`. To reply, set `to` to the entry's `sender` and `reply_to` to its `ref`. Refused `not_permitted`
-    when you cannot reach the target: call `peers` for agents, `channel.list` for channels. `undeliverable` when the
+    when you cannot reach the target. Call `peers` for agents, `channel.list` for channels. `undeliverable` when the
     agent has ended: tell someone else. `queue_full` when its inbox is full: try later. `not_found` when `reply_to`
     names nothing you can read. `conflict` once the session is closing, when it would reach nobody."""
     session = txn.view(SessionRecord)
@@ -585,8 +585,8 @@ def read(txn: Txn, a: Read) -> dict[str, Any]:
     read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it
     skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref for
     `blob.get`, and past what one result holds `text` is null: pass `body` to `blob.get`. `behind` counts what is left,
-    up to 4096. Refused `not_permitted` when you do not read this channel: call `channel.list`. `invalid` for an `after`
-    past every event: leave it out."""
+    up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to see yours. `invalid`
+    for an `after` past every event: leave it out."""
     stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
     txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)

@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Refused, Stamps, Tombstones, Txn
+from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Refused, Stamps, Tombstones, Txn
 
 
 def _bare(name: str) -> str:
@@ -74,6 +74,19 @@ def fitted[T](rows: Iterable[T], *, show: Any = lambda row: row) -> list[T]:
             break
         kept.append(row)
     return kept
+
+
+class Paging(Args):
+    after: Annotated[str | None, Field(description="A `cursor` from an earlier call.")] = None
+
+
+def paged(rows: Iterable[dict[str, Any]], name: str, key: str, after: str | None) -> dict[str, Any]:
+    """One page of a list as long as a team, in order of `key`, with the true `total`. `cursor` goes on from there, and
+    is None at the end. A query has no other way past what one tool result holds."""
+    ordered = sorted(rows, key=lambda row: row[key])
+    rest = [row for row in ordered if after is None or row[key] > after]
+    kept = fitted(rest)
+    return {name: kept, "total": len(ordered), "cursor": kept[-1][key] if len(kept) < len(rest) else None}
 
 
 class Lines(NamedTuple):

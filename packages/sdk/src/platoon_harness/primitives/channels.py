@@ -8,7 +8,7 @@ from pydantic.json_schema import SkipJsonSchema
 
 from platoon_harness.kernel import Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
 
-from .common import WAKING, Injection, Name
+from .common import WAKING, Injection, Name, Paging, paged
 
 _PREFIX = {"topic": "channel", "queue": "queue", "board": "board"}
 _DEFAULT_DELIVERY: dict[str, Injection] = {"topic": "next-turn", "queue": "pull", "board": "pull"}
@@ -212,9 +212,9 @@ def create(txn: Txn, a: CreateChannel) -> dict[str, Any]:
 
 
 @op("channel.list", query=True, tool=True)
-def list_channels(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List the channels you may use. Pass `name` as `to` or `channel` for a topic, `queue` for a queue, `board` for a
-    board."""
+def list_channels(txn: Txn, a: Paging) -> dict[str, Any]:
+    """List the channels you may use, in `channels`, with the true `total` and a `cursor` to pass as `after`, or none at
+    the end. Pass `name` as `to` or `channel` for a topic, `queue` for a queue, `board` for a board."""
     grants = txn.view(Grants)
 
     def usable(channel: Channel) -> bool:
@@ -222,7 +222,8 @@ def list_channels(txn: Txn, a: Args) -> list[dict[str, Any]]:
             grants.permits(txn.me, verb, channel.object) for verb in (*_READ[channel.kind], *_WRITE[channel.kind])
         )
 
-    return [{"name": c.address, "kind": c.kind} for c in txn.view(Channels).listed() if c.kind != "inbox" and usable(c)]
+    rows = [{"name": c.address, "kind": c.kind} for c in txn.view(Channels).listed() if c.kind != "inbox" and usable(c)]
+    return paged(rows, "channels", "name", a.after)
 
 
 class DefineGroup(Args):

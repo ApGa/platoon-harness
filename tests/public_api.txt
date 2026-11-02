@@ -125,6 +125,7 @@ platoon_harness.kernel.fold
 platoon_harness.kernel.hash_token
 platoon_harness.kernel.is_held
 platoon_harness.kernel.op
+platoon_harness.kernel.tool_name
 platoon_harness.load_team
 platoon_harness.on
 platoon_harness.primitives.Agent
@@ -292,6 +293,7 @@ platoon_harness.tools.Surface
 platoon_harness.tools.ToolServer
 platoon_harness.tools.delivery_text
 platoon_harness.tools.harness_name
+platoon_harness.tools.held_tools
 platoon_harness.tools.list_tools
 platoon_harness.tools.preamble
 platoon_harness.tools.shell_name

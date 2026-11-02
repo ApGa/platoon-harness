@@ -16,6 +16,11 @@ _SAME_IN_THE_IMPERATIVE = frozenset({"cut", "put", "read", "run", "set", "split"
 _VERBS_ENDING_IN_ED = frozenset({"embed", "exceed", "feed", "need", "proceed", "seed", "shed", "succeed"})
 
 
+def tool_name(op: str) -> str:
+    """An op as an MCP server lists it: `task_claim`. Two ops can share one, which `load` refuses."""
+    return op.replace(".", "_")
+
+
 def _past_tense(word: str) -> bool:
     return word in _PAST_FORMS or (word.endswith("ed") and word not in _VERBS_ENDING_IN_ED)
 

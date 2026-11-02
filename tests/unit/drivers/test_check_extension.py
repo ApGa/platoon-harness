@@ -1,10 +1,12 @@
 """check_extension: a third party's extension held to what a core primitive keeps to."""
 
+import importlib
 import textwrap
 
+import pytest
 from pydantic import Field
 
-from platoon_harness.kernel import Args, Event, Extension, Kernel, Txn, View, fold, op
+from platoon_harness.kernel import Args, Event, Extension, Kernel, Refused, Txn, View, fold, op
 from platoon_harness.testing import check_extension
 
 
@@ -136,3 +138,61 @@ async def test_a_private_kernel_name_fails(tmp_path, monkeypatch):
     assert "rude.py reaches _db" in reason
     assert "reaches into platoon_harness.kernel.txn" in reason
     assert "imports Sneaky" in reason
+
+
+async def test_two_extensions_cannot_claim_one_tool_name(tmp_path):
+    @op("task_claim.now", tool=True)
+    def now(txn: Txn, a: Args) -> None:
+        """Claim. Refused never."""
+
+    @op("task.claim_now", tool=True)
+    def same(txn: Txn, a: Args) -> None:
+        """Claim. Refused never."""
+
+    with pytest.raises(Refused, match="task_claim_now is defined by both"):
+        Kernel.open(tmp_path / "both", extensions=[Extension("task_claim", ops=[now]), Extension("task", ops=[same])])
+
+
+@pytest.mark.parametrize("name", ["`ballot.no_such_op`", "`ballot.v2`", "`ballot_tally.count.all`"])
+async def test_a_description_naming_an_op_with_an_underscore_or_a_digit_that_is_not_there_fails(tmp_path, name):
+    @op("ballot.say", tool=True)
+    def say(txn: Txn, a: Args) -> None:
+        """Say a name. Refused never."""
+
+    say.fn.__doc__ = f"See {name}. Refused never."
+
+    result = await check_extension(Extension("ballot", ops=[say]), folder=tmp_path / "session")
+
+    assert states(result)["descriptions"] == "failed"
+
+
+async def test_a_description_is_free_to_name_an_argument(tmp_path):
+    @op("ballot.say", tool=True)
+    def say(txn: Txn, a: Args) -> None:
+        """Pass `choice`, or see `session.status`. Refused never."""
+
+    result = await check_extension(Extension("ballot", ops=[say]), folder=tmp_path / "session")
+
+    assert states(result)["descriptions"] == "passed"
+
+
+async def test_a_plain_import_of_a_kernel_module_fails(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(tmp_path)
+    (tmp_path / "plain_import.py").write_text(
+        textwrap.dedent(
+            """
+            import platoon_harness.kernel.journal
+            from platoon_harness.kernel import Args, Txn, op
+
+            @op("plain.go", tool=True)
+            def go(txn: Txn, a: Args) -> None:
+                \"\"\"Go. Refused never.\"\"\"
+            """
+        )
+    )
+    extension = Extension("plain", ops=[importlib.import_module("plain_import").go])
+
+    result = await check_extension(extension, folder=tmp_path / "session")
+
+    assert states(result)["public_api_only"] == "failed"
+    assert "platoon_harness.kernel.journal" in result.get("public_api_only").reason

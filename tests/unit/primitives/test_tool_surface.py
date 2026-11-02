@@ -8,7 +8,7 @@ from platoon_harness.kernel import Kernel, ManualClock, Op
 from platoon_harness.primitives import PRIMITIVES
 
 TOOLS = [operation for extension in PRIMITIVES for operation in extension.ops if operation.tool]
-NEVER_REFUSED = {"agent.finish", "agent.list", "channel.list", "peers", "session.status", "wait.progress"}
+NEVER_REFUSED = {"agent.finish", "channel.list", "peers", "session.status", "wait.progress"}
 OP_NAME = re.compile(r"`([a-z]+\.[a-z]+)`")
 
 

@@ -211,7 +211,7 @@ class Add(Args):
 @op("task.add", on=lambda a: f"queue/{a.queue}", tool=True)
 def add(txn: Txn, a: Add) -> dict[str, Any]:
     """Add a task to a queue. `gist` says what to do; put anything longer in `body`. Refused `not_permitted` when you
-    may not write this queue: call `channel.list`. `not_found` when no such queue exists."""
+    may not write this queue, and `not_found` when no such queue exists. Call `channel.list` to see yours."""
     channel = _queue(txn, a.queue)
     id = str(txn.view(Tasks).count(a.queue) + 1)
     data = {"queue": a.queue, "task": id, "body": a.body}
@@ -232,8 +232,8 @@ def claim(txn: Txn, a: Claim) -> dict[str, Any]:
     `blob.get`. Keep working: the runtime renews your lease while you are active, and `task.complete` finds the task
     without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused
     `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks: claim another, or finish
-    one first. `queue_empty` when nothing is open: call `wait` with `queue` and end your turn. `not_found` when no such
-    task or queue exists."""
+    one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open. Call `wait` with
+    `queue` then, and end your turn."""
     channel = _queue(txn, a.queue)
     tasks = txn.view(Tasks)
     for lapsed in tasks.lapsed(a.queue, txn.now):
@@ -302,7 +302,7 @@ def _caller_lease(txn: Txn, a: Held) -> Task:
     return task
 
 
-@op("task.renew", on=lambda a: f"queue/{a.queue}", tool=True)
+@op("task.renew", on=lambda a: f"queue/{a.queue}")
 def renew(txn: Txn, a: Held) -> dict[str, Any]:
     """Extend your lease, up to the queue's `lease_max`. The runtime already does this while you are active. Refused
     `stale_fence` when the lease has gone: claim again."""
@@ -326,7 +326,7 @@ def release(txn: Txn, a: Held) -> None:
 
 
 class Finish(Held):
-    gist: Annotated[Gist, Field(description="The result, at most 280 characters: `task.list` shows it.")] = ""
+    gist: Annotated[Gist, Field(description="The result, at most 280 characters. `task.list` shows it.")] = ""
     body: Body = None
     based_on: BasedOn = ()
 
@@ -399,8 +399,8 @@ class ListTasks(Args):
 @op("task.list", on=lambda a: f"queue/{a.queue}", exposes=True, tool=True)
 def list_tasks(txn: Txn, a: ListTasks) -> dict[str, Any]:
     """List a queue's tasks, oldest first, each with its `result` once it has one, with the true `total` and a `cursor`
-    to pass as `after`, or none at the end. Refused `not_permitted` when you may not read this queue: call
-    `channel.list`. `not_found` when no such queue exists."""
+    to pass as `after`, or none at the end. Refused `not_permitted` when you may not read this queue, and `not_found`
+    when no such queue exists. Call `channel.list` to see yours."""
     _queue(txn, a.queue)
     rows, total = txn.view(Tasks).listed(a.queue, a.state, a.after, a.limit)
     tasks = fitted(rows, show=Task.shown)

@@ -1,17 +1,18 @@
-"""What a model sees: one derivation from `ops.list`, per token, in the words of each surface."""
+"""What a model sees: one derivation from `ops.list`, per token, in the words of each surface, fixed at launch."""
 
 import json
 import re
 from collections.abc import Callable, Collection
 from typing import Any
 
-from platoon_harness.kernel import Kernel, Principal, Refusal, Refused
+from platoon_harness.kernel import Kernel, Principal, Refusal, Refused, tool_name
 from platoon_harness.primitives import BODY_REF
 
 type Surface = Callable[[str], str]
 
 _NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
-_OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
+_SENTENCE = re.compile(r"(?<=\.)\s+")
+OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
 _NO_NEXT_STEP = "Carry on without it, and say so."
 _REFUSALS = {
     "not_permitted": (
@@ -24,7 +25,7 @@ _REFUSALS = {
     ),
     "not_found": (
         "What you named does not exist.",
-        "Check the name: `agent.list` and `channel.list` show what does.",
+        "Check the name: `peers` and `channel.list` show what does.",
     ),
     "conflict": (
         "It clashes with where things stand now.",
@@ -69,11 +70,6 @@ _REFUSALS = {
 }
 
 
-def tool_name(op: str) -> str:
-    """An op as an MCP server lists it: `task_claim`."""
-    return op.replace(".", "_")
-
-
 def harness_name(namespace: str) -> Surface:
     """An op as a harness shows a server's tools to its model: `mcp__<namespace>__task_claim`."""
     return lambda op: f"mcp__{namespace}__{tool_name(op)}"
@@ -102,7 +98,22 @@ def describe(text: str, surface: Surface, ops: Collection[str]) -> str:
     def rendered(named: re.Match[str]) -> str:
         return f"`{surface(named[1])}`" if named[1] in ops else named[0]
 
-    return _OP_NAMED.sub(rendered, " ".join(text.split()))
+    return OP_NAMED.sub(rendered, " ".join(text.split()))
+
+
+def _named(text: str, ops: Collection[str]) -> set[str]:
+    return {name for name in OP_NAMED.findall(text) if name in ops}
+
+
+def _teacher(surface: Surface, ops: Collection[str], held: Collection[str]) -> Callable[[str], str]:
+    """How one reader is told a thing: `describe`, with no sentence that names a tool it does not hold, since that would
+    send a model to something it cannot call."""
+
+    def teach(text: str) -> str:
+        sentences = _SENTENCE.split(" ".join(text.split()))
+        return describe(" ".join(line for line in sentences if _named(line, ops) <= {*held}), surface, ops)
+
+    return teach
 
 
 def _takes_body(field: dict[str, Any]) -> bool:
@@ -114,17 +125,17 @@ def body_fields(schema: dict[str, Any]) -> tuple[str, ...]:
     return tuple(name for name, field in schema.get("properties", {}).items() if _takes_body(field))
 
 
-def _field(field: dict[str, Any], surface: Surface, ops: Collection[str]) -> dict[str, Any]:
+def _field(field: dict[str, Any], teach: Callable[[str], str]) -> dict[str, Any]:
     shown = {"type": "string"} if _takes_body(field) else {k: v for k, v in field.items() if k != "title"}
     if "description" in field:
-        shown["description"] = describe(field["description"], surface, ops)
+        shown["description"] = teach(field["description"])
     return shown
 
 
-def _input_schema(schema: dict[str, Any], surface: Surface, ops: Collection[str]) -> dict[str, Any]:
+def _input_schema(schema: dict[str, Any], teach: Callable[[str], str]) -> dict[str, Any]:
     """An op's schema as a model should see it: no titles or class text, and each body offered as text."""
     shown = {keyword: value for keyword, value in schema.items() if keyword not in ("title", "description")}
-    fields = {name: _field(field, surface, ops) for name, field in schema.get("properties", {}).items()}
+    fields = {name: _field(field, teach) for name, field in schema.get("properties", {}).items()}
     return {**shown, "properties": fields, "additionalProperties": False}
 
 
@@ -145,21 +156,28 @@ def list_tools(kernel: Kernel, principal: Principal, surface: Surface = tool_nam
 
     `readOnlyHint` is true only for what journals nothing: an agent's read moves its cursor and records exposure.
     """
+    tools = _held(kernel, principal)
+    teach = _teacher(surface, kernel.ops, {op["name"] for op in tools})
     return [
         {
             "name": tool_name(op["name"]),
             "title": op["name"],
-            "description": describe(op["description"], surface, kernel.ops),
-            "inputSchema": _input_schema(op["schema"], surface, kernel.ops),
+            "description": teach(op["description"]),
+            "inputSchema": _input_schema(op["schema"], teach),
             "annotations": {"readOnlyHint": op["query"]},
         }
-        for op in _held(kernel, principal)
+        for op in tools
     ]
 
 
+def _listed(page: dict[str, Any], rows: str, show: Callable[[dict[str, Any]], str], tool: str) -> str:
+    """A first page as words, saying where the rest is."""
+    return ", ".join((*map(show, page[rows]), *(() if page["cursor"] is None else (f"and more: call `{tool}`",))))
+
+
 def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> str:
-    """The turn preamble: this agent's exact tools, and who it can reach now, because no harness's tool discovery can be
-    relied on and tool schemas never enumerate targets."""
+    """This agent's exact tools, and who it can reach, because no harness's tool discovery can be relied on and tool
+    schemas never enumerate targets. A harness has it once, at launch: what changes later travels in a delivery."""
     held = sorted(op["name"] for op in _held(kernel, agent))
     names = ", ".join(f"`{surface(op)}`" for op in held)
     lines = [
@@ -167,14 +185,14 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> 
     ]
     if surface is shell_name:
         lines.append("Run `ph --help`, or `ph <tool> --help` for one tool's arguments.")
-    if "peers" in held:
-        peers = [peer["address"] for peer in kernel.query(agent, "peers", {}).result or ()]
-        lines.append(f"You can message: {', '.join(peers) or 'nobody yet'}.")
-    if "channel.list" in held:
-        channels = [
-            f"{found['name']} ({found['kind']})" for found in kernel.query(agent, "channel.list", {}).result or ()
-        ]
-        lines.append(f"Channels: {', '.join(channels) or 'none yet'}.")
+    if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
+        reach = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
+        lines.append(f"You can message: {reach or 'nobody yet'}.")
+    if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
+        kept = _listed(
+            channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
+        )
+        lines.append(f"Channels: {kept or 'none yet'}.")
     if "wait" in held:
         parking = (
             "With nothing to do until something changes, call `wait` and end your turn: the runtime starts the next."
@@ -187,7 +205,7 @@ def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held:
     """A refusal as a model can act on it: the code, what it means, what to do next, and the reason given. A next step
     that names a tool outside `held` would send a model to something it cannot call, so it is left out."""
     meaning, next_step = _REFUSALS[refusal.code]
-    if not {name for name in _OP_NAMED.findall(next_step) if name in ops} <= {*held}:
+    if not _named(next_step, ops) <= {*held}:
         next_step = _NO_NEXT_STEP
     detail = refusal.detail if isinstance(refusal.detail, str) else json.dumps(refusal.detail, ensure_ascii=False)
     lines = [f"Refused {refusal.code}{f' on {refusal.object}' if refusal.object else ''}: {meaning}"]
@@ -201,25 +219,25 @@ def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held:
     return "\n".join(describe(line, surface, ops) for line in lines)
 
 
-def _entries(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> list[str]:
+def _entries(handed: dict[str, Any], teach: Callable[[str], str]) -> list[str]:
     """Each entry handed over, by the ref that dedupes a repeat, then how to read what did not come with it."""
     lines = []
     for item in handed["items"]:
         lines.append(f"- {item['ref']} from {item['sender']}: {item['gist']}")
-        if item["body"]:
-            reading = describe(f"Its body is {item['body']}: pass that as `ref` to `blob.get`.", surface, ops)
+        if item["body"] and (reading := teach(f"Its body is {item['body']}: pass that as `ref` to `blob.get`.")):
             lines.append(f"  {reading}")
-    if handed["behind"]:
-        lines.append(describe(f"{handed['behind']} more are waiting: call `message.read`.", surface, ops))
+    if handed["behind"] and (behind := teach(f"{handed['behind']} more are waiting: call `message.read`.")):
+        lines.append(behind)
     return lines
 
 
-def notices_text(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> str:
+def notices_text(handed: dict[str, Any], surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
     """Steer notices handed over on a tool's result."""
-    lines = ["Messages arrived, and they may change what you should do next:", *_entries(handed, surface, ops)]
-    return "\n".join(lines)
+    entries = _entries(handed, _teacher(surface, ops, held))
+    return "\n".join(["Messages arrived, and they may change what you should do next:", *entries])
 
 
-def delivery_text(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> str:
+def delivery_text(handed: dict[str, Any], surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
     """A handover as a harness's prompt reads it. Its id goes with it, because a handover can come twice."""
-    return "\n".join([f"New messages (delivery {handed['input']}):", *_entries(handed, surface, ops)])
+    entries = _entries(handed, _teacher(surface, ops, held))
+    return "\n".join([f"New messages (delivery {handed['input']}):", *entries])

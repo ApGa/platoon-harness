@@ -9,7 +9,7 @@
   lifecycle and completion, approvals, budgets, and the `roster`, `attention` and `changes` views.
 - Teams and topologies: roles, nine presets that mix by union, one compiled grant table, `team_check`, and `team.show()`.
 - Layered configuration, `Secret`, the reproducibility manifest, and extension discovery from metadata alone.
-- The tool plane: a tools-only MCP server on loopback, a stdio shim, `ph`, and one derivation of tools and the turn preamble from
+- The tool plane: a tools-only MCP server on loopback, a stdio shim, `ph`, and one derivation of tools and the preamble from
   `ops.list`, per token.
 - `platoon_harness.rpc`: one line-delimited JSON-RPC 2.0 peer on asyncio streams, split on LF only.
 - The driver contract: seven methods, one closed report vocabulary, `levels`, and `docs/drivers.md`.
@@ -83,6 +83,12 @@
 - A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
   mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
+- A model on a long team can still find its peers: `peers` and `channel.list` go a page at a time, where one past 32 KiB was refused
+  with nothing left to try.
+- A description or a handover no longer names a tool its reader does not hold, and a refused query leaves its line out of the preamble.
+  It used to read `nobody yet`.
+- Two extensions that claim one tool name are refused at load, as op names are. They used to pass load and raise at start.
+- `check_extension` sees an op named with an underscore or a digit, and a plain `import` of a kernel module.
 - A long `forgotten` no longer loses its agent: the list passed what an event holds, and the report was refused.
 - `view.watch("roster")` no longer misses a row. It keyed on `event.agent`, so a row that moved on an event naming someone else or
   nobody, a message, a wait's progress or a budget, stayed stale. A roster now changes as a whole.
@@ -110,6 +116,9 @@
 - `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
+- `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
+  page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
+- `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
 - `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have
   `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`.
 - `Compacted.forgotten` holds native ids, and the host stores it and `summary` as bodies. With `None` the runtime records

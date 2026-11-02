@@ -24,7 +24,7 @@ from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
 from .clients import Gaps
-from .common import AgentName, Body, Gist, Name, address
+from .common import AgentName, Body, Gist, Name, Paging, address, paged
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
@@ -266,7 +266,7 @@ def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
     a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
-    children that would end with you are working: call `wait` with `agents`, or `agent.cancel` each."""
+    children that would end with you are working. Call `wait` with `agents` for them, or `agent.cancel` each."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
@@ -286,7 +286,7 @@ def finish(txn: Txn, a: Finish) -> None:
 
 
 class Named(Args):
-    agent: Annotated[AgentName, Field(description="`@agent`, as `peers` and `agent.list` show it.")]
+    agent: Annotated[AgentName, Field(description="`@agent`, as `peers` shows it.")]
 
 
 @op("agent.conclude", on=lambda a: f"agent/{a.agent}", runtime=True)
@@ -321,8 +321,8 @@ def cancel(txn: Txn, a: Named) -> None:
 @op("agent.retire", on=lambda a: f"agent/{a.agent}", tool=True)
 def retire(txn: Txn, a: Named) -> None:
     """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while a
-    turn is open, or while children that would end with it are working: `wait` for them, or call `agent.cancel` to stop
-    them now. `conflict` too when it has ended already."""
+    turn is open, or while children that would end with it are working, and when it has ended already. Call `wait` for
+    them, or `agent.cancel` to stop them now."""
     agent = _live(txn, a.agent)
     if txn.view(Stamps).turn(agent.name) is not None:
         raise Refused("conflict", f"{agent.name} has a turn open")
@@ -523,7 +523,7 @@ def _public(agent: Agent) -> dict[str, Any]:
     return {**agent.model_dump(include={"role", "depth", "state", "status"}), "agent": agent.name, "parent": parent}
 
 
-@op("agent.list", query=True, tool=True)
+@op("agent.list", query=True)
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
     """List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
@@ -544,8 +544,8 @@ def agent_records(txn: Txn, a: Records) -> list[dict[str, Any]]:
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)
 def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
-    """Show one agent's state, live or ended, and its open `turn`. Refused `not_found` when no such agent ever existed:
-    call `agent.list`. `not_permitted` when it is not below you."""
+    """Show one agent's state, live or ended, and its open `turn`. Refused `not_found` when no such agent ever existed,
+    and `not_permitted` when it is not below you."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
@@ -553,15 +553,17 @@ def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
 
 
 @op("peers", query=True, tool=True)
-def peers(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List whom you may message directly now. Targets change as agents come and go, so ask rather than remember."""
+def peers(txn: Txn, a: Paging) -> dict[str, Any]:
+    """List whom you may message directly now, in `peers`, with the true `total` and a `cursor` to pass as `after`, or
+    none at the end. Targets change as agents come and go, so ask rather than remember."""
     grants = txn.view(Grants)
     live = txn.view(Principals).select(txn.me, "all")
-    return [
+    rows = [
         {"address": f"@{principal.name}", "kind": principal.kind, "role": principal.role}
         for principal in live
         if principal.id != txn.me.id and grants.permits(txn.me, "message.send", f"inbox/{principal.name}")
     ]
+    return paged(rows, "peers", "address", a.after)
 
 
 def _blockers(txn: Txn) -> list[str]:
