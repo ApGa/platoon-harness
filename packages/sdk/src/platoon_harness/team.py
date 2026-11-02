@@ -74,10 +74,12 @@ class Role(Model):
 
     `count` is how many start with the session: left out, one, or none if another role spawns this one. `delivery` is
     how a message reaches this role's inboxes, and `inbox_depth` how many entries one holds before refusing more.
+    `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn.
     """
 
     harness: str | Command
     model: str | None = None
+    effort: str | None = None
     instructions: str | None = None
     auth: str | None = None
     workspace: Literal["shared", "worktree", "snapshot", "isolated"] = "shared"

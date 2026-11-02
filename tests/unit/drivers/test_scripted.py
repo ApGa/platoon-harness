@@ -345,6 +345,11 @@ async def test_a_harness_with_no_approvals_says_so_to_the_model(tmp_path):
     assert heard.of(ApprovalRequested) == []
 
 
+async def test_an_effort_it_cannot_set_is_refused(tmp_path):
+    with pytest.raises(DriverError, match="no effort"):
+        await ScriptedDriver().start(make_spec(tmp_path, effort="low"), Heard())
+
+
 async def test_no_model_set_is_refused_rather_than_defaulted(tmp_path):
     driver, heard = await started(tmp_path, [AskModel()], [Say("still here")])
 

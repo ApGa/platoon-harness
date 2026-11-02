@@ -251,6 +251,27 @@ async def test_a_harness_with_no_tool_path_gets_no_binding(tmp_path, recording):
     assert recording.specs[0].instructions is None
 
 
+async def test_a_role_s_effort_reaches_its_harness(tmp_path, recording):
+    class Taking(Recording):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            Recording.specs.append(spec)
+            return await super().start(spec.model_copy(update={"effort": None}), report)
+
+    team = solo_with(Taking, effort="low")
+
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+    assert recording.specs[0].effort == "low"
+
+
+async def test_a_harness_that_cannot_honor_an_effort_fails_its_spawn(tmp_path):
+    async with Session.start(solo(effort="low"), root=tmp_path) as session:
+        row = await asyncio.wait_for(ended(session, "bob"), SECONDS)
+
+    assert (row["status"], row["reason"]) == ("failed", "its spawn failed: a scripted harness has no effort to set")
+
+
 async def test_capabilities_and_levels_reach_agent_started(tmp_path):
     async with Session.start(solo(), root=tmp_path) as session:
         await in_state(session, "bob", "idle")

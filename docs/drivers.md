@@ -178,6 +178,8 @@ class OneCall:
     async def start(self, spec, report):
         if spec.model is None:
             raise DriverError("set a model: this harness will not pick one")
+        if spec.effort is not None:
+            raise DriverError("this harness has no effort to set")
         self.model, self.report = spec.model, report
         await report(Ready(version="1.0", effective_model=spec.model))
         if spec.goal:
@@ -238,7 +240,7 @@ That was one short process: `describe` runs your program, sends this one frame, 
 may start for it. Starting an agent is a new process.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}

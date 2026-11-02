@@ -869,10 +869,11 @@ class Driver(Protocol):
     async def stop(self, grace: float) -> None: ...              # ends the process tree it owns
 ```
 
-`AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, tool binding, model access (`Secret` values by variable
-name, URLs included), env, instructions (appended by the supported path; native project files are never touched) and resume. A
-fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for
-what it cannot do, so a one-shot harness refuses a start with no goal.
+`AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, effort (a string handed to the harness as it stands), tool
+binding, model access (`Secret` values by variable name, URLs included), env, instructions (appended by the supported path; native
+project files are never touched) and resume. A fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a
+delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
+such setting refuses an effort.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),

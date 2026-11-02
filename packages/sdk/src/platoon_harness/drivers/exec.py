@@ -51,6 +51,8 @@ class ExecDriver:
             raise DriverError("a one-shot harness cannot resume")
         if not spec.goal:
             raise DriverError("a one-shot harness takes nothing after its goal: set `count = 0` and spawn it with one")
+        if spec.effort is not None:
+            raise DriverError("a one-shot command takes no effort from here: put it in the command")
         if GOAL in self._command and spec.goal.startswith("-"):
             raise DriverError("a goal that starts with `-` would reach this program as an option: reword it")
         command = [part.replace(GOAL, spec.goal) for part in self._command]

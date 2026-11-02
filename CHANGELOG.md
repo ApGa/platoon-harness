@@ -30,6 +30,7 @@
 - `session.ending` gives each agent's last `report`. `agent.conclude` and `agent.retell` are runtime-only ops, and `kernel.first` is
   the one race helper. A live text frame is cut at 64 KiB.
 
+- `effort` on `Role` and `AgentSpec`, handed to the harness as it stands. A driver that cannot honor one fails the spawn.
 ### Fixed
 
 - A secret split across two deltas reached followers unmasked, on every driver but `exec`. Live text is masked as one stream.

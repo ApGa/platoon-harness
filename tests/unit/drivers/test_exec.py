@@ -54,6 +54,11 @@ def test_a_command_harness_means_the_exec_driver():
     assert (role.driver, wire.driver) == ("exec", "wire")
 
 
+async def test_an_effort_it_cannot_set_is_refused(tmp_path):
+    with pytest.raises(DriverError, match="takes no effort"):
+        await ExecDriver(["true"]).start(make_spec(tmp_path, effort="low"), Heard())
+
+
 async def test_one_process_is_one_turn(tmp_path):
     _, heard = await run(tmp_path, "sh", "-c", "echo the answer")
 

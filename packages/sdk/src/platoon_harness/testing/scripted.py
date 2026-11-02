@@ -168,6 +168,8 @@ class ScriptedDriver:
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
         if spec.resume is not None and not self._capabilities.resume:
             raise DriverError("this harness cannot resume")
+        if spec.effort is not None:
+            raise DriverError("a scripted harness has no effort to set")
         self._spec, self._report = spec, report
         self._native = spec.resume or f"scripted-{spec.agent}"
         if spec.resume is not None and self._transcript.exists():
