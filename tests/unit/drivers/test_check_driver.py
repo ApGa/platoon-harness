@@ -200,10 +200,10 @@ async def test_an_interrupt_reported_as_anything_else_fails(tmp_path):
     def stopped(report):
         return TurnEnded(reason="stopped") if isinstance(report, TurnEnded) else report
 
-    result = await check(lambda: Filtered(stopped), tmp_path)
+    result = await check_driver(lambda: Filtered(stopped), folder=tmp_path, timeout=5)
 
-    check_ = result.get("interrupt")
-    assert (check_.state, check_.reason) == (
+    said = result.get("interrupt")
+    assert (said.state, said.reason) == (
         "failed",
         "it ended its turn `stopped`, and an interrupt must say `interrupted`",
     )
