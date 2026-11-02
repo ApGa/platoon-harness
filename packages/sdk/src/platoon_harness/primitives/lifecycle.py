@@ -193,8 +193,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     and takes no turn until a message wakes it. It reports back to you when it ends, however it ends, so a parent can
     simply wait. Refused `not_permitted` for a role or limit outside your
     reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the
-    session is closing or you have finished: use another name, or stop spawning. `not_found` when no such role exists.
-    """
+    session is closing or you have finished: use another name, or stop. `not_found` when no such role exists."""
     session = txn.view(SessionRecord)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
@@ -267,8 +266,7 @@ def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
     a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
-    children that would end with you are working: call `wait` with `agents` and end your turn, or `agent.cancel` each.
-    """
+    children that would end with you are working: call `wait` with `agents`, or `agent.cancel` each."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
@@ -585,6 +583,12 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
     return bool(leads) and all(agent.ended for agent in leads)
 
 
+def _scheduled(txn: Txn) -> bool:
+    """Whether anything the journal knows of can still move this session with nobody acting. An extension daemon's
+    private schedule is not in the journal."""
+    return bool(txn.view(Timers).next()) or work(txn).due is not None
+
+
 @op("session.status", query=True, tool=True)
 def session_status(txn: Txn, a: Args) -> dict[str, Any]:
     """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
@@ -603,12 +607,6 @@ def session_status(txn: Txn, a: Args) -> dict[str, Any]:
         "asking": txn.view(Approvals).asking(),
         "stalled": not blockers and not done and until != "program" and not _scheduled(txn),
     }
-
-
-def _scheduled(txn: Txn) -> bool:
-    """Whether anything the journal knows of can still move this session with nobody acting. An extension daemon's
-    private schedule is not in the journal."""
-    return bool(txn.view(Timers).next()) or work(txn).due is not None
 
 
 def _came_to(txn: Txn, state: str) -> str:

@@ -431,7 +431,7 @@ class Session:
 
     async def settled(self, timeout: Span | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.
         """Wait for `session.status` to say done, close at `until`, and say what the session came to. Past `timeout` it
-        says `timed_out`, and leaves the session as it is."""
+        says `timed_out`, and with something only a person can move it says `needs_human`. Both leave it as it is."""
         clock = self._current().clock
         settling = asyncio.ensure_future(self._settling())
         rivals = () if timeout is None else (clock.sleep(seconds(timeout)),)

@@ -148,9 +148,9 @@ class Runtime:
             await first(kernel.changed(head), kernel.clock.sleep(remaining))
 
     async def _hand_back(self) -> None:
-        """Release what will not happen now. A turn still open ends, which reconciles its reservation. A handover that
-        never started fails, which queues its entries again and returns a wake's reservation. A spawn still to come
-        keeps its own, since the next runtime goes on with it."""
+        """Release what will not happen now. A turn still open ends, which reconciles its reservation, and its agent is
+        told on resume. A handover that never started fails, which queues its entries again and returns a wake's
+        reservation. A spawn still to come keeps its own, since the next runtime goes on with it."""
         kernel, host = self.kernel, self.host
         for record in self._records():
             if record["turn"] is not None:

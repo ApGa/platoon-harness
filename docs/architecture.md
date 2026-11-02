@@ -166,7 +166,8 @@ can both be watched. Leaving only disconnects.
   live in that entry point and nowhere else, so that several runtimes can share a process.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
   reservations, append `session.stopped`, keep the folder resumable. To release is to hand back what will not happen now: a turn
-  still open ends, which reconciles its reservation, and a handover that never started fails, which queues its entries again. A spawn
+  still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started fails,
+  which queues its entries again. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
   while open; one that was closing or cancelled stays so, and its harnesses are not resumed, because nothing new may start. A journal
   that stops committing holds this up by at most `grace` and a second, a driver that breaks in `stop` holds up nothing, and the process
@@ -1066,8 +1067,8 @@ A stop aborts every connection, so no client can hold up shutdown either.
 state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves
 the session as it is. What only a person can move, an approval left to `ask` or a session that has stalled, ends it with `needs_human`
 and leaves the session as it is, unless another client holding a control credential is attached. It waits for that client to act or
-to go, and looks once a second, because a client can leave without moving the journal. So `settled()` with no timeout cannot hang
-on anything the journal knows of.
+to go, and looks once a second, because a client can leave without moving the journal. So a session at rest cannot hang `settled()`,
+with no timeout too. A harness that never ends its turn can, which is what a wall limit is for.
 
 | Reason | Exit code |
 |---|---|

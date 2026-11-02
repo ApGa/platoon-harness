@@ -24,7 +24,7 @@ pass, and the row says which kind), **experimental** (works, but rests on an uns
 | Human parity | planned | |
 | Claim race | tested | `tests/unit/primitives/test_tasks.py`, `test_claim_race_*`, including a hypothesis interleaving. Concurrent commands on one writer; no real harness |
 | Watch race | tested | `tests/unit/primitives/test_waits.py`, `test_watch_race_*`, including a hypothesis interleaving of sends, reads, waits and reopening the journal. No real harness |
-| Retry and crash | tested | `tests/integration/test_crash.py`: `kill -9` of a detached runtime mid-turn, then a resume, with wire processes as harnesses. Each effect kind has its row in `tests/unit/runtime/test_recovery.py`. No real harness has been through it |
+| Retry and crash | tested | `tests/integration/test_crash.py`: `kill -9` of a detached runtime mid-turn, then a resume, with wire processes as harnesses. Each effect kind has its row in `tests/unit/runtime/test_recovery.py`, and `test_crash_points.py` cuts a journal at every command boundary. No real harness has been through it |
 | Provenance | planned | |
 | Identity | planned | |
 | Credit integration | planned | |
