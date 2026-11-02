@@ -1,0 +1,351 @@
+"""ScriptedDriver: each step, its capabilities as data, and real MCP and model calls."""
+
+import pytest
+
+from platoon_harness.config import Secret
+from platoon_harness.drivers import (
+    ApprovalRequested,
+    Capabilities,
+    Delivery,
+    Delta,
+    Driver,
+    DriverError,
+    Exited,
+    InputDelivered,
+    Item,
+    ModelCall,
+    Offered,
+    Ready,
+    TurnEnded,
+    TurnStarted,
+    Usage,
+)
+from platoon_harness.testing import (
+    TOOL,
+    Ask,
+    AskModel,
+    Call,
+    EndTurn,
+    Exit,
+    Fail,
+    FakeModel,
+    FakeTools,
+    Hang,
+    Say,
+    ScriptedDriver,
+    Think,
+    ToolCall,
+    Wait,
+    chat_access,
+)
+
+from .support import Heard, make_spec
+
+pytestmark = pytest.mark.timeout(30)
+
+
+def delivery(input: str = "d1", boundary: str = "turn", gist: str = "hello") -> Delivery:
+    return Delivery(input=input, boundary=boundary, items=(Offered(ref="inbox/ada@1", gist=gist),))
+
+
+async def started(tmp_path, *turns, capabilities=None, **fields) -> tuple[ScriptedDriver, Heard]:
+    options = {} if capabilities is None else {"capabilities": capabilities}
+    driver, heard = ScriptedDriver(turns, **options), Heard()
+    await driver.start(make_spec(tmp_path, **fields), heard)
+    return driver, heard
+
+
+def test_it_is_a_driver():
+    assert isinstance(ScriptedDriver(), Driver)
+
+
+async def test_say_streams_then_records(tmp_path):
+    driver, heard = await started(tmp_path, [Say("hello there")])
+
+    await heard.until(TurnEnded)
+    await driver.stop(1)
+
+    assert [type(report) for report in heard.reports] == [Ready, TurnStarted, Delta, Item, TurnEnded, Exited]
+    assert (heard.of(Item)[0].kind, heard.of(Item)[0].body) == ("message", "hello there")
+
+
+async def test_think_is_a_thought(tmp_path):
+    driver, heard = await started(tmp_path, [Think("hmm")])
+
+    assert (await heard.until(Item)).kind == "thought"
+    await driver.stop(1)
+
+
+async def test_a_long_text_keeps_its_body_and_cuts_its_gist(tmp_path):
+    driver, heard = await started(tmp_path, [Say("x" * 1000)])
+
+    item = await heard.until(Item)
+    await driver.stop(1)
+
+    assert (len(item.gist), len(item.body)) == (280, 1000)
+
+
+async def test_turns_run_one_per_delivery_and_then_run_out(tmp_path):
+    driver, heard = await started(tmp_path, [Say("one")], [Say("two")])
+    await heard.until(TurnEnded)
+
+    await driver.deliver(delivery("d1"))
+    await heard.until(Item, lambda item: item.gist == "two")
+    await driver.deliver(delivery("d2"))
+    await heard.until(InputDelivered, lambda delivered: delivered.input == "d2")
+    await heard.until(TurnStarted, lambda turn: turn.turn == "t3")
+    await driver.stop(1)
+
+    assert [turn.turn for turn in heard.of(TurnStarted)] == ["t1", "t2", "t3"]
+
+
+async def test_a_delivery_at_a_turn_boundary_waits_for_the_turn_to_end(tmp_path):
+    driver, heard = await started(tmp_path, [Wait(), Say("first")], [Say("second")])
+    await heard.until(TurnStarted)
+
+    receipt = await driver.deliver(delivery())
+    await heard.until(Item, lambda item: item.gist == "second")
+    await driver.stop(1)
+
+    assert receipt.queued == ("d1",)
+    order = [type(report) for report in heard.reports]
+    assert order.index(TurnEnded) < order.index(InputDelivered)
+
+
+async def test_a_steer_lands_between_steps(tmp_path):
+    driver, heard = await started(tmp_path, [Wait(), Say("after")])
+    await heard.until(TurnStarted)
+
+    await driver.deliver(delivery(boundary="tool"))
+
+    landed = await heard.until(InputDelivered)
+    assert (landed.boundary, landed.evidence) == ("tool", "between_steps")
+    await heard.until(Item)
+    await driver.stop(1)
+
+
+async def test_an_undeclared_boundary_is_refused(tmp_path):
+    driver, _ = await started(tmp_path, capabilities=Capabilities(persistent=True, boundaries={"turn"}))
+
+    with pytest.raises(DriverError, match="no tool boundary"):
+        await driver.deliver(delivery(boundary="tool"))
+    await driver.stop(1)
+
+
+async def test_end_turn_drops_the_rest(tmp_path):
+    driver, heard = await started(tmp_path, [EndTurn("done early"), Say("never")])
+
+    assert (await heard.until(TurnEnded)).reason == "done early"
+    await driver.stop(1)
+    assert heard.of(Item) == []
+
+
+async def test_fail_ends_the_turn_and_not_the_harness(tmp_path):
+    driver, heard = await started(tmp_path, [Fail("boom")], [Say("still here")])
+
+    assert (await heard.until(TurnEnded)).reason == "failed: boom"
+    await driver.deliver(delivery())
+    assert (await heard.until(Item)).gist == "still here"
+    await driver.stop(1)
+
+
+async def test_exit_ends_the_harness_in_the_middle_of_its_turn(tmp_path):
+    driver, heard = await started(tmp_path, [Say("bye"), Exit("crashed"), Say("never")])
+
+    assert (await heard.until(Exited)).reason == "crashed"
+    assert heard.of(TurnEnded) == []
+    with pytest.raises(DriverError, match="has exited"):
+        await driver.deliver(delivery())
+    await driver.stop(1)
+    assert len(heard.of(Exited)) == 1
+
+
+async def test_ask_holds_the_turn_until_answered(tmp_path):
+    driver, heard = await started(tmp_path, [Ask("run rm?"), Say("after")])
+    asked = await heard.until(ApprovalRequested)
+
+    assert heard.of(Item) == []
+    await driver.answer(asked.id, "deny")
+
+    decided = await heard.until(Item, lambda item: item.approval is not None)
+    assert (decided.approval, decided.outcome) == (asked.id, "deny")
+    await heard.until(Item, lambda item: item.gist == "after")
+    await driver.stop(1)
+
+
+async def test_answering_what_nobody_asked_is_refused(tmp_path):
+    driver, _ = await started(tmp_path)
+
+    with pytest.raises(DriverError, match="no approval"):
+        await driver.answer("nothing", "allow")
+    await driver.stop(1)
+
+
+async def test_hang_holds_until_interrupted_and_says_what_was_queued(tmp_path):
+    driver, heard = await started(tmp_path, [Hang()], [Say("next")])
+    await heard.until(TurnStarted)
+    await driver.deliver(delivery())
+
+    receipt = await driver.interrupt()
+
+    assert receipt.queued == ("d1",)
+    assert (await heard.until(TurnEnded)).reason == "interrupted"
+    assert (await heard.until(Item)).gist == "next"
+    await driver.stop(1)
+
+
+async def test_an_unsteerable_harness_cannot_be_interrupted(tmp_path):
+    capabilities = Capabilities(persistent=True, boundaries={"turn"})
+    driver, _ = await started(tmp_path, capabilities=capabilities)
+
+    with pytest.raises(DriverError, match="cannot be interrupted"):
+        await driver.interrupt()
+    await driver.stop(1)
+
+
+async def test_a_one_shot_exits_after_its_turn(tmp_path):
+    driver, heard = await started(tmp_path, [Say("once")], capabilities=Capabilities())
+
+    assert await heard.until(Exited)
+    with pytest.raises(DriverError, match="has exited"):
+        await driver.deliver(delivery())
+    await driver.stop(1)
+
+
+async def test_a_one_shot_refuses_input_while_it_runs(tmp_path):
+    driver, heard = await started(tmp_path, [Hang()], capabilities=Capabilities())
+    await heard.until(TurnStarted)
+
+    with pytest.raises(DriverError, match="takes nothing after its goal"):
+        await driver.deliver(delivery())
+    await driver.stop(1)
+
+
+async def test_it_refuses_to_resume_when_it_cannot(tmp_path):
+    with pytest.raises(DriverError, match="cannot resume"):
+        await ScriptedDriver(capabilities=Capabilities()).start(make_spec(tmp_path, resume="s-1"), Heard())
+
+
+async def test_reconcile_tells_landed_from_waiting_from_unknown(tmp_path):
+    driver, heard = await started(tmp_path, [Hang()])
+    await heard.until(TurnStarted)
+    await driver.deliver(delivery("waiting"))
+
+    assert await driver.reconcile("waiting") == "not_landed"
+    assert await driver.reconcile("never") == "unknown"
+    await driver.interrupt()
+    await heard.until(InputDelivered)
+    assert await driver.reconcile("waiting") == "landed"
+    await driver.stop(1)
+
+
+async def test_stop_before_start_does_nothing():
+    await ScriptedDriver().stop(1)
+
+
+async def test_a_tool_call_is_real_mcp_with_the_bearer(tmp_path):
+    async with FakeTools() as tools:
+        driver, heard = await started(tmp_path, [Call(TOOL, {"note": "hi"})], tools=tools.binding(tmp_path))
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    assert tools.calls == [{"name": TOOL, "arguments": {"note": "hi"}}]
+    assert driver.results[0]["content"][0]["text"] == "pong"
+    assert [item.phase for item in heard.of(Item)] == ["started", "completed"]
+    assert heard.of(Ready)[0].tools_visible == (TOOL,)
+
+
+async def test_a_tool_refused_at_the_door_fails_the_call_loudly(tmp_path):
+    async with FakeTools() as tools:
+        wrong = tools.binding(tmp_path).model_copy(update={"token": Secret("wrong")})
+
+        with pytest.raises(DriverError, match="tools/list answered 401"):
+            await ScriptedDriver().start(make_spec(tmp_path, tools=wrong), Heard())
+
+
+async def test_no_tools_means_visibility_is_unknown(tmp_path):
+    driver, heard = await started(tmp_path)
+
+    assert (await heard.until(Ready)).tools_visible is None
+    await driver.stop(1)
+
+
+async def test_ask_model_is_a_real_model_call_and_runs_what_it_calls(tmp_path):
+    async with FakeModel(ToolCall(TOOL, {"note": "x"}, id="call_a"), "all done") as model, FakeTools() as tools:
+        driver, heard = await started(
+            tmp_path, [AskModel()], tools=tools.binding(tmp_path), model="m", access=chat_access(model)
+        )
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    assert len(model.calls) == 2
+    assert model.calls[0].offers(TOOL) and model.calls[0].says("do the thing")
+    assert model.calls[1].says("call_a") and model.calls[1].says("pong")
+    assert [call.call_id for call in heard.of(ModelCall)] == [call.response_id for call in model.calls]
+    assert [usage.scope for usage in heard.of(Usage)] == ["call", "call"]
+    assert tools.calls[0]["name"] == TOOL
+    assert heard.of(Item)[-1].gist == "all done"
+
+
+async def test_a_tool_that_is_not_ours_is_gated(tmp_path):
+    async with FakeModel(ToolCall("shell", id="call_s"), "done") as model:
+        driver, heard = await started(tmp_path, [AskModel()], model="m", access=chat_access(model))
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "allow")
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    assert model.calls[1].says("shell allow")
+
+
+async def test_a_harness_with_no_approvals_says_so_to_the_model(tmp_path):
+    capabilities = Capabilities(persistent=True, boundaries={"turn"})
+    async with FakeModel(ToolCall("shell"), "done") as model:
+        driver, heard = await started(
+            tmp_path, [AskModel()], capabilities=capabilities, model="m", access=chat_access(model)
+        )
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    assert model.calls[1].says("needs an approval")
+    assert heard.of(ApprovalRequested) == []
+
+
+async def test_no_model_set_is_refused_rather_than_defaulted(tmp_path):
+    driver, heard = await started(tmp_path, [AskModel()], [Say("still here")])
+
+    ended = await heard.until(TurnEnded)
+    assert ended.reason == "failed: no model was set, and this harness will not pick one"
+    await driver.deliver(delivery())
+    assert (await heard.until(Item)).gist == "still here"
+    await driver.stop(1)
+
+
+async def test_two_approvals_in_one_turn_have_two_ids(tmp_path):
+    driver, heard = await started(tmp_path, [Ask("first?"), Ask("second?")])
+
+    first = await heard.until(ApprovalRequested, lambda asked: asked.gist == "first?")
+    await driver.answer(first.id, "allow")
+    second = await heard.until(ApprovalRequested, lambda asked: asked.gist == "second?")
+    await driver.stop(1)
+
+    assert first.id != second.id
+
+
+async def test_a_resumed_harness_has_its_transcript_and_no_new_turn(tmp_path):
+    async with FakeModel("first") as model:
+        access = chat_access(model)
+        driver, heard = await started(tmp_path, [AskModel()], model="m", access=access)
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+        again, heard = ScriptedDriver([[AskModel()]]), Heard()
+        await again.start(make_spec(tmp_path, model="m", access=access, resume="scripted-ada"), heard)
+        await heard.until(Ready)
+        assert heard.of(TurnStarted) == []
+
+        await again.deliver(delivery(gist="more"))
+        await heard.until(TurnEnded)
+        await again.stop(1)
+
+    assert model.calls[1].says("do the thing") and model.calls[1].says("more")

@@ -291,10 +291,11 @@ def test_the_manifest_states_unknown_versions_as_unknown():
     assert all(component.version is None for component in Manifest.of(installed_team()).components)
 
 
-def test_the_manifest_names_a_command_harness_by_its_driver():
-    team = Team(roles={"a": Role(harness=Command(command=["my-agent"]))})
-    with pytest.raises(ConfigError, match="no driver `exec`"):
-        Manifest.of(team)
+@pytest.mark.parametrize(("mode", "driver"), [("oneshot", "exec"), ("wire", "wire")])
+def test_the_manifest_names_a_command_harness_by_its_driver(mode, driver):
+    team = Team(roles={"a": Role(harness=Command(command=["my-agent"], mode=mode))})
+
+    assert [component.name for component in Manifest.of(team).components] == [driver]
 
 
 def test_the_manifest_holds_no_value():

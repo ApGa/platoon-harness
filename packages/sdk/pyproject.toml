@@ -22,3 +22,7 @@ dependencies = ["pydantic>=2.10,<3"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/platoon_harness"]
+
+[project.entry-points."platoon_harness.drivers"]
+exec = "platoon_harness.drivers.exec:ExecDriver"
+wire = "platoon_harness.drivers.wire:WireDriver"

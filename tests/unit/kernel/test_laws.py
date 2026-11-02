@@ -11,6 +11,7 @@ from pydantic import Field, create_model
 
 from platoon_harness import kernel as kernel_package
 from platoon_harness.kernel import Args, Event, Extension, Kernel, Refused, Txn, View, fold, op
+from platoon_harness.testing.extension import private_reaches
 
 from .support import (
     ALICE,
@@ -252,18 +253,6 @@ async def test_absence_stays_honest(kernel):
     assert unknown == (None, None, None, None, None, None)
     listed = result_of(kernel.query(kernel.runtime, "effect.ready", {}))
     assert [(row["id"], row["timeout"], row["agent"]) for row in listed] == [(effect, None, None)]
-
-
-def private_reaches(tree: ast.AST) -> list[str]:
-    """Underscored names reached on anything but `self` or `cls`."""
-    return [
-        node.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute)
-        and node.attr.startswith("_")
-        and not (node.attr.startswith("__") and node.attr.endswith("__"))
-        and not (isinstance(node.value, ast.Name) and node.value.id in ("self", "cls"))
-    ]
 
 
 def test_nothing_has_a_private_api():
