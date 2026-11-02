@@ -27,6 +27,19 @@ def importable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
 
 
+async def exited(pid: int) -> None:
+    """Wait for a process to end. The lock goes a moment before the interpreter does."""
+    descriptor = os.pidfd_open(pid)
+    loop = asyncio.get_running_loop()
+    ended = asyncio.Event()
+    loop.add_reader(descriptor, ended.set)
+    try:
+        await asyncio.wait_for(ended.wait(), SECONDS)
+    finally:
+        loop.remove_reader(descriptor)
+        os.close(descriptor)
+
+
 def team(worker: str = "worker"):
     return manager_worker(inside("lead"), inside(worker))
 
@@ -58,7 +71,7 @@ async def test_a_detached_runtime_runs_the_whole_flow_for_a_guest(tmp_path: Path
     assert (await guest.read())["entries"][0]["gist"] == "The test is fixed."
     await gone(guest)
     assert not (guest.folder / "runtime.json").exists()
-    assert not running(found.pid)
+    await exited(found.pid)
     await guest.leave()
     await rebuilt_equals_live(guest.folder)
 
