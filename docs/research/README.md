@@ -4,6 +4,10 @@ Milestone 0 research for `platoon-harness`, reviewed adversarially on 2026-11-02
 
 **Bottom line.** All 12 critical claims survived, 2 with refinements. Two real agents, OpenHands and pi, passed the full trainable path on a minted child key. The six new findings below should change the design.
 
+> **Later spikes override this page.** [spikes/tools-and-parking.md](spikes/tools-and-parking.md) found that under live Code Mode the Codex
+> `callId` is `exec-<uuid>`, not the model's `call_*` (claim 11, finding 5), and that the shell client is blocked by the default Codex sandbox,
+> so MCP with `omit_tools_from=["deferred"]` is its coordination path (finding 3). [../compatibility.md](../compatibility.md) is current.
+
 ## Reports
 
 | Report | Covers | Use it for |

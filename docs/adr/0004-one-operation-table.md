@@ -27,7 +27,7 @@ One `Op` definition reaches every surface. Python, MCP, `ph`, the CLI, the web r
 - An op's docstring is its tool description, so it must say what a refusal means and what to do next.
 - `exposes` makes one op a command for agents and a query for everyone else. A query cannot emit, so the op's body must check `txn.me.kind`.
 - The naming law is mechanical: the kernel checks it at load and at `emit`. `effect.uncertain` is the one event named for a state.
-- The Python surface is `session.call`, which uses the word as a verb for running an op. That sits badly with the naming law and is unresolved.
+- The Python surface is `session.submit`, the kernel's own verb, because `call` is reserved for model calls.
 
 ## Evidence
 

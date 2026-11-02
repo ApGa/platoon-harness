@@ -33,3 +33,5 @@ The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a 
 - [tools-and-parking.md](../research/spikes/tools-and-parking.md): a 142-line stdlib server, 38 harness turns, the sandbox and token checks. Sample log: [mcp-http-probe.jsonl](../research/fixtures/mcp-http-probe.jsonl).
 - [acp-mcp.md](../research/acp-mcp.md), sections 4 and 5: eras, weight, identity binding, threat tiers.
 - [Research index](../research/README.md), claim 11, new finding 1, and the MCP identity contradiction. [Architecture section 10](../architecture.md).
+
+Also verified with `uv pip compile` on Python 3.12: `platoon[ors]>=0.5,<0.6` with `mcp>=2.3,<3` is unsatisfiable, because `openreward` pins `sse-starlette==2.3.6` and `mcp>=2.3` needs `sse-starlette>=3.0.0`. An unpinned `mcp` silently resolves to 1.30.0. So the SDK, which runs inside Platoon rollout workers, cannot take this dependency.

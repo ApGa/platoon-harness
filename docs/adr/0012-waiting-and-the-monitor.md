@@ -33,3 +33,5 @@ An LLM agent cannot block. A held tool call has a harness cap: 300 s by default 
 
 - [tools-and-parking.md](../research/spikes/tools-and-parking.md): parking, wake turns, fallback, clean-stop counts.
 - [distributed-primitives.md](../research/distributed-primitives.md), section 2, the Erlang row, and the wake-storm risk. [acp-mcp.md](../research/acp-mcp.md), client support and rule 8 on blocking tools. [Architecture section 7](../architecture.md).
+
+Decided: no interrupt fallback and no notion of a required `wait`. Interrupting spends a cold resume to save a model's own overrun, which no trial showed, and budgets already bound the cost. A turn that ends with no `wait` and no `finish` is handled by the monitor, so the silent case reaches the parent.
