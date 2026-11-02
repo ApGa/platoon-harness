@@ -834,8 +834,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `sandbox`** (`read-only`, ...) is a harness-plane setting, not a grant, and an unsupported value fails at `team check`.
 - **Role `delivery`** sets the ladder for its agents' inboxes, `wake` unless stated.
 - **Role `count`** is how many agents start with the session. Left out, that is one, or none if another role spawns this one.
-- **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so `peers`
-  and the preamble list them; tool schemas never enumerate them.
+- **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so the preamble
+  lists them at launch and `peers` as they stand; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
   it makes, and may name only readers and writers within its own reach. For an agent each selector means those it covers at that
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
@@ -1008,11 +1008,12 @@ against the official client and against each real harness.
 
 **Everyday instruction surface.** The preamble and the tool descriptions teach the tools, by exact name, because no harness's
 tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool.
-A sentence that names a tool its reader does not hold is left out, so what a model is told it can do. A test holds every argument to
-a description, every description to what a refusal means, and every op it names to one that exists. Tool schemas leave out what is
+A sentence that names a tool its reader does not hold is left out, in a refusal's reason too, so what a model is told it can do, and
+a fact goes in a sentence apart from the tool that serves it. A test holds every argument to a description, every description to what
+a refusal means, and every op it names to one that exists, for a reader who holds only that tool. Tool schemas leave out what is
 for programs and team files, such as `on` and a queue's lease. The tool list and the preamble are fixed at launch, and go once to each
-harness: what changes later, such as who can be reached, travels in a delivery. That text is in every request of every agent, so
-a test holds each default role's list under a ceiling. We append through each harness's
+harness, so the preamble is a snapshot of who could be reached then, and `peers` is what stays current. That text is in every request
+of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in
 [compatibility.md](compatibility.md).

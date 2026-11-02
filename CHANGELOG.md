@@ -66,7 +66,7 @@
   `XDG_RUNTIME_DIR` falls through, and a detached runtime runs from its folder with `-P`.
 - `team_check` refuses a one-shot role that starts with the session, and says nothing of a `count` of zero, which was said on purpose.
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
-- A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
+- A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold, in its reason either.
 - `ph <tool> --help` for an unknown tool shows what there is.
 - An effect left `uncertain` can be settled by a person with `effect.settle`, as ADR 0005 promised. Nothing could settle one under
   `surface`.
@@ -98,7 +98,8 @@
 - A model on a long team can still find its peers: `peers` and `channel.list` go a page at a time, where one past 32 KiB was refused
   with nothing left to try.
 - A description or a handover no longer names a tool its reader does not hold, and a refused query leaves its line out of the preamble.
-  It used to read `nobody yet`.
+  It used to read `nobody yet`. Each pointer to a tool has a sentence of its own, so a reader who does not hold that tool keeps the fact
+  beside it. An argument's whole description could go with it.
 - Two extensions that claim one tool name are refused at load, as op names are. They used to pass load and raise at start.
 - `check_extension` sees an op named with an underscore or a digit, and a plain `import` of a kernel module.
 - A long `forgotten` no longer loses its agent: the list passed what an event holds, and the report was refused.

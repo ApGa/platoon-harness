@@ -137,7 +137,7 @@ def _board(txn: Txn, name: str) -> Channel:
 
 
 ObjectName = Annotated[str, Field(pattern=r"^[\w.-]+(/[\w.-]+)*$", max_length=256, description="The object's name.")]
-BoardName = Annotated[Name, Field(description="The board, as `channel.list` names it.")]
+BoardName = Annotated[Name, Field(description="The board. `channel.list` names them.")]
 
 
 class Post(Args):
@@ -146,7 +146,7 @@ class Post(Args):
     gist: Gist
     body: Body = None
     fields: Annotated[
-        dict[Name, JsonValue], Field(description="Short JSON values that `board.query` can match with `where`.")
+        dict[Name, JsonValue], Field(description="Short JSON values. `board.query` can match them with `where`.")
     ] = {}
     based_on: BasedOn = ()
 
@@ -174,7 +174,7 @@ def _write(txn: Txn, event_type: str, a: Post) -> dict[str, Any]:
 @op("board.post", on=lambda a: f"board/{a.board}/{a.name}", tool=True)
 def post(txn: Txn, a: Post) -> dict[str, Any]:
     """Create an object on a board, at version 1. Put anything longer than `gist` in `body`. Refused `conflict`, with
-    the current version, when the name exists: read it, then `board.revise`. `not_found` when no such board exists."""
+    the current version, when the name exists. Read it, then `board.revise`. `not_found` when no such board exists."""
     found = txn.view(Boards).get(a.board, a.name)
     if found is not None:
         raise Refused("conflict", {"current": found["version"], "ref": _ref(found)})
@@ -204,9 +204,9 @@ class Get(Args):
 @op("board.get", on=lambda a: f"board/{a.board}/{a.name}", exposes=True, tool=True)
 def get(txn: Txn, a: Get) -> dict[str, Any]:
     """Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`. A
-    long body comes back cut: `lines` says how many exist and `rest` is a ref for `blob.get` to read on. Cite `ref`.
-    `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the
-    board, object or version does not exist."""
+    long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `blob.get` to read on. Cite
+    `ref`. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when
+    the board, object or version does not exist."""
     _board(txn, a.board)
     row = txn.view(Boards).get(a.board, a.name, a.version)
     if row is None:

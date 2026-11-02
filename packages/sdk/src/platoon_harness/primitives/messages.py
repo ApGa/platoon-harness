@@ -598,10 +598,10 @@ def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
 def read(txn: Txn, a: Read) -> dict[str, Any]:
     """Read your inbox, or `#channel` or `+group`, from where you left off. Passing `after`, a `cursor` from an earlier
     read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it
-    skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref for
-    `blob.get`, and past what one result holds `text` is null: pass `body` to `blob.get`. `behind` counts what is left,
-    up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to see yours. `invalid`
-    for an `after` past every event: leave it out."""
+    skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and
+    past what one result holds `text` is null. Pass `rest` or `body` to `blob.get`. `behind` counts what is left, up to
+    4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to see yours. `invalid` for an
+    `after` past every event: leave it out."""
     stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
     txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)

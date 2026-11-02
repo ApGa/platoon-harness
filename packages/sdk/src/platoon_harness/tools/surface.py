@@ -177,7 +177,8 @@ def _listed(page: dict[str, Any], rows: str, show: Callable[[dict[str, Any]], st
 
 def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> str:
     """This agent's exact tools, and who it can reach, because no harness's tool discovery can be relied on and tool
-    schemas never enumerate targets. A harness has it once, at launch: what changes later travels in a delivery."""
+    schemas never enumerate targets. A harness has it once, at launch, so it is a snapshot: `peers` is what stays
+    current."""
     held = sorted(op["name"] for op in _held(kernel, agent))
     names = ", ".join(f"`{surface(op)}`" for op in held)
     lines = [
@@ -202,21 +203,20 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> 
 
 
 def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
-    """A refusal as a model can act on it: the code, what it means, what to do next, and the reason given. A next step
-    that names a tool outside `held` would send a model to something it cannot call, so it is left out."""
+    """A refusal as a model can act on it: the code, what it means, why, and what to do next, each told as anything else
+    is, so that it sends a model to no tool outside `held`."""
+    teach = _teacher(surface, ops, held)
     meaning, next_step = _REFUSALS[refusal.code]
-    if not _named(next_step, ops) <= {*held}:
-        next_step = _NO_NEXT_STEP
     detail = refusal.detail if isinstance(refusal.detail, str) else json.dumps(refusal.detail, ensure_ascii=False)
     lines = [f"Refused {refusal.code}{f' on {refusal.object}' if refusal.object else ''}: {meaning}"]
-    if detail:
-        lines.append(f"Why: {detail}")
-    lines.append(f"Next: {next_step}")
+    if why := teach(detail):
+        lines.append(f"Why: {why}")
+    lines.append(f"Next: {teach(next_step) or _NO_NEXT_STEP}")
     if refusal.retry_after is not None:
         lines.append(f"Retry after {refusal.retry_after:.3f} seconds.")
     if refusal.reachable:
         lines.append(f"You can reach: {', '.join(refusal.reachable)}.")
-    return "\n".join(describe(line, surface, ops) for line in lines)
+    return "\n".join(lines)
 
 
 def _entries(handed: dict[str, Any], teach: Callable[[str], str]) -> list[str]:

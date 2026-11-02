@@ -207,7 +207,7 @@ Rules that hold on every harness:
 
 - **Instructions.** We append through the supported path. We never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks.
 - **Teaching tools.** The preamble and tool descriptions name tools exactly. No harness's tool discovery is relied on.
-- **Tool set.** Fixed per role at launch, with the preamble. Valid targets change, so `peers` and the preamble list them. Whether a
+- **Tool set.** Fixed per role at launch, with the preamble. Valid targets change, so `peers` lists them as they stand. Whether a
   harness keeps the tool block byte-stable across requests is a measurement to record per harness, not a gate. None has been measured.
 - **Skills.** Per harness. No unification is claimed.
 - **Slash commands.** A small core of ours plus namespaced passthrough. The syntax is a TUI decision and is not set here.

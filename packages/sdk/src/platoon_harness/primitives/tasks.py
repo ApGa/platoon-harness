@@ -200,7 +200,7 @@ def _arm(txn: Txn, task: str, queue: str, fence: int, due: float, step: int) -> 
     txn.emit("timer.set", f"timer/{key}", gist=f"timer {key} set", data=timer)
 
 
-QueueName = Annotated[Name, Field(description="The queue, as `channel.list` names it.")]
+QueueName = Annotated[Name, Field(description="The queue. `channel.list` names them.")]
 TaskId = Annotated[str | None, Field(description="A task's id; your live lease if left out.")]
 
 
@@ -231,8 +231,8 @@ class Claim(Args):
 
 @op("task.claim", on=lambda a: f"queue/{a.queue}", tool=True)
 def claim(txn: Txn, a: Claim) -> dict[str, Any]:
-    """Claim the next open task, or `task` by id. `text` is its body; a long one comes back cut, with `rest` a ref for
-    `blob.get`. Keep working: the runtime renews your lease while you are active, and `task.complete` finds the task
+    """Claim the next open task, or `task` by id. `text` is its body; a long one comes back cut, with `rest` a ref. Pass
+    it to `blob.get`. Keep working: the runtime renews your lease while you are active. `task.complete` finds the task
     without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused
     `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks: claim another, or finish
     one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open. Call `wait` with
@@ -347,7 +347,7 @@ def _report(txn: Txn, a: Finish, event_type: str, outcome: str) -> Task:
 
 @op("task.complete", on=lambda a: f"queue/{a.queue}", tool=True)
 def complete(txn: Txn, a: Finish) -> None:
-    """Finish your task, with `gist` and `body` as its result, which `task.list` shows. Refused `stale_fence` once the
+    """Finish your task, with `gist` and `body` as its result. `task.list` shows it. Refused `stale_fence` once the
     lease has expired, even if nobody else took the task: your work may be lost, so check the task and claim it again if
     it is open. `invalid` when you hold several: name `task`."""
     _report(txn, a, "task.completed", "completed")

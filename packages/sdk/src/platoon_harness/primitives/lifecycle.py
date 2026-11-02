@@ -315,7 +315,7 @@ def finish(txn: Txn, a: Finish) -> None:
 
 
 class Named(Args):
-    agent: Annotated[AgentName, Field(description="`@agent`, as `peers` shows it.")]
+    agent: Annotated[AgentName, Field(description="An agent, as `@agent`. `peers` shows who is here.")]
 
 
 @op("agent.conclude", on=lambda a: f"agent/{a.agent}", runtime=True)

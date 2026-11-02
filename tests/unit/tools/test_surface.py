@@ -13,6 +13,7 @@ from platoon_harness.tools.surface import delivery_text, describe, named_surface
 
 from ..kernel.support import grant
 from ..primitives.support import spawn
+from ..primitives.test_tool_surface import NEVER_REFUSED
 from .support import BUILT, enrolled
 
 SURFACES: dict[str, Surface] = {"mcp": tool_name, "harness": harness_name("coord"), "shell": shell_name}
@@ -53,6 +54,25 @@ async def every_tool(tmp_path):
     await grant(kernel, "agent")
     yield kernel, agent
     kernel.close()
+
+
+async def test_a_reader_holding_only_one_tool_loses_no_fact_with_a_pointer(every_tool):
+    kernel, _ = every_tool
+    lost = []
+    for number, operation in enumerate(TOOLS):
+        reader = Principal(id=f"agent:only-{number}")
+        scopes = [operation.name, "ops.list"]
+        await kernel.submit(kernel.runtime, "principal.add", {"id": reader.id, "scopes": scopes})
+        tool = next(tool for tool in list_tools(kernel, reader) if tool["title"] == operation.name)
+        lost += [
+            f"{operation.name}.{name}"
+            for name, field in tool["inputSchema"]["properties"].items()
+            if not field["description"]
+        ]
+        if operation.name not in NEVER_REFUSED and "Refused" not in tool["description"]:
+            lost.append(operation.name)
+
+    assert lost == []
 
 
 async def test_every_tool_is_listed_to_who_holds_it(every_tool):
@@ -324,6 +344,14 @@ def test_a_refusal_never_sends_a_model_to_a_tool_it_does_not_hold():
 
     assert "channel_list" not in text and "peers" not in text
     assert text.splitlines()[-1] == "Next: Carry on without it, and say so."
+
+
+def test_a_refusal_s_reason_never_sends_a_model_to_a_tool_it_does_not_hold():
+    detail = "lead has children at work. `wait` lets them finish. `agent.cancel` stops one now. They are @w1"
+
+    text = refusal_text(Refusal(code="conflict", detail=detail), tool_name, OPS, {"wait"})
+
+    assert "Why: lead has children at work. `wait` lets them finish. They are @w1" in text
 
 
 def test_a_refusal_keeps_a_next_step_a_model_can_take():
