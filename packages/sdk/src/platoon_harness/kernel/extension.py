@@ -1,7 +1,8 @@
 """Extensions: what a kernel loads, core and third party alike."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from .daemon import Daemon
 from .model import Refused
@@ -12,12 +13,13 @@ from .view import View, tables_of
 
 @dataclass(frozen=True)
 class Extension:
-    """A named set of ops, views and daemons. The name is the ops' namespace."""
+    """A named set of ops, views, daemons and topology presets. The name is the ops' namespace."""
 
     name: str
     ops: Sequence[Op] = ()
     views: Sequence[type[View]] = ()
     daemons: Sequence[Daemon] = ()
+    presets: Sequence[Callable[..., Any]] = ()
 
 
 @dataclass(frozen=True)

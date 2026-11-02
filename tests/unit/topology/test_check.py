@@ -1,0 +1,494 @@
+"""`team_check`: a pure function that reports every problem at once, before any cost."""
+
+import pytest
+
+from platoon_harness.kernel import Extension
+from platoon_harness.schema import ConfigError, Problem
+from platoon_harness.team import Budget, Capabilities, Command, Role, Team, team_check
+from platoon_harness.topology import (
+    Group,
+    Limits,
+    Queue,
+    Topic,
+    Topology,
+    Unexpanded,
+    manager_worker,
+    mesh,
+    pipeline,
+    star,
+    tree,
+)
+
+from .support import CAPABILITIES, MEASURING, PRESET_TEAMS
+
+
+def check(team, capabilities=CAPABILITIES, extensions=None):
+    return team_check(team, capabilities=capabilities, extensions=extensions)
+
+
+def errors(team, **kwargs):
+    return [str(problem) for problem in check(team, **kwargs) if problem.level == "error"]
+
+
+def warnings(team, **kwargs):
+    return [str(problem) for problem in check(team, **kwargs) if problem.level == "warning"]
+
+
+def text(problems):
+    return "\n".join(problems)
+
+
+def test_a_sound_team_has_no_problems():
+    assert check(PRESET_TEAMS["manager-worker"]) == ()
+
+
+def test_recursive_may_spawn_with_no_max_depth_is_refused():
+    team = Team(roles={"agent": Role(harness="pi", may_spawn=["agent"])})
+    assert "recursive may_spawn" in text(errors(team))
+
+
+def test_mutually_recursive_may_spawn_is_refused():
+    team = Team(roles={"a": Role(harness="pi", may_spawn=["b"]), "b": Role(harness="pi", may_spawn=["a"])})
+    assert "a -> b -> a" in text(errors(team)) or "b -> a -> b" in text(errors(team))
+
+
+def test_max_depth_answers_recursion():
+    assert (
+        errors(
+            Team(
+                roles={"agent": Role(harness="pi", may_spawn=["agent"])},
+                topology=tree("agent", max_depth=2, max_children=2),
+            )
+        )
+        == []
+    )
+
+
+def test_a_wake_cycle_with_no_max_hops_is_refused():
+    team = Team(
+        roles={"a": Role(harness="pi"), "b": Role(harness="pi")},
+        topology=pipeline(["a", "b"], back=True),
+    )
+    assert "wake cycle" in text(errors(team))
+
+
+def test_a_self_waking_topic_is_a_cycle():
+    channel = Topic(writers="role:a", readers="role:a", delivery="wake")
+    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(channels={"chatter": channel}))
+    assert "wake cycle" in text(errors(team))
+
+
+def test_a_cycle_that_wakes_no_one_is_no_cycle():
+    team = Team(
+        roles={"a": Role(harness="pi"), "b": Role(harness="pi")},
+        topology=Topology(
+            channels={
+                "one": Queue(writers="role:a", readers="role:b"),
+                "two": Queue(writers="role:b", readers="role:a"),
+            }
+        ),
+    )
+    assert errors(team) == []
+
+
+def test_peer_messages_in_a_loop_are_a_cycle():
+    team = Team(
+        roles={"a": Role(harness="pi"), "b": Role(harness="pi")},
+        topology=Topology(edges={"a": ["role:b"], "b": ["role:a"]}),
+    )
+    assert "wake cycle" in text(errors(team))
+
+
+def test_a_loop_into_inboxes_that_do_not_wake_is_no_cycle():
+    team = Team(
+        roles={"a": Role(harness="pi", delivery="next-turn"), "b": Role(harness="pi")},
+        topology=Topology(edges={"a": ["role:b"], "b": ["role:a"]}),
+    )
+    assert errors(team) == []
+
+
+def test_a_reply_up_a_tree_is_no_cycle():
+    assert errors(PRESET_TEAMS["manager-worker"]) == []
+
+
+def test_max_hops_answers_a_cycle():
+    team = Team(
+        roles={"a": Role(harness="pi"), "b": Role(harness="pi")},
+        topology=pipeline(["a", "b"], back=True, max_hops=4),
+    )
+    assert errors(team) == []
+
+
+def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():
+    blind = {"pi": Capabilities()}
+    team = Team(roles={"a": Role(harness="pi")}, budget=Budget(usd=5))
+    assert "`pi` cannot measure usd" in text(errors(team, capabilities=blind))
+
+
+def test_a_per_role_budget_is_checked_against_that_role():
+    capabilities = {"pi": Capabilities(), "claude": MEASURING}
+    team = Team(
+        roles={
+            "a": Role(harness="claude", budget=Budget(tokens=1000)),
+            "b": Role(harness="pi", budget=Budget(tokens=10)),
+        }
+    )
+    assert errors(team, capabilities=capabilities) == [
+        'roles.b.budget.tokens: `pi` cannot measure tokens. Remove the limit, or set `fallback = "turns"`'
+    ]
+
+
+def test_a_budget_falls_back_to_turns_only_when_the_team_says_so():
+    blind = {"pi": Capabilities()}
+    role = {"a": Role(harness="pi")}
+    assert errors(Team(roles=role, budget=Budget(tokens=10, turns=5, fallback="turns")), capabilities=blind) == []
+
+
+def test_a_fallback_with_no_turns_limit_would_stop_enforcing():
+    team = Team(roles={"a": Role(harness="pi")}, budget=Budget(tokens=10, fallback="turns"))
+    assert "no `turns` limit" in text(errors(team, capabilities={"pi": Capabilities()}))
+
+
+def test_the_runtime_measures_turns_agents_and_wall_for_everyone():
+    team = Team(roles={"a": Role(harness="pi")}, budget=Budget(turns=5, agents=2, wall="2h"))
+    assert errors(team, capabilities={"pi": Capabilities()}) == []
+
+
+def test_an_unknown_harness_gets_a_did_you_mean():
+    assert "unknown harness `cluade`. Did you mean `claude`?" in text(errors(Team(roles={"a": Role(harness="cluade")})))
+
+
+def test_a_command_harness_runs_under_exec():
+    role = Role(harness=Command(command=["my-agent", "{goal}"]))
+    assert errors(Team(roles={"a": role})) == []
+    assert "unknown harness `exec`" in text(errors(Team(roles={"a": role}), capabilities={}))
+
+
+def test_an_unsupported_sandbox_fails():
+    team = Team(roles={"a": Role(harness="pi", sandbox="read-onyl")})
+    assert "no sandbox `read-onyl`. Did you mean `read-only`?" in text(errors(team))
+
+
+def test_an_unknown_preset_gets_a_did_you_mean():
+    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.blackbord]\nrole = "a"')
+    assert "unknown preset `blackbord`. Did you mean `blackboard`?" in text(errors(team))
+
+
+def test_an_unknown_extension_gets_a_did_you_mean():
+    team = Team(roles={"a": Role(harness="pi")}, extensions=["balot"])
+    assert "unknown extension `balot`. Did you mean `ballot`?" in text(
+        errors(team, extensions={"ballot": Extension("ballot")})
+    )
+
+
+def test_an_unknown_role_in_may_spawn_gets_a_did_you_mean():
+    team = Team(roles={"worker": Role(harness="pi", may_spawn=["wroker"])})
+    assert "unknown role `wroker`. Did you mean `worker`?" in text(errors(team))
+
+
+def test_an_unknown_role_in_a_selector_gets_a_did_you_mean():
+    team = Team(
+        roles={"worker": Role(harness="pi")},
+        topology=Topology(
+            edges={"worker": ["role:wroker"]}, channels={"q": Queue(writers="role:worke", readers="all")}
+        ),
+    )
+    found = text(errors(team))
+    assert "topology.edges.worker: unknown role `wroker`" in found
+    assert "topology.channels.q.writers: unknown role `worke`" in found
+
+
+def test_an_unknown_role_in_until_is_refused():
+    assert "unknown role `boss`" in text(
+        errors(Team(roles={"a": Role(harness="pi")}, topology=Topology(until="role:boss")))
+    )
+
+
+def test_until_program_needs_a_program():
+    assert "needs a `program`" in text(
+        errors(Team(roles={"a": Role(harness="pi")}, topology=Topology(until="program")))
+    )
+
+
+def test_an_unknown_auth_profile_gets_a_did_you_mean():
+    team = Team(roles={"a": Role(harness="pi", auth="wrok")}, auth={"work": {"env": ["WORK_KEY"]}})
+    assert "unknown profile `wrok`. Did you mean `work`?" in text(errors(team))
+
+
+def test_a_channel_cannot_use_a_relation():
+    team = Team(
+        roles={"a": Role(harness="pi")}, topology=Topology(channels={"q": Queue(writers="parent", readers="all")})
+    )
+    assert "`parent` needs an agent" in text(errors(team))
+
+
+def test_every_problem_is_reported_at_once():
+    team = Team.loads(
+        """
+        extensions = ["balot"]
+
+        [roles.agent]
+        harness = "cluade"
+        may_spawn = ["agent", "ghost"]
+        sandbox = "nope"
+        auth = "missing"
+
+        [roles.quiet]
+        harness = "pi"
+        count = 0
+
+        [budget]
+        usd = 1
+
+        [topology.blackbord]
+        role = "agent"
+
+        [topology.channels.storm]
+        kind = "topic"
+        writers = "role:agent"
+        readers = "role:agent"
+        delivery = "wake"
+        """
+    )
+    report = team_check(team, capabilities={"pi": Capabilities()}, extensions={"ballot": Extension("ballot")})
+    wheres = {problem.where for problem in report}
+    assert wheres >= {
+        "extensions",
+        "topology.blackbord",
+        "roles.agent.harness",
+        "roles.agent.may_spawn",
+        "roles.agent.auth",
+        "budget.usd",
+        "topology.limits.max_depth",
+        "topology.limits.max_hops",
+        "roles.quiet",
+        "topology.channels.storm.delivery",
+    }
+
+
+def test_team_check_is_pure():
+    team = PRESET_TEAMS["mesh"]
+    assert check(team) == check(team)
+    assert team == PRESET_TEAMS["mesh"]
+
+
+def test_a_role_that_can_never_start_is_a_warning():
+    team = Team(roles={"lead": Role(harness="pi"), "lost": Role(harness="pi", count=0)})
+    assert "roles.lost: never starts" in text(warnings(team))
+
+
+def test_a_role_only_a_never_started_role_spawns_never_starts():
+    team = Team(
+        roles={
+            "root": Role(harness="pi", count=0, may_spawn=["leaf"]),
+            "leaf": Role(harness="pi"),
+        }
+    )
+    assert len([w for w in warnings(team) if "never starts" in w]) == 2
+
+
+def test_a_role_with_no_path_to_anyone_is_a_warning():
+    team = Team(roles={"lead": Role(harness="pi"), "worker": Role(harness="pi")})
+    found = warnings(team)
+    assert "roles.lead: has no path to anyone" in found
+    assert "roles.worker: has no path to anyone" in found
+
+
+def test_a_lone_role_is_not_cut_off_from_anyone():
+    assert warnings(Team(roles={"solo": Role(harness="pi")})) == []
+
+
+def test_a_spawned_role_reaches_its_parent_through_the_monitor():
+    team = Team(roles={"lead": Role(harness="pi", may_spawn=["worker"]), "worker": Role(harness="pi")})
+    assert warnings(team) == []
+
+
+def test_a_wake_topic_with_large_fan_out_is_a_warning():
+    channel = Topic(writers="human", readers="role:peer", delivery="wake")
+    team = Team(roles={"peer": Role(harness="pi", count=32)}, topology=Topology(channels={"alerts": channel}))
+    assert "can wake 32 agents" in text(warnings(team))
+
+
+def test_a_wake_topic_over_an_unbounded_role_is_a_warning():
+    channel = Topic(writers="human", readers="all", delivery="steer")
+    team = Team(
+        roles={"lead": Role(harness="pi", may_spawn=["peer"]), "peer": Role(harness="pi")},
+        topology=Topology(channels={"alerts": channel}),
+    )
+    assert "an unbounded number of agents" in text(warnings(team))
+
+
+def test_max_live_bounds_a_spawned_fan_out():
+    channel = Topic(writers="human", readers="role:peer", delivery="wake")
+    team = Team(
+        roles={"lead": Role(harness="pi", may_spawn=["peer"]), "peer": Role(harness="pi")},
+        topology=Topology(channels={"alerts": channel}, limits=Limits(max_live=4)),
+    )
+    assert warnings(team) == []
+
+
+def test_a_quiet_topic_never_warns_of_fan_out():
+    team = Team(roles={"peer": Role(harness="pi", count=64)}, topology=mesh("peer"))
+    assert not any("wake" in warning for warning in warnings(team))
+
+
+def test_settings_nothing_enforces_yet_are_labelled():
+    found = warnings(PRESET_TEAMS["git-swarm"])
+    for field in ("entry", "requires", "validator"):
+        assert f"topology.channels.contributions.{field}: recorded, but nothing enforces it yet" in found
+    assert "topology.channels.inflight.keys: recorded, but nothing enforces it yet" in found
+
+
+def test_a_member_is_a_principal_id_and_never_a_glob():
+    with pytest.raises(ValueError, match="pattern"):
+        Group(members=("agent:*",))
+    with pytest.raises(ValueError, match="pattern"):
+        Group(members=("ada",))
+
+
+def test_a_name_cannot_smuggle_a_glob_into_a_grant():
+    with pytest.raises(ConfigError, match="pattern"):
+        Team.loads('[roles."*"]\nharness = "pi"')
+    with pytest.raises(ConfigError, match="pattern"):
+        Team.loads('[roles.a]\nharness = "pi"\n[topology.blackboard]\nrole = "a"\nboard = "*"')
+
+
+def test_an_extensions_preset_has_the_same_power_as_a_builtin():
+    def hub(center: str, rim: str, *, max_hops: int = 8) -> Topology:
+        return star(center, rim, max_hops=max_hops)
+
+    extension = Extension("hubs", presets=[hub])
+    text_form = """
+    extensions = ["hubs"]
+    [roles.c]
+    harness = "pi"
+    [roles.r]
+    harness = "pi"
+    [topology.hub]
+    center = "c"
+    rim = "r"
+    """
+    team = Team.loads(text_form)
+    assert errors(team, extensions={"hubs": extension}) == []
+    resolved = team.resolved({"hubs": extension})
+    assert resolved.topology == star("c", "r")
+    assert Team.loads(resolved.show(resolved=True)) == resolved
+
+
+def test_a_builtin_written_as_unexpanded_still_expands():
+    team = Team(
+        roles={"a": Role(harness="pi", may_spawn=["a"])},
+        topology=Topology(
+            unexpanded=[Unexpanded(preset="tree", params={"role": "a", "max_depth": 2, "max_children": 2})]
+        ),
+    )
+    assert team.resolved().topology == tree("a", max_depth=2, max_children=2)
+
+
+def test_a_preset_is_active_only_if_its_extension_is_named():
+    def hub(center: str) -> Topology:
+        return Topology(edges={center: ["human"]})
+
+    team = Team.loads('[roles.c]\nharness = "pi"\n[topology.hub]\ncenter = "c"')
+    assert "unknown preset `hub`" in text(errors(team, extensions={"hubs": Extension("hubs", presets=[hub])}))
+
+
+def test_an_extension_cannot_shadow_a_builtin_preset():
+    def tree(role: str) -> Topology:
+        return Topology()
+
+    team = Team(roles={"a": Role(harness="pi")}, extensions=["evil"])
+    assert "preset `tree` is defined twice" in text(
+        errors(team, extensions={"evil": Extension("evil", presets=[tree])})
+    )
+
+
+def test_a_conflict_with_an_extensions_preset_is_a_problem_too():
+    def notes(role: str) -> Topology:
+        return Topology(limits=Limits(max_hops=2))
+
+    team = Team.loads(
+        """
+        extensions = ["x"]
+        [roles.a]
+        harness = "pi"
+        [topology]
+        limits = { max_hops = 3 }
+        [topology.notes]
+        role = "a"
+        """
+    )
+    assert "defined differently" in text(errors(team, extensions={"x": Extension("x", presets=[notes])}))
+
+
+def test_resolving_reports_what_cannot_be_expanded():
+    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
+    with pytest.raises(ConfigError, match="unknown preset `ballot`"):
+        team.resolved()
+
+
+def test_a_broken_extension_preset_is_a_problem_not_a_crash():
+    def needs_a_table(role: str) -> Topology:
+        raise ValueError("this preset is unhappy")
+
+    team = Team.loads('extensions = ["x"]\n[roles.a]\nharness = "pi"\n[topology.needs-a-table]\nrole = "a"')
+    assert "this preset is unhappy" in text(errors(team, extensions={"x": Extension("x", presets=[needs_a_table])}))
+
+
+def test_a_preset_must_return_a_topology():
+    def wrong(role: str) -> dict:
+        return {}
+
+    team = Team.loads('extensions = ["x"]\n[roles.a]\nharness = "pi"\n[topology.wrong]\nrole = "a"')
+    assert "must return a Topology" in text(errors(team, extensions={"x": Extension("x", presets=[wrong])}))
+
+
+def test_problems_print_as_place_and_reason():
+    assert str(Problem("roles.a", "broken")) == "roles.a: broken"
+
+
+def test_groups_and_selectors_are_validated_at_load():
+    with pytest.raises(ConfigError) as caught:
+        Team.loads(
+            """
+            [roles.a]
+            harness = "pi"
+            [topology]
+            edges = { a = ["chidlren", "lead"] }
+            [topology.groups.g]
+            roles = ["a"]
+            order = ["a"]
+            """
+        )
+    found = str(caught.value)
+    assert "unknown selector `chidlren`. Did you mean `children`?" in found
+    assert "unknown selector `lead`" in found
+    assert "A role is `role:x`" in found
+    assert "exactly one of" in found
+
+
+def test_a_star_and_a_mesh_bound_their_own_hops():
+    assert (
+        errors(Team(roles={"hub": Role(harness="pi"), "spoke": Role(harness="pi")}, topology=star("hub", "spoke")))
+        == []
+    )
+    assert errors(Team(roles={"peer": Role(harness="pi")}, topology=mesh("peer"))) == []
+
+
+def test_groups_and_orders_resolve_in_cycles():
+    team = Team(
+        roles={"a": Role(harness="pi"), "b": Role(harness="pi")},
+        topology=Topology(groups={"ring": Group(order=("a", "b"))}, edges={"a": ["next"], "b": ["prev"]}),
+    )
+    assert "wake cycle" in text(errors(team))
+
+
+def test_a_manager_worker_mix_with_a_tree_agrees_on_when_to_close():
+    team = Team(
+        roles={
+            "lead": Role(harness="pi", may_spawn=["worker"]),
+            "worker": Role(harness="pi", may_spawn=["worker"]),
+        },
+        topology=manager_worker("lead", "worker") | tree("worker", max_depth=3, max_children=2, until="role:lead"),
+    )
+    assert errors(team) == []

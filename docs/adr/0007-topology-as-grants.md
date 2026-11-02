@@ -26,7 +26,7 @@ A topology is a set of grants over relations such as `parent` and `children`, ev
 - Grants name ops by glob, so an extension's op is authorized with no new vocabulary.
 - `team check` can refuse a bad team before any cost, such as recursive `may_spawn` without `max_depth`.
 - One ladder hides real differences: pi steering enters after the assistant turn, and Codex needs a matching turn id. The capability table records them.
-- `next`, `prev` and `group:x` have no evaluator yet, so `grant.add` refuses them `unsupported`.
+- `next`, `prev` and `group:x` have no evaluator in `authorize`, so `grant.add` refuses them `unsupported`. Compilation expands them over roles instead.
 - Reachability at 100 agents depends on `path` making `descendants` a prefix test. Mesh reply loops are [0012](0012-waiting-and-the-monitor.md)'s problem.
 
 ## Evidence

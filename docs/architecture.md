@@ -584,46 +584,64 @@ lead (claude) may message its workers and you. Workers (codex, own worktrees) ma
 lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Closes when lead finishes.
 ```
 
-`team show --resolved` prints the expansion, which is valid input and is what the manifest stores and hashes:
+`team show --resolved` prints the expansion, which is valid input and is what the manifest stores and hashes. Defaults stay out of
+it, so a new default never disturbs an old hash:
 
 ```toml
+[roles.lead]
+harness = "claude"
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "codex"
+workspace = "worktree"
+
 [topology]
 until = "role:lead"
 edges = { lead = ["children", "human"], worker = ["parent"] }
+
+[topology.channels.notes]
+kind = "board"
+writers = "all"
+readers = "all"
 
 [topology.channels.tasks]
 kind = "queue"
 writers = "role:lead"
 readers = "role:worker"
 lease = "30m"
-
-[topology.channels.notes]
-kind = "board"
-writers = "all"
-readers = "all"
 ```
+
+[topologies.md](topologies.md) is the guide, with a worked example per preset.
 
 | Key | Meaning |
 |---|---|
-| `<preset>` | A macro: `manager-worker` `tree` `mesh` `star` `blackboard` `pipeline` `ring` `map-reduce` `git-swarm`, or an extension's. Several form a union |
+| `<preset>` | A macro: `manager-worker` `tree` `mesh` `star` `blackboard` `pipeline` `ring` `map-reduce` `git-swarm`, or an extension's. A table named after it, or `[[...]]` to use one twice. Several form a union |
 | `edges` | Who may send to whose inbox, as `role: [relation...]` |
 | `channels` | Each with `kind`, `writers`, `readers`, `delivery`, and kind-specific fields |
-| `groups` | Named membership rules. Each change bumps the group's stream version, which is its generation |
+| `groups` | Named membership rules: `roles`, `members` (principal ids), or `order`, which `next` and `prev` walk. Each change bumps the group's stream version, which is its generation |
 | `limits` | `max_depth` `max_children` `max_live` `max_hops` |
+| `grants` | Written-out `(who, ops, on)` rows, which is how an extension's op reaches a role |
 | `program` | Optional control flow, in Python |
 | `until` | §7, Completion |
 
 **Selectors** are the same everywhere: `self parent children siblings ancestors descendants next prev human program all
-role:x group:x`. They are evaluated on the live graph.
+role:x group:x`. They are evaluated on the live graph. A channel in a team has no agent to be relative to, so its `writers` and
+`readers` take only `human program all role:x group:x`.
 
-**Rules.** Default deny. `use` is a union, so order never matters. There is no `deny`, because it would make mixing
-non-commutative. Two sources defining one channel differently is a load error. Anything a preset can do, you can write
+**Rules.** Default deny. Presets and keys form a union, `a | b` in Python, so order never matters and the hash cannot tell how a
+topology was mixed. Edges and grants add up. There is no `deny`, because it would make mixing non-commutative. Two sources defining
+one channel, group, limit, `program` or `until` differently is a load error that names both. Anything a preset can do, you can write
 out. A preset that behaves differently from its expansion is a bug.
 
 **Compilation.** Topology compiles to one `(who, ops, on)` table, with relations in `on` (`inbox/{children}`). Grants name
 ops by glob, so an extension's op is authorized with no new vocabulary. `who` is a principal id, a kind, `role:x` or `all`.
 `authorize` evaluates `self parent children siblings ancestors descendants human program all role:x`. `next`, `prev` and
-`group:x` have no evaluator yet, so `grant.add` refuses them `unsupported`.
+`group:x` have no evaluator there, so `grant.add` refuses them `unsupported` and compilation never emits them: a group becomes its
+roles or principals, and `next` and `prev` become the neighbors in a group's `order`. Humans and programs hold every op, so the
+table binds agents. Its objects are `inbox/<id>`, `channel/<name>`, `channel/+<group>`, `queue/<name>`, `board/<board>/<name>`,
+`role/<x>` for `agent.spawn` and `agent/<id>` for the rest of the lifecycle. An agent may `wait` only on what it can read: its
+inbox, its channels and groups, the tasks of a queue it uses, and its descendants.
 
 | Config | Enforcement | Shown to the agent | UI |
 |---|---|---|---|
@@ -636,13 +654,18 @@ ops by glob, so an extension's op is authorized with no new vocabulary. `who` is
 - **Role `tools`** attenuates: it lists op globs, which become the token's scopes, so the effective set is grants ∩ tools.
   Compilation always keeps `ops.list` in scope and grants it to `all`, because every surface derives from it.
 - **Role `sandbox`** (`read-only`, ...) is a harness-plane setting, not a grant, and an unsupported value fails at `team check`.
+- **Role `delivery`** sets the ladder for its agents' inboxes, `wake` unless stated.
+- **Role `count`** is how many agents start with the session. Left out, that is one, or none if another role spawns this one.
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so `peers`
   and the turn preamble list them; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may name
   only readers and writers within its own reach. `topology.patch` comes from a human or program, and every event carries
   `topology_rev`.
-- **`team check`** runs before any cost and refuses recursive `may_spawn` without `max_depth`, a cycle without `max_hops`, a
-  budget unit a role cannot measure, and an unknown preset, harness or extension.
+- **`team check`** runs before any cost and reports everything at once. It refuses recursive `may_spawn` without `max_depth`, a
+  cycle without `max_hops`, a budget unit a role cannot measure, and an unknown preset, harness, extension, role, group or auth
+  profile. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`, `ancestors` and
+  `descendants` edges never count, and neither does a channel or inbox that does not wake. It warns of a role that can never
+  start, a role with no path to anyone, an entry that can wake more than 8 agents, and a setting no primitive enforces yet.
 
 ## 9. Drivers
 
@@ -703,6 +726,8 @@ Absence means unsupported, as in ACP.
 | `call_ids` | `none`, `agent`, `call` |
 | `dialects` | `chat`, `responses`, `messages` |
 | `coverage` | `surface → observed | partial | none`, for `prompt`, `tool_results`, `shell_reads`, `files`, `native_children`, `compaction`, `external` |
+| `measures` | Budget units it reports, of `tokens` and `usd`. The runtime counts `turns`, `agents` and `wall` for every harness |
+| `sandboxes` | The values a role's `sandbox` may take |
 
 ### 9.3 Verified, not believed
 
@@ -889,20 +914,25 @@ freely, because credit-critical evidence is an event and deltas are not.
 ## 17. Extensions and configuration
 
 ```python
-extension = Extension("ballot", ops=[cast], views=[Votes], daemons=[])
+extension = Extension("ballot", ops=[cast], views=[Votes], daemons=[], presets=[pair_review])
 ```
+
+A preset is a plain function returning a topology fragment. Its name is the function's with dashes for underscores, and it may not
+take the name of a built-in preset or a topology key.
 
 Two entry-point groups: `platoon_harness.drivers` (name → driver) and `platoon_harness.extensions` (name → `Extension`). A kind gets a group when a
 second independent user needs a short name. Discovery reads metadata with no import, so duplicates and incompatible `platoon-harness-sdk` requirements
 are caught before any code loads or any cost is spent. Installing activates nothing: a role names a harness, a team names `extensions = [...]`, and
-`module:attr` is always accepted. First-party and third-party extensions use the same contracts.
+`name@version` and `module:attr` are always accepted. First-party and third-party extensions use the same contracts.
 
 An extension op is usable through the SDK, MCP, `ph`, the CLI and the generic UI with no core edit: every surface derives from `ops.list`, and any client
 can render any event from its `gist`. Unknown events survive export and replay.
 
 **Configuration** is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `tomllib`, or built in Python. Precedence, low to high: defaults, user
-config, project config, team file, environment, command line. Mappings merge and lists replace. Every problem is reported at once, with did-you-mean.
-The sanitized resolved form reloads alone. The manifest records it with resolved component versions, and schema and protocol versions.
+config (`$XDG_CONFIG_HOME/platoon-harness/config.toml`), project config (`platoon-harness.toml`), team file, environment (`PLATOON_HARNESS_CONFIG`, TOML text),
+command line (TOML lines, such as `budget.usd = 5`). Mappings merge and lists replace. Every problem is reported at once, with did-you-mean.
+The sanitized resolved form reloads alone, and is refused if it holds the value of a variable an auth profile names. The manifest records it with resolved
+component versions, and schema and protocol versions.
 
 ## 18. Left out on purpose
 
