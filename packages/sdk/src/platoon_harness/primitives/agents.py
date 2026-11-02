@@ -88,7 +88,7 @@ class Agents(View):
 
     @fold("agent.started")
     def started(self, event: Event) -> None:
-        data = event.data
+        data, declared = event.data, event.data["declared"]
         self.db.execute(
             """
             UPDATE v_agents SET state = 'idle', persistent = :persistent, resume = :resume,
@@ -97,8 +97,9 @@ class Agents(View):
             WHERE name = :agent
             """,
             {
-                **data,
-                "boundaries": json.dumps(data["boundaries"]),
+                **declared,
+                "effective_model": data["effective_model"],
+                "boundaries": json.dumps(sorted(declared["boundaries"])),
                 "levels": json.dumps(data["levels"]),
                 "agent": event.agent,
             },

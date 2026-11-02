@@ -17,7 +17,7 @@ from . import (
     waits,
 )
 from .agents import Agent, Agents
-from .approvals import Approval, Approvals
+from .approvals import Approval, Approvals, Verdict
 from .boards import Boards
 from .budgets import Budgets
 from .channels import Channels, Groups, channel_grants
@@ -25,6 +25,31 @@ from .clients import Attention, Changes
 from .common import BODY_REF, WAKING, Delivery, Lines, lines_of, stream_of
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
+from .reports import (
+    RAW_LIMIT,
+    REPORTS,
+    ApprovalRequested,
+    Attribution,
+    Boundary,
+    Capabilities,
+    Changed,
+    ChildSeen,
+    Compacted,
+    Delta,
+    Exited,
+    Gap,
+    GapReport,
+    InputDelivered,
+    Item,
+    ModelCall,
+    Native,
+    Plane,
+    Ready,
+    Report,
+    TurnEnded,
+    TurnStarted,
+    Usage,
+)
 from .sessions import Session, Settings
 from .tasks import Task, Tasks
 from .waits import Condition, Waits, hold_open, on
@@ -55,6 +80,7 @@ PRIMITIVES = (
             lifecycle.retire,
             lifecycle.takeover,
             lifecycle.release,
+            lifecycle.start,
             lifecycle.report,
             lifecycle.list_agents,
             lifecycle.agent_status,
@@ -87,27 +113,51 @@ PRIMITIVES = (
 __all__ = [
     "BODY_REF",
     "PRIMITIVES",
+    "RAW_LIMIT",
+    "REPORTS",
     "WAKING",
     "Agent",
     "Agents",
     "Approval",
+    "ApprovalRequested",
     "Approvals",
     "Attention",
+    "Attribution",
     "Boards",
+    "Boundary",
     "Budgets",
+    "Capabilities",
+    "Changed",
     "Changes",
     "Channels",
+    "ChildSeen",
+    "Compacted",
     "Condition",
     "Cursor",
     "Deliveries",
     "Delivery",
+    "Delta",
     "Entry",
+    "Exited",
+    "Gap",
+    "GapReport",
     "Groups",
+    "InputDelivered",
+    "Item",
     "Lines",
+    "ModelCall",
+    "Native",
+    "Plane",
+    "Ready",
+    "Report",
     "Session",
     "Settings",
     "Task",
     "Tasks",
+    "TurnEnded",
+    "TurnStarted",
+    "Usage",
+    "Verdict",
     "Waits",
     "Why",
     "channel_grants",

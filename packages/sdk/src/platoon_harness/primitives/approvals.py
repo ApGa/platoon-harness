@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from platoon_harness.kernel import GIST_LIMIT, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .agents import Agents
+from .agents import Agent, Agents
 from .common import Gist, Name
 from .sessions import Session
 
@@ -97,6 +97,17 @@ def _decide(txn: Txn, id: str, agent: str, verdict: str, by: str, via: str | Non
     )
 
 
+def ask(txn: Txn, id: str, agent: Agent, gist: str) -> None:
+    """Record that a harness is waiting on a decision, then apply the role's policy. `ask` leaves it for a human."""
+    if txn.view(Approvals).get(id) is not None:
+        raise Refused("conflict", f"approval {id} exists")
+    role = txn.view(Session).settings().roles.get(agent.role)
+    policy = "ask" if role is None else role.approvals
+    txn.emit("approval.requested", f"approval/{id}", gist=gist, agent=agent.name, data={"id": id, "policy": policy})
+    if policy != "ask":
+        _decide(txn, id, agent.name, policy, "policy", "policy")
+
+
 class Request(Args):
     id: Name
     agent: Name
@@ -105,17 +116,11 @@ class Request(Args):
 
 @op("approval.request", on=lambda a: f"approval/{a.id}", runtime=True)
 def request(txn: Txn, a: Request) -> None:
-    """Record that a harness is waiting on a decision, then apply the role's policy. `ask` leaves it for a human."""
+    """Record that a harness is waiting on a decision."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None or agent.ended:
         raise Refused("not_found", f"no live agent {a.agent}")
-    if txn.view(Approvals).get(a.id) is not None:
-        raise Refused("conflict", f"approval {a.id} exists")
-    role = txn.view(Session).settings().roles.get(agent.role)
-    policy = "ask" if role is None else role.approvals
-    txn.emit("approval.requested", f"approval/{a.id}", gist=a.gist, agent=a.agent, data={"id": a.id, "policy": policy})
-    if policy != "ask":
-        _decide(txn, a.id, a.agent, policy, "policy", "policy")
+    ask(txn, a.id, agent, a.gist)
 
 
 class Resolve(Args):

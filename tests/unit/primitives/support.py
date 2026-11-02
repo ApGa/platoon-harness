@@ -35,7 +35,7 @@ async def spawn(
     args = {"name": name, "child_role": role, "goal": f"be {name}"}
     result_of(await kernel.submit(by or kernel.runtime, "agent.spawn", args))
     await settle_effects(kernel, name)
-    await report(kernel, name, "ready", **(ready or {}))
+    await start(kernel, name, **(ready or {}))
     return agent(name)
 
 
@@ -49,6 +49,13 @@ async def settle_effects(kernel: Kernel, name: str | None = None) -> None:
         for effect in effects:
             started = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
             result_of(await kernel.submit(kernel.runtime, "effect.finish", {"id": effect["id"], "attempt": started}))
+
+
+async def start(kernel: Kernel, name: str, /, *, levels: dict[str, Any] | None = None, **declared: Any) -> None:
+    """Commit a harness as up, as a persistent one with turn boundaries unless a test says otherwise."""
+    declared = {"persistent": True, "boundaries": ["turn"], **declared}
+    args = {"agent": name, "ready": {}, "declared": declared, "levels": levels or {}}
+    result_of(await kernel.submit(kernel.runtime, "agent.start", args))
 
 
 async def report(kernel: Kernel, name: str, type: str, /, **fields: Any) -> None:

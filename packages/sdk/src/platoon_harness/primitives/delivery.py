@@ -150,6 +150,24 @@ def pending(txn: Txn, a: Pending) -> int:
     return txn.view(Deliveries).queued(a.agent, ("steer",))[1]
 
 
+def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None) -> None:
+    """Record that a driver saw an offer injected, which is observed exposure. A repeat changes nothing."""
+    found = txn.view(Deliveries).offer(input)
+    if found is None:
+        raise Refused("not_found", f"no offer {input}")
+    reader, positions, delivered = found
+    if not delivered:
+        data = {"input": input, "positions": positions, "boundary": boundary, "evidence": evidence}
+        txn.emit(
+            "context.delivered",
+            f"context/{reader}",
+            gist=f"offer {input} delivered",
+            agent=reader,
+            data=data,
+            cause=[input],
+        )
+
+
 class Confirm(Args):
     input: Seq
     boundary: str | None = None
@@ -158,21 +176,8 @@ class Confirm(Args):
 
 @op("delivery.confirm", on=lambda a: f"input/{a.input}", runtime=True)
 def confirm(txn: Txn, a: Confirm) -> None:
-    """Record that a driver saw an offer injected, which is observed exposure. A repeat changes nothing."""
-    found = txn.view(Deliveries).offer(a.input)
-    if found is None:
-        raise Refused("not_found", f"no offer {a.input}")
-    reader, positions, delivered = found
-    if not delivered:
-        data = {"input": a.input, "positions": positions, "boundary": a.boundary, "evidence": a.evidence}
-        txn.emit(
-            "context.delivered",
-            f"context/{reader}",
-            gist=f"offer {a.input} delivered",
-            agent=reader,
-            data=data,
-            cause=[a.input],
-        )
+    """Record that a driver saw an offer injected."""
+    confirmed(txn, a.input, a.boundary, a.evidence)
 
 
 @op("delivery.ready", query=True, runtime=True)

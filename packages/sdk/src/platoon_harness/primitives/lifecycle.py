@@ -9,6 +9,7 @@ from platoon_harness.kernel import (
     Args,
     Effects,
     Grants,
+    ModelRef,
     Principals,
     Refused,
     Stamps,
@@ -18,27 +19,37 @@ from platoon_harness.kernel import (
 )
 
 from .agents import Agent, Agents
-from .budgets import Budgets, Label, reconcile, reserve
+from .approvals import ask
+from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
-from .common import AgentName, Body, BodyRef, Gist, Name, address
-from .delivery import work
+from .common import AgentName, Body, Gist, Name, address
+from .delivery import confirmed, work
 from .messages import post
+from .reports import (
+    ApprovalRequested,
+    Capabilities,
+    Changed,
+    ChildSeen,
+    Compacted,
+    Delta,
+    Exited,
+    GapReport,
+    InputDelivered,
+    Item,
+    ModelCall,
+    Native,
+    Plane,
+    Ready,
+    Report,
+    TurnEnded,
+    TurnStarted,
+    Usage,
+)
 from .sessions import Session
 from .tasks import Tasks, bury_if_spent
 from .waits import Waits
 
 Status = Literal["finished", "cancelled", "retired", "lost", "failed"]
-Gap = Literal[
-    "stream_lost",
-    "compaction_opaque",
-    "exposure_unconfirmed",
-    "native_child_unattributed",
-    "usage_lower_bound",
-    "unknown_update",
-    "hidden_call",
-    "crash_window",
-    "takeover",
-]
 
 
 def _inbox_of(principal: str) -> str:
@@ -262,85 +273,37 @@ def release(txn: Txn, a: Named) -> None:
     state = "idle" if txn.view(Stamps).turn(agent.name) is None else "running"
     data = {"state": state}
     txn.emit("agent.released", f"agent/{agent.name}", gist=f"{agent.name} released", agent=agent.name, data=data)
-    _gap(txn, agent.name, "harness", "takeover")
+    _gap(txn, agent.name, "control", "takeover")
 
 
-def _gap(txn: Txn, agent: str, plane: str, what: str) -> None:
+def _gap(txn: Txn, agent: str, plane: Plane, what: str) -> None:
     data = {"plane": plane, "what": what}
     txn.emit("gap.recorded", f"agent/{agent}", gist=f"gap: {what}", agent=agent, data=data)
 
 
-class Ready(Args):
-    type: Literal["ready"]
-    native: str | None = None
-    version: str | None = None
-    effective_model: str | None = None
-    tools_visible: tuple[str, ...] | None = None
-    persistent: bool = True
-    resume: bool = False
-    boundaries: tuple[Literal["turn", "tool", "model_call"], ...] = ("turn",)
-    tool_timeout_s: float | None = None
+class Start(Args):
+    agent: Name
+    ready: Ready
+    declared: Capabilities
+    verified: dict[str, JsonValue] | None = None
     levels: dict[str, JsonValue] = {}
 
 
-class TurnStarted(Args):
-    type: Literal["turn.started"]
-    turn: Annotated[str, Field(max_length=256)]
-
-
-class TurnEnded(Args):
-    type: Literal["turn.ended"]
-    reason: Annotated[str, Field(max_length=256)] = "stopped"
-
-
-class Item(Args):
-    type: Literal["item"]
-    kind: Literal["message", "thought", "tool", "patch"]
-    gist: Gist
-    phase: str | None = None
-    native_id: str | None = None
-    body: BodyRef | None = None
-    approval: Name | None = None
-    outcome: str | None = None
-
-
-class Usage(Args):
-    type: Literal["usage"]
-    tokens: int | None = None
-    usd: float | None = None
-    label: Label
-
-
-class Compacted(Args):
-    type: Literal["compacted"]
-    forgotten: tuple[str, ...] | None = None
-
-
-class GapReport(Args):
-    type: Literal["gap"]
-    plane: str
-    what: Gap
-
-
-class Exited(Args):
-    type: Literal["exited"]
-    reason: str = "the harness exited"
-
-
-class Changed(Args):
-    type: Literal["changes"]
-    path: Annotated[str, Field(max_length=1024)]
-    added: int | None = None
-    removed: int | None = None
-    tests: str | None = None
-
-
-Report = Ready | TurnStarted | TurnEnded | Item | Usage | Compacted | GapReport | Exited | Changed
+@op("agent.start", on=lambda a: f"agent/{a.agent}", runtime=True)
+def start(txn: Txn, a: Start) -> None:
+    """Record that a harness is up, with what its driver declared and what the runtime verified of it. A report cannot
+    carry these, so no driver can claim a level."""
+    agent = _live(txn, a.agent)
+    if agent.state != "spawning":
+        raise Refused("conflict", f"{agent.name} has started")
+    data = {**a.ready.model_dump(exclude={"type"}), **a.model_dump(include={"declared", "verified", "levels"})}
+    txn.emit("agent.started", f"agent/{agent.name}", gist=f"{agent.name} started", agent=agent.name, data=data)
+    regroup(txn, agent.name, agent.role, joined=True)
 
 
 class AgentReport(Args):
     agent: Name
-    report: Annotated[Report, Field(discriminator="type")]
+    report: Report
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
@@ -361,12 +324,15 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
 
 @op("agent.report", on=lambda a: f"agent/{a.agent}", runtime=True)
 def report(txn: Txn, a: AgentReport) -> None:
-    """Take one report from a driver, in the driver's closed vocabulary."""
+    """Take one report from a driver, in the driver's closed vocabulary. Two never come here: `ready` commits through
+    `agent.start` with what the runtime verified, and a `delta` is lossy, so the host pushes it to the kernel."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
     name = agent.name
     match a.report:
+        case Ready() | Delta():
+            raise Refused("invalid", f"a {a.report.type} report is not journaled through agent.report")
         case Exited(reason=reason):
             if not agent.ended:
                 end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
@@ -374,12 +340,6 @@ def report(txn: Txn, a: AgentReport) -> None:
             _turn_ended(txn, agent, reason)
         case _ if agent.ended:
             raise Refused("conflict", f"{name} has ended: {agent.status}")
-        case Ready() as ready:
-            if agent.state != "spawning":
-                raise Refused("conflict", f"{name} has started")
-            data = ready.model_dump(exclude={"type"})
-            txn.emit("agent.started", f"agent/{name}", gist=f"{name} started", agent=name, data=data)
-            regroup(txn, name, agent.role, joined=True)
         case TurnStarted(turn=turn):
             data = {"turn": turn, "by": agent.held_by}
             txn.emit("turn.started", f"turn/{name}", gist=f"turn {turn} started"[:GIST_LIMIT], agent=name, data=data)
@@ -393,6 +353,23 @@ def report(txn: Txn, a: AgentReport) -> None:
         case Compacted(forgotten=forgotten):
             data = {"forgotten": forgotten}
             txn.emit("context.compacted", f"context/{name}", gist=f"{name} compacted", agent=name, data=data)
+        case InputDelivered() as delivered:
+            if not delivered.input.isdecimal():
+                raise Refused("not_found", f"no offer {delivered.input}")
+            confirmed(txn, int(delivered.input), delivered.boundary, delivered.evidence)
+        case ApprovalRequested(id=id, gist=gist):
+            ask(txn, id, agent, gist)
+        case ModelCall(call_id=call_id) as call:
+            data = call.model_dump(exclude={"type"})
+            model = ModelRef(call_id=call_id) if call_id else None
+            txn.emit("model.called", f"turn/{name}", gist=f"{name} called a model", agent=name, data=data, model=model)
+        case ChildSeen() as child:
+            data = child.model_dump(exclude={"type"})
+            txn.emit("child.seen", f"agent/{name}", gist=f"{name} has a native child", agent=name, data=data)
+        case Native() as native:
+            data = native.model_dump(exclude={"type"})
+            gist = f"unknown {native.kind}"[:GIST_LIMIT]
+            txn.emit("native.recorded", f"agent/{name}", gist=gist, agent=name, data=data)
         case GapReport(plane=plane, what=what):
             _gap(txn, name, plane, what)
         case Changed() as change:

@@ -22,6 +22,7 @@ from .support import (
     send,
     settle_effects,
     spawn,
+    start,
     start_turn,
 )
 
@@ -148,11 +149,21 @@ async def test_report_vocabulary_is_closed(kernel):
     assert refusal(await kernel.submit(kernel.runtime, "agent.report", args)).code == "invalid"
 
 
-async def test_ready_twice_is_refused(kernel):
+async def test_a_harness_starts_once(kernel):
     await spawn(kernel, "bob")
-    args = {"agent": "bob", "report": {"type": "ready"}}
+    args = {"agent": "bob", "ready": {}, "declared": {}}
 
-    assert refusal(await kernel.submit(kernel.runtime, "agent.report", args)).code == "conflict"
+    assert refusal(await kernel.submit(kernel.runtime, "agent.start", args)).code == "conflict"
+
+
+@pytest.mark.parametrize("type", ["ready", "delta"])
+async def test_what_no_journal_takes_from_a_report_is_refused(kernel, type):
+    await spawn(kernel, "bob")
+    report = {"type": type, "text": "live"} if type == "delta" else {"type": type}
+
+    args = {"agent": "bob", "report": report}
+
+    assert refusal(await kernel.submit(kernel.runtime, "agent.report", args)).code == "invalid"
 
 
 # The ended transition.
@@ -691,7 +702,7 @@ async def test_an_agent_on_its_way_to_a_turn_unsettles(kernel):
     await settle_effects(kernel, "bob")
     assert status(kernel)["blockers"] == ["starting_agent"]
 
-    await report(kernel, "bob", "ready")
+    await start(kernel, "bob")
     await send(kernel, kernel.runtime, "@bob", "go")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
     await settle_effects(kernel, "bob")

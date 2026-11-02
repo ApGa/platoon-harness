@@ -123,7 +123,7 @@ Each law is a sentence, and each has a test of the same name.
   runtime.json        pid, start time, socket path, incarnation: present only while live
   owner.token         0600
   lock                flock: held by the one live runtime
-  agents/<id>/        per-agent state: proc.json, native home, workspace pointer
+  agents/<id>/        per-agent state: proc.json, stderr.log, native home, workspace pointer
 ```
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. If that is on a network filesystem,
@@ -451,7 +451,7 @@ to do next.
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` `delivery.pending` |
+| Runtime only | `agent.start` `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` `delivery.pending` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -743,7 +743,7 @@ One driver instance per agent.
 ```python
 class Driver(Protocol):
     def describe(self) -> DriverInfo: ...                        # name, version, login kind, capabilities. Starts nothing
-    async def start(self, spec: AgentSpec, report: Report) -> Started: ...   # fresh, or resume from spec.resume
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> Receipt: ...  # delivery.boundary is one the driver declared
     async def interrupt(self) -> Receipt: ...                    # stops at the boundary it can, says what was queued
     async def answer(self, approval: str, verdict: Verdict) -> None: ...
@@ -751,14 +751,23 @@ class Driver(Protocol):
     async def stop(self, grace: float) -> None: ...              # ends the process tree it owns
 ```
 
-`AgentSpec` holds agent, role, goal, cwd, model, tool binding, model access (`Secret` values, URLs included), env,
-instructions (appended by the supported path; native project files are never touched) and resume.
+`AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, tool binding, model access (`Secret` values by variable
+name, URLs included), env, instructions (appended by the supported path; native project files are never touched) and resume. A
+fresh start begins the first turn on the goal. A resumed one waits for a delivery. A driver raises `DriverError` for what it
+cannot do.
 
-`report` takes this vocabulary and no other: `ready{native, version, effective_model, tools_visible}`, `turn.started`,
-`turn.ended{reason}`, `delta` (lossy), `item{kind: message|thought|tool|patch, phase, native_id, gist, body}`,
-`input.delivered{input, boundary, evidence}`, `approval.requested`, `model.call`, `usage{scope, label}`,
-`compacted{forgotten}`, `child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw}`, `exited`. Unknown
-frames become `native` plus a gap, never a log line.
+`Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
+effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
+`item{kind: message|thought|tool|patch, phase, native_id, gist, body, approval, outcome}`,
+`input.delivered{input, boundary, evidence}`, `approval.requested{id, gist}`, `model.call{call_id, model}`,
+`usage{tokens, usd, label, scope: call|turn|tree}`, `compacted{forgotten}`, `child.seen{native, parent, attribution}`,
+`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and `changes{path, added, removed, tests}` from the runtime's own
+probe. Unknown frames become `native` plus a gap, never a log line. A report's `body` is text until the host stores it and journals
+the hash, as ingress does for a tool's body argument.
+
+The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
+`agent.start` with the declared capabilities, the verified result and the levels. A report cannot carry those, so a driver that
+tries to state one has sent an unknown frame.
 
 ### 9.1 Wire
 
@@ -768,15 +777,27 @@ way in its own environment, because its dependency set cannot share one with oth
 exercised.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","version":"1.4.0","effective_model":"m","tools_visible":null}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"d41","boundary":"turn","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable"}]}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"d41","boundary":"turn","evidence":"message_start"}}
 ```
 
+Credentials never travel in a frame: `start` names them, and the program finds their values in its environment. `serve(driver)`
+is all a wire driver in Python needs. Unknown lines and reports become `native` plus a gap, and a line past 16 MiB stops the agent
+with a gap, since it may have held an answer. A team names a program with `harness = { command = [...], mode = "wire" }`.
+[drivers.md](drivers.md) is the guide, with a complete wire driver that a test runs through the conformance suite.
+
 A simple one-shot CLI needs no code: `harness = { command = ["my-agent", "{goal}"], mode = "oneshot" }` runs under the `exec`
 driver, coordinating through `ph`. PTY integration is an explicit degraded fallback, not a substitute for structured events.
+
+Every subprocess driver builds on `Process`, which holds the rest of what this page asks of one. A harness leads its own group. Its
+pid and start time are on disk before it can exec: `sh` waits for one line on stdin, and exits unexecuted if we die first. Only a
+leader with the recorded start time proves a group is ours, so a reused pid cannot make recovery kill a stranger, and a group whose
+leader is gone is left alone and named. Pipes always drain, and stderr goes to a bounded log with credentials masked. `stop(grace)`
+is `SIGTERM`, wait, `SIGKILL`, then verify. A process that leaves the group by `setsid` escapes it. See
+[ADR 0018](adr/0018-who-owns-a-process.md).
 
 ### 9.2 Capabilities
 
@@ -803,16 +824,20 @@ Absence means unsupported, as in ACP.
 - **Tool visibility has three values:** `visible`, `hidden`, `unverified`. `ready.tools_visible` is a list only when it comes from
   an observed source, and otherwise `None`. Unverified never refuses a spawn: the UI says "tools unverified", and the agent
   still works through `ph` and the monitor.
-- **Conformance.** `check_driver(driver)` runs named checks and reports all failures at once, against a loopback model that logs
-  each request. So "tool in the first model request" and "delivered text in the next prompt" are tested against ground truth,
-  and "connected" counts for nothing. Results pin to `(driver, harness version)`.
+- **Conformance.** `check_driver(factory, folder=...)` runs named checks and reports all failures at once, against a loopback model
+  that logs each request exactly as it arrived. So "tool in the first model request" and "delivered text in the next prompt" are tested
+  against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to
+  `(driver, harness version)`, and a result pinned elsewhere says nothing of this agent. A wire `describe` runs the program once and
+  starts no harness.
 - **Model pinning.** The effective model must equal the requested one, and a driver refuses an unset model where the harness
   would otherwise pick a hosted default.
 
 ### 9.4 Levels
 
-`levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each with
-reasons, journaled in `agent.started` beside `declared` and `verified`. No driver can claim a level.
+`levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each `met`,
+`unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent runs:
+its driver and observed harness version, its login, and whether its tools were seen. No driver can claim a level: the host commits
+all of this through `agent.start`, and a report has no field for it.
 
 ### 9.5 Mappings
 

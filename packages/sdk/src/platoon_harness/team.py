@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictFloat, StrictInt, StringConstraints, ValidationError, field_validator, model_validator
 
 from platoon_harness.kernel import Extension
-from platoon_harness.primitives import WAKING, Delivery
+from platoon_harness.primitives import WAKING, Capabilities, Delivery
 from platoon_harness.schema import (
     ConfigError,
     Duration,
@@ -63,10 +63,10 @@ class AuthProfile(Model):
 
 
 class Command(Model):
-    """A harness given as a command line, run by the `exec` driver."""
+    """A harness given as a command line: a `oneshot` CLI run by the `exec` driver, or a `wire` driver program."""
 
     command: Annotated[tuple[str, ...], Field(min_length=1)]
-    mode: Literal["oneshot"] = "oneshot"
+    mode: Literal["oneshot", "wire"] = "oneshot"
 
 
 class Role(Model):
@@ -94,14 +94,9 @@ class Role(Model):
     @property
     def driver(self) -> str:
         """The name this role's harness goes by among drivers."""
-        return self.harness if isinstance(self.harness, str) else "exec"
-
-
-class Capabilities(Model):
-    """What `team_check` must know of a harness. Absence means unsupported."""
-
-    measures: frozenset[str] = frozenset()
-    sandboxes: frozenset[str] = frozenset()
+        if isinstance(self.harness, str):
+            return self.harness
+        return "exec" if self.harness.mode == "oneshot" else "wire"
 
 
 class Team(Model):
