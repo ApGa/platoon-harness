@@ -42,6 +42,7 @@
 
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`
   says which.
+- A live test runs in `tests/live`, marked `live`, on `PLATOON_HARNESS_LIVE=1`.
 
 ### Fixed
 
