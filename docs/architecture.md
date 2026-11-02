@@ -130,9 +130,11 @@ Each law is a sentence, and each has a test of the same name.
   the default falls back to `/var/tmp/platoon-harness-$UID`, with a one-line notice and a `doctor` entry. An
   explicitly chosen root on a network filesystem is refused with exit 78. Only live writers are refused: a closed
   session is a portable artifact (§5.8).
-- **Sockets** live in a short per-user runtime directory, never inside the session folder, because `sun_path` is
-  about 104-108 bytes. `runtime.json` names the path.
-- **One runtime process per live session.** It owns `lock` and binds the control socket in every mode. There is no
+- **Sockets** live at `<runtime dir>/<short hash>.sock` in a 0700 directory from `XDG_RUNTIME_DIR` or a short per-user fallback,
+  never inside the session folder: a Python `bind` allows 107 bytes on Linux and 103 on macOS, and a deep folder exceeds that.
+  The path is checked before binding, abstract names are not used, and `runtime.json` holds the pointer.
+- **One runtime per live session.** It owns `lock` and binds the control socket in every mode. Usually that is one process; a
+  Platoon rollout worker hosts several in one. There is no
   central daemon or registry: listing sessions scans folders, and `flock` is the liveness check.
 
 | Mode | Who keeps the process alive | Leaving ends the agents? |
@@ -413,15 +415,16 @@ One definition reaches every surface.
 
 | Surface | Derivation |
 |---|---|
-| Python | `session.call("task.claim", ...)`; typed facade methods are thin wrappers, checked against the registry by a test |
+| Python | `session.submit("task.claim", ...)`; typed facade methods are thin wrappers, checked against the registry by a test |
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `ops.list` for its token |
 | CLI | `platoon-harness tasks claim ...` for curated groups, `platoon-harness op <name>` for any op, flags built from the schema |
 | Web | `POST /x/command {op, args, key, expected_version}` |
 | TUI | Palette entries and generated forms; buttons come from `actions[]`; disabled entries carry `authorize`'s reason |
 
-**The tool-plane idempotency key** is the client's anchor when present (`claudecode/toolUseId`, Codex `callId`), else
-derived from `(turn, op, canonical args hash)`. Either way a harness retry after a timeout is one logical operation.
+**The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
+one (`claudecode/toolUseId`, Codex `callId`) and the turn otherwise. The op and args stay in the key because one Codex script can
+make several calls under shared ids. Either way a harness retry after a timeout is one logical operation.
 
 **Commands and queries.** A query enters no history and reads a read connection. A command is journaled and returns a
 result. An agent's read of content is a command, because it records exposure. A human's read of the same content is a
@@ -550,9 +553,11 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 - **One open wait per agent.** Another `wait` replaces it, so a model tracks no ids. A program may hold several.
 - **A wait outlives its turn.** While the agent's turn runs its wait stays open, even once it holds. The runtime closes it when
   the turn ends, so a wake cannot race the turn it follows. A `timeout` closes it the same way and acks nothing.
-- **Parks by default.** The tool result says the wait is registered and to end the turn. When the turn ends the agent is
-  `waiting`. When the condition holds, the runtime starts the next turn with its delivery attached. If the model keeps
-  working, the wait stays open and nothing breaks.
+- **Parks by default.** The tool result says the wait is registered and to end the turn. An agent becomes `waiting` when
+  its turn ends, not at the call, because a harness can batch `wait` with sibling tools. When the condition holds, the runtime
+  starts the next turn with its delivery attached. If the model keeps working, the wait stays open and nothing breaks.
+- **The wait lives in the service.** A wake never depends on the model having seen the tool result, because an interrupted
+  harness can replace that result. Parking was clean in 10 of 10 trials across Claude Code and Codex with the tool visible.
 - **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending`; the agent may call again,
   and each stream resumes from its own cursor, so nothing is counted twice. A one-shot driver cannot park, so `wait` beyond `hold`
   is refused `unsupported` with the reason.
@@ -809,8 +814,8 @@ reasons, journaled in `agent.started` beside `declared` and `verified`. No drive
 
 | Harness | Path | Notes that matter |
 |---|---|---|
-| `claude` | `claude -p` stream-json plus control protocol, stdin held open | HTTP MCP with `alwaysLoad`; `uuid` on every input; `--permission-prompt-tool stdio`; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` for workers, since a result is not a turn end while background tasks run. Never `ANTHROPIC_BASE_URL` without a gateway credential |
-| `codex` | `codex app-server` over stdio, no `experimentalApi` by default | `turn/start` idle, `turn/steer` with `expectedTurnId` active; `approvalsReviewer: "user"`; `default_tools_approval_mode: "approve"`; interrupt walks descendants; `item/completed` is truth. `ph` is blocked by the default sandbox, so MCP is the path |
+| `claude` | `claude -p` stream-json plus control protocol, stdin held open | HTTP MCP from a 0600 file with `alwaysLoad`, `--strict-mcp-config`; `--permission-prompt-tool stdio` is the one launch path, and the runtime applies the approval policy to every request; `uuid` on every input; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` for workers, since a result is not a turn end while background tasks run; exit 1 after our own interrupt is normal. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
+| `codex` | `codex app-server` over stdio, no `experimentalApi` by default | `turn/start` idle, `turn/steer` with `expectedTurnId` active; `approvalsReviewer: "user"`; MCP in `thread/start.config` with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. Interrupt walks descendants; `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path |
 | `pi` | `pi --mode rpc` | `prompt`, `steer`, `follow_up`; `agent_settled` is `turn.ended`; `exposure: direct`; `gated` approvals through a shipped extension; cache warming off when trainable |
 | `openhands` | Wire worker on SDK `arun()`, own environment | Boundary is the next LLM request; `llm_response_id` gives `model.call`; `Condensation` gives `compacted{forgotten}`; hold deliveries while an approval is open, since `send_message` supersedes it |
 | ACP agents | Generic driver, protocol 1, `fs` and `terminal` false | Turn boundary only; raw frames captured before parsing; `steer` only after a fixture passes. OpenCode must set `codemode: false`, or tools hide behind Code Mode, and must never run with an unset model |
@@ -828,8 +833,12 @@ against the official client and against each real harness.
 - Coordination state uses explicit handles (`cursor`, `lease`, `version`). No session semantics.
 - A body argument is offered as a string of text. Ingress stores it and puts the hash in its place before `submit`, as ingress
   already stores bodies first, so a model never handles a hash it has to make.
+- JSON replies, no SSE, no sessions; `GET` and `DELETE` return 405, and `server/discover` returns -32601. Both real clients connect
+  through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
+  only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.
 
-**Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to
+**Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools, by exact name, because no harness's
+tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to
 a description, every description to what a refusal means, and every op it names to one that exists. Tool schemas leave out what is
 for programs and team files, such as `on` and a queue's lease. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
@@ -932,6 +941,9 @@ class Authority(Protocol):
 - **Eligibility** is `eligibility(agent, episode)`, a pure function of the record with no stored flag. Anything outside an episode
   fails by default, as do frozen agents, judges, humans, shared keys and unverified profiles. Platoon still decides.
 - **Reward data** stays in `annotations.sqlite`, which no agent-reachable read opens.
+- **Codex behind the gateway has no known coordination path.** Its MCP tools do not survive the gateway's Responses dialect, and its
+  default sandbox blocks the shell client. It stays out of trainable teams unless a role grants network access as a journaled trust
+  decision.
 - **Limits at Platoon 0.5.** `AgentGraph`, `RewardEvent` and attribution levels are draft-only there, so they are not integration
   targets. See [training.md](training.md) for the bridge, the RAO golden fixture, the no-extra-rollout baseline and the proposed
   amendments.
@@ -969,7 +981,9 @@ Threat tiers stay separate, in docs and in events.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step in a project or team file. The check reads where
   each value came from, since mappings merge across layers.
-- **Harness env.** An allowlist, per process. The driver strips variables that change a harness's behavior or leak the parent's identity.
+- **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same
+  allowlist plus its token variable. Nothing is inherited by default, so variables that change a harness's behavior or leak a parent's
+  identity cannot pass through.
 
 ## 16. Observability
 
