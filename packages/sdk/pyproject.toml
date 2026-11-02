@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platoon-harness-sdk"
+version = "0.1.0"
+description = "Harness-agnostic multi-agent runtime: durable sessions, explicit distributed primitives, honest provenance."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Apurva Gandhi", email = "apurvasgandhi@gmail.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+dependencies = ["pydantic>=2.10,<3"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platoon_harness"]

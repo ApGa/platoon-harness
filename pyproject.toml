@@ -1,0 +1,50 @@
+[project]
+name = "platoon-harness"
+version = "0.1.0"
+description = "Bring existing agents together with excellent interaction, explicit distributed primitives, and honest provenance."
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["platoon-harness-sdk", "platoon-harness-cli"]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6",
+    "pre-commit>=4",
+    "pyte>=0.8",
+    "pytest>=8",
+    "pytest-asyncio>=1",
+    "pytest-textual-snapshot>=1",
+    "pytest-xdist>=3",
+    "ruff==0.14.5",
+    "ty==0.0.87",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "extensions/*"]
+
+[tool.uv.sources]
+platoon-harness-sdk = { workspace = true }
+platoon-harness-cli = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["packages/sdk/src", "packages/cli/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S110"]
+ignore = ["RUF012"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests", "extensions"]
+addopts = "-ra --strict-markers -m 'not slow and not e2e and not live'"
+markers = [
+    "slow: longer tests such as scale and crash loops",
+    "e2e: browser or full-process end-to-end tests",
+    "live: uses a real provider and needs PLATOON_HARNESS_LIVE=1",
+]

@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+.ty_cache/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.platoon-harness/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

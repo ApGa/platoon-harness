@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platoon-harness-cli"
+version = "0.1.0"
+description = "Terminal UI and command line for platoon-harness."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Apurva Gandhi", email = "apurvasgandhi@gmail.com" }]
+dependencies = [
+    "cyclopts>=4,<5",
+    "platoon-harness-sdk>=0.1,<0.2",
+    "rich>=14",
+    "textual>=8.2,<9",
+]
+
+[project.scripts]
+platoon-harness = "platoon_harness_cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platoon_harness_cli"]
+
+[tool.uv.sources]
+platoon-harness-sdk = { workspace = true }
