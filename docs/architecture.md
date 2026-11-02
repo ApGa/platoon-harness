@@ -633,12 +633,19 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 - **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
   still going a minute later is cut off, so what it had yet to report goes unmeasured. A harness that exits has finished all the same.
+- **Working children.** `agent.finish` and `agent.retire` are refused `conflict`, naming each descendant that would end with the agent
+  and is on its way to a turn or in one. The walk follows `cancel-subtree` edges, through a child that holds no turn, and stops at an
+  `adopt` child. A child `waiting` or `idle` holds no turn, so it does not block, and `on_parent_exit` decides for it. The refusal says
+  what to do next: `wait` for them, or `agent.cancel` each, which is never refused. An agent that has finished can spawn nothing. This
+  is a check at the call, not a hold, so it has limits: a child that begins work after an accepted `finish` ends with its parent,
+  whether the turn ends, the timer fires or the harness exits. So do the working children of a harness that exits, which nothing can
+  refuse, and of a one-shot parent, which ends with its turn whatever it was told, as `team check` warns.
 - **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
   A goal no turn has begun on keeps the session unsettled. A harness that says ready and begins none within a minute is lost, and one
   resumed before it began takes the goal as a delivery, at-least-once, since a resumed harness waits to be told.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
-  refused `conflict`: `cancel` is what stops one.
+  refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
 - **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it, to its
   open turn if it has one, and records a gap. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
 
@@ -790,7 +797,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
-  resolve, and a setting no primitive enforces yet. It refuses a one-shot role that starts with the session, which has no goal to start on,
+  resolve, a setting no primitive enforces yet, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
 and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
 
 ## 9. Drivers

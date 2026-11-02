@@ -4,6 +4,8 @@ import pytest
 
 from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.tools import shell_name
+from platoon_harness.tools.surface import refusal_text
 
 from ..kernel.support import supervised, until
 from .support import (
@@ -466,6 +468,200 @@ async def test_a_harness_that_exits_after_a_finish_has_finished(kernel):
     await report(kernel, "bob", "exited", reason="it went")
 
     assert state_of(kernel, "bob")["status"] == "finished"
+
+
+# Finishing over working children.
+
+
+async def working_child(kernel, *, state: str = "running") -> Principal:
+    """A parent over a child that would end with it, in one of the ways of working."""
+    lead = await spawn(kernel, "lead", role="lead")
+    if state == "spawning":
+        result_of(await kernel.submit(lead, "agent.spawn", spawning("bob", "linked")))
+        return lead
+    await spawn(kernel, "bob", role="linked", by=lead, goal="" if state == "waking" else None)
+    if state == "waking":
+        await send(kernel, lead, "@bob", "go")
+        result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    elif state == "running":
+        await start_turn(kernel, "bob")
+    return lead
+
+
+@pytest.mark.parametrize("state", ["spawning", "goal not begun", "waking", "running"])
+async def test_finishing_is_refused_over_a_child_on_its_way_to_a_turn_or_in_one(kernel, state):
+    lead = await working_child(kernel, state=state)
+    await start_turn(kernel, "lead")
+
+    refused = refusal(await kernel.submit(lead, "agent.finish", {"gist": "all done"}))
+
+    assert refused.code == "conflict"
+    assert "@bob" in refused.detail
+    assert of_type(kernel, "agent.finished") == []
+    assert state_of(kernel, "bob")["status"] is None
+
+
+async def test_finishing_out_of_a_turn_is_refused_over_a_working_child_too(kernel):
+    lead = await working_child(kernel)
+
+    assert refusal(await kernel.submit(lead, "agent.finish", {})).code == "conflict"
+    assert state_of(kernel, "lead")["status"] is None
+
+
+async def test_a_refused_finish_says_what_to_do_next(kernel):
+    lead = await working_child(kernel)
+
+    refused = refusal(await kernel.submit(lead, "agent.finish", {}))
+
+    text = refusal_text(refused, shell_name, kernel.ops, {"wait", "agent.cancel"})
+    assert "`ph wait`" in text and "`ph agent.cancel`" in text
+
+
+async def test_a_finish_refused_over_many_children_keeps_what_to_do_next(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    for n in range(64):
+        await spawn(kernel, f"some-child-with-a-long-name-{n}", role="linked", by=lead)
+
+    refused = refusal(await kernel.submit(lead, "agent.finish", {}))
+
+    assert "`wait`" in refused.detail and "`agent.cancel`" in refused.detail
+
+
+async def test_a_refused_finish_leaves_the_turn_to_end_as_any_other(kernel):
+    lead = await working_child(kernel)
+    await start_turn(kernel, "lead")
+    refusal(await kernel.submit(lead, "agent.finish", {}))
+
+    await end_turn(kernel, "lead")
+
+    assert state_of(kernel, "lead")["state"] == "idle"
+
+
+async def test_a_finish_goes_through_once_the_child_has_ended(kernel):
+    lead = await working_child(kernel)
+    await start_turn(kernel, "lead")
+    refusal(await kernel.submit(lead, "agent.finish", {}))
+    result_of(await kernel.submit(lead, "agent.cancel", {"agent": "bob"}))
+
+    result_of(await kernel.submit(lead, "agent.finish", {"gist": "all done"}))
+
+    await end_turn(kernel, "lead")
+    assert state_of(kernel, "lead")["status"] == "finished"
+
+
+async def test_a_working_grandchild_holds_up_a_finish_through_a_child_that_ends_with_its_parent(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    mid = await spawn(kernel, "mid", role="linked", by=lead)
+    await spawn(kernel, "bob", role="linked", by=mid)
+    await start_turn(kernel, "bob")
+
+    assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {})).detail
+
+
+@pytest.mark.parametrize("parked", [False, True])
+async def test_a_child_out_of_a_turn_does_not_hold_up_a_finish(kernel, parked):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", role="linked", by=lead, goal="")
+    if parked:
+        await start_turn(kernel, "bob")
+        result_of(await kernel.submit(bob, "wait", {"from": ["lead"]}))
+        await end_turn(kernel, "bob")
+        assert state_of(kernel, "bob")["state"] == "waiting"
+
+    result_of(await kernel.submit(lead, "agent.finish", {}))
+
+    assert (state_of(kernel, "bob")["status"], of_type(kernel, "agent.ended")[-1].data["reason"]) == (
+        "cancelled",
+        "parent lead ended",
+    )
+
+
+async def test_an_adopted_child_and_all_below_it_do_not_hold_up_a_finish(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    mid = await spawn(kernel, "mid", role="worker", by=lead)
+    await spawn(kernel, "bob", role="linked", by=mid)
+    await start_turn(kernel, "mid")
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.submit(lead, "agent.finish", {}))
+
+    assert state_of(kernel, "lead")["status"] == "finished"
+    assert state_of(kernel, "bob")["status"] is None
+
+
+async def test_retiring_is_refused_over_a_working_child(kernel, ada):
+    await working_child(kernel)
+
+    refused = refusal(await kernel.submit(ada, "agent.retire", {"agent": "lead"}))
+
+    assert refused.code == "conflict" and "@bob" in refused.detail
+    assert state_of(kernel, "bob")["status"] is None
+
+
+async def test_a_held_child_with_a_turn_open_holds_up_a_finish(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", role="linked", by=lead, ready={"resume": True})
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+
+    assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {})).detail
+
+
+async def test_cancelling_is_never_refused_over_working_children(kernel, ada):
+    await working_child(kernel)
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
+
+    assert state_of(kernel, "bob")["status"] == "cancelled"
+
+
+async def test_an_agent_that_has_finished_starts_nothing_it_would_take_down_with_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "agent.finish", {}))
+
+    assert refusal(await kernel.submit(lead, "agent.spawn", spawning("bob", "linked"))).code == "conflict"
+
+
+@pytest.mark.parametrize("how", ["its turn ended", "the timer fired", "its harness exited"])
+async def test_a_child_that_began_work_after_a_finish_ends_with_its_parent(kernel, how):
+    """The check is at the call. What comes after it ends with the agent, and says so."""
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", role="linked", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "agent.finish", {"gist": "all done"}))
+    await start_turn(kernel, "bob")
+
+    if how == "its turn ended":
+        await end_turn(kernel, "lead")
+    elif how == "the timer fired":
+        result_of(await kernel.submit(kernel.runtime, "agent.conclude", {"agent": "lead"}))
+    else:
+        await report(kernel, "lead", "exited", reason="it went")
+
+    assert state_of(kernel, "lead")["status"] == "finished"
+    assert state_of(kernel, "bob")["status"] == "cancelled"
+    assert of_type(kernel, "agent.ended")[-1].data["reason"] == "parent lead ended"
+
+
+async def test_a_harness_that_exits_takes_its_working_children_with_it(kernel):
+    await working_child(kernel)
+
+    await report(kernel, "lead", "exited", reason="segfault")
+
+    assert (state_of(kernel, "lead")["status"], state_of(kernel, "bob")["status"]) == ("lost", "cancelled")
+
+
+async def test_a_one_shot_parent_takes_its_working_children_with_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead", ready={"persistent": False})
+    await start_turn(kernel, "lead")
+    await spawn(kernel, "bob", role="linked", by=lead)
+    await start_turn(kernel, "bob")
+    refusal(await kernel.submit(lead, "agent.finish", {}))
+
+    await end_turn(kernel, "lead")
+
+    assert (state_of(kernel, "lead")["status"], state_of(kernel, "bob")["status"]) == ("finished", "cancelled")
 
 
 async def test_a_one_shot_agent_that_finished_is_finished_however_its_turn_ended(kernel):

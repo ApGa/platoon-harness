@@ -353,6 +353,26 @@ def test_a_one_shot_role_only_another_role_spawns_is_sound():
     assert errors(team, capabilities={"claude": MEASURING, "pi": Capabilities()}) == []
 
 
+def test_a_one_shot_parent_is_warned_that_its_children_end_with_its_turn():
+    team = Team(
+        roles={
+            "lead": Role(harness="pi", may_spawn=["brief"]),
+            "brief": Role(harness="brief", count=0, may_spawn=["worker", "helper"]),
+            "worker": Role(harness="pi"),
+            "helper": Role(harness="pi", on_parent_exit="adopt"),
+        },
+        topology=Topology(limits=Limits(max_depth=3)),
+    )
+
+    capabilities = {"pi": MEASURING, "brief": Capabilities()}
+    found = [problem for problem in warnings(team, capabilities=capabilities) if "one-shot" in problem]
+
+    assert found == [
+        "roles.brief.may_spawn: a one-shot harness ends with its turn, and that cancels `worker` however far along it "
+        'is: wait for it within the turn, or set `on_parent_exit = "adopt"` on that role'
+    ]
+
+
 def test_a_role_only_a_never_started_role_spawns_never_starts():
     team = Team(
         roles={

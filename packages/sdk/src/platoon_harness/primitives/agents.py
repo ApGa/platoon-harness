@@ -54,6 +54,11 @@ class Agent(BaseModel, frozen=True):
     def ended(self) -> bool:
         return self.state == "ended"
 
+    @property
+    def starting(self) -> bool:
+        """Whether a turn is on its way to this agent."""
+        return self.state in ("spawning", "waking") or self.unbegun
+
 
 class Agents(View):
     """Everyone ever spawned, live or not."""

@@ -68,6 +68,8 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
 - `ph <tool> --help` for an unknown tool shows what there is.
+- `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
+  mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
 
 ### Changed
 
@@ -92,6 +94,7 @@
 - `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
+- An agent that has finished can spawn nothing.
 - `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
 - `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.
 - `message.send` takes no `cause`: a program carries a chain with `reply_to`.

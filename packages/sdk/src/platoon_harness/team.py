@@ -217,6 +217,17 @@ def _spawning(team: Team) -> dict[str, set[str]]:
     return found
 
 
+def _taken_down(team: Team, name: str) -> Iterable[Problem]:
+    """A one-shot role's turn is its end, and no refusal can stand in the way of that."""
+    for child in sorted(_spawning(team)[name] & team.roles.keys()):
+        if team.roles[child].on_parent_exit == "cancel-subtree":
+            what = (
+                f"a one-shot harness ends with its turn, and that cancels `{child}` however far along it is: "
+                'wait for it within the turn, or set `on_parent_exit = "adopt"` on that role'
+            )
+            yield Problem(f"roles.{name}.may_spawn", what, "warning")
+
+
 def _warnings(team: Team) -> Iterable[Problem]:
     starting = {name for name in team.roles if team.starts(name)}
     started = starting.union(*(reach(team, name, "descendants") for name in starting))
@@ -283,6 +294,8 @@ def team_check(
                     "set `count = 0` and spawn it with one"
                 )
                 problems.append(Problem(f"roles.{name}.count", what))
+            if not known.persistent:
+                problems += _taken_down(team, name)
             problems += _budget_problems(team.budget, "budget", role, known)
             problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:

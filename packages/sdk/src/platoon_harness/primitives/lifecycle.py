@@ -70,6 +70,29 @@ def _live(txn: Txn, name: str) -> Agent:
     return agent
 
 
+def _working(txn: Txn, agent: Agent) -> list[str]:
+    """Who would end with this agent and is on its way to a turn or in one. A child that holds no turn is left to
+    `on_parent_exit`, and an adopted child outlives it, with all below that child."""
+    found: list[str] = []
+    for child in txn.view(Agents).children(agent.id):
+        if child.on_parent_exit != "adopt":
+            if child.starting or txn.view(Stamps).turn(child.name) is not None:
+                found.append(child.name)
+            found += _working(txn, child)
+    return found
+
+
+def _refuse_over_working(txn: Txn, agent: Agent) -> None:
+    """A refusal names what would be lost, and what to do next comes first, since a long one is cut."""
+    if working := _working(txn, agent):
+        names = ", ".join(f"@{name}" for name in working)
+        raise Refused(
+            "conflict",
+            f"Call `wait` with `agents` and end your turn, or `agent.cancel` each. Working, and ending with "
+            f"{agent.name}: {names}",
+        )
+
+
 def _monitor(txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None) -> bool:
     """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden.
     Returns whether a parent was there to hear it."""
@@ -152,8 +175,9 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. With neither it starts idle
     and takes no turn until a message wakes it. It reports back to you when it ends, however it ends, so a parent can
     simply wait. Refused `not_permitted` for a role or limit outside your
-    reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken or the
-    session is closing: use another name, or stop spawning. `not_found` when no such role exists."""
+    reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the
+    session is closing or you have finished: use another name, or stop spawning. `not_found` when no such role exists.
+    """
     session = txn.view(SessionRecord)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
@@ -164,6 +188,8 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         raise Refused("conflict", f"{a.name} is taken")
     agents = txn.view(Agents)
     spawner = agents.get(txn.me.name) if txn.me.kind == "agent" else None
+    if spawner is not None and spawner.finishing:
+        raise Refused("conflict", f"{spawner.name} has finished: end your turn")
     depth = 0 if spawner is None else spawner.depth + 1
     parent = None if txn.me.kind == "runtime" else txn.me.id
     _admit(txn, depth, parent)
@@ -223,12 +249,15 @@ def _conclude(txn: Txn, agent: Agent) -> None:
 def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
-    a turn still going a minute from now is cut off. Refused `conflict` when you have finished already."""
+    a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
+    children that would end with you are working: call `wait` with `agents` and end your turn, or `agent.cancel` each.
+    """
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
     if agent.finishing:
         raise Refused("conflict", f"{agent.name} has finished: end your turn")
+    _refuse_over_working(txn, agent)
     if txn.view(Stamps).turn(agent.name) is None:
         end(txn, agent, "finished", gist=a.gist or None, body=a.body)
         return
@@ -277,10 +306,12 @@ def cancel(txn: Txn, a: Named) -> None:
 @op("agent.retire", on=lambda a: f"agent/{a.agent}", tool=True)
 def retire(txn: Txn, a: Named) -> None:
     """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while a
-    turn is open: wait for it, or call `agent.cancel` to stop it now. `conflict` too when it has ended already."""
+    turn is open, or while children that would end with it are working: `wait` for them, or call `agent.cancel` to stop
+    them now. `conflict` too when it has ended already."""
     agent = _live(txn, a.agent)
     if txn.view(Stamps).turn(agent.name) is not None:
         raise Refused("conflict", f"{agent.name} has a turn open")
+    _refuse_over_working(txn, agent)
     end(txn, agent, "retired", reason=f"retired by {txn.me.id}")
 
 
@@ -492,7 +523,7 @@ def peers(txn: Txn, a: Args) -> list[dict[str, Any]]:
 def _blockers(txn: Txn) -> list[str]:
     """What stands between this session and `settled`: each clause of its definition, checked."""
     found: list[str] = []
-    if any(agent.state in ("spawning", "waking") or agent.unbegun for agent in txn.view(Agents).live()):
+    if any(agent.starting for agent in txn.view(Agents).live()):
         found.append("starting_agent")
     if txn.view(Stamps).open_turns():
         found.append("open_turn")
