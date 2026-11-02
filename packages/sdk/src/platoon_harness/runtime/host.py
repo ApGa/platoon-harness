@@ -306,6 +306,7 @@ class Host:
             folder=folder,
             model=role.model,
             effort=role.effort,
+            sandbox=role.sandbox,
             tools=binding,
             access=admission.access,
             instructions="\n\n".join(filter(None, (role.instructions, teaching))) or None,

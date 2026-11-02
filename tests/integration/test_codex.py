@@ -1,0 +1,497 @@
+"""The `codex` driver on the real binary against FakeModel. Free: a dummy key, an isolated home, and loopback only."""
+
+import asyncio
+import json
+import os
+import shutil
+import signal
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from platoon_harness import Role, Session, Team
+from platoon_harness.config import Secret
+from platoon_harness.drivers import (
+    AgentSpec,
+    ApprovalRequested,
+    ChildSeen,
+    Compacted,
+    Delivery,
+    DriverError,
+    Exited,
+    GapReport,
+    InputDelivered,
+    Item,
+    ModelCall,
+    Ready,
+    TurnEnded,
+    TurnStarted,
+    Usage,
+)
+from platoon_harness.drivers.codex import CodexDriver
+from platoon_harness.drivers.levels import Conformance, Profile, levels
+from platoon_harness.drivers.process import Record
+from platoon_harness.team import AuthProfile
+from platoon_harness.testing import (
+    NAMESPACE,
+    TOOL,
+    FakeModel,
+    FakeTools,
+    Stall,
+    Text,
+    ToolCall,
+    chat_access,
+    check_driver,
+)
+from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
+
+from ..unit.drivers.support import Heard
+from ..unit.runtime.support import in_state, of_type, until
+
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
+
+MODEL = "fake-model"
+TIMEOUT = 60.0
+ESCALATED = {"sandbox_permissions": "require_escalated", "justification": "needs an approval"}
+GATED = ToolCall("exec_command", {"cmd": "touch gated", **ESCALATED}, id="call_gated")
+CHILD = ToolCall("spawn_agent", {"message": "say so"}, id="call_child", namespace="multi_agent_v1")
+
+
+@pytest.fixture(autouse=True)
+def binary():
+    if shutil.which("codex") is None:
+        pytest.skip("codex is not installed, so this driver met no real harness here")
+
+
+def access(home: Path, settings: str = ""):
+    """How a harness reaches FakeModel, on a dummy key, with a home of its own so that no login takes part."""
+
+    def given(model: FakeModel) -> dict[str, Secret]:
+        (home / ".codex").mkdir(parents=True, exist_ok=True)
+        (home / ".codex" / "config.toml").write_text(settings)
+        codex = {"HOME": Secret(str(home)), "CODEX_HOME": Secret(str(home / ".codex"))}
+        return {**chat_access(model), **codex}
+
+    return given
+
+
+def shell(command: str) -> ToolCall:
+    return ToolCall("exec_command", {"cmd": command})
+
+
+def ours(note: str) -> ToolCall:
+    return ToolCall(TOOL, {"note": note}, namespace=f"mcp__{NAMESPACE}")
+
+
+def tool(name: str, id: str, **arguments: Any) -> ToolCall:
+    return ToolCall(name, arguments, id=id, namespace="mcp__ph")
+
+
+def garbling(folder: Path):
+    """Write into the harness's own stdout, since nothing makes the real binary write a frame no parser knows."""
+
+    async def garble(_: CodexDriver) -> None:
+        record = Record.read(folder / "malformed_frame_is_a_gap" / "agent")
+        assert record is not None
+        pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
+        os.write(pipe, b"this is no frame\n" + json.dumps({"method": "nobody/knows"}).encode() + b"\n")
+        os.close(pipe)
+
+    return garble
+
+
+async def conformance(folder: Path) -> Conformance:
+    return await check_driver(
+        CodexDriver,
+        folder=folder,
+        access=access(folder / "home"),
+        garble=garbling(folder),
+        gated=GATED,
+        shell=shell,
+        tool=ours,
+        child=CHILD,
+        timeout=TIMEOUT,
+    )
+
+
+async def test_the_codex_driver_conforms(tmp_path):
+    result = await conformance(tmp_path)
+
+    print(result)
+    assert result.failed == (), str(result)
+    assert result.driver == "codex"
+    skipped = {check.name for check in result.checks if check.state == "skipped"}
+    assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven"}
+    earned = levels(CodexDriver().describe().capabilities, Profile(driver="codex", version=result.version), result)
+    assert earned.operational.state == "met", earned.operational.reasons
+    assert earned.observable.state == "met", earned.observable.reasons
+
+
+def on_fake_model(tmp_path: Path, fake: FakeModel, *, settings: str = "", **fields: Any) -> AgentSpec:
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
+    return AgentSpec.model_validate({**spec, "access": access(tmp_path / "home", settings)(fake), **fields})
+
+
+def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role: Any) -> Team:
+    """One agent on the real binary, reaching FakeModel the way an auth profile would."""
+    (home / ".codex").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(home / ".codex"))
+    monkeypatch.setenv("OPENAI_BASE_URL", f"{model.url}/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-key")
+    bob = Role(harness="codex", model=MODEL, auth="fake", **role)
+    return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY"))})
+
+
+async def test_a_real_harness_calls_our_tools_parks_wakes_and_resumes_in_a_session(tmp_path, monkeypatch):
+    replies = (
+        tool("channel_list", "call_list"),
+        tool("wait", "call_wait", **{"from": ["@you"]}),
+        "waiting for you",
+        "woken",
+        "resumed",
+    )
+
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+
+        async with Session.start(team, name="real", root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "find your peers, then wait for me")
+            await in_state(session, "bob", "waiting")
+
+            await session.send("@bob", "carry on, the word is cinnabar")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 2)
+
+            items = await of_type(session, "item.recorded")
+            placed = await of_type(session, "wait.registered")
+            started = (await of_type(session, "agent.started"))[0]
+            assert [event.data["reason"] for event in await of_type(session, "turn.ended")] == ["stopped", "stopped"]
+            assert {"call_list", "call_wait"} <= {event.data["native_id"] for event in items}
+            assert placed[0].native["callId"] == "call_wait"
+            assert started.data["effective_model"] == MODEL
+            assert started.data["verified"]["login"] == "key"
+
+        async with Session.resume("real", root=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "what was the word?")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 3)
+            usages = await of_type(session, "usage.reported")
+
+    assert model.calls[-1].says("cinnabar")
+    assert model.calls[0].offers("wait")
+    assert sum(event.data["tokens"] for event in usages) == len(model.calls) * (INPUT_TOKENS + OUTPUT_TOKENS)
+
+
+async def test_a_real_harness_finishes_with_its_turn(tmp_path, monkeypatch):
+    replies = (tool("agent_finish", "call_finish", gist="all done"), "that is all")
+
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "finish")
+            await in_state(session, "bob", "ended")
+            ending = await session.ending()
+
+    assert ending.agents[0]["status"] == "finished"
+    assert ending.agents[0]["report"]["gist"] == "all done"
+
+
+async def test_a_turn_the_owner_stopped_is_told_on_resume_and_the_harness_goes_on(tmp_path, monkeypatch):
+    async with FakeModel([Stall(), Text("never heard")], "understood") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+
+        async with Session.start(team, name="stopped", root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "think for a long time")
+            await asyncio.wait_for(model.call(0), TIMEOUT)
+
+        async with Session.resume("stopped", root=tmp_path) as session:
+            ended = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+
+    assert [event.data["reason"] for event in ended] == ["stopped by its owner", "stopped"]
+    assert model.calls[-1].says("the owner stopping the session")
+
+
+async def test_a_role_s_sandbox_reaches_the_harness(tmp_path, monkeypatch):
+    async with FakeModel(shell("touch refused"), "done") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, sandbox="read-only")
+        work = tmp_path / "work"
+        work.mkdir()
+
+        async with Session.start(team, root=tmp_path, cwd=work) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "touch it")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 1)
+
+    assert not (work / "refused").exists()
+    assert json.loads(model.calls[0].message.header("x-codex-turn-metadata"))["sandbox_mode"] == "read-only"
+
+
+@pytest.mark.parametrize(
+    ("sandbox", "inside", "outside"),
+    [("read-only", False, False), ("workspace-write", True, False), ("danger-full-access", True, True)],
+)
+async def test_each_sandbox_it_declares_does_what_it_says(tmp_path, sandbox, inside, outside):
+    settings = "[sandbox_workspace_write]\nexclude_slash_tmp = true\nexclude_tmpdir_env_var = true\n"
+    target = tmp_path / "home" / "outside"
+    async with FakeModel(shell(f"touch inside; touch {target}"), "done") as model:
+        spec = on_fake_model(tmp_path, model, goal="go", sandbox=sandbox, settings=settings)
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert (spec.cwd / "inside").exists() == inside
+    assert target.exists() == outside
+
+
+async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
+    delivery = Delivery(input="41", boundary="turn", text="remember heliotrope", items=())
+
+    async with FakeModel() as model:
+        spec = on_fake_model(tmp_path, model)
+        first, heard = CodexDriver(), Heard()
+        native = (await first.start(spec, heard)).native
+        await first.deliver(delivery)
+        delivered = await heard.until(InputDelivered)
+        await heard.until(TurnEnded)
+        record = Record.read(spec.folder)
+        assert record is not None
+        os.killpg(record.pid, signal.SIGKILL)
+        await heard.until(Exited)
+        await first.stop(2.0)
+
+        second, heard = CodexDriver(), Heard()
+        await second.start(spec.model_copy(update={"resume": native}), heard)
+        await heard.until(Ready)
+        try:
+            assert await second.reconcile("41") == "landed"
+            assert await second.reconcile("42") == "unknown"
+        finally:
+            await second.stop(2.0)
+
+    assert (delivered.boundary, delivered.evidence) == ("turn", "userMessage")
+
+
+async def test_a_steer_lands_at_the_next_model_call_and_one_an_interrupt_dropped_goes_again(tmp_path):
+    steer = Delivery(input="41", boundary="model_call", text="the steer says cinnabar", items=())
+
+    async with FakeModel([Stall()], "the next turn") as model:
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        await asyncio.wait_for(model.call(0), TIMEOUT)
+        await driver.deliver(steer)
+        receipt = await driver.interrupt()
+        await heard.until(TurnEnded)
+        delivered = await heard.until(InputDelivered)
+        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
+        await driver.stop(2.0)
+
+    assert receipt.queued == ("41",)
+    assert delivered.boundary == "turn"
+    assert [turn.reason for turn in heard.of(TurnEnded)] == ["interrupted", "stopped"]
+    assert model.calls[1].says("cinnabar")
+
+
+async def test_a_steer_during_a_model_call_is_in_the_next_one_within_the_turn(tmp_path):
+    steer = Delivery(input="41", boundary="model_call", text="the steer says cinnabar", items=())
+
+    async with FakeModel([Stall(), ours("steer")], "done") as model:
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        await asyncio.wait_for(model.call(0), TIMEOUT)
+        await driver.deliver(steer)
+        model.release()
+        delivered = await heard.until(InputDelivered)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert delivered.boundary == "model_call"
+    assert len(heard.of(TurnStarted)) == 1
+    assert model.calls[1].says("cinnabar")
+
+
+async def test_a_tool_a_kill_cut_off_reads_as_aborted_on_resume_and_never_ran_again(tmp_path):
+    """What a resumed harness shows of a dangling tool call, which the cut-off notice must not contradict."""
+    delivery = Delivery(input="41", boundary="turn", text="carry on", items=())
+
+    async with FakeModel(
+        ToolCall("exec_command", {"cmd": "echo ran >> ran; exec sleep 600"}, id="call_dangling"), "ok"
+    ) as model:
+        spec = on_fake_model(tmp_path, model, goal="go", sandbox="workspace-write")
+        first, heard = CodexDriver(), Heard()
+        native = (await first.start(spec, heard)).native
+        await heard.until(Item, lambda item: item.native_id == "call_dangling")
+        record = Record.read(spec.folder)
+        assert record is not None
+        os.killpg(record.pid, signal.SIGKILL)
+        await heard.until(Exited)
+        await first.stop(2.0)
+
+        second, heard = CodexDriver(), Heard()
+        await second.start(spec.model_copy(update={"resume": native}), heard)
+        await heard.until(Ready)
+        await second.deliver(delivery)
+        await heard.until(TurnEnded)
+        await second.stop(2.0)
+
+    print(json.dumps(model.calls[-1].json["input"][-4:])[:1500])
+    assert (spec.cwd / "ran").read_text() == "ran\n"
+    assert model.calls[-1].says("call_dangling")
+
+
+async def test_a_compaction_reports_its_call_and_a_gap_for_what_it_forgot(tmp_path):
+    delivery = Delivery(input="41", boundary="turn", text="say two", items=())
+
+    async with FakeModel("one", "the summary", "two") as model:
+        driver, heard = CodexDriver(), Heard()
+        settings = "model_auto_compact_token_limit = 10\n"
+        await driver.start(on_fake_model(tmp_path, model, goal="say one", settings=settings), heard)
+        await heard.until(TurnEnded)
+        await driver.deliver(delivery)
+        compacted = await heard.until(Compacted)
+        called = await heard.until(ModelCall, lambda call: call.purpose == "compaction")
+        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
+        await driver.stop(2.0)
+
+    assert (compacted.forgotten, compacted.summary) == (None, None)
+    assert called.call_id is None
+    assert sum(usage.tokens or 0 for usage in heard.of(Usage)) == len(model.calls) * (INPUT_TOKENS + OUTPUT_TOKENS)
+    assert not [gap for gap in heard.of(GapReport) if gap.what == "hidden_call"]
+
+
+async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_path):
+    async with FakeModel(CHILD, "the parent is done", "the child is done") as model:
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one"), heard)
+        child = await heard.until(ChildSeen)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert child.attribution == "inferred"
+    assert len(heard.of(TurnEnded)) == 1
+    usages = heard.of(Usage)
+    assert {usage.scope for usage in usages} == {"call", "tree"}
+    assert sum(usage.tokens or 0 for usage in usages) == len(model.calls) * (INPUT_TOKENS + OUTPUT_TOKENS)
+    assert len(heard.of(ModelCall)) == len(model.calls)
+
+
+async def test_an_interrupt_reaches_a_child_as_well(tmp_path):
+    async with FakeModel(CHILD, [Stall()], [Stall()]) as model:
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one"), heard)
+        await heard.until(ChildSeen)
+        await asyncio.wait_for(model.call(2), TIMEOUT)
+        await driver.interrupt()
+        turn = await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert turn.reason == "interrupted"
+
+
+async def test_effort_reaches_the_model_and_comes_back_on_a_resume(tmp_path):
+    async with FakeModel("ok") as model:
+        spec = on_fake_model(tmp_path, model, goal="go", effort="low")
+        driver, heard = CodexDriver(), Heard()
+        native = (await driver.start(spec, heard)).native
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+        resumed = CodexDriver()
+        await resumed.start(spec.model_copy(update={"resume": native}), Heard())
+        await resumed.stop(2.0)
+
+    assert model.calls[0].json["reasoning"]["effort"] == "low"
+
+
+async def test_with_no_model_on_a_login_of_its_own_ready_says_the_harness_s_default(tmp_path):
+    (tmp_path / "home" / ".codex").mkdir(parents=True)
+    variables = {"HOME": str(tmp_path / "home"), "CODEX_HOME": str(tmp_path / "home" / ".codex")}
+
+    async with FakeModel() as model:
+        spec = on_fake_model(tmp_path, model, model=None, access={}, env=variables)
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        ready = await heard.until(Ready)
+        await driver.stop(2.0)
+
+    assert ready.effective_model
+    assert not model.calls
+
+
+async def test_what_the_user_set_stays_beside_ours(tmp_path):
+    settings = 'developer_instructions = "their words"\n[shell_environment_policy]\nexclude = ["THEIR_SECRET"]\n'
+    variables = {"THEIR_SECRET": "cinnabar"}
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "AGENTS.md").write_text("the project's words")
+    said = shell("echo secret=$THEIR_SECRET token=$PLATOON_HARNESS_TOKEN")
+
+    async with FakeModel(said, "done") as model, FakeTools() as tools:
+        spec = on_fake_model(
+            tmp_path,
+            model,
+            goal="go",
+            settings=settings,
+            instructions="our words",
+            env=variables,
+            tools=tools.binding(tmp_path),
+        )
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert model.calls[0].says("their words")
+    assert model.calls[0].says("our words")
+    assert model.calls[0].says("the project's words")
+    assert model.calls[1].says("secret= token=\\n")
+
+
+async def test_the_user_s_own_mcp_server_asks_and_the_runtime_answers(tmp_path):
+    called = ToolCall(TOOL, {"note": "theirs"}, id="call_theirs", namespace="mcp__theirs")
+
+    async with FakeModel(called, "done") as model, FakeTools() as tools:
+        url, token = tools.binding(tmp_path).url, tools.binding(tmp_path).token.reveal()
+        settings = f'[mcp_servers.theirs]\nurl = "{url}"\nbearer_token_env_var = "THEIR_TOKEN"\n'
+        spec = on_fake_model(tmp_path, model, goal="go", settings=settings, env={"THEIR_TOKEN": token})
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "allow")
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert "Allow the theirs MCP server" in asked.gist
+    assert len(tools.calls) == 1
+
+
+async def test_a_denied_command_never_runs_and_the_item_says_so(tmp_path):
+    async with FakeModel(GATED, "done") as model:
+        spec = on_fake_model(tmp_path, model, goal="go")
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "deny")
+        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert not (spec.cwd / "gated").exists()
+    assert (decided.approval, decided.outcome, decided.native_id) == (asked.id, "declined", "call_gated")
+
+
+async def test_a_required_server_that_refuses_us_fails_the_start_and_says_why(tmp_path):
+    async with FakeModel() as model, FakeTools() as tools:
+        binding = tools.binding(tmp_path).model_copy(update={"token": Secret("not-the-token")})
+        driver = CodexDriver()
+        with pytest.raises(DriverError, match="required MCP servers failed"):
+            await driver.start(on_fake_model(tmp_path, model, tools=binding), Heard())
+        await driver.stop(2.0)
+
+    assert not model.calls

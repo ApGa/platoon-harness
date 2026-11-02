@@ -34,13 +34,15 @@ method promises:
 - **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
   for a delivery. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
-  the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.instructions` holds the role's words and
-  the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.
+  the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
+  `sandboxes`, and None leaves it to the harness. `spec.instructions` holds the role's words and the preamble, fixed at launch: hand
+  them over once, through the harness's supported path, and never per turn.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
   again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
-- **`interrupt`** stops the turn. The agent lives on.
+- **`interrupt`** stops the turn. The agent lives on. A delivery the harness took and has not landed is still handed over, and lands
+  in what comes next, so a harness that drops it at an interrupt is sent it again. `Receipt.queued` names those.
 - **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
   harness, so ask a harness to end first, and with real grace. `Process` reports the gap `crash_window` when it comes to `SIGKILL`,
   and the workspace may still be being written.
@@ -244,7 +246,7 @@ That was one short process: `describe` runs your program, sends this one frame, 
 may start for it. Starting an agent is a new process.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}
@@ -348,6 +350,7 @@ async def test_my_driver_conforms(tmp_path):
 | `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
+| `interrupt_keeps_a_steer` | A delivery handed over inside a turn outlives an interrupt. Needs a boundary inside a turn and `interrupt` |
 | `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |

@@ -47,6 +47,7 @@ platoon_harness.drivers.TurnStarted
 platoon_harness.drivers.Usage
 platoon_harness.drivers.Verdict
 platoon_harness.drivers.claude.ClaudeDriver
+platoon_harness.drivers.codex.CodexDriver
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.harness_env

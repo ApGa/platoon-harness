@@ -447,6 +447,26 @@ async def steers_at_declared_boundary(rig: _Rig) -> None:
     _expect((await rig.call(1)).says(_GIST), "the steer is not in the next prompt")
 
 
+def _keeps_a_steer(capabilities: Capabilities) -> str | None:
+    return _interruptible(capabilities) or _steerable(capabilities)
+
+
+@_check(_keeps_a_steer)
+async def interrupt_keeps_a_steer(rig: _Rig) -> None:
+    """What a harness took is no less handed over for an interrupt, whatever the harness does with it."""
+    boundary: Boundary = "tool" if "tool" in rig.capabilities.boundaries else "model_call"
+    rig.model.script([Stall()])
+    await rig.start()
+    await rig.call(0)
+
+    await rig.deliver(boundary)
+    await rig.driver.interrupt()
+
+    await rig.until(TurnEnded)
+    await rig.until(InputDelivered)
+    _expect((await rig.call(1)).says(_GIST), "what was steered did not outlive the interrupt")
+
+
 def _measuring(capabilities: Capabilities) -> str | None:
     return None if capabilities.measures else "it declares no measures"
 

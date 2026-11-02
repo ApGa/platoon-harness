@@ -94,8 +94,8 @@ by a driver landing; only the row below changes.
 
 | Driver | Path | Depends on | Driver status | Conformance result |
 |---|---|---|---|---|
-| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 21 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
-| `codex` | `codex app-server` over stdio | User's binary | planned | none |
+| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 22 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
+| `codex` | `codex app-server` over stdio | User's binary | implemented | 0.164.0 on FakeModel: 21 passed, 0 failed, 3 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage` or `sandboxes`). Operational and observable met |
 | `pi` | `pi --mode rpc` | User's install | planned | none |
 | `openhands` | `WireDriver`, worker on SDK `arun()` | Own environment | planned | none |
 | ACP, covering `opencode` | Generic driver, protocol 1 | `[acp]` extra | planned | none |
@@ -140,6 +140,25 @@ by a driver landing; only the row below changes.
 - Stable usage has no response id. `rawResponse/completed` has one but is internal-only. Interrupted calls report nothing, so totals are a lower bound.
 - `bearer_token_env_var` reaches the agent shell unless `shell_environment_policy.exclude` names it (1 trial).
 - Resume on a different provider is refused in the app-server README at the pinned clone, which is ahead of 0.164.0. Keep the provider the same.
+- The driver on 0.164.0, on FakeModel [L] and then on `gpt-6-luna` at low effort with a plan login [R]. `thread/start` answers with the effective model, effort and version, and calls no model. A thread has no rollout until its first turn, so one that took no turn cannot resume: `no rollout found`. `claude --resume` says the same of a session that took no turn, so such an agent is `lost` on either.
+- `developerInstructions` replaces the user's `developer_instructions`, and `shell_environment_policy.exclude` replaces theirs, which let a variable they excluded reach the shell. `config/read` gives both, and the driver keeps them. A project's `AGENTS.md` reached the model beside ours [L].
+- `turn/start` on a turn under way steers it, returning that turn's id, so `turn/steer` and its "no active turn" race are not needed. A steer sent during a stalled model call ended that call: its text and usage never came, and the input was in the next one. Whether a call was cut or had finished cannot be told from the frames [L].
+- A steered input that has not landed is dropped by `turn/interrupt`, with no frame to say so, and is not in the next turn. The driver sends it again, and `interrupt_keeps_a_steer` holds every driver to that [L].
+- `clientUserMessageId` comes back as `clientId` on the `userMessage` item as it lands, and in `thread/turns/list` after a `SIGKILL`, which is `input.delivered` and `reconcile` [L].
+- `thread/tokenUsage/updated` comes once per model call, with the same `total` again at an interrupt, and the old `total` at a resume. A cut call adds nothing. No frame says a model call began, so `model.call` comes with its usage, with no id, and a cut one goes uncounted [L] [R].
+- Tools: a live call of ours is an `mcpToolCall` item whose id is the `exec-<uuid>` of `_meta.callId`, so `tool_item_carries_its_anchor` holds at the script, and the id is no model call's. On FakeModel, with no Code Mode, the same field holds the model's `call_id` [L] [R].
+- Stop: end of stdin, `SIGTERM` and `SIGKILL` of the app-server each end a running `exec_command`, which leads a session of its own, 1 trial each. `turn/interrupt` leaves it running: an exec session outlives a turn [L].
+- Sandboxes: `read-only`, `workspace-write` and `danger-full-access` each did what they say on a shell write [L]. `/tmp` is writable under `workspace-write` unless config excludes it.
+- A required server that refuses us fails `thread/start`, naming it, so `ready.tools_visible` stays unknown. A connected server proves no model saw a tool [L].
+- `mcpServer/elicitation/request` is how a tool of the user's own asks under `on-request`, with `codex_approval_kind: mcp_tool_call`. `accept` runs it, and `decline` tells the model `user rejected MCP tool call`. Ours asks nothing, by `default_tools_approval_mode` [L].
+- `request_user_input` is offered to the model and answers `unavailable in Default mode`, so no request reached the driver. One that came could not be answered by a verdict, so the driver refuses it with a gap, which only a stand-in has shown [L].
+- Compaction: `contextCompaction` starts and completes with no text, and on a custom provider its call reaches `tokenUsage`, so `model.call` carries `purpose: compaction`. `compacted` has neither `forgotten` nor `summary`. A provider that compacts on its side was not observed, and with no usage the driver reports `hidden_call` [L].
+- Children: no `thread/started`, and a child's first `turn/started` on an unknown thread is the signal. `rootTurnId` names the parent turn, and no frame names the parent thread of a nested child, so `child.seen.parent` is None. A child's turn can end after its parent's, so our turn runs until the last thread stops, and `turn/interrupt` goes to each. Only `multi_agent_v1` ran, on FakeModel. A child's usage comes per thread, as `tree` [L].
+- Resume with a dangling tool call: the next request holds `function_call_output: "aborted"` for it, and it did not run again. That agrees with our cut-off notice (1 trial) [L].
+- One MCP tool call is cut at 300 s, `timed out awaiting tools/call after 300s`, and the model is told it failed (1 trial). No check proves that, so `tool_timeout_s` is not declared [L].
+- A login's kind is read from `codex login status`, on stderr. `account/*` frames name the account, so the driver drops them unread.
+- A model on a native login treats the delivery as a pointer: it called `message_read` before answering, and called `agent_finish` when a goal seemed done, even at `Reply with the single word beta` [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
+- The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
 
 **pi 1.4.0.** [Report](research/adapter-others.md), [fixture](research/fixtures/pi-sample.jsonl).
 
@@ -192,6 +211,9 @@ by a driver landing; only the row below changes.
 | `mcp` SDK in an extra, dual-era server (acp-mcp); stdio shim (adapter-codex) | Stdlib tools-only HTTP server, stdio shim as fallback, `server/discover` -32601 | Spike, architecture §10 |
 | Parking unproven; cold resume untested (index, distributed-primitives) | Parking clean 10 of 10 with the tool visible. Cold resume 1 trial each | Spike |
 | 3 of 4 `codex exec` stdio runs sent no MCP tools (acp-mcp) | Not reproduced over HTTP with a slow `initialize` (1 trial). `exec` and stdio were not rerun, so it stays open | Spike |
+| Deliver with `turn/start` idle, `turn/steer` active, and retry on "no active turn" (adapter-codex, implication 7) | `turn/start` alone does both, and answers with the turn it joined | Driver probe on 0.164.0, FakeModel |
+| Approval policy `never` with `approve` for tools (spike's settings) | `on-request`: every approval goes through the runtime | Owner's ruling |
+| Codex child usage: "take increases in `total` per thread" | Holds, and a resume sends the old `total` again, which is no spending | Driver probe on 0.164.0, FakeModel |
 | Claude launch omits `--setting-sources` (adapter-claude-code) | True. A role runs in the user's own setup, and a sealed launch belongs to a role's trainable profile at M3. The spike's `--strict-mcp-config --setting-sources= --permission-prompts none` is not the driver's launch | Owner's ruling |
 | ACP untested past `initialize` on real agents (index) | Holds for the Claude and Codex adapters. OpenCode and `openhands acp` ran prompts on loopback | Recorded frames |
 
@@ -242,12 +264,12 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Tool configuration | Namespaced | Ours arrive as `mcp__<ns>__<tool>` and are pre-approved by `--allowedTools`. The user's servers stay, and a sealed launch belongs to a role's trainable profile at M3 |
 | | Hooks | Passthrough | User hooks still run, and we register none. A sealed launch belongs to a role's trainable profile at M3. A known limit: a headless harness shows no trust dialog, so a project's own hooks and `.mcp.json` run as they would under `claude -p`, in an untrusted folder too |
 | | Session compaction | Passthrough, observed | `compact_boundary`, `PreCompact`, `PostCompact` [L]. Whether their fields name what was forgotten: not determined. Compaction also fires a false `SubagentStop`: it is not a child. Auto compaction was not probed |
-| `codex` | Project instructions | Not determined | `developerInstructions` exists on `thread/start`, and `/init` exists in the TUI. How native project files load on app-server was not researched |
+| `codex` | Project instructions | Passthrough | A project's `AGENTS.md` reached the model under the driver's launch. Ours go in `developerInstructions` on `thread/start` and `thread/resume`, after the user's `developer_instructions`, which that field would otherwise replace [L] |
 | | Native skills | Passthrough in everyday mode | A shared `CODEX_HOME` inherits skills and plugins. A per-run `CODEX_HOME` has none |
 | | Slash commands | Not determined | 70+ in the TUI. Their reach over app-server was not researched. Compaction has its own RPC |
-| | Tool configuration | Namespaced | `thread/start.config` overlays the user's config, so the user's servers still start. Ours arrive as namespace `mcp__<ns>`. Never `codex mcp add` or a config write. Project `.codex/config.toml` loads only when trusted |
+| | Tool configuration | Namespaced | `thread/start.config` overlays the user's config, so the user's servers still start, and one of theirs that asks reaches the runtime as an approval. Ours arrive as namespace `mcp__<ns>`. Never `codex mcp add` or a config write. Project `.codex/config.toml` loads only when trusted |
 | | Hooks | Not determined | Listed in the TUI. Behavior under app-server was not researched |
-| | Session compaction | Passthrough, opaque | `thread/compact/start` is stable. Compaction runs as hidden internal work (`x-openai-subagent: compact`). What it forgets was not observed |
+| | Session compaction | Passthrough, opaque | `thread/compact/start` is stable, and the driver does not call it. Compaction runs as hidden internal work (`x-openai-subagent: compact`). What it forgets is not said, so `compaction_opaque` stands. Auto compaction ran on FakeModel, and not on a real model |
 | `pi` | Project instructions | Not determined | The assembled prompt is visible as a `role: system` message with named `sections`. `--append-system-prompt` exists [S], and was not run under `--mode rpc`. The file rules were not researched |
 | | Native skills | Not determined | Documented upstream. Interaction was not researched |
 | | Slash commands | Not determined | Interactive surface. Their reach over RPC was not researched |
@@ -387,11 +409,14 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Long parks: nothing parked beyond seconds. Cache cost after expiry, long blocking `wait` calls and client tool timeouts are untested.
 - Fallback, cold resume, token exclusion, slow init and shell socket are 1 trial each.
 - Several agents in one `codex app-server`, with distinct tokens.
-- Codex child agents on a real model. Real v2 subagent flow may differ from the stub.
+- Codex child agents on a real model. Real v2 subagent flow may differ from the stub, and only v1 has run through the driver.
+- Auto compaction, a turn that fails and a child's approval on a real Codex model, and `fileChange` items anywhere: FakeModel offered no patch tool, so a stand-in is all that has shown one.
+- Whether a steer that ended a model call on FakeModel does so on a real model.
+- An agent that took no turn cannot resume on Claude Code or Codex, so it is `lost` rather than brought back. The runtime has no fresh start for one.
 - Unix sockets from the Codex sandboxed shell, the `read-only` sandbox, and blocked user namespaces.
 - `omit_tools_from` durability: under-development `code_mode_only_strict_3p_tools` ignores it, and the model catalog is served remotely, so a live first-turn check belongs in conformance.
 - Why `accept` gave two outcomes on identical Codex input.
-- Whether `thread/resume` restores thread-level `config`. We resend it.
+- Whether `thread/resume` restores thread-level `config`. We resend it, and our tool, the effort and the preamble held on a resume.
 - `--bare` becoming the default for `claude -p`: announced with no version, and it stops reading a native login.
 - Auto compaction, nested subagents and parallel tool batches on Claude Code. Crash recovery there ran on FakeModel only, and a resume on a real model only after an owner's stop.
 - `tool_timeout_s` on Claude Code: no cap was measured, so none is declared.

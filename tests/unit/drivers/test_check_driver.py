@@ -75,6 +75,7 @@ def test_every_check_a_level_reads_exists():
         "resume",
         "approval_answered",
         "steers_at_declared_boundary",
+        "interrupt_keeps_a_steer",
         "measures_reported",
         "preamble_once_per_request",
         "tool_item_carries_its_anchor",
@@ -281,6 +282,18 @@ async def test_a_steer_at_a_boundary_it_does_not_honor_fails(tmp_path):
     result = await check(Tardy, tmp_path)
 
     assert result.get("steers_at_declared_boundary").state == "failed"
+
+
+async def test_a_steer_an_interrupt_drops_fails(tmp_path):
+    class Forgetful(Filtered):
+        async def interrupt(self):
+            receipt = await super().interrupt()
+            self._pending.clear()
+            return receipt
+
+    result = await check(Forgetful, tmp_path)
+
+    assert result.get("interrupt_keeps_a_steer").state == "failed"
 
 
 async def test_a_one_shot_that_lives_on_fails(tmp_path):

@@ -96,7 +96,8 @@ class AgentSpec(Model):
     """One agent to start, or to resume from the native id in `resume`.
 
     `folder` is the agent's own directory, for its record, log and native home. `access` maps variable names to model
-    access, URLs included, and reaches only the harness's environment. `effort` goes to the harness as it stands.
+    access, URLs included, and reaches only the harness's environment. `effort` goes to the harness as it stands, and
+    `sandbox` is one of the values the driver declared.
     """
 
     agent: str
@@ -106,6 +107,7 @@ class AgentSpec(Model):
     folder: Path
     model: str | None = None
     effort: str | None = None
+    sandbox: str | None = None
     tools: ToolBinding | None = None
     access: Mapping[str, Secret] = {}
     env: Mapping[str, str] = {}

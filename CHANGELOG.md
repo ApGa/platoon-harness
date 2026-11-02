@@ -32,6 +32,11 @@
 
 - The `claude` driver: `claude -p` in stream-json with the control protocol on the same pipes, in the user's own setup, with every
   approval through the runtime. `check_driver` passes on the real binary against FakeModel, at 2.1.316.
+- The `codex` driver: `codex app-server` on stdio, in the user's own setup, with every approval through the runtime. `check_driver`
+  passes on the real binary against FakeModel, at 0.164.0.
+- `sandbox` on `AgentSpec`, from the role.
+- `check_driver` row `interrupt_keeps_a_steer`: a delivery handed over inside a turn outlives an interrupt, whatever the harness does
+  with it.
 - `effort` on `Role` and `AgentSpec`, handed to the harness as it stands. A driver that cannot honor one fails the spawn.
 - `Session.start(team, plan_login=True)`. A driver reports the login kind, and `prepare` refuses several agents on one plan login
   without it, naming the fix.

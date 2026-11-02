@@ -19,7 +19,7 @@ pass, and the row says which kind), **experimental** (works, but rests on an uns
 | Case | State | Evidence |
 |---|---|---|
 | SDK independence | tested | `tests/integration/test_independence.py`: a headless script importing only `platoon_harness` runs a session in a subprocess, on the `exec` driver, and imported no CLI, Textual, Platoon, Torch or Tinker |
-| Mixed backends | planned | |
+| Mixed backends | experimental | `tests/live/test_codex.py`, live, once: a Claude Code agent and a Codex agent in one session on their own logins, with a message each way and a board entry, `plan_login=True` said aloud. `agent.started` journals what each declared and earned, and no client draws that yet |
 | End-to-end collaboration | tested | `tests/integration/test_vertical_slice.py`, `test_detached.py`: spawn, post, query, claim, message, completion and a final artifact. Scripted harnesses on the real tool plane, in-process and as real wire processes. One real harness ran one agent in a session, below |
 | Human parity | planned | |
 | Claim race | tested | `tests/unit/primitives/test_tasks.py`, `test_claim_race_*`, including a hypothesis interleaving. Concurrent commands on one writer; no real harness |
@@ -141,7 +141,7 @@ under Runtime below, so every effect is now performed. One real harness has met 
 ### Tool plane (`platoon_harness.tools`)
 
 Rows marked tested have CPU-only tests in `tests/unit/tools`, against a real `Kernel` with `PRIMITIVES`, a compiled team and a real
-socket on port 0. Real Claude Code has run against this server, as a row says. The spike's prototype met Codex, and its log is replayed here.
+socket on port 0. Real Claude Code and real Codex have run against this server, as a row says. The spike's prototype log of Codex is replayed here too.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -165,17 +165,17 @@ socket on port 0. Real Claude Code has run against this server, as a row says. T
 | The stdio shim, with a call waiting out a hold beside others | tested | `test_shim.py`, real processes, on both interpreters. No real harness has run it |
 | The official MCP client | tested | `tests/conformance/test_mcp_client.py`, slow, through `uv run --isolated --with 'mcp>=2.3,<3'`. `mcp` 2.3.0 connected in `auto`, which took -32601 for `server/discover` and fell back to `initialize`, and in `legacy`, negotiated `2025-11-25`, pinged, listed closed schemas and `readOnlyHint`, called tools, read a refused spoof as `isError`, and kept a `?surface=` in its URL. It sent no `GET` or `DELETE`. Its `2026-07-28` mode is not claimed and not run |
 | Real Claude Code against this server | tested | `tests/integration/test_claude.py`, slow, on FakeModel: `peers` and a `wait` that parks, through a URL with `?surface=`, its `toolUseId` kept as `native`. `tests/live/test_claude.py` on `claude-haiku-5-5`: `board_post` |
-| Real Codex against this server | planned | Needs its driver. The spike's prototype passed |
+| Real Codex against this server | tested | `tests/integration/test_codex.py`, slow, on FakeModel: `channel_list` and a `wait` that parks, through a URL with `?surface=`, its `callId` kept as `native`. `tests/live/test_codex.py` on `gpt-6-luna`: `board_post` on a first turn, `message_send` and `board_get` in a mixed team, each under `exec-<uuid>`, and no discovery call |
 
 ### Drivers (`platoon_harness.drivers`, `platoon_harness.rpc`, `platoon_harness.testing`)
 
 Rows marked tested have tests in `tests/unit/drivers`, `tests/conformance` and `tests/integration`, on real subprocesses and real sockets
 on Linux. Nothing here has run on macOS. The host calls these drivers now, so `ScriptedDriver`, `WireDriver`, `ExecDriver` and the
-`claude` driver have run inside a session. The drivers for `codex` and `pi` do not exist.
+`claude` and `codex` drivers have run inside a session. The driver for `pi` does not exist.
 
 | Capability | State | Evidence |
 |---|---|---|
-| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames: no Codex session has run on it. ACP does not use it yet |
+| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames, and `codex app-server` has run on it, on FakeModel and on a real model. ACP does not use it yet |
 | The contract: seven methods, `DriverInfo`, `AgentSpec`, `ToolBinding`, `Delivery`, `Receipt`, `Started`, every field of section 9.2 | tested | `test_public_api.py`, `tests/unit/primitives/test_reports.py`, and every driver below |
 | One closed report vocabulary, serializable for the wire, with a path through `agent.report` for each | tested | `tests/unit/primitives/test_reports.py`, against the architecture's list |
 | `agent.start`: what the runtime concluded, which a report has no field for, so no driver can claim a level or a capability | tested | `test_reports.py`, `test_wire.py`, with a real program trying |
@@ -196,13 +196,15 @@ on Linux. Nothing here has run on macOS. The host calls these drivers now, so `S
 | `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`, and launched from a role in `tests/integration/` |
 | `ScriptedDriver`: every step, capabilities as data, real MCP, real model calls, resume | tested | `test_scripted.py`, and against the real `ToolServer` in `test_scripted_tool_plane.py` |
 | `FakeModel`: three dialects, whole and streamed, a script, a log of what arrived | tested | `test_fake_model.py`. `tests/integration/test_fake_model_clients.py`, marked `slow`, ran with dummy keys: Codex 0.164.0 and Claude Code 2.1.316 on text and a tool call, pi 1.4.0 on text. It skips a client that is not installed, and a skip proves nothing |
-| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies, an interrupt reported as anything but `interrupted` among them. It passes on `ScriptedDriver`, a wire program, `exec`, and `claude` on the real 2.1.316 binary against FakeModel |
-| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, token totals, an unset model refused where access was given, a native child, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass what they can reach. `claude` passes every one on the real binary, which is what gives it `operational`. `tool` names our tool for a harness that prefixes it |
+| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies, an interrupt reported as anything but `interrupted` among them. It passes on `ScriptedDriver`, a wire program, `exec`, `claude` on the real 2.1.316 binary against FakeModel, and `codex` on the real 0.164.0 binary against FakeModel |
+| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, a steer that outlives an interrupt, token totals, an unset model refused where access was given, a native child, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass what they can reach. `claude` and `codex` pass every one that applies on the real binary, which is what gives each `operational`. `codex` has no `call_id`, so that row skips, and a skip proves nothing. `tool` names our tool for a harness that prefixes it |
 | A stop that came to `SIGKILL` reports `crash_window` | tested | `test_process.py`, on a process that ignores `SIGTERM` |
-| What `check_driver` cannot prove yet | deferred | `tool_timeout_s`, `coverage` and `sandboxes`. The `declared_but_unproven` check names them when declared, and always skips. `claude` declares `coverage` from its stream and the frames probed, so that row names it |
+| What `check_driver` cannot prove yet | deferred | `tool_timeout_s`, `coverage` and `sandboxes`. The `declared_but_unproven` check names them when declared, and always skips. `claude` and `codex` declare `coverage` from the frames probed, so that row names it. `codex` declares `sandboxes` too, and each value ran on the real binary in `test_codex.py`, which no check does |
 | The `claude` driver: `claude -p` stream-json and the control protocol, every report of the vocabulary but `changes`, resume, interrupt, approvals through the runtime, a steer at a tool boundary, `reconcile` from the transcript, and `stop` that ends a running tool | experimental | Rests on `--permission-prompt-tool stdio`, `command_lifecycle`, `get_settings`, `model_usage_since_last_result` and the transcript, all undocumented upstream. `tests/unit/drivers/test_claude.py` on a stand-in; `tests/integration/test_claude.py`, slow, on the real binary against FakeModel, every `check_driver` row; `tests/live/test_claude.py`, live, on `claude-haiku-5-5`. It skips where the binary is absent, and a skip proves nothing. Auto compaction, nested children and parallel tool batches have not run |
+| The `codex` driver: `codex app-server` on one `Peer`, every report of the vocabulary but `changes`, resume, interrupt across native children, approvals through the runtime, a steer at a model call, one an interrupt drops sent again, `reconcile` from the thread, and `stop` that ends a running tool | experimental | The app-server is labelled Experimental upstream. `tests/unit/drivers/test_codex.py` on a stand-in; `tests/integration/test_codex.py`, slow, on the real binary against FakeModel, every `check_driver` row; `tests/live/test_codex.py`, live, on `gpt-6-luna`. It skips where the binary is absent, and a skip proves nothing. Auto compaction ran on FakeModel only. A child ran on FakeModel only, at v1. A `fileChange` item has been seen only on the stand-in, as has a request for permissions |
+| `sandbox` on `AgentSpec`, from the role, one of the values a driver declared and left to the harness with none | tested | `test_opening.py` for the refusal, and `test_codex.py` on the real binary, each value on a shell write and a role's through a session |
 | `effort` on `Role` and `AgentSpec`, handed over as it stands, and refused by a driver that cannot honor it | tested | `test_claude.py`, `test_exec.py`, `test_scripted.py`, `tests/unit/runtime/test_host.py`, and on the real binary, where an effort it would drop is refused. A wire program must refuse one itself, and `check_driver` has no row for that |
-| A role with no auth profile signing in as the harness does in the shell | tested | `test_claude.py` for `claude`: its home variable, proxies and CA file pass by name, and a provider key does not. The machine that ran the live test sets none of them, so those paths rest on that test alone |
+| A role with no auth profile signing in as the harness does in the shell | tested | `test_claude.py` and `test_codex.py`, each for its own: a home variable, proxies and a CA file pass by name, for `codex` the session bus a keyring login needs too, and a provider key does not. The machine that ran the live tests sets none of them, so those paths rest on those tests alone |
 | `check_extension`: names, naming law, schemas, descriptions, public API only, rebuild equals live | tested | `test_check_extension.py`, each with an extension that breaks it |
 | `docs/drivers.md`: its wire driver runs through the conformance suite, and its tables match the code | tested | `test_docs.py` |
 | The SDK imports nothing but the standard library and pydantic, and nothing public holds a local path | tested | `test_boundaries.py`, by AST and by pattern. A pattern catches what it knows |
@@ -210,8 +212,8 @@ on Linux. Nothing here has run on macOS. The host calls these drivers now, so `S
 ### Runtime (`platoon_harness.runtime`, `platoon_harness.session`)
 
 Rows marked tested have tests in `tests/unit/runtime` and `tests/integration`, on real sockets and real subprocesses on Linux, with
-scripted harnesses on the real tool plane and wire programs as processes. One real harness has run in a session, on a real model and on
-FakeModel: one Claude Code agent. Nothing has run with several, and nothing here has run on macOS. The fast suite covers everything below except a second crash during recovery, the kill matrix and the sweep of crash
+scripted harnesses on the real tool plane and wire programs as processes. Two real harnesses have run in a session, on a real model and on
+FakeModel: one agent of each, and one mixed team of two on real models. Nothing has run with more, and nothing here has run on macOS. The fast suite covers everything below except a second crash during recovery, the kill matrix and the sweep of crash
 points, which are marked `slow`.
 
 | Capability | State | Evidence |
