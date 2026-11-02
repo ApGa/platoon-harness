@@ -25,11 +25,15 @@ log = logging.getLogger("platoon_harness.runtime")
 __all__ = ["recover_agents"]
 
 
+async def _must(host: Host, op: str, args: dict[str, Any]) -> None:
+    outcome = await host.insist(op, args)
+    if outcome.refusal is not None:
+        raise Refused.of(outcome.refusal)
+
+
 async def _say(host: Host, agent: str, *reports: Report) -> None:
     for report in reports:
-        outcome = await host.insist("agent.report", {"agent": agent, "report": report})
-        if outcome.refusal is not None:
-            raise Refused.of(outcome.refusal)
+        await _must(host, "agent.report", {"agent": agent, "report": report})
 
 
 async def _reap(host: Host, folder: Path, agent: dict[str, Any]) -> None:
@@ -39,15 +43,15 @@ async def _reap(host: Host, folder: Path, agent: dict[str, Any]) -> None:
 
 
 async def _resume(host: Host, agent: dict[str, Any]) -> None:
-    """Bring a harness back on a fresh credential. If its goal never began, it is told again, since a resumed harness
-    waits to be told."""
+    """Bring a harness back on a fresh credential. It is told what it cannot know, a goal that never began or a turn
+    that was cut off, since a resumed harness waits to be told, and a resume is someone wanting the session to go on."""
     name, role, native = agent["name"], agent["role"], agent["native"]
     if native is None or not (await host.describe(role)).capabilities.resume:
         raise DriverError("its harness cannot resume")
     admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
     await host.connect(name, role, admission, resume=native)
-    if agent["unbegun"]:
-        await host.insist("agent.retell", {"agent": name})
+    if agent["unbegun"] or agent["cut_off"]:
+        await _must(host, "agent.retell", {"agent": name})
 
 
 async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: bool) -> None:

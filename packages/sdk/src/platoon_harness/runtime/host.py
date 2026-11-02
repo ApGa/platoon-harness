@@ -27,12 +27,14 @@ from platoon_harness.drivers import (
     Report,
     Started,
     ToolBinding,
+    TurnEnded,
     unknown_frame,
 )
 from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token
+from platoon_harness.primitives import OWNER_STOP
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Team
 from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, list_tools, preamble, shell_name
@@ -410,6 +412,8 @@ class Host:
             case Exited(reason=reason) if not link.ready.is_set():
                 link.refuse(reason)  # Nobody has heard of this harness, so `connect` fails, which says so.
                 return
+            case TurnEnded(reason="interrupted") if self._closing:
+                report = TurnEnded(reason=OWNER_STOP)
             case Item(body=str(text)):
                 sha256 = await self._kernel.put_body(text.encode(errors="replace"))
                 report = report.model_copy(update={"body": f"sha256:{sha256}"})
@@ -480,7 +484,8 @@ class Host:
     # Shutdown.
 
     def closing(self) -> None:
-        """Start nothing new but interrupts, and take no harness's end from here on as an agent's."""
+        """Start nothing new but interrupts, and take no harness's end from here on as an agent's. A turn interrupted
+        from here on was the owner's doing, which a resume tells its agent."""
         self._closing = True
         for link in self._links.values():
             link.leaving = True

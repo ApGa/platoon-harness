@@ -68,6 +68,8 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
 - `ph <tool> --help` for an unknown tool shows what there is.
+- A turn a crash or the owner's stop cut off is told to its agent once, on resume, with a wake, and the words keep the two apart. A
+  lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
 - `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
   It says `needs_human`. A wake the budget refused keeps a session from closing as `settled`.
 - A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
@@ -103,6 +105,8 @@
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
 - `session.status` says `stalled`.
+- `agent.retell` also tells a resumed harness its last turn was cut off, once, which journals `agent.told`. `Agent` has `cut_off`.
+- `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.
 - An agent that has finished can spawn nothing.
 - `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
 - `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.

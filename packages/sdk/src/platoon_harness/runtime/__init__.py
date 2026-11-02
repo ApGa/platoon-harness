@@ -12,7 +12,7 @@ from platoon_harness.config import Manifest
 from platoon_harness.drivers import TurnEnded
 from platoon_harness.extensions import Installed
 from platoon_harness.kernel import Clock, Daemon, Extension, Kernel, Principal, Refused, first, hash_token
-from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives import OWNER_STOP, PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
 
@@ -154,7 +154,7 @@ class Runtime:
         kernel, host = self.kernel, self.host
         for record in self._records():
             if record["turn"] is not None:
-                report = TurnEnded(reason="the owner stopped")
+                report = TurnEnded(reason=OWNER_STOP)
                 await host.insist("agent.report", {"agent": record["name"], "report": report})
         requested = kernel.query(kernel.runtime, "effect.list", {"state": "requested"}).result
         for row in (row for row in requested if row["kind"] == "deliver"):

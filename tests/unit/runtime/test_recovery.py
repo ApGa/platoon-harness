@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Refused, Session, Team
 from platoon_harness.drivers import (
     AgentSpec,
     Capabilities,
@@ -80,6 +80,19 @@ class Knowing(ScriptedDriver):
 
 def knowing(found: str) -> type[Knowing]:
     return type("Answered", (Knowing,), {"answer_found": found})
+
+
+class ComesBack(ScriptedDriver):
+    """A harness that hangs in its first turn, or does `first`, and once resumed does the rest of its script."""
+
+    def __init__(self, *resumed: Any, first: Any = None, **options: Any) -> None:
+        super().__init__([first or [Hang()]], **options)
+        self._resumed = resumed
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        if spec.resume is not None:
+            self._turns = iter(self._resumed)
+        return await super().start(spec, report)
 
 
 def solo_with(make: Any, **role: Any) -> Team:
@@ -653,15 +666,231 @@ async def test_a_turn_lost_after_a_finish_still_finishes_the_agent(tmp_path):
 
 
 async def test_an_approval_pending_at_a_crash_asks_nobody_afterwards(tmp_path):
-    session = await Session.start(solo_with(lambda: ScriptedDriver([[Ask("may I?")]])), name="s", root=tmp_path)
+    session = await Session.start(solo_with(lambda: ComesBack(first=[Ask("may I?")])), name="s", root=tmp_path)
     await session.send("@bob", "go")
-    await until(session.approvals, session)
+    asked = (await until(session.approvals, session))[0]
     await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
         ending = await asyncio.wait_for(session.settled(), SECONDS)
 
+        assert await session.approvals() == []
+        with pytest.raises(Refused) as refused:
+            await session.resolve(asked["id"], "allow", expected_version=asked["version"])
+
     assert ending.reason != "needs_human"
+    assert refused.value.refusal.code == "conflict"
+
+
+# A turn that was cut off.
+
+
+def comes_back(**role: Any) -> Team:
+    return solo_with(lambda: ComesBack([Say("I looked first")]), **role)
+
+
+async def cut_off_by_a_crash(tmp_path: Path, team: Team) -> None:
+    session = await Session.start(team, name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await abandon(session)
+
+
+async def notices(session: Session) -> list[Any]:
+    return [event for event in await of_type(session, "message.sent") if "cut off" in event.gist]
+
+
+async def test_an_agent_whose_turn_was_lost_is_told_and_woken_on_resume(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back())
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+
+    assert items[-1].gist == "I looked first"
+    assert [(event.stream, event.data["sender"]) for event in told] == [("inbox/bob", "runtime")]
+
+
+async def test_a_crash_says_what_a_resumed_harness_may_also_show_and_does_not_contradict_it(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back())
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session)
+        told = (await notices(session))[0].gist
+
+    for words in ("cut off by a crash", "in part or in full", "unfinished, failed or interrupted", "before you repeat"):
+        assert words in told
+
+
+async def test_a_turn_stopped_by_the_owner_is_told_and_woken_on_resume(tmp_path):
+    async with Session.start(comes_back(), name="s", root=tmp_path) as session:
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+
+    assert items[-1].gist == "I looked first"
+    assert [event.gist.partition(".")[0] for event in told] == [
+        "Your last turn was cut off by the owner stopping the session"
+    ]
+
+
+async def test_a_turn_a_stop_ran_out_of_time_on_is_told_as_a_stop(tmp_path):
+    class Deaf(ComesBack):
+        async def interrupt(self) -> Receipt:
+            return Receipt(boundary="turn")
+
+    async with Session.start(solo_with(lambda: Deaf([Say("back")])), name="s", root=tmp_path) as session:
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+        await session.leave(grace=0.01)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+
+    assert ["owner stopping" in event.gist for event in told] == [True]
+
+
+async def test_a_crash_during_a_stop_still_tells_an_agent_its_stop_cut_it_off(tmp_path):
+    session = await Session.start(comes_back(), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    runtime = session._runtime
+    runtime.host.closing()
+    await session.interrupt("@bob")
+    await in_state(session, "bob", "idle")
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+
+    assert ["owner stopping" in event.gist for event in told] == [True]
+
+
+async def test_a_human_s_interrupt_stays_one_and_nobody_is_told_or_woken_on_resume(tmp_path):
+    session = await Session.start(comes_back(), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await session.interrupt("@bob")
+    await in_state(session, "bob", "idle")
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await asyncio.wait_for(session.settled(), SECONDS)
+        told = await notices(session)
+        turns = await of_type(session, "turn.started")
+
+    assert told == [] and len(turns) == 1
+
+
+async def test_a_turn_that_ended_before_the_crash_is_nothing_to_tell(tmp_path):
+    session = await Session.start(solo_with(lambda: ScriptedDriver([[Say("done")]])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        assert await notices(session) == []
+
+
+async def test_a_session_that_stopped_accepting_work_tells_nobody(tmp_path):
+    session = await Session.start(comes_back(), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await session.close()
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        assert await notices(session) == []
+        assert len(await of_type(session, "turn.started")) == 1
+
+
+async def test_a_harness_that_cannot_resume_is_lost_and_told_nothing(tmp_path):
+    team = solo_with(lambda: ComesBack(capabilities=NO_RESUME))
+    await cut_off_by_a_crash(tmp_path, team)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "ended")
+        assert await notices(session) == []
+
+
+async def test_the_notice_is_not_sent_twice_across_a_second_crash_during_recovery(tmp_path):
+    took = asyncio.Event()
+
+    class QuietOnceResumed(ComesBack):
+        async def deliver(self, delivery: Delivery) -> Receipt:
+            if self._spec.resume is not None and not took.is_set():
+                took.set()
+                return Receipt(boundary=delivery.boundary)
+            return await super().deliver(delivery)
+
+    await cut_off_by_a_crash(tmp_path, solo_with(lambda: QuietOnceResumed([Say("I looked first")])))
+    session = await Session.resume("s", root=tmp_path)
+    await asyncio.wait_for(took.wait(), SECONDS)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+        offers = await of_type(session, "context.offered")
+
+    assert items[-1].gist == "I looked first"
+    assert len(told) == 1
+    ref = f"{told[0].stream}@{told[0].version}"
+    assert len([offer for offer in offers if ref in [item["ref"] for item in offer.data["items"]]]) == 2
+
+
+async def test_a_wake_the_budget_refuses_ends_the_session_needs_human(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+        told = await notices(session)
+        kinds = {row["kind"] for row in await session.attention()}
+
+    assert ending.reason == "needs_human"
+    assert len(told) == 1
+    assert "budget" in kinds
+
+
+async def test_a_budget_that_falls_back_to_turns_still_wakes_an_agent_after_a_crash(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "turns": 5, "fallback": "turns"}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+
+    assert items[-1].gist == "I looked first"
+
+
+async def test_raising_the_budget_lets_the_wake_it_refused_go_on(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "wake.refused"), session)
+
+        await session.set_budget("role:bob", limits={"tokens": 1000, "turns": 5}, fallback="turns")
+
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+
+    assert items[-1].gist == "I looked first"
+
+
+async def test_a_lost_turn_stays_in_attention_until_its_agent_is_back_in_a_turn(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "wake.refused"), session)
+        assert "turn/bob" in {row["id"] for row in await session.attention()}
+
+        await session.set_budget("role:bob", limits={"tokens": 1000, "turns": 5}, fallback="turns")
+
+        await until(lambda: of_type(session, "turn.started"), session, lambda found: len(found) == 2)
+        assert "turn/bob" not in {row["id"] for row in await session.attention()}
 
 
 # What nobody may wait on for ever.

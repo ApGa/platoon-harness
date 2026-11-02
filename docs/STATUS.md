@@ -113,7 +113,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
 | Completion: `settled`, `until`, `session.close`, `session.cancel`, resuming a stopped session, episodes | tested | `test_lifecycle.py` |
 | Closing a headless session at `until` | tested | `tests/unit/runtime/test_session.py`: `settled()` closes, and waits for it to drain |
-| Approvals: four facts, one winner, per-role policy journaled at open, moot with the turn that asked | tested | `test_approvals.py`, `tests/unit/runtime/test_recovery.py` |
+| Approvals: four facts, one winner, per-role policy journaled at open, moot with the turn that asked, and lowered in `attention` with it, across a crash too | tested | `test_approvals.py`, `tests/unit/runtime/test_recovery.py` |
 | An `ask` no human can answer | tested | `settled()` returns `needs_human`, never a hang: `test_session.py`. The exit code itself arrives with the headless CLI |
 | A session settled short of `until` with nothing scheduled says `stalled`, and `settled()` returns `needs_human`, with no timeout too | tested | `test_lifecycle.py` against each thing scheduled, `tests/unit/runtime/test_session.py` against a wall limit, a wait's deadline, `agent.conclude`, two agents parked on each other, and a guest that acts, or leaves having done nothing. An extension daemon's private schedule cannot be seen |
 | Budgets: limits, reservations, reconciliation, labels with `counted` for what the runtime counts, no amount for a unit nobody measured, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
@@ -194,8 +194,8 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 
 Rows marked tested have tests in `tests/unit/runtime` and `tests/integration`, on real sockets and real subprocesses on Linux, with
 scripted harnesses on the real tool plane and wire programs as processes. **No real harness has run in a session,** and nothing here
-has run on macOS. The fast suite covers everything below except a second crash during recovery and the kill matrix, which are marked
-`slow`.
+has run on macOS. The fast suite covers everything below except a second crash during recovery, the kill matrix and the sweep of crash
+points, which are marked `slow`.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -219,6 +219,9 @@ has run on macOS. The fast suite covers everything below except a second crash d
 | Every process tree gone with its agent, a wire program's own harness among them | tested | `test_host.py`, on real processes |
 | Links that outlive a daemon restart | tested | `test_host.py` |
 | Several runtimes in one process, nothing global, signals only in the entry point | tested | `test_host.py`, `test_public_api.py` |
+| A turn cut off by a crash or by the owner's stop told once on resume, in words that keep the two apart, with a wake, only while the session accepts work, and not twice across a second crash | tested | `test_recovery.py`, `test_lifecycle.py`, and `kill -9` in `tests/integration/test_crash.py`, where nobody has to say anything for the work to finish. No real harness has seen the notice, so whether one reads it as meant, or shows something it does not cover, is unknown |
+| A wake the budget refuses after a crash ends the session `needs_human`, and raising the budget lets it go on | tested | `test_recovery.py`, by name |
+| Sweep of crash points: cut a journal at each of the 153 command boundaries of one team's run, resume, and find no exception, no effect left `started`, nothing owed, and rebuild equal to live | tested | `tests/integration/test_crash_points.py`, slow, on a driver that resumes and idles. It cuts the journal alone: blobs, agent folders and process records stay from a later time, so it says nothing of them. One scenario |
 | Per-agent recovery: reap, resume, reconcile, on a fresh credential, one broken driver losing one agent, a `reconcile` that hangs, and a stop asked during it | tested | `test_recovery.py` for each effect kind, `tests/integration/test_crash.py` and the kill matrix for `kill -9` on real processes. Grace is the host's `GRACE` per group |
 | A group that cannot be proved ours left alone and named, for an agent that has ended too | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
 | `Session`: `start`, `attach`, `resume`, as `await` or `async with`, one link in two forms | tested | `test_session.py`, `test_control.py` |

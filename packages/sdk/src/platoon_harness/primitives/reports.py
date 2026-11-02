@@ -12,6 +12,7 @@ from .budgets import Label
 from .common import Gist, Name
 
 RAW_LIMIT = 2048
+OWNER_STOP = "stopped by its owner"
 
 Boundary = Literal["turn", "tool", "model_call"]
 Plane = Literal["control", "tool", "model"]
@@ -64,6 +65,9 @@ class TurnStarted(Args):
 
 
 class TurnEnded(Args):
+    """`stopped` if it stopped on its own, `interrupted` if someone stopped it, `OWNER_STOP` if a shutdown did, and
+    otherwise what went wrong. Only the runtime says `OWNER_STOP`."""
+
     type: Literal["turn.ended"] = "turn.ended"
     reason: Annotated[str, Field(max_length=256)] = "stopped"
 

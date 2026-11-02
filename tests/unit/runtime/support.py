@@ -1,6 +1,7 @@
 """Teams made in a test. A role's harness is a name, so a driver built here is reached as an attribute of this file."""
 
 import asyncio
+import sqlite3
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,30 @@ async def rebuilt_equals_live(folder: Path) -> None:
     await kernel.rebuild_all()
     kernel.close()
     assert rows() == before
+
+
+def boundaries(folder: Path) -> list[int]:
+    """Where a journal can be cut: each command ends on one event, and one writer commits them in order."""
+    db = sqlite3.connect(folder / "journal.sqlite")
+    found = [row[0] for row in db.execute("SELECT seq FROM events WHERE outcome IS NOT NULL ORDER BY seq")]
+    db.close()
+    return found
+
+
+def cut(folder: Path, seq: int) -> None:
+    """Leave a journal as a crash just past `seq` would, for the journal only: blobs and agent folders stay as they are.
+    Law 1 aborts this, so the triggers that enforce it step aside."""
+    db = sqlite3.connect(folder / "journal.sqlite")
+    triggers = db.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'events'"
+    ).fetchall()
+    for name, _ in triggers:
+        db.execute(f"DROP TRIGGER {name}")
+    db.execute("DELETE FROM events WHERE seq > ?", (seq,))
+    for _, sql in triggers:
+        db.execute(sql)
+    db.commit()
+    db.close()
 
 
 async def until[T](ask: Callable[[], Awaitable[T]], session: Session, holds: Callable[[T], Any] = bool) -> T:

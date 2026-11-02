@@ -115,7 +115,7 @@ class Attention(View):
 
     @fold("turn.lost")
     def turn_lost(self, event: Event) -> None:
-        """Nobody knows what a lost turn did, and nothing will wake its agent to find out."""
+        """Nobody knows what a lost turn did, until its agent's next turn has looked."""
         self._raise(f"turn/{event.agent}", "uncertain", event)
 
     @fold("turn.ended", "turn.lost")

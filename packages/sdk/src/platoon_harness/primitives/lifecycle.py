@@ -28,6 +28,7 @@ from .common import AgentName, Body, Gist, Name, address
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
+    OWNER_STOP,
     ApprovalRequested,
     Capabilities,
     Changed,
@@ -55,6 +56,12 @@ Status = Literal["finished", "cancelled", "retired", "lost", "failed"]
 
 _FINISH_SECONDS = 60.0
 _REASON_LIMIT = 1024
+_ON_PURPOSE = ("interrupted", OWNER_STOP)
+_CUT_OFF = (
+    "Your last turn was cut off by {cause}. Its tool calls may have run in part or in full, even if your history shows "
+    "them unfinished, failed or interrupted, or not at all. Nothing was repeated. Check before you repeat anything, "
+    "then carry on."
+)
 
 
 def _inbox_of(principal: str) -> str:
@@ -392,9 +399,15 @@ def start(txn: Txn, a: Start) -> None:
 
 @op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)
 def retell(txn: Txn, a: Named) -> None:
-    """Hand a resumed harness the goal it never began, as a delivery, since a resume starts no turn of its own."""
+    """Tell a resumed harness what it has no way to know, as a delivery, since a resume starts no turn of its own: the
+    goal it never began, or that its last turn was cut off. That is told once, however often recovery runs."""
     agent = _live(txn, a.agent)
-    post(txn, f"inbox/{agent.name}", agent.goal, body=agent.goal_body, wake=True)
+    inbox = f"inbox/{agent.name}"
+    if agent.unbegun:
+        post(txn, inbox, agent.goal, body=agent.goal_body, wake=True)
+    elif agent.cut_off is not None:
+        post(txn, inbox, _CUT_OFF.format(cause=agent.cut_off), wake=True)
+        txn.emit("agent.told", f"agent/{agent.name}", gist=f"{agent.name} told it was cut off", agent=agent.name)
 
 
 class AgentReport(Args):
@@ -403,14 +416,14 @@ class AgentReport(Args):
 
 
 def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
-    """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and an
-    interrupt was someone's own doing, so it wakes nobody. A failure wakes the parent, even one counting this agent."""
+    """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and one
+    stopped on purpose wakes nobody. A failure wakes the parent, even one counting this agent."""
     if reason == "stopped":
         _monitor(txn, agent, wake=False if _counted(txn, agent) else None)
     else:
         said = f": {agent.final_gist}" if agent.final_gist else ""
         gist = f"{agent.name} turn {reason}{said}"[:GIST_LIMIT]
-        _monitor(txn, agent, gist, wake=False if reason == "interrupted" else None)
+        _monitor(txn, agent, gist, wake=False if reason in _ON_PURPOSE else None)
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:

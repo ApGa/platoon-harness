@@ -329,7 +329,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `deny`, since a harness is blocked on it. A `deliver` that wakes an agent stays open until the turn begins, so `waking` always has
   an effect behind it and recovery needs no second path: past a minute, or at an interrupt, it fails, and its entries are queued again.
 - **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
-  `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. With no native id, no
+  `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. `agent.retell` then tells
+  it what it cannot know, a goal that never began or a turn that was cut off (§7). With no native id, no
   `resume`, or a failure to resume, its agent is `lost` with the gap `crash_window`, through the normal ended transition, and that is
   the one agent's: a driver that raises anything, or a group that outlives `SIGKILL`, stops no other. A `reconcile` that does not answer
   in 10 s, or fails, is `unknown`, and a stop asked during recovery cuts it short. A group `reap` cannot prove ours is left alone and
@@ -468,7 +469,9 @@ one (`claudecode/toolUseId`, Codex `callId`) and the turn otherwise. The op and 
 make several calls under shared ids. Either way a harness retry after a timeout is one logical operation. So a client with no id
 cannot tell the server that an identical call in one turn is meant, and it gets the first answer, labelled as a repeat. `ph` and
 the stdio shim therefore send a fresh `platoon-harness/callId` per call, kept under that name so it cannot pass for a harness's id:
-a second `task.claim` on a pipe is a second claim. Outside a turn, a call with no id has no key.
+a second `task.claim` on a pipe is a second claim. Outside a turn, a call with no id has no key. A key lasts as long as its anchor, so
+a call that committed and lost its ack in a crash can run again if a model reissues it after a resume, under a new turn and a new id.
+That is what the cut-off notice's check is for (§7).
 
 **Commands and queries.** A query enters no history and reads a read connection. A command is journaled and returns a
 result. An agent's read of content is a command, because it records exposure. A human's read of the same content is a
@@ -652,6 +655,16 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 - **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
   A goal no turn has begun on keeps the session unsettled. A harness that says ready and begins none within a minute is lost, and one
   resumed before it began takes the goal as a delivery, at-least-once, since a resumed harness waits to be told.
+- **Cut-off turns.** A turn a crash lost, or one the owner's stop ended, is a turn its agent cannot know the end of, and an agent
+  nobody tells sits idle on its leases. So a resume tells it, with one fixed notice and a wake, once and only while the session accepts
+  work: a resume is someone wanting the session to go on, and a notice nobody acts on is the stall it fixes. The notice says which of
+  the two it was, that its tool calls may have run in part or in full even if its history shows them unfinished, failed or interrupted
+  or not at all, that nothing was repeated, and to check before repeating. It lists no calls, since a query leaves no event, so a list
+  could not say that an unlisted call never ran. `agent.told` records that it went, so a second crash during recovery sends no second
+  notice, and what was posted goes on at-least-once like any entry. A second turn cut off is a second thing to tell. A human's
+  `agent.interrupt` is no cut-off: once a host is closing it reports a turn interrupted as `stopped by its owner`, so a crash part of
+  the way through a stop loses nothing. The wake reserves a turn like any other, so a budget that an unmeasured turn left unable to hold
+  refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
   refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.

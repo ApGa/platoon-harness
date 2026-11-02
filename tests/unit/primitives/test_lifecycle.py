@@ -3,7 +3,7 @@
 import pytest
 
 from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
-from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives import OWNER_STOP, PRIMITIVES
 from platoon_harness.tools import shell_name
 from platoon_harness.tools.surface import refusal_text
 
@@ -726,6 +726,60 @@ async def test_a_goal_never_begun_is_told_again_as_a_delivery(kernel):
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
     assert [item["gist"] for item in handed["items"]] == ["do the important thing"]
     assert state_of(kernel, "bob")["state"] == "waking"
+
+
+async def test_a_turn_a_crash_cut_off_is_told_once_however_often_recovery_runs(kernel):
+    await spawn(kernel, "bob", goal="")
+    await start_turn(kernel, "bob")
+    await kernel.recover()
+    await kernel.recover()
+
+    for _ in range(2):
+        result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    assert len(of_type(kernel, "message.sent")) == 1
+    assert ready(kernel)["agents"] == ["bob"]
+
+
+async def test_a_second_turn_cut_off_is_a_second_thing_to_tell(kernel):
+    await spawn(kernel, "bob", goal="")
+    for turn in ("t1", "t2"):
+        await start_turn(kernel, "bob", turn)
+        await kernel.recover()
+        result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    assert len(of_type(kernel, "message.sent")) == 2
+
+
+async def test_a_harness_with_nothing_to_be_told_is_told_nothing(kernel):
+    await spawn(kernel, "bob", goal="")
+
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    assert of_type(kernel, "message.sent") == []
+
+
+async def test_a_notice_wakes_an_agent_whose_inbox_would_not(kernel):
+    await spawn(kernel, "bob", role="quiet", goal="")
+    await start_turn(kernel, "bob")
+    await kernel.recover()
+
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    assert ready(kernel)["agents"] == ["bob"]
+
+
+@pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP])
+async def test_a_turn_stopped_on_purpose_wakes_no_parent(kernel, reason):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", by=lead, goal="")
+    await start_turn(kernel, "bob")
+
+    await end_turn(kernel, "bob", reason)
+
+    sent = of_type(kernel, "message.sent")[-1]
+    assert sent.gist == f"bob turn {reason}"
+    assert sent.data["delivery"] == "next-turn"
 
 
 async def test_retiring_removes_an_agent_from_relations_never_from_history(kernel):

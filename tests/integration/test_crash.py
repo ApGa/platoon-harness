@@ -18,6 +18,8 @@ from .scripts import manager_worker, wire
 
 pytestmark = pytest.mark.timeout(120)
 
+WORKERS = {"w1", "w2"}
+
 
 def team():
     return manager_worker(
@@ -89,11 +91,11 @@ async def assert_what_a_crash_leaves(
 
     assert types.count("runtime.started") == 2
 
-    # The turn in flight is lost with a gap, and shown.
+    # The turn in flight is lost with a gap, and was shown until its agent was back in a turn.
     lost = {event.agent: event for event in events if event.type == "turn.lost"}
     assert lost["w1"].data == {"gap": "crash_window"}
-    attention = await owner.attention()
-    assert any(row["id"] == "turn/w1" and row["kind"] == "uncertain" for row in attention)
+    attention = await owner._ask("view.watch", name="attention", after=0)
+    assert "turn/w1" in {row["id"] for row in attention["rows"]} | {*attention["removed"]}
 
     # Nothing logical happened twice: each task claimed once, and the lease survives the crash.
     assert types.count("task.claimed") == 2
@@ -123,6 +125,12 @@ async def assert_what_a_crash_leaves(
     assert {"lead", "w1", "w2", "stuck"} <= resumed
 
 
+async def every_task_done(owner: Session) -> None:
+    await until(
+        lambda: owner.task_list("tasks"), owner, lambda listed: {t["state"] for t in listed["tasks"]} == {"done"}
+    )
+
+
 def uncertain_kinds(events: list[Event]) -> set[str]:
     return {event.data["kind"] for event in events if event.type == "effect.uncertain"}
 
@@ -132,12 +140,9 @@ def stuck_turn(found: list[Event]) -> bool:
 
 
 async def settled_after_the_crash(owner: Session) -> Any:
-    """The workers come back to their leases, and the work ends as it should have."""
-    for worker in ("@w1", "@w2"):
-        await owner.send(worker, "carry on")
-    await until(
-        lambda: owner.task_list("tasks"), owner, lambda listed: {t["state"] for t in listed["tasks"]} == {"done"}
-    )
+    """The workers are told their turns were cut off, come back to their leases, and the work ends as it should have.
+    Nobody has to say anything."""
+    await every_task_done(owner)
     return await owner.settled(timeout="30s")
 
 
@@ -148,13 +153,13 @@ async def test_a_second_crash_during_recovery_loses_nothing_more(tmp_path: Path)
     await guest.leave()
 
     first = await Session.resume("s", root=tmp_path, detach=True)
-    await in_state(first, "w1", "idle")
+    await until(lambda: of_type(first, "agent.told"), first, lambda told: {event.agent for event in told} >= WORKERS)
     await kill_the_runtime(first)
     await first.status()
     await first.leave()
 
     async with Session.resume("s", root=tmp_path) as owner:
-        await in_state(owner, "w1", "idle")
+        await every_task_done(owner)
         assert len(await of_type(owner, "runtime.started")) == 3
         assert len(await of_type(owner, "task.claimed")) == 2
         folder = owner.folder

@@ -26,6 +26,7 @@ from .common import BODY_REF, WAKING, Injection, Lines, Policy, lines_of, stream
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
 from .reports import (
+    OWNER_STOP,
     RAW_LIMIT,
     REPORTS,
     ApprovalRequested,
@@ -116,6 +117,7 @@ PRIMITIVES = (
 
 __all__ = [
     "BODY_REF",
+    "OWNER_STOP",
     "PRIMITIVES",
     "RAW_LIMIT",
     "REPORTS",
