@@ -320,6 +320,10 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names the gap `crash_window`; the
   incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
+- **A kind of an extension's own.** The host starts only the kinds in this table, and recovery settles only those. An extension that
+  requests another brings the daemon that performs it, and that daemon settles its rows, after a crash and past a `timeout` alike:
+  `effect.list` names what is `uncertain`, and `effect.finish` or `effect.fail` settles it. `retry` is the one policy that acts by
+  itself. Otherwise a row nobody settles waits in `attention`, for a person to say with `effect.settle`.
 - **The host** is the daemon that performs these kinds, but for `erase`, which the kernel's own eraser does, on public names. It reads `effect.ready`, level-triggered, and gives each
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
   daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
@@ -788,7 +792,8 @@ its own answer: `wait` releases, `agent.status` answers, and `message.send` says
 to be relative to, so its `writers` and `readers` take only `human program all role:x group:x`.
 
 **Rules.** Default deny. Presets and keys form a union, `a | b` in Python, so order never matters and the hash cannot tell how a
-topology was mixed. Edges and grants add up. There is no `deny`, because it would make mixing non-commutative. Two sources defining
+topology was mixed. Edges and grants add up. There is no `deny`, because mixing would stop being monotonic: adding a fragment could
+take authority away. Two sources defining
 one channel, group, limit, `program` or `until` differently is a load error that names both. Anything a preset can do, you can write
 out. A preset that behaves differently from its expansion is a bug.
 
@@ -1229,7 +1234,7 @@ component versions, and schema and protocol versions.
 - **Deterministic replay:** replay folds events and never re-runs tools. Event replay, resumable execution, workspace snapshotting and counterfactual
   re-execution are four different things, and only the first three exist.
 - **Consensus, 2PC, leader election, vector clocks:** one writer gives order; a leader is a role or one task token.
-- **`deny` rules and sender-chosen wakes:** deny breaks commutativity; wakes belong to the reader.
+- **`deny` rules and sender-chosen wakes:** deny breaks monotonicity, since adding a fragment could remove authority; wakes belong to the reader.
 - **Multi-machine workers in the first release:** the wire allows them. No fleet code until a user exists.
 - **Login flows and credential brokerage:** each harness signs itself in.
 - **Raw frames for every harness:** only unknown updates keep their frames, since a spool is a second durable path and a scrubbing problem.

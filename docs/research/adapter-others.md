@@ -261,7 +261,7 @@ Versions: OpenCode 2.2.5, pi 1.4.0, Prime Agent 0.10.2. Section evidence above a
 | Resume | [LIVE] | pi@c9f4c7b9fcd0:packages/coding-agent/src/core/session-manager.ts:49 | Run by session id with `--session-dir`. |
 | Native subagents | None by design | pi@c9f4c7b9fcd0:README.md:19 | User extensions can add them, so disable or review third-party ones. |
 | Model endpoint | [LIVE] | pi@c9f4c7b9fcd0:packages/coding-agent/docs/models-configuration.md:11 | Config is a file, so use one agent dir per agent. |
-| Exact call attribution | Agent-level [LIVE] | pi@c9f4c7b9fcd0:packages/ai/src/api/openai-completions.ts:759 | Through per-process credential or header. No per-call id: `x-client-request-id` repeats the session id. |
+| Exact call attribution | Agent-level [LIVE] | pi@c9f4c7b9fcd0:packages/ai/src/api/openai-completions.ts:759 | Through per-process credential or header. No per-call id in a request: `x-client-request-id` repeats the session id. An RPC frame has one: `message_end` carries the model's `responseId`, which this report missed by reading headers and not frames. |
 | Training eligibility | **Best candidate**; full path passed in a critic probe | platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:29 | Real pi on a minted child key through the real gateway: direct MCP tool seen and called, exact tokens, 2 datums on the child. Platoon has no pi spec. Turn off cache warming. Compaction purpose is unlabelled. |
 
 ### Prime Agent 0.10.2
