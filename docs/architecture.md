@@ -417,15 +417,18 @@ One definition reaches every surface.
 | Surface | Derivation |
 |---|---|
 | Python | `session.submit("task.claim", ...)`; typed facade methods are thin wrappers, checked against the registry by a test |
-| MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced |
-| `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `ops.list` for its token |
+| MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
+| `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness tasks claim ...` for curated groups, `platoon-harness op <name>` for any op, flags built from the schema |
 | Web | `POST /x/command {op, args, key, expected_version}` |
 | TUI | Palette entries and generated forms; buttons come from `actions[]`; disabled entries carry `authorize`'s reason |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
 one (`claudecode/toolUseId`, Codex `callId`) and the turn otherwise. The op and args stay in the key because one Codex script can
-make several calls under shared ids. Either way a harness retry after a timeout is one logical operation.
+make several calls under shared ids. Either way a harness retry after a timeout is one logical operation. So a client with no id
+cannot tell the server that an identical call in one turn is meant, and it gets the first answer, labelled as a repeat. `ph` and
+the stdio shim therefore send a fresh `platoon-harness/callId` per call, kept under that name so it cannot pass for a harness's id:
+a second `task.claim` on a pipe is a second claim. Outside a turn, a call with no id has no key.
 
 **Commands and queries.** A query enters no history and reads a read connection. A command is journaled and returns a
 result. An agent's read of content is a command, because it records exposure. A human's read of the same content is a
@@ -837,6 +840,22 @@ against the official client and against each real harness.
 - JSON replies, no SSE, no sessions; `GET` and `DELETE` return 405, and `server/discover` returns -32601. Both real clients connect
   through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
   only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.
+- One request per connection, answered with `Connection: close`, so an idle client holds no task, socket or state here. A client
+  that goes during a call drops the call, not what it asked for: a wait stays registered.
+- A request is bounded before it is believed: a head of 16 KiB, then `Origin`, `Host` and the bearer, and only then a body of at most
+  1 MiB, with a length and no chunking. It has 10 s on the kernel's clock to arrive and its answer 10 s to leave. Past 1,024
+  connections the server answers 503.
+- `?surface=` on the URL names how tools read to a model: `ph`, or `mcp__<ns>` for a harness that shows them that way. It changes
+  descriptions and refusals, never what a token may do. No real harness has been run through a URL with a query yet.
+- `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
+  which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
+- A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A row with a null `text` beside a
+  body's ref is a body its op could not read: the surface reads up to 16 MiB of it, shows the lines that fit, says in `rest` where
+  the rest is, and journals what it showed with `blob.offer` before the text leaves. `text` stays null for a binary, redacted or
+  larger body, or one line too long to show.
+- `hold` runs `hold_open` as the runtime, which is right: a held call must close its wait with `wait.release`, a runtime-only op, and
+  a role's `tools` can leave out `wait.progress`. Nothing a client sends reaches it: its id comes from the `wait` the agent was
+  authorized to place. Holding is bounded by `tool_timeout_s` when `wait` is placed, and by the client hanging up.
 
 **Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools, by exact name, because no harness's
 tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to

@@ -71,7 +71,7 @@ power loss. Nothing here has run on macOS.
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Effects cancelled before they start, and effects that wait for another to finish | tested | `test_effects.py` |
-| `native` ids stamped on a command's events and read by nothing | tested | `test_commands.py` |
+| `native` ids stamped on a command's events and read by nothing | tested | `test_commands.py`, `tests/unit/tools/test_mcp.py` |
 | A reader's limit on a body, and refs that name lines of a body | tested | `test_bodies.py` |
 
 ### Primitives (`platoon_harness.primitives`)
@@ -88,18 +88,18 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Inbox depth cap with a `full` receipt, undeliverable on ended readers | tested | `test_messages.py` |
 | Hops, `max_hops`, chains followed through what a turn was offered, replies, and a wait's notice | tested | `test_messages.py`, `test_lifecycle.py`, `test_waits.py` |
 | Injection ladder, coalesce, steer degrading visibly, digests with a gap notice | tested | `test_delivery.py`. Boundaries are whatever a test's `ready` report declares |
-| `steer` notices on a tool result | implemented | `delivery.offer` with `boundary="tool"` is tested. No tool plane exists to attach them yet |
+| `steer` notices on a tool result | tested | `test_delivery.py`, and `tests/unit/tools/test_mcp.py` over a real socket, with a call that has none journaling nothing extra. No real harness |
 | At-least-once handover: a failed `deliver` is queued again under a new input, even past a newer offer | tested | `test_delivery.py` |
 | Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
 | Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py`. A task that reopens after a lapse releases no such wait: pass a `timeout` |
-| `hold` as a surface keeps it | implemented | `hold_open` is tested. No tool plane calls it yet |
+| `hold` as a surface keeps it | tested | `tests/unit/tools/test_mcp.py`, on a manual clock over a real socket: released, `pending`, closed under the call, a retry, a role without `wait.progress`, and a client that vanishes. `hold_open` running as the runtime is confirmed in architecture section 10. No real harness |
 | One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |
 | Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors, a wait counting only versions unread | tested | `test_boards.py` |
 | Board text search on FTS5, over names, gists and fields | tested | `test_boards.py`. Bodies are not searched, on purpose. The no-FTS5 refusal is tested by flag, not on a build without it |
-| Reading a body held in `blobs/` from an op | deferred | An op may do no I/O, so it returns the hash and the surface reads the body. No surface exists yet |
+| Reading a body held in `blobs/` | tested | An op may do no I/O, so it leaves `text` null beside the hash and the tool plane reads it, within its limits: `test_mcp.py`. Only the tool plane reads one so far |
 | Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging, results read back | tested | `test_tasks.py`, properties |
 | `delivery` on queues and boards, as an entry on the channel | tested | `test_tasks.py`, `test_boards.py` |
 | Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it arrives with drivers |
@@ -112,10 +112,31 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
 | `blob.get`, by a ref that can name lines, and `blob.offer` for what a surface showed | tested | `test_lifecycle.py`. A surface stores the bytes first |
-| A `body` argument offered as text on the tool plane | planned | Architecture section 10. No tool plane exists, so only `Kernel.put_body` makes a body today |
-| Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`. Rendering op names per surface arrives with the tool plane |
+| A `body` argument offered as text on the tool plane | tested | `tests/unit/tools/test_mcp.py`, `test_ph.py`: stored first, cited by hash, the same for a retry |
+| Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`, and `tests/unit/tools/test_surface.py` rendered for MCP, `mcp__<ns>__` and `ph` |
 | `lineage`, `exposure` | deferred | Provenance queries, after drivers |
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | planned | Both ends exist; nothing joins them yet |
+
+### Tool plane (`platoon_harness.tools`)
+
+Rows marked tested have CPU-only tests in `tests/unit/tools`, against a real `Kernel` with `PRIMITIVES`, a compiled team and a real
+socket on port 0. No real harness has run against this server: the spike's prototype did, and its log is replayed here.
+
+| Capability | State | Evidence |
+|---|---|---|
+| One derivation from `ops.list`, per token: names per surface, closed schemas showing only what a model should see, an honest `readOnlyHint` | tested | `test_surface.py` |
+| The turn preamble: exact tools, who can be reached now, how to park | tested | `test_surface.py`. Nothing sends it to a harness yet |
+| The server: Streamable HTTP, JSON replies, no sessions, `initialize` at `2025-11-25` and `2025-06-18`, 405, -32601, 202, -32600, 401, 403 | tested | `test_mcp.py`, `test_replay.py`, which replays every non-tool request of the spike's log |
+| Bounded HTTP: head and body limits, a body read only after the token, deadlines on the kernel's clock, a connection limit, hostile bytes | tested | `test_mcp.py`. A client that will not read its answer is bounded by the same deadline, which no test reaches, since an answer fits a socket buffer |
+| Identity from the token alone, `tools/list` filtered and enforced again at call time, undeclared arguments journaled, an agent's refused query journaled, an ended agent's token refused | tested | `test_mcp.py` |
+| The idempotency key: one operation for a retry, the turn with no id, a label on a repeat, anchors kept in `native` as evidence only | tested | `test_mcp.py`. Anchors were read from the spike's log, not from a live client |
+| Refusals a model can act on: code, what it means, what to do next, in the words of its surface | tested | `test_surface.py`, `test_mcp.py` |
+| Results capped, with `rest` saying where the rest of a body is, and reading on reaching the end | tested | `test_mcp.py` |
+| An idle client costs nothing, and one that vanishes during a held wait frees its server task and keeps its wait | tested | `test_mcp.py` |
+| `ph`: argv and help from `tools/list`, JSON on stdout, a plain refusal on stderr, exit codes in its help | tested | `test_ph.py`, real processes, on the test interpreter and on the host's `python3` from the default path, skipped where there is none |
+| The stdio shim, with a call waiting out a hold beside others | tested | `test_shim.py`, real processes, on both interpreters. No real harness has run it |
+| The official MCP client | tested | `tests/conformance/test_mcp_client.py`, slow, through `uv run --isolated --with 'mcp>=2.3,<3'`. `mcp` 2.3.0 connected in `auto`, which took -32601 for `server/discover` and fell back to `initialize`, and in `legacy`, negotiated `2025-11-25`, pinged, listed closed schemas and `readOnlyHint`, called tools, read a refused spoof as `isError`, and kept a `?surface=` in its URL. It sent no `GET` or `DELETE`. Its `2026-07-28` mode is not claimed and not run |
+| Real Claude Code and Codex against this server | planned | Needs the drivers. The spike's prototype passed both |
 
 ### Teams and topologies (`platoon_harness.team`, `platoon_harness.topology`)
 

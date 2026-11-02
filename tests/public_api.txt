@@ -98,6 +98,15 @@ platoon_harness.team.Command
 platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
+platoon_harness.tools.PH
+platoon_harness.tools.SHIM
+platoon_harness.tools.Surface
+platoon_harness.tools.ToolServer
+platoon_harness.tools.harness_name
+platoon_harness.tools.list_tools
+platoon_harness.tools.preamble
+platoon_harness.tools.shell_name
+platoon_harness.tools.tool_name
 platoon_harness.topology.Board
 platoon_harness.topology.Channel
 platoon_harness.topology.Delivery
