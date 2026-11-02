@@ -24,6 +24,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0.
 | [0015](0015-textual-and-safetext.md) | Textual and `SafeText` | One sanitizing boundary for untrusted text, and a Line API transcript paged from the journal |
 | [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | The user's own harness under its own login. We never read a credential |
 | [0017](0017-config-and-entry-points.md) | Config and entry points | TOML, frozen pydantic, two entry-point groups, nothing active until named |
+| [0018](0018-who-owns-a-process.md) | Who owns a process | Recorded before exec, a start time tells pids apart, and only a recorded leader proves a group ours |
 
 ## Adding or changing one
 
