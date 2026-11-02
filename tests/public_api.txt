@@ -113,6 +113,7 @@ platoon_harness.kernel.View
 platoon_harness.kernel.filesystem
 platoon_harness.kernel.fold
 platoon_harness.kernel.hash_token
+platoon_harness.kernel.is_held
 platoon_harness.kernel.op
 platoon_harness.primitives.Agent
 platoon_harness.primitives.Agents
@@ -140,6 +141,7 @@ platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
 platoon_harness.primitives.Gap
 platoon_harness.primitives.GapReport
+platoon_harness.primitives.Gaps
 platoon_harness.primitives.Groups
 platoon_harness.primitives.InputDelivered
 platoon_harness.primitives.Item
@@ -152,7 +154,7 @@ platoon_harness.primitives.RAW_LIMIT
 platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Ready
 platoon_harness.primitives.Report
-platoon_harness.primitives.Session
+platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
 platoon_harness.primitives.Task
 platoon_harness.primitives.Tasks
@@ -192,6 +194,7 @@ platoon_harness.schema.Sorted
 platoon_harness.schema.dumps
 platoon_harness.schema.nearest
 platoon_harness.schema.problems_in
+platoon_harness.schema.seconds
 platoon_harness.team.AuthProfile
 platoon_harness.team.Budget
 platoon_harness.team.Capabilities
@@ -228,6 +231,7 @@ platoon_harness.tools.PH
 platoon_harness.tools.SHIM
 platoon_harness.tools.Surface
 platoon_harness.tools.ToolServer
+platoon_harness.tools.delivery_text
 platoon_harness.tools.harness_name
 platoon_harness.tools.list_tools
 platoon_harness.tools.preamble

@@ -517,9 +517,9 @@ class Kernel:
         """Offer a frame of live text. It may be lost and is never journaled."""
         self._ring(agent).push(text)
 
-    def deltas(self, agent: str) -> AsyncIterator[Delta]:
-        """Follow an agent's live text until the kernel closes."""
-        return self._ring(agent).frames()
+    def deltas(self, agent: str, *, after: int | None = None) -> AsyncIterator[Delta]:
+        """Follow an agent's live text until the kernel closes, past frame `after` or from the oldest still held."""
+        return self._ring(agent).frames(after)
 
     # Lifetime.
 
@@ -531,6 +531,10 @@ class Kernel:
     @property
     def closed(self) -> bool:
         return self._pulse.closed
+
+    @property
+    def read_only(self) -> bool:
+        return self._writer is None
 
     def close(self) -> None:
         """Finish queued commands, checkpoint the WAL to empty, and let go of the lock."""

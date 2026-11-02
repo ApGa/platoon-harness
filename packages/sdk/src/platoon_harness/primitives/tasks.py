@@ -371,6 +371,24 @@ def expire_lease(txn: Txn, a: Fence) -> None:
         expire(txn, task, _queue(txn, a.queue))
 
 
+class Owner(Args):
+    agent: Name
+
+
+@op("lease.due", query=True, runtime=True)
+def leases_due(txn: Txn, a: Owner) -> list[dict[str, Any]]:
+    """List an agent's leases past half their time that `task.renew` could extend, which the host does on harness
+    activity. It asks first, so that activity with nothing to renew journals nothing."""
+    due = []
+    for task in txn.view(Tasks).owned(f"agent:{a.agent}"):
+        channel = _queue(txn, task.queue)
+        assert task.lease_until is not None and task.claimed_at is not None
+        grows = _lease_until(txn.now, task.claimed_at, channel) > task.lease_until
+        if task.live(txn.now) and grows and task.lease_until - txn.now < channel.lease / 2:
+            due.append({"queue": task.queue, "task": task.id, "fence": task.fence})
+    return due
+
+
 class ListTasks(Args):
     queue: QueueName
     state: Annotated[TaskState | None, Field(description="Only tasks in this state.")] = None

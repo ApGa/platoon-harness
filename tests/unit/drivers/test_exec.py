@@ -139,7 +139,7 @@ async def test_a_forked_child_cannot_keep_the_turn_open(tmp_path):
     await driver.start(spec, heard)
 
     assert (await heard.until(TurnEnded)).reason == "stopped"
-    await heard.until(Exited)
+    assert (await heard.until(Exited)).code == 0
     assert heard.of(Item)[0].gist == "said"
     record = Record.read(spec.folder)
     await driver.stop(1)
@@ -149,7 +149,7 @@ async def test_a_forked_child_cannot_keep_the_turn_open(tmp_path):
 
 async def test_what_a_one_shot_cannot_do_is_refused_with_why(tmp_path):
     driver = ExecDriver(["true"])
-    delivery = Delivery(input="1", boundary="turn", items=(Offered(ref="inbox/a@1", gist="x"),))
+    delivery = Delivery(input="1", boundary="turn", text="x", items=(Offered(ref="inbox/a@1", gist="x"),))
 
     with pytest.raises(DriverError, match="takes nothing after its goal"):
         await driver.deliver(delivery)
@@ -159,6 +159,8 @@ async def test_what_a_one_shot_cannot_do_is_refused_with_why(tmp_path):
         await driver.interrupt()
     with pytest.raises(DriverError, match="cannot resume"):
         await driver.start(make_spec(tmp_path, resume="s-1"), Heard())
+    with pytest.raises(DriverError, match="spawn it with one"):
+        await driver.start(make_spec(tmp_path, goal=""), Heard())
     assert await driver.reconcile("1") == "unknown"
     await driver.stop(1)
 

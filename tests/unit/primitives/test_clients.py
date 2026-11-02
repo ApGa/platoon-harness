@@ -12,6 +12,10 @@ def roster(kernel, name: str) -> dict:
     return next(row for row in rows if row["agent"] == name)
 
 
+def attention(kernel) -> list[dict]:
+    return result_of(kernel.query(kernel.runtime, "attention.list", {}))
+
+
 def why(kernel, name: str) -> dict | None:
     return roster(kernel, name)["why"]
 
@@ -301,3 +305,16 @@ async def test_a_wake_past_hops_leaves_attention_when_a_turn_starts(kernel, ada,
     await start_turn(kernel, "bob")
 
     assert result_of(kernel.query(ada, "attention.list", {})) == []
+
+
+async def test_a_lost_turn_asks_for_attention_until_a_turn_starts(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await kernel.recover()
+
+    assert [(row["id"], row["kind"]) for row in attention(kernel)] == [("turn/bob", "uncertain")]
+
+    await start_turn(kernel, "bob", "t2")
+
+    assert attention(kernel) == []

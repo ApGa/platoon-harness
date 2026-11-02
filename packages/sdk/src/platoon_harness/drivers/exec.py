@@ -48,6 +48,8 @@ class ExecDriver:
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
         if spec.resume is not None:
             raise DriverError("a one-shot harness cannot resume")
+        if not spec.goal:
+            raise DriverError("a one-shot harness takes nothing after its goal: set `count = 0` and spawn it with one")
         command = [part.replace(GOAL, spec.goal) for part in self._command]
         self._process = await Process.launch(command, spec, report, read=self._read)
         return Started()

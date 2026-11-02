@@ -19,9 +19,10 @@ from platoon_harness.kernel import (
 )
 
 from .agents import Agent, Agents
-from .approvals import ask
+from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
+from .clients import Gaps
 from .common import AgentName, Body, Gist, Name, address
 from .delivery import confirmed, work
 from .messages import post
@@ -45,7 +46,7 @@ from .reports import (
     TurnStarted,
     Usage,
 )
-from .sessions import Session
+from .sessions import SessionRecord
 from .tasks import Tasks, bury_if_spent
 from .waits import Waits
 
@@ -122,13 +123,13 @@ def end(
 class Spawn(Args):
     name: Annotated[Name, Field(description="A name nobody in this session has used.")]
     child_role: Annotated[Name, Field(description="The role to start it in.")]
-    goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")]
+    goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")] = ""
     body: Body = None
 
 
 def _admit(txn: Txn, depth: int, parent: str | None) -> None:
     """The limits on the live graph, counted with those still spawning, so concurrent spawns cannot pass them."""
-    limits = txn.view(Session).settings().limits
+    limits = txn.view(SessionRecord).settings().limits
     agents = txn.view(Agents)
     if limits.max_depth is not None and depth > limits.max_depth:
         raise Refused("not_permitted", f"depth {depth} is past max_depth {limits.max_depth}")
@@ -140,11 +141,12 @@ def _admit(txn: Txn, depth: int, parent: str | None) -> None:
 
 @op("agent.spawn", on=lambda a: f"role/{a.child_role}", tool=True)
 def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
-    """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. It reports back to you when
-    it ends, however it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your
+    """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. With neither it starts idle
+    and takes no turn until a message wakes it. It reports back to you when it ends, however it ends, so a parent can
+    simply wait. Refused `not_permitted` for a role or limit outside your
     reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken or the
     session is closing: use another name, or stop spawning. `not_found` when no such role exists."""
-    session = txn.view(Session)
+    session = txn.view(SessionRecord)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
     role = session.settings().roles.get(a.child_role)
@@ -157,7 +159,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     depth = 0 if spawner is None else spawner.depth + 1
     parent = None if txn.me.kind == "runtime" else txn.me.id
     _admit(txn, depth, parent)
-    reserve(txn, a.name, a.child_role, agents=1.0)
+    reserve(txn, a.name, a.child_role, turn=bool(a.goal or a.body), agents=1.0)
     txn.emit(
         "agent.spawned",
         f"agent/{a.name}",
@@ -287,23 +289,38 @@ class Start(Args):
     declared: Capabilities
     verified: dict[str, JsonValue] | None = None
     levels: dict[str, JsonValue] = {}
+    resumed: bool = False
 
 
 @op("agent.start", on=lambda a: f"agent/{a.agent}", runtime=True)
 def start(txn: Txn, a: Start) -> None:
     """Record that a harness is up, with what its driver declared and what the runtime verified of it. A report cannot
-    carry these, so no driver can claim a level."""
+    carry these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
     agent = _live(txn, a.agent)
-    if agent.state != "spawning":
-        raise Refused("conflict", f"{agent.name} has started")
+    if (agent.state != "spawning") != a.resumed:
+        raise Refused("conflict", f"{agent.name} has started" if not a.resumed else f"{agent.name} has not started")
     data = {**a.ready.model_dump(exclude={"type"}), **a.model_dump(include={"declared", "verified", "levels"})}
-    txn.emit("agent.started", f"agent/{agent.name}", gist=f"{agent.name} started", agent=agent.name, data=data)
-    regroup(txn, agent.name, agent.role, joined=True)
+    stream = f"agent/{agent.name}"
+    if a.resumed:
+        txn.emit("agent.resumed", stream, gist=f"{agent.name} resumed", agent=agent.name, data=data)
+    else:
+        txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, data=data)
+        regroup(txn, agent.name, agent.role, joined=True)
 
 
 class AgentReport(Args):
     agent: Name
     report: Report
+
+
+def _exit_status(txn: Txn, agent: Agent, code: int | None) -> Status:
+    """What a harness's end means. One that never started failed. A one-shot harness ends between turns, and its exit
+    code says how that went. Anything else was meant to stay, so its agent is lost."""
+    if agent.state == "spawning":
+        return "failed"
+    if agent.persistent is False and txn.view(Stamps).turn(agent.name) is None:
+        return "finished" if code == 0 else "failed"
+    return "lost"
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
@@ -333,9 +350,9 @@ def report(txn: Txn, a: AgentReport) -> None:
     match a.report:
         case Ready() | Delta():
             raise Refused("invalid", f"a {a.report.type} report is not journaled through agent.report")
-        case Exited(reason=reason):
+        case Exited(reason=reason, code=code):
             if not agent.ended:
-                end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
+                end(txn, agent, _exit_status(txn, agent, code), reason=reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)
         case _ if agent.ended:
@@ -391,6 +408,13 @@ def _public(agent: Agent) -> dict[str, Any]:
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
     """List every agent of this session, live or ended. Pass `name` as `agent` to the ops that take one."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
+
+
+@op("agent.records", query=True, runtime=True)
+def agent_records(txn: Txn, a: Args) -> list[dict[str, Any]]:
+    """List every agent as the runtime keeps it, with its open turn. Recovery and shutdown work through these."""
+    stamps = txn.view(Stamps)
+    return [{**agent.model_dump(), "turn": stamps.turn(agent.name)} for agent in txn.view(Agents).listed()]
 
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)
@@ -449,7 +473,7 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
 def session_status(txn: Txn, a: Args) -> dict[str, Any]:
     """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
     ask. A message can un-settle it; only close ends it."""
-    session = txn.view(Session)
+    session = txn.view(SessionRecord)
     blockers = _blockers(txn)
     until = session.settings().until
     return {
@@ -458,13 +482,44 @@ def session_status(txn: Txn, a: Args) -> dict[str, Any]:
         "blockers": blockers,
         "until": until,
         "done": _done(txn, until, not blockers),
+        "asking": txn.view(Approvals).asking(),
+    }
+
+
+def _came_to(txn: Txn, state: str) -> str:
+    if state == "cancelled":
+        return "cancelled"
+    if txn.view(Budgets).exhausted(txn.now):
+        return "budget_exhausted"
+    failed = any(agent.status in ("failed", "lost") for agent in txn.view(Agents).listed())
+    return "agent_failed" if failed else "settled"
+
+
+@op("session.ending", query=True)
+def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
+    """What this session has come to: its state, why, each agent, what was spent with its labels, and every gap."""
+    state = txn.view(SessionRecord).state()
+    budget = txn.view(Budgets)
+    return {
+        "state": state,
+        "reason": _came_to(txn, state),
+        "agents": [
+            {
+                **agent.model_dump(include={"role", "state", "status", "reason"}),
+                "agent": agent.name,
+                "usage": budget.usage_of(f"agent:{agent.name}"),
+            }
+            for agent in txn.view(Agents).listed()
+        ],
+        "usage": budget.usage_of("shared"),
+        "gaps": txn.view(Gaps).rows(),
     }
 
 
 @op("session.close")
 def close(txn: Txn, a: Args) -> None:
     """Drain: nothing new starts, and what is in flight finishes. Refused `conflict` when the session is not open."""
-    state = txn.view(Session).state()
+    state = txn.view(SessionRecord).state()
     if state != "open":
         raise Refused("conflict", f"the session is {state}")
     txn.emit("session.closed", "session", gist="session closing")
@@ -473,7 +528,7 @@ def close(txn: Txn, a: Args) -> None:
 @op("session.cancel")
 def cancel_session(txn: Txn, a: Args) -> None:
     """Stop now: every live agent ends, cancelled. Refused `conflict` once the session has stopped."""
-    session = txn.view(Session)
+    session = txn.view(SessionRecord)
     if session.state() in ("cancelled", "stopped"):
         raise Refused("conflict", f"the session is {session.state()}")
     txn.emit("session.cancelled", "session", gist="session cancelled")

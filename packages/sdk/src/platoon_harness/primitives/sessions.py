@@ -41,9 +41,10 @@ class Settings(Args):
     manifest: BodyRef | None = None
 
 
-class Session(View):
+class SessionRecord(View):
     """One row, once the session is open."""
 
+    name = "session"
     schema = """
     CREATE TABLE v_session(id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL, settings TEXT NOT NULL) STRICT;
     """
@@ -82,7 +83,7 @@ class Session(View):
 @op("session.open", runtime=True)
 def open_session(txn: Txn, a: Settings) -> None:
     """Journal what this session runs under, before its first turn."""
-    if txn.view(Session).state() != "unopened":
+    if txn.view(SessionRecord).state() != "unopened":
         raise Refused("conflict", "this session is open")
     txn.emit("session.opened", "session", gist="session opened", data=a, refs=[a.manifest] if a.manifest else ())
 
@@ -90,7 +91,7 @@ def open_session(txn: Txn, a: Settings) -> None:
 @op("session.manifest", query=True)
 def show_manifest(txn: Txn, a: Args) -> dict[str, Any]:
     """Name the stored manifest of this session, which holds no secrets."""
-    return {"manifest": txn.view(Session).settings().manifest}
+    return {"manifest": txn.view(SessionRecord).settings().manifest}
 
 
 class OpenEpisode(Args):

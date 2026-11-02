@@ -9,7 +9,7 @@ from .agents import Agent, Agents
 from .budgets import reserve
 from .common import Exposed, Name, Seq, expose, fitted
 from .messages import Deliveries, Entry, chain_of
-from .sessions import Session
+from .sessions import SessionRecord
 from .waits import WaitRecord, Waits, out_of_turn
 
 _RETRY_SECONDS = 1.0
@@ -45,7 +45,7 @@ def _stranded(txn: Txn) -> list[str]:
 def work(txn: Txn) -> Work:
     """The courier's input, and what `settled` asks about. A wait stays open while its agent's turn runs."""
     stranded = _stranded(txn)
-    if not txn.view(Session).accepting():
+    if not txn.view(SessionRecord).accepting():
         return Work([], [], stranded, [], None)
     agents = txn.view(Agents)
     ready: list[str] = []
@@ -92,7 +92,7 @@ def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how:
     return {
         "input": input,
         "boundary": boundary,
-        "items": [{"ref": entry.ref, "gist": entry.gist} for entry in shown],
+        "items": [entry.model_dump(include={"ref", "gist", "sender", "body"}) for entry in shown],
         "behind": total - len(shown),
     }
 

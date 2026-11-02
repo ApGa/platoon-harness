@@ -45,7 +45,7 @@ pytestmark = pytest.mark.timeout(30)
 
 
 def delivery(input: str = "d1", boundary: str = "turn", gist: str = "hello") -> Delivery:
-    return Delivery(input=input, boundary=boundary, items=(Offered(ref="inbox/ada@1", gist=gist),))
+    return Delivery(input=input, boundary=boundary, text=gist, items=(Offered(ref="inbox/ada@1", gist=gist),))
 
 
 async def started(tmp_path, *turns, capabilities=None, **fields) -> tuple[ScriptedDriver, Heard]:
@@ -67,6 +67,40 @@ async def test_say_streams_then_records(tmp_path):
 
     assert [type(report) for report in heard.reports] == [Ready, TurnStarted, Delta, Item, TurnEnded, Exited]
     assert (heard.of(Item)[0].kind, heard.of(Item)[0].body) == ("message", "hello there")
+
+
+async def test_with_no_goal_it_waits_and_its_first_turn_is_on_a_delivery(tmp_path):
+    driver, heard = await started(tmp_path, [Say("the first turn")], goal="")
+    await heard.until(Ready)
+
+    assert heard.of(TurnStarted) == []
+
+    await driver.deliver(delivery())
+
+    assert (await heard.until(Item)).gist == "the first turn"
+    await driver.stop(1)
+
+
+async def test_a_session_that_never_ended_a_turn_resumes_with_nothing_to_remember(tmp_path):
+    driver, heard = ScriptedDriver(), Heard()
+
+    await driver.start(make_spec(tmp_path, goal="", resume="scripted-ada"), heard)
+
+    assert (await heard.until(Ready)).native == "scripted-ada"
+    await driver.stop(1)
+
+
+async def test_no_two_approvals_share_an_id_across_a_resume(tmp_path):
+    first, heard = await started(tmp_path, [Ask("may I?")])
+    asked = await heard.until(ApprovalRequested)
+    await first.stop(1)
+
+    second, again = ScriptedDriver([[Ask("may I?")]]), Heard()
+    await second.start(make_spec(tmp_path, resume="scripted-ada"), again)
+    await second.deliver(delivery())
+
+    assert (await again.until(ApprovalRequested)).id != asked.id
+    await second.stop(1)
 
 
 async def test_think_is_a_thought(tmp_path):

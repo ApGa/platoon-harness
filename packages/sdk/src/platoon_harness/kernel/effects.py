@@ -177,10 +177,20 @@ class EffectKind(Args):
     kind: str | None = None
 
 
+class EffectState(Args):
+    state: Literal["requested", "started", "finished", "failed", "uncertain", "cancelled"]
+
+
 @op("effect.ready", query=True, runtime=True)
 def ready_effects(txn: Txn, a: EffectKind) -> list[Effect]:
     """List the effects a daemon may start now."""
     return txn.view(Effects).ready(a.kind)
+
+
+@op("effect.list", query=True, runtime=True)
+def list_effects(txn: Txn, a: EffectState) -> list[Effect]:
+    """List the effects in one state, which is what recovery works through."""
+    return txn.view(Effects).in_state(a.state)
 
 
 @op("effect.start", on=lambda a: f"effect/{a.id}", runtime=True)
@@ -223,14 +233,15 @@ def expire_effect(txn: Txn, a: EffectAttempt) -> None:
 
 
 @op("runtime.start", on=lambda a: "runtime", runtime=True)
-def start_runtime(txn: Txn, a: Args) -> None:
-    """Begin an incarnation, whose number is this event's stream version.
+def start_runtime(txn: Txn, a: Args) -> int:
+    """Begin an incarnation, and return its number, which is this event's stream version.
 
     Started effects become uncertain, and a turn in flight is lost: its tool effects are unknown and never re-run.
     """
-    txn.emit("runtime.started", "runtime", gist="runtime started")
+    incarnation = txn.emit("runtime.started", "runtime", gist="runtime started").version
     for effect in txn.view(Effects).in_state("started"):
         _cancel_timeout(txn, effect)
         _mark_uncertain(txn, effect, "the runtime restarted")
     for agent, turn in txn.view(Stamps).open_turns().items():
         txn.emit("turn.lost", f"turn/{agent}", gist=f"turn {turn} lost", agent=agent, data={"gap": "crash_window"})
+    return incarnation

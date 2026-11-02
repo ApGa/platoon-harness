@@ -204,8 +204,11 @@ def take_lock(path: Path) -> int:
 def is_live(folder: Path) -> bool:
     """Whether the journal has a writer or unfinished WAL, and so cannot be read as immutable."""
     wal = folder / "journal.sqlite-wal"
-    if wal.exists() and wal.stat().st_size > 0:
-        return True
+    return (wal.exists() and wal.stat().st_size > 0) or is_held(folder)
+
+
+def is_held(folder: Path) -> bool:
+    """Whether a live runtime holds this folder's lock, which is how anyone can tell a session is live."""
     try:
         fd = os.open(folder / "lock", os.O_RDONLY)
     except FileNotFoundError:

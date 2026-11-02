@@ -1065,3 +1065,153 @@ async def test_an_adopted_orphan_leaves_its_old_ancestors_reach(kernel, ada):
     assert refusal(kernel.query(lead, "agent.status", {"agent": "orphan"})).code == "not_permitted"
     assert refusal(kernel.query(lead, "agent.status", {"agent": "below"})).code == "not_permitted"
     assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == "@orphan"
+
+
+# What a host needs from the record.
+
+
+async def test_an_agent_with_no_goal_holds_no_turn(kernel):
+    args = {"name": "bob", "child_role": "worker"}
+
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", args))
+
+    assert of_type(kernel, "budget.reserved")[-1].data["amounts"] == {"agents": 1.0}
+
+
+async def test_a_body_is_a_goal_enough_to_hold_a_turn(kernel):
+    body = f"sha256:{await kernel.put_body(b'all of it')}"
+
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker", "body": body}))
+
+    assert of_type(kernel, "budget.reserved")[-1].data["amounts"]["turns"] == 1.0
+
+
+@pytest.mark.parametrize(("code", "status"), [(0, "finished"), (1, "failed"), (-9, "failed"), (None, "failed")])
+async def test_a_one_shot_that_exits_between_turns_says_how_it_went_by_its_code(kernel, code, status):
+    await spawn(kernel, "bob", ready={"persistent": False})
+
+    await report(kernel, "bob", "exited", reason="its turn was its life", code=code)
+
+    assert of_type(kernel, "agent.ended")[-1].data["status"] == status
+
+
+async def test_a_one_shot_that_exits_in_its_turn_is_lost(kernel):
+    await spawn(kernel, "bob", ready={"persistent": False})
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "exited", code=0)
+
+    assert of_type(kernel, "agent.ended")[-1].data["status"] == "lost"
+
+
+async def test_a_persistent_harness_that_exits_is_lost_however_it_exited(kernel):
+    await spawn(kernel, "bob")
+
+    await report(kernel, "bob", "exited", code=0)
+
+    assert of_type(kernel, "agent.ended")[-1].data["status"] == "lost"
+
+
+async def test_a_resumed_harness_comes_back_to_the_agent_as_it_stood(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    args = {"agent": "bob", "ready": {"native": "s-2", "version": "2"}, "declared": {"resume": True}, "resumed": True}
+
+    result_of(await kernel.submit(kernel.runtime, "agent.start", args))
+
+    record = next(row for row in result_of(kernel.query(kernel.runtime, "agent.records", {})) if row["name"] == "bob")
+    assert (record["state"], record["native"], record["resume"], record["turn"]) == ("running", "s-2", True, "t1")
+    assert of_type(kernel, "agent.resumed")[-1].data["version"] == "2"
+
+
+async def test_only_a_harness_that_started_can_resume(kernel):
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker"}))
+    args = {"agent": "bob", "ready": {}, "declared": {}, "resumed": True}
+
+    assert refusal(await kernel.submit(kernel.runtime, "agent.start", args)).code == "conflict"
+
+
+async def test_a_session_named_only_by_start_reaches_the_record_through_the_launch(kernel):
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker"}))
+    while effects := result_of(kernel.query(kernel.runtime, "effect.ready", {})):
+        for effect in effects:
+            attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+            result = {"native": "s-9"} if effect["kind"] == "launch" else None
+            done = {"id": effect["id"], "attempt": attempt, "result": result}
+            result_of(await kernel.submit(kernel.runtime, "effect.finish", done))
+    await start(kernel, "bob")
+
+    assert result_of(kernel.query(kernel.runtime, "agent.records", {}))[0]["native"] == "s-9"
+
+
+# What a session came to.
+
+
+async def ending(kernel: Kernel) -> dict:
+    return result_of(kernel.query(kernel.runtime, "session.ending", {}))
+
+
+async def test_an_ending_says_why_with_each_agent_and_what_was_measured(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=120, label="estimated")
+    await end_turn(kernel, "bob")
+
+    found = await ending(kernel)
+
+    assert found["reason"] == "settled"
+    assert found["usage"]["tokens"] == {"amount": 120.0, "label": "estimated"}
+    assert [(row["agent"], row["role"], row["state"]) for row in found["agents"]] == [("bob", "worker", "idle")]
+    assert found["agents"][0]["usage"]["tokens"]["amount"] == 120.0
+
+
+@pytest.mark.parametrize("how", ["exited", "spawn"])
+async def test_an_agent_that_failed_or_was_lost_is_what_an_ending_says(kernel, how):
+    if how == "exited":
+        await spawn(kernel, "bob")
+        await report(kernel, "bob", "exited")
+    else:
+        result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker"}))
+        await report(kernel, "bob", "exited")
+
+    assert (await ending(kernel))["reason"] == "agent_failed"
+
+
+async def test_exhausting_the_budget_outranks_a_failed_agent(kernel):
+    await spawn(kernel, "bob")
+    await kernel.submit(kernel.runtime, "budget.set", {"limits": {"tokens": 10}})
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=120, label="provider")
+    await report(kernel, "bob", "exited")
+
+    assert (await ending(kernel))["reason"] == "budget_exhausted"
+
+
+async def test_cancelling_outranks_everything(kernel):
+    await spawn(kernel, "bob")
+    await kernel.submit(kernel.runtime, "session.cancel", {})
+
+    found = await ending(kernel)
+
+    assert (found["state"], found["reason"]) == ("cancelled", "cancelled")
+
+
+async def test_gaps_are_counted_by_agent_and_kind_and_a_lost_turn_is_one(kernel):
+    await spawn(kernel, "bob")
+    await report(kernel, "bob", "gap", plane="model", what="hidden_call")
+    await report(kernel, "bob", "gap", plane="model", what="hidden_call")
+    await start_turn(kernel, "bob")
+
+    await kernel.recover()
+
+    assert (await ending(kernel))["gaps"] == [
+        {"agent": "bob", "what": "crash_window", "plane": "control", "count": 1},
+        {"agent": "bob", "what": "hidden_call", "plane": "model", "count": 2},
+    ]
+
+
+async def test_status_counts_what_is_left_to_a_human(kernel):
+    await spawn(kernel, "bob")
+    await report(kernel, "bob", "approval.requested", id="a1", gist="may I")
+
+    assert result_of(kernel.query(kernel.runtime, "session.status", {}))["asking"] == 1

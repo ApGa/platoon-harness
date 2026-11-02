@@ -192,10 +192,25 @@ def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str]) -> st
     return "\n".join(describe(line, surface, ops) for line in lines)
 
 
-def notices_text(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> str:
-    """Steer notices handed over on a tool's result."""
-    lines = ["Messages arrived, and they may change what you should do next:"]
-    lines += [f"- {item['ref']}: {item['gist']}" for item in handed["items"]]
+def _entries(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> list[str]:
+    """Each entry handed over, by the ref that dedupes a repeat, then how to read what did not come with it."""
+    lines = []
+    for item in handed["items"]:
+        lines.append(f"- {item['ref']} from {item['sender']}: {item['gist']}")
+        if item["body"]:
+            reading = describe(f"Its body is {item['body']}: pass that as `ref` to `blob.get`.", surface, ops)
+            lines.append(f"  {reading}")
     if handed["behind"]:
         lines.append(describe(f"{handed['behind']} more are waiting: call `message.read`.", surface, ops))
+    return lines
+
+
+def notices_text(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> str:
+    """Steer notices handed over on a tool's result."""
+    lines = ["Messages arrived, and they may change what you should do next:", *_entries(handed, surface, ops)]
     return "\n".join(lines)
+
+
+def delivery_text(handed: dict[str, Any], surface: Surface, ops: Collection[str]) -> str:
+    """A handover as a harness's prompt reads it. Its id goes with it, because a handover can come twice."""
+    return "\n".join([f"New messages (delivery {handed['input']}):", *_entries(handed, surface, ops)])

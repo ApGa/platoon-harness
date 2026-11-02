@@ -4,7 +4,7 @@ import os
 import tomllib
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, NoReturn, Self
+from typing import Any, Literal, NoReturn, Self
 
 from pydantic import GetCoreSchemaHandler, ValidationError
 from pydantic_core import CoreSchema, core_schema
@@ -190,21 +190,26 @@ def sanitized(team: Team, environ: Mapping[str, str] = os.environ) -> str:
 
 
 class Manifest(Model):
-    """What reproduces a session. `team` is the sanitized resolved form, which reloads alone."""
+    """What reproduces a session, and all a runtime needs to take one up: `team` is the sanitized resolved form, which
+    reloads alone, `human` the principal who started it, `approvals` a policy stated over every role's own, and `cwd`
+    where a shared workspace is."""
 
     team: str
     topology_hash: str
     components: tuple[Component, ...]
+    human: str = "human:you"
+    approvals: Literal["ask", "deny", "allow"] | None = None
+    cwd: str = "."
     sdk_version: str = __version__
     team_schema: int = TEAM_SCHEMA
     wire_protocol: int = WIRE_PROTOCOL
 
     @classmethod
-    def of(cls, team: Team, environ: Mapping[str, str] = os.environ) -> Self:
+    def of(cls, team: Team, environ: Mapping[str, str] = os.environ, **started: Any) -> Self:
         """The manifest of a resolved team, with versions from metadata. Nothing is imported."""
         harnesses = sorted({role.driver for role in team.roles.values()})
         components = (
             *(find(DRIVERS, name) for name in harnesses),
             *(find(EXTENSIONS, name) for name in team.extensions),
         )
-        return cls(team=sanitized(team, environ), topology_hash=team.topology.hash, components=components)
+        return cls(team=sanitized(team, environ), topology_hash=team.topology.hash, components=components, **started)

@@ -16,6 +16,7 @@ pytestmark = pytest.mark.timeout(120)
 HERE = Path(__file__).parent
 ONE_SHOT_SKIPS = {
     "delivered_text_in_next_prompt",
+    "no_goal_takes_no_turn",
     "tool_in_first_request",
     "ready_with_pinned_model",
     "resume",
@@ -51,7 +52,7 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
 
     async def garble(driver: WireDriver) -> None:
         item = Offered(ref="inbox/ada@1", gist="anything")
-        await driver.deliver(Delivery(input="garble", boundary="turn", items=(item,)))
+        await driver.deliver(Delivery(input="garble", boundary="turn", text=item.gist, items=(item,)))
 
     result = await check_driver(lambda: WireDriver(command), folder=tmp_path, garble=garble, timeout=20)
 

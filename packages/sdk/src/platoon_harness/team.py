@@ -256,8 +256,9 @@ def team_check(
 ) -> tuple[Problem, ...]:
     """Every problem with a team, at once, before any cost. Pure: all it knows arrives as arguments.
 
-    `capabilities` maps harness names to what is known of them, and `extensions` maps the references a team may
-    name to their extensions. Errors stop a team from running; warnings do not.
+    `capabilities` maps harness names, or a role's own name where its command decides, to what is known of them, and
+    `extensions` maps the references a team may name to their extensions. Errors stop a team from running; warnings do
+    not.
     """
     presets, problems = _presets_of(team, {} if extensions is None else extensions)
     topology, more = finish(team.topology, presets)
@@ -267,7 +268,7 @@ def team_check(
     problems += structure(team)
 
     for name, role in team.roles.items():
-        known = capabilities.get(role.driver)
+        known = capabilities.get(name) or capabilities.get(role.driver)
         if known is None:
             what = f"unknown harness `{role.driver}`.{nearest(role.driver, capabilities.keys())}"
             problems.append(Problem(f"roles.{name}.harness", what))

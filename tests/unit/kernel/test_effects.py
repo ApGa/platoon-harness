@@ -256,3 +256,18 @@ async def test_recovery_leaves_no_timeout_behind(kernel):
     await kernel.recover()
 
     assert result_of(kernel.query(kernel.runtime, "timer.next", {})) == []
+
+
+async def test_effects_can_be_listed_by_state_for_recovery(kernel):
+    reconciled = await dispatch(kernel, on_uncertain="reconcile")
+    await start(kernel, reconciled)
+    await kernel.recover()
+
+    listed = result_of(kernel.query(kernel.runtime, "effect.list", {"state": "uncertain"}))
+
+    assert [row["id"] for row in listed] == [reconciled]
+
+
+async def test_an_incarnation_is_numbered_from_one(kernel):
+    assert result_of(await kernel.recover()) == 1
+    assert result_of(await kernel.recover()) == 2

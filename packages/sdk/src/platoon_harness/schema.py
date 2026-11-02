@@ -24,6 +24,7 @@ __all__ = [
     "dumps",
     "nearest",
     "problems_in",
+    "seconds",
 ]
 
 Name = Annotated[str, StringConstraints(pattern=f"^{NAME}$")]
@@ -41,6 +42,14 @@ def _duration(text: str) -> str:
     seconds = int(match[1]) * _UNITS[match[2]]
     unit = next(unit for unit, size in _UNITS.items() if seconds % size == 0)
     return f"{seconds // _UNITS[unit]}{unit}"
+
+
+def seconds(span: str | float) -> float:
+    """A duration as seconds. A number already is one."""
+    if isinstance(span, str):
+        _duration(span)
+        return float(int(span[:-1]) * _UNITS[span[-1]])
+    return float(span)
 
 
 Sorted = AfterValidator(_sorted)

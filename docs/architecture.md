@@ -119,7 +119,7 @@ Each law is a sentence, and each has a test of the same name.
   annotations.sqlite  rewards, judgments, credit: no agent-reachable read opens it
   marks.sqlite        per-human unread positions: neither evidence nor view; losing it loses badges
   blobs/ab/<sha256>   bodies too large for the journal file
-  manifest.json       resolved team, component and protocol versions, topology hash; no secrets
+  manifest.json       resolved team, how it was started, component and protocol versions, topology hash; no secrets
   runtime.json        pid, start time, socket path, incarnation: present only while live
   owner.token         0600
   lock                flock: held by the one live runtime
@@ -442,7 +442,7 @@ to do next.
 
 | Area | Commands | Queries |
 |---|---|---|
-| Session | `session.close` `session.cancel` `topology.patch` `episode.open` `episode.close` `budget.set` | `session.status` `session.manifest` `topology.show` `ops.list` `budget.status` |
+| Session | `session.close` `session.cancel` `topology.patch` `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `topology.show` `ops.list` `budget.status` |
 | Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
@@ -451,7 +451,7 @@ to do next.
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` `delivery.pending` |
+| Runtime only | `agent.start` `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -585,7 +585,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
-  An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing.
+  An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
+  that exits ends its agent `lost`, or `failed` if it never started. A one-shot harness ends between turns by design, so it `finished`
+  if it exited 0, and `failed` otherwise.
+- **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
   refused `conflict`: `cancel` is what stops one.
@@ -753,21 +756,21 @@ class Driver(Protocol):
 
 `AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, tool binding, model access (`Secret` values by variable
 name, URLs included), env, instructions (appended by the supported path; native project files are never touched) and resume. A
-fresh start begins the first turn on the goal. A resumed one waits for a delivery. A driver raises `DriverError` for what it
-cannot do.
+fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for
+what it cannot do, so a one-shot harness refuses a start with no goal.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
 `item{kind: message|thought|tool|patch, phase, native_id, gist, body, approval, outcome}`,
 `input.delivered{input, boundary, evidence}`, `approval.requested{id, gist}`, `model.call{call_id, model}`,
 `usage{tokens, usd, label, scope: call|turn|tree}`, `compacted{forgotten}`, `child.seen{native, parent, attribution}`,
-`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and `changes{path, added, removed, tests}` from the runtime's own
+`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason, code}`, and `changes{path, added, removed, tests}` from the runtime's own
 probe. Unknown frames become `native` plus a gap, never a log line. A report's `body` is text until the host stores it and journals
 the hash, as ingress does for a tool's body argument.
 
 The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
-`agent.start` with the declared capabilities, the verified result and the levels. A report cannot carry those, so a driver that
-tries to state one has sent an unknown frame.
+`agent.start` with the declared capabilities, the verified result and the levels, as `resumed` when it comes from a resumed harness,
+which leaves the agent as it stood. A report cannot carry those, so a driver that tries to state one has sent an unknown frame.
 
 ### 9.1 Wire
 

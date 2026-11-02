@@ -116,8 +116,9 @@ async def post(url: str, payload: Any, headers: Mapping[str, str] | None = None)
         **(headers or {}),
     }
     head = "".join(f"{key}: {value}\r\n" for key, value in fields.items())
+    target = f"{parts.path or '/'}?{parts.query}" if parts.query else parts.path or "/"
     try:
-        writer.write(f"POST {parts.path or '/'} HTTP/1.1\r\n{head}\r\n".encode() + body)
+        writer.write(f"POST {target} HTTP/1.1\r\n{head}\r\n".encode() + body)
         await writer.drain()
         status = int((await reader.readline()).split()[1])
         length = None

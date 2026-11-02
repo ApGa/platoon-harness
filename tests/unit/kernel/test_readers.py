@@ -341,3 +341,25 @@ async def test_deltas_end_when_the_kernel_closes(kernel):
     kernel.close()
     with pytest.raises(StopAsyncIteration):
         await pending
+
+
+async def test_a_reader_of_deltas_can_go_on_from_a_frame(kernel):
+    for text in ("one", "two", "three"):
+        kernel.push_delta("alice", text)
+
+    frames = kernel.deltas("alice", after=2)
+
+    assert (await anext(frames)).text == "three"
+    await frames.aclose()
+
+
+async def test_a_place_past_the_head_of_deltas_is_from_an_earlier_incarnation(kernel):
+    kernel.push_delta("alice", "held")
+    frames = kernel.deltas("alice", after=500)
+    next_frame = asyncio.ensure_future(anext(frames))
+    await asyncio.sleep(0)
+
+    kernel.push_delta("alice", "new")
+
+    assert (await next_frame).text == "new"
+    await frames.aclose()

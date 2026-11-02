@@ -81,7 +81,7 @@ async def test_a_wake_requests_a_deliver_effect_with_the_input_as_its_key(kernel
     effect = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[-1]
     assert effect["agent"] == "bob" and effect["on_uncertain"] == "reconcile"
     assert effect["data"]["input"] == handed["input"]
-    assert effect["data"]["items"] == [{"ref": sent["ref"], "gist": "wake up"}]
+    assert effect["data"]["items"] == [{"ref": sent["ref"], "gist": "wake up", "sender": "@alice", "body": None}]
     assert effect["data"]["boundary"] == "turn"
 
 

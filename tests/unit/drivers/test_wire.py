@@ -75,7 +75,7 @@ async def started(tmp_path, command, **fields) -> tuple[WireDriver, Heard]:
     return driver, heard
 
 
-DELIVERY = Delivery(input="d1", boundary="turn", items=(Offered(ref="inbox/ada@1", gist="hello"),))
+DELIVERY = Delivery(input="d1", boundary="turn", text="hello", items=(Offered(ref="inbox/ada@1", gist="hello"),))
 
 
 async def test_a_python_driver_on_the_wire_is_a_few_lines(tmp_path):

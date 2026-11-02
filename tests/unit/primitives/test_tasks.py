@@ -503,3 +503,44 @@ def test_claim_race_a_task_has_at_most_one_completer_and_it_held_a_live_lease(tm
         kernel.close()
 
     asyncio.run(body())
+
+
+def due(kernel, agent: str) -> list[dict[str, Any]]:
+    return result_of(kernel.query(kernel.runtime, "lease.due", {"agent": agent}))
+
+
+async def test_a_lease_is_due_for_renewal_past_half_its_time(kernel, queue, clock):
+    bob = await spawn(kernel, "bob")
+    await add(kernel)
+    claimed = await claim(kernel, bob)
+
+    assert due(kernel, "bob") == []
+
+    clock.advance(31.0)
+
+    assert due(kernel, "bob") == [{"queue": "work", "task": claimed["task"], "fence": claimed["fence"]}]
+
+
+async def test_a_lease_that_lapsed_or_cannot_grow_is_not_due(kernel, clock):
+    await channel(kernel, "work", kind="queue", lease=60.0, lease_max=60.0)
+    bob = await spawn(kernel, "bob")
+    await add(kernel)
+    await claim(kernel, bob)
+
+    clock.advance(31.0)
+    assert due(kernel, "bob") == []
+
+    clock.advance(30.0)
+    assert due(kernel, "bob") == []
+
+
+async def test_what_is_due_renews_with_no_fence_in_the_model_s_hands(kernel, queue, clock):
+    bob = await spawn(kernel, "bob")
+    await add(kernel)
+    await claim(kernel, bob)
+    clock.advance(31.0)
+
+    renewed = result_of(await kernel.submit(kernel.runtime, "task.renew", due(kernel, "bob")[0]))
+
+    assert renewed["lease_until"] == clock.now() + 60.0
+    assert due(kernel, "bob") == []

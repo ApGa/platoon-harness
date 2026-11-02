@@ -8,7 +8,7 @@ from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Pri
 from platoon_harness.kernel.model import RefusalCode
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools import Surface, harness_name, list_tools, preamble, shell_name, tool_name
-from platoon_harness.tools.surface import describe, named_surface, notices_text, refusal_text
+from platoon_harness.tools.surface import delivery_text, describe, named_surface, notices_text, refusal_text
 
 from ..kernel.support import grant
 from .support import enrolled
@@ -223,9 +223,21 @@ def test_a_refusal_carries_everything_it_was_given():
 
 
 def test_notices_say_how_many_more_are_waiting():
-    handed = {"items": [{"ref": "inbox/a@1", "gist": "stop"}], "behind": 2}
+    handed = {"items": [{"ref": "inbox/a@1", "gist": "stop", "sender": "@a", "body": None}], "behind": 2}
 
     assert notices_text(handed, shell_name, OPS).splitlines()[1:] == [
-        "- inbox/a@1: stop",
+        "- inbox/a@1 from @a: stop",
         "2 more are waiting: call `ph message.read`.",
+    ]
+
+
+def test_a_delivery_reads_in_the_words_of_its_surface_and_names_its_input():
+    item = {"ref": "inbox/a@1", "gist": "read this", "sender": "@lead", "body": "sha256:abc"}
+
+    text = delivery_text({"input": 41, "items": [item], "behind": 0}, harness_name("ph"), OPS)
+
+    assert text.splitlines() == [
+        "New messages (delivery 41):",
+        "- inbox/a@1 from @lead: read this",
+        "  Its body is sha256:abc: pass that as `ref` to `mcp__ph__blob_get`.",
     ]

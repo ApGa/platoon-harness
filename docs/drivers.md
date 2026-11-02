@@ -29,8 +29,8 @@ A method it cannot honor raises `DriverError`, with the reason. That is how "uns
 method promises:
 
 - **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer.
-- **`start`** begins the first turn on `spec.goal`. Given `spec.resume`, it reopens that native session and waits for a delivery.
-  A driver refuses an unset model where the harness would otherwise pick a hosted default.
+- **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
+  for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash.
 - **`interrupt`** stops the turn. The agent lives on.
@@ -55,7 +55,7 @@ method promises:
 | `ChildSeen` | `native`, `parent`, `attribution` | A native child it made on its own |
 | `GapReport` | `plane`, `what` | Something went unseen, from a closed list |
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
-| `Exited` | `reason` | The harness is gone |
+| `Exited` | `reason`, `code` | The harness is gone. `code` is its exit code, when it has one, and tells a one-shot that finished from one that failed |
 
 Never guess. Unknown is `None`, not zero, not an empty list, and not a plausible id. A frame you cannot read becomes `Native` plus a
 gap, which is what `unknown_frame(kind, raw)` returns, and never a log line.
@@ -152,7 +152,8 @@ class OneCall:
             raise DriverError("set a model: this harness will not pick one")
         self.model, self.report = spec.model, report
         await report(Ready(version="1.0", effective_model=spec.model))
-        self.turn = asyncio.create_task(self.take_turn(spec.goal))
+        if spec.goal:
+            self.turn = asyncio.create_task(self.take_turn(spec.goal))
         return Started()
 
     async def take_turn(self, prompt):
@@ -172,7 +173,8 @@ class OneCall:
             return json.load(reply)["choices"][0]["message"]["content"]
 
     async def deliver(self, delivery):
-        await self.turn
+        if self.turn is not None:
+            await self.turn
         await self.report(InputDelivered(input=delivery.input, boundary="turn", evidence="prompt"))
         self.turn = asyncio.create_task(self.take_turn(delivery.text))
         return Receipt(boundary="turn")
@@ -212,7 +214,7 @@ may start for it. Starting an agent is a new process.
 < {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}
-> {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable"}],"behind":0}}
+> {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","text":"New messages (delivery 41):\n- inbox/ada@3 from @lead: Keep the API stable","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable","sender":"@lead","body":null}],"behind":0}}
 < {"jsonrpc":"2.0","id":2,"result":{"boundary":"turn","queued":["41"]}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"41","boundary":"turn","evidence":"message_start"}}
 > {"jsonrpc":"2.0","id":3,"method":"stop","params":{"grace":5.0}}
@@ -223,7 +225,7 @@ may start for it. Starting an agent is a new process.
 |---|---|---|
 | `describe` | `protocol` | `protocol` plus the fields of `DriverInfo` |
 | `start` | `protocol`, `spec` | `{native}` |
-| `deliver` | `input`, `boundary`, `items`, `behind` | `{boundary, queued}` |
+| `deliver` | `input`, `boundary`, `text`, `items`, `behind` | `{boundary, queued}` |
 | `interrupt` | none | `{boundary, queued}` |
 | `answer` | `approval`, `verdict` | null |
 | `reconcile` | `input` | `"landed"`, `"not_landed"` or `"unknown"` |
@@ -292,6 +294,7 @@ async def test_my_driver_conforms(tmp_path):
 | `tool_in_first_request` | Our tool is in the first model request. Needs an MCP path |
 | `delivered_text_in_next_prompt` | A delivery's text is in the next prompt, and `input.delivered` came. Needs a persistent session and a `turn` boundary |
 | `turn_end_reported` | A turn starts and ends |
+| `no_goal_takes_no_turn` | With no goal it waits, and its first prompt is what it was sent. Needs a persistent session and a `turn` boundary |
 | `interrupt` | A stalled turn ends, and the agent lives on. Needs `interrupt` |
 | `resume` | A new instance resumes, takes a delivery and still knows what came before. Needs `resume` |
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |

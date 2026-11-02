@@ -29,7 +29,7 @@ from .common import (
     size_of,
     stream_of,
 )
-from .sessions import Session
+from .sessions import SessionRecord
 
 _SCAN_LIMIT = 4096
 _VERSION_DIGITS = 18
@@ -432,7 +432,7 @@ def post(
             raise Refused("queue_full", {"receipt": "full", "depth": depth, "cap": channel.depth})
 
     hops, spent = _chain(txn, cause, subject, follows)
-    max_hops = txn.view(Session).settings().limits.max_hops
+    max_hops = txn.view(SessionRecord).settings().limits.max_hops
     past_hops = max_hops is not None and hops > max_hops
     setting = "wake" if wake else channel.delivery
     wakes = not past_hops and subject not in spent

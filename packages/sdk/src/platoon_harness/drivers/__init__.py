@@ -112,25 +112,24 @@ class AgentSpec(Model):
 
 
 class Offered(Model):
-    """One entry handed over, by its ref and what a reader sees first."""
+    """One entry handed over: its ref, who sent it, what a reader sees first, and the ref of any body."""
 
     ref: str
     gist: str
+    sender: str | None = None
+    body: str | None = None
 
 
 class Delivery(Model):
-    """One handover. `input` is the id `input.delivered` echoes, `boundary` is one the driver declared, and `behind`
-    counts entries left for the next."""
+    """One handover. `input` is the id `input.delivered` echoes, `boundary` is one the driver declared, `text` is the
+    handover as a harness's prompt reads it, in the words of its surface, and `behind` counts entries left for the
+    next."""
 
     input: str
     boundary: Boundary
+    text: str
     items: tuple[Offered, ...]
     behind: int = 0
-
-    @property
-    def text(self) -> str:
-        """The handover as a harness's prompt reads it."""
-        return "\n".join(item.gist for item in self.items)
 
 
 class Started(Model):

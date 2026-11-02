@@ -250,18 +250,17 @@ class Budgets(View):
                 )
         return rows
 
-    def usage_of(self, agent: str) -> dict[str, dict[str, Any]]:
-        """What one agent has spent, with labels: empty until something is measured, which is not zero."""
-        rows = self.db.execute(
-            "SELECT * FROM v_budgets_spent WHERE scope = ? AND unit != 'agents'", (f"agent:{agent}",)
-        )
+    def usage_of(self, scope: str) -> dict[str, dict[str, Any]]:
+        """What `shared` or one `agent:x` has spent, with labels: empty until something is measured, and not zero."""
+        rows = self.db.execute("SELECT * FROM v_budgets_spent WHERE scope = ? AND unit != 'agents'", (scope,))
         return {row["unit"]: {"amount": row["amount"], "label": row["label"]} for row in rows}
 
 
-def reserve(txn: Txn, agent: str, role: str, **extra: float) -> None:
-    """Hold one turn's estimate against every limit, or refuse. An agent holds one, since it runs one turn at a time."""
+def reserve(txn: Txn, agent: str, role: str, *, turn: bool = True, **extra: float) -> None:
+    """Hold what `extra` names, and one turn's estimate if a turn is coming, against every limit, or refuse. An agent
+    holds one turn's, since it runs one at a time."""
     budget = txn.view(Budgets)
-    amounts = {**budget.estimate(role), "turns": 1.0, **extra}
+    amounts = {**(budget.estimate(role) | {"turns": 1.0} if turn else {}), **extra}
     budget.check(role, amounts, txn.now)
     data = {"role": role, "amounts": amounts}
     txn.emit("budget.reserved", f"budget/agent:{agent}", gist=f"{agent} reserved", agent=agent, data=data)

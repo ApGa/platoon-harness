@@ -7,6 +7,7 @@ exercises the real tool plane, and conformance can read what it did from the mod
 import asyncio
 import itertools
 import json
+import uuid
 from collections import deque
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -129,8 +130,8 @@ class _Exiting(Exception):
 
 
 class ScriptedDriver:
-    """A harness made of `turns`, each a list of steps: the first runs on the goal, and each next on a delivery. A turn
-    with no steps left ends, and turns run out into empty ones.
+    """A harness made of `turns`, each a list of steps: the first runs on the goal if it has one, and each next on a
+    delivery. A turn with no steps left ends, and turns run out into empty ones.
 
     Its capabilities are data, and it holds to them: one that is not `persistent` exits after its first turn, one with
     no `resume` refuses to resume, and a boundary it does not declare is refused.
@@ -154,7 +155,6 @@ class ScriptedDriver:
         self._arrival = asyncio.Event()
         self._heard_this_turn = False
         self._approvals: dict[str, asyncio.Future[Verdict]] = {}
-        self._asked = itertools.count(1)
         self._tools: list[dict[str, Any]] = []
         self._turn_count = 0
         self._steps: asyncio.Task[str] | None = None
@@ -170,7 +170,7 @@ class ScriptedDriver:
             raise DriverError("this harness cannot resume")
         self._spec, self._report = spec, report
         self._native = spec.resume or f"scripted-{spec.agent}"
-        if spec.resume is not None:
+        if spec.resume is not None and self._transcript.exists():
             self._messages = json.loads(self._transcript.read_text())
         tools = await self._list_tools() if spec.tools is not None else None
         await report(
@@ -185,7 +185,7 @@ class ScriptedDriver:
 
     async def _run(self) -> None:
         try:
-            if self._spec.resume is None:
+            if self._spec.goal and self._spec.resume is None:
                 await self._turn(self._spec.goal)
             while self._capabilities.persistent:
                 delivery = await self._next_delivery()
@@ -199,7 +199,7 @@ class ScriptedDriver:
     async def _exit(self, reason: str) -> None:
         if not self._exited:
             self._exited = True
-            await self._report(Exited(reason=reason))
+            await self._report(Exited(reason=reason, code=0))
 
     async def _next_delivery(self) -> Delivery:
         while not self._pending:
@@ -273,7 +273,7 @@ class ScriptedDriver:
         await self._report(Item(kind="message", phase="final", gist=text[:GIST_LIMIT], body=text))
 
     async def _ask(self, gist: str) -> Verdict:
-        id = f"approval-{next(self._asked)}"
+        id = f"approval-{uuid.uuid4().hex[:8]}"  # A resumed harness must not ask under an id it has used.
         answered: asyncio.Future[Verdict] = asyncio.get_running_loop().create_future()
         self._approvals[id] = answered
         await self._report(ApprovalRequested(id=id, gist=gist[:GIST_LIMIT]))

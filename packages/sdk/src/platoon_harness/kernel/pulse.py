@@ -121,9 +121,10 @@ class Ring:
     def close(self) -> None:
         self._pulse.close()
 
-    async def frames(self) -> AsyncIterator[Delta]:
-        """Yield frames from the oldest still held. Overflow shows up as `lag`."""
-        seen = self._pulse.head - len(self._held)
+    async def frames(self, after: int | None = None) -> AsyncIterator[Delta]:
+        """Yield frames past `after`, or from the oldest still held. Overflow shows up as `lag`, and a place past the
+        head belongs to an earlier incarnation, so it counts as the head."""
+        seen = self._pulse.head - len(self._held) if after is None else min(after, self._pulse.head)
         while await self._pulse.wait(seen):
             for delta in tuple(self._held):
                 if delta.frame > seen:

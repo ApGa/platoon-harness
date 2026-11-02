@@ -65,6 +65,7 @@ def test_every_check_a_level_reads_exists():
         "tool_in_first_request",
         "call_ids_reported",
         "delivered_text_in_next_prompt",
+        "no_goal_takes_no_turn",
         "interrupt",
         "resume",
         "approval_answered",
@@ -166,6 +167,16 @@ async def test_a_delivery_that_never_reaches_the_prompt_fails(tmp_path):
     result = await check(Forgetful, tmp_path)
 
     assert result.get("delivered_text_in_next_prompt").reason == "the delivered text is not in the next prompt"
+
+
+async def test_a_turn_taken_on_no_goal_fails(tmp_path):
+    class Restless(Filtered):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            return await super().start(spec.model_copy(update={"goal": spec.goal or "carry on"}), report)
+
+    result = await check(Restless, tmp_path)
+
+    assert result.get("no_goal_takes_no_turn").reason == "its first model call came before anything was delivered"
 
 
 async def test_an_interrupt_that_stops_nothing_fails(tmp_path):

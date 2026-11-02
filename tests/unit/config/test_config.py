@@ -25,7 +25,7 @@ from platoon_harness.config import (
     sanitized,
 )
 from platoon_harness.extensions import DRIVERS, EXTENSIONS
-from platoon_harness.schema import ConfigError, dumps
+from platoon_harness.schema import ConfigError, dumps, seconds
 from platoon_harness.team import Command, Role, Team
 from platoon_harness.topology import Queue, manager_worker
 
@@ -450,3 +450,21 @@ def test_a_bad_set_line_is_not_repeated(layers):
         layers.load(sets=["api_key = sk-hunter2"])
 
     assert "hunter2" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("span", "expected"), [("90s", 90.0), ("30m", 1800.0), ("2h", 7200.0), ("1d", 86400.0), (1.5, 1.5)]
+)
+def test_a_duration_converts_to_seconds(span, expected):
+    assert seconds(span) == expected
+
+
+def test_a_duration_that_is_none_says_what_one_looks_like():
+    with pytest.raises(ValueError, match="looks like 90s"):
+        seconds("soon")
+
+
+def test_a_manifest_says_how_a_session_was_started():
+    manifest = Manifest.of(installed_team(), human="human:ada", approvals="deny", cwd="work")
+
+    assert Manifest.model_validate_json(manifest.model_dump_json()) == manifest

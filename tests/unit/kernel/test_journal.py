@@ -7,7 +7,7 @@ import sqlite3
 
 import pytest
 
-from platoon_harness.kernel import Filesystem, Kernel, Refused, filesystem, journal
+from platoon_harness.kernel import Filesystem, Kernel, Refused, filesystem, is_held, journal
 from platoon_harness.kernel import writer as writer_module
 
 from .support import dump, events_of, notes, refusal_of, refused_code, result_of
@@ -299,3 +299,16 @@ async def test_reopening_keeps_everything(folder, clock):
     assert dump(folder) == before
     assert again.head == 1
     again.close()
+
+
+async def test_the_lock_alone_says_whether_a_runtime_is_live(kernel, folder, clock):
+    assert is_held(folder)
+    assert not kernel.read_only
+
+    kernel.close()
+
+    assert not is_held(folder)
+    assert not is_held(folder.parent)
+    reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
+    assert reader.read_only
+    reader.close()

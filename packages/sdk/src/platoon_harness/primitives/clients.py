@@ -109,9 +109,15 @@ class Attention(View):
     def budget_set(self, event: Event) -> None:
         self._lower(event, "kind = 'budget'")
 
+    @fold("turn.lost")
+    def turn_lost(self, event: Event) -> None:
+        """Nobody knows what a lost turn did, and nothing will wake its agent to find out."""
+        self._raise(f"turn/{event.agent}", "uncertain", event)
+
     @fold("turn.started")
     def turn_started(self, event: Event) -> None:
-        self._lower(event, "id = ? OR (agent = ? AND kind = 'failed')", f"wake/{event.agent}", event.agent)
+        turn = f"turn/{event.agent}"
+        self._lower(event, "id IN (?, ?) OR (agent = ? AND kind = 'failed')", f"wake/{event.agent}", turn, event.agent)
 
     def _row(self, row: Any) -> dict[str, Any]:
         return {**dict(row), "actions": json.loads(row["actions"]), "open": bool(row["open"])}
@@ -156,6 +162,36 @@ class Changes(View):
         return [{**dict(row), "since_mark": after} for row in rows]
 
 
+class Gaps(View):
+    """Every incident gap, counted by agent and kind, which is what an ending has to state."""
+
+    schema = """
+    CREATE TABLE v_gaps(
+        agent TEXT NOT NULL,
+        what TEXT NOT NULL,
+        plane TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        PRIMARY KEY (agent, what)
+    ) WITHOUT ROWID, STRICT;
+    """
+
+    def _count(self, agent: str | None, what: str, plane: str) -> None:
+        self.db.execute(
+            "INSERT INTO v_gaps VALUES (?, ?, ?, 1) ON CONFLICT DO UPDATE SET count = count + 1", (agent, what, plane)
+        )
+
+    @fold("gap.recorded")
+    def recorded(self, event: Event) -> None:
+        self._count(event.agent, event.data["what"], event.data["plane"])
+
+    @fold("turn.lost")
+    def turn_lost(self, event: Event) -> None:
+        self._count(event.agent, event.data["gap"], "control")
+
+    def rows(self) -> list[dict[str, Any]]:
+        return [dict(row) for row in self.db.execute("SELECT * FROM v_gaps ORDER BY agent, what")]
+
+
 def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]) -> why.Why | None:
     """The one thing most worth saying about this agent, or nothing if it needs no explaining."""
     if agent.ended:
@@ -195,7 +231,7 @@ def _roster(txn: Txn, names: set[str] | None = None) -> list[dict[str, Any]]:
             "why": _why(txn, agent, uncertain, dues),
             "unread": deliveries.unread(agent.name),
             "levels": agent.levels,
-            "usage": budget.usage_of(agent.name),
+            "usage": budget.usage_of(f"agent:{agent.name}"),
         }
         for agent in txn.view(Agents).listed()
         if names is None or agent.name in names

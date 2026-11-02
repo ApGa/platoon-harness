@@ -9,7 +9,7 @@ from .clock import Clock, ManualClock, SystemClock
 from .daemon import Daemon
 from .effects import Effect, Effects
 from .extension import Extension
-from .journal import Filesystem, filesystem
+from .journal import Filesystem, filesystem, is_held
 from .kernel import Kernel
 from .model import GIST_LIMIT, NAME, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
 from .op import Args, Op, op
@@ -51,5 +51,6 @@ __all__ = [
     "filesystem",
     "fold",
     "hash_token",
+    "is_held",
     "op",
 ]

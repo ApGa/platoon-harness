@@ -132,7 +132,14 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
         profile,
         conformance,
         ("describe_starts_nothing", "turn_end_reported", "exit_reported", "stop_leaves_no_process"),
-        ("delivered_text_in_next_prompt", "interrupt", "resume", "approval_answered", "steers_at_declared_boundary"),
+        (
+            "delivered_text_in_next_prompt",
+            "no_goal_takes_no_turn",
+            "interrupt",
+            "resume",
+            "approval_answered",
+            "steers_at_declared_boundary",
+        ),
     )
     if not capabilities.tool_paths:
         yield "unmet", "it has no path to our tools"

@@ -138,7 +138,7 @@ class _Rig:
 
     async def deliver(self, boundary: Boundary = "turn", *, input: str = "1") -> Delivery:
         item = Offered(ref="inbox/conformance@1", gist=_GIST)
-        delivery = Delivery(input=input, boundary=boundary, items=(item,))
+        delivery = Delivery(input=input, boundary=boundary, text=_GIST, items=(item,))
         self.awaiting = "an answer to `deliver`"
         await self.driver.deliver(delivery)
         return delivery
@@ -247,6 +247,17 @@ async def turn_end_reported(rig: _Rig) -> None:
     await rig.start()
     await rig.until(TurnStarted)
     await rig.until(TurnEnded)
+
+
+@_check(_persistent)
+async def no_goal_takes_no_turn(rig: _Rig) -> None:
+    await rig.start(goal="")
+    await rig.until(Ready)
+
+    await rig.deliver()
+    await rig.until(InputDelivered)
+
+    _expect((await rig.call(0)).says(_GIST), "its first model call came before anything was delivered")
 
 
 def _interruptible(capabilities: Capabilities) -> str | None:

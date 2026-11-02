@@ -11,7 +11,8 @@ AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held",
 
 
 class Agent(BaseModel, frozen=True):
-    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session."""
+    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `native` is the id
+    its harness resumes by, when it gave one."""
 
     name: str
     role: str
@@ -25,6 +26,7 @@ class Agent(BaseModel, frozen=True):
     on_parent_exit: str
     persistent: bool | None
     resume: bool | None
+    native: str | None
     tool_timeout_s: float | None
     boundaries: tuple[str, ...]
     held_by: str | None
@@ -60,6 +62,7 @@ class Agents(View):
         on_parent_exit TEXT NOT NULL,
         persistent INTEGER,
         resume INTEGER,
+        native TEXT,
         tool_timeout_s REAL,
         boundaries TEXT NOT NULL,
         held_by TEXT,
@@ -80,30 +83,42 @@ class Agents(View):
             """
             INSERT INTO v_agents VALUES (
                 :name, :role, :parent, :depth, 'spawning', NULL, NULL, :harness, :model, :on_parent_exit,
-                NULL, NULL, NULL, '[]', NULL, :goal, NULL, NULL, NULL, '{}'
+                NULL, NULL, NULL, NULL, '[]', NULL, :goal, NULL, NULL, NULL, '{}'
             )
             """,
             {**data, "harness": json.dumps(data["harness"])},
         )
 
-    @fold("agent.started")
-    def started(self, event: Event) -> None:
+    @fold("agent.started", "agent.resumed")
+    def harness_up(self, event: Event) -> None:
         data, declared = event.data, event.data["declared"]
         self.db.execute(
             """
-            UPDATE v_agents SET state = 'idle', persistent = :persistent, resume = :resume,
-                tool_timeout_s = :tool_timeout_s, boundaries = :boundaries, levels = :levels,
-                model = coalesce(:effective_model, model)
+            UPDATE v_agents SET persistent = :persistent, resume = :resume, tool_timeout_s = :tool_timeout_s,
+                boundaries = :boundaries, levels = :levels, model = coalesce(:effective_model, model),
+                native = coalesce(:native, native)
             WHERE name = :agent
             """,
             {
                 **declared,
                 "effective_model": data["effective_model"],
+                "native": data["native"],
                 "boundaries": json.dumps(sorted(declared["boundaries"])),
                 "levels": json.dumps(data["levels"]),
                 "agent": event.agent,
             },
         )
+        if event.type == "agent.started":
+            self._move(event, "idle", "spawning")
+
+    @fold("effect.finished")
+    def launched(self, event: Event) -> None:
+        """A driver may name its session only in what `start` returned, which reaches the journal here."""
+        result = event.data["result"]
+        if event.data["kind"] == "launch" and isinstance(result, dict):
+            self.db.execute(
+                "UPDATE v_agents SET native = coalesce(?, native) WHERE name = ?", (result.get("native"), event.agent)
+            )
 
     def _move(self, event: Event, state: str, *only: str) -> None:
         marks = ", ".join("?" * len(only))

@@ -8,7 +8,7 @@ from platoon_harness.kernel import GIST_LIMIT, Args, Event, Refused, Stamps, Txn
 
 from .agents import Agent, Agents
 from .common import Gist, Name
-from .sessions import Session
+from .sessions import SessionRecord
 
 Verdict = Literal["allow", "deny"]
 
@@ -82,6 +82,10 @@ class Approvals(View):
         row = self.db.execute("SELECT * FROM v_approvals WHERE id = ?", (id,)).fetchone()
         return None if row is None else Approval(**dict(row))
 
+    def asking(self) -> int:
+        """How many wait on a human. A stated policy decides in the same command, so anything pending is left to ask."""
+        return self.db.execute("SELECT count(*) AS n FROM v_approvals WHERE state = 'pending'").fetchone()["n"]
+
     def pending_for(self, agent: str) -> list[Approval]:
         rows = self.db.execute("SELECT * FROM v_approvals WHERE agent = ? AND state = 'pending' ORDER BY id", (agent,))
         return [Approval(**dict(row)) for row in rows]
@@ -101,7 +105,7 @@ def ask(txn: Txn, id: str, agent: Agent, gist: str) -> None:
     """Record that a harness is waiting on a decision, then apply the role's policy. `ask` leaves it for a human."""
     if txn.view(Approvals).get(id) is not None:
         raise Refused("conflict", f"approval {id} exists")
-    role = txn.view(Session).settings().roles.get(agent.role)
+    role = txn.view(SessionRecord).settings().roles.get(agent.role)
     policy = "ask" if role is None else role.approvals
     txn.emit("approval.requested", f"approval/{id}", gist=gist, agent=agent.name, data={"id": id, "policy": policy})
     if policy != "ask":
