@@ -37,7 +37,7 @@ from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token, tool_name
-from platoon_harness.primitives import OWNER_STOP
+from platoon_harness.primitives import CUT_OFF, OWNER_STOP
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Team
 from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, held_tools, preamble, shell_name
@@ -417,6 +417,9 @@ class Host:
             case Exited(reason=reason) if not link.ready.is_set():
                 link.refuse(reason)  # Nobody has heard of this harness, so `connect` fails, which says so.
                 return
+            case TurnEnded(reason=reason) if reason in CUT_OFF:
+                await self._unknown(link, report.type, f"a turn ended `{reason}`, which only the runtime can say")
+                report = TurnEnded(reason="unknown")
             case TurnEnded(reason="interrupted") if self._closing:
                 report = TurnEnded(reason=OWNER_STOP)
             case Item(body=body):
@@ -426,6 +429,10 @@ class Host:
                 stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}
                 report = report.model_copy(update=stored)
         await self._taken(link, report, await self.insist("agent.report", {"agent": link.agent, "report": report}))
+
+    async def _unknown(self, link: DriverLink, kind: str, why: str) -> None:
+        for frame in unknown_frame(kind, why):
+            await self.insist("agent.report", {"agent": link.agent, "report": frame})
 
     async def _stored(self, text: str | None) -> str | None:
         """Text from a report as the ref of a stored body, since a journal event holds 16 KiB."""
@@ -444,8 +451,7 @@ class Host:
         if refusal.code == "conflict" and status["state"] == "ended":
             return
         why = f"its {report.type} report was refused: {refusal.code}: {refusal.detail}"
-        for dropped in unknown_frame(report.type, why):
-            await self.insist("agent.report", {"agent": link.agent, "report": dropped})
+        await self._unknown(link, report.type, why)
         await self._lose(link.agent, why)
 
     async def _ready(self, link: DriverLink, ready: Ready) -> None:

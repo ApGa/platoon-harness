@@ -50,8 +50,7 @@ async def _resume(host: Host, agent: dict[str, Any]) -> None:
         raise DriverError("its harness cannot resume")
     admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
     await host.connect(name, role, admission, resume=native)
-    if agent["unbegun"] or agent["cut_off"]:
-        await _must(host, "agent.retell", {"agent": name})
+    await _must(host, "agent.retell", {"agent": name})
 
 
 async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: bool) -> None:

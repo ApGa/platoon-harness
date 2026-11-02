@@ -28,6 +28,7 @@ from .common import AgentName, Body, Gist, Name, Paging, address, paged
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
+    CUT_OFF,
     OWNER_STOP,
     ApprovalRequested,
     Capabilities,
@@ -57,10 +58,9 @@ Status = Literal["finished", "cancelled", "retired", "lost", "failed"]
 _FINISH_SECONDS = 60.0
 _REASON_LIMIT = 1024
 _ON_PURPOSE = ("interrupted", OWNER_STOP)
-_CUT_OFF = (
-    "Your last turn was cut off by {cause}. Its tool calls may have run in part or in full, even if your history shows "
-    "them unfinished, failed or interrupted, or not at all. None was repeated. Check before you repeat anything, "
-    "then carry on."
+_NOTICE = (
+    "Your last turn was cut off by {cause}. Any tool call in it may have run, in part or in full, whatever your "
+    "history shows, and none was repeated. Check before you repeat anything, then carry on."
 )
 
 
@@ -403,14 +403,16 @@ def start(txn: Txn, a: Start) -> None:
 @op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)
 def retell(txn: Txn, a: Named) -> None:
     """Tell a resumed harness what it has no way to know, as a delivery, since a resume starts no turn of its own: the
-    goal it never began, or that its last turn was cut off. That is told once, however often recovery runs."""
-    agent = _live(txn, a.agent)
+    goal it never began, or that its last turn was cut off. With neither there is nothing to say, and one that has ended
+    since is left alone."""
+    agent = txn.view(Agents).get(a.agent)
+    if agent is None or agent.ended:
+        return
     inbox = f"inbox/{agent.name}"
     if agent.unbegun:
         post(txn, inbox, agent.goal, body=agent.goal_body, wake=True)
-    elif agent.cut_off is not None:
-        post(txn, inbox, _CUT_OFF.format(cause=agent.cut_off), wake=True)
-        txn.emit("agent.told", f"agent/{agent.name}", gist=f"{agent.name} told it was cut off", agent=agent.name)
+    elif cause := CUT_OFF.get(agent.stopped or ""):
+        post(txn, inbox, _NOTICE.format(cause=cause), wake=True)
 
 
 class AgentReport(Args):

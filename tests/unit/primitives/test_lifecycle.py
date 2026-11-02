@@ -728,17 +728,26 @@ async def test_a_goal_never_begun_is_told_again_as_a_delivery(kernel):
     assert state_of(kernel, "bob")["state"] == "waking"
 
 
-async def test_a_turn_a_crash_cut_off_is_told_once_however_often_recovery_runs(kernel):
+async def test_a_turn_a_crash_cut_off_is_told_until_another_begins(kernel):
     await spawn(kernel, "bob", goal="")
     await start_turn(kernel, "bob")
-    await kernel.recover()
     await kernel.recover()
 
     for _ in range(2):
         result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+    await start_turn(kernel, "bob", "t2")
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
 
-    assert len(of_type(kernel, "message.sent")) == 1
-    assert ready(kernel)["agents"] == ["bob"]
+    assert len(of_type(kernel, "message.sent")) == 2
+
+
+async def test_an_agent_that_has_ended_is_told_nothing(kernel):
+    await spawn(kernel, "bob", goal="be bob")
+    result_of(await kernel.submit(kernel.runtime, "agent.cancel", {"agent": "bob"}))
+
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    assert of_type(kernel, "message.sent") == []
 
 
 async def test_a_second_turn_cut_off_is_a_second_thing_to_tell(kernel):

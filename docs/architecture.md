@@ -663,15 +663,15 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   A goal no turn has begun on keeps the session unsettled. A harness that says ready and begins none within a minute is lost, and one
   resumed before it began takes the goal as a delivery, at-least-once, since a resumed harness waits to be told.
 - **Cut-off turns.** A turn a crash lost, or one the owner's stop ended, is a turn its agent cannot know the end of, and an agent
-  nobody tells sits idle on its leases. So a resume tells it, with one fixed notice and a wake, once and only while the session accepts
-  work: a resume is someone wanting the session to go on, and a notice nobody acts on is the stall it fixes. The notice says which of
-  the two it was, that its tool calls may have run in part or in full even if its history shows them unfinished, failed or interrupted
-  or not at all, that none was repeated, and to check before repeating. It lists no calls, since a query leaves no event, so a list
-  could not say that an unlisted call never ran. `agent.told` records that it went, so a second crash during recovery sends no second
-  notice, and what was posted goes on at-least-once like any entry. A second turn cut off is a second thing to tell. A human's
-  `agent.interrupt` is no cut-off. A host that is closing reports a turn interrupted as `stopped by its owner`, which tells the two
-  apart and leaves a crash part of the way through a stop nothing to lose. The wake reserves a turn like any other, so a budget that an unmeasured turn left unable to hold
-  refuses it, and the session ends `needs_human`.
+  nobody tells sits idle on its leases. So a resume tells it, with one fixed notice and a wake, while the session accepts work: a
+  resume is someone wanting the session to go on, and a notice nobody acts on is the stall it fixes. The notice says which of the two
+  it was, that any tool call in it may have run, in part or in full, whatever its history shows, that none was repeated, and to check
+  before repeating. It lists no calls, since a query leaves no event, so a list could not say that an unlisted call never ran. It is
+  at-least-once, as a goal told again is: `stopped` says what to tell until the next turn begins, so a second crash before then repeats
+  the line. A human's `agent.interrupt` is no cut-off. A host that is closing reports a turn interrupted as `stopped by its owner`,
+  which tells the two apart and leaves a crash part of the way through a stop nothing to lose. Only the runtime gives those two
+  reasons: a driver that says one has sent an unknown frame, and its turn ended `unknown`. The wake reserves a turn like any other, so
+  a budget that an unmeasured turn left unable to hold refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
   refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
@@ -1104,7 +1104,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
 
 `activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
-turn ended, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
+turn did not stop on its own, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
 `Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `needs-you` is a derived group, not a state. `actions[]` are
 op references, each with whatever keeps a stale button from deciding anything, so any client can draw them.
 

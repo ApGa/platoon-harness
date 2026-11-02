@@ -161,6 +161,7 @@ platoon_harness.primitives.Item
 platoon_harness.primitives.Lines
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
+platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.OWNER_STOP
 platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.Plane

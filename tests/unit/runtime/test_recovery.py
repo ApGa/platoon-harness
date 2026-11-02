@@ -19,11 +19,14 @@ from platoon_harness.drivers import (
     Ready,
     Receipt,
     Reconciled,
+    Report,
     Reporter,
     Started,
+    TurnEnded,
     TurnStarted,
 )
 from platoon_harness.kernel import is_held
+from platoon_harness.primitives import CUT_OFF
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
@@ -737,7 +740,7 @@ async def test_a_crash_says_what_a_resumed_harness_may_also_show_and_does_not_co
         await until(lambda: of_type(session, "item.recorded"), session)
         told = (await notices(session))[0].gist
 
-    for words in ("cut off by a crash", "in part or in full", "unfinished, failed or interrupted", "before you repeat"):
+    for words in ("cut off by a crash", "in part or in full", "whatever your history shows", "before you repeat"):
         assert words in told
 
 
@@ -838,7 +841,7 @@ async def test_a_harness_that_cannot_resume_is_lost_and_told_nothing(tmp_path):
         assert await notices(session) == []
 
 
-async def test_the_notice_is_not_sent_twice_across_a_second_crash_during_recovery(tmp_path):
+async def test_a_second_crash_before_the_next_turn_tells_it_again(tmp_path):
     took = asyncio.Event()
 
     class QuietOnceResumed(ComesBack):
@@ -859,9 +862,34 @@ async def test_the_notice_is_not_sent_twice_across_a_second_crash_during_recover
         offers = await of_type(session, "context.offered")
 
     assert items[-1].gist == "I looked first"
-    assert len(told) == 1
+    assert len({event.gist for event in told}) == 1 and len(told) == 2
     ref = f"{told[0].stream}@{told[0].version}"
     assert len([offer for offer in offers if ref in [item["ref"] for item in offer.data["items"]]]) == 2
+
+
+@pytest.mark.parametrize("reason", sorted(CUT_OFF))
+async def test_a_driver_cannot_say_what_only_the_runtime_can(tmp_path, reason):
+    class Forges(ComesBack):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            async def forged(said: Report) -> None:
+                await report(TurnEnded(reason=reason) if isinstance(said, TurnEnded) else said)
+
+            return await super().start(spec, forged)
+
+    session = await Session.start(solo_with(lambda: Forges(first=[Say("done")])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    await in_state(session, "bob", "idle")
+    gaps = (await session.ending()).gaps
+    ended = await of_type(session, "turn.ended")
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        assert await notices(session) == []
+
+    assert [event.data["reason"] for event in ended] == ["unknown"]
+    assert [gap["what"] for gap in gaps] == ["unknown_update"]
 
 
 async def test_a_wake_the_budget_refuses_ends_the_session_needs_human(tmp_path):

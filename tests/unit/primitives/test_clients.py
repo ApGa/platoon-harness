@@ -309,6 +309,15 @@ async def test_a_roster_row_says_why_the_last_turn_stopped_until_the_next_begins
     assert roster(kernel, "bob")["stopped"] is None
 
 
+async def test_a_roster_row_says_nothing_of_a_turn_that_stopped_on_its_own(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await end_turn(kernel, "bob")
+
+    assert roster(kernel, "bob")["stopped"] is None
+
+
 async def test_a_roster_row_says_a_lost_turn_was_lost(kernel):
     await spawn(kernel, "bob")
     await start_turn(kernel, "bob")

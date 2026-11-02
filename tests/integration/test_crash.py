@@ -146,6 +146,12 @@ async def settled_after_the_crash(owner: Session) -> Any:
     return await owner.settled(timeout="30s")
 
 
+async def told(session: Session) -> set[str]:
+    """Who has been told a turn was cut off."""
+    sent = await of_type(session, "message.sent")
+    return {event.stream.removeprefix("inbox/") for event in sent if "cut off" in event.gist}
+
+
 @pytest.mark.slow
 async def test_a_second_crash_during_recovery_loses_nothing_more(tmp_path: Path):
     guest, _, sent = await crashed(tmp_path)
@@ -153,7 +159,7 @@ async def test_a_second_crash_during_recovery_loses_nothing_more(tmp_path: Path)
     await guest.leave()
 
     first = await Session.resume("s", root=tmp_path, detach=True)
-    await until(lambda: of_type(first, "agent.told"), first, lambda told: {event.agent for event in told} >= WORKERS)
+    await until(lambda: told(first), first, lambda names: names >= WORKERS)
     await kill_the_runtime(first)
     await first.status()
     await first.leave()

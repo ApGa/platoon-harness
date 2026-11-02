@@ -13,6 +13,8 @@ from .common import BodyRef, Gist, Name
 
 RAW_LIMIT = 2048
 OWNER_STOP = "stopped by its owner"
+CUT_OFF = {"lost": "a crash", OWNER_STOP: "the owner stopping the session"}
+"""The reasons only the runtime can give a turn, each with what cut that turn off, as a notice says it."""
 
 CallId = Annotated[str, Field(max_length=256)]
 Boundary = Literal["turn", "tool", "model_call"]
@@ -66,8 +68,8 @@ class TurnStarted(Args):
 
 
 class TurnEnded(Args):
-    """`stopped` if it stopped on its own, `interrupted` if someone stopped it, `OWNER_STOP` if a shutdown did, and
-    otherwise what went wrong. Only the runtime says `OWNER_STOP`."""
+    """`stopped` if it stopped on its own, `interrupted` if someone stopped it, and otherwise what went wrong. A driver
+    cannot say a reason in `CUT_OFF`, which are the runtime's own."""
 
     type: Literal["turn.ended"] = "turn.ended"
     reason: Annotated[str, Field(max_length=256)] = "stopped"

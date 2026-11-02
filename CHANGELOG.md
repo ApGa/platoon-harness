@@ -71,8 +71,8 @@
 - An effect left `uncertain` can be settled by a person with `effect.settle`, as ADR 0005 promised. Nothing could settle one under
   `surface`.
 - The host retries under one key, since a failed commit may have landed. It used to retry with none, and could run a command twice.
-- A turn a crash or the owner's stop cut off is told to its agent once, on resume, with a wake, and the words keep the two apart. A
-  lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
+- A turn a crash or the owner's stop cut off is told to its agent on resume, at-least-once, with a wake, and the words keep the two
+  apart. A lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
 - `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
   It says `needs_human`. A wake the budget refused keeps a session from closing as `settled`.
 - A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
@@ -130,10 +130,11 @@
   `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`.
 - `Compacted.forgotten` holds native ids, and the host stores it and `summary` as bodies. With `None` the runtime records
   `compaction_opaque`, so a driver no longer reports that gap itself.
-- A `roster` row has `parent`, `stopped`, why the last turn ended until the next begins, and `held_by`.
+- A `roster` row has `parent`, `stopped`, why the last turn did not stop on its own until the next begins, and `held_by`.
 - `session.status` says `stalled`, and `Session.settle_effect` says whether an uncertain effect happened.
-- `agent.retell` also tells a resumed harness its last turn was cut off, once, which journals `agent.told`. `Agent` has `cut_off`.
+- `agent.retell` also tells a resumed harness its last turn was cut off, from `stopped`, and with nothing to tell it says nothing.
 - `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.
+  `CUT_OFF` holds the reasons only the runtime gives, and a driver that says one has sent an unknown frame.
 - An agent that has finished can spawn nothing.
 - `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
 - `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.

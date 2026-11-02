@@ -9,9 +9,10 @@ import pytest
 
 from platoon_harness import Session
 from platoon_harness.drivers import AgentSpec, Reporter, Started
+from platoon_harness.primitives import CUT_OFF
 from platoon_harness.testing import ScriptedDriver
 
-from ..unit.runtime.support import boundaries, cut, harness, rebuilt_equals_live, until
+from ..unit.runtime.support import boundaries, cut, harness, of_type, rebuilt_equals_live, until
 from .scripts import FIX_THE_TEST, WORK, Lead, Templated, manager_worker
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
@@ -57,7 +58,9 @@ async def resumed_from(folder: Path, seq: int, root: Path) -> None:
         kernel = owner._runtime.kernel
         assert kernel.query(kernel.runtime, "effect.list", {"state": "started"}).result == [], seq
         records = kernel.query(kernel.runtime, "agent.records", {}).result
-        assert not [record["name"] for record in records if record["cut_off"] and record["status"] is None], seq
+        owed = {record["name"] for record in records if record["stopped"] in CUT_OFF and record["status"] is None}
+        sent = await of_type(owner, "message.sent")
+        assert owed <= {event.stream.removeprefix("inbox/") for event in sent if "cut off" in event.gist}, seq
 
     await rebuilt_equals_live(copy)
     shutil.rmtree(root)
