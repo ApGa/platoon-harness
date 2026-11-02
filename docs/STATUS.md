@@ -62,7 +62,7 @@ power loss. Nothing here has run on macOS.
 | Extension loading and the naming law | tested | `test_extension.py` |
 | Laws 1 to 9 and 12 | tested | `test_laws.py` |
 | Law 10, for what the kernel owns: unknown stays `None` in the envelope and in `Effect` | tested | `test_laws.py`. Rewards, usage, tool visibility and exposure do not exist yet |
-| Law 11: the kernel's own extensions reach no private name, and code outside the kernel imports only `__all__` | tested | `test_laws.py`. No code exists outside the kernel yet, so that half guards an empty set |
+| Law 11: the kernel's own extensions reach no private name, and code outside the kernel imports only `__all__` | tested | `test_laws.py`, over everything outside the kernel too |
 | Rebuild equals live, idempotent retry, gapless versions, backward references | tested | `test_properties.py` (hypothesis) |
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
 | `v`-based upcasting of old payloads | deferred | `v` is recorded. No upcaster exists until a second payload version does |
