@@ -262,9 +262,8 @@ def test_installed_says_a_name_is_missing_the_way_a_mapping_does(site):
 def test_installing_activates_nothing(site):
     site.module("never_imported_f", "raise RuntimeError('imported')")
     site.install("ballot", entry_points={EXTENSIONS: {"ballot": "never_imported_f:extension"}})
-    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.hub]\ncenter = "a"')
-    report = team_check(team, capabilities={"pi": Capabilities()}, extensions=Installed())
-    assert any("unknown preset `hub`" in str(problem) for problem in report)
+    with pytest.raises(ConfigError, match="unknown preset `hub`"):
+        Team.loads('[roles.a]\nharness = "pi"\n[topology.hub]\ncenter = "a"')
     assert "never_imported_f" not in sys.modules
 
 
@@ -292,3 +291,14 @@ def test_drivers_load_by_name_too(site):
     assert load(DRIVERS, "mine").__name__ == "Driver"
     with pytest.raises(NotInstalled, match="no driver `other`"):
         load(DRIVERS, "other")
+
+
+def test_a_module_reference_works_with_nothing_installed(site):
+    site.module(
+        "nothing_installed_ext", 'from platoon_harness.kernel import Extension\nextension = Extension("loose")\n'
+    )
+    assert len(Installed()) == 0
+    team = Team.loads('extensions = ["nothing_installed_ext:extension"]\n[roles.a]\nharness = "pi"\n')
+
+    assert team.resolved(Installed()) == team
+    assert team_check(team, capabilities={"pi": Capabilities()}, extensions=Installed()) == ()

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from platoon_harness.kernel import Args, Extension, Grant, Kernel, Principal, Txn, op
+from platoon_harness.primitives import channel_grants
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Role, Team
 from platoon_harness.topology import (
@@ -209,7 +210,7 @@ async def test_groups_become_their_roles_on_the_live_graph(kernel):
     two = await enroll(kernel, "agent:two", "peer")
     outsider = await enroll(kernel, "agent:out", "outsider")
     assert await may(kernel, one, "message.send", "inbox/two")
-    assert await may(kernel, two, "message.send", "channel/general")
+    assert await may(kernel, two, "message.send", "channel/+peers")
     assert not await may(kernel, outsider, "message.send", "inbox/one")
     assert not await may(kernel, one, "message.send", "inbox/out")
 
@@ -401,6 +402,18 @@ def test_compile_refuses_what_cannot_be_enforced():
 
 
 def test_compile_refuses_an_unexpanded_preset():
-    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
+    team = Team.loads('extensions = ["x"]\n[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
     with pytest.raises(ConfigError, match="not resolved"):
         compile(team)
+
+
+@pytest.mark.parametrize("kind", ["topic", "queue", "board"])
+def test_a_team_channel_grants_what_a_created_one_does(kind):
+    channels = {"topic": Topic, "queue": Queue, "board": Board}
+    channel = channels[kind](writers="role:a", readers="role:b")
+    roles = {"a": Role(harness="pi"), "b": Role(harness="pi")}
+    grants = compile(Team(roles=roles, topology=Topology(channels={"x": channel})))
+
+    for who, write in (("role:a", True), ("role:b", False)):
+        wanted = {Grant(who=who, ops=ops, on=on) for ops, on in channel_grants(kind, "x", write=write)}
+        assert wanted <= set(grants)

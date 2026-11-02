@@ -42,27 +42,22 @@ def manager_worker(
     )
 
 
-def tree(role: str, *, max_depth: int, max_children: int, until: str | None = None) -> Topology:
+def tree(role: str, *, max_depth: int, max_children: int | None = None, until: str | None = None) -> Topology:
     """Agents delegate downward and report upward. It closes when its root finishes, unless `until` says otherwise."""
     return Topology(
         until=until or f"role:{role}",
-        edges={role: ["children", "parent"]},
+        edges={role: ["children", "parent", "human"]},
         limits=Limits(max_depth=max_depth, max_children=max_children),
     )
 
 
-def mesh(
-    role: Roles, *, board: str | None = None, topic: str = "general", group: str = "peers", max_hops: int = 8
-) -> Topology:
-    """Peers message each other directly and share a topic that wakes no one."""
+def mesh(role: Roles, *, board: str | None = None, group: str = "peers", max_hops: int = 8) -> Topology:
+    """Peers message each other directly and share their group's topic, which wakes no one."""
     members = f"group:{group}"
-    channels: dict[str, Topic | Board] = {topic: Topic(writers=members, readers=members)}
-    if board:
-        channels[board] = Board(writers=members, readers=members)
     return Topology(
         groups={group: Group(roles=_names(role))},
         edges={name: [members, "human"] for name in _names(role)},
-        channels=channels,
+        channels={board: Board(writers=members, readers=members)} if board else {},
         limits=Limits(max_hops=max_hops),
     )
 
@@ -70,7 +65,7 @@ def mesh(
 def star(hub: str, spokes: Roles, *, topic: str | None = None, max_hops: int = 8) -> Topology:
     """Every message goes through the hub, which may also announce on a topic. Spokes never reach each other."""
     return Topology(
-        edges={hub: _selectors(spokes), **{spoke: [f"role:{hub}"] for spoke in _names(spokes)}},
+        edges={hub: [*_selectors(spokes), "human"], **{spoke: [f"role:{hub}"] for spoke in _names(spokes)}},
         channels={topic: Topic(writers=f"role:{hub}", readers=_selectors(spokes))} if topic else {},
         limits=Limits(max_hops=max_hops),
     )
@@ -85,26 +80,28 @@ def blackboard(role: Roles, *, board: str = "notes", queue: str | None = None) -
     return Topology(channels=channels)
 
 
-def _stage_queues(links: Mapping[str, Sequence[str]]) -> dict[str, Queue]:
-    if not links:
+def _stage_queues(links: Iterable[tuple[str, str]]) -> dict[str, Queue]:
+    """One queue per stage, with everything that feeds it as writers, so a stage named twice loses none."""
+    writers: dict[str, list[str]] = {}
+    for before, after in links:
+        writers.setdefault(after, []).append(before)
+    if not writers:
         raise ValueError("stages must link at least two roles")
     return {
-        f"to-{stage}": Queue(writers=_selectors(writers), readers=f"role:{stage}", delivery="wake")
-        for stage, writers in links.items()
+        f"to-{stage}": Queue(writers=_selectors(feeding), readers=f"role:{stage}", delivery="wake")
+        for stage, feeding in writers.items()
     }
 
 
 def pipeline(stages: Sequence[str], *, back: bool = False, max_hops: int | None = None) -> Topology:
     """Each stage feeds a queue for the next. `back` lets every later stage return work to the first."""
-    links: dict[str, Sequence[str]] = {after: [before] for before, after in pairwise(stages)}
-    if back:
-        links[stages[0]] = stages[1:]
+    links = [*pairwise(stages), *((stage, stages[0]) for stage in stages[1:] if back)]
     return Topology(channels=_stage_queues(links), limits=Limits(max_hops=max_hops))
 
 
 def ring(stages: Sequence[str], *, laps: int) -> Topology:
     """A pipeline whose last stage feeds the first, for at most `laps` times round."""
-    links = {after: [before] for before, after in pairwise([*stages, *stages[:1]])}
+    links = pairwise([*stages, *stages[:1]])
     return Topology(channels=_stage_queues(links), limits=Limits(max_hops=laps * len(stages)))
 
 
@@ -158,9 +155,9 @@ PRESETS: dict[str, Preset] = {
 
 def _call(preset: Preset, params: Mapping[str, Any], where: str) -> Topology:
     try:
-        fragment = validate_call(config=ConfigDict(strict=True))(preset)(**params)
+        fragment = validate_call(config=ConfigDict(strict=True, hide_input_in_errors=True))(preset)(**params)
     except ValidationError as error:
-        raise ConfigError(problems_in(error, where=where, keys=signature(preset).parameters.keys())) from error
+        raise ConfigError(problems_in(error, where=where, keys=signature(preset).parameters.keys())) from None
     except ValueError as error:
         raise ConfigError([Problem(where, str(error))]) from error
     if not isinstance(fragment, Topology):
@@ -187,7 +184,7 @@ def _expand(
 
 def expand(table: Mapping[str, Any], presets: Mapping[str, Preset] = PRESETS) -> Topology:
     """A `[topology]` table as one fragment: its own keys, in union with each preset table beside them."""
-    own = {key: value for key, value in table.items() if key in Topology.model_fields}
+    own = {key: value for key, value in table.items() if key in Topology.model_fields and key != "unexpanded"}
     uses: list[tuple[str, Mapping[str, Any]]] = []
     problems: list[Problem] = []
     for name, value in table.items():

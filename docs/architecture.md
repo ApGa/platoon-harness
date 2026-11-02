@@ -608,7 +608,7 @@ largest turn's cost times the live agents. Spawn reserves in the admission trans
 event, tried again when the budget moves.
 
 Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`. A limit in a unit a role cannot measure
-is refused by `team check`, or falls back to `turns` when the team says so; it never silently stops enforcing. A turn nobody
+is refused by `team check`, or falls back to `turns` when that budget also limits `turns`; it never silently stops enforcing. A turn nobody
 measured, a lost one among them, is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused
 `unavailable`. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
@@ -671,7 +671,7 @@ lease = "30m"
 | Key | Meaning |
 |---|---|
 | `<preset>` | A macro: `manager-worker` `tree` `mesh` `star` `blackboard` `pipeline` `ring` `map-reduce` `git-swarm`, or an extension's. A table named after it, or `[[...]]` to use one twice. Several form a union |
-| `edges` | Who may send to whose inbox, as `role: [relation...]` |
+| `edges` | Who may send to whose inbox, as `role: [relation...]`, or a lone relation |
 | `channels` | Each with `kind`, `writers`, `readers`, `delivery`, and kind-specific fields |
 | `groups` | Named membership rules: `roles`, `members` (principal ids), or `order`, which `next` and `prev` walk. Each change bumps the group's stream version, which is its generation |
 | `limits` | `max_depth` `max_children` `max_live` `max_hops` |
@@ -717,11 +717,14 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   it makes, and may name only readers and writers within its own reach. For an agent each selector means those it covers at that
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
   from a human or program, and every event carries `topology_rev`.
-- **`team check`** runs before any cost and reports everything at once. It refuses recursive `may_spawn` without `max_depth`, a
-  cycle without `max_hops`, a budget unit a role cannot measure, and an unknown preset, harness, extension, role, group or auth
-  profile. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`, `ancestors` and
-  `descendants` edges never count, and neither does a channel or inbox that does not wake. It warns of a role that can never
-  start, a role with no path to anyone, an entry that can wake more than 8 agents, and a setting no primitive enforces yet.
+- **`team check`** runs before any cost and reports everything at once. It refuses recursive spawning without `max_depth`, whether
+  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a budget unit a role cannot measure, and an unknown
+  preset, harness, extension, role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
+  preset is refused at load. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`,
+  `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A chain through a program
+  is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
+  with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
+  resolve, and a setting no primitive enforces yet.
 
 ## 9. Drivers
 
@@ -962,8 +965,9 @@ Threat tiers stay separate, in docs and in events.
   offline rewrite that produces a new session. See [security.md](security.md).
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan
   login exits 78 and names the fix unless the user opts in. `web --remote` refuses a second person on a plan-login session.
-- **Project config is untrusted.** It can select installed components but can never install one, and a `command` harness in a project file needs
-  an explicit trust step.
+- **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
+  `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step in a project or team file. The check reads where
+  each value came from, since mappings merge across layers.
 - **Harness env.** An allowlist, per process. The driver strips variables that change a harness's behavior or leak the parent's identity.
 
 ## 16. Observability
@@ -983,8 +987,9 @@ take the name of a built-in preset or a topology key.
 
 Two entry-point groups: `platoon_harness.drivers` (name → driver) and `platoon_harness.extensions` (name → `Extension`). A kind gets a group when a
 second independent user needs a short name. Discovery reads metadata with no import, so duplicates and incompatible `platoon-harness-sdk` requirements
-are caught before any code loads or any cost is spent. Installing activates nothing: a role names a harness, a team names `extensions = [...]`, and
-`name@version` and `module:attr` are always accepted. First-party and third-party extensions use the same contracts.
+are caught before any code loads or any cost is spent. Installing activates nothing: a role names a harness, a team names `extensions = [...]`,
+`name@version` is always accepted, and `module:attr` is accepted from a trusted layer, since it imports. First-party and third-party extensions use
+the same contracts.
 
 An extension op is usable through the SDK, MCP, `ph`, the CLI and the generic UI with no core edit: every surface derives from `ops.list`, and any client
 can render any event from its `gist`. Unknown events survive export and replay.

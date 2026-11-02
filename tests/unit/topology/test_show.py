@@ -36,24 +36,37 @@ def test_every_preset_reads_as_sentences(name):
 
 def test_show_describes_a_tree():
     assert PRESET_TEAMS["tree"].show() == (
-        "Agents (openhands) may message their children and their parent.\n"
-        "Limits: depth 6, children 4. Closes when agent finishes."
+        "Agents (openhands) may message their children, their parent and you.\n"
+        "Limits: depth 6, children 4. Closes when every agent has finished."
     )
 
 
 def test_show_describes_a_mesh():
     assert PRESET_TEAMS["mesh"].show() == (
         "Peers (opencode) may message +peers and you.\n"
-        "+peers is every peer. +peers share topic `general`. +peers share board `notes`. Limits: hops 8. "
-        "Closes when the session settles."
+        "+peers is every peer. +peers share board `notes`. Limits: hops 8. Closes when the session settles."
     )
 
 
 def test_show_describes_a_star():
     assert PRESET_TEAMS["star"].show() == (
-        "hub (claude) may message spokes. Spokes (codex) may message hub.\n"
+        "hub (claude) may message spokes and you. Spokes (codex) may message hub.\n"
         "hub posts to topic `announcements`; spokes read it. Limits: hops 8. Closes when the session settles."
     )
+
+
+@pytest.mark.parametrize(
+    ("role", "shown"),
+    [("policy", "Policies"), ("day", "Days"), ("lead_x", "Every lead_x"), ("qa-bot2", "Every qa-bot2")],
+)
+def test_a_role_reads_as_a_plural_only_when_it_is_a_word(role, shown):
+    team = Team(roles={role: Role(harness="pi", count=2)})
+    assert team.show().startswith(f"{shown} (pi)")
+
+
+def test_a_close_on_a_role_of_many_says_every():
+    team = Team(roles={"a": Role(harness="pi", count=2)}, topology=Topology(until="role:a"))
+    assert team.show().endswith("Closes when every a has finished.")
 
 
 def test_show_describes_a_pipeline():
@@ -102,7 +115,7 @@ def test_equal_teams_print_alike():
 
 
 def test_show_refuses_an_unresolved_team():
-    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
+    team = Team.loads('extensions = ["x"]\n[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
     with pytest.raises(ConfigError, match="waits for an extension"):
         team.show()
     with pytest.raises(ConfigError, match="waits for an extension"):

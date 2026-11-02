@@ -3,8 +3,9 @@
 A topology says who may reach whom. It never says who acts next: control flow belongs in a Python program. Everything else is
 ordinary grants over relations such as `parent` and `children`, which stay true as agents come and go.
 
-Pick a preset, name your roles, and you are done. Every example here is a team you can run, as TOML and as Python, and a test
-checks that both forms build the same object and that `team.show()` prints what is shown.
+Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team that `team check` accepts, as
+TOML and as Python, and a test checks that both forms build the same object and that `team.show()` prints what is shown. Running one
+is not implemented yet: see [STATUS.md](STATUS.md).
 
 ```python
 from platoon_harness.team import Role, Team
@@ -84,15 +85,16 @@ team = Team(
 ```
 
 ```text
-Agents (pi) may message their children and their parent.
-Limits: depth 6, children 4. Closes when agent finishes.
+Agents (pi) may message their children, their parent and you.
+Limits: depth 6, children 4. Closes when every agent has finished.
 ```
 
 ### mesh
 
-Peers message each other directly and share a topic that wakes no one, so a post costs nothing until the next turn. A direct message
-does wake, so a mesh bounds hops: 8 unless you say otherwise. Give it a list of roles to mix harnesses in one mesh. If peers spawn
-peers, set `limits.max_depth`, and `on_parent_exit = "adopt"` on the role so that a peer outlives whoever started it.
+Peers message each other directly and share their group's topic, `+peers`, which wakes no one, so a post costs nothing until the next
+turn. A direct message does wake, so a mesh bounds hops: 8 unless you say otherwise. Give it a list of roles to mix harnesses in one
+mesh. If peers spawn peers, set `limits.max_depth`, and `on_parent_exit = "adopt"` on the role so that a peer outlives whoever started
+it.
 
 ```toml
 [roles.peer]
@@ -113,12 +115,12 @@ team = Team(
 
 ```text
 Peers (claude) may message +peers and you.
-+peers is every peer. +peers share topic `general`. +peers share board `notes`. Limits: hops 8. Closes when the session settles.
++peers is every peer. +peers share board `notes`. Limits: hops 8. Closes when the session settles.
 ```
 
 ### star
 
-Everything goes through a hub, which may also announce on a topic. Spokes never reach each other.
+Everything goes through a hub, which may also announce on a topic, and which a person can reach. Spokes never reach each other.
 
 ```toml
 [roles.dispatcher]
@@ -142,7 +144,7 @@ team = Team(
 ```
 
 ```text
-dispatcher (claude) may message scouts. Scouts (codex) may message dispatcher.
+dispatcher (claude) may message scouts and you. Scouts (codex) may message dispatcher.
 dispatcher posts to topic `orders`; scouts read it. Limits: hops 8. Closes when the session settles.
 ```
 
@@ -213,7 +215,7 @@ reviewer and verifier add to queue `to-author`; author claims from it. Each entr
 
 ### ring
 
-A pipeline whose last stage feeds the first, for a stated number of laps.
+A pipeline whose last stage feeds the first, for a stated number of laps: each announcement carries its hops, so `max_hops` stops it.
 
 ```toml
 [roles.writer]
@@ -346,7 +348,7 @@ team = Team(
 ```
 
 ```text
-lead (claude) may message its workers and you. Workers (codex) may message their children and their parent.
+lead (claude) may message its workers and you. Workers (codex) may message their children, their parent and you.
 lead adds to queue `tasks`; workers claim from it. You post to topic `alerts`; everyone reads it. Each entry steers its readers. Everyone shares board `notes`. Limits: depth 3, children 4. Closes when lead finishes.
 ```
 
@@ -357,7 +359,8 @@ Three rules keep this safe:
 - **Two sources may not disagree.** Defining one channel, group, limit, `program` or `until` differently in two places is a load error
   that names both. Defining it alike is fine.
 
-To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls. Give each a different channel name.
+To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls, and give each a different channel name.
+Presets with fixed names (`pipeline`, `ring`, `map-reduce`, `git-swarm`) cannot be used twice over the same stage: write the second out.
 
 ## Writing it out
 
@@ -430,7 +433,8 @@ problems = team_check(team, capabilities=known)
 
 It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
 harness lacks, and any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never
-start, a role with no path to anyone, an entry that can wake more than 8 agents, and a setting nothing enforces yet.
+start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it
+cannot resolve, and a setting nothing enforces yet.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one.

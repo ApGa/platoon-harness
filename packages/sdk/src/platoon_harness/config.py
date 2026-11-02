@@ -2,7 +2,7 @@
 
 import os
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn, Self
 
@@ -12,7 +12,7 @@ from pydantic_core import CoreSchema, core_schema
 from platoon_harness import __version__
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component, find
 from platoon_harness.schema import ConfigError, Model, Problem, problems_in
-from platoon_harness.team import Command, Team
+from platoon_harness.team import Team
 
 ENVIRONMENT_VARIABLE = "PLATOON_HARNESS_CONFIG"
 PROJECT_FILE = "platoon-harness.toml"
@@ -51,6 +51,8 @@ class Secret:
         raise TypeError("a Secret refuses serialization")
 
     __reduce_ex__ = _refuse
+    __reduce__ = _refuse
+    __getstate__ = _refuse
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
@@ -92,18 +94,38 @@ def _dig(data: Any, *path: str) -> Any:
     return data
 
 
+def _needing_trust(team: Team, merged: Mapping[str, Any], files: Sequence[Mapping[str, Any]]) -> Iterator[Problem]:
+    """What only explicit trust may take from a project or team file: code to run, and credentials to pass on."""
+
+    def from_a_file(*path: str) -> bool:
+        value = _dig(merged, *path)
+        return value is not None and any(_dig(file, *path) == value for file in files)
+
+    for name, role in team.roles.items():
+        if from_a_file("roles", name, "harness", "command"):
+            yield Problem(f"roles.{name}.harness", "a command in a project file needs explicit trust")
+        if isinstance(role.harness, str) and ":" in role.harness and from_a_file("roles", name, "harness"):
+            yield Problem(f"roles.{name}.harness", "a `module:attr` in a project file needs explicit trust")
+    if any(":" in reference for reference in team.extensions) and from_a_file("extensions"):
+        yield Problem("extensions", "a `module:attr` in a project file needs explicit trust")
+    for name in team.auth:
+        if from_a_file("auth", name):
+            yield Problem(f"auth.{name}", "an auth profile in a project file needs explicit trust")
+
+
 def load_team(
     path: Path | None = None,
     *,
     cwd: Path | None = None,
     environ: Mapping[str, str] = os.environ,
     sets: Sequence[str] = (),
-    trust_commands: bool = False,
+    trust_project: bool = False,
 ) -> Team:
     """Layer config, low to high: defaults, user, project, team file, environment, command line.
 
-    The environment and each of `sets` are TOML text, such as `budget.usd = 5`. A `command` harness in a project
-    file is refused without `trust_commands`, since a project is untrusted. Every problem is reported at once.
+    The environment and each of `sets` are TOML text, such as `budget.usd = 5`. A project is untrusted, so what would
+    run code or pass a credential is refused from a project or team file without `trust_project`. Every problem is
+    reported at once.
     """
     problems: list[Problem] = []
     config_home = Path(environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
@@ -115,18 +137,15 @@ def load_team(
     merged: dict[str, Any] = {}
     for layer in (user, project, team_file, environment):
         merged = merge(merged, layer)
-    for text in sets:
-        merged = merge(merged, _parse(text, f"--set {text}", problems))
+    for index, text in enumerate(sets, 1):
+        merged = merge(merged, _parse(text, f"--set line {index}", problems))
 
     try:
         team = Team.model_validate(merged)
     except ValidationError as error:
-        raise ConfigError([*problems, *problems_in(error, Team)]) from error
-    if not trust_commands:
-        for name, role in team.roles.items():
-            untrusted = [_dig(layer, "roles", name, "harness") for layer in (project, team_file)]
-            if isinstance(role.harness, Command) and _dig(merged, "roles", name, "harness") in untrusted:
-                problems.append(Problem(f"roles.{name}.harness", "a command in a project file needs explicit trust"))
+        raise ConfigError([*problems, *problems_in(error, Team)]) from None
+    if not trust_project:
+        problems.extend(_needing_trust(team, merged, (project, team_file)))
     if problems:
         raise ConfigError(problems)
     return team
@@ -142,16 +161,32 @@ def credentials(team: Team, role: str, environ: Mapping[str, str] = os.environ) 
     return {name: Secret(environ[name]) for name in names}
 
 
+def _strings(value: Any) -> Iterator[str]:
+    """Every string in plain data, keys too."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for key, item in value.items():
+            yield key
+            yield from _strings(item)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            yield from _strings(item)
+
+
 def sanitized(team: Team, environ: Mapping[str, str] = os.environ) -> str:
-    """The resolved form, refused if it holds the value of a variable an auth profile names."""
-    text = team.show(resolved=True)
+    """The resolved form, refused if it holds the value of a variable an auth profile names. It looks at the strings
+    themselves, since rendering escapes them, and an empty value holds no secret."""
+    held = list(_strings(team.canonical()))
     names = sorted({name for profile in team.auth.values() for name in profile.env})
     leaks = [
-        Problem("auth", f"the value of `{name}` is in this config") for name in names if environ.get(name, "\0") in text
+        Problem("auth", f"the value of `{name}` is in this config")
+        for name in names
+        if (value := environ.get(name)) and any(value in text for text in held)
     ]
     if leaks:
         raise ConfigError(leaks)
-    return text
+    return team.show(resolved=True)
 
 
 class Manifest(Model):

@@ -40,6 +40,16 @@ hub = "hub"
 spokes = ["a", "b"]
 """
 
+TREE = """
+[roles.agent]
+harness = "pi"
+may_spawn = ["agent"]
+
+[topology.tree]
+role = "agent"
+max_depth = 2
+"""
+
 
 @pytest.fixture
 async def team(tmp_path: Path) -> AsyncIterator[Kernel]:
@@ -198,6 +208,19 @@ async def test_a_worker_waits_for_work_under_real_grants(team):
     result_of(await team.submit(lead, "task.add", {"queue": "tasks", "gist": "work"}))
 
     assert result_of(team.query(team.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]
+
+
+async def test_a_tree_root_can_answer_a_person(tmp_path):
+    kernel = Kernel.open(tmp_path / "tree", clock=ManualClock(1000.0), extensions=PRIMITIVES)
+    result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": {"agent": {}}}))
+    built = Team.loads(TREE)
+    for grant in compile(built):
+        result_of(await kernel.submit(kernel.runtime, "grant.add", grant.model_dump()))
+    await enroll(kernel, Principal(id="human:ada"))
+    root = await spawn(kernel, "root", role="agent")
+
+    assert (await send(kernel, root, "@ada", "here is the answer"))["audience"] == 1
+    kernel.close()
 
 
 async def test_a_reply_reaches_only_what_you_can_read(team):

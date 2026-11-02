@@ -33,6 +33,11 @@ def _join(items: Sequence[str]) -> str:
 
 
 def _plural(name: str) -> str:
+    """A role in the plural. A name that is no plain word stays an identifier."""
+    if not name.isalpha():
+        return f"every {name}"
+    if name.endswith("y") and name[-2:-1] not in "aeiou":
+        return f"{name[:-1]}ies"
     return f"{name}es" if name.endswith(("s", "x", "ch", "sh")) else f"{name}s"
 
 
@@ -40,14 +45,6 @@ def _group(name: str, group: Group) -> str:
     if group.order:
         return f"+{name} runs {', then '.join(group.order)}."
     return f"+{name} is {_join([*(f'every {role}' for role in group.roles), *group.members])}."
-
-
-def _closing(until: str) -> str:
-    if until == "program":
-        return "Closes when the program finishes."
-    if until == "settled":
-        return "Closes when the session settles."
-    return f"Closes when {until.partition(':')[2]} finishes."
 
 
 class _Prose:
@@ -89,6 +86,14 @@ class _Prose:
         text = self.nouns(selectors)
         lone = selectors[0].startswith("role:") and not self.many(selectors[0].partition(":")[2])
         return text if lone else text[0].upper() + text[1:]
+
+    def closing(self, until: str) -> str:
+        if until == "program":
+            return "Closes when the program finishes."
+        if until == "settled":
+            return "Closes when the session settles."
+        role = until.partition(":")[2]
+        return f"Closes when every {role} has finished." if self.many(role) else f"Closes when {role} finishes."
 
     def role(self, name: str) -> str:
         role = self.team.roles[name]
@@ -138,5 +143,5 @@ def describe(team: Team) -> str:
     if topology.program is not None:
         program = topology.program if isinstance(topology.program, str) else topology.program.name
         shared.append(f"Program `{program}` runs it.")
-    shared.append(_closing(topology.until or "settled"))
+    shared.append(prose.closing(topology.until or "settled"))
     return f"{' '.join(map(prose.role, team.roles))}\n{' '.join(shared)}"

@@ -1,5 +1,7 @@
 """Presets are macros: each worked example, and the promise that a resolved form is valid input."""
 
+from inspect import signature
+
 import pytest
 
 from platoon_harness.schema import ConfigError
@@ -19,6 +21,7 @@ from platoon_harness.topology import (
     mesh,
     pipeline,
     ring,
+    star,
     tree,
 )
 
@@ -108,7 +111,7 @@ def test_manager_worker_with_a_shared_board():
 
 def test_recursive_tree():
     topology = tree("agent", max_depth=6, max_children=4)
-    assert topology.edges == {"agent": ("children", "parent")}
+    assert topology.edges == {"agent": ("children", "human", "parent")}
     assert topology.limits == Limits(max_depth=6, max_children=4)
     assert topology.until == "role:agent"
     assert topology.channels == {}
@@ -130,18 +133,32 @@ def test_full_mesh_of_peers():
     peers = "group:peers"
     assert team.topology.groups == {"peers": Group(roles=("peer",))}
     assert team.topology.edges == {"peer": (peers, "human")}
-    assert team.topology.channels == {
-        "general": Topic(writers=peers, readers=peers, delivery="next-turn", history="from-join"),
-        "notes": Board(writers=peers, readers=peers),
-    }
+    assert team.topology.channels == {"notes": Board(writers=peers, readers=peers)}
     assert team.topology.until is None
     assert errors(team) == []
 
 
-def test_a_mesh_fans_out_without_waking_anyone():
-    topic = mesh("peer").channels["general"]
-    assert topic.delivery == "next-turn"
-    assert (topic.digest.items, topic.digest.overflow) == (32, "spill")
+def test_a_mesh_shares_its_groups_topic_and_makes_no_second_one():
+    assert mesh("peer").channels == {}
+    assert "topic" not in signature(mesh).parameters
+
+
+def test_a_person_can_reach_a_star_and_a_tree_and_be_answered():
+    assert "human" in star("hub", "spoke").edges["hub"]
+    assert "human" in tree("agent", max_depth=2).edges["agent"]
+
+
+def test_a_tree_needs_only_a_depth():
+    assert tree("agent", max_depth=6).limits == Limits(max_depth=6)
+
+
+def test_a_stage_named_twice_keeps_every_writer():
+    assert set(pipeline(["a", "b", "c", "b"]).channels["to-b"].writers) == {"role:a", "role:c"}
+
+
+def test_an_edge_may_be_one_selector_as_a_channel_may():
+    team = Team.loads('[roles.a]\nharness = "pi"\n[topology]\nedges = { a = "human" }')
+    assert team.topology.edges == {"a": ("human",)}
 
 
 def test_review_chain():
@@ -242,7 +259,6 @@ def test_a_preset_table_rejects_what_its_function_would():
     assert "topology.tree.rol" in text
     assert "Did you mean `role`?" in text
     assert "topology.tree.max_depth" in text
-    assert "topology.tree.max_children" in text
 
 
 def test_a_preset_used_twice_is_an_array_of_tables():

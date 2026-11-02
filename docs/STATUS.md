@@ -127,7 +127,8 @@ against a real kernel with stand-in ops, and nothing yet journals a team at open
 | Union: commutative, associative, a stable hash, conflicts naming both sources, no `deny` | tested | `test_union.py`, properties |
 | `compile`: edges, channels, groups, `may_spawn`, lifecycle, `wait` and scopes, enforced by the real `authorize` | tested | `test_compile.py` against stand-in ops. The object names match `primitives` by reading its source, not by running it |
 | `next`, `prev` and groups expanded over roles | tested | `test_compile.py` |
-| `team_check`: refusals, warnings, did-you-mean, every problem at once | tested | `test_check.py` |
+| `team_check`: refusals, warnings, did-you-mean, every problem at once, recursion through a written grant, relations no `may_spawn` makes true | tested | `test_check.py` |
+| A preset nobody knows, refused at load unless the team names an extension | tested | `test_check.py` |
 | `team.show()` in English, and the resolved form as valid input | tested | `test_show.py`, `test_docs.py` |
 | `docs/topologies.md`: every snippet runs, and both forms agree | tested | `test_docs.py` |
 | Presets from `Extension.presets`, with the power of a built-in | tested | `test_check.py`, `test_extensions.py` |
@@ -143,13 +144,14 @@ installed wheels.
 | Capability | State | Evidence |
 |---|---|---|
 | Precedence across six layers, mappings merge, lists replace, every problem at once | tested | `test_config.py` |
-| A `command` harness in a project file needs trust | tested | `test_config.py` |
-| `Secret`: refuses json, pickle, copy and pydantic, prints as a mask | tested | `test_config.py` |
-| Sanitized resolved config: names only, refused if it holds a named variable's value | tested | `test_config.py`. A credential no profile names cannot be recognised |
+| What a project file needs trust for: a `command` harness, a `module:attr` reference, an auth profile | tested | `test_config.py` |
+| `Secret`: refuses json, pickle, copy and pydantic, keeps its state to itself, prints as a mask | tested | `test_config.py` |
+| Input kept out of configuration errors and their tracebacks | tested | `test_config.py` |
+| Sanitized resolved config: names only, refused if it holds a named variable's value, however rendering escapes it | tested | `test_config.py`. A credential no profile names cannot be recognised |
 | Redaction of encoded forms and URLs | planned | Architecture section 15. Only exact values are refused here |
 | The manifest: resolved team, components, versions, topology hash | tested | `test_config.py`. Nothing writes `manifest.json` yet |
 | Discovery from metadata with no import, in two groups | tested | `test_extensions.py` |
 | Duplicates and incompatible SDK requirements caught before import | tested | `test_extensions.py`. Versions compare by release number, so a pre-release suffix is ignored |
-| `name`, `name@version` and `module:attr` references, lazy load by exact name | tested | `test_extensions.py` |
+| `name`, `name@version` and `module:attr` references, lazy load by exact name, with nothing installed too | tested | `test_extensions.py` |
 | Errors listing registered, installed and nearest names | tested | `test_extensions.py` |
 | Installing activates nothing | tested | `test_extensions.py` |

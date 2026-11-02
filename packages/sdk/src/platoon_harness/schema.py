@@ -9,6 +9,8 @@ from typing import Annotated, Any, Literal, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StringConstraints, ValidationError
 
+from platoon_harness.kernel import NAME
+
 _UNITS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
 
 __all__ = [
@@ -24,7 +26,7 @@ __all__ = [
     "problems_in",
 ]
 
-Name = Annotated[str, StringConstraints(pattern=r"^[\w.-]+$")]
+Name = Annotated[str, StringConstraints(pattern=f"^{NAME}$")]
 Positive = Annotated[StrictInt, Field(gt=0)]
 
 
@@ -49,9 +51,10 @@ Duration = Annotated[str, AfterValidator(_duration)]
 
 
 class Model(BaseModel):
-    """A configuration object: immutable, and refusing keys it does not declare."""
+    """A configuration object: immutable, and refusing keys it does not declare. Input stays out of an error, even a
+    chained one, since a mistaken key may hold a secret."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
     def canonical(self) -> dict[str, Any]:
         """Plain data with defaults left out, so a new default never disturbs an old form."""

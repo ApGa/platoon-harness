@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING
 
 from platoon_harness.kernel import Grant
+from platoon_harness.primitives import WAKING, channel_grants
 from platoon_harness.schema import ConfigError, Problem, nearest
 
 from .spec import RELATIONS, Group, Topology
@@ -15,15 +16,6 @@ if TYPE_CHECKING:
     from platoon_harness.team import Role, Team
 
 _RELATION = re.compile(r"\{([^{}]+)\}")
-_WAKING = ("wake", "steer")
-_WRITE = {"topic": ("message.send",), "queue": ("task.add", "task.list"), "board": ("board.post", "board.revise")}
-_READ = {
-    "topic": ("message.read",),
-    "queue": ("task.claim", "task.renew", "task.release", "task.complete", "task.fail", "task.list"),
-    "board": ("board.get", "board.query"),
-}
-_STREAM = {"topic": "channel/{}", "queue": "queue/{}", "board": "board/{}/*"}
-_WATCHED = {"topic": "channel/{}", "queue": "task/{}/*", "board": "board/{}/*"}
 _TREE = ("parent", "children", "ancestors", "descendants")
 _BASE = (
     Grant(who="all", ops="ops.list"),
@@ -89,17 +81,11 @@ def compile(team: Team) -> tuple[Grant, ...]:
             }
 
     for name, channel in topology.channels.items():
-        stream = _STREAM[channel.kind].format(name)
-        watched = _WATCHED[channel.kind].format(name)
-        for selector in channel.writers:
-            for who in _for_kernel(topology, "", selector):
-                grants |= {Grant(who=who, ops=ops, on=stream) for ops in _WRITE[channel.kind]}
-                if channel.kind == "queue":
-                    grants.add(Grant(who=who, ops="wait", on=watched))
-        for selector in channel.readers:
-            for who in _for_kernel(topology, "", selector):
-                grants |= {Grant(who=who, ops=ops, on=stream) for ops in _READ[channel.kind]}
-                grants.add(Grant(who=who, ops="wait", on=watched))
+        for selectors, write in ((channel.writers, True), (channel.readers, False)):
+            for who in (who for selector in selectors for who in _for_kernel(topology, "", selector)):
+                grants |= {
+                    Grant(who=who, ops=ops, on=on) for ops, on in channel_grants(channel.kind, name, write=write)
+                }
 
     for name, role in team.roles.items():
         who = f"role:{name}"
@@ -169,7 +155,7 @@ def arcs(team: Team, *, wakes: bool = False) -> dict[str, list[str]]:
             found[sender] |= targets
 
     def wakes_on_message(name: str) -> bool:
-        return name in team.roles and team.roles[name].delivery in _WAKING
+        return name in team.roles and team.roles[name].delivery in WAKING
 
     for role, selectors in team.topology.edges.items():
         for sender in team.roles if role == "all" else (role,):
@@ -179,7 +165,7 @@ def arcs(team: Team, *, wakes: bool = False) -> dict[str, list[str]]:
                 elif selector not in _TREE:
                     link((sender,), set(filter(wakes_on_message, reach(team, sender, selector))))
     for channel in team.topology.channels.values():
-        if not wakes or channel.delivery in _WAKING:
+        if not wakes or channel.delivery in WAKING:
             readers = {name for selector in channel.readers for name in reach(team, "", selector)}
             link({name for selector in channel.writers for name in reach(team, "", selector)}, readers)
     if not wakes:

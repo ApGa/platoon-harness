@@ -2,7 +2,7 @@
 
 import pytest
 
-from platoon_harness.kernel import Extension
+from platoon_harness.kernel import Extension, Grant
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Budget, Capabilities, Command, Role, Team, team_check
 from platoon_harness.topology import (
@@ -169,9 +169,19 @@ def test_an_unsupported_sandbox_fails():
     assert "no sandbox `read-onyl`. Did you mean `read-only`?" in text(errors(team))
 
 
-def test_an_unknown_preset_gets_a_did_you_mean():
-    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.blackbord]\nrole = "a"')
-    assert "unknown preset `blackbord`. Did you mean `blackboard`?" in text(errors(team))
+def test_an_unknown_preset_gets_a_did_you_mean_at_load():
+    with pytest.raises(ConfigError, match=r"unknown preset `blackbord`\. Did you mean `blackboard`\?"):
+        Team.loads('[roles.a]\nharness = "pi"\n[topology.blackbord]\nrole = "a"')
+
+
+def test_a_preset_can_wait_only_for_an_extension_the_team_names():
+    team = Team.loads('extensions = ["hubs"]\n[roles.a]\nharness = "pi"\n[topology.hub]\ncenter = "a"')
+    assert [item.preset for item in team.topology.unexpanded] == ["hub"]
+
+
+def test_unexpanded_is_no_key_of_a_topology():
+    with pytest.raises(ConfigError, match="not a key"):
+        Team.loads('[roles.a]\nharness = "pi"\n[topology]\nunexpanded = "x"')
 
 
 def test_an_unknown_extension_gets_a_did_you_mean():
@@ -212,7 +222,51 @@ def test_until_program_needs_a_program():
 
 def test_an_unknown_auth_profile_gets_a_did_you_mean():
     team = Team(roles={"a": Role(harness="pi", auth="wrok")}, auth={"work": {"env": ["WORK_KEY"]}})
-    assert "unknown profile `wrok`. Did you mean `work`?" in text(errors(team))
+    assert "unknown profile. Did you mean `work`?" in text(errors(team))
+
+
+def test_a_key_pasted_as_a_profile_is_not_repeated():
+    team = Team(roles={"a": Role(harness="pi", auth="sk-hunter2")})
+    assert "hunter2" not in text(errors(team))
+
+
+def test_a_relation_that_no_may_spawn_makes_true_is_warned():
+    team = Team(
+        roles={"lead": Role(harness="pi"), "worker": Role(harness="pi", count=3)},
+        topology=manager_worker("lead", "worker"),
+    )
+    found = warnings(team)
+    assert any("`children` reaches nobody" in line for line in found)
+    assert any("`parent` reaches nobody" in line for line in found)
+
+
+def test_a_program_that_cannot_be_resolved_is_warned():
+    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(program="nope", until="program"))
+    assert "topology.program: `nope` cannot run yet: no program can be resolved" in warnings(team)
+
+
+def test_recursion_through_a_written_grant_is_seen():
+    written = Grant(who="role:a", ops="agent.spawn", on="role/a")
+    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(grants=[written]))
+    assert "recursive may_spawn with no limit" in text(errors(team))
+
+
+def test_recursion_through_a_glob_is_seen():
+    written = Grant(who="all", ops="agent.*", on="role/*")
+    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(grants=[written]))
+    assert "recursive may_spawn with no limit" in text(errors(team))
+
+
+def test_a_grant_of_another_op_is_no_spawning():
+    written = Grant(who="role:a", ops="board.*", on="role/a")
+    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(grants=[written]))
+    assert errors(team) == []
+
+
+def test_a_fallback_needs_turns_in_its_own_budget_as_budget_set_does():
+    limited = Role(harness="pi", budget=Budget(tokens=5, fallback="turns"))
+    team = Team(roles={"a": limited}, budget=Budget(turns=3))
+    assert "falls back to turns" in text(errors(team, capabilities={"pi": Capabilities()}))
 
 
 def test_a_channel_cannot_use_a_relation():
@@ -389,8 +443,9 @@ def test_a_preset_is_active_only_if_its_extension_is_named():
     def hub(center: str) -> Topology:
         return Topology(edges={center: ["human"]})
 
-    team = Team.loads('[roles.c]\nharness = "pi"\n[topology.hub]\ncenter = "c"')
-    assert "unknown preset `hub`" in text(errors(team, extensions={"hubs": Extension("hubs", presets=[hub])}))
+    team = Team.loads('extensions = ["other"]\n[roles.c]\nharness = "pi"\n[topology.hub]\ncenter = "c"')
+    known = {"other": Extension("other"), "hubs": Extension("hubs", presets=[hub])}
+    assert "unknown preset `hub`" in text(errors(team, extensions=known))
 
 
 def test_an_extension_cannot_shadow_a_builtin_preset():
@@ -422,9 +477,9 @@ def test_a_conflict_with_an_extensions_preset_is_a_problem_too():
 
 
 def test_resolving_reports_what_cannot_be_expanded():
-    team = Team.loads('[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
+    team = Team.loads('extensions = ["x"]\n[roles.a]\nharness = "pi"\n[topology.ballot]\nvoters = "a"')
     with pytest.raises(ConfigError, match="unknown preset `ballot`"):
-        team.resolved()
+        team.resolved({"x": Extension("x")})
 
 
 def test_a_broken_extension_preset_is_a_problem_not_a_crash():

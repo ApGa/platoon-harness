@@ -18,7 +18,8 @@ from pydantic import (
     model_validator,
 )
 
-from platoon_harness.kernel import Grant
+from platoon_harness.kernel import NAME, Grant
+from platoon_harness.primitives import Delivery
 from platoon_harness.schema import ConfigError, Duration, Model, Name, Positive, Problem, Sorted, nearest
 
 RELATIONS = ("self", "parent", "children", "siblings", "ancestors", "descendants", "next", "prev")
@@ -53,8 +54,8 @@ def _normal_grants(grants: tuple[Grant, ...]) -> tuple[Grant, ...]:
 
 
 Selector = Annotated[str, AfterValidator(_selector)]
-Until = Annotated[str, StringConstraints(pattern=r"^(settled|program|role:[\w.-]+)$")]
-Member = Annotated[str, StringConstraints(pattern=r"^(agent|human|program|judge):[\w.-]+$")]
+Until = Annotated[str, StringConstraints(pattern=f"^(settled|program|role:{NAME})$")]
+Member = Annotated[str, StringConstraints(pattern=f"^(agent|human|program|judge):{NAME}$")]
 Selectors = Annotated[
     tuple[Selector, ...],
     BeforeValidator(_as_list),
@@ -63,8 +64,6 @@ Selectors = Annotated[
     PlainSerializer(_one_or_many),
 ]
 """One selector or several: a lone one prints as a string, and order never matters."""
-
-Delivery = Literal["pull", "next-turn", "wake", "steer"]
 
 
 class Digest(Model):
@@ -98,7 +97,7 @@ class Topic(_Channel):
 
 
 class Queue(_Channel):
-    """Tasks leased to one claimant at a time. `delivery = "wake"` announces work; it never assigns it."""
+    """Tasks leased to one claimant at a time. Unless `pull`, `delivery` announces work; it never assigns it."""
 
     kind: Literal["queue"] = "queue"
     delivery: Delivery = "pull"
@@ -161,7 +160,9 @@ class Topology(Model):
 
     until: Until | None = None
     program: Name | Program | None = None
-    edges: Annotated[Mapping[Name, tuple[Selector, ...]], AfterValidator(_normal_edges)] = {}
+    edges: Annotated[
+        Mapping[Name, Annotated[tuple[Selector, ...], BeforeValidator(_as_list)]], AfterValidator(_normal_edges)
+    ] = {}
     groups: Annotated[Mapping[Name, Group], Sorted] = {}
     channels: Annotated[Mapping[Name, Channel], Sorted] = {}
     limits: Limits = Limits()

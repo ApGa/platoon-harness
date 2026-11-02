@@ -4,11 +4,13 @@ import graphlib
 import math
 import tomllib
 from collections.abc import Iterable, Mapping
+from fnmatch import fnmatchcase
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictFloat, StrictInt, StringConstraints, ValidationError, field_validator
+from pydantic import Field, StrictFloat, StrictInt, StringConstraints, ValidationError, field_validator, model_validator
 
 from platoon_harness.kernel import Extension
+from platoon_harness.primitives import WAKING, Delivery
 from platoon_harness.schema import (
     ConfigError,
     Duration,
@@ -24,7 +26,7 @@ from platoon_harness.schema import (
 from platoon_harness.topology.compile import arcs, reach, structure
 from platoon_harness.topology.presets import PRESETS, Preset, expand, finish, preset_name
 from platoon_harness.topology.show import describe
-from platoon_harness.topology.spec import Delivery, Topology
+from platoon_harness.topology.spec import RELATIONS, Topology
 
 _FAN_OUT = 8
 _MEASURED = ("tokens", "usd")
@@ -71,7 +73,7 @@ class Role(Model):
     """A template for agents. `tools` lists op globs, and only ever narrows what the topology grants.
 
     `count` is how many start with the session: left out, one, or none if another role spawns this one. `delivery` is
-    how a message reaches this role's inboxes.
+    how a message reaches this role's inboxes, and `inbox_depth` how many entries one holds before refusing more.
     """
 
     harness: str | Command
@@ -82,6 +84,7 @@ class Role(Model):
     sandbox: str | None = None
     tools: tuple[str, ...] = ("*",)
     delivery: Delivery = "wake"
+    inbox_depth: Positive = 1024
     may_spawn: tuple[str, ...] = ()
     count: Annotated[StrictInt, Field(ge=0)] | None = None
     on_parent_exit: Literal["cancel-subtree", "adopt"] = "cancel-subtree"
@@ -115,6 +118,13 @@ class Team(Model):
     def _expand_presets(cls, value: Any) -> Any:
         return expand(value) if isinstance(value, Mapping) else value
 
+    @model_validator(mode="after")
+    def _knows_every_preset(self) -> Self:
+        """With no extension to supply one, a preset nobody knows is a mistake now, and no wait."""
+        if not self.extensions and (problems := finish(self.topology, {})[1]):
+            raise ConfigError(problems)
+        return self
+
     @classmethod
     def loads(cls, text: str) -> Self:
         """A team from TOML text alone. `load_team` layers one over the user's and project's config."""
@@ -123,7 +133,7 @@ class Team(Model):
         except tomllib.TOMLDecodeError as error:
             raise ConfigError([Problem("team", f"not TOML: {error}")]) from error
         except ValidationError as error:
-            raise ConfigError(problems_in(error, cls)) from error
+            raise ConfigError(problems_in(error, cls)) from None
 
     def spawners(self, role: str) -> set[str]:
         """The roles that may spawn `role`."""
@@ -138,7 +148,7 @@ class Team(Model):
 
     def resolved(self, extensions: Mapping[str, Extension] | None = None) -> Self:
         """This team with every preset expanded, using the extensions it names from `extensions`."""
-        presets, problems = _presets_of(self, extensions or {})
+        presets, problems = _presets_of(self, {} if extensions is None else extensions)
         topology, more = finish(self.topology, presets)
         if problems + more:
             raise ConfigError(problems + more)
@@ -183,22 +193,33 @@ def _cycle(arcs: Mapping[str, Iterable[str]]) -> list[str] | None:
     return None
 
 
-def _budget_problems(
-    budget: Budget, where: str, team: Team, role: Role, capabilities: Capabilities
-) -> Iterable[Problem]:
+def _budget_problems(budget: Budget, where: str, role: Role, capabilities: Capabilities) -> Iterable[Problem]:
     for unit in _MEASURED:
         if getattr(budget, unit) is None or unit in capabilities.measures:
             continue
         if budget.fallback is None:
             what = f'`{role.driver}` cannot measure {unit}. Remove the limit, or set `fallback = "turns"`'
             yield Problem(f"{where}.{unit}", what)
-        elif role.budget.turns is None and team.budget.turns is None:
-            yield Problem(f"{where}.{unit}", "falls back to turns, but no `turns` limit applies")
+        elif budget.turns is None:
+            yield Problem(f"{where}.{unit}", "falls back to turns, but this budget has no `turns` limit")
 
 
 def _population(team: Team, role: str) -> float:
     """The most agents a role can have at once, which is infinite when nothing bounds it."""
     return (team.topology.limits.max_live or math.inf) if team.spawners(role) else team.starts(role)
+
+
+def _spawning(team: Team) -> dict[str, set[str]]:
+    """Who may spawn whom, by role: `may_spawn`, and any written grant of `agent.spawn`, which is the same thing."""
+    found = {name: {*role.may_spawn} for name, role in team.roles.items()}
+    for grant in team.topology.grants:
+        if fnmatchcase("agent.spawn", grant.ops):
+            spawners = (
+                found.keys() if grant.who in ("agent", "all") else found.keys() & {grant.who.removeprefix("role:")}
+            )
+            for name in spawners:
+                found[name] |= {role for role in team.roles if fnmatchcase(f"role/{role}", grant.on)}
+    return found
 
 
 def _warnings(team: Team) -> Iterable[Problem]:
@@ -212,8 +233,19 @@ def _warnings(team: Team) -> Iterable[Problem]:
             if not set(targets) - {name}:
                 yield Problem(f"roles.{name}", "has no path to anyone", "warning")
 
+    for role, selectors in team.topology.edges.items():
+        for name in team.roles if role == "all" else (role,):
+            for selector in selectors:
+                if selector in RELATIONS and not reach(team, name, selector):
+                    what = f"`{selector}` reaches nobody: relations come from `may_spawn`, and none makes this one true"
+                    yield Problem(f"topology.edges.{role}", what, "warning")
+
+    if (program := team.topology.program) is not None:
+        name = program if isinstance(program, str) else program.name
+        yield Problem("topology.program", f"`{name}` cannot run yet: no program can be resolved", "warning")
+
     for name, channel in team.topology.channels.items():
-        if channel.delivery in ("wake", "steer"):
+        if channel.delivery in WAKING:
             readers = {role for selector in channel.readers for role in reach(team, "", selector)}
             fan_out = sum(_population(team, role) for role in readers & team.roles.keys())
             if fan_out > _FAN_OUT:
@@ -232,7 +264,7 @@ def team_check(
     `capabilities` maps harness names to what is known of them, and `extensions` maps the references a team may
     name to their extensions. Errors stop a team from running; warnings do not.
     """
-    presets, problems = _presets_of(team, extensions or {})
+    presets, problems = _presets_of(team, {} if extensions is None else extensions)
     topology, more = finish(team.topology, presets)
     problems += more
     team = team.model_copy(update={"topology": topology})
@@ -248,15 +280,12 @@ def team_check(
             if role.sandbox is not None and role.sandbox not in known.sandboxes:
                 what = f"`{role.driver}` has no sandbox `{role.sandbox}`.{nearest(role.sandbox, known.sandboxes)}"
                 problems.append(Problem(f"roles.{name}.sandbox", what))
-            problems += _budget_problems(team.budget, "budget", team, role, known)
-            problems += _budget_problems(role.budget, f"roles.{name}.budget", team, role, known)
+            problems += _budget_problems(team.budget, "budget", role, known)
+            problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:
-            problems.append(
-                Problem(f"roles.{name}.auth", f"unknown profile `{role.auth}`.{nearest(role.auth, team.auth.keys())}")
-            )
+            problems.append(Problem(f"roles.{name}.auth", f"unknown profile.{nearest(role.auth, team.auth.keys())}"))
 
-    spawning = {name: role.may_spawn for name, role in team.roles.items()}
-    if limits.max_depth is None and (cycle := _cycle(spawning)):
+    if limits.max_depth is None and (cycle := _cycle(_spawning(team))):
         what = f"recursive may_spawn with no limit: {' -> '.join(cycle)}"
         problems.append(Problem("topology.limits.max_depth", what))
     if limits.max_hops is None and (cycle := _cycle(arcs(team, wakes=True))):
