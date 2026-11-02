@@ -396,7 +396,7 @@ class Process:
                 task.cancel()
             await asyncio.gather(*reading, return_exceptions=True)
             if not self._exit_reported:
-                self._enqueue(Exited(reason=exit_reason(self.returncode), code=self.returncode))
+                self._enqueue(Exited(reason=exit_reason(self.returncode)))
             self._sealed = True
             self._queue.append(None)
             self._queued.set()

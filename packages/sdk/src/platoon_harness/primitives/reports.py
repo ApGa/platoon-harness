@@ -152,11 +152,8 @@ class Native(Args):
 
 
 class Exited(Args):
-    """The harness is gone. `code` is what it exited with, when it has one: negative for a signal."""
-
     type: Literal["exited"] = "exited"
     reason: str = "the harness exited"
-    code: int | None = None
 
 
 class Changed(Args):

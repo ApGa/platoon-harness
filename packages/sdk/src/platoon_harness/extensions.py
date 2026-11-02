@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any
 
-from platoon_harness import __version__
 from platoon_harness.kernel import Extension
 from platoon_harness.schema import ConfigError, Problem, nearest
+from platoon_harness.version import __version__
 
 DRIVERS = "platoon_harness.drivers"
 EXTENSIONS = "platoon_harness.extensions"

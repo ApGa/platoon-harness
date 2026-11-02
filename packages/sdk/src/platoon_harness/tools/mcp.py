@@ -10,9 +10,9 @@ from http import HTTPStatus
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness import __version__
 from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refused
 from platoon_harness.primitives import hold_open, lines_of
+from platoon_harness.version import __version__
 
 from .surface import Surface, body_fields, list_tools, named_surface, notices_text, refusal_text, tool_name
 

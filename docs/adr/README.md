@@ -3,7 +3,7 @@
 [architecture.md](../architecture.md) says what the system is. These records say why, and what else was on the table. Each one
 names the alternatives considered and the research or spike behind it.
 
-Every record below was accepted on 2026-11-02, during Milestone 0.
+Every record below was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
 
 | # | Decision | In one line |
 |---|---|---|
@@ -25,6 +25,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0.
 | [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | The user's own harness under its own login. We never read a credential |
 | [0017](0017-config-and-entry-points.md) | Config and entry points | TOML, frozen pydantic, two entry-point groups, nothing active until named |
 | [0018](0018-who-owns-a-process.md) | Who owns a process | Recorded before exec, a start time tells pids apart, and only a recorded leader proves a group ours |
+| [0019](0019-one-link-two-forms.md) | One link, two forms | `Session` has one link, in-process or over a socket. Start and resume are one path, and a client only pulls |
 
 ## Adding or changing one
 

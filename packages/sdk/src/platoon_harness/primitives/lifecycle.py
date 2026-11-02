@@ -313,20 +313,15 @@ class AgentReport(Args):
     report: Report
 
 
-def _exit_status(txn: Txn, agent: Agent, code: int | None) -> Status:
-    """What a harness's end means. One that never started failed. A one-shot harness ends between turns, and its exit
-    code says how that went. Anything else was meant to stay, so its agent is lost."""
-    if agent.state == "spawning":
-        return "failed"
-    if agent.persistent is False and txn.view(Stamps).turn(agent.name) is None:
-        return "finished" if code == 0 else "failed"
-    return "lost"
-
-
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
-    """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools."""
+    """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools. A
+    one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished."""
     name = agent.name
     if txn.view(Stamps).turn(name) is None:
+        return
+    if agent.persistent is False:
+        finished = reason == "stopped"
+        end(txn, agent, "finished" if finished else "failed", reason=None if finished else reason)
         return
     parked = bool(txn.view(Waits).open_for(agent.id))
     if not parked and agent.state != "held":
@@ -350,9 +345,9 @@ def report(txn: Txn, a: AgentReport) -> None:
     match a.report:
         case Ready() | Delta():
             raise Refused("invalid", f"a {a.report.type} report is not journaled through agent.report")
-        case Exited(reason=reason, code=code):
+        case Exited(reason=reason):
             if not agent.ended:
-                end(txn, agent, _exit_status(txn, agent, code), reason=reason)
+                end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)
         case _ if agent.ended:

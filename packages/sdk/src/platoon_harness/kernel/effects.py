@@ -28,7 +28,7 @@ class Effect(BaseModel, frozen=True):
     agent: str | None
     attempts: int
     after: int | None
-    data: JsonValue
+    data: Any
 
 
 class Effects(View):

@@ -139,7 +139,7 @@ async def test_a_forked_child_cannot_keep_the_turn_open(tmp_path):
     await driver.start(spec, heard)
 
     assert (await heard.until(TurnEnded)).reason == "stopped"
-    assert (await heard.until(Exited)).code == 0
+    await heard.until(Exited)
     assert heard.of(Item)[0].gist == "said"
     record = Record.read(spec.folder)
     await driver.stop(1)

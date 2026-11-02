@@ -44,7 +44,7 @@ method promises:
 |---|---|---|
 | `Ready` | `native`, `version`, `effective_model`, `tools_visible` | The harness is up. `tools_visible` is a list only when it was observed |
 | `TurnStarted` | `turn` | |
-| `TurnEnded` | `reason` | |
+| `TurnEnded` | `reason` | `stopped`, unless something went wrong. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
 | `Item` | `kind`, `gist`, `phase`, `native_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text |
 | `InputDelivered` | `input`, `boundary`, `evidence` | A delivery reached the harness. `evidence` names what showed it |
@@ -55,7 +55,7 @@ method promises:
 | `ChildSeen` | `native`, `parent`, `attribution` | A native child it made on its own |
 | `GapReport` | `plane`, `what` | Something went unseen, from a closed list |
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
-| `Exited` | `reason`, `code` | The harness is gone. `code` is its exit code, when it has one, and tells a one-shot that finished from one that failed |
+| `Exited` | `reason` | The harness is gone |
 
 Never guess. Unknown is `None`, not zero, not an empty list, and not a plausible id. A frame you cannot read becomes `Native` plus a
 gap, which is what `unknown_frame(kind, raw)` returns, and never a log line.

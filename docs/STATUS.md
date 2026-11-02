@@ -18,13 +18,13 @@ pass, and the row says which kind), **experimental** (works, but rests on an uns
 
 | Case | State | Evidence |
 |---|---|---|
-| SDK independence | planned | |
+| SDK independence | tested | `tests/integration/test_independence.py`: a headless script importing only `platoon_harness` runs a session in a subprocess, on the `exec` driver, and imported no CLI, Textual, Platoon, Torch or Tinker |
 | Mixed backends | planned | |
-| End-to-end collaboration | planned | |
+| End-to-end collaboration | tested | `tests/integration/test_vertical_slice.py`, `test_detached.py`: spawn, post, query, claim, message, completion and a final artifact. Scripted harnesses on the real tool plane, in-process and as real wire processes. No real harness has run in a session |
 | Human parity | planned | |
 | Claim race | tested | `tests/unit/primitives/test_tasks.py`, `test_claim_race_*`, including a hypothesis interleaving. Concurrent commands on one writer; no real harness |
 | Watch race | tested | `tests/unit/primitives/test_waits.py`, `test_watch_race_*`, including a hypothesis interleaving of sends, reads, waits and reopening the journal. No real harness |
-| Retry and crash | planned | |
+| Retry and crash | tested | `tests/integration/test_crash.py`: `kill -9` of a detached runtime mid-turn, then a resume, with wire processes as harnesses. Each effect kind has its row in `tests/unit/runtime/test_recovery.py`. No real harness has been through it |
 | Provenance | planned | |
 | Identity | planned | |
 | Credit integration | planned | |
@@ -53,14 +53,14 @@ power loss. Nothing here has run on macOS.
 | `authorize`: grants, live relations, scopes, runtime-only ops, credentials by hash | tested | `test_authorize.py` |
 | Envelope stamping and payload limits, one open episode | tested | `test_envelope.py` |
 | Bodies: inline, `blobs/`, fsync before citation, tombstones, erased bytes gone from the journal, the WAL and `blobs/`, redacted content kept out | tested | `test_bodies.py` on Linux. Bytes on the device below the filesystem are out of scope |
-| Effects: lifecycle, timeouts, `on_uncertain`, priority, attempt fence, recovery of the journal side including `turn.lost` | tested | `test_effects.py` |
+| Effects: lifecycle, timeouts, `on_uncertain`, priority, attempt fence, recovery of the journal side including `turn.lost`, a list by state, an incarnation's number | tested | `test_effects.py` |
 | Timers and the clock daemon on an injected clock, unjournaled firings kept | tested | `test_timers.py` |
 | Views: versions, per-view rebuild, high-water marks, `rebuild_all` | tested | `test_views.py`, properties |
-| Readers: `read`, `follow` with one shared read per pulse, `query`, lossy `deltas`, live principals only, a follower stopped at its revocation | tested | `test_readers.py` |
+| Readers: `read`, `follow` with one shared read per pulse, `query`, lossy `deltas` from a frame, live principals only, a follower stopped at its revocation, no wake on a batch with no events | tested | `test_readers.py` |
 | Read-only kernels: schema check, staleness per query, a moving head, a closed journal refused once a writer touches it | tested | `test_journal.py` |
 | Daemon supervision with backoff | tested | `test_daemon.py` |
 | Extension loading and the naming law | tested | `test_extension.py` |
-| Laws 1 to 9 and 12 | tested | `test_laws.py` |
+| Laws 1 to 9 and 12 | tested | `test_laws.py`. Law 8 over a socket: `tests/unit/runtime/test_control.py` |
 | Law 10, for what the kernel owns: unknown stays `None` in the envelope and in `Effect` | tested | `test_laws.py`. Usage labels are tested in `test_budgets.py`. Rewards, tool visibility and exposure queries do not exist yet |
 | Law 11: the kernel's own extensions reach no private name, and code outside the kernel imports only `__all__` | tested | `test_laws.py`, over everything outside the kernel too |
 | Rebuild equals live, idempotent retry, gapless versions, backward references | tested | `test_properties.py` (hypothesis) |
@@ -77,8 +77,8 @@ power loss. Nothing here has run on macOS.
 ### Primitives (`platoon_harness.primitives`)
 
 Rows marked tested have CPU-only unit tests in `tests/unit/primitives`, named for the promises in architecture section 7, and each
-test's fixture compares live views to a full rebuild when it ends. No host exists yet: a test does what one would, by hand, so
-nothing here has met a real harness. Effects such as `deliver`, `launch` and `answer` are requested and tracked, and nothing performs them.
+test's fixture compares live views to a full rebuild when it ends. A test there does what a host would, by hand. The host itself is
+under Runtime below, so every effect is now performed, and nothing here has met a real harness.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -102,20 +102,24 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Reading a body held in `blobs/` | tested | An op may do no I/O, so it leaves `text` null beside the hash and the tool plane reads it, within its limits: `test_mcp.py`. Only the tool plane reads one so far |
 | Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging, results read back | tested | `test_tasks.py`, properties |
 | `delivery` on queues and boards, as an entry on the channel | tested | `test_tasks.py`, `test_boards.py` |
-| Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it is not built |
+| Lease renewal from observed harness activity | tested | `test_tasks.py` for `lease.due`, and `tests/unit/runtime/test_host.py` from a harness's reports on a manual clock, up to `lease_max`. Activity is reports: a tool call alone renews nothing |
 | Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor on every ending, a final report kept in the journal | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
 | A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
 | Completion: `settled`, `until`, `session.close`, `session.cancel`, resuming a stopped session, episodes | tested | `test_lifecycle.py` |
-| Closing a headless session at `until` | deferred | `session.status` reports `done`. The owner that acts on it arrives with `Session` |
+| Closing a headless session at `until` | tested | `tests/unit/runtime/test_session.py`: `settled()` closes, and waits for it to drain |
 | Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |
-| Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
+| An `ask` no human can answer | tested | `settled()` returns `needs_human`, never a hang: `test_session.py`. The exit code itself arrives with the headless CLI |
 | Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budgets` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
 | `blob.get`, by a ref that can name lines, and `blob.offer` for what a surface showed | tested | `test_lifecycle.py`. A surface stores the bytes first |
 | A `body` argument offered as text on the tool plane | tested | `tests/unit/tools/test_mcp.py`, `test_ph.py`: stored first, cited by hash, the same for a retry |
 | Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`, and `tests/unit/tools/test_surface.py` rendered for MCP, `mcp__<ns>__` and `ph` |
 | `lineage`, `exposure` | deferred | Provenance queries, after the host |
-| Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | planned | Both ends exist; nothing joins them yet |
+| Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | tested | `tests/unit/runtime/test_opening.py` |
+| An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |
+| A one-shot agent ending with its turn | tested | `test_lifecycle.py`, and on the `exec` driver in `tests/integration/test_independence.py` |
+| A resumed harness back on the agent as it stood | tested | `test_lifecycle.py`, `tests/unit/runtime/test_recovery.py` |
+| `session.ending`: the reason, each agent, usage with labels, gaps | tested | `test_lifecycle.py`, `tests/unit/runtime/test_session.py` |
 
 ### Tool plane (`platoon_harness.tools`)
 
@@ -125,7 +129,7 @@ socket on port 0. No real harness has run against this server: the spike's proto
 | Capability | State | Evidence |
 |---|---|---|
 | One derivation from `ops.list`, per token: names per surface, closed schemas showing only what a model should see, an honest `readOnlyHint` | tested | `test_surface.py` |
-| The turn preamble: exact tools, who can be reached now, how to park | tested | `test_surface.py`. Nothing sends it to a harness yet |
+| The turn preamble: exact tools, who can be reached now, how to park | tested | `test_surface.py`. It reaches a harness at launch, in `AgentSpec.instructions`: `tests/unit/runtime/test_host.py`. It is not refreshed per turn, so who can be reached goes stale until `peers` is asked |
 | The server: Streamable HTTP, JSON replies, no sessions, `initialize` at `2025-11-25` and `2025-06-18`, 405, -32601, 202, -32600, 401, 403 | tested | `test_mcp.py`, `test_replay.py`, which replays every non-tool request of the spike's log |
 | Bounded HTTP: head and body limits, a body read only after the token, deadlines on the kernel's clock, a connection limit, hostile bytes | tested | `test_mcp.py`. A client that will not read its answer is bounded by the same deadline, which no test reaches, since an answer fits a socket buffer |
 | Identity from the token alone, `tools/list` filtered and enforced again at call time, undeclared arguments journaled, an agent's refused query journaled, an ended agent's token refused | tested | `test_mcp.py` |
@@ -141,8 +145,8 @@ socket on port 0. No real harness has run against this server: the spike's proto
 ### Drivers (`platoon_harness.drivers`, `platoon_harness.rpc`, `platoon_harness.testing`)
 
 Rows marked tested have tests in `tests/unit/drivers`, `tests/conformance` and `tests/integration`, on real subprocesses and real sockets
-on Linux. Nothing here has run on macOS. No host calls a driver yet, so no driver has run inside a session, and `Delivery`, `Started` and
-`Receipt` have not met the effects they will serve. The drivers for `claude`, `codex` and `pi` do not exist.
+on Linux. Nothing here has run on macOS. The host calls these drivers now, so `ScriptedDriver`, `WireDriver` and `ExecDriver` have run
+inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -150,7 +154,7 @@ on Linux. Nothing here has run on macOS. No host calls a driver yet, so no drive
 | The contract: seven methods, `DriverInfo`, `AgentSpec`, `ToolBinding`, `Delivery`, `Receipt`, `Started`, every field of section 9.2 | tested | `test_public_api.py`, `tests/unit/primitives/test_reports.py`, and every driver below |
 | One closed report vocabulary, serializable for the wire, with a path through `agent.report` for each | tested | `tests/unit/primitives/test_reports.py`, against the architecture's list |
 | `agent.start`: what the runtime concluded, which a report has no field for, so no driver can claim a level or a capability | tested | `test_reports.py`, `test_wire.py`, with a real program trying |
-| `levels`: a pure function, reasons for each, a result pinned to `(driver, version)`, a skip no pass, three-valued tool visibility | tested | `test_levels.py`. Nothing calls it from a live agent yet. The rules are a first reading of compatibility section 4, and no real harness has been through them |
+| `levels`: a pure function, reasons for each, a result pinned to `(driver, version)`, a skip no pass, three-valued tool visibility | tested | `test_levels.py`, and from a live agent in `tests/unit/runtime/test_host.py`. Nothing stores a conformance result yet, so a live agent's levels are `unverified`. The rules are a first reading of compatibility section 4, and no real harness has been through them |
 | A harness in its own group, recorded before it can exec, with nothing run if we die first | tested | `test_process.py` |
 | Recognising a group on restart: a reused pid signals nobody | tested | `test_process.py`. A group whose leader is gone stays `unproven`: `reap` leaves it and names it, so a forked child can outlive a crash |
 | `stop`: TERM, wait, KILL, verify, for a child that ignores TERM, forks, or outlives its leader holding the pipes | tested | `test_process.py`, `test_wire.py` |
@@ -161,10 +165,10 @@ on Linux. Nothing here has run on macOS. No host calls a driver yet, so no drive
 | `Process` on macOS | experimental | `ps -o lstart=` and the rest are written from the man page and have never run |
 | A process that leaves its group by `setsid` | deferred | It escapes `stop`. Only a cgroup would hold it. See ADR 0018 |
 | `WireDriver` and `serve`: verbs equal to the methods, an integer protocol refused both ways, credentials by name, unknown frames as `native` plus a gap, a program's own record kept apart | tested | `test_wire.py`, `tests/conformance`, and against the real tool plane in `tests/integration/test_scripted_tool_plane.py` |
-| Wire `describe` | tested | `test_wire.py`. It runs the program once with a blocking `subprocess.run`, so a host must not call it on the event loop |
+| Wire `describe` | tested | `test_wire.py`. It runs the program once with a blocking `subprocess.run`, so the host calls it on a thread, and keeps the answer per role |
 | OpenHands as a wire worker | planned | The path is real. That worker does not exist |
 | The `exec` driver, with `{goal}`, `ph` on the path, and what it cannot do refused with the reason | tested | `test_exec.py`, and `tests/conformance` with a small CLI that calls the model |
-| `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`. Nothing launches a role from them yet |
+| `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`, and launched from a role in `tests/integration/` |
 | `ScriptedDriver`: every step, capabilities as data, real MCP, real model calls, resume | tested | `test_scripted.py`, and against the real `ToolServer` in `test_scripted_tool_plane.py` |
 | `FakeModel`: three dialects, whole and streamed, a script, a log of what arrived | tested | `test_fake_model.py`. `tests/integration/test_fake_model_clients.py`, marked `slow`, ran with dummy keys: Codex 0.164.0 and Claude Code 2.1.316 on text and a tool call, pi 1.4.0 on text. It skips a client that is not installed, and a skip proves nothing |
 | `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies. It passes on `ScriptedDriver`, a wire program and `exec`, and no real harness has been through it |
@@ -173,10 +177,49 @@ on Linux. Nothing here has run on macOS. No host calls a driver yet, so no drive
 | `docs/drivers.md`: its wire driver runs through the conformance suite, and its tables match the code | tested | `test_docs.py` |
 | The SDK imports nothing but the standard library and pydantic, and nothing public holds a local path | tested | `test_boundaries.py`, by AST and by pattern. A pattern catches what it knows |
 
+### Runtime (`platoon_harness.runtime`, `platoon_harness.session`)
+
+Rows marked tested have tests in `tests/unit/runtime` and `tests/integration`, on real sockets and real subprocesses on Linux, with
+scripted harnesses on the real tool plane and wire programs as processes. **No real harness has run in a session,** and nothing here
+has run on macOS. The fast suite covers everything below except a second crash during recovery, which is marked `slow`.
+
+| Capability | State | Evidence |
+|---|---|---|
+| The root: chosen, environment, state home, the network fallback with a notice, a chosen network root refused to a live writer | tested | `test_paths.py`, with a simulated filesystem. The `doctor` entry arrives with the CLI |
+| The folder: unique names, the socket's length and private directory, `runtime.json`, tokens at 0600, listing by scan and `flock` | tested | `test_paths.py` |
+| Opening: `team_check` on each driver's `describe` before any cost, the manifest and its body, roles, limits, `until`, policy, grants, channels, groups, budgets in seconds, starting agents | tested | `test_opening.py` |
+| Opening again after a crash part of the way through | tested | `test_opening.py`, by a kill between two steps, in-process |
+| Effects performed level-triggered: `admit`, `workspace` (`shared`, and any other fails loudly), `launch`, `deliver`, `interrupt`, `stop`, `answer` | tested | `test_host.py` |
+| `interrupt`, `stop` and `answer` around a delivery that hangs | tested | `test_host.py` |
+| A token in memory and its hash in the journal, a binding per agent, `ph` in `agents/<id>/bin`, instructions and preamble | tested | `test_host.py` |
+| A delivery as text in the words of its surface, with refs and the input id | tested | `test_host.py`, `tests/unit/tools/test_surface.py` |
+| Reports in order, bodies stored by hash, deltas to followers and never the journal, capabilities and levels on `agent.started` | tested | `test_host.py` |
+| A takeover holding deliveries, already requested ones too | tested | `test_host.py`. Driving the native session during one is not built, so `agent.takeover` holds and releases and no more |
+| A report stream that dies, a driver that raises, a harness that never starts or never says ready: `exited`, never a silent hang | tested | `test_host.py`. A Python driver whose own background task dies without a word is out of reach: nothing reports, and nothing raises |
+| Credentials masked in what a driver said | tested | `test_host.py` |
+| Links that outlive a daemon restart | tested | `test_host.py` |
+| Several runtimes in one process, nothing global, signals only in the entry point | tested | `test_host.py`, `test_public_api.py` |
+| Per-agent recovery: reap, resume, reconcile, on a fresh credential | tested | `test_recovery.py` for each effect kind, `tests/integration/test_crash.py` for `kill -9` on real processes. Grace is the host's `GRACE` per group |
+| A group that cannot be proved ours left alone and named | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
+| `Session`: `start`, `attach`, `resume`, as `await` or `async with`, one link in two forms | tested | `test_session.py`, `test_control.py` |
+| Typed wrappers checked against the registry: every client op has a method, each method takes what its op declares, defaults agree | tested | `test_session.py` |
+| `settled()` and its six reasons | tested | `test_session.py`, on a manual clock where time matters |
+| `detach=True`, the entry point, `SIGTERM` as the owner's shutdown, an exit once drained | tested | `tests/integration/test_detached.py` |
+| The control socket: a credential checked once, the principal bound, refusals as data, long-polls, a client that stops reading is dropped | tested | `test_control.py`. The drop is shown at a 64 KiB limit. The real limit is 16 MiB per client, since one frame shares it with a body |
+| View and control credentials | tested | `test_control.py`. A view token reads and never writes, and a try leaves no event |
+| A client reconnecting from its cursor, retrying under its key | tested | `test_control.py`, `test_crash.py` |
+| A guest falling back to history when its runtime goes, and finding the next one | tested | `test_control.py`, `test_session.py`, `test_crash.py` |
+| A human message and an approval raced by two guests | tested | `test_detached.py` |
+| A guest's leaving changes nothing, an owner's leaves no process, attaching to a closed session writes nothing | tested | `test_detached.py`, `test_vertical_slice.py`, with the journal's bytes compared |
+| `Authority` and `LocalAuthority` | tested | `test_host.py`, `test_opening.py`, `test_recovery.py`. `Admission` holds a token and model access: tool endpoints, workspace and attribution arrive with `PlatoonAuthority` |
+| Workspaces other than `shared` | planned | A role naming one fails its spawn with the reason |
+| Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from, and history names the command already. The CLI does not exist yet |
+| The turn-end probe behind `changes` | planned | Arrives with workspaces |
+
 ### Teams and topologies (`platoon_harness.team`, `platoon_harness.topology`)
 
-Rows marked tested have CPU-only unit tests in `tests/unit/topology`. No session runs a team yet: the compiled grants are checked
-against a real kernel with stand-in ops, and nothing yet journals a team at open.
+Rows marked tested have CPU-only unit tests in `tests/unit/topology`, where the compiled grants are checked against a real kernel with
+stand-in ops. A session runs a team through `tests/unit/runtime/test_opening.py`.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -190,7 +233,7 @@ against a real kernel with stand-in ops, and nothing yet journals a team at open
 | `team.show()` in English, and the resolved form as valid input | tested | `test_show.py`, `test_docs.py` |
 | `docs/topologies.md`: every snippet runs, and both forms agree | tested | `test_docs.py` |
 | Presets from `Extension.presets`, with the power of a built-in | tested | `test_check.py`, `test_extensions.py` |
-| `Capabilities.measures` and `sandboxes` as drivers report them | implemented | One class with the driver contract, and `describe` gives it. `team_check` still takes it as an argument: nothing asks each driver yet, and a wire program's capabilities are per command, not per driver name |
+| `Capabilities.measures` and `sandboxes` as drivers report them | tested | `tests/unit/runtime/test_opening.py`: each role's driver is asked, by role, since a wire program's capabilities are per command |
 | `digest`, `entry`, `requires`, `validator` and `keys` on channels | experimental | Parsed, hashed and resolved, and `team_check` warns that no primitive enforces them yet |
 | A role's `on_parent_exit` set by a preset | deferred | A preset returns a topology, and this is a role policy. The guide tells a mesh to set it |
 
@@ -207,7 +250,7 @@ installed wheels.
 | Input kept out of configuration errors and their tracebacks | tested | `test_config.py` |
 | Sanitized resolved config: names only, refused if it holds a named variable's value, however rendering escapes it | tested | `test_config.py`. A credential no profile names cannot be recognised |
 | Redaction of encoded forms and URLs | tested | `tests/unit/drivers/test_env.py`, `test_process.py`: plain, JSON-escaped, URL-quoted and base64 forms, on what a harness writes to stderr and reports. Only exact values are refused in a resolved config. Exports do not exist yet |
-| The manifest: resolved team, components, versions, topology hash | tested | `test_config.py`. Nothing writes `manifest.json` yet |
+| The manifest: resolved team, how it was started, components, versions, topology hash | tested | `test_config.py`, and written with its stored body in `tests/unit/runtime/test_opening.py` |
 | Discovery from metadata with no import, in two groups | tested | `test_extensions.py` |
 | Duplicates and incompatible SDK requirements caught before import | tested | `test_extensions.py`. Versions compare by release number, so a pre-release suffix is ignored |
 | `name`, `name@version` and `module:attr` references, lazy load by exact name, with nothing installed too | tested | `test_extensions.py` |

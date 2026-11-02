@@ -120,10 +120,12 @@ Each law is a sentence, and each has a test of the same name.
   marks.sqlite        per-human unread positions: neither evidence nor view; losing it loses badges
   blobs/ab/<sha256>   bodies too large for the journal file
   manifest.json       resolved team, how it was started, component and protocol versions, topology hash; no secrets
-  runtime.json        pid, start time, socket path, incarnation: present only while live
-  owner.token         0600
+  runtime.json        pid, start time, socket path, incarnation: left by a crash, so only `lock` proves it true
+  runtime.log         what a detached runtime said
+  owner.token         0600: a control credential, fresh each incarnation
+  view.token          0600: a view credential, which reads and never writes
   lock                flock: held by the one live runtime
-  agents/<id>/        per-agent state: proc.json, stderr.log, native home, workspace pointer
+  agents/<id>/        per-agent state: proc.json, stderr.log, native home, workspace pointer, bin/ph
 ```
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. If that is on a network filesystem,
@@ -132,7 +134,8 @@ Each law is a sentence, and each has a test of the same name.
   session is a portable artifact (§5.8).
 - **Sockets** live at `<runtime dir>/<short hash>.sock` in a 0700 directory from `XDG_RUNTIME_DIR` or a short per-user fallback,
   never inside the session folder: a Python `bind` allows 107 bytes on Linux and 103 on macOS, and a deep folder exceeds that.
-  The path is checked before binding, abstract names are not used, and `runtime.json` holds the pointer.
+  The path is checked before binding, abstract names are not used, and `runtime.json` holds the pointer. A directory that is not
+  this user's own is refused, and one that is gets tightened.
 - **One runtime per live session.** It owns `lock` and binds the control socket in every mode. Usually that is one process; a
   Platoon rollout worker hosts several in one. There is no
   central daemon or registry: listing sessions scans folders, and `flock` is the liveness check.
@@ -148,9 +151,19 @@ can both be watched. Leaving only disconnects.
 
 - **Attach never has side effects.** With no live runtime, `attach` gives read-only history. Only `resume` restarts
   anything, because restarting can spend money.
+- **One path up.** `Session.start` checks the team and writes the manifest before any cost, and that folder is all a runtime
+  needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
+  and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
+  through opening is finished by the next runtime.
+- **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
+  detach=True)` starts one and gives a guest. It takes no authority or clock from its parent, since it is another process. It exits
+  on `SIGTERM`, which runs the shutdown below, and once a session that has stopped accepting work has drained. Signal handlers
+  live in that entry point and nowhere else, so that several runtimes can share a process.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
-  reservations, append `session.stopped`, keep the folder resumable. The next `runtime.started` reopens a session stopped while
-  open; one that was closing or cancelled stays so.
+  reservations, append `session.stopped`, keep the folder resumable. To release is to hand back what will not happen now: a turn
+  still open ends, which reconciles its reservation, and a handover that never started fails, which queues its entries again. A spawn
+  still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
+  while open; one that was closing or cancelled stays so, and its harnesses are not resumed, because nothing new may start.
 
 ## 5. Kernel
 
@@ -161,7 +174,7 @@ class Kernel:
     def query(self, principal, op, args) -> Outcome: ...      # a read-only op on a read connection
     def read(self, principal, *, after, match=None, limit=512) -> Page: ...  # never for agent principals
     async def follow(self, principal, *, after, match=None) -> AsyncIterator[Page]: ...
-    def deltas(self, agent) -> AsyncIterator[Delta]: ...      # lossy live text; never journaled
+    def deltas(self, agent, *, after=None) -> AsyncIterator[Delta]: ...  # lossy live text; never journaled
     def close(self) -> None: ...
 ```
 
@@ -173,7 +186,8 @@ daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
-`push_delta(agent, text)`, `session_id` and `closed`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`push_delta(agent, text)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live.
 
 ### 5.1 One write
 
@@ -278,9 +292,9 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | Kind | Key sent outward | After a crash |
 |---|---|---|
 | `launch` | Native session id; pid and start time written by the launcher **before exec** | Kill the recorded group if still ours; resume if the role allows; else agent `lost` with a gap |
-| `deliver` | Input id (`uuid`, `clientUserMessageId`) | `reconcile` if capable, else redeliver: at-least-once, with the id visible for dedupe |
+| `deliver` | Input id (`uuid`, `clientUserMessageId`) | `reconcile` if capable, else redeliver: at-least-once, with the id visible for dedupe. One that landed but began no turn is redelivered too, since a harness killed before its turn will not begin one now |
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
-| `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap |
+| `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs |
 | `erase` | None | Repeat: erasing twice is harmless |
@@ -295,6 +309,18 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names
   the gap `crash_window`; the incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
+- **The host** is the daemon that performs these kinds, on public names. It reads `effect.ready`, level-triggered, and gives each
+  effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
+  daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
+  agent's reports are heard in order, one at a time, and a driver waits for its turn: `Process`'s own queue is what keeps a pipe
+  draining. Observed activity renews an agent's leases past half their time, up to `lease_max`, and it asks `lease.due` first, so idle
+  activity journals nothing. A harness that never says it is ready within a minute fails its spawn. A report that cannot be taken, or a
+  driver that raises anything but `DriverError`, ends in `exited`: nothing that goes wrong there is a silent hang. An approval the
+  journal refuses is answered `deny`, since a harness is blocked on it.
+- **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
+  `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. With no native id, no
+  `resume`, or a failure to resume, its agent is `lost` with the gap `crash_window`, through the normal ended transition. A group
+  `reap` cannot prove ours is left alone and named in a `native` event plus a gap.
 
 **Timers.** A `timer.set` event sets one: `{due, op, args, key}`, where `key` names one firing and `op` and `key` are at most 256
 characters. The clock daemon sleeps on the injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then
@@ -416,7 +442,7 @@ One definition reaches every surface.
 
 | Surface | Derivation |
 |---|---|
-| Python | `session.submit("task.claim", ...)`; typed facade methods are thin wrappers, checked against the registry by a test |
+| Python | `session.submit("task.claim", ...)` returns the `Outcome`; typed facade methods are thin wrappers that return the result and raise `Refused`, checked against the registry by a test |
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness tasks claim ...` for curated groups, `platoon-harness op <name>` for any op, flags built from the schema |
@@ -586,8 +612,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   journal, and an agent that has ended cannot be given one.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
-  that exits ends its agent `lost`, or `failed` if it never started. A one-shot harness ends between turns by design, so it `finished`
-  if it exited 0, and `failed` otherwise.
+  that exits ends its agent `lost`, or `failed` if it never started. A one-shot agent ends with its turn: `finished` if that turn
+  `stopped`, and `failed` otherwise.
 - **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
@@ -608,9 +634,10 @@ Four facts stay apart: `approval.requested`, `approval.resolved` (a principal de
 the harness), and the observed item outcome. Codex's `accept` does not fix the result, so the UI reports the last.
 
 `resolve` carries `expected_version`: the first commit wins, and the loser gets `conflict{resolved_by, via}`, shown as
-information. **Approval policy is a durable session setting** (`ask`, `deny`, `allow`, per role), journaled at open. A
-headless session states one before its first turn. An `ask` that no human can answer ends with exit 4. A message from an
-agent can never carry an approval.
+information. **Approval policy is a durable session setting** (`ask`, `deny`, `allow`, per role), journaled at open, and
+`Session.start(approvals=)` states one over every role's own. A headless session states one before its first turn. An `ask` that no
+human can answer ends with exit 4: `settled()` returns `needs_human` at once when an approval is left to ask and no other client
+holding a control credential is attached. A message from an agent can never carry an approval.
 
 ### Budgets
 
@@ -764,9 +791,11 @@ effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `d
 `item{kind: message|thought|tool|patch, phase, native_id, gist, body, approval, outcome}`,
 `input.delivered{input, boundary, evidence}`, `approval.requested{id, gist}`, `model.call{call_id, model}`,
 `usage{tokens, usd, label, scope: call|turn|tree}`, `compacted{forgotten}`, `child.seen{native, parent, attribution}`,
-`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason, code}`, and `changes{path, added, removed, tests}` from the runtime's own
+`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and `changes{path, added, removed, tests}` from the runtime's own
 probe. Unknown frames become `native` plus a gap, never a log line. A report's `body` is text until the host stores it and journals
-the hash, as ingress does for a tool's body argument.
+the hash, as ingress does for a tool's body argument. A `Delivery` carries its `text`, which the host renders in the words of the
+agent's surface, with each entry's ref and sender, the ref of any body, and the input id. So a wire program in any language has it
+for nothing, and `items` is there for one that wants more.
 
 The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
 `agent.start` with the declared capabilities, the verified result and the levels, as `resumed` when it comes from a resumed harness,
@@ -938,7 +967,45 @@ beside old ones, on a closed session, with no writer lock.
 ## 12. Clients
 
 Clients hold no timers, decide nothing and compute no status. They submit ops and render kernel views, so no second scheduler
-can exist. Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes.
+can exist.
+
+```python
+async with Session.start(team, name="fix-auth") as session:   # owner: leaving stops agents and keeps the folder
+    await session.send("@lead", "Fix the flaky test")
+    ending = await session.settled(timeout="30m")
+```
+
+`await Session.start(...)` works too. `Session.attach(name)` is the same class as a guest, and `Session.resume(name)` restarts an
+owner, as its own verb because restarting can spend money. The human is one principal, `human:you` unless `start` says otherwise. That
+is a name in the journal and not a claim: identity still comes from the credential.
+
+A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, whose
+writes are refused `unavailable` naming the resume command), and the control socket (`Remote`). Everything else is written once
+on top of it, so following a journal is one loop of `read` and a long-poll in either form. A client that loses its runtime attaches
+again, and a command it had sent retries under its key, so it stays one operation. On history it looks for a runtime on each call.
+
+**The control socket** is line-delimited JSON-RPC 2.0 through `rpc.py`, on a Unix socket: `hello`, then `submit`, `query`, `read`,
+`put_body`, `get_body`, `others`, and the long-polls `changed` and `delta`. The server is one `Local` per connection, so the methods
+mirror by construction. `hello` checks the credential once and binds the principal to the connection. A connection that never says
+it is dropped. A view credential reads and can never write, and a try writes nothing either, so no event can come of it. An agent's
+token is refused: its reads are ops, and the tool plane is its way in. A refusal crosses as data. Law 8 holds because a client only
+ever pulls, so the runtime has no queue or subscription to fill: a page leaves when asked for, a long-poll comes back within 25 s, and
+a client that stops reading is dropped by its `Peer`.
+
+`settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the
+state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves
+the session as it is.
+
+| Reason | Exit code |
+|---|---|
+| `settled` | 0 |
+| `agent_failed` | 1 |
+| `budget_exhausted` | 2 |
+| `timed_out` | 3 |
+| `needs_human` | 4 |
+| `cancelled` | 130 |
+
+Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes.
 
 | View | Row | Answers |
 |---|---|---|
@@ -973,13 +1040,16 @@ Platoon branch: standalone and managed differ only in the `Authority` object and
 
 ```python
 class Authority(Protocol):
-    async def admit(self, spawn: SpawnRequest) -> Admission: ...       # model access, tool endpoints, workspace, attribution
+    async def admit(self, spawn: SpawnRequest) -> Admission: ...       # a token and model access, so far
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None: ...
     def budget_owner(self, resource: str) -> Literal["session", "authority"]: ...
 ```
 
-`LocalAuthority` issues session-scoped identity and leaves the harness's own auth alone. `PlatoonAuthority` lives in the
-`platoon-harness-platoon` extension, built on Platoon's stable function-harness and program seam.
+`LocalAuthority` issues session-scoped identity and leaves the harness's own auth alone: model access is what a role's auth profile
+names, and with none the harness signs itself in. `admit` runs for a spawn, and again with `resumed` for a harness coming back, which
+needs its access again. A limit in a resource `budget_owner` says the authority owns is no limit of the session's. `PlatoonAuthority`
+lives in the `platoon-harness-platoon` extension, built on Platoon's stable function-harness and program seam. It will add what
+`Admission` does not hold yet: tool endpoints, workspace and attribution.
 
 - **Two admission routes.** Tree children use `ctx.agents.spawn` with a member harness, which gives forks, grading and depth. Peers
   with no fork use `POST /v1/platoon/agents`. Mint is never retried.

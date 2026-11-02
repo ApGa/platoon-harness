@@ -1086,28 +1086,46 @@ async def test_a_body_is_a_goal_enough_to_hold_a_turn(kernel):
     assert of_type(kernel, "budget.reserved")[-1].data["amounts"]["turns"] == 1.0
 
 
-@pytest.mark.parametrize(("code", "status"), [(0, "finished"), (1, "failed"), (-9, "failed"), (None, "failed")])
-async def test_a_one_shot_that_exits_between_turns_says_how_it_went_by_its_code(kernel, code, status):
+@pytest.mark.parametrize(
+    ("reason", "status", "said"),
+    [("stopped", "finished", None), ("exited with code 1", "failed", "exited with code 1")],
+)
+async def test_a_one_shot_agent_ends_with_its_turn(kernel, reason, status, said):
     await spawn(kernel, "bob", ready={"persistent": False})
+    await start_turn(kernel, "bob")
 
-    await report(kernel, "bob", "exited", reason="its turn was its life", code=code)
+    await end_turn(kernel, "bob", reason)
 
-    assert of_type(kernel, "agent.ended")[-1].data["status"] == status
+    ended = of_type(kernel, "agent.ended")[-1].data
+    assert (ended["status"], ended["reason"]) == (status, said)
+    assert state_of(kernel, "bob")["turn"] is None
+
+
+async def test_a_one_shot_agent_s_end_tells_its_parent_once(kernel):
+    alice = await spawn(kernel, "alice", role="lead")
+    await grant(kernel, "agent:alice", ops="agent.spawn")
+    await spawn(kernel, "bob", by=alice, ready={"persistent": False})
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="all done")
+
+    await end_turn(kernel, "bob")
+
+    assert [event.gist for event in of_type(kernel, "message.sent")] == ["all done"]
 
 
 async def test_a_one_shot_that_exits_in_its_turn_is_lost(kernel):
     await spawn(kernel, "bob", ready={"persistent": False})
     await start_turn(kernel, "bob")
 
-    await report(kernel, "bob", "exited", code=0)
+    await report(kernel, "bob", "exited")
 
     assert of_type(kernel, "agent.ended")[-1].data["status"] == "lost"
 
 
-async def test_a_persistent_harness_that_exits_is_lost_however_it_exited(kernel):
+async def test_a_persistent_harness_that_exits_is_lost(kernel):
     await spawn(kernel, "bob")
 
-    await report(kernel, "bob", "exited", code=0)
+    await report(kernel, "bob", "exited")
 
     assert of_type(kernel, "agent.ended")[-1].data["status"] == "lost"
 

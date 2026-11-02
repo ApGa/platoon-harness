@@ -9,10 +9,10 @@ from typing import Any, Literal, NoReturn, Self
 from pydantic import GetCoreSchemaHandler, ValidationError
 from pydantic_core import CoreSchema, core_schema
 
-from platoon_harness import __version__
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component, find
 from platoon_harness.schema import ConfigError, Model, Problem, problems_in
 from platoon_harness.team import Team
+from platoon_harness.version import __version__
 
 ENVIRONMENT_VARIABLE = "PLATOON_HARNESS_CONFIG"
 PROJECT_FILE = "platoon-harness.toml"

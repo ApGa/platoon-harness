@@ -1,0 +1,134 @@
+"""One team's harnesses, scripted: in-process, or `scripts.py <name>` as a wire program of its own."""
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+from platoon_harness import Team
+from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Receipt, Reporter, Started
+from platoon_harness.drivers.wire import serve
+from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
+
+PROGRAM = str(Path(__file__))
+
+WORKERS = ["w1", "w2"]
+FIX_THE_TEST = [
+    Say("On it."),
+    Call("task_add", {"queue": "tasks", "gist": "fix the flaky test", "body": "It fails one run in ten."}),
+    Call("task_add", {"queue": "tasks", "gist": "add a regression test"}),
+    Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "take work from the queue"}),
+    Call("agent_spawn", {"name": "w2", "child_role": "worker", "goal": "take work from the queue"}),
+    Call("wait", {"agents": WORKERS}),
+]
+REPORT_BACK = [
+    Call("board_query", {"board": "notes"}),
+    Call("message_send", {"to": "@you", "gist": "The test is fixed."}),
+    Call("agent_finish", {"gist": "Both tasks are done."}),
+]
+WORK = [
+    Call("task_claim", {"queue": "tasks"}),
+    Call("board_post", {"board": "notes", "name": "from-{agent}", "gist": "what {agent} found", "body": "All of it."}),
+    Call("task_complete", {"queue": "tasks", "gist": "done by {agent}"}),
+    Call("message_send", {"to": "@lead", "gist": "{agent} is done"}),
+    Call("agent_finish", {"gist": "{agent} finished"}),
+]
+ASK_FIRST = [Ask("Ship the fix?"), *WORK]
+HANG_IN_A_TURN = [Call("task_claim", {"queue": "tasks"}), Hang()]
+AFTER_A_RESUME = [Call("task_complete", {"queue": "tasks", "gist": "done after the crash"}), Call("agent_finish", {})]
+
+
+class Templated(ScriptedDriver):
+    """A scripted harness whose tool arguments may say `{agent}`, since one role's agents share a script."""
+
+    async def _call(self, tool: str, arguments: Any) -> Any:
+        return await super()._call(tool, {key: self._filled(value) for key, value in arguments.items()})
+
+    def _filled(self, value: Any) -> Any:
+        return value.replace("{agent}", self._spec.agent) if isinstance(value, str) else value
+
+
+class Lead(Templated):
+    """A lead that goes back to its wait until it holds, as a model would: each worker's report wakes it. Once resumed
+    it has done its first turn, as a harness with a session has."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        if spec.resume is not None:
+            self._turns = iter(())
+        return await super().start(spec, report)
+
+    async def _walk(self, steps: Any) -> str:
+        if steps:
+            return await super()._walk(steps)
+        placed = await self._call("wait", {"agents": WORKERS})
+        holds = json.loads(placed["content"][0]["text"])["state"] == "released"
+        return await super()._walk(REPORT_BACK if holds else ())
+
+
+class Resumable(Templated):
+    """It runs one script fresh, and another once resumed."""
+
+    def __init__(self, fresh: Any, resumed: Any) -> None:
+        super().__init__(fresh)
+        self._resumed = resumed
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        if spec.resume is not None:
+            self._turns = iter(self._resumed)
+        return await super().start(spec, report)
+
+
+class Stuck(Resumable):
+    """Its first handover never comes back. Once resumed it behaves."""
+
+    async def deliver(self, delivery: Delivery) -> Receipt:
+        if self._spec.resume is None:
+            await asyncio.Event().wait()
+        return await super().deliver(delivery)
+
+
+FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt="turn")
+
+HARNESSES = {
+    "lead": lambda: Lead([FIX_THE_TEST]),
+    "worker": lambda: Templated([WORK]),
+    "asking": lambda: Templated([ASK_FIRST]),
+    "hanging": lambda: Resumable([HANG_IN_A_TURN], [AFTER_A_RESUME]),
+    "stuck": lambda: Stuck([], [[Say("heard it, the second time")]]),
+    "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        return HARNESSES[name]
+    except KeyError:
+        raise AttributeError(name) from None
+
+
+def wire(name: str) -> dict[str, Any]:
+    """A role's `harness`, as a wire program."""
+    return {"command": [sys.executable, PROGRAM, name], "mode": "wire"}
+
+
+def inside(name: str) -> str:
+    """A role's `harness`, inside the runtime, which is quicker to start than a process of its own."""
+    return f"{__name__}:{name}"
+
+
+def manager_worker(lead: Any, worker: Any, **roles: Any) -> Team:
+    return Team.model_validate(
+        {
+            "roles": {
+                "lead": {"harness": lead, "may_spawn": ["worker"]},
+                "worker": {"harness": worker},
+                **roles,
+            },
+            "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}},
+        }
+    )
+
+
+if __name__ == "__main__":
+    serve(HARNESSES[sys.argv[1]]())

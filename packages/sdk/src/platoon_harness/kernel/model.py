@@ -78,6 +78,13 @@ class Refused(Exception):
         super().__init__(f"{code}: {detail}" if detail else code)
         self.refusal = Refusal(code=code, detail=detail, reachable=reachable, retry_after=retry_after)
 
+    @classmethod
+    def of(cls, refusal: Refusal) -> "Refused":
+        """Raise what an outcome holds, for a caller that wants its refusals as exceptions."""
+        refused = cls(refusal.code, refusal.detail)
+        refused.refusal = refusal
+        return refused
+
 
 class Outcome(BaseModel, frozen=True):
     """How a command or query ended. `seq` is that of the event carrying it, if it has one."""

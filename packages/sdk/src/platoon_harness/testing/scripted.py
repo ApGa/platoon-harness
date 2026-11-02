@@ -199,7 +199,7 @@ class ScriptedDriver:
     async def _exit(self, reason: str) -> None:
         if not self._exited:
             self._exited = True
-            await self._report(Exited(reason=reason, code=0))
+            await self._report(Exited(reason=reason))
 
     async def _next_delivery(self) -> Delivery:
         while not self._pending:
