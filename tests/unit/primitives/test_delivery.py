@@ -291,7 +291,7 @@ async def test_a_program_gets_no_cursor_and_reads_by_after(kernel):
 async def test_compaction_advances_the_context_version(kernel):
     alice = await spawn(kernel, "alice")
 
-    await report(kernel, "alice", "compacted", forgotten=["inbox/alice@1"])
+    await report(kernel, "alice", "compacted")
     sent = await send(kernel, alice, "@alice", "to myself")
 
     event = next(event for event in of_type(kernel, "message.sent") if event.seq == sent["seq"])

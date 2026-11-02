@@ -851,12 +851,14 @@ what it cannot do, so a one-shot harness refuses a start with no goal.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
-`item{kind: message|thought|tool|patch, phase, native_id, gist, body, approval, outcome}`,
-`input.delivered{input, boundary, evidence}`, `approval.requested{id, gist}`, `model.call{call_id, model}`,
-`usage{tokens, usd, label, scope: call|turn|tree}`, `compacted{forgotten}`, `child.seen{native, parent, attribution}`,
-`gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and `changes{path, added, removed, tests}` from the runtime's own
-probe. Unknown frames become `native` plus a gap, never a log line. A report's `body` is text until the host stores it and journals
-the hash, as ingress does for a tool's body argument. A `Delivery` carries its `text`, which the host renders in the words of the
+`item{kind: message|thought|tool|patch, phase: started|completed|final|decided, native_id, call_id, gist, body, approval, outcome}`,
+`input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist}`, `model.call{call_id, model, purpose}`,
+`usage{tokens, usd, label, scope: call|turn|tree, call_id}`, `compacted{forgotten, summary}`,
+`child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and
+`changes{path, added, removed, tests}` from the runtime's own probe. Unknown frames become `native` plus a gap, never a log line. A
+report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
+and `summary` go the same way, since either can pass what an event holds. `forgotten` holds native ids, and with `None` the runtime
+records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
 agent's surface, with each entry's ref and sender, the ref of any body, and the input id. So a wire program in any language has it
 for nothing, and `items` is there for one that wants more.
 
@@ -1011,8 +1013,9 @@ says why an edge is believed; **attribution** (`exact`, `declared`, `inferred`, 
 an agent, tracking a Platoon draft in our own versioned enum; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
 
-**Late joins.** A tool op can commit before the model call that caused it is reported. `call.joined` is a new event citing both,
-with its quality (`anchor`, `response_id`, `turn`). Tools link to a model call only through a real anchor.
+**Late joins.** An `item` or a `usage` that names its model call carries that `call_id` on its envelope, and nothing else does. A tool
+op can commit before the model call that caused it is reported. `call.joined` is a new event citing both, with its quality (`anchor`,
+`response_id`, `turn`), for that late case alone. Tools link to a model call only through a real anchor.
 
 **Coverage.** Standing gaps come from `coverage` at `agent.started`: any harness with a shell is blind to `shell_reads` for life.
 Incident gaps are events of a closed set: `stream_lost`, `compaction_opaque`, `exposure_unconfirmed`, `native_child_unattributed`,

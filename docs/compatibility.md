@@ -211,8 +211,8 @@ Rules that hold on every harness:
 - **Skills.** Per harness. No unification is claimed.
 - **Slash commands.** A small core of ours plus namespaced passthrough. The syntax is a TUI decision and is not set here.
 - **Hooks.** Displayed, not reimplemented.
-- **Compaction.** Passed through and recorded as `compacted{forgotten}`. If what was forgotten is unknown, that is a
-  `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
+- **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as
+  bodies. If what was forgotten is unknown, that is a `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
   cursors are server-held, and a fence defaults to the caller's live lease. A notice carried on a tool result can still be lost to
   compaction, so "delivered" never means "still in context".
 

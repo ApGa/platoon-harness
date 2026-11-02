@@ -44,14 +44,14 @@ method promises:
 |---|---|---|
 | `Ready` | `native`, `version`, `effective_model`, `tools_visible` | The harness is up. `tools_visible` is a list only when it was observed |
 | `TurnStarted` | `turn` | |
-| `TurnEnded` | `reason` | `stopped`, `interrupted` after an interrupt, and otherwise what went wrong. For a one-shot harness this is its end, and `stopped` means it finished |
+| `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong. An `interrupted` turn was someone's own doing, so it wakes nobody. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
-| `Item` | `kind`, `gist`, `phase`, `native_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text |
-| `InputDelivered` | `input`, `boundary`, `evidence` | A delivery reached the harness. `evidence` names what showed it |
+| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. `phase` is `started`, `completed`, `final` or `decided`. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item |
+| `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness. `evidence` names what showed it, and `native_id` is the harness's own id for what landed |
 | `ApprovalRequested` | `id`, `gist` | The harness is waiting on a decision |
-| `ModelCall` | `call_id`, `model` | A model call, with its id only when the id is real |
-| `Usage` | `tokens`, `usd`, `label`, `scope` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable` |
-| `Compacted` | `forgotten` | Context was compacted. If what it forgot is unknown, also report the gap `compaction_opaque` |
+| `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
+| `Usage` | `tokens`, `usd`, `label`, `scope`, `call_id` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable`. `call_id` names the call a `call` scope paid for |
+| `Compacted` | `forgotten`, `summary` | Context was compacted. `forgotten` holds the native ids of what left it, and `summary` the text that took its place |
 | `ChildSeen` | `native`, `parent`, `attribution` | A native child it made on its own |
 | `GapReport` | `plane`, `what` | Something went unseen, from a closed list |
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
@@ -59,6 +59,18 @@ method promises:
 
 Never guess. Unknown is `None`, not zero, not an empty list, and not a plausible id. A frame you cannot read becomes `Native` plus a
 gap, which is what `unknown_frame(kind, raw)` returns, and never a log line.
+
+Send `started` where the harness shows it. A tool that has begun and not finished is an `Item` of kind `tool` in that phase, and it is
+all a person watching has to say what is running, since `activity` is the gist of the latest item. Then send its `completed`.
+
+`Usage.tokens` counts every token of what the scope covers, input and output, with cached input included, as a provider's total does, so
+that budgets mean the same across drivers. A harness that gives you parts, add them. A zero on an aborted call means unknown, because a
+harness writes it for a call it stopped hearing: report `tokens=None` with the label `unavailable`, which a budget treats as unmeasured.
+
+`forgotten` holds native ids, the harness's own for what left the context, and no journal refs, since nothing else can say what those
+were. If a harness names a position, such as the first entry it kept, expand it into ids where it can list them. If what it forgot is
+unknown, leave `forgotten` `None`, and the runtime records the gap `compaction_opaque`. The host stores `forgotten` and `summary` as
+bodies, however long, and `context.compacted` cites them.
 
 Levels are not in this list, and neither are capabilities. A driver declares capabilities in `describe`, and the runtime works
 out what they earned. A `ready` that tries to state a level is an unknown frame.

@@ -9,11 +9,12 @@ from platoon_harness.kernel import Args
 from platoon_harness.schema import Model
 
 from .budgets import Label
-from .common import Gist, Name
+from .common import BodyRef, Gist, Name
 
 RAW_LIMIT = 2048
 OWNER_STOP = "stopped by its owner"
 
+CallId = Annotated[str, Field(max_length=256)]
 Boundary = Literal["turn", "tool", "model_call"]
 Plane = Literal["control", "tool", "model"]
 Attribution = Literal["exact", "declared", "inferred", "forked"]
@@ -80,25 +81,30 @@ class Delta(Args):
 
 
 class Item(Args):
-    """One finished thing a harness did. `body` is its whole text until the host stores it and journals the hash."""
+    """One thing a harness did or began. `phase` is `started` for a tool under way, so `activity` can say what is
+    running, then `completed`, `final` for an answer, and `decided` for an approval. `call_id` names the model call that
+    made it, when the harness says so. `body` is its whole text until the host stores it and journals the hash."""
 
     type: Literal["item"] = "item"
     kind: Literal["message", "thought", "tool", "patch"]
     gist: Gist
-    phase: str | None = None
+    phase: Literal["started", "completed", "final", "decided"] | None = None
     native_id: str | None = None
+    call_id: CallId | None = None
     body: str | None = None
     approval: Name | None = None
     outcome: str | None = None
 
 
 class InputDelivered(Args):
-    """A delivery reached the harness. `evidence` names what showed it, which is what makes this observed exposure."""
+    """A delivery reached the harness. `evidence` names what showed it, which is what makes this observed exposure, and
+    `native_id` is the harness's own id for what landed."""
 
     type: Literal["input.delivered"] = "input.delivered"
     input: Annotated[str, Field(max_length=256)]
     boundary: Boundary
     evidence: str | None = None
+    native_id: CallId | None = None
 
 
 class ApprovalRequested(Args):
@@ -108,27 +114,35 @@ class ApprovalRequested(Args):
 
 
 class ModelCall(Args):
-    """A model call the harness made. `call_id` is present only when it is real."""
+    """A model call the harness made. `call_id` is present only when it is real, and `purpose` only when the harness
+    said why, in its own word, such as `compaction`."""
 
     type: Literal["model.call"] = "model.call"
-    call_id: Annotated[str, Field(max_length=256)] | None = None
+    call_id: CallId | None = None
     model: str | None = None
+    purpose: CallId | None = None
 
 
 class Usage(Args):
     """What was spent, once: `scope` says what the amounts cover, one `call`, this agent's `turn`, or its whole `tree`
-    with native children. A driver reports each spend at one scope."""
+    with native children. A driver reports each spend at one scope. `tokens` counts input and output, cached input
+    included. `call_id` names the model call, when the harness says so."""
 
     type: Literal["usage"] = "usage"
     tokens: int | None = None
     usd: float | None = None
     label: Label
     scope: Literal["call", "turn", "tree"] = "turn"
+    call_id: CallId | None = None
 
 
 class Compacted(Args):
+    """A harness compacted its context. `forgotten` holds the native ids of what left it, None if nobody can say, and
+    `summary` the text that took its place. Each is that until the host stores it and journals the hash."""
+
     type: Literal["compacted"] = "compacted"
-    forgotten: tuple[str, ...] | None = None
+    forgotten: tuple[str, ...] | BodyRef | None = None
+    summary: str | None = None
 
 
 class ChildSeen(Args):

@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import json
 import logging
 import shutil
 from collections.abc import Awaitable, Callable, Mapping
@@ -14,6 +15,7 @@ from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
     ApprovalRequested,
+    Compacted,
     Delivery,
     Delta,
     Driver,
@@ -417,10 +419,17 @@ class Host:
                 return
             case TurnEnded(reason="interrupted") if self._closing:
                 report = TurnEnded(reason=OWNER_STOP)
-            case Item(body=str(text)):
-                sha256 = await self._kernel.put_body(text.encode(errors="replace"))
-                report = report.model_copy(update={"body": f"sha256:{sha256}"})
+            case Item(body=body):
+                report = report.model_copy(update={"body": await self._stored(body)})
+            case Compacted(forgotten=forgotten, summary=summary):
+                listed = None if forgotten is None else json.dumps(forgotten)
+                stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}
+                report = report.model_copy(update=stored)
         await self._taken(link, report, await self.insist("agent.report", {"agent": link.agent, "report": report}))
+
+    async def _stored(self, text: str | None) -> str | None:
+        """Text from a report as the ref of a stored body, since a journal event holds 16 KiB."""
+        return None if text is None else f"sha256:{await self._kernel.put_body(text.encode(errors='replace'))}"
 
     async def _taken(self, link: DriverLink, report: Report, outcome: Outcome) -> None:
         """What comes of a report the journal refused. The evidence is gone, so a gap says so and the harness ends. But

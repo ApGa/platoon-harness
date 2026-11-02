@@ -155,14 +155,20 @@ def pending(txn: Txn, a: Pending) -> int:
     return txn.view(Deliveries).queued(a.agent, ("steer",))[1]
 
 
-def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None) -> None:
+def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None, native_id: str | None = None) -> None:
     """Record that a driver saw an offer injected, which is observed exposure. A repeat changes nothing."""
     found = txn.view(Deliveries).offer(input)
     if found is None:
         raise Refused("not_found", f"no offer {input}")
     reader, positions, delivered = found
     if not delivered:
-        data = {"input": input, "positions": positions, "boundary": boundary, "evidence": evidence}
+        data = {
+            "input": input,
+            "positions": positions,
+            "boundary": boundary,
+            "evidence": evidence,
+            "native_id": native_id,
+        }
         txn.emit(
             "context.delivered",
             f"context/{reader}",

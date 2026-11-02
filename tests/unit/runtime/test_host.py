@@ -17,6 +17,7 @@ from platoon_harness.drivers import (
     AgentSpec,
     ApprovalRequested,
     Capabilities,
+    Compacted,
     Delivery,
     Delta,
     DriverError,
@@ -164,6 +165,27 @@ async def test_an_authority_hears_how_an_agent_ended(tmp_path):
             AgentRef(agent="bob", role="bob"),
             AgentOutcome(status="cancelled"),
         )
+
+
+async def test_a_long_forgotten_does_not_lose_the_agent(tmp_path):
+    """Compaction can name more than one event holds, so the list is a body, whatever its length."""
+    forgotten = tuple(f"{index:036d}" for index in range(500))
+
+    class Compacting(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            started = await super().start(spec, report)
+            await report(Compacted(forgotten=forgotten, summary="what was kept"))
+            return started
+
+    async with Session.start(solo_with(Compacting), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        compacted = await until(lambda: of_type(session, "context.compacted"), session)
+        kept = await session.get_body(compacted[0].data["forgotten"])
+        summary = await session.get_body(compacted[0].data["summary"])
+        ending = await session.ending()
+
+    assert tuple(json.loads(kept)) == forgotten and summary == b"what was kept"
+    assert ending.agents[0]["state"] == "idle" and ending.gaps == ()
 
 
 async def test_each_agent_gets_its_own_binding_instructions_preamble_and_ph(tmp_path, recording):

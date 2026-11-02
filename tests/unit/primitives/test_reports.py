@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from platoon_harness import drivers, team
 from platoon_harness.primitives import (
@@ -36,6 +37,7 @@ from .support import (
     send,
     settle_effects,
     spawn,
+    start_turn,
 )
 
 EVERY_REPORT = [
@@ -43,12 +45,21 @@ EVERY_REPORT = [
     TurnStarted(turn="t1"),
     TurnEnded(reason="stopped"),
     Delta(text="live"),
-    Item(kind="tool", gist="ran it", phase="completed", native_id="i1", body="all of it", approval="a1", outcome="ok"),
-    InputDelivered(input="12", boundary="tool", evidence="message_start"),
+    Item(
+        kind="tool",
+        gist="ran it",
+        phase="completed",
+        native_id="i1",
+        call_id="c1",
+        body="all of it",
+        approval="a1",
+        outcome="ok",
+    ),
+    InputDelivered(input="12", boundary="tool", evidence="message_start", native_id="entry-3"),
     ApprovalRequested(id="a1", gist="run it?"),
-    ModelCall(call_id="c1", model="m"),
-    Usage(tokens=14, usd=0.5, label="provider", scope="tree"),
-    Compacted(forgotten=("e1", "e2")),
+    ModelCall(call_id="c1", model="m", purpose="compaction"),
+    Usage(tokens=14, usd=0.5, label="provider", scope="tree", call_id="c1"),
+    Compacted(forgotten=("e1", "e2"), summary="what it kept"),
     ChildSeen(native="thread-2", parent="thread-1", attribution="inferred"),
     GapReport(plane="model", what="hidden_call"),
     Native(kind="frame", raw="???", cut=3),
@@ -202,7 +213,7 @@ async def test_a_model_call_with_an_id_stamps_the_envelope(kernel):
 
     event = of_type(kernel, "model.called")[-1]
     assert event.model.call_id == "c1"
-    assert event.data == {"call_id": "c1", "model": "m"}
+    assert event.data == {"call_id": "c1", "model": "m", "purpose": None}
 
 
 async def test_a_model_call_with_no_id_fabricates_none(kernel):
@@ -211,6 +222,97 @@ async def test_a_model_call_with_no_id_fabricates_none(kernel):
     await report(kernel, "bob", "model.call")
 
     assert of_type(kernel, "model.called")[-1].model is None
+
+
+async def test_a_model_call_keeps_the_harness_word_for_why_it_was_made(kernel):
+    await spawn(kernel, "bob")
+
+    await report(kernel, "bob", "model.call", purpose="compaction")
+
+    assert of_type(kernel, "model.called")[-1].data["purpose"] == "compaction"
+
+
+async def test_an_item_names_the_model_call_that_made_it(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "item", kind="tool", gist="ran it", call_id="c1")
+
+    assert of_type(kernel, "item.recorded")[-1].model.call_id == "c1"
+
+
+async def test_usage_names_the_model_call_it_paid_for(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "usage", tokens=14, label="provider", scope="call", call_id="c1")
+
+    assert of_type(kernel, "usage.reported")[-1].model.call_id == "c1"
+
+
+async def test_a_report_with_no_call_id_fabricates_no_link(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "item", kind="tool", gist="ran it")
+    await report(kernel, "bob", "usage", tokens=14, label="provider")
+
+    assert of_type(kernel, "item.recorded")[-1].model is None
+    assert of_type(kernel, "usage.reported")[-1].model is None
+
+
+@pytest.mark.parametrize("phase", ["started", "completed", "final", "decided", None])
+def test_a_phase_is_one_of_four(phase):
+    assert Item(kind="tool", gist="x", phase=phase).phase == phase
+
+
+def test_a_phase_nobody_knows_is_an_unknown_frame():
+    with pytest.raises(ValidationError):
+        REPORTS.validate_python({"type": "item", "kind": "tool", "gist": "x", "phase": "running"})
+
+
+async def test_a_delivery_keeps_the_harness_id_for_what_landed(kernel):
+    await spawn(kernel, "bob")
+    await send(kernel, kernel.runtime, "@bob", "go")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    await report(kernel, "bob", "input.delivered", input=str(handed["input"]), boundary="turn", native_id="entry-3")
+
+    assert of_type(kernel, "context.delivered")[-1].data["native_id"] == "entry-3"
+
+
+async def test_a_compaction_cites_what_it_stored(kernel):
+    await spawn(kernel, "bob")
+    forgotten = await kernel.put_body(b'["e1", "e2"]')
+    summary = await kernel.put_body(b"what it kept")
+
+    await report(kernel, "bob", "compacted", forgotten=f"sha256:{forgotten}", summary=f"sha256:{summary}")
+
+    assert of_type(kernel, "context.compacted")[-1].data == {
+        "forgotten": f"sha256:{forgotten}",
+        "summary": f"sha256:{summary}",
+    }
+    assert of_type(kernel, "gap.recorded") == []
+
+
+async def test_a_compaction_that_forgot_nobody_knows_what_is_a_gap_by_itself(kernel):
+    await spawn(kernel, "bob")
+
+    await report(kernel, "bob", "compacted")
+
+    assert [event.data["what"] for event in of_type(kernel, "gap.recorded")] == ["compaction_opaque"]
+    ending = result_of(kernel.query(kernel.runtime, "session.ending", {}))
+    assert [gap["what"] for gap in ending["gaps"]] == ["compaction_opaque"]
+
+
+async def test_a_compaction_cannot_cite_what_nobody_stored(kernel):
+    await spawn(kernel, "bob")
+
+    outcome = await kernel.submit(
+        kernel.runtime, "agent.report", {"agent": "bob", "report": {"type": "compacted", "forgotten": ["e1"]}}
+    )
+
+    assert refusal(outcome).code == "invalid"
 
 
 async def test_usage_keeps_its_scope_and_label(kernel):

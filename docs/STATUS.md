@@ -94,6 +94,8 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves, back-off after a failed handover, and an agent lost after six in a row | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
+| A compaction's `forgotten` and `summary` stored as bodies, with `compaction_opaque` recorded for an unknown `forgotten` | tested | `test_reports.py`, and a long list through a host in `test_host.py`. No compaction has been observed on a real harness |
+| `call_id` on `item.recorded` and `usage.reported`, `purpose` on `model.called`, `native_id` on `context.delivered`, and a closed `Item.phase` | tested | `test_reports.py`. `call.joined` for the late case is not built |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
 | A waiter's own cancel or completion counts for its wait, placed before or after | tested | `test_waits.py` |
 | A report the parent is counting does not wake it unless the child ended badly, so a join of N costs one turn, on agents, on senders and on tasks | tested | `test_lifecycle.py`, and in a session in `tests/unit/runtime/test_session.py`. No real harness |

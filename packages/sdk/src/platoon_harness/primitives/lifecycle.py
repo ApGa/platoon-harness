@@ -363,6 +363,11 @@ def release(txn: Txn, a: Named) -> None:
     _gap(txn, agent.name, "control", "takeover")
 
 
+def _model(call_id: str | None) -> ModelRef | None:
+    """The model call behind an event, only when a harness named a real one."""
+    return ModelRef(call_id=call_id) if call_id else None
+
+
 def _gap(txn: Txn, agent: str, plane: Plane, what: str) -> None:
     data = {"plane": plane, "what": what}
     txn.emit("gap.recorded", f"agent/{agent}", gist=f"gap: {what}", agent=agent, data=data)
@@ -480,23 +485,30 @@ def report(txn: Txn, a: AgentReport) -> None:
         case Item() as item:
             refs = [item.body] if item.body else ()
             data = item.model_dump(exclude={"type", "gist"})
-            txn.emit("item.recorded", f"turn/{name}", gist=item.gist, agent=name, refs=refs, data=data)
+            model = _model(item.call_id)
+            txn.emit("item.recorded", f"turn/{name}", gist=item.gist, agent=name, refs=refs, data=data, model=model)
         case Usage() as usage:
             data = usage.model_dump(exclude={"type"})
-            txn.emit("usage.reported", f"turn/{name}", gist=f"usage: {usage.label}", agent=name, data=data)
-        case Compacted(forgotten=forgotten):
-            data = {"forgotten": forgotten}
-            txn.emit("context.compacted", f"context/{name}", gist=f"{name} compacted", agent=name, data=data)
+            gist = f"usage: {usage.label}"
+            txn.emit("usage.reported", f"turn/{name}", gist=gist, agent=name, data=data, model=_model(usage.call_id))
+        case Compacted(forgotten=tuple()):
+            raise Refused("invalid", "what was forgotten is cited as a stored body")
+        case Compacted(forgotten=forgotten, summary=summary):
+            data = {"forgotten": forgotten, "summary": summary}
+            refs = [ref for ref in (forgotten, summary) if isinstance(ref, str)]
+            txn.emit("context.compacted", f"context/{name}", gist=f"{name} compacted", agent=name, refs=refs, data=data)
+            if forgotten is None:
+                _gap(txn, name, "control", "compaction_opaque")
         case InputDelivered() as delivered:
             if not delivered.input.isdecimal():
                 raise Refused("not_found", f"no offer {delivered.input}")
-            confirmed(txn, int(delivered.input), delivered.boundary, delivered.evidence)
+            confirmed(txn, int(delivered.input), delivered.boundary, delivered.evidence, delivered.native_id)
         case ApprovalRequested(id=id, gist=gist):
             ask(txn, id, agent, gist)
         case ModelCall(call_id=call_id) as call:
             data = call.model_dump(exclude={"type"})
-            model = ModelRef(call_id=call_id) if call_id else None
-            txn.emit("model.called", f"turn/{name}", gist=f"{name} called a model", agent=name, data=data, model=model)
+            gist = f"{name} called a model"
+            txn.emit("model.called", f"turn/{name}", gist=gist, agent=name, data=data, model=_model(call_id))
         case ChildSeen() as child:
             data = child.model_dump(exclude={"type"})
             txn.emit("child.seen", f"agent/{name}", gist=f"{name} has a native child", agent=name, data=data)
