@@ -229,8 +229,8 @@ through `submit` too, so no second path exists.
    `unavailable`, journals nothing, and may retry. A refusal's `object` is cut to 256 characters and its `detail` to 512, so
    caller text cannot grow the journal.
 4. **Commit.** One fsync per batch. Only then does the head pulse and are futures resolved, so whoever is acked finds their
-   write under `head`. If the commit fails, no command in the batch happened: each gets `unavailable`, journals nothing, and
-   may retry under its key.
+   write under `head`. If the commit fails, the batch's outcome is unknown, since its bytes may have landed all the same: each command
+   gets `unavailable` and should retry under its key, which answers from the journal if they did.
 
 ### 5.2 Tables
 
