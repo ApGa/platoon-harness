@@ -44,7 +44,7 @@ method promises:
 |---|---|---|
 | `Ready` | `native`, `version`, `effective_model`, `tools_visible` | The harness is up. `tools_visible` is a list only when it was observed |
 | `TurnStarted` | `turn` | |
-| `TurnEnded` | `reason` | `stopped`, unless something went wrong. For a one-shot harness this is its end, and `stopped` means it finished |
+| `TurnEnded` | `reason` | `stopped`, `interrupted` after an interrupt, and otherwise what went wrong. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
 | `Item` | `kind`, `gist`, `phase`, `native_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text |
 | `InputDelivered` | `input`, `boundary`, `evidence` | A delivery reached the harness. `evidence` names what showed it |

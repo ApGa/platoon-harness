@@ -729,6 +729,33 @@ async def test_a_quiet_session_past_its_wall_limit_ends_and_does_not_hang(tmp_pa
     assert (ending.state, ending.reason) == ("closing", "budget_exhausted")
 
 
+async def test_a_join_of_three_workers_costs_its_lead_one_turn_after_the_first(tmp_path):
+    names = ["a", "b", "c"]
+    spawned = [Call("agent_spawn", {"name": name, "child_role": "worker", "goal": "go"}) for name in names]
+    team = Team.model_validate(
+        {
+            "roles": {
+                "lead": {
+                    "harness": scripted([*spawned, Call("wait", {"agents": names})], [Say("all three are in")]),
+                    "may_spawn": ["worker"],
+                },
+                "worker": {"harness": scripted([Call("agent_finish", {"gist": "done"})])},
+            },
+            "topology": {"edges": {"lead": ["children"]}},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@lead", "go")
+        ending = await session.settled(timeout="10s")
+        turns = [event for event in await of_type(session, "turn.started") if event.agent == "lead"]
+        said = [event.gist for event in await of_type(session, "item.recorded") if event.agent == "lead"]
+
+    assert ending.reason == "settled"
+    assert len(turns) == 2
+    assert "all three are in" in said
+
+
 async def test_timing_out_is_exit_3_and_leaves_the_session_as_it_is(tmp_path):
     clock = ManualClock(1000.0)
 

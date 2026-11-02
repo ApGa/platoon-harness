@@ -93,15 +93,24 @@ def _refuse_over_working(txn: Txn, agent: Agent) -> None:
         )
 
 
-def _monitor(txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None) -> bool:
+def _monitor(
+    txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None, *, wake: bool | None = None
+) -> bool:
     """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden.
     Returns whether a parent was there to hear it."""
     parent = None if agent.parent is None else txn.view(Principals).get(agent.parent)
     if parent is None or parent.state != "live":
         return False
     text = gist or agent.final_gist or f"{agent.name} ended its turn with no final text."
-    post(txn, _inbox_of(parent.id), text, body=body or agent.final_body, subject=agent.name)
+    post(txn, _inbox_of(parent.id), text, body=body or agent.final_body, subject=agent.name, wake=wake)
     return True
+
+
+def _counted(txn: Txn, agent: Agent, *, ended: bool = False) -> bool:
+    """Whether a wait of the parent is counting this agent. Its report need not wake anyone: the wait does, when it
+    holds, so a join of N costs one turn."""
+    waits = () if agent.parent is None else txn.view(Waits).open_for(agent.parent)
+    return any(wait.counts(agent.name, ended=ended) for wait in waits)
 
 
 def end(
@@ -123,7 +132,8 @@ def end(
     ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
     body = body or agent.final_body
-    heard = _monitor(txn, agent, report, body)
+    quiet = txn.me.id == agent.parent or (status == "finished" and _counted(txn, agent, ended=True))
+    heard = _monitor(txn, agent, report, body, wake=False if quiet else None)
     txn.emit(
         "agent.ended",
         f"agent/{name}",
@@ -392,6 +402,17 @@ class AgentReport(Args):
     report: Report
 
 
+def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
+    """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and an
+    interrupt was someone's own doing, so it wakes nobody. A failure wakes the parent, even one counting this agent."""
+    if reason == "stopped":
+        _monitor(txn, agent, wake=False if _counted(txn, agent) else None)
+    else:
+        said = f": {agent.final_gist}" if agent.final_gist else ""
+        gist = f"{agent.name} turn {reason}{said}"[:GIST_LIMIT]
+        _monitor(txn, agent, gist, wake=False if reason == "interrupted" else None)
+
+
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools. A
     one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished."""
@@ -407,7 +428,7 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
         return
     parked = bool(txn.view(Waits).open_for(agent.id))
     if not parked and agent.state != "held":
-        _monitor(txn, agent)
+        _report_turn(txn, agent, reason)
     txn.emit(
         "turn.ended", f"turn/{name}", gist=f"turn ended: {reason}"[:GIST_LIMIT], agent=name, data={"reason": reason}
     )

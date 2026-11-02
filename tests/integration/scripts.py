@@ -51,8 +51,8 @@ class Templated(ScriptedDriver):
 
 
 class Lead(Templated):
-    """A lead that goes back to its wait until it holds, as a model would: each worker's report wakes it. Once resumed
-    it has done its first turn, as a harness with a session has."""
+    """A lead that goes back to its wait until it holds, as a model would: each message from a worker wakes it. Once
+    resumed it has done its first turn, as a harness with a session has."""
 
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
         if spec.resume is not None:

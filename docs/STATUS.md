@@ -94,6 +94,9 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
+| A waiter's own cancel or completion counts for its wait, placed before or after | tested | `test_waits.py` |
+| A report the parent is counting does not wake it unless the child ended badly, so a join of N costs one turn, on agents, on senders and on tasks | tested | `test_lifecycle.py`, and in a session in `tests/unit/runtime/test_session.py`. No real harness |
+| A parent is not woken to hear of a child it ended itself, and a turn that did not stop on its own says so | tested | `test_lifecycle.py` |
 | Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py`. A task that reopens after a lapse releases no such wait: pass a `timeout` |
 | `hold` as a surface keeps it | tested | `tests/unit/tools/test_mcp.py`, on a manual clock over a real socket: released, `pending`, closed under the call, a retry, a role without `wait.progress`, and a client that vanishes. `hold_open` running as the runtime is confirmed in architecture section 10. No real harness |
 | One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |

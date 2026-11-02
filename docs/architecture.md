@@ -556,6 +556,14 @@ subject. It wakes at most once per causal chain for each child, so a reply to th
 still reports back, and it stops at `max_hops`; past either, its message waits for the next turn.
 So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
 
+A report also waits for the next turn when waking would tell the parent nothing. A parent that ended the child itself did it. A
+report the parent is counting does not wake it, unless the child ended badly: the wait wakes it when it holds, so a join of N costs
+one turn, and a failure still breaks in, which is fail-fast with no new wait grammar. A parent counts a child when a wait of its stands
+on the child's end, on a message from it, or on what it has already counted of it, such as a task it settled. A turn end is no end,
+so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it. A turn that did not stop on
+its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. An `interrupted` turn was someone's own doing,
+so it wakes nobody, and any other reason wakes the parent, even one counting that child.
+
 ### Boards
 
 Objects have stable names and immutable versions (`board/<board>/<name>`). A read of one moves the reader's cursor on it, so
@@ -595,7 +603,8 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 - `Waits` folds progress (`have`, `need`, `missing`), which is what the UI shows, and how each wait closed. `n` counts events
   that are news to the waiter: not its own, and no entry it was never meant to see, so a wait for an answer cannot end on the
   question. With `distinct`, naming an envelope field, it counts different values, its own too, and it may list them, so
-  `n=members` can say who is `missing`.
+  `n=members` can say who is `missing`. `agents` and `tasks` use it, because an end is an end whoever brought it about, so a
+  cancel before a join holds that join.
 - **One open wait per agent.** Another `wait` replaces it, so a model tracks no ids. A program may hold several.
 - **A wait outlives its turn.** While the agent's turn runs its wait stays open, even once it holds. The runtime closes it when
   the turn ends, so a wake cannot race the turn it follows. A `timeout` closes it the same way and acks nothing.

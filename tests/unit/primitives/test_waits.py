@@ -218,6 +218,47 @@ async def test_a_waiters_own_post_does_not_satisfy_its_wait(kernel):
     assert (await wait(kernel, alice, condition("channel/t")))["state"] == "parked"
 
 
+@pytest.mark.parametrize("first", ["cancel", "wait"])
+async def test_a_waiters_own_cancel_counts_for_its_join(kernel, first):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead)
+
+    if first == "cancel":
+        result_of(await kernel.submit(lead, "agent.cancel", {"agent": "bob"}))
+        placed = result_of(await kernel.submit(lead, "wait", {"agents": ["bob"]}))
+        assert placed["state"] == "released"
+    else:
+        placed = result_of(await kernel.submit(lead, "wait", {"agents": ["bob"]}))
+        result_of(await kernel.submit(lead, "agent.cancel", {"agent": "bob"}))
+        assert released(kernel) == [placed["id"]]
+
+
+@pytest.mark.parametrize("first", ["cancel", "wait"])
+async def test_a_human_s_own_cancel_counts_for_their_join(kernel, ada, first):
+    await spawn(kernel, "bob")
+
+    if first == "cancel":
+        result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+        placed = result_of(await kernel.submit(ada, "wait", {"agents": ["bob"]}))
+        assert placed["state"] == "released"
+    else:
+        placed = result_of(await kernel.submit(ada, "wait", {"agents": ["bob"]}))
+        result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+        assert released(kernel) == [placed["id"]]
+
+
+async def test_a_task_a_waiter_settled_itself_counts_for_its_wait(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    await channel(kernel, "q", "queue")
+    task = result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do it"}))["task"]
+    result_of(await kernel.submit(lead, "task.claim", {"queue": "q"}))
+    result_of(await kernel.submit(lead, "task.complete", {"queue": "q"}))
+
+    placed = result_of(await kernel.submit(lead, "wait", {"tasks": [f"q/{task}"]}))
+
+    assert placed["state"] == "released"
+
+
 async def test_a_waiters_own_revision_does_not_satisfy_its_wait(kernel):
     alice = await spawn(kernel, "alice")
     await channel(kernel, "notes", kind="board")

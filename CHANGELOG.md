@@ -68,6 +68,12 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
 - `ph <tool> --help` for an unknown tool shows what there is.
+- A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
+- A report the parent is counting no longer wakes it, unless the child ended badly, so a join of N costs one turn and not N. The same
+  goes for a join on tasks.
+- A turn that did not stop on its own says so to the parent, as `<name> turn <reason>: <text>`, and an `interrupted` one wakes nobody.
+  It used to read as a final answer and wake the parent.
+- A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
   mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
 

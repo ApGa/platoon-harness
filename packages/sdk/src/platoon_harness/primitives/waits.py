@@ -101,6 +101,10 @@ class Progress(BaseModel, frozen=True):
         lacking = tuple(f"{prefix}{value}" for value in self.expected if value not in self.seen)
         return lacking or (_label(self.stream),)
 
+    def stands_on(self, agent: str) -> bool:
+        """Whether this condition names `agent`, or has already counted something of its doing."""
+        return agent in self.expected or agent in self.seen or f"agent:{agent}" in self.seen
+
     def _news(self, event: Event) -> bool:
         """Whether an event is news to the waiter: not its own doing, and no entry it was never meant to see."""
         if event.actor == self.waiter:
@@ -154,6 +158,13 @@ class WaitRecord(BaseModel, frozen=True):
     @property
     def missing(self) -> tuple[str, ...]:
         return () if self.left <= 0 else tuple(value for condition in self.conditions for value in condition.missing)
+
+    def counts(self, agent: str, *, ended: bool) -> bool:
+        """Whether this wait is counting `agent`: its end, if it has `ended`, what it says, or what it has done."""
+        return any(
+            condition.stands_on(agent) or (ended and condition.stream == f"agent/{agent}")
+            for condition in self.conditions
+        )
 
     def shown(self) -> dict[str, Any]:
         return {"id": self.id, "have": self.have, "need": self.need, "missing": self.missing}
@@ -283,10 +294,11 @@ def _work_on(txn: Txn, queue: str) -> Condition:
 
 
 def _ending_of(txn: Txn, name: str) -> Condition:
-    """An agent's end. A spawn adds its principal in its own transaction, so a name nobody holds is a typo."""
+    """An agent's end, whoever brought it about, so `distinct` counts the waiter's own cancel too. A spawn adds its
+    principal in its own transaction, so a name nobody holds is a typo."""
     if txn.view(Principals).named(name) is None:
         raise Refused("not_found", f"no agent {name}")
-    return Condition(stream=f"agent/{name}", types=("agent.ended",))
+    return Condition(stream=f"agent/{name}", types=("agent.ended",), distinct="agent")
 
 
 def _conditions(txn: Txn, a: Wait) -> tuple[Condition, ...]:
@@ -295,7 +307,7 @@ def _conditions(txn: Txn, a: Wait) -> tuple[Condition, ...]:
         *a.on,
         *(_ending_of(txn, name) for name in a.agents),
         *(Condition(stream=f"inbox/{txn.me.name}", n=(name,), distinct="agent") for name in a.senders),
-        *(Condition(stream=f"task/{task}", types=_TASK_SETTLED) for task in a.tasks),
+        *(Condition(stream=f"task/{task}", types=_TASK_SETTLED, distinct="actor") for task in a.tasks),
         *(Condition(stream=f"board/{name}", types=_BOARD_VERSIONED) for name in a.board),
         *(Condition(stream=stream_of(channel)) for channel in a.channels),
         *(_work_on(txn, queue) for queue in a.queue),
@@ -356,7 +368,8 @@ def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
     version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`. One
     wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
     runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran
-    out, call again or end your turn. Refused `not_permitted` for what you may not watch, `not_found` for an agent
+    out, call again or end your turn. An agent you count that ends badly starts your next turn early, and the wait
+    stays open. Refused `not_permitted` for what you may not watch, `not_found` for an agent
     nobody spawned: call `agent.list`. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least
     as long. `invalid` for an `after` past every event: leave it out."""
     _check_call(txn, a)

@@ -418,13 +418,14 @@ def post(
     cause: Sequence[int] = (),
     based_on: Sequence[str] = (),
     subject: str | None = None,
-    wake: bool = False,
+    wake: bool | None = None,
     follows: int = -1,
 ) -> Event:
-    """Journal one entry for its audience. The runtime posts here too, about a `subject` or to `wake` the reader, and
-    `follows` is the hops of what a post follows when no `cause` can say so, as for a wait's notice."""
+    """Journal one entry for its audience. The runtime posts here too, about a `subject`, or to `wake` the reader or,
+    with False, to leave it for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can
+    say so, as for a wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
-    by_runtime = subject is not None or wake
+    by_runtime = subject is not None or wake is not None
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
     if channel.depth is not None and not by_runtime:
         depth = txn.view(Deliveries).depth(readers[0], stream)
@@ -435,7 +436,8 @@ def post(
     max_hops = txn.view(SessionRecord).settings().limits.max_hops
     past_hops = max_hops is not None and hops > max_hops
     setting = "wake" if wake else channel.delivery
-    wakes = not past_hops and subject not in spent
+    wants = setting in WAKING and wake is not False
+    wakes = wants and not past_hops and subject not in spent
     event = txn.emit(
         "message.sent",
         stream,
@@ -461,7 +463,7 @@ def post(
             "mention": human,
         },
     )
-    if setting in WAKING and past_hops:
+    if wants and past_hops:
         ref = f"{event.stream}@{event.version}"
         for reader in audience:
             data = {"why": "hops", "hops": hops, "limit": max_hops, "ref": ref}
