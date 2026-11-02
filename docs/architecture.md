@@ -661,11 +661,11 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   nobody tells sits idle on its leases. So a resume tells it, with one fixed notice and a wake, once and only while the session accepts
   work: a resume is someone wanting the session to go on, and a notice nobody acts on is the stall it fixes. The notice says which of
   the two it was, that its tool calls may have run in part or in full even if its history shows them unfinished, failed or interrupted
-  or not at all, that nothing was repeated, and to check before repeating. It lists no calls, since a query leaves no event, so a list
+  or not at all, that none was repeated, and to check before repeating. It lists no calls, since a query leaves no event, so a list
   could not say that an unlisted call never ran. `agent.told` records that it went, so a second crash during recovery sends no second
   notice, and what was posted goes on at-least-once like any entry. A second turn cut off is a second thing to tell. A human's
-  `agent.interrupt` is no cut-off: once a host is closing it reports a turn interrupted as `stopped by its owner`, so a crash part of
-  the way through a stop loses nothing. The wake reserves a turn like any other, so a budget that an unmeasured turn left unable to hold
+  `agent.interrupt` is no cut-off. A host that is closing reports a turn interrupted as `stopped by its owner`, which tells the two
+  apart and leaves a crash part of the way through a stop nothing to lose. The wake reserves a turn like any other, so a budget that an unmeasured turn left unable to hold
   refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
@@ -683,9 +683,9 @@ reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:
 A team with no root uses `"settled"`.
 
 A session has **stalled** when it is settled short of `until` with nothing scheduled: no timer and no wait deadline to come. So a wall
-limit, a lease or a wait's `timeout` is waited for, and two agents parked on each other come to this too. A wake the budget refused
-is never `done`, even at `"settled"`, because it is work left that only a human can unblock. A `"program"` session is left to its
-program. An extension daemon's private schedule is not in the journal, so it cannot hold off a stall: such a daemon sets a timer.
+limit, a lease or a wait's `timeout` is waited for, and two agents parked on each other come to this too. Short of exhaustion, a wake
+the budget refused keeps even a `"settled"` session from being done, because it is work left that only a human can unblock. A
+`"program"` session is left to its program. An extension daemon's private schedule is not in the journal, so it cannot hold off a stall: such a daemon sets a timer.
 
 ### Approvals
 

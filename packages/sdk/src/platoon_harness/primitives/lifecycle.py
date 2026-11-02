@@ -59,7 +59,7 @@ _REASON_LIMIT = 1024
 _ON_PURPOSE = ("interrupted", OWNER_STOP)
 _CUT_OFF = (
     "Your last turn was cut off by {cause}. Its tool calls may have run in part or in full, even if your history shows "
-    "them unfinished, failed or interrupted, or not at all. Nothing was repeated. Check before you repeat anything, "
+    "them unfinished, failed or interrupted, or not at all. None was repeated. Check before you repeat anything, "
     "then carry on."
 )
 
