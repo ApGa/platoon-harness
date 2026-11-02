@@ -295,7 +295,9 @@ class Session:
 
     # Lifecycle.
 
-    async def spawn(self, name: str, child_role: str, goal: str = "", *, body: str | bytes | None = None) -> dict:
+    async def spawn(
+        self, name: str, child_role: str, goal: str = "", *, body: str | bytes | None = None
+    ) -> dict[str, Any]:
         """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it."""
         return await self._do("agent.spawn", name=name, child_role=child_role, goal=goal, body=await self._stored(body))
 
@@ -645,6 +647,7 @@ class Session:
     async def deltas(self, agent: str) -> AsyncIterator[Delta]:
         """An agent's live text as it comes. It is lossy: `lag` counts what was lost, and the item that follows is the
         truth."""
+        agent = agent.removeprefix("@")
         frame = await self._frame(agent, None)
         while frame is not None:
             yield frame

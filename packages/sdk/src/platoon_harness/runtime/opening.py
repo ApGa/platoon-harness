@@ -124,13 +124,14 @@ def _starting(team: Team) -> list[dict[str, str]]:
 
 
 async def _steps(kernel: Kernel, op: str, *steps: tuple[str, Mapping[str, Any]]) -> None:
-    """Run one op over several arguments, in order, as one batch of commits. A key answers a repeat from the journal."""
+    """Run one op over several arguments, in order, as one batch of commits. A key answers a repeat from the journal,
+    and a step that ran with other arguments, under an older SDK, stands as it ran."""
     outcomes = await asyncio.gather(
         *(kernel.submit(kernel.runtime, op, args, key=f"open/{key}") for key, args in steps)
     )
     for outcome in outcomes:
-        if outcome.refusal is not None:
-            raise Refused(outcome.refusal.code, outcome.refusal.detail)
+        if outcome.refusal is not None and outcome.refusal.code != "key_reused":
+            raise Refused.of(outcome.refusal)
 
 
 async def open_session(kernel: Kernel, team: Team, manifest: Manifest, authority: Authority, text: str) -> None:

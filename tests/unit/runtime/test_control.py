@@ -19,7 +19,7 @@ from platoon_harness.runtime.control import REFUSED, Remote
 from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
 from platoon_harness.testing import Say
 
-from .support import SECONDS, in_state, journal, of_type, solo
+from .support import SECONDS, in_state, journal, of_type, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -286,7 +286,6 @@ async def test_a_client_that_reconnects_resumes_from_its_cursor(guest, owner):
 async def test_following_is_a_read_plus_a_long_poll(guest, owner):
     events = guest.events(follow=True, match="inbox/*")
     next_event = asyncio.ensure_future(anext(events))
-    await asyncio.sleep(0)
 
     await owner.send("@bob", "follow this")
 
@@ -296,21 +295,33 @@ async def test_following_is_a_read_plus_a_long_poll(guest, owner):
 
 async def test_a_long_poll_comes_back_empty_and_goes_round_again(guest, owner, monkeypatch):
     monkeypatch.setattr(control, "_POLL_SECONDS", 0.001)
+    real = Remote._call
+    twice = asyncio.Event()
+    polls = []
+
+    async def counting(self: Remote, method: str, params: Any) -> Any:
+        answer = await real(self, method, params)
+        if method == "changed" and answer["again"]:
+            polls.append(answer)
+            if len(polls) == 2:
+                twice.set()
+        return answer
+
+    monkeypatch.setattr(Remote, "_call", counting)
+    await until(owner.status, owner, lambda status: status["settled"])
     head = owner._runtime.kernel.head
     changed = asyncio.ensure_future(guest._link.changed(head))
+    await asyncio.wait_for(twice.wait(), SECONDS)
 
-    async with asyncio.timeout(SECONDS):
-        while not (await asyncio.sleep(0.01, changed.done())) and head == owner._runtime.kernel.head:
-            await owner.send("@bob", "a move")
+    await owner.send("@bob", "a move")
 
     assert await asyncio.wait_for(changed, SECONDS) > head
 
 
 async def test_live_text_crosses_the_socket(guest, owner):
     kernel = owner._runtime.kernel
-    frames = guest.deltas("bob")
+    frames = guest.deltas("@bob")
     next_frame = asyncio.ensure_future(anext(frames))
-    await asyncio.sleep(0)
 
     kernel.push_delta("bob", "typing")
 
@@ -357,14 +368,14 @@ async def test_a_client_that_stops_reading_is_dropped_and_costs_nobody_else(owne
     connection.close()
 
 
-async def test_the_runtime_holds_no_queue_for_a_client(owner):
+async def test_nothing_is_pushed_to_a_client_that_did_not_ask(owner):
     connection = await Raw.connect(owner.folder)
     await connection.hello(token(owner))
     await connection.call("changed", {"after": 0})
 
     await owner.send("@bob", "nobody asked for this")
 
-    assert connection.reader._buffer == b""
+    assert (await connection.call("others"))["id"] == connection.sent
     connection.close()
 
 
@@ -397,7 +408,6 @@ async def test_watching_a_view_needs_no_session_of_its_own(guest, owner):
     assert first["snapshot"] is True
 
     changed = asyncio.ensure_future(anext(views))
-    await asyncio.sleep(0)
     await owner.send("@you", "a note to self")
 
     assert (await asyncio.wait_for(changed, SECONDS))["snapshot"] is False

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import stat
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
@@ -61,6 +62,15 @@ def recording() -> type[Recording]:
     return Recording
 
 
+def recorded(driver: type[Recording]) -> Callable[[], Awaitable[list[Delivery]]]:
+    """What the harness was handed, to ask of it each time the journal moves."""
+
+    async def handed() -> list[Delivery]:
+        return driver.deliveries
+
+    return handed
+
+
 class Stuck(ScriptedDriver):
     """A harness whose handover never comes back."""
 
@@ -105,19 +115,21 @@ async def test_an_authority_that_refuses_ends_the_spawn(tmp_path):
 
 
 async def test_an_authority_hears_how_an_agent_ended(tmp_path):
-    heard: list[tuple[AgentRef, AgentOutcome]] = []
+    heard: asyncio.Future[tuple[AgentRef, AgentOutcome]] = asyncio.get_running_loop().create_future()
 
     class Listening(LocalAuthority):
         async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
-            heard.append((agent, outcome))
+            heard.set_result((agent, outcome))
 
     team = solo()
     async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         await session.cancel("@bob")
-        await until(lambda: asyncio.sleep(0, heard), session)
 
-    assert heard == [(AgentRef(agent="bob", role="bob"), AgentOutcome(status="cancelled"))]
+        assert await asyncio.wait_for(heard, SECONDS) == (
+            AgentRef(agent="bob", role="bob"),
+            AgentOutcome(status="cancelled"),
+        )
 
 
 async def test_each_agent_gets_its_own_binding_instructions_preamble_and_ph(tmp_path, recording):
@@ -288,7 +300,7 @@ async def test_a_message_reaches_a_harness_as_text_with_the_ref_and_the_input(tm
     async with Session.start(team, root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         sent = await session.send("@bob", "read this", body="the whole of it")
-        await until(lambda: asyncio.sleep(0, recording.deliveries), session)
+        await until(recorded(recording), session)
         body = next(event.data["body"] for event in await of_type(session, "message.sent"))
 
     delivery = recording.deliveries[0]
@@ -495,7 +507,6 @@ async def test_a_delta_reaches_a_follower_and_never_the_journal(tmp_path):
     async with Session.start(team, root=tmp_path) as session:
         frames = session.deltas("bob")
         next_frame = asyncio.ensure_future(anext(frames))
-        await asyncio.sleep(0)
         release.set()
 
         frame = await asyncio.wait_for(next_frame, SECONDS)

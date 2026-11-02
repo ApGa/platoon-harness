@@ -98,6 +98,9 @@ exit ends the turn and the agent. It coordinates through `ph`, which is on its `
 It cannot park, take a delivery or resume, and every one of those is refused with the reason. All it reports is what stdout and an
 exit can show: the model it ran stays unknown, and nothing pretends otherwise. A `command` in a project file needs explicit trust.
 
+It needs a goal to start, so set `count = 0` on the role and spawn it with one. Its agent ends with its turn: `finished` if the turn
+`stopped`, and `failed` otherwise.
+
 ## A program: the wire
 
 A wire driver is a program that speaks line-delimited JSON-RPC 2.0 on stdio. Lines split on LF only, stderr goes to the agent's

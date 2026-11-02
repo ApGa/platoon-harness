@@ -8,7 +8,7 @@ import pytest
 from platoon_harness import Session, Team
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
-from platoon_harness.kernel import Event, Kernel
+from platoon_harness.kernel import Event, Kernel, Refused
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime import LocalAuthority, opening
 from platoon_harness.runtime.opening import open_session, prepare
@@ -288,6 +288,25 @@ async def test_a_second_opening_changes_nothing(opened):
     await open_session(kernel, team, manifest, LocalAuthority(team), text)
 
     assert kernel.head == head
+
+
+async def test_a_step_that_ran_under_an_older_sdk_stands_as_it_ran(opened, monkeypatch):
+    kernel, team, manifest, text = await opened(full_team())
+    grants = compile(team)
+    monkeypatch.setattr(opening, "compile", lambda _: (*grants[1:], grants[0]))
+
+    await open_session(kernel, team, manifest, LocalAuthority(team), text)
+
+    assert len(events_of(kernel, "grant.added")) == len(grants)
+
+
+async def test_a_step_refused_for_any_other_reason_is_loud(opened, tmp_path):
+    roles = {"lead": {"harness": scripted()}, "worker": {"harness": scripted(), "count": 2}}
+
+    with pytest.raises(Refused) as refused:
+        await opened(team_of(roles=roles, budget={"agents": 1}))
+
+    assert refused.value.refusal.code == "over_budget"
 
 
 async def test_a_crash_part_way_through_is_finished_by_the_next_opening(tmp_path, monkeypatch):
