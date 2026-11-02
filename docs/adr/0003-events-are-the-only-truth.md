@@ -23,7 +23,7 @@ Three needs pull against each other. A credit estimator written next year cannot
 
 ## Consequences
 
-- Law 1 is checkable: CI compares live views to a rebuild after every scenario.
+- Law 1 is checkable: a property test compares live views to a rebuild. Running that after every scenario in CI is planned, since neither exists yet.
 - A secret in a `gist` or in `data` cannot be erased in place. It needs an offline rewrite that produces a new session.
 - A command's last event is held back from `events` until the op returns, because its `outcome` does not exist before then. Folds never see `outcome`, and only `v_commands` is written from it.
 - A refused or empty command still ends on one event, on `commands/<actor>`, so a failed attempt moves no object's version.

@@ -27,7 +27,7 @@ The TUI uses Textual, pinned `textual>=8.2,<9` with `rich`, in the CLI package o
 - `Markdown` runs with `open_links=False`, and only `http` and `https` are followed.
 - The SDK stays free of Textual, and a boundary test enforces it. `SafeText` lives in the CLI package.
 - `textual-serve` is not the web client: it has no auth and runs one process per connection. See [0014](0014-swarmchat-compatibility-backend.md).
-- Measurements came from a loaded shared host with Pilot idle-waits, so trends are firmer than absolute times.
+- Measurements came from a loaded shared host with Pilot idle-waits, so trends are firmer than absolute times. 15 Hz itself was not measured: the nearest probes ran at 10 Hz and 20 Hz.
 
 ## Evidence
 

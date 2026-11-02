@@ -20,7 +20,7 @@ An LLM agent cannot block. A held tool call has a harness cap: 300 s by default 
 | Blocking inside the tool call | The harness cap ends it, and it holds a turn open. Short waits use `hold` |
 | Marking the agent parked at the `wait` call | Claude Code sent `wait` beside a sibling tool in 5 of 5 trials, so a wake would race that sibling |
 | A return rule: final text goes to whoever caused the turn, unless already messaged | It fires on turns woken by peers, so replying becomes the default loop, a coalesced turn has several causes, and "already messaged" needs a judgment. The monitor follows one stable relation, Erlang-style |
-| Interrupting as soon as work follows `wait` | It worked in one trial per harness, but an interrupt beside `wait` hid the result from Codex's model. If the model keeps working, the wait stays open and nothing breaks |
+| Interrupting as soon as work follows `wait` | The spike proposed this as a fallback. Its one trial per harness fired on `wait` itself, where the interrupt hid the result from Codex's model, so the proposed trigger, tool activity after the result, has never met a real overrun. If the model keeps working, the wait stays open and nothing breaks |
 
 ## Consequences
 

@@ -25,7 +25,7 @@ Upstream's server never runs. A follower folds the journal into its own rebuilda
 - `view_*` is an unversioned internal shape. An exact pin and a contract test contain that, and upgrades are deliberate work.
 - One session per port, because the page keeps one token per origin in `localStorage` and its `/v1/` paths are fixed.
 - Link tokens are one-time and exchanged for expiring ones. View and control tokens are separate classes.
-- The overlay couples to the page's top-level names. The probes used a stub authority, so large sessions are unmeasured on our backend.
+- The overlay couples to the page's top-level names. The probes used an in-memory stub authority, so they prove the UI flow, not our journal transaction, and large sessions are unmeasured on our backend.
 
 ## Evidence
 

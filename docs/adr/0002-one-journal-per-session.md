@@ -24,7 +24,8 @@ Each session folder holds one `journal.sqlite`. One writer thread, never the eve
 
 ## Consequences
 
-- Paced at 500 events per second, ack p99 was 2.8 ms on NVMe against a 20 ms warning mark. A sync above about 20 ms misses the 50 ms mark whatever we do.
+- Paced at 500 events per second, ack p99 was 2.8 ms on server NVMe against a 20 ms warning mark. A sync above about 20 ms misses the 50 ms mark whatever we do.
+- The hybrid ran only in short runs, and injected delay does not model consumer SSD queueing, so its numbers are optimistic.
 - Cluster home areas are the refused filesystems, so the default root falls back to a local directory with a notice. A closed session is still portable.
 - A commit without an ack is expected, so clients always retry under the same key.
 - Readers take one short transaction per page, and tail followers share one read per pulse. A held cursor pins the WAL at 11.4 MiB/s, and a private read per follower does not keep up at 100.

@@ -8,7 +8,7 @@ Agents reach coordination ops as tools. The research planned on the `mcp` packag
 
 ## Decision
 
-The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, JSON replies, no SSE, no sessions. `GET` and `DELETE` return 405, and `server/discover` returns -32601. A stdlib stdio shim serves harnesses without HTTP. Identity comes from the token and nothing else. Undeclared arguments return `isError: true` and are journaled. `ph` is one stdlib file on the agent's `PATH` only, building its argv and help from `ops.list`. The server is contract-tested against the official client and each real harness.
+The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, JSON replies, no SSE, no sessions. `GET` and `DELETE` return 405, and `server/discover` returns -32601. A stdlib stdio shim serves harnesses without HTTP. Identity comes from the token and nothing else. Undeclared arguments return `isError: true` and are journaled. `ph` is one stdlib file on the agent's `PATH` only, building its argv and help from `ops.list`. The server must pass contract tests against the official client and each real harness. So far only the spike's prototype has run, against Claude Code and Codex.
 
 ## Alternatives considered
 

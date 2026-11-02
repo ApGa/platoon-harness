@@ -24,7 +24,7 @@ A driver has seven methods: `describe`, `start`, `deliver`, `interrupt`, `answer
 
 ## Consequences
 
-- The custom-driver path is exercised by a first-party driver, so it cannot rot unnoticed. That driver needs its own lock and environment.
+- A first-party driver will use the custom-driver path, so it cannot rot unnoticed once that driver lands. No driver exists yet. It needs its own lock and environment.
 - A simple one-shot CLI needs no code: `exec` runs it from config and it coordinates through `ph`.
 - A report vocabulary that is too small shows up loudly, as `native` frames and gaps.
 - Seven methods are unproven until pi and an ACP agent run on them. An eighth method, or normal work leaning on `native`, would mean the contract is wrong.

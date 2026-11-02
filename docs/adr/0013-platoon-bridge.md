@@ -26,6 +26,7 @@ The bridge is an optional extension, `platoon-harness-platoon`, on Platoon's sta
 ## Consequences
 
 - A mesh's root is visibly an artifact, not a privileged agent. Message edges stay in our journal as non-tree evidence.
+- `POST /v1/platoon/agents` carries no stated stability promise, so the bridge pins `platoon>=0.5,<0.6`.
 - The default mint cap of 64 is below the 100-agent case, so recipes must set `PLATOON_MAX_MINTED_AGENTS`.
 - G1, G3, G4 and G5 block token-level and graph credit and go upstream as amendments. Until then provenance is a labelled out-of-band export. A session inside `rollout_isolation: process` is untested.
 
