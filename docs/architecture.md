@@ -328,7 +328,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
   daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
   agent's reports are heard in order, one at a time, and a driver waits for its turn: `Process`'s own queue is what keeps a pipe
-  draining. Every report is masked on the way in, whichever driver said it. Observed activity renews an agent's leases past half their
+  draining. Every report is masked on the way in, whichever driver said it. Live text is masked as one stream, since a secret can
+  straddle two deltas, so its tail waits for the next delta or any other report. Observed activity renews an agent's leases past half their
   time, up to `lease_max`, and it asks `lease.due` first, so idle activity journals nothing. A harness that never says it is ready within
   a minute fails its spawn, as does one that exits first or names a model other than the one pinned. A report that cannot be taken, or a
   driver that raises anything but `DriverError`, ends in `exited`: nothing that goes wrong there is a silent hang. A report the journal

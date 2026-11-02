@@ -253,6 +253,7 @@ points, which are marked `slow`.
 | `Authority` and `LocalAuthority` | tested | `test_host.py`, `test_opening.py`, `test_recovery.py`. `Admission` holds a token and model access: tool endpoints, workspace and attribution arrive with `PlatoonAuthority` |
 | Workspaces other than `shared` | planned | A role naming one fails its spawn with the reason |
 | A plan login refused for headless multi-agent, exit 78 | planned | Architecture section 15. `prepare` will refuse it, from each role's `DriverInfo.login`, so `Session` and the CLI share the rule. No driver reports `plan` yet, so nothing can reach it |
+| Live text masked as one stream, so a secret split across two deltas is masked, and a cut never falls inside a character | tested | `test_host.py`, `tests/unit/drivers/test_env.py`. Its tail waits for the next delta or any other report |
 | Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from. The CLI does not exist yet, so history names `Session.resume` |
 | The turn-end probe behind `changes` | planned | Arrives with workspaces |
 

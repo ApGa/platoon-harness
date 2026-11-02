@@ -293,8 +293,9 @@ architecture asks for and is easy to get wrong:
 - `stop(grace)`: `SIGTERM`, wait, `SIGKILL`, then verify;
 - the allowlisted environment from `harness_env(spec)`.
 
-The host masks every report on its way in, whichever driver said it. So if you cut text to fit a field, mask it first with
-`process.redact`, because a cut can split a secret. `Held(process.redact)` does the same for a stream of chunks.
+The host masks every report on its way in, whichever driver said it, and holds back the end of live text until the next delta or any
+other report, as a secret can straddle two deltas. So if you cut text to fit a field, mask it first with `process.redact`, because a
+cut can split a secret. `Held(process.redact)` does the same for a stream of chunks.
 
 For a line protocol, `read_lines` in `platoon_harness.rpc` splits on LF only and bounds a line. For JSON-RPC, `Peer` is the whole
 client: it takes a handler for inbound calls, and `jsonrpc=False` for a peer that omits that member.

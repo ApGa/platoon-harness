@@ -32,6 +32,7 @@
 
 ### Fixed
 
+- A secret split across two deltas reached followers unmasked, on every driver but `exec`. Live text is masked as one stream.
 - `Kernel.changed` no longer wakes on a batch with no events, as it never promised to.
 - `Peer.run` treats a reset connection as the end of the stream.
 - `agent.finish` in an open turn ends the agent with that turn, so what a harness reports at turn end counts. It used to be refused,

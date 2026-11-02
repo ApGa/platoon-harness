@@ -582,6 +582,7 @@ async def test_a_delta_reaches_a_follower_and_never_the_journal(tmp_path):
             started = await super().start(spec, report)
             await release.wait()
             await report(Delta(text="live words"))
+            await report(Item(kind="thought", gist="that was all"))
             return started
 
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Talking)}}})
@@ -939,18 +940,19 @@ async def test_a_harness_that_exits_before_it_is_ready_fails_its_spawn_with_its_
 
 
 class Saying(ScriptedDriver):
-    """A harness that says one thing as soon as it is up."""
+    """A harness that says its piece as soon as it is up."""
 
-    said: Report
+    said: tuple[Report, ...]
 
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
         started = await super().start(spec, report)
-        await report(self.said)
+        for said in self.said:
+            await report(said)
         return started
 
 
-def saying(report: Report) -> type[Saying]:
-    return type("Said", (Saying,), {"said": report})
+def saying(*reports: Report) -> type[Saying]:
+    return type("Said", (Saying,), {"said": reports})
 
 
 async def test_a_ready_the_journal_refuses_fails_the_spawn_and_says_why(tmp_path):
@@ -1066,12 +1068,48 @@ async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_p
 
 
 async def test_live_text_is_masked_too(tmp_path):
-    team = solo_with(saying(Delta(text=f"the key is {SECRET}")))
+    team = solo_with(saying(Delta(text=f"the key is {SECRET}"), Item(kind="message", gist="said")), model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         frame = await asyncio.wait_for(anext(session.deltas("@bob")), SECONDS)
 
     assert frame.text == "the key is ***"
+
+
+async def test_a_secret_split_across_two_deltas_is_masked(tmp_path):
+    split = len(SECRET) // 2
+    said = (Delta(text=f"the key is {SECRET[:split]}"), Delta(text=f"{SECRET[split:]} and more"), TurnEnded())
+    team = solo_with(saying(*said), model="m")
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        frames = session.deltas("@bob")
+        heard = ""
+        while "more" not in heard:
+            heard += (await asyncio.wait_for(anext(frames), SECONDS)).text
+
+    assert heard == "the key is *** and more"
+
+
+async def test_live_text_does_not_wait_past_the_report_that_ends_it(tmp_path):
+    team = solo_with(saying(Delta(text="short"), Item(kind="message", gist="short")), model="m")
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        frame = await asyncio.wait_for(anext(session.deltas("@bob")), SECONDS)
+
+    assert frame.text == "short"
+
+
+async def test_live_text_cut_for_a_secret_keeps_its_characters_whole(tmp_path):
+    text = "é" * 2000
+    team = solo_with(saying(Delta(text=text), Delta(text=text), Item(kind="message", gist="done")), model="m")
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        frames = session.deltas("@bob")
+        heard = ""
+        while len(heard) < 2 * len(text):
+            heard += (await asyncio.wait_for(anext(frames), SECONDS)).text
+
+    assert heard == text + text
 
 
 async def test_a_stop_that_fails_is_masked_in_the_journal_and_the_log(tmp_path, caplog):

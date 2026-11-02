@@ -8,7 +8,7 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import ToolBinding
-from platoon_harness.drivers.env import Redactor, harness_env, secrets_of
+from platoon_harness.drivers.env import Held, Redactor, harness_env, secrets_of
 from platoon_harness.drivers.process import LOG, RECORD, Process
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
@@ -149,3 +149,13 @@ async def test_the_record_holds_no_more_than_a_pid_and_a_start(tmp_path):
     await process.stop(1)
 
     assert (spec.folder / LOG).read_bytes() == b""
+
+
+def test_a_stream_held_for_a_secret_is_never_cut_inside_a_character():
+    held = Held(Redactor([Secret("a-secret-of-some-length")]))
+    text = "日本語" * 100
+
+    chunks = [held.feed(text[index : index + 7].encode()) for index in range(0, len(text), 7)]
+
+    assert all(chunk.decode() is not None for chunk in chunks)
+    assert b"".join(chunks).decode() + held.flush().decode() == text

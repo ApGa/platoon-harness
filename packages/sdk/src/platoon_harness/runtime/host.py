@@ -33,7 +33,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     unknown_frame,
 )
-from platoon_harness.drivers.env import Redactor, secrets_of
+from platoon_harness.drivers.env import Held, Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token, tool_name
@@ -78,6 +78,7 @@ class DriverLink:
         self.refused: str | None = None
         self.handing: asyncio.Event | None = None
         self.redact = Redactor(())
+        self.live = Held(self.redact)
         self.held: set[str] = set()
         self.order = asyncio.Lock()
         self.renewal = 0.0
@@ -244,6 +245,7 @@ class Host:
         self._links[agent] = link
         spec = self._spec(link, admission, goal, resume)
         link.redact = Redactor(secrets_of(spec))
+        link.live = Held(link.redact)
 
         async def up() -> Started:
             started = await driver.start(spec, partial(self._heard, link))
@@ -392,20 +394,24 @@ class Host:
 
     async def _heard(self, link: DriverLink, report: Report) -> None:
         """Take one report, in the order its harness said it, with every credential masked, whichever driver said it: a
-        driver waits here, and its own queue keeps a pipe draining. Nothing it cannot hear goes unsaid: a report that
-        cannot be taken ends the harness, not the host."""
-        kernel = self._kernel
-        report = link.redact.masked(report)
+        driver waits here, and its own queue keeps a pipe draining. Live text is one stream, since a secret can straddle
+        two deltas, and any other report ends it. Nothing it cannot hear goes unsaid: a report that cannot be taken ends
+        the harness, not the host."""
         try:
             if isinstance(report, Delta):
-                kernel.push_delta(link.agent, report.text)
+                self._live(link, link.live.feed(report.text.encode(errors="surrogatepass")))
             else:
+                self._live(link, link.live.flush())
                 async with link.order:
-                    await self._commit(link, report)
+                    await self._commit(link, link.redact.masked(report))
             await self._renew(link)
         except Exception:
             log.exception("a report from %s could not be taken", link.agent)
             await self._drop(link, report, "its reports could not be taken")
+
+    def _live(self, link: DriverLink, text: bytes) -> None:
+        if text:
+            self._kernel.push_delta(link.agent, text.decode(errors="surrogatepass"))
 
     async def _commit(self, link: DriverLink, report: Report) -> None:
         match report:

@@ -16,6 +16,8 @@ from . import AgentSpec, Report
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
+_CONTINUATION = 0b1000_0000
+_CONTINUATION_MASK = 0b1100_0000
 
 __all__ = ["Held", "Redactor", "harness_env", "inherited", "secrets_of"]
 
@@ -97,7 +99,8 @@ class Redactor:
 
 
 class Held:
-    """One stream through a `Redactor`. What could be the start of a secret waits for the next chunk."""
+    """One stream through a `Redactor`. What could be the start of a secret waits for the next chunk, and a cut never
+    falls inside a character."""
 
     def __init__(self, redact: Redactor) -> None:
         self._redact = redact
@@ -106,6 +109,8 @@ class Held:
     def feed(self, chunk: bytes) -> bytes:
         text = self._redact(self._held + chunk)
         cut = max(len(text) - self._redact.reach, 0)
+        while 0 < cut < len(text) and text[cut] & _CONTINUATION_MASK == _CONTINUATION:
+            cut -= 1
         self._held = text[cut:]
         return text[:cut]
 
