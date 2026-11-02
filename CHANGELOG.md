@@ -44,7 +44,8 @@
 - Recovery gives each agent its own failure. One broken driver, or one `reconcile` that hangs, used to stop every other.
 - `Runtime.stop` always lets go, and a journal that will not commit holds it up for at most `grace`.
 - A wire program's own harness ends with its agent, and a stop already running no longer leaves a harness alive.
-- A report the journal refuses ends its harness with a gap. A `ready`, an item or an exit used to be dropped, which could hang an agent.
+- A report the journal refuses ends its harness with a gap, and so does one whose body will not store, which left none. A `ready`, an
+  item or an exit used to be dropped, which could hang an agent.
 - `ready` naming a model other than the one pinned fails the spawn.
 - Every report is masked on the way to the journal, whichever driver said it, and text is masked before it is cut.
 - `session.close` takes `if_done`, and `settled()` uses it, so a message that gets in first keeps a session open. `message.send` is
@@ -69,7 +70,7 @@
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold, in its reason either.
 - `ph <tool> --help` for an unknown tool shows what there is.
 - An effect left `uncertain` can be settled by a person with `effect.settle`, as ADR 0005 promised. Nothing could settle one under
-  `surface`.
+  `surface`. Saying it did not happen lowers its row in `attention`, as saying it did does.
 - The host retries under one key, since a failed commit may have landed. It used to retry with none, and could run a command twice.
 - A turn a crash or the owner's stop cut off is told to its agent on resume, at-least-once, with a wake, and the words keep the two
   apart. A lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
@@ -132,7 +133,8 @@
 - `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
   page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
 - `check_driver` has `preamble_once_per_request`, `tool_item_carries_its_anchor` and `stop_ends_a_running_tool`, for which it takes
-  `shell`. `measures_reported` holds `tokens` to what the model said, and `call_ids_reported` holds an item and a call's usage to the id.
+  `shell`, and `operational` needs that last one. `measures_reported` holds `tokens` to what the model said, `call_ids_reported` holds an
+  item and a call's usage to the id, and `interrupt` holds a turn's reason to `interrupted`.
 - `ScriptedDriver` sends `spec.instructions` as a system message, and says which call made an item.
 - `runtime.start` takes `changed`, and `Kernel.recover` takes it as arguments. `Manifest.changed()` says what differs from a manifest.
 - `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.

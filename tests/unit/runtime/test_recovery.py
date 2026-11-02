@@ -438,7 +438,8 @@ async def test_an_answer_is_read_from_the_harness_or_stays_uncertain_in_attentio
     assert shown == {"effect.finished": None, "effect.failed": "failed", None: "uncertain"}[ending]
 
 
-async def test_a_person_can_settle_an_answer_nobody_can_read_back(tmp_path):
+@pytest.mark.parametrize(("happened", "event"), [(True, "effect.finished"), (False, "effect.failed")])
+async def test_a_person_can_settle_an_answer_nobody_can_read_back(tmp_path, happened, event):
     def make() -> ScriptedDriver:
         return type("Found", (HangsOnAnswers,), {"answer_found": "unknown"})([[Ask("may I?")]])
 
@@ -448,10 +449,9 @@ async def test_a_person_can_settle_an_answer_nobody_can_read_back(tmp_path):
         await until(session.attention, session, lambda rows: any(row["kind"] == "uncertain" for row in rows))
         row = next(row for row in await session.attention() if row["id"].startswith("effect/"))
 
-        await session.settle_effect(row["actions"][0]["args"]["id"], True)
+        await session.settle_effect(row["actions"][0]["args"]["id"], happened)
 
-        kinds = [event.data["kind"] for event in await of_type(session, "effect.finished")]
-        assert "answer" in kinds
+        assert "answer" in [found.data["kind"] for found in await of_type(session, event)]
         assert row["id"] not in [found["id"] for found in await session.attention()]
 
 

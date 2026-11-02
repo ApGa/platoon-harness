@@ -330,17 +330,17 @@ async def test_my_driver_conforms(tmp_path):
 | `delivered_text_in_next_prompt` | A delivery's text is in the next prompt, and `input.delivered` came. Needs a persistent session and a `turn` boundary |
 | `turn_end_reported` | A turn starts and ends |
 | `no_goal_takes_no_turn` | With no goal it waits, and its first prompt is what it was sent. Needs a persistent session and a `turn` boundary |
-| `interrupt` | A stalled turn ends, and the agent lives on. Needs `interrupt` |
+| `interrupt` | A stalled turn ends `interrupted`, and the agent lives on. Needs `interrupt` |
 | `resume` | A new instance resumes, takes a delivery and still knows what came before. Needs `resume` |
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
-| `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped |
+| `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
 | `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
-| `preamble_once_per_request` | `spec.instructions` is in every model request exactly once, across a tool call and a next turn. Needs an MCP path |
+| `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |
 | `tool_item_carries_its_anchor` | A tool item's `native_id` equals the anchor its harness sent on the MCP call. Skipped for a harness that sends none |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |

@@ -105,7 +105,11 @@ class Attention(View):
 
     @fold("effect.failed")
     def failed(self, event: Event) -> None:
-        self._raise(f"effect/{event.data['id']}", "failed", event)
+        """A failure is news, unless a person said so, who has nothing left to do here."""
+        if event.actor == "runtime":
+            self._raise(f"effect/{event.data['id']}", "failed", event)
+        else:
+            self._lower(event, "id = ?", f"effect/{event.data['id']}")
 
     @fold("task.died")
     def dead_task(self, event: Event) -> None:

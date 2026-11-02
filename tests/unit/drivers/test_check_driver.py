@@ -196,6 +196,19 @@ async def test_an_interrupt_that_stops_nothing_fails(tmp_path):
     assert result.get("interrupt").state == "failed"
 
 
+async def test_an_interrupt_reported_as_anything_else_fails(tmp_path):
+    def stopped(report):
+        return TurnEnded(reason="stopped") if isinstance(report, TurnEnded) else report
+
+    result = await check(lambda: Filtered(stopped), tmp_path)
+
+    check_ = result.get("interrupt")
+    assert (check_.state, check_.reason) == (
+        "failed",
+        "it ended its turn `stopped`, and an interrupt must say `interrupted`",
+    )
+
+
 async def test_an_interrupt_that_ends_the_agent_fails(tmp_path):
     class Fatal(Filtered):
         async def interrupt(self):
@@ -313,6 +326,12 @@ def shell(command):
 
 async def test_a_stop_that_ends_a_running_shell_tool_passes(tmp_path):
     result = await check_driver(lambda: Shelling(True), folder=tmp_path, shell=shell, timeout=5)
+
+    assert result.get("stop_ends_a_running_tool").state == "passed"
+
+
+async def test_a_folder_with_a_space_fails_no_good_driver(tmp_path):
+    result = await check_driver(lambda: Shelling(True), folder=tmp_path / "a b", shell=shell, timeout=5)
 
     assert result.get("stop_ends_a_running_tool").state == "passed"
 

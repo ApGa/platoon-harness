@@ -732,6 +732,7 @@ async def test_a_report_that_cannot_be_taken_ends_the_harness_and_not_the_host(t
         row = await ended(session, "bob")
 
         assert (row["status"], row["reason"]) == ("lost", "its reports could not be taken")
+        assert [gap["what"] for gap in (await session.ending()).gaps] == ["unknown_update"]
 
 
 async def test_an_approval_the_journal_will_not_hold_is_denied_so_no_harness_blocks(tmp_path):

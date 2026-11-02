@@ -18,6 +18,7 @@ NEEDED = (
     "turn_end_reported",
     "exit_reported",
     "stop_leaves_no_process",
+    "stop_ends_a_running_tool",
     "malformed_frame_is_a_gap",
     "ready_with_pinned_model",
     "tool_in_first_request",
@@ -74,6 +75,15 @@ def test_a_skipped_check_a_level_needs_is_no_pass():
 
     assert earned.operational.state == "unverified"
     assert earned.operational.reasons == ("`stop_leaves_no_process` did not run: no process",)
+
+
+def test_a_stop_nobody_saw_end_a_running_tool_is_no_pass():
+    skipped = Check(name="stop_ends_a_running_tool", state="skipped", reason="nothing runs a shell command")
+
+    earned = levels(CAPABILITIES, PROFILE, conformance(skipped))
+
+    assert earned.operational.state == "unverified"
+    assert earned.operational.reasons == ("`stop_ends_a_running_tool` did not run: nothing runs a shell command",)
 
 
 def test_a_skip_of_what_a_harness_never_declared_costs_nothing():

@@ -71,7 +71,7 @@ power loss. Nothing here has run on macOS.
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Effects cancelled before they start, and effects that wait for another to finish | tested | `test_effects.py` |
-| A person settling an uncertain effect with `effect.settle`, offered as two actions on its row | tested | `test_effects.py`, `tests/unit/primitives/test_clients.py`, `tests/unit/runtime/test_recovery.py`. No client draws the buttons yet |
+| A person settling an uncertain effect with `effect.settle`, offered as two actions on its row, which goes with either answer | tested | `test_effects.py`, `tests/unit/primitives/test_clients.py`, `tests/unit/runtime/test_recovery.py`. No client draws the buttons yet |
 | `native` ids stamped on a command's events and read by nothing | tested | `test_commands.py`, `tests/unit/tools/test_mcp.py` |
 | A reader's limit on a body, and refs that name lines of a body | tested | `test_bodies.py` |
 
@@ -194,8 +194,8 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 | `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`, and launched from a role in `tests/integration/` |
 | `ScriptedDriver`: every step, capabilities as data, real MCP, real model calls, resume | tested | `test_scripted.py`, and against the real `ToolServer` in `test_scripted_tool_plane.py` |
 | `FakeModel`: three dialects, whole and streamed, a script, a log of what arrived | tested | `test_fake_model.py`. `tests/integration/test_fake_model_clients.py`, marked `slow`, ran with dummy keys: Codex 0.164.0 and Claude Code 2.1.316 on text and a tool call, pi 1.4.0 on text. It skips a client that is not installed, and a skip proves nothing |
-| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies. It passes on `ScriptedDriver`, a wire program and `exec`, and no real harness has been through it |
-| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, token totals, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass the first and last two. Nothing real has run them, and no driver yet sends an anchor or passes `shell` |
+| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies, an interrupt reported as anything but `interrupted` among them. It passes on `ScriptedDriver`, a wire program and `exec`, and no real harness has been through it |
+| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, token totals, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass the first and last two. Nothing real has run them, and no driver yet sends an anchor or passes `shell`, so none can reach `operational` yet: that row is one it needs, and a skip leaves it `unverified` |
 | A stop that came to `SIGKILL` reports `crash_window` | tested | `test_process.py`, on a process that ignores `SIGTERM` |
 | What `check_driver` cannot prove yet | deferred | `tool_timeout_s`, `native_children`, `coverage` and `sandboxes`. The `declared_but_unproven` check names them when declared, and always skips |
 | `check_extension`: names, naming law, schemas, descriptions, public API only, rebuild equals live | tested | `test_check_extension.py`, each with an extension that breaks it |
@@ -225,7 +225,7 @@ points, which are marked `slow`.
 | A delivery as text in the words of its surface, with refs and the input id | tested | `test_host.py`, `tests/unit/tools/test_surface.py` |
 | Reports in order, bodies stored by hash, deltas to followers and never the journal, capabilities and levels on `agent.started` | tested | `test_host.py` |
 | A takeover holding deliveries, already requested ones too | tested | `test_host.py`. Driving the native session during one is not built, so `agent.takeover` holds and releases and no more |
-| A report stream that dies, a driver that raises, a harness that never starts or never says ready, a report the journal refuses: `exited` and a gap, never a silent hang | tested | `test_host.py`. A Python driver whose own background task dies without a word is out of reach: nothing reports, and nothing raises |
+| A report stream that dies, a driver that raises, a harness that never starts or never says ready, a report the journal refuses or a body that will not store: `exited` and a gap, never a silent hang | tested | `test_host.py`. A Python driver whose own background task dies without a word is out of reach: nothing reports, and nothing raises |
 | Credentials masked in every report of every driver, deltas too, in failed effects, and in the runtime's log | tested | `test_host.py`, `test_exec.py`, `test_wire.py`. A secret can be cut by a driver that does not mask first: `Process` gives one what it needs, and the ones here use it |
 | Shutdown bounded: a journal that will not commit, a driver that breaks in `stop`, a stop already running | tested | `test_host.py` |
 | Every process tree gone with its agent, a wire program's own harness among them | tested | `test_host.py`, on real processes |

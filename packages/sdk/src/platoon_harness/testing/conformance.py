@@ -7,6 +7,7 @@ is a skip with a reason, and a skip is never a pass.
 import asyncio
 import contextlib
 import os
+import shlex
 import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -279,8 +280,11 @@ async def interrupt(rig: _Rig) -> None:
     await rig.call(0)
 
     await rig.driver.interrupt()
-    await rig.until(TurnEnded)
+    ended = await rig.until(TurnEnded)
 
+    _expect(
+        ended.reason == "interrupted", f"it ended its turn `{ended.reason}`, and an interrupt must say `interrupted`"
+    )
     if rig.capabilities.persistent:
         rig.reports.clear()
         await rig.deliver()
@@ -377,7 +381,8 @@ async def stop_ends_a_running_tool(rig: _Rig) -> None:
     rig.folder.mkdir(parents=True, exist_ok=True)
     async with _named_pipe(rig.folder / "tool") as tool:
         rig.allowing = True
-        rig.model.script([rig.options.shell(f"exec 3>{rig.folder / 'tool'}; echo $$ >&3; exec sleep 600")])
+        pipe = shlex.quote(str(rig.folder / "tool"))
+        rig.model.script([rig.options.shell(f"exec 3>{pipe}; echo $$ >&3; exec sleep 600")])
         await rig.start()
         rig.awaiting = "the shell tool"
         pid = int(await tool.readline())

@@ -133,7 +133,13 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
     yield from _verified(
         profile,
         conformance,
-        ("describe_starts_nothing", "turn_end_reported", "exit_reported", "stop_leaves_no_process"),
+        (
+            "describe_starts_nothing",
+            "turn_end_reported",
+            "exit_reported",
+            "stop_leaves_no_process",
+            "stop_ends_a_running_tool",
+        ),
         (
             "delivered_text_in_next_prompt",
             "no_goal_takes_no_turn",
@@ -142,7 +148,6 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
             "approval_answered",
             "steers_at_declared_boundary",
             "preamble_once_per_request",
-            "stop_ends_a_running_tool",
         ),
     )
     if not capabilities.tool_paths:

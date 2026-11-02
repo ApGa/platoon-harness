@@ -405,7 +405,7 @@ class Host:
             await self._renew(link)
         except Exception:
             log.exception("a report from %s could not be taken", link.agent)
-            await self._lose(link.agent, "its reports could not be taken")
+            await self._drop(link, report, "its reports could not be taken")
 
     async def _commit(self, link: DriverLink, report: Report) -> None:
         match report:
@@ -439,8 +439,8 @@ class Host:
         return None if text is None else f"sha256:{await self._kernel.put_body(text.encode(errors='replace'))}"
 
     async def _taken(self, link: DriverLink, report: Report, outcome: Outcome) -> None:
-        """What comes of a report the journal refused. The evidence is gone, so a gap says so and the harness ends. But
-        an approval is answered `deny`, as a harness is blocked on it, and an ended agent's late word is no loss."""
+        """What comes of a report the journal refused: it is dropped. But an approval is answered `deny`, as a harness
+        is blocked on it, and an ended agent's late word is no loss."""
         kernel, refusal = self._kernel, outcome.refusal
         if refusal is None or link.leaving:
             return
@@ -450,9 +450,13 @@ class Host:
         status = kernel.query(kernel.runtime, "agent.status", {"agent": link.agent}).result
         if refusal.code == "conflict" and status["state"] == "ended":
             return
-        why = f"its {report.type} report was refused: {refusal.code}: {refusal.detail}"
-        await self._unknown(link, report.type, why)
-        await self._lose(link.agent, why)
+        await self._drop(link, report, f"its {report.type} report was refused: {refusal.code}: {refusal.detail}")
+
+    async def _drop(self, link: DriverLink, report: Report, why: str) -> None:
+        """The evidence is gone, so a gap says so and the harness ends."""
+        if not link.leaving:
+            await self._unknown(link, report.type, why)
+            await self._lose(link.agent, why)
 
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
         """Commit what was declared with what was verified, so no driver can claim a level. A model that is not the one
