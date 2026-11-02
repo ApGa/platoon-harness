@@ -126,11 +126,12 @@ def _monitor(
     return True
 
 
-def _others_at_work(txn: Txn, agent: Agent, parent: str) -> bool:
+def _others_at_work(txn: Txn, agent: Agent) -> bool:
     """Whether anyone else below this agent's parent is at work."""
     principals = txn.view(Principals)
-    below = {found.name for found in principals.select(principals.live(parent), "descendants")}
-    return bool(_at_work(txn) & below - {agent.name})
+    parent = principals.get(agent.parent or "")
+    below = () if parent is None else principals.select(parent, "descendants")
+    return bool(_at_work(txn) & {found.name for found in below} - {agent.name})
 
 
 def _wakes(txn: Txn, agent: Agent, *, ended: bool = False, badly: bool = False) -> bool | None:
@@ -146,7 +147,7 @@ def _wakes(txn: Txn, agent: Agent, *, ended: bool = False, badly: bool = False) 
     if any(wait.awaits(agent.name, ended=ended) for wait in waits):
         return False
     counted = any(wait.counted(agent.name) for wait in waits)
-    return False if counted and _others_at_work(txn, agent, agent.parent) else None
+    return False if counted and _others_at_work(txn, agent) else None
 
 
 def end(

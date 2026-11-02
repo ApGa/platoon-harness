@@ -1258,6 +1258,21 @@ async def test_someone_at_work_elsewhere_is_no_reason_to_stay_quiet(kernel):
     assert ready(kernel)["agents"] == ["lead"]
 
 
+async def test_a_child_of_a_parent_that_has_gone_still_ends(kernel, ada):
+    child = await spawn(kernel, "a", by=ada, goal="")
+    await channel(kernel, "q", "queue")
+    result_of(await kernel.submit(ada, "task.add", {"queue": "q", "gist": "do"}))
+    result_of(await kernel.submit(ada, "task.add", {"queue": "q", "gist": "do"}))
+    result_of(await kernel.submit(ada, "wait", {"tasks": ["q/1", "q/2"]}))
+    result_of(await kernel.submit(child, "task.claim", {"queue": "q"}))
+    result_of(await kernel.submit(child, "task.complete", {"queue": "q"}))
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": ada.id}))
+
+    result_of(await kernel.submit(child, "agent.finish", {"gist": "done"}))
+
+    assert state_of(kernel, "a")["status"] == "finished"
+
+
 async def test_a_wait_on_other_events_of_a_child_does_not_count_its_end(kernel):
     lead = await spawn(kernel, "lead", role="lead", goal="")
     child = await spawn(kernel, "a", by=lead, goal="")
