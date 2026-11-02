@@ -22,6 +22,7 @@ Milestone 0 research for `platoon-harness`, reviewed adversarially on 2026-11-02
 | [adapter-claude-code.md](adapter-claude-code.md) | stream-json control protocol, subagents, terms, capability row | Claude driver, auth rules |
 | [adapter-others.md](adapter-others.md) | OpenCode, pi, Prime Agent, capability rows | pi and OpenCode drivers |
 | [swarm-patterns.md](swarm-patterns.md) | DeLM, Agensh, GitSwarm, Prime, RAO/DAO, example scenarios, tool surface | Examples, tool design |
+| [pi-durable.md](pi-durable.md) | Pi Durable against our design, decisions, defects found in ours, spike | What to adopt and when, pi driver notes |
 | [distributed-primitives.md](distributed-primitives.md) | Primitive families, topology grammar, presets, core and library split | Owner addendum, coordination core |
 
 Fixtures are in [fixtures/](fixtures/). `prime-agent-sample.md` states that it holds no capture.
