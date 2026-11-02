@@ -15,9 +15,9 @@ AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held",
 class Agent(BaseModel, frozen=True):
     """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `native` is the id
     its harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it.
-    `finishing` says it called `agent.finish` in a turn that has not ended. `cut_off` is what cut its last turn short,
-    until it has been told. `failure` is what the last effect to fail for it said, `failures` counts handovers failed in
-    a row, and the next waits until `retry_at`."""
+    `finishing` says it called `agent.finish` in a turn that has not ended. `stopped` is why its last turn ended, until
+    the next begins. `cut_off` is what cut its last turn short, until it has been told. `failure` is what the last
+    effect to fail for it said, `failures` counts handovers failed in a row, and the next waits until `retry_at`."""
 
     name: str
     role: str
@@ -44,6 +44,7 @@ class Agent(BaseModel, frozen=True):
     finishing: bool
     finish_gist: str | None
     finish_body: str | None
+    stopped: str | None
     cut_off: str | None
     failure: str | None
     failures: int
@@ -94,6 +95,7 @@ class Agents(View):
         finishing INTEGER NOT NULL DEFAULT 0,
         finish_gist TEXT,
         finish_body TEXT,
+        stopped TEXT,
         cut_off TEXT,
         failure TEXT,
         failures INTEGER NOT NULL DEFAULT 0,
@@ -164,13 +166,16 @@ class Agents(View):
         self._move(event, "running", "idle", "waking", "waiting")
         self._reachable(event)
         self.db.execute(
-            "UPDATE v_agents SET unbegun = 0, final_gist = NULL, final_body = NULL WHERE name = ?", (event.agent,)
+            "UPDATE v_agents SET unbegun = 0, final_gist = NULL, final_body = NULL, stopped = NULL WHERE name = ?",
+            (event.agent,),
         )
 
     @fold("turn.ended", "turn.lost")
     def stopped(self, event: Event) -> None:
         self._move(event, "idle", "running", "waking")
         self._reachable(event)
+        reason = "lost" if event.type == "turn.lost" else event.data["reason"]
+        self.db.execute("UPDATE v_agents SET stopped = ? WHERE name = ?", (reason, event.agent))
 
     def _cut_off(self, event: Event, cause: str) -> None:
         self.db.execute("UPDATE v_agents SET cut_off = ? WHERE name = ?", (cause, event.agent))

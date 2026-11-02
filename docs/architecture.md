@@ -1079,15 +1079,18 @@ with no timeout too. A harness that never ends its turn can, which is what a wal
 | `needs_human` | 4 |
 | `cancelled` | 130 |
 
-Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes.
+Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes. Almost any event can move a
+roster row, under a name that is not that agent's, so `roster` answers with every row whenever the journal has moved, which is about
+21 KB at 100 agents.
 
 | View | Row | Answers |
 |---|---|---|
-| `roster` | `agent, role, harness, model, state, activity, why, unread, levels, usage` | Who is working, on what, what is blocked |
+| `roster` | `agent, role, harness, model, parent, state, activity, stopped, held_by, why, unread, levels, usage` | Who is working, on what, what is blocked |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
 
-`why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
+`activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
+turn ended, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
 `Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `needs-you` is a derived group, not a state. `actions[]` are
 op references, each with whatever keeps a stale button from deciding anything, so any client can draw them.
 

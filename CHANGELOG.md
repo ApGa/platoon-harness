@@ -83,6 +83,8 @@
 - A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
   mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
+- `view.watch("roster")` no longer misses a row. It keyed on `event.agent`, so a row that moved on an event naming someone else or
+  nobody, a message, a wait's progress or a budget, stayed stale. A roster now changes as a whole.
 
 ### Changed
 
@@ -107,6 +109,7 @@
 - `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
+- A `roster` row has `parent`, `stopped`, why the last turn ended until the next begins, and `held_by`.
 - `session.status` says `stalled`, and `Session.settle_effect` says whether an uncertain effect happened.
 - `agent.retell` also tells a resumed harness its last turn was cut off, once, which journals `agent.told`. `Agent` has `cut_off`.
 - `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.

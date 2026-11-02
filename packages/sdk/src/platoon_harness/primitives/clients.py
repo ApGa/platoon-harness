@@ -11,6 +11,7 @@ from . import why
 from .agents import Agent, Agents
 from .approvals import Approvals
 from .budgets import Budgets
+from .common import address
 from .messages import Deliveries
 from .tasks import Tasks
 from .waits import Waits
@@ -231,7 +232,7 @@ def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]
     return None
 
 
-def _roster(txn: Txn, names: set[str] | None = None) -> list[dict[str, Any]]:
+def _roster(txn: Txn) -> list[dict[str, Any]]:
     uncertain = txn.view(Effects).in_state("uncertain")
     dues = {reader: due for reader, due, _ in txn.view(Deliveries).waking() if due > txn.now}
     deliveries = txn.view(Deliveries)
@@ -242,15 +243,17 @@ def _roster(txn: Txn, names: set[str] | None = None) -> list[dict[str, Any]]:
             "role": agent.role,
             "harness": agent.harness,
             "model": agent.model,
+            "parent": agent.parent and address(agent.parent),
             "state": agent.state,
             "activity": agent.activity,
+            "stopped": agent.stopped,
+            "held_by": agent.held_by and address(agent.held_by),
             "why": _why(txn, agent, uncertain, dues),
             "unread": deliveries.unread(agent.name),
             "levels": agent.levels,
             "usage": budget.usage_of(f"agent:{agent.name}"),
         }
         for agent in txn.view(Agents).listed()
-        if names is None or agent.name in names
     ]
 
 
@@ -272,10 +275,10 @@ def _snapshot(txn: Txn, name: str) -> list[dict[str, Any]]:
 
 
 def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], list[str]]:
-    """Rows changed past `after`, and the keys that went away."""
+    """Rows changed past `after`, and the keys that went away. Almost any event can move a roster row, under a name
+    that is not that agent's, so a roster changes as a whole whenever the journal moves."""
     if name == "roster":
-        touched = {event.agent for event in txn.view(Stamps).events(after=after) if event.agent is not None}
-        return _roster(txn, touched), []
+        return (_roster(txn) if txn.view(Stamps).head() > after else []), []
     if name == "changes":
         return txn.view(Changes).since(after), []
     rows = txn.view(Attention).since(after)

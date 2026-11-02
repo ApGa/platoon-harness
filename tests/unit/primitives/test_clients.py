@@ -253,8 +253,96 @@ async def test_watch_is_a_snapshot_then_keyed_changes(kernel):
     next_page = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster", "after": first["cursor"]}))
 
     assert not next_page["snapshot"]
-    assert [(row["agent"], row["activity"]) for row in next_page["rows"]] == [("alice", "working")]
+    assert [(row["agent"], row["activity"]) for row in next_page["rows"]] == [("alice", "working"), ("bob", None)]
     assert next_page["cursor"] == kernel.head
+
+
+async def test_a_roster_delta_agrees_with_a_fresh_snapshot(kernel):
+    """A row moves on events that name someone else or nobody, so what a watcher folds must equal a new snapshot."""
+    boss = await spawn(kernel, "boss", role="lead")
+    alice, _ = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "barrier")
+    watching = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))
+    rows = {row["agent"]: row for row in watching["rows"]}
+
+    async def agrees() -> None:
+        state = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster", "after": watching["cursor"]}))
+        rows.update({row["agent"]: row for row in state["rows"]})
+        watching["cursor"] = state["cursor"]
+        fresh = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))["rows"]
+        assert rows == {row["agent"]: row for row in fresh}
+
+    await send(kernel, alice, "@bob", "from an agent")
+    await agrees()
+    await send(kernel, kernel.runtime, "@bob", "from nobody in the roster")
+    await agrees()
+    await kernel.submit(boss, "wait", {"on": [{"stream": "channel/barrier", "n": 2, "distinct": "actor"}]})
+    await send(kernel, alice, "#barrier", "here")
+    await agrees()
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"tokens": 10}, "estimate": {"tokens": 99}}))
+    await send(kernel, kernel.runtime, "@alice", "go")
+    await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "alice"})
+    await agrees()
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"tokens": 99}, "estimate": {"tokens": 9}}))
+    await agrees()
+
+
+async def test_a_roster_delta_is_empty_while_the_journal_is_still(kernel):
+    await spawn(kernel, "bob")
+    first = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))
+
+    state = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster", "after": first["cursor"]}))
+
+    assert state["rows"] == [] and state["cursor"] == first["cursor"]
+
+
+async def test_a_roster_row_says_why_the_last_turn_stopped_until_the_next_begins(kernel):
+    await spawn(kernel, "bob")
+    assert roster(kernel, "bob")["stopped"] is None
+
+    await start_turn(kernel, "bob")
+    assert roster(kernel, "bob")["stopped"] is None
+    await end_turn(kernel, "bob", "failed: out of memory")
+    assert roster(kernel, "bob")["stopped"] == "failed: out of memory"
+
+    await start_turn(kernel, "bob", "t2")
+    assert roster(kernel, "bob")["stopped"] is None
+
+
+async def test_a_roster_row_says_a_lost_turn_was_lost(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await kernel.recover()
+
+    assert roster(kernel, "bob")["stopped"] == "lost"
+
+
+async def test_a_roster_row_names_its_parent_as_an_address(kernel):
+    boss = await spawn(kernel, "boss", role="lead")
+    await spawn(kernel, "bob", by=boss)
+
+    assert roster(kernel, "boss")["parent"] is None
+    assert roster(kernel, "bob")["parent"] == "@boss"
+
+
+async def test_a_roster_row_says_who_holds_an_agent(kernel, ada):
+    await spawn(kernel, "bob", ready={"resume": True})
+
+    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    assert roster(kernel, "bob")["held_by"] == "@ada"
+
+    result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
+    assert roster(kernel, "bob")["held_by"] is None
+
+
+async def test_activity_reads_the_running_tool_from_its_started_item(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "item", kind="tool", phase="started", gist="pytest called")
+
+    assert roster(kernel, "bob")["activity"] == "pytest called"
 
 
 async def test_watch_says_when_a_key_went_away(kernel, ada):
