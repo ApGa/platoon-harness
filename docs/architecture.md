@@ -670,8 +670,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   whether the turn ends, the timer fires or the harness exits. So do the working children of a harness that exits, which nothing can
   refuse, and of a one-shot parent, which ends with its turn whatever it was told, as `team check` warns.
 - **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
-  A goal no turn has begun on keeps the session unsettled. A harness that says ready and begins none within a minute is lost, and one
-  resumed before it began takes the goal as a delivery, at-least-once, since a resumed harness waits to be told.
+A goal no turn has begun on keeps the session unsettled, until a wake the budget refused says none is coming. A harness that says
+  ready and begins none within a minute is lost, and one resumed before it began takes the goal as a delivery, at-least-once, since a
+  resumed harness waits to be told. That wake holds the turn its spawn reserved, and asks for no second. A session that stops accepting
+  before that wake comes ends the agent, `lost`, because nothing is handed over now.
 - **Cut-off turns.** A turn a crash lost, or one the owner's stop ended, is a turn its agent cannot know the end of, and an agent
   nobody tells sits idle on its leases. So a resume tells it, with one fixed notice and a wake, while the session accepts work: a
   resume is someone wanting the session to go on, and a notice nobody acts on is the stall it fixes. The notice says which of the two
@@ -697,10 +699,13 @@ a message that gets in first keeps a session open, and once it is closing `messa
 reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
 A team with no root uses `"settled"`.
 
-A session has **stalled** when it is settled short of `until` with nothing scheduled: no timer and no wait deadline to come. So a wall
-limit, a lease or a wait's `timeout` is waited for, and two agents parked on each other come to this too. Short of exhaustion, a wake
-the budget refused keeps even a `"settled"` session from being done, because it is work left that only a human can unblock. A
-`"program"` session is left to its program. An extension daemon's private schedule is not in the journal, so it cannot hold off a stall: such a daemon sets a timer.
+A session has **stalled** when it is open and settled short of `until` with nothing scheduled: no timer, no wait deadline to come and
+no lease held. So a wall limit, a lease or a wait's `timeout` is waited for, and a lease's timer counts only while its claim does.
+Short of exhaustion, a wake the budget refused keeps even a `"settled"` session from being done, because it is work left that only a
+human can unblock, and so does a wait that names someone still here, through `agents` or `from`, so two agents parked on each other
+stall under every `until` but `"program"`. A worker parked on a `queue` or a channel is no such thing, and a session closes around it.
+A `"program"` session is left to its program. An extension daemon's private schedule is not in the journal, so it cannot hold off a
+stall: such a daemon sets a timer.
 
 ### Approvals
 
@@ -1091,8 +1096,9 @@ A stop aborts every connection, so no client can hold up shutdown either.
 state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves
 the session as it is. What only a person can move, an approval left to `ask` or a session that has stalled, ends it with `needs_human`
 and leaves the session as it is, unless another client holding a control credential is attached. It waits for that client to act or
-to go, and looks once a second, because a client can leave without moving the journal. So a session at rest cannot hang `settled()`,
-with no timeout too. A harness that never ends its turn can, which is what a wall limit is for.
+to go, and looks once a second, because a client can leave without moving the journal. So a session at rest cannot hang `settled()`
+with no timeout, unless a client that stays attached never acts: two clients both in `settled()` wait on each other, so give one a
+timeout. A harness that never ends its turn can hang it too, which is what a wall limit is for.
 
 | Reason | Exit code |
 |---|---|

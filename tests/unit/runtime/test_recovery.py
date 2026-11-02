@@ -26,7 +26,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     TurnStarted,
 )
-from platoon_harness.kernel import is_held
+from platoon_harness.kernel import ManualClock, is_held
 from platoon_harness.primitives import CUT_OFF, Agents
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.runtime.paths import MANIFEST
@@ -939,6 +939,61 @@ async def test_a_lost_turn_stays_in_attention_until_its_agent_is_back_in_a_turn(
 
         await until(lambda: of_type(session, "turn.started"), session, lambda found: len(found) == 2)
         assert "turn/bob" not in {row["id"] for row in await session.attention()}
+
+
+# A goal that never began.
+
+
+def goal_to_come(**team: Any) -> Team:
+    roles = {
+        "bob": {"harness": harness(lambda: ComesBack([Say("back")]))},
+        "ada": {"harness": harness(quiet), "count": 0},
+    }
+    return Team.model_validate({"roles": roles, **team})
+
+
+async def goal_unbegun(tmp_path: Path, team: Team, **options: Any) -> None:
+    """A crash with `ada` up on a goal it never began, and `bob` in a turn if the team has one."""
+    session = await Session.start(team, name="s", root=tmp_path, **options)
+    if "bob" in team.roles:
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+    await session.spawn("ada", "ada", "the important thing")
+    await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) == len(team.roles))
+    await abandon(session)
+
+
+async def test_a_goal_the_budget_will_not_retell_ends_the_session_needs_human(tmp_path):
+    await goal_unbegun(tmp_path, goal_to_come(budget={"tokens": 1000}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert ending.reason == "needs_human"
+
+
+async def test_a_goal_the_budget_held_a_turn_for_runs_after_a_crash(tmp_path):
+    roles = {"ada": {"harness": harness(quiet), "count": 0, "budget": {"turns": 1}}}
+    await goal_unbegun(tmp_path, Team.model_validate({"roles": roles}))
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "turn.started"), session)
+        refused = await of_type(session, "wake.refused")
+
+    assert refused == []
+
+
+async def test_a_goal_past_the_wall_ends_its_agent_and_the_session_drains(tmp_path):
+    clock = ManualClock(1000.0)
+    await goal_unbegun(tmp_path, goal_to_come(budget={"wall": "1m"}), clock=clock)
+    clock.advance(120.0)
+
+    async with Session.resume("s", root=tmp_path, clock=clock) as session:
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    ada = next(agent for agent in ending.agents if agent["agent"] == "ada")
+    assert ending.reason == "budget_exhausted"
+    assert (ada["status"], ada["reason"]) == ("lost", "its session closed before it began its goal")
 
 
 # A session from before a change.

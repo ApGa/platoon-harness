@@ -1775,6 +1775,31 @@ async def test_a_lease_to_expire_can_still_move_a_session_so_it_has_not_stalled(
     kernel.close()
 
 
+async def test_a_settled_task_leaves_no_lease_to_wait_for(tmp_path, clock):
+    kernel, lead = await short_of_until(tmp_path, clock)
+    await channel(kernel, "q", "queue")
+    result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do"}))
+    result_of(await kernel.submit(lead, "task.claim", {"queue": "q"}))
+
+    result_of(await kernel.submit(lead, "task.complete", {"queue": "q"}))
+
+    assert status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_timers_of_leases_long_gone_hide_no_timer_to_come(tmp_path, clock):
+    kernel, lead = await short_of_until(tmp_path, clock)
+    await channel(kernel, "q", "queue")
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 100_000}}))
+    for _ in range(70):
+        result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do"}))
+        result_of(await kernel.submit(lead, "task.claim", {"queue": "q"}))
+        result_of(await kernel.submit(lead, "task.complete", {"queue": "q"}))
+
+    assert not status(kernel)["stalled"]
+    kernel.close()
+
+
 async def test_a_wall_limit_to_come_can_still_end_a_session_so_it_has_not_stalled(tmp_path, clock):
     kernel, _ = await short_of_until(tmp_path, clock)
 
@@ -2216,3 +2241,44 @@ async def test_a_lost_agent_keeps_what_it_said_and_not_how_it_ended(kernel):
     rows = result_of(kernel.query(kernel.runtime, "session.ending", {}))["agents"]
 
     assert rows[0]["report"] == {"gist": "so far", "body": None}
+
+
+# What holds off a stall.
+
+
+def stalled(kernel: Kernel) -> bool:
+    return result_of(kernel.query(kernel.runtime, "session.status", {}))["stalled"]
+
+
+@pytest.mark.parametrize("wait", [{"from": ["b"]}, {"agents": ["b"]}])
+async def test_a_wait_on_someone_still_here_keeps_a_settled_session_from_done(kernel, wait):
+    a = await spawn(kernel, "a", goal="")
+    await spawn(kernel, "b", goal="")
+    await start_turn(kernel, "a")
+    result_of(await kernel.submit(a, "wait", wait))
+    await end_turn(kernel, "a")
+
+    assert stalled(kernel)
+
+
+async def test_a_wait_on_someone_gone_leaves_a_settled_session_done(kernel):
+    a = await spawn(kernel, "a", goal="")
+    await spawn(kernel, "b", goal="")
+    await start_turn(kernel, "a")
+    result_of(await kernel.submit(a, "wait", {"from": ["b"]}))
+    await end_turn(kernel, "a")
+
+    result_of(await kernel.submit(kernel.runtime, "agent.cancel", {"agent": "b"}))
+    await settle_effects(kernel)
+
+    assert result_of(kernel.query(kernel.runtime, "session.status", {}))["done"]
+
+
+async def test_a_wait_s_timeout_is_waited_for_before_a_settled_session_stalls(kernel):
+    a = await spawn(kernel, "a", goal="")
+    await spawn(kernel, "b", goal="")
+    await start_turn(kernel, "a")
+    result_of(await kernel.submit(a, "wait", {"from": ["b"], "timeout": 60.0}))
+    await end_turn(kernel, "a")
+
+    assert not stalled(kernel)

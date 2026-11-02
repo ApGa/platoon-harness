@@ -615,13 +615,22 @@ def _blockers(txn: Txn) -> list[str]:
     return found
 
 
+def _parked_on_someone(txn: Txn) -> bool:
+    """Whether an agent has a wait open on someone still here, which only they can end."""
+    principals, waits = txn.view(Principals), txn.view(Waits)
+    missing = (name for agent in txn.view(Agents).live() for wait in waits.open_for(agent.id) for name in wait.missing)
+    named = (principals.named(name.removeprefix("@")) for name in missing if name.startswith("@"))
+    return any(principal is not None and principal.state == "live" for principal in named)
+
+
 def _done(txn: Txn, until: str, settled: bool) -> bool:
     """Whether a headless session may close. Every kind stops at budget exhaustion. A wake the budget refused is work
-    left undone, and only a human can raise that budget."""
+    left undone, and only a human can raise that budget. So is a wait on someone still here, which is no worker parked
+    for more work: that waits on a queue or a channel."""
     if txn.view(Budgets).exhausted(txn.now):
         return True
     if until == "settled":
-        return settled and not txn.view(Deliveries).any_blocked()
+        return settled and not txn.view(Deliveries).any_blocked() and not _parked_on_someone(txn)
     if until == "program":
         return False
     leads = [agent for agent in txn.view(Agents).listed() if agent.role == until.removeprefix("role:")]
@@ -629,9 +638,26 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
 
 
 def _scheduled(txn: Txn) -> bool:
-    """Whether anything the journal knows of can still move this session with nobody acting. An extension daemon's
-    private schedule is not in the journal."""
-    return bool(txn.view(Timers).next()) or work(txn).due is not None
+    """Whether anything the journal knows of can still move this session with nobody acting. A lease's timer outlives
+    the lease, so a lease counts by its claim. An extension daemon's private schedule is not in the journal."""
+    return txn.view(Timers).besides("lease.expire") or txn.view(Tasks).any_claimed() or work(txn).due is not None
+
+
+def _standing(txn: Txn) -> dict[str, Any]:
+    session = txn.view(SessionRecord)
+    state = session.state()
+    blockers = _blockers(txn)
+    until = session.settings().until
+    done = _done(txn, until, not blockers)
+    return {
+        "state": state,
+        "settled": not blockers,
+        "blockers": blockers,
+        "until": until,
+        "done": done,
+        "asking": txn.view(Approvals).asking(),
+        "stalled": state == "open" and not blockers and not done and until != "program" and not _scheduled(txn),
+    }
 
 
 @op("session.status", query=True, tool=True)
@@ -639,19 +665,7 @@ def session_status(txn: Txn, a: Args) -> dict[str, Any]:
     """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
     ask. A message can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing
     scheduled, so only someone acting can move it."""
-    session = txn.view(SessionRecord)
-    blockers = _blockers(txn)
-    until = session.settings().until
-    done = _done(txn, until, not blockers)
-    return {
-        "state": session.state(),
-        "settled": not blockers,
-        "blockers": blockers,
-        "until": until,
-        "done": done,
-        "asking": txn.view(Approvals).asking(),
-        "stalled": not blockers and not done and until != "program" and not _scheduled(txn),
-    }
+    return _standing(txn)
 
 
 def _came_to(txn: Txn, state: str) -> str:
@@ -659,6 +673,9 @@ def _came_to(txn: Txn, state: str) -> str:
         return "cancelled"
     if txn.view(Budgets).exhausted(txn.now):
         return "budget_exhausted"
+    standing = _standing(txn)
+    if standing["asking"] or standing["stalled"]:
+        return "needs_human"
     failed = any(agent.status in ("failed", "lost") for agent in txn.view(Agents).listed())
     return "agent_failed" if failed else "settled"
 

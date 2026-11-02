@@ -262,10 +262,11 @@ class Budgets(View):
 
 def reserve(txn: Txn, agent: str, role: str, *, turn: bool = True, **extra: float) -> None:
     """Hold what `extra` names, and one turn's estimate if a turn is coming, against every limit, or refuse. An agent
-    holds one turn's, since it runs one at a time."""
+    holds one turn's, since it runs one at a time, so what it holds already goes toward this."""
     budget = txn.view(Budgets)
     amounts = {**(budget.estimate(role) | {"turns": 1.0} if turn else {}), **extra}
-    budget.check(role, amounts, txn.now)
+    held = budget.reservation(agent)
+    budget.check(role, {unit: amount - held.get(unit, 0.0) for unit, amount in amounts.items()}, txn.now)
     data = {"role": role, "amounts": amounts}
     txn.emit("budget.reserved", f"budget/agent:{agent}", gist=f"{agent} reserved", agent=agent, data=data)
 

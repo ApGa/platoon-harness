@@ -243,7 +243,7 @@ async def test_the_courier_acts_on_a_wake_with_no_prompting(kernel):
 async def test_the_courier_stops_at_a_refused_wake_and_tries_again_when_the_budget_moves(kernel, clock):
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob")
-    set_budget = {"limits": {"turns": 2}}
+    set_budget = {"limits": {"turns": 1}}
     result_of(await kernel.submit(kernel.runtime, "budget.set", set_budget))
     head = kernel.head
 

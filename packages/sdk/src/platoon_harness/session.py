@@ -404,29 +404,24 @@ class Session:
         """What this session has come to so far."""
         return Ending.model_validate(await self._ask("session.ending"))
 
-    async def _others(self) -> int:
-        return await self._over_link(lambda link: link.others())
-
     async def _alone(self) -> None:
         """Return once nobody else could act. A client can go without moving the journal, so this has to look."""
-        while await self._others():
+        while await self._over_link(lambda link: link.others()):
             await self._current().clock.sleep(_CLIENT_SECONDS)
 
     async def _settling(self) -> Reason | None:
         """Close at `until`, and return once the session has drained. What only a person could move ends this with
-        `needs_human`, once nobody else could be that person, and never hangs."""
+        `needs_human`, once nobody else could be that person."""
         async for head in self._moves():
             status = await self.status()
             if status["state"] != "open" and status["settled"]:
                 return None
-            for_a_human = status["asking"] or status["stalled"]
-            if for_a_human and not await self._others():
-                return "needs_human"
-            if status["state"] == "open" and status["done"]:
+            if status["asking"] or status["stalled"]:
+                if await first(self._alone(), self._changed(head)):
+                    return "needs_human"
+            elif status["state"] == "open" and status["done"]:
                 with contextlib.suppress(Refused):  # A message got in first, or a guest closed it.
                     await self._do("session.close", if_done=True)
-            elif for_a_human and await first(self._alone(), self._changed(head)):
-                return "needs_human"
         raise Refused("unavailable", f"the runtime of session {self.name} went before it settled")
 
     async def settled(self, timeout: Span | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.

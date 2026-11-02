@@ -73,8 +73,12 @@
 - The host retries under one key, since a failed commit may have landed. It used to retry with none, and could run a command twice.
 - A turn a crash or the owner's stop cut off is told to its agent on resume, at-least-once, with a wake, and the words keep the two
   apart. A lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
-- `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
-  It says `needs_human`. A wake the budget refused keeps a session from closing as `settled`.
+- `settled()` with no timeout can no longer hang on a session settled short of `until`, on a guest that leaves having done nothing, or
+  on a goal the budget will not wake. It says `needs_human`, and so does `session.ending`. A wake the budget refused keeps a session from
+  closing as `settled`, and so does a wait on someone still here, so a deadlock with no root no longer ends exit 0.
+- A goal told again after a crash takes the turn its spawn reserved. It used to be refused by that reservation. A session that stops
+  accepting before it can be told ends its agent, and used to hang as `closing`.
+- A task long settled no longer holds off a stall until its lease's timer fires.
 - A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
 - A report the parent is counting no longer wakes it, so a join of N costs one turn and not N. The same goes for a join on tasks, while
   someone else below the parent is at work: the last worker's report wakes it, or it would sleep on what nobody is left to do.

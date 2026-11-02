@@ -9,6 +9,7 @@ from pydantic_core import PydanticUndefined
 
 import platoon_harness
 from platoon_harness import Ending, Refused, Role, Session, Team, on
+from platoon_harness import session as session_module
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op
@@ -882,6 +883,42 @@ async def test_a_join_on_tasks_whose_only_worker_stops_short_wakes_the_lead(tmp_
         await said(session, "the lead heard it")
 
 
+async def test_two_agents_parked_on_each_other_end_a_session_with_no_root_needs_human(tmp_path):
+    team = Team.model_validate(
+        {
+            "roles": {
+                "a": {"harness": scripted([Call("wait", {"from": ["b"]})])},
+                "b": {"harness": scripted([Call("wait", {"from": ["a"]})])},
+            }
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@a", "go")
+        await session.send("@b", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert ending.reason == "needs_human"
+
+
+async def test_a_worker_parked_for_more_work_leaves_a_session_with_no_root_to_close(tmp_path):
+    channels = {"tasks": {"kind": "queue", "writers": "all", "readers": "all"}}
+    team = Team.model_validate(
+        {
+            "roles": {"bob": {"harness": scripted([Call("wait", {"queue": ["tasks"]})])}},
+            "topology": {"channels": channels},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@bob", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert ending.reason == "settled"
+
+
 async def test_a_wall_limit_to_come_is_waited_for_and_ends_the_session(tmp_path):
     clock = ManualClock(1000.0)
     team = until_lead([Say("I think we are done")], budget={"wall": "1m"})
@@ -979,6 +1016,22 @@ async def test_a_guest_that_leaves_having_done_nothing_ends_the_wait_for_it(tmp_
         assert (await asyncio.wait_for(settling, SECONDS)).reason == "needs_human"
 
 
+async def test_two_guests_in_settled_wait_on_each_other_until_one_gives_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_module, "_CLIENT_SECONDS", 0.01)
+
+    async with Session.start(until_lead([Say("I think we are done")]), name="s", root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await stalled_in(session)
+        patient, hurried = [await Session.attach("s", root=tmp_path) for _ in range(2)]
+        waiting = asyncio.ensure_future(patient.settled())
+
+        assert (await hurried.settled(timeout=0.01)).reason == "timed_out"
+        await hurried.leave()
+
+        assert (await asyncio.wait_for(waiting, SECONDS)).reason == "needs_human"
+        await patient.leave()
+
+
 async def test_a_view_credential_cannot_act_so_it_holds_nothing_off(tmp_path):
     async with Session.start(until_lead([Say("I think we are done")]), name="s", root=tmp_path) as session:
         viewer = await Session.attach("s", view=True, root=tmp_path)
@@ -1020,6 +1073,26 @@ async def test_cancelling_is_exit_130(tmp_path):
 
     assert (ending.state, ending.reason) == ("cancelled", "cancelled")
     assert ending.agents[0]["status"] == "cancelled"
+
+
+async def test_what_a_guest_reads_of_a_stalled_session_says_what_settled_says(tmp_path):
+    async with Session.start(until_lead([Say("I think we are done")]), name="s", root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await stalled_in(session)
+
+        assert (await session.ending()).reason == "needs_human"
+
+
+async def test_a_closed_session_short_of_until_has_not_stalled(tmp_path):
+    async with Session.start(until_lead([Say("I think we are done")]), name="s", root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await stalled_in(session)
+
+        await session.close()
+
+        status = await until(session.status, session, lambda status: status["settled"])
+        assert status["stalled"] is False
+        assert (await session.ending()).reason == "settled"
 
 
 async def test_a_guest_can_settle_and_close(tmp_path):

@@ -59,6 +59,10 @@ class Timers(View):
         rows = self.db.execute("SELECT * FROM v_timers ORDER BY due, seq LIMIT ?", (_LIMIT,))
         return [Timer(due=r["due"], op=r["op"], args=json.loads(r["args"]), key=r["key"]) for r in rows]
 
+    def besides(self, op: str) -> bool:
+        """Whether a timer is set for anything but `op`, however many of those come first."""
+        return self.db.execute("SELECT 1 FROM v_timers WHERE op != ? LIMIT 1", (op,)).fetchone() is not None
+
 
 class TimerKey(Args):
     key: str = Field(max_length=NAME_LIMIT)

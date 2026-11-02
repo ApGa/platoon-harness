@@ -159,6 +159,9 @@ class Tasks(View):
     def owned(self, owner: str) -> list[Task]:
         return self._where("owner = ? AND state = 'claimed' ORDER BY seq", owner)
 
+    def any_claimed(self) -> bool:
+        return self.db.execute("SELECT 1 FROM v_tasks WHERE state = 'claimed' LIMIT 1").fetchone() is not None
+
     def listed(self, queue: str, state: str | None, after: int, limit: int) -> tuple[list[Task], int]:
         """A page past `after`, oldest first, and the true total."""
         match = "queue = ?1 AND (?2 IS NULL OR state = ?2)"
