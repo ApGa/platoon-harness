@@ -1,5 +1,6 @@
 """Where a session lives: its root, its folder, its socket, and what a live runtime leaves beside its journal."""
 
+import errno
 import hashlib
 import logging
 import os
@@ -94,14 +95,16 @@ def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
         raise Refused("invalid", f"{name!r} cannot name a session: it must be safe as a part of a path")
     sessions = _sessions_of(root)
     _make_private(sessions)
-    folder = sessions / (name or f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}")
+    folder = sessions / (name or f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}")
     built = Path(tempfile.mkdtemp(dir=root, prefix=".new-"))
     write_private(built / MANIFEST, manifest)
     try:
         built.rename(folder)
-    except OSError:
+    except OSError as error:
         (built / MANIFEST).unlink()
         built.rmdir()
+        if error.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+            raise
         raise Refused("conflict", f"session {folder.name} exists: resume it, or choose another name") from None
     return folder
 

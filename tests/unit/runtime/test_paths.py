@@ -1,5 +1,6 @@
 """Where a session lives: architecture section 4."""
 
+import errno
 import logging
 import os
 import stat
@@ -115,6 +116,17 @@ def test_a_name_must_be_safe_as_a_part_of_a_path(tmp_path, name):
 
 def test_a_session_with_no_name_gets_one_nobody_has(tmp_path):
     assert len({new_folder(tmp_path, "{}").name for _ in range(32)}) == 32
+
+
+def test_a_folder_that_cannot_be_claimed_is_not_called_taken(tmp_path, monkeypatch):
+    def denied(*_: Any) -> None:
+        raise PermissionError(errno.EACCES, "denied")
+
+    monkeypatch.setattr(Path, "rename", denied)
+
+    with pytest.raises(PermissionError):
+        new_folder(tmp_path, "{}", "mine")
+    assert not list(tmp_path.glob(".new-*"))
 
 
 def test_a_session_folder_is_private(tmp_path):
