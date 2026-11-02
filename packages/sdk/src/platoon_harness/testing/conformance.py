@@ -21,8 +21,10 @@ from platoon_harness.drivers import (
     ApprovalRequested,
     Boundary,
     Capabilities,
+    ChildSeen,
     Delivery,
     Driver,
+    DriverError,
     Exited,
     GapReport,
     InputDelivered,
@@ -56,7 +58,12 @@ Factory = Callable[[], Driver]
 Access = Callable[[FakeModel], Mapping[str, Secret]]
 Garble = Callable[[Any], Awaitable[Any]]
 Shell = Callable[[str], ToolCall]
+Tool = Callable[[str], ToolCall]
 _Needs = Callable[[Capabilities], str | None]
+
+
+def _tool(note: str) -> ToolCall:
+    return ToolCall(TOOL, {"note": note})
 
 
 class _Failed(Exception):
@@ -169,6 +176,8 @@ class _Options:
     garble: Garble | None
     gated: ToolCall
     shell: Shell | None
+    tool: Tool
+    child: ToolCall | None
     timeout: float
 
 
@@ -228,6 +237,20 @@ async def ready_with_pinned_model(rig: _Rig) -> None:
     call = await rig.call(0)
 
     _expect(call.model == _MODEL, f"it asked the model for {call.model}, and {_MODEL} was asked for")
+
+
+def _speaking(capabilities: Capabilities) -> str | None:
+    return None if capabilities.dialects else "it declares no dialect"
+
+
+@_check(_speaking)
+async def unset_model_refused(rig: _Rig) -> None:
+    """Where access was given, a harness's default may go somewhere nobody chose."""
+    try:
+        await rig.start(model=None)
+    except DriverError:
+        return
+    raise _Failed("it started with access given and no model")
 
 
 @_check(_mcp)
@@ -412,7 +435,7 @@ async def malformed_frame_is_a_gap(rig: _Rig) -> None:
 @_check(_steerable)
 async def steers_at_declared_boundary(rig: _Rig) -> None:
     boundary: Boundary = "tool" if "tool" in rig.capabilities.boundaries else "model_call"
-    rig.model.script([[Stall(), ToolCall(TOOL, {"note": "steer"})]])
+    rig.model.script([[Stall(), rig.options.tool("steer")]])
     await rig.start()
     await rig.call(0)
 
@@ -462,7 +485,7 @@ async def call_ids_reported(rig: _Rig) -> None:
 
 @_check(_mcp)
 async def preamble_once_per_request(rig: _Rig) -> None:
-    rig.model.script([ToolCall(TOOL, {"note": "preamble"})])
+    rig.model.script([rig.options.tool("preamble")])
     await rig.start(instructions=_PREAMBLE)
     await rig.until(TurnEnded)
     if _persistent(rig.capabilities) is None:
@@ -476,7 +499,7 @@ async def preamble_once_per_request(rig: _Rig) -> None:
 
 @_check(_mcp)
 async def tool_item_carries_its_anchor(rig: _Rig) -> None:
-    rig.model.script([ToolCall(TOOL, {"note": "anchor"})])
+    rig.model.script([rig.options.tool("anchor")])
     await rig.start()
     await rig.until(TurnEnded)
     metas = [call.get("_meta") or {} for call in rig.tools.calls]
@@ -488,11 +511,21 @@ async def tool_item_carries_its_anchor(rig: _Rig) -> None:
     _expect(anchors <= ids, f"its tool items say {sorted(map(str, ids))}, and it sent {sorted(anchors)}")
 
 
-def _dialects(capabilities: Capabilities) -> str | None:
-    return None if capabilities.dialects else "it declares no dialect"
+def _parenting(capabilities: Capabilities) -> str | None:
+    return "it declares no native children" if capabilities.native_children == "none" else None
 
 
-@_check(_dialects)
+@_check(_parenting)
+async def native_child_seen(rig: _Rig) -> None:
+    if rig.options.child is None:
+        raise _Skipped("nothing was given that makes this harness start a native child")
+    rig.model.script([rig.options.child])
+    await rig.start()
+
+    await rig.until(ChildSeen)
+
+
+@_check(_speaking)
 async def dialects_spoken(rig: _Rig) -> None:
     await rig.start()
     await rig.until(TurnEnded)
@@ -516,7 +549,6 @@ async def one_shot_exits(rig: _Rig) -> None:
 def _unproven(capabilities: Capabilities) -> str | None:
     declared = {
         "tool_timeout_s": capabilities.tool_timeout_s is not None,
-        "native_children": capabilities.native_children != "none",
         "coverage": bool(capabilities.coverage),
         "sandboxes": bool(capabilities.sandboxes),
     }
@@ -564,6 +596,8 @@ async def check_driver(
     garble: Garble | None = None,
     gated: ToolCall = _GATED,
     shell: Shell | None = None,
+    tool: Tool = _tool,
+    child: ToolCall | None = None,
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
     """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver and the
@@ -572,10 +606,12 @@ async def check_driver(
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
     write a frame no parser knows, and with none that check is skipped. `gated` is a tool call this harness asks
     approval for. `shell` turns a command into the tool call that runs it, and with none the check of a stop during a
-    running tool is skipped. `timeout` bounds each check, so one wedged harness costs only its own checks.
+    running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
+    `child` is a tool call that starts a native child, and with none that check is skipped. `timeout` bounds each check,
+    so one wedged harness costs only its own checks.
     """
     name = factory().describe().name
-    options = _Options(garble, gated, shell, timeout)
+    options = _Options(garble, gated, shell, tool, child, timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)

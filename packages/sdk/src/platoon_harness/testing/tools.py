@@ -11,9 +11,9 @@ from platoon_harness.drivers import ToolBinding
 from .loopback import Loopback, Message, answer
 
 TOOL = "conformance_ping"
+NAMESPACE = "conformance"
 
 _TOKEN = "conformance-token"
-_NAMESPACE = "conformance"
 _DESCRIPTION = {
     "name": TOOL,
     "description": "Answer with pong. Conformance uses this tool to see whether a model was shown it.",
@@ -37,7 +37,7 @@ class FakeTools:
         await self._server.__aexit__()
 
     def binding(self, bin: Path) -> ToolBinding:
-        return ToolBinding(url=f"{self._server.url}/mcp", token=Secret(_TOKEN), namespace=_NAMESPACE, bin=bin)
+        return ToolBinding(url=f"{self._server.url}/mcp", token=Secret(_TOKEN), namespace=NAMESPACE, bin=bin)
 
     async def _handle(self, message: Message, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bool:
         if message.method != "POST":

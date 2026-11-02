@@ -954,9 +954,10 @@ Absence means unsupported, as in ACP.
   against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to
   `(driver, harness version)`, and a result pinned elsewhere says nothing of this agent. A wire `describe` runs the program once and
   starts no harness.
-- **Model pinning.** The effective model must equal the requested one, and a driver refuses an unset model where the harness
-  would otherwise pick a hosted default. The host holds `ready` to this and fails a spawn or a resume that differs. An effective model
-  a harness does not name stays unknown, and refuses nothing.
+- **Model pinning.** The effective model must equal the requested one, so an alias a harness resolves to another name fails. The host
+  holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
+  nothing. An unset model on the harness's own login means the harness's own default, and `ready` says which. A driver refuses an unset
+  model only where access was given, since the default may then go somewhere nobody chose.
 
 ### 9.4 Levels
 
@@ -969,7 +970,7 @@ all of this through `agent.start`, and a report has no field for it.
 
 | Harness | Path | Notes that matter |
 |---|---|---|
-| `claude` | `claude -p` stream-json plus control protocol, stdin held open | HTTP MCP from a 0600 file with `alwaysLoad`, `--strict-mcp-config`; `--permission-prompt-tool stdio` is the one launch path, and the runtime applies the approval policy to every request; `uuid` on every input; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` for workers, since a result is not a turn end while background tasks run; exit 1 after our own interrupt is normal. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
+| `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP from a 0600 file with `alwaysLoad`, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio` is the one launch path, and the runtime applies the approval policy to every request; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
 | `codex` | `codex app-server` over stdio, no `experimentalApi` by default | `turn/start` idle, `turn/steer` with `expectedTurnId` active; `approvalsReviewer: "user"`; MCP in `thread/start.config` with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. Interrupt walks descendants; `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path |
 | `pi` | `pi --mode rpc` | `prompt`, `steer`, `follow_up`; `agent_settled` is `turn.ended`; `exposure: direct`; `gated` approvals through a shipped extension; cache warming off when trainable |
 | `openhands` | Wire worker on SDK `arun()`, own environment | Boundary is the next LLM request; `llm_response_id` gives `model.call`; `Condensation` gives `compacted{forgotten}`; hold deliveries while an approval is open, since `send_message` supersedes it |
@@ -1215,7 +1216,8 @@ Threat tiers stay separate, in docs and in events.
   each value came from, since mappings merge across layers.
 - **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same
   allowlist plus its token variable. Nothing is inherited by default, so variables that change a harness's behavior or leak a parent's
-  identity cannot pass through.
+  identity cannot pass through. A role with no auth profile signs in as the harness does in the user's shell, so a driver adds by name what
+  stops that, such as where its login lives and a proxy. Provider keys stay in auth profiles.
 
 ## 16. Observability
 

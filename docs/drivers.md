@@ -32,8 +32,10 @@ method promises:
   from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
   tell. `prepare` reads it to refuse several agents on one plan login.
 - **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
-  for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default. `spec.instructions` holds
-  the role's words and the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.
+  for a delivery. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
+  given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
+  the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.instructions` holds the role's words and
+  the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
@@ -333,6 +335,7 @@ async def test_my_driver_conforms(tmp_path):
 |---|---|
 | `describe_starts_nothing` | `describe` reaches nothing, and two answers agree |
 | `ready_with_pinned_model` | `ready` names the model asked for, and the first request asked for it |
+| `unset_model_refused` | With access given and no model, `start` refuses. Needs a dialect |
 | `tool_in_first_request` | Our tool is in the first model request. Needs an MCP path |
 | `delivered_text_in_next_prompt` | A delivery's text is in the next prompt, and `input.delivered` came. Needs a persistent session and a `turn` boundary |
 | `turn_end_reported` | A turn starts and ends |
@@ -349,6 +352,7 @@ async def test_my_driver_conforms(tmp_path):
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |
 | `tool_item_carries_its_anchor` | A tool item's `native_id` equals the anchor its harness sent on the MCP call. Skipped for a harness that sends none |
+| `native_child_seen` | A native child is reported. Needs `native_children`. Pass `child`, or it is skipped |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |
@@ -362,6 +366,8 @@ own checks. What a driver leaves running, the suite reaps.
 | `garble` | None | A coroutine function, given the driver, that makes the harness write a frame no parser knows |
 | `gated` | A `shell` tool call | A tool call your harness asks approval for |
 | `shell` | None | A function from a command to the tool call that runs it. An approval it asks for is allowed |
+| `tool` | A call of `conformance_ping` by that name | A function from a note to a call of our tool, by the name this harness's model knows it by, such as `mcp__conformance__conformance_ping` |
+| `child` | None | A tool call that starts a native child |
 | `timeout` | 10 s | How long one check may take |
 
 The result is pinned to the driver and the harness version it reported, and `levels` reads it. A result for another version says

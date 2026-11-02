@@ -17,9 +17,10 @@ from .scripted import (
     Wait,
     every_turn_asks_the_model,
 )
-from .tools import TOOL, FakeTools
+from .tools import NAMESPACE, TOOL, FakeTools
 
 __all__ = [
+    "NAMESPACE",
     "TOOL",
     "Ask",
     "AskModel",

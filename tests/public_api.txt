@@ -46,6 +46,7 @@ platoon_harness.drivers.TurnEnded
 platoon_harness.drivers.TurnStarted
 platoon_harness.drivers.Usage
 platoon_harness.drivers.Verdict
+platoon_harness.drivers.claude.ClaudeDriver
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.harness_env
@@ -278,6 +279,7 @@ platoon_harness.testing.Request
 platoon_harness.testing.Say
 platoon_harness.testing.ScriptedDriver
 platoon_harness.testing.Stall
+platoon_harness.testing.NAMESPACE
 platoon_harness.testing.TOOL
 platoon_harness.testing.Text
 platoon_harness.testing.Think

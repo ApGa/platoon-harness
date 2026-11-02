@@ -1,8 +1,8 @@
 # Compatibility
 
 What each upstream is, how we use it, and what is known about it. Everything here was inspected or measured on 2026-11-02.
-These are **upstream facts**, not claims about our drivers. No driver exists yet. Each driver records its own verified result
-in the status list of section 3 as it lands, and a result pins to `(driver, harness version)` (architecture §9.3).
+These are **upstream facts**, not claims about our drivers. Each driver records its own verified result in the status list of
+section 3 as it lands, and a result pins to `(driver, harness version)` (architecture §9.3).
 
 Detail and citations live in [research/](research/README.md). Where a report and a spike disagree, the spike wins because
 it was measured later. The critic's corrections in the research index are authoritative. Section 3 lists what changed.
@@ -89,12 +89,12 @@ Unknown is not no. Reports label OpenCode and pi runs `[LIVE]` against a fake se
 
 ### Driver status
 
-Every row is **planned** today. A driver fills in its row when `check_driver` passes, with the result pinned to the harness version.
-A cell above is never upgraded by a driver landing; only the row below changes.
+A driver fills in its row when `check_driver` passes, with the result pinned to the harness version. A cell above is never upgraded
+by a driver landing; only the row below changes.
 
 | Driver | Path | Depends on | Driver status | Conformance result |
 |---|---|---|---|---|
-| `claude` | Stream-json plus control protocol | User's binary | planned | none |
+| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 21 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
 | `codex` | `codex app-server` over stdio | User's binary | planned | none |
 | `pi` | `pi --mode rpc` | User's install | planned | none |
 | `openhands` | `WireDriver`, worker on SDK `arun()` | Own environment | planned | none |
@@ -112,9 +112,23 @@ A cell above is never upgraded by a driver landing; only the row below changes.
 - Visibility: tool search defers MCP tools. `alwaysLoad` or `ENABLE_TOOL_SEARCH=false` put the tool in the first request. Live runs made 0 `ToolSearch` uses in 28 messages, but that request body was not inspected.
 - Stream usage: `model_usage_since_last_result` gives the tree's delta (undocumented). Interrupted calls record nothing.
 - Fallback trial: after `interrupt` and stop, the process exits 1. Treat that as normal. In the earlier probe, after `interrupt` alone, the same process took the next turn.
-- Background: in `-p` a subagent started in the background and a later notification opened an extra turn, so `result` is not one per user message. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` is the worker setting. Loopback.
-- Approvals and workers: `can_use_tool` ran in the report, with `--permission-prompt-tool stdio`. The spike's worker launch did not use that flag and sets `--permission-prompts none`, which denies anything that would prompt. So that launch has no approval path.
+- Background: in `-p` a subagent started in the background and a later notification opened an extra turn, so `result` is not one per user message. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` is the driver's setting. Loopback. With it, `run_in_background` on `Agent` still ran in the foreground, `is_backgrounded: false`, and `Bash` refused the parameter [L].
+- Approvals: `can_use_tool` ran in the report, with `--permission-prompt-tool stdio`. The spike's launch did not use that flag and set `--permission-prompts none`, which denies anything that would prompt, so that launch has no approval path. The driver uses the flag, and every approval goes through the runtime.
 - Floors: 2.1.259 for `--permission-prompts`, 2.1.273 for hint headers, 2.1.283 for prompt id.
+- The driver on 2.1.316, on FakeModel [L] and then on `claude-haiku-5-5` with a plan login [R]. `system/init` comes only with a turn, so `ready` is `initialize`, `get_settings` and `mcp_status`, which call no model. `get_settings.applied.model` is the resolved model, so `--model haiku` reads `claude-haiku-5-5` and the host refuses it against a role that pins `haiku`: name the model in full. `--append-system-prompt-file` works and is not in `--help`. `--include-partial-messages` is needed for deltas and for true output tokens, and is not in the spike's launch.
+- An unknown `--effort` is a warning on stderr, and the run goes on at the default, so the driver compares `applied.effort` and refuses.
+- `command_lifecycle` runs `queued`, `started`, then `completed` or `cancelled`. A message sent during a tool is `started` after its `tool_result` in the same turn, with both uuids on the next `system/status`. Sent during a last model call, it begins the next turn. A uuid already in the transcript answers `completed` and starts nothing.
+- A `result` can say `is_error: true` with `subtype: success`: `Not logged in · Please run /login` does, under an `assistant` frame of model `<synthetic>` whose id is no model call's.
+- A request cut off before it streams leaves no `message_start`, so only `system/status: requesting` shows it. Usage is `{}` and cost 0, which means unknown. A live interrupt met this.
+- A stream the harness aborts closes with a `message_delta` of its own, whose `stop_reason` is null and whose counts are the placeholder from `message_start`. Read as a measurement it undercounts: a live interrupt showed that, so the driver takes only one with a stop reason [R].
+- Interrupt: `still_queued` names inputs left in the queue, and the first begins a new turn by itself. `cancel_queued: true` moves them to `cancelled`, which the driver does not use, as nothing would then redeliver them. An approval pending at an interrupt gets `control_cancel_request`.
+- Stop: an interrupt then end of stdin exits 1 and ends a running `Bash` in 1.3 s, and `SIGTERM` to the group exits 143 in the same time. End of stdin alone waits for the tool. `SIGKILL` of the group leaves the tool alive, in a group of its own, 1 trial each [L].
+- Resume with a dangling tool call: the next request holds a synthetic error `tool_result`, `[Tool call interrupted: the session ended before this call's result was recorded, so its outcome is unknown...]`, then `No response requested.` That agrees with our cut-off notice (1 trial) [L].
+- Native children: `task_started` carries `task_id` and the `tool_use_id` of the `Agent` call, and with background tasks off a child ends before that call's `tool_result`, so an open turn covers it and `child.seen` needs no end. Its spend reaches us only in `model_usage_since_last_result`, so `ChildSeen` comes with the gap `native_child_unattributed`. A `task_started` with `is_backgrounded: true` is reported as an unknown frame. `--forward-subagent-text` is not passed, so a child's text is not seen [L].
+- Compaction: `system/status: compacting`, `compact_boundary` naming only what was kept, then a `user` frame with `isSynthetic: true` holding the summary. It has no `message_start`, so its model call has no id, and its tokens reach us only in `model_usage_since_last_result`. `/compact` ran; auto compaction was not probed [L].
+- A rejected tool token leaves `mcp_status` at `failed`, and the tool is not offered, so `ready.tools_visible` is empty then, and otherwise unknown [L].
+- The transcript is internal, and the driver reads it for one thing: whether an input's uuid is on a line, to `reconcile` after a crash. A miss says `unknown`. On a native login it is also the one place a live test can read a request: all of a session's requests shared one `api-request-shape`, across a resume too [R].
+- The live run: a goal, `board_post` called directly with no `ToolSearch`, its `toolUseId` matching the item, a delivery, an interrupt, an approval, and a resume by a new process, with the preamble once in every request and no unknown frame, in the user's own setup, at 7 model calls. Getting there took 20 calls over four runs [R].
 
 **codex, CLI 0.164.0.** [Report](research/adapter-codex.md), [spike](research/spikes/tools-and-parking.md),
 [fixture](research/fixtures/codex-appserver-sample.jsonl).
@@ -178,7 +192,7 @@ A cell above is never upgraded by a driver landing; only the row below changes.
 | `mcp` SDK in an extra, dual-era server (acp-mcp); stdio shim (adapter-codex) | Stdlib tools-only HTTP server, stdio shim as fallback, `server/discover` -32601 | Spike, architecture §10 |
 | Parking unproven; cold resume untested (index, distributed-primitives) | Parking clean 10 of 10 with the tool visible. Cold resume 1 trial each | Spike |
 | 3 of 4 `codex exec` stdio runs sent no MCP tools (acp-mcp) | Not reproduced over HTTP with a slow `initialize` (1 trial). `exec` and stdio were not rerun, so it stays open | Spike |
-| Claude launch omits `--setting-sources` (adapter-claude-code) | True for everyday use. Workers use `--strict-mcp-config --setting-sources= --permission-prompts none` and a minimal allowlisted env | Spike |
+| Claude launch omits `--setting-sources` (adapter-claude-code) | True. A role runs in the user's own setup, and a sealed launch belongs to a role's trainable profile at M3. The spike's `--strict-mcp-config --setting-sources= --permission-prompts none` is not the driver's launch | Owner's ruling |
 | ACP untested past `initialize` on real agents (index) | Holds for the Claude and Codex adapters. OpenCode and `openhands acp` ran prompts on loopback | Recorded frames |
 
 ## 4. Operational, Observable, Trainable
@@ -222,11 +236,11 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 
 | Harness | Surface | Mode | Interaction |
 |---|---|---|---|
-| `claude` | Project instructions | Passthrough; off for workers | Omitting `--setting-sources` loads `CLAUDE.md` and rules. `--setting-sources=` disables them for workers. Ours goes in `--append-system-prompt-file`, never `--system-prompt` |
-| | Native skills | Passthrough; off for workers | Same switch. Built-in skills stay listed with empty sources: 20 in the probe. A forked skill uses a `forked-command-` prefix, not a tool id |
+| `claude` | Project instructions | Passthrough | Omitting `--setting-sources` loads `CLAUDE.md` and rules. A sealed launch belongs to a role's trainable profile at M3. Ours goes in `--append-system-prompt-file`, never `--system-prompt` |
+| | Native skills | Passthrough | The same switch, and the same for a sealed launch. Built-in skills stay listed with empty sources: 20 in the probe. A forked skill uses a `forked-command-` prefix, not a tool id |
 | | Slash commands | Passthrough, partial | `initialize` returns the command list. `/compact` ran over stream-json [L]. Other commands: not determined |
-| | Tool configuration | Namespaced | Ours arrive as `mcp__<ns>__<tool>` and are pre-approved by `--allowedTools`. Everyday use keeps the user's servers. Workers use `--strict-mcp-config` |
-| | Hooks | Passthrough; off for workers | User hooks still run. Ours go through `initialize`, never settings files. `-p` shows no trust dialog, so project hooks and `.mcp.json` run in an untrusted folder |
+| | Tool configuration | Namespaced | Ours arrive as `mcp__<ns>__<tool>` and are pre-approved by `--allowedTools`. The user's servers stay, and a sealed launch belongs to a role's trainable profile at M3 |
+| | Hooks | Passthrough | User hooks still run, and we register none. A sealed launch belongs to a role's trainable profile at M3. A known limit: a headless harness shows no trust dialog, so a project's own hooks and `.mcp.json` run as they would under `claude -p`, in an untrusted folder too |
 | | Session compaction | Passthrough, observed | `compact_boundary`, `PreCompact`, `PostCompact` [L]. Whether their fields name what was forgotten: not determined. Compaction also fires a false `SubagentStop`: it is not a child. Auto compaction was not probed |
 | `codex` | Project instructions | Not determined | `developerInstructions` exists on `thread/start`, and `/init` exists in the TUI. How native project files load on app-server was not researched |
 | | Native skills | Passthrough in everyday mode | A shared `CODEX_HOME` inherits skills and plugins. A per-run `CODEX_HOME` has none |
@@ -379,7 +393,8 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Why `accept` gave two outcomes on identical Codex input.
 - Whether `thread/resume` restores thread-level `config`. We resend it.
 - `--bare` becoming the default for `claude -p`: announced with no version, and it stops reading a native login.
-- Auto compaction, nested subagents, parallel tool batches and crash recovery on Claude Code.
+- Auto compaction, nested subagents and parallel tool batches on Claude Code. Crash recovery there ran on FakeModel only, and a resume on a real model only after an owner's stop.
+- `tool_timeout_s` on Claude Code: no cap was measured, so none is declared.
 - Successful compaction on OpenCode and pi, so provenance across compaction is unconfirmed on both.
 - OpenCode: `mcpServers` precedence, repeated prompt `id` retry semantics, and the empty experimental log replay.
 - Our HTTP tools server against OpenHands and OpenCode. Claude Code and Codex have met it, and so has pi, on a fake model. The other probes used stdio servers.

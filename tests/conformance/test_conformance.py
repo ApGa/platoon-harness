@@ -30,8 +30,16 @@ ONE_SHOT_SKIPS = {
     "preamble_once_per_request",
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
+    "unset_model_refused",
+    "native_child_seen",
 }
-SCRIPTED_SKIPS = {"one_shot_exits", "declared_but_unproven", "tool_item_carries_its_anchor", "stop_ends_a_running_tool"}
+SCRIPTED_SKIPS = {
+    "one_shot_exits",
+    "declared_but_unproven",
+    "tool_item_carries_its_anchor",
+    "stop_ends_a_running_tool",
+    "native_child_seen",
+}
 
 
 def states(result: Conformance) -> dict[str, str]:

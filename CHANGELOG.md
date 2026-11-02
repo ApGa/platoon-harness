@@ -30,9 +30,19 @@
 - `session.ending` gives each agent's last `report`. `agent.conclude` and `agent.retell` are runtime-only ops, and `kernel.first` is
   the one race helper. A live text frame is cut at 64 KiB.
 
+- The `claude` driver: `claude -p` in stream-json with the control protocol on the same pipes, in the user's own setup, with every
+  approval through the runtime. `check_driver` passes on the real binary against FakeModel, at 2.1.316.
 - `effort` on `Role` and `AgentSpec`, handed to the harness as it stands. A driver that cannot honor one fails the spawn.
 - `Session.start(team, plan_login=True)`. A driver reports the login kind, and `prepare` refuses several agents on one plan login
   without it, naming the fix.
+- `check_driver` rows `unset_model_refused` and `native_child_seen`, and its `tool` and `child` arguments, because a real harness
+  knows our tool by a prefixed name.
+
+### Changed
+
+- An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`
+  says which.
+
 ### Fixed
 
 - A secret split across two deltas reached followers unmasked, on every driver but `exec`. Live text is masked as one stream.

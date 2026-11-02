@@ -350,6 +350,13 @@ async def test_an_effort_it_cannot_set_is_refused(tmp_path):
         await ScriptedDriver().start(make_spec(tmp_path, effort="low"), Heard())
 
 
+async def test_no_model_where_access_was_given_is_refused_at_the_start(tmp_path):
+    spec = make_spec(tmp_path, access={"OPENAI_API_KEY": Secret("a-key")})
+
+    with pytest.raises(DriverError, match="set a model"):
+        await ScriptedDriver().start(spec, Heard())
+
+
 async def test_no_model_set_is_refused_rather_than_defaulted(tmp_path):
     driver, heard = await started(tmp_path, [AskModel()], [Say("still here")])
 

@@ -1150,7 +1150,7 @@ class Keyed(LocalAuthority):
 
 
 async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_path):
-    team = solo_with(saying(Item(kind="message", gist=f"my key is {SECRET}", body=f"{SECRET}\n")))
+    team = solo_with(saying(Item(kind="message", gist=f"my key is {SECRET}", body=f"{SECRET}\n")), model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         items = await until(lambda: of_type(session, "item.recorded"), session)
@@ -1210,7 +1210,7 @@ async def test_a_stop_that_fails_is_masked_in_the_journal_and_the_log(tmp_path, 
         async def stop(self, grace: float) -> None:
             raise DriverError(f"stop failed with {SECRET}")
 
-    team = solo_with(BadStop)
+    team = solo_with(BadStop, model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
@@ -1226,7 +1226,7 @@ async def test_a_driver_that_breaks_leaves_no_credential_in_the_log(tmp_path, ca
         async def deliver(self, delivery: Delivery) -> Receipt:
             raise RuntimeError(f"boom {SECRET}")
 
-    team = solo_with(Breaks)
+    team = solo_with(Breaks, model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         await in_state(session, "bob", "idle")

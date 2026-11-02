@@ -10,6 +10,7 @@ import pytest
 from platoon_harness.drivers import (
     AgentSpec,
     Capabilities,
+    ChildSeen,
     DriverError,
     Exited,
     Item,
@@ -24,7 +25,7 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.wire import WireDriver
-from platoon_harness.testing import ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
+from platoon_harness.testing import TOOL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
 from platoon_harness.testing.conformance import _CHECKS
 from platoon_harness.testing.model import OUTPUT_TOKENS
 
@@ -78,6 +79,8 @@ def test_every_check_a_level_reads_exists():
         "preamble_once_per_request",
         "tool_item_carries_its_anchor",
         "stop_ends_a_running_tool",
+        "unset_model_refused",
+        "native_child_seen",
     } <= names
 
 
@@ -461,13 +464,68 @@ async def test_unsupported_is_a_skip_with_a_reason_never_a_pass(tmp_path):
         assert (result.get(name).state, result.get(name).reason) == ("skipped", reason)
 
 
+async def test_a_harness_that_starts_with_access_and_no_model_fails(tmp_path):
+    class Defaulting(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            return await super().start(spec.model_copy(update={"model": "whatever it likes"}), report)
+
+    result = await check(lambda: Defaulting(every_turn_asks_the_model()), tmp_path)
+
+    assert result.get("unset_model_refused").state == "failed"
+
+
+class Parent(ScriptedDriver):
+    """A harness that has a native child, or says so."""
+
+    def __init__(self, seen: bool) -> None:
+        capabilities = Capabilities(persistent=True, native_children="observed", boundaries={"turn"})
+        super().__init__(every_turn_asks_the_model(), capabilities=capabilities)
+        self._seen = seen
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        started = await super().start(spec, report)
+        if self._seen:
+            await report(ChildSeen(native="child-1", attribution="inferred"))
+        return started
+
+
+async def test_a_child_that_is_reported_passes(tmp_path):
+    result = await check(lambda: Parent(seen=True), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_child_seen").state == "passed"
+
+
+async def test_a_child_declared_and_never_reported_fails(tmp_path):
+    result = await check(lambda: Parent(seen=False), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_child_seen").state == "failed"
+
+
+async def test_a_child_nothing_starts_is_a_skip_and_no_pass(tmp_path):
+    result = await check(lambda: Parent(seen=True), tmp_path)
+
+    assert result.get("native_child_seen").state == "skipped"
+
+
+async def test_our_tool_goes_by_the_name_a_harness_s_model_knows_it_by(tmp_path):
+    called: list[str] = []
+
+    def named(note: str) -> ToolCall:
+        called.append(note)
+        return ToolCall(TOOL, {"note": note})
+
+    await check(lambda: ScriptedDriver(every_turn_asks_the_model()), tmp_path, tool=named)
+
+    assert {"steer", "preamble", "anchor"} <= set(called)
+
+
 async def test_what_no_check_proves_is_named(tmp_path):
-    capabilities = Capabilities(tool_timeout_s=60.0, native_children="observed", sandboxes={"read-only"})
+    capabilities = Capabilities(tool_timeout_s=60.0, coverage={"prompt": "partial"}, sandboxes={"read-only"})
 
     result = await check(lambda: ScriptedDriver(capabilities=capabilities), tmp_path)
 
     assert result.get("declared_but_unproven").state == "skipped"
-    assert result.get("declared_but_unproven").reason == "no check proves tool_timeout_s, native_children, sandboxes"
+    assert result.get("declared_but_unproven").reason == "no check proves tool_timeout_s, coverage, sandboxes"
 
 
 async def test_a_wedged_driver_costs_each_check_its_timeout_and_no_more(tmp_path):

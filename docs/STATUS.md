@@ -20,11 +20,11 @@ pass, and the row says which kind), **experimental** (works, but rests on an uns
 |---|---|---|
 | SDK independence | tested | `tests/integration/test_independence.py`: a headless script importing only `platoon_harness` runs a session in a subprocess, on the `exec` driver, and imported no CLI, Textual, Platoon, Torch or Tinker |
 | Mixed backends | planned | |
-| End-to-end collaboration | tested | `tests/integration/test_vertical_slice.py`, `test_detached.py`: spawn, post, query, claim, message, completion and a final artifact. Scripted harnesses on the real tool plane, in-process and as real wire processes. No real harness has run in a session |
+| End-to-end collaboration | tested | `tests/integration/test_vertical_slice.py`, `test_detached.py`: spawn, post, query, claim, message, completion and a final artifact. Scripted harnesses on the real tool plane, in-process and as real wire processes. One real harness ran one agent in a session, below |
 | Human parity | planned | |
 | Claim race | tested | `tests/unit/primitives/test_tasks.py`, `test_claim_race_*`, including a hypothesis interleaving. Concurrent commands on one writer; no real harness |
 | Watch race | tested | `tests/unit/primitives/test_waits.py`, `test_watch_race_*`, including a hypothesis interleaving of sends, reads, waits and reopening the journal. No real harness |
-| Retry and crash | tested | `tests/integration/test_crash.py`: `kill -9` of a detached runtime mid-turn, then a resume, with wire processes as harnesses. Each effect kind has its row in `tests/unit/runtime/test_recovery.py`, and `test_crash_points.py` cuts a journal at every command boundary. No real harness has been through it |
+| Retry and crash | tested | `tests/integration/test_crash.py`: `kill -9` of a detached runtime mid-turn, then a resume, with wire processes as harnesses. Each effect kind has its row in `tests/unit/runtime/test_recovery.py`, and `test_crash_points.py` cuts a journal at every command boundary. A real harness has been through it only in part: killed and resumed on FakeModel, in `tests/integration/test_claude.py`, with no runtime killed |
 | Provenance | planned | |
 | Identity | planned | |
 | Credit integration | planned | |
@@ -79,7 +79,7 @@ power loss. Nothing here has run on macOS.
 
 Rows marked tested have CPU-only unit tests in `tests/unit/primitives`, named for the promises in architecture section 7, and each
 test's fixture compares live views to a full rebuild when it ends. A test there does what a host would, by hand. The host itself is
-under Runtime below, so every effect is now performed, and nothing here has met a real harness.
+under Runtime below, so every effect is now performed. One real harness has met these, where a row says so.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -95,7 +95,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | A resume under other SDK or component versions labelled on `runtime.started`, not refused, and a session from before a view changed refolded and resumed | tested | `test_recovery.py`, `test_config.py`. Harness versions are on `agent.resumed`. A journal that was stopped under the old reason for a stop is not told |
-| A compaction's `forgotten` and `summary` stored as bodies, with `compaction_opaque` recorded for an unknown `forgotten` | tested | `test_reports.py`, and a long list through a host in `test_host.py`. No compaction has been observed on a real harness |
+| A compaction's `forgotten` and `summary` stored as bodies, with `compaction_opaque` recorded for an unknown `forgotten` | tested | `test_reports.py`, and a long list through a host in `test_host.py`. On Claude Code a manual `/compact` ran on FakeModel, with a summary and `forgotten` unknown. Auto compaction has not been observed |
 | `call_id` on `item.recorded` and `usage.reported`, `purpose` on `model.called`, `native_id` on `context.delivered`, and a closed `Item.phase` | tested | `test_reports.py`. `call.joined` for the late case is not built |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
 | A waiter's own cancel or completion counts for its wait, placed before or after | tested | `test_waits.py` |
@@ -113,7 +113,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | `delivery` on queues and boards, as an entry on the channel | tested | `test_tasks.py`, `test_boards.py` |
 | Lease renewal from observed harness activity | tested | `test_tasks.py` for `lease.due`, and `tests/unit/runtime/test_host.py` from a harness's reports on a manual clock, up to `lease_max`. Activity is reports: a tool call alone renews nothing |
 | Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor on every ending, a final report kept in the journal | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
-| `agent.finish` in a turn ending the agent with that turn, so usage and a last message count, cut off after a minute | tested | `test_lifecycle.py`, and on a harness in `tests/unit/runtime/test_session.py`. A real harness's turn end after the tool call has not been observed |
+| `agent.finish` in a turn ending the agent with that turn, so usage and a last message count, cut off after a minute | tested | `test_lifecycle.py`, and on a harness in `tests/unit/runtime/test_session.py`. Claude Code on FakeModel ended its turn after the call, and finished, in `tests/integration/test_claude.py` |
 | `agent.finish` and `agent.retire` refused over children that would end with the agent and are on their way to a turn or in one, by a wake that is due or a wait that holds too, saying what to do next, and `agent.cancel` never refused | tested | `test_lifecycle.py`, with the limits of architecture section 7 each named: a child that begins work after a finish, a harness that exits, a one-shot parent, which `team_check` warns of. Whether a real model does what the refusal says has not been observed |
 | An interrupt reaching a wake whose turn has not begun | tested | `test_lifecycle.py`, `tests/unit/runtime/test_host.py` |
 | A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
@@ -141,7 +141,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 ### Tool plane (`platoon_harness.tools`)
 
 Rows marked tested have CPU-only tests in `tests/unit/tools`, against a real `Kernel` with `PRIMITIVES`, a compiled team and a real
-socket on port 0. No real harness has run against this server: the spike's prototype did, and its log is replayed here.
+socket on port 0. Real Claude Code has run against this server, as a row says. The spike's prototype met Codex, and its log is replayed here.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -164,13 +164,14 @@ socket on port 0. No real harness has run against this server: the spike's proto
 | `ph`: argv and help from `tools/list`, JSON on stdout, a plain refusal on stderr, exit codes in its help | tested | `test_ph.py`, real processes, on the test interpreter and on the host's `python3` from the default path, skipped where there is none. A name that is no tool answers `no such tool` and journals nothing: only a tool the token does not hold is evidence |
 | The stdio shim, with a call waiting out a hold beside others | tested | `test_shim.py`, real processes, on both interpreters. No real harness has run it |
 | The official MCP client | tested | `tests/conformance/test_mcp_client.py`, slow, through `uv run --isolated --with 'mcp>=2.3,<3'`. `mcp` 2.3.0 connected in `auto`, which took -32601 for `server/discover` and fell back to `initialize`, and in `legacy`, negotiated `2025-11-25`, pinged, listed closed schemas and `readOnlyHint`, called tools, read a refused spoof as `isError`, and kept a `?surface=` in its URL. It sent no `GET` or `DELETE`. Its `2026-07-28` mode is not claimed and not run |
-| Real Claude Code and Codex against this server | planned | Needs the drivers. The spike's prototype passed both |
+| Real Claude Code against this server | tested | `tests/integration/test_claude.py`, slow, on FakeModel: `peers` and a `wait` that parks, through a URL with `?surface=`, its `toolUseId` kept as `native`. `tests/live/test_claude.py` on `claude-haiku-5-5`: `board_post` |
+| Real Codex against this server | planned | Needs its driver. The spike's prototype passed |
 
 ### Drivers (`platoon_harness.drivers`, `platoon_harness.rpc`, `platoon_harness.testing`)
 
 Rows marked tested have tests in `tests/unit/drivers`, `tests/conformance` and `tests/integration`, on real subprocesses and real sockets
-on Linux. Nothing here has run on macOS. The host calls these drivers now, so `ScriptedDriver`, `WireDriver` and `ExecDriver` have run
-inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
+on Linux. Nothing here has run on macOS. The host calls these drivers now, so `ScriptedDriver`, `WireDriver`, `ExecDriver` and the
+`claude` driver have run inside a session. The drivers for `codex` and `pi` do not exist.
 
 | Capability | State | Evidence |
 |---|---|---|
@@ -178,7 +179,7 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 | The contract: seven methods, `DriverInfo`, `AgentSpec`, `ToolBinding`, `Delivery`, `Receipt`, `Started`, every field of section 9.2 | tested | `test_public_api.py`, `tests/unit/primitives/test_reports.py`, and every driver below |
 | One closed report vocabulary, serializable for the wire, with a path through `agent.report` for each | tested | `tests/unit/primitives/test_reports.py`, against the architecture's list |
 | `agent.start`: what the runtime concluded, which a report has no field for, so no driver can claim a level or a capability | tested | `test_reports.py`, `test_wire.py`, with a real program trying |
-| `levels`: a pure function, reasons for each, a result pinned to `(driver, version)`, a skip no pass, three-valued tool visibility | tested | `test_levels.py`, and from a live agent in `tests/unit/runtime/test_host.py`. Nothing stores a conformance result yet, so a live agent's levels are `unverified`. The rules are a first reading of compatibility section 4, and no real harness has been through them |
+| `levels`: a pure function, reasons for each, a result pinned to `(driver, version)`, a skip no pass, three-valued tool visibility | tested | `test_levels.py`, and from a live agent in `tests/unit/runtime/test_host.py`. Nothing stores a conformance result yet, so a live agent's levels are `unverified`. The rules are a first reading of compatibility section 4. `claude` earned `operational` and `observable` from a result on FakeModel, in `tests/integration/test_claude.py`. `trainable` was not reached |
 | A harness in its own group, recorded before it can exec, with nothing run if we die first | tested | `test_process.py` |
 | Recognising a group on restart: a reused pid signals nobody | tested | `test_process.py`. A group whose leader is gone stays `unproven`: `reap` leaves it and names it, so a forked child can outlive a crash. `reap` reads the driver's record and a wire program's and no others, and names one it cannot read. A harness at the same UID can still forge those two: see security tiers in architecture section 15 |
 | `stop`: TERM, wait, KILL, verify, for a child that ignores TERM, forks, or outlives its leader holding the pipes | tested | `test_process.py`, `test_wire.py` |
@@ -195,11 +196,13 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 | `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`, and launched from a role in `tests/integration/` |
 | `ScriptedDriver`: every step, capabilities as data, real MCP, real model calls, resume | tested | `test_scripted.py`, and against the real `ToolServer` in `test_scripted_tool_plane.py` |
 | `FakeModel`: three dialects, whole and streamed, a script, a log of what arrived | tested | `test_fake_model.py`. `tests/integration/test_fake_model_clients.py`, marked `slow`, ran with dummy keys: Codex 0.164.0 and Claude Code 2.1.316 on text and a tool call, pi 1.4.0 on text. It skips a client that is not installed, and a skip proves nothing |
-| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies, an interrupt reported as anything but `interrupted` among them. It passes on `ScriptedDriver`, a wire program and `exec`, and no real harness has been through it |
-| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, token totals, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass the first and last two. Nothing real has run them, and no driver yet sends an anchor or passes `shell`, so none can reach `operational` yet: that row is one it needs, and a skip leaves it `unverified` |
+| `check_driver`: named checks, all failures at once, a skip no pass, nothing left running | tested | `test_check_driver.py` gives each check a driver that lies, an interrupt reported as anything but `interrupted` among them. It passes on `ScriptedDriver`, a wire program, `exec`, and `claude` on the real 2.1.316 binary against FakeModel |
+| `check_driver` rows for a preamble once per request, a tool item's anchor, a stop during a running shell tool, token totals, an unset model refused where access was given, a native child, and `call_id` on items and usage | tested | `test_check_driver.py` shows each failing for its lie. The scripted and wire drivers pass what they can reach. `claude` passes every one on the real binary, which is what gives it `operational`. `tool` names our tool for a harness that prefixes it |
 | A stop that came to `SIGKILL` reports `crash_window` | tested | `test_process.py`, on a process that ignores `SIGTERM` |
-| What `check_driver` cannot prove yet | deferred | `tool_timeout_s`, `native_children`, `coverage` and `sandboxes`. The `declared_but_unproven` check names them when declared, and always skips |
+| What `check_driver` cannot prove yet | deferred | `tool_timeout_s`, `coverage` and `sandboxes`. The `declared_but_unproven` check names them when declared, and always skips. `claude` declares `coverage` from its stream and the frames probed, so that row names it |
+| The `claude` driver: `claude -p` stream-json and the control protocol, every report of the vocabulary but `changes`, resume, interrupt, approvals through the runtime, a steer at a tool boundary, `reconcile` from the transcript, and `stop` that ends a running tool | experimental | Rests on `--permission-prompt-tool stdio`, `command_lifecycle`, `get_settings`, `model_usage_since_last_result` and the transcript, all undocumented upstream. `tests/unit/drivers/test_claude.py` on a stand-in; `tests/integration/test_claude.py`, slow, on the real binary against FakeModel, every `check_driver` row; `tests/live/test_claude.py`, live, on `claude-haiku-5-5`. It skips where the binary is absent, and a skip proves nothing. Auto compaction, nested children and parallel tool batches have not run |
 | `effort` on `Role` and `AgentSpec`, handed over as it stands, and refused by a driver that cannot honor it | tested | `test_claude.py`, `test_exec.py`, `test_scripted.py`, `tests/unit/runtime/test_host.py`, and on the real binary, where an effort it would drop is refused. A wire program must refuse one itself, and `check_driver` has no row for that |
+| A role with no auth profile signing in as the harness does in the shell | tested | `test_claude.py` for `claude`: its home variable, proxies and CA file pass by name, and a provider key does not. The machine that ran the live test sets none of them, so those paths rest on that test alone |
 | `check_extension`: names, naming law, schemas, descriptions, public API only, rebuild equals live | tested | `test_check_extension.py`, each with an extension that breaks it |
 | `docs/drivers.md`: its wire driver runs through the conformance suite, and its tables match the code | tested | `test_docs.py` |
 | The SDK imports nothing but the standard library and pydantic, and nothing public holds a local path | tested | `test_boundaries.py`, by AST and by pattern. A pattern catches what it knows |
@@ -207,8 +210,8 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 ### Runtime (`platoon_harness.runtime`, `platoon_harness.session`)
 
 Rows marked tested have tests in `tests/unit/runtime` and `tests/integration`, on real sockets and real subprocesses on Linux, with
-scripted harnesses on the real tool plane and wire programs as processes. **No real harness has run in a session,** and nothing here
-has run on macOS. The fast suite covers everything below except a second crash during recovery, the kill matrix and the sweep of crash
+scripted harnesses on the real tool plane and wire programs as processes. One real harness has run in a session, on a real model and on
+FakeModel: one Claude Code agent. Nothing has run with several, and nothing here has run on macOS. The fast suite covers everything below except a second crash during recovery, the kill matrix and the sweep of crash
 points, which are marked `slow`.
 
 | Capability | State | Evidence |
@@ -221,7 +224,7 @@ points, which are marked `slow`.
 | `interrupt`, `stop` and `answer` around a delivery that hangs, and an interrupt or a minute failing a handover under way | tested | `test_host.py` |
 | A wake's `deliver` open until its turn begins, so a crash or a quiet harness cannot strand `waking` | tested | `test_host.py`, `test_recovery.py`, and the kill matrix in `tests/integration/test_kill_matrix.py` |
 | A harness that says ready and never begins its goal is lost, and one resumed before it began is told again | tested | `test_host.py`, `test_recovery.py` |
-| Model pinning: `ready` naming another model fails the spawn or the resume, and an unnamed one stays unknown | tested | `test_host.py`. No real harness has been through it |
+| Model pinning: `ready` naming another model fails the spawn or the resume, and an unnamed one stays unknown | tested | `test_host.py`. Claude Code has been through it with the model matching. An alias it resolves fails, and that was reasoned from a probe and not run through the host |
 | `assurance` on `agent.started` and `agent.resumed` | tested | `test_host.py`. Always `cooperative`: nothing earns `isolated` until OS isolation exists |
 | A token in memory and its hash in the journal, a binding per agent, `ph` in `agents/<id>/bin`, instructions and preamble | tested | `test_host.py` |
 | A delivery as text in the words of its surface, with refs and the input id | tested | `test_host.py`, `tests/unit/tools/test_surface.py` |
@@ -233,7 +236,7 @@ points, which are marked `slow`.
 | Every process tree gone with its agent, a wire program's own harness among them | tested | `test_host.py`, on real processes |
 | Links that outlive a daemon restart | tested | `test_host.py` |
 | Several runtimes in one process, nothing global, signals only in the entry point | tested | `test_host.py`, `test_public_api.py` |
-| A turn cut off by a crash or by the owner's stop told on resume, at-least-once, in words that keep the two apart, with a wake, only while the session accepts work, and reasons a driver cannot forge | tested | `test_recovery.py`, `test_lifecycle.py`, and `kill -9` in `tests/integration/test_crash.py`, where nobody has to say anything for the work to finish. No real harness has seen the notice, so whether one reads it as meant, or shows something it does not cover, is unknown |
+| A turn cut off by a crash or by the owner's stop told on resume, at-least-once, in words that keep the two apart, with a wake, only while the session accepts work, and reasons a driver cannot forge | tested | `test_recovery.py`, `test_lifecycle.py`, and `kill -9` in `tests/integration/test_crash.py`, where nobody has to say anything for the work to finish. Claude Code on FakeModel took the notice after an owner's stop, in `tests/integration/test_claude.py`, and its own synthetic result for a dangling tool call agrees with it. Whether a real model reads it as meant is unknown, and Codex and pi have not seen it |
 | A wake the budget refuses after a crash ends the session `needs_human`, a goal never begun's too, and raising the budget lets it go on | tested | `test_recovery.py`, by name |
 | A goal told again on the turn its spawn reserved, and its agent ended if the session stops accepting first | tested | `test_recovery.py` |
 | Sweep of crash points: cut a journal at each command boundary of one team's run, resume, and find no exception, no effect left `started`, every turn cut off told, and rebuild equal to live | tested | `tests/integration/test_crash_points.py`, slow, on a driver that resumes and idles. It cuts the journal alone: blobs, agent folders and process records stay from a later time, so it says nothing of them. One scenario |
