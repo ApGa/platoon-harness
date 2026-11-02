@@ -131,11 +131,15 @@ Each law is a sentence, and each has a test of the same name.
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. If that is on a network filesystem,
   the default falls back to `/var/tmp/platoon-harness-$UID`, with a one-line notice and a `doctor` entry. An
   explicitly chosen root on a network filesystem is refused with exit 78. Only live writers are refused: a closed
-  session is a portable artifact (§5.8).
+  session is a portable artifact (§5.8). A root to write in must be this user's, and writable by nobody else, since a manifest in it
+  names what a resume runs. The fallback and `sessions/` are made 0700, and a chosen root is left as it is.
+- **A session's folder** is built aside and renamed into place with its manifest in it, so a name is claimed whole or not at all, and
+  a crash burns none.
 - **Sockets** live at `<runtime dir>/<short hash>.sock` in a 0700 directory from `XDG_RUNTIME_DIR` or a short per-user fallback,
   never inside the session folder: a Python `bind` allows 107 bytes on Linux and 103 on macOS, and a deep folder exceeds that.
-  The path is checked before binding, abstract names are not used, and `runtime.json` holds the pointer. A directory that is not
-  this user's own is refused, and one that is gets tightened.
+  The hash is of the folder, not the session id, since a copy of a closed session keeps its journal and must not take the socket of
+  the one still running. The path is checked before binding, abstract names are not used, and `runtime.json` holds the pointer. A
+  directory that is not this user's own is refused, one that is gets tightened, and one that cannot be used falls through to the next.
 - **One runtime per live session.** It owns `lock` and binds the control socket in every mode. Usually that is one process; a
   Platoon rollout worker hosts several in one. There is no
   central daemon or registry: listing sessions scans folders, and `flock` is the liveness check.
@@ -156,7 +160,8 @@ can both be watched. Leaving only disconnects.
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
   through opening is finished by the next runtime.
 - **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
-  detach=True)` starts one and gives a guest. It takes no authority or clock from its parent, since it is another process. It exits
+  detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
+  in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
   on `SIGTERM`, which runs the shutdown below, and once a session that has stopped accepting work has drained. Signal handlers
   live in that entry point and nowhere else, so that several runtimes can share a process.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
@@ -450,7 +455,7 @@ One definition reaches every surface.
 
 | Surface | Derivation |
 |---|---|
-| Python | `session.submit("task.claim", ...)` returns the `Outcome`; typed facade methods are thin wrappers that return the result and raise `Refused`, checked against the registry by a test |
+| Python | `session.submit("task.claim", ...)` returns the `Outcome`; typed facade methods are thin wrappers that return the result and raise `Refused`, checked against the registry by a test. Boards and queues use the tool's name, `session.task_claim`, since `session.fail` alone reads as failing the session. An agent-only op has no method |
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness tasks claim ...` for curated groups, `platoon-harness op <name>` for any op, flags built from the schema |
@@ -489,7 +494,7 @@ to do next.
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
-Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
+Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
 requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
 body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
 comes back as its hash beside a null `text`, for the surface to fetch, and `blob.offer` records what the surface showed. A hash is
@@ -604,8 +609,8 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 - **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`, `channels`, `queue`) and compile to `on(...)`, which no tool
   schema shows, so a model never learns stream names. `from` counts by subject, so a monitor's report counts as its child's, and a
   human or a program by name. `queue` holds on the oldest open task, or else wherever the next will land, so a task added after
-  `queue_empty` cannot slip by. A task that reopens after a lapse releases no such wait, so pass a `timeout` where that matters. The
-  Python sugar is `lead.finished()`.
+  `queue_empty` cannot slip by. A task that reopens after a lapse releases no such wait, so pass a `timeout` where that matters.
+  An agent nobody spawned is refused `not_found`: it is a typo, since a spawn adds its principal in its own transaction.
 - A parked agent whose harness cannot resume is `lost` through the normal ended transition.
 
 **Barrier** is library code: a topic plus `wait(on(..., n=members, distinct="actor"))`, with member snapshot and generation
@@ -1004,15 +1009,19 @@ is a name in the journal and not a claim: identity still comes from the credenti
 A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, whose
 writes are refused `unavailable` naming the resume command), and the control socket (`Remote`). Everything else is written once
 on top of it, so following a journal is one loop of `read` and a long-poll in either form. A client that loses its runtime attaches
-again, and a command it had sent retries under its key, so it stays one operation. On history it looks for a runtime on each call.
+again, and a command it had sent retries under its key, so it stays one operation. On history it looks for a runtime on each call,
+and opens the journal again once a writer has touched it. A session is entered once: awaiting one that was left starts nothing, because
+`resume` is the verb for that. A refusal a runtime gives while it comes up is waited out, and any other, such as a protocol it does not
+speak, comes back at once.
 
 **The control socket** is line-delimited JSON-RPC 2.0 through `rpc.py`, on a Unix socket: `hello`, then `submit`, `query`, `read`,
 `put_body`, `get_body`, `others`, and the long-polls `changed` and `delta`. The server is one `Local` per connection, so the methods
 mirror by construction. `hello` checks the credential once and binds the principal to the connection. A connection that never says
 it is dropped. A view credential reads and can never write, and a try writes nothing either, so no event can come of it. An agent's
 token is refused: its reads are ops, and the tool plane is its way in. A refusal crosses as data. Law 8 holds because a client only
-ever pulls, so the runtime has no queue or subscription to fill: a page leaves when asked for, a long-poll comes back within 25 s, and
-a client that stops reading is dropped by its `Peer`.
+ever pulls, so the runtime has no queue or subscription to fill: a page leaves when asked for, a long-poll comes back within 25 s, a
+client that stops reading is dropped by its `Peer`, and live text is refused for a name nobody holds, so no client can grow the rings.
+A stop aborts every connection, so no client can hold up shutdown either.
 
 `settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the
 state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves

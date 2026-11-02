@@ -185,8 +185,8 @@ has run on macOS. The fast suite covers everything below except a second crash d
 
 | Capability | State | Evidence |
 |---|---|---|
-| The root: chosen, environment, state home, the network fallback with a notice, a chosen network root refused to a live writer | tested | `test_paths.py`, with a simulated filesystem. The `doctor` entry arrives with the CLI |
-| The folder: unique names, the socket's length and private directory, `runtime.json`, tokens at 0600, listing by scan and `flock` | tested | `test_paths.py` |
+| The root: chosen, environment, state home, the network fallback with a notice, a chosen network root refused to a live writer, a root another user owns or can write refused | tested | `test_paths.py`, with a simulated filesystem. The `doctor` entry arrives with the CLI |
+| The folder: unique names built aside and renamed in with their manifest, the socket's length and private directory, a socket per folder, an unusable runtime directory falling through, `runtime.json`, tokens at 0600, listing by scan and `flock` | tested | `test_paths.py`. `/run/user/<uid>` can go at logout where logind is set to, taking a detached runtime's socket: nothing here has run across a logout |
 | Opening: `team_check` on each driver's `describe` before any cost, the manifest and its body, roles, limits, `until`, policy, grants, channels, groups, budgets in seconds, starting agents | tested | `test_opening.py` |
 | Opening again after a crash part of the way through | tested | `test_opening.py`, by a kill between two steps, in-process |
 | Effects performed level-triggered: `admit`, `workspace` (`shared`, and any other fails loudly), `launch`, `deliver`, `interrupt`, `stop`, `answer` | tested | `test_host.py` |
@@ -208,18 +208,20 @@ has run on macOS. The fast suite covers everything below except a second crash d
 | Per-agent recovery: reap, resume, reconcile, on a fresh credential, one broken driver losing one agent, a `reconcile` that hangs, and a stop asked during it | tested | `test_recovery.py` for each effect kind, `tests/integration/test_crash.py` and the kill matrix for `kill -9` on real processes. Grace is the host's `GRACE` per group |
 | A group that cannot be proved ours left alone and named, for an agent that has ended too | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
 | `Session`: `start`, `attach`, `resume`, as `await` or `async with`, one link in two forms | tested | `test_session.py`, `test_control.py` |
-| Typed wrappers checked against the registry: every client op has a method, each method takes what its op declares, defaults agree | tested | `test_session.py` |
+| Typed wrappers checked against the registry: every client op has a method, each method takes what its op declares, defaults agree | tested | `test_session.py`. `agent.finish` has none: a `Session` is no agent |
+| One spelling for a body, the ref, on every method that takes or gives one | tested | `test_session.py` |
+| `Ending.agents[n]["report"]`, a unit nobody measured with no amount, and why a spawn failed | tested | `test_session.py`, `tests/unit/primitives/test_lifecycle.py` |
 | `settled()` and its six reasons, a quiet session past its wall limit among them | tested | `test_session.py`, on a manual clock where time matters |
-| `detach=True`, the entry point, `SIGTERM` as the owner's shutdown, an exit once drained | tested | `tests/integration/test_detached.py` |
-| The control socket: a credential checked once, the principal bound, refusals as data, long-polls, a client that stops reading is dropped | tested | `test_control.py`. The drop is shown at a 64 KiB limit. The real limit is 16 MiB per client, since one frame shares it with a body |
+| `detach=True`, the entry point, `SIGTERM` as the owner's shutdown, an exit once drained, nothing in the caller's directory able to stand in for a module | tested | `tests/integration/test_detached.py`, `test_session.py` |
+| The control socket: a credential checked once, the principal bound, refusals as data and nothing else, long-polls, a client that stops reading is dropped and holds up no stop, a connection accepted during one dropped, live text refused for a name nobody holds | tested | `test_control.py`. The drop is shown at a 64 KiB limit. The real limit is 16 MiB per client, since one frame shares it with a body |
 | View and control credentials | tested | `test_control.py`. A view token reads and never writes, and a try leaves no event |
 | A client reconnecting from its cursor, retrying under its key | tested | `test_control.py`, `test_crash.py` |
-| A guest falling back to history when its runtime goes, and finding the next one | tested | `test_control.py`, `test_session.py`, `test_crash.py` |
+| A guest falling back to history when its runtime goes, finding the next one, and outliving a writer | tested | `test_control.py`, `test_session.py`, `test_crash.py` |
 | A human message and an approval raced by two guests | tested | `test_detached.py` |
 | A guest's leaving changes nothing, an owner's leaves no process, attaching to a closed session writes nothing | tested | `test_detached.py`, `test_vertical_slice.py`, with the journal's bytes compared |
 | `Authority` and `LocalAuthority` | tested | `test_host.py`, `test_opening.py`, `test_recovery.py`. `Admission` holds a token and model access: tool endpoints, workspace and attribution arrive with `PlatoonAuthority` |
 | Workspaces other than `shared` | planned | A role naming one fails its spawn with the reason |
-| Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from, and history names the command already. The CLI does not exist yet |
+| Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from. The CLI does not exist yet, so history names `Session.resume` |
 | The turn-end probe behind `changes` | planned | Arrives with workspaces |
 
 ### Teams and topologies (`platoon_harness.team`, `platoon_harness.topology`)

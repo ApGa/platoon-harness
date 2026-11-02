@@ -11,23 +11,23 @@ import platoon_harness
 from platoon_harness import Ending, Refused, Role, Session, Team, on
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Usage
-from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op
 from platoon_harness.kernel.core import CORE, list_ops
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
+from ...integration.scripts import wire
 from .support import SECONDS, harness, in_state, of_type, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
 COVERED = {
-    "agent.cancel": "cancel",
-    "agent.finish": "finish",
+    "agent.cancel": "cancel_agent",
     "agent.interrupt": "interrupt",
     "agent.list": "agents",
-    "agent.release": "release_agent",
+    "agent.release": "release",
     "agent.retire": "retire",
     "agent.spawn": "spawn",
     "agent.status": "status",
@@ -35,10 +35,10 @@ COVERED = {
     "approval.resolve": "resolve",
     "attention.list": "attention",
     "blob.get": "blob",
-    "board.get": "get",
-    "board.post": "post",
-    "board.query": "query",
-    "board.revise": "revise",
+    "board.get": "board_get",
+    "board.post": "board_post",
+    "board.query": "board_query",
+    "board.revise": "board_revise",
     "body.tombstone": "tombstone",
     "budget.set": "set_budget",
     "budget.status": "budgets",
@@ -55,13 +55,13 @@ COVERED = {
     "session.ending": "ending",
     "session.manifest": "manifest",
     "session.status": "status",
-    "task.add": "enqueue",
-    "task.claim": "claim",
-    "task.complete": "complete",
-    "task.fail": "fail",
-    "task.list": "tasks",
-    "task.release": "release",
-    "task.renew": "renew",
+    "task.add": "task_add",
+    "task.claim": "task_claim",
+    "task.complete": "task_complete",
+    "task.fail": "task_fail",
+    "task.list": "task_list",
+    "task.release": "task_release",
+    "task.renew": "task_renew",
     "view.watch": "watch",
     "wait": "wait",
     "wait.cancel": "cancel_wait",
@@ -69,11 +69,9 @@ COVERED = {
 }
 DERIVED = {
     "approvals": "attention.list",
-    "broadcast": "message.send",
     "deltas": "the link",
     "events": "the link",
     "get_body": "the link",
-    "join": "wait",
     "leave": "the runtime",
     "put_body": "the link",
     "reply": "message.send",
@@ -82,12 +80,12 @@ DERIVED = {
     "start": "a verb of its own",
     "attach": "a verb of its own",
     "submit": "the one way in",
-    "wait_any": "wait",
 }
+AGENT_ONLY = {"agent.finish"}
 OPS = {operation.name: operation for extension in (*CORE, *PRIMITIVES) for operation in extension.ops}
 OPS["ops.list"] = list_ops({})
-CLIENT_OPS = {name: operation for name, operation in OPS.items() if not operation.runtime}
-RENAMED = {"view": "name"}
+CLIENT_OPS = {name: operation for name, operation in OPS.items() if not operation.runtime and name not in AGENT_ONLY}
+RENAMED = {"watch": {"view": "name"}, "spawn": {"role": "child_role"}, "tombstone": {"ref": "sha256"}}
 
 
 def public_methods() -> set[str]:
@@ -122,8 +120,8 @@ def test_a_method_takes_what_its_op_declares(name: str, method: str):
     fields = operation.input.model_fields
     given = parameters_of(getattr(Session, method))
 
-    stated = {RENAMED.get(parameter, parameter) for parameter in given}
-    if method not in ("status", "cancel"):  # Each wraps two ops, and says which by whether `agent` is given.
+    stated = {RENAMED.get(method, {}).get(parameter, parameter) for parameter in given}
+    if method != "status":  # It wraps two ops, and says which by whether `agent` is given.
         assert stated <= set(fields), f"{method} states what {name} does not declare: {stated - set(fields)}"
     required = {field for field, info in fields.items() if info.is_required()}
     assert required <= stated, f"{method} cannot state {required - stated}"
@@ -143,6 +141,7 @@ def test_a_default_is_the_op_s_own(name: str, method: str):
 
 def test_what_a_user_needs_is_at_the_top():
     assert set(platoon_harness.__all__) == {
+        "ConfigError",
         "Ending",
         "Refused",
         "Role",
@@ -179,12 +178,50 @@ async def test_leaving_stops_the_agents_and_keeps_the_folder(tmp_path):
     assert events[-1] == "session.stopped"
 
 
-async def test_a_session_left_is_refused_and_says_what_to_do(tmp_path):
+async def test_a_session_left_is_refused_and_says_so(tmp_path):
     session = await Session.start(solo(), root=tmp_path)
     await session.leave()
 
-    with pytest.raises(Refused, match="attach to it again"):
+    assert not session.owner
+    with pytest.raises(Refused, match="this session was left"):
         await session.status()
+
+
+async def test_a_session_never_entered_says_how_to_start_it(tmp_path):
+    session = Session.start(solo(), root=tmp_path)
+
+    with pytest.raises(Refused, match="not started: `await` it"):
+        await session.send("@bob", "hello")
+
+
+async def test_awaiting_a_session_left_starts_nothing(tmp_path):
+    session = await Session.start(solo(), root=tmp_path)
+    await session.leave()
+
+    await session
+
+    assert len(list((tmp_path / "sessions").iterdir())) == 1
+    with pytest.raises(Refused, match="this session was left"):
+        await session.status()
+
+
+async def test_grace_takes_a_span_as_every_other_wait_does(tmp_path):
+    session = await Session.start(solo(), root=tmp_path)
+    folder = session.folder
+
+    await session.leave("1s")
+
+    assert not is_held(folder)
+
+
+async def test_a_grace_that_makes_no_sense_stops_nothing_halfway(tmp_path):
+    session = await Session.start(solo(), root=tmp_path)
+
+    with pytest.raises(ValueError, match="a duration"):
+        await session.leave("soon")
+
+    assert session.owner and is_held(session.folder)
+    await session.leave()
 
 
 async def test_leaving_twice_is_harmless(tmp_path):
@@ -290,7 +327,7 @@ async def test_with_no_runtime_a_write_is_refused_naming_what_restarts_it(tmp_pa
             await history.put_body(b"a body")
 
     assert outcome.refusal is not None and outcome.refusal.code == "unavailable"
-    assert "platoon-harness resume s" in str(outcome.refusal.detail)
+    assert 'Session.resume("s")' in str(outcome.refusal.detail)
     assert refused.value.refusal.code == "unavailable"
     assert stored.value.refusal.code == "unavailable"
 
@@ -411,17 +448,19 @@ def worker_team(**fields: Any) -> Team:
 
 async def test_a_board_through_the_facade(tmp_path):
     async with Session.start(worker_team(), root=tmp_path) as session:
-        posted = await session.post("notes", "spec", "the spec", body="line one\nline two\n", fields={"state": "draft"})
-        revised = await session.revise(
+        posted = await session.board_post(
+            "notes", "spec", "the spec", body="line one\nline two\n", fields={"state": "draft"}
+        )
+        revised = await session.board_revise(
             "notes", "spec", "the spec, revised", posted["version"], fields={"state": "done"}
         )
 
         with pytest.raises(Refused) as stale:
-            await session.revise("notes", "spec", "too late", posted["version"])
+            await session.board_revise("notes", "spec", "too late", posted["version"])
 
-        got = await session.get("notes", "spec")
-        old = await session.get("notes", "spec", version=1, range="L2-2")
-        found = await session.query("notes", where={"state": "done"})
+        got = await session.board_get("notes", "spec")
+        old = await session.board_get("notes", "spec", version=1, range="L2-2")
+        found = await session.board_query("notes", where={"state": "done"})
 
     assert revised["version"] == 2
     assert stale.value.refusal.code == "conflict"
@@ -432,16 +471,16 @@ async def test_a_board_through_the_facade(tmp_path):
 
 async def test_a_queue_through_the_facade(tmp_path):
     async with Session.start(worker_team(), root=tmp_path) as session:
-        added = await session.enqueue("tasks", "do it", body="in detail")
-        claim = await session.claim("tasks")
-        renewed = await session.renew("tasks")
-        await session.release("tasks")
-        await session.claim("tasks", task=added["task"])
-        await session.complete("tasks", gist="done", body="how it went")
-        await session.enqueue("tasks", "do it again")
-        await session.claim("tasks")
-        await session.fail("tasks", gist="it broke")
-        listed = await session.tasks("tasks", state="done")
+        added = await session.task_add("tasks", "do it", body="in detail")
+        claim = await session.task_claim("tasks")
+        renewed = await session.task_renew("tasks")
+        await session.task_release("tasks")
+        await session.task_claim("tasks", task=added["task"])
+        await session.task_complete("tasks", gist="done", body="how it went")
+        await session.task_add("tasks", "do it again")
+        await session.task_claim("tasks")
+        await session.task_fail("tasks", gist="it broke")
+        listed = await session.task_list("tasks", state="done")
 
     assert claim["task"] == added["task"] and renewed["fence"] == claim["fence"]
     assert [task["result"] for task in listed["tasks"]] == ["done"]
@@ -450,7 +489,7 @@ async def test_a_queue_through_the_facade(tmp_path):
 async def test_messages_through_the_facade(tmp_path):
     async with Session.start(worker_team(), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.broadcast("crew", "to the crew")
+        await session.send("+crew", "to the crew")
         await session.send("#news", "in the news", body="at length")
         inbox = await session.send("@you", "note to self")
         read = await session.read()
@@ -464,12 +503,26 @@ async def test_messages_through_the_facade(tmp_path):
 
 async def test_a_body_that_is_a_ref_is_cited_and_not_stored_again(tmp_path):
     async with Session.start(worker_team(), root=tmp_path) as session:
-        sha256 = await session.put_body(b"already here")
-        ref = f"sha256:{sha256}"
+        ref = await session.put_body(b"already here")
 
         await session.send("#news", "with a ref", body=ref)
 
         assert (await of_type(session, "message.sent"))[-1].data["body"] == ref
+
+
+async def test_a_body_has_one_spelling_everywhere(tmp_path):
+    async with Session.start(worker_team(), root=tmp_path) as session:
+        ref = await session.put_body(b"the real content\n")
+        await session.board_post("notes", "a", "gist", body=ref)
+
+        got = await session.board_get("notes", "a")
+
+        assert got["body"] == ref and got["text"] == "the real content\n"
+        assert await session.get_body(got["body"]) == b"the real content\n"
+        assert (await session.blob(ref))["text"] == "the real content\n"
+        await session.tombstone(got["body"])
+        with pytest.raises(Refused):
+            await session.get_body(ref)
 
 
 async def test_lifecycle_through_the_facade(tmp_path):
@@ -482,7 +535,7 @@ async def test_lifecycle_through_the_facade(tmp_path):
         await in_state(session, "ada", "ended")
         await session.spawn("eve", "bob")
         await in_state(session, "eve", "idle")
-        await session.cancel("@eve")
+        await session.cancel_agent("@eve")
 
         rows = {row["agent"]: row["status"] for row in await session.agents()}
         assert rows["ada"] == "retired" and rows["eve"] == "cancelled"
@@ -505,29 +558,29 @@ async def test_channels_and_budgets_through_the_facade(tmp_path):
 
 async def test_a_body_can_be_read_and_redacted(tmp_path):
     async with Session.start(solo(), root=tmp_path) as session:
-        sha256 = await session.put_body(b"line\n")
+        ref = await session.put_body(b"line\n")
 
-        assert (await session.blob(f"sha256:{sha256}"))["text"] == "line\n"
+        assert (await session.blob(ref))["text"] == "line\n"
 
-        await session.tombstone(sha256)
+        await session.tombstone(ref)
 
         with pytest.raises(Refused):
-            await session.get_body(sha256)
+            await session.get_body(ref)
 
 
-async def test_join_waits_for_every_agent_and_says_how_it_closed(tmp_path):
+async def test_a_wait_for_every_agent_says_how_it_closed(tmp_path):
     team = Team.model_validate({"roles": {"bob": {"harness": scripted([Call("agent_finish", {})]), "count": 0}}})
 
     async with Session.start(team, root=tmp_path) as session:
         await session.spawn("ada", "bob", "be quick")
         await session.spawn("eve", "bob", "be quick")
 
-        closed = await asyncio.wait_for(session.join("@ada", "@eve"), SECONDS)
+        closed = await asyncio.wait_for(session.wait(agents=["@ada", "@eve"]), SECONDS)
 
     assert closed["state"] == "released"
 
 
-async def test_wait_any_stops_at_the_first(tmp_path):
+async def test_a_wait_for_any_stops_at_the_first(tmp_path):
     roles = {
         "bob": {"harness": scripted([Call("agent_finish", {})]), "count": 0},
         "slow": {"harness": scripted([Hang()]), "count": 0},
@@ -537,7 +590,7 @@ async def test_wait_any_stops_at_the_first(tmp_path):
         await session.spawn("ada", "bob", "be quick")
         await session.spawn("eve", "slow", "take your time")
 
-        closed = await asyncio.wait_for(session.wait_any("@ada", "@eve"), SECONDS)
+        closed = await asyncio.wait_for(session.wait(agents=["@ada", "@eve"], mode="any"), SECONDS)
 
     assert closed["state"] == "released"
 
@@ -547,6 +600,29 @@ async def test_a_wait_on_a_condition_stated_outright(tmp_path):
         closed = await asyncio.wait_for(session.wait(on=[on("agent/bob", ("agent.started",))]), SECONDS)
 
     assert closed["state"] == "released"
+
+
+async def test_a_guest_can_wait_on_a_condition_stated_outright(tmp_path):
+    async with Session.start(worker_team(), name="s", root=tmp_path), Session.attach("s", root=tmp_path) as guest:
+        closed = await asyncio.wait_for(guest.wait(on=[on("agent/bob", ("agent.started",))]), SECONDS)
+
+    assert closed["state"] == "released"
+
+
+async def test_a_wait_for_an_agent_nobody_spawned_is_refused_and_hangs_nothing(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        with pytest.raises(Refused) as refused:
+            await asyncio.wait_for(session.wait(agents=["@nobody"]), SECONDS)
+
+    assert refused.value.refusal.code == "not_found"
+
+
+async def test_live_text_of_nobody_is_refused_and_hangs_nothing(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        with pytest.raises(Refused) as refused:
+            await asyncio.wait_for(anext(session.deltas("@nobody")), SECONDS)
+
+    assert refused.value.refusal.code == "not_found"
 
 
 async def test_a_wait_times_out_on_the_kernel_s_clock(tmp_path):
@@ -847,3 +923,69 @@ async def test_a_failed_spawn_says_why_in_the_ending(tmp_path):
 
     row = next(row for row in ending.agents if row["agent"] == "ada")
     assert row["reason"].startswith("its spawn failed: a one-shot harness takes nothing after its goal")
+
+
+async def test_a_message_that_gets_in_ahead_of_a_close_keeps_the_session_open(tmp_path):
+    async with Session.start(solo([Say("first")], [Say("second")]), root=tmp_path) as session:
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        real, raced = session._do, []
+
+        async def racing(op: str, **args: Any) -> Any:
+            if op == "session.close" and not raced:
+                raced.append(await session.send("@bob", "one more thing"))
+            return await real(op, **args)
+
+        session._do = racing
+
+        ending = await session.settled(timeout="10s")
+
+        said = [event.gist for event in await of_type(session, "item.recorded")]
+
+    assert said == ["first", "second"]
+    assert ending.reason == "settled"
+
+
+async def test_a_message_after_a_close_is_refused_and_not_dropped_in_silence(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.close()
+
+        with pytest.raises(Refused) as refused:
+            await session.send("@bob", "too late")
+
+    assert refused.value.refusal.code == "conflict"
+
+
+async def test_a_guest_on_history_outlives_a_writer(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path):
+        pass
+    history = await Session.attach("s", root=tmp_path)
+
+    async with Session.resume("s", root=tmp_path) as resumed:
+        await in_state(resumed, "bob", "idle")
+
+    assert (await history.status())["state"] == "stopped"
+    await history.leave()
+
+
+async def test_a_detached_runtime_cannot_be_fooled_by_a_module_in_the_working_directory(tmp_path, monkeypatch):
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    marker = tmp_path / "ran"
+    (planted / "secrets.py").write_text(f"open({str(marker)!r}, 'w').close()\nraise SystemExit(9)\n")
+    monkeypatch.chdir(planted)
+    team = Team.model_validate(
+        {
+            "roles": {
+                "bob": {"harness": {"command": ["cat"], "mode": "oneshot"}, "count": 0},
+                "z": {"harness": wire("saying")},
+            }
+        }
+    )
+
+    guest = await Session.start(team, root=tmp_path / "root", detach=True)
+    await guest.cancel()
+    await guest.leave()
+
+    assert not marker.exists()

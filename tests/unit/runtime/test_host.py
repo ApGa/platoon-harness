@@ -77,6 +77,10 @@ def recorded(driver: type[Recording]) -> Callable[[], Awaitable[list[Delivery]]]
     return handed
 
 
+def launch_of(agent: str) -> Callable[[list[Any]], bool]:
+    return lambda found: any(event.data["kind"] == "launch" and event.agent == agent for event in found)
+
+
 def solo_with(make: Callable[[], Any], **role: Any) -> Team:
     return Team.model_validate({"roles": {"bob": {"harness": harness(make), **role}}})
 
@@ -133,7 +137,7 @@ async def test_an_authority_hears_how_an_agent_ended(tmp_path):
     team = solo()
     async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
 
         assert await asyncio.wait_for(heard, SECONDS) == (
             AgentRef(agent="bob", role="bob"),
@@ -380,7 +384,7 @@ async def test_stop_works_while_a_delivery_hangs(tmp_path):
             lambda found: found and found[-1].data["kind"] == "deliver",
         )
 
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
 
         await until(
             lambda: of_type(session, "effect.finished"),
@@ -429,7 +433,7 @@ async def test_deliveries_wait_while_a_takeover_holds_an_agent(tmp_path):
         assert (await session.status("@bob"))["state"] == "held"
         assert len(await of_type(session, "context.offered")) == 1
 
-        await session.release_agent("@bob")
+        await session.release("@bob")
         offered = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) == 2)
 
         assert offered[-1].data["items"][0]["ref"] == "inbox/bob@2"
@@ -468,7 +472,7 @@ async def test_a_delivery_already_asked_for_waits_out_a_takeover(tmp_path):
 
         assert not delivered.is_set()
 
-        await session.release_agent("@bob")
+        await session.release("@bob")
         async with asyncio.timeout(SECONDS):
             await delivered.wait()
 
@@ -497,7 +501,7 @@ async def test_a_report_s_body_is_stored_and_journaled_by_its_hash(tmp_path):
         item = (await until(lambda: of_type(session, "item.recorded"), session))[0]
 
         assert item.data["body"].startswith("sha256:")
-        stored = await session.get_body(item.data["body"].removeprefix("sha256:"))
+        stored = await session.get_body(item.data["body"])
         assert stored == b"the whole of what it said"
 
 
@@ -582,7 +586,7 @@ async def test_activity_renews_a_lease_up_to_its_limit(tmp_path):
 
     async with Session.start(team, root=tmp_path, clock=clock) as session:
         await in_state(session, "worker", "idle")
-        await session.enqueue("work", "do it")
+        await session.task_add("work", "do it")
         await session.send("@worker", "go")
         task = await until(lambda: of_type(session, "task.claimed"), session)
         working = drivers[-1]
@@ -723,7 +727,7 @@ async def test_several_runtimes_share_a_process(tmp_path):
 async def test_an_agent_that_ended_leaves_no_harness_behind(tmp_path):
     async with Session.start(solo(), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
         await until(
             lambda: of_type(session, "effect.finished"),
             session,
@@ -744,7 +748,7 @@ async def test_a_token_works_only_while_its_agent_lives(tmp_path, recording):
 
         assert kernel.authenticate(binding.token.reveal()).id == "agent:bob"
 
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
         await in_state(session, "bob", "ended")
 
         with pytest.raises(Exception, match="unknown credential"):
@@ -776,7 +780,7 @@ async def test_a_delivery_that_hangs_is_cut_off_and_queued_again(tmp_path):
     clock = ManualClock(1000.0)
 
     async with Session.start(solo_with(Stuck), root=tmp_path, clock=clock) as session:
-        await in_state(session, "bob", "idle")
+        await until(lambda: of_type(session, "effect.finished"), session, launch_of("bob"))
         await session.send("@bob", "hang")
         await until(
             lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "deliver"
@@ -798,7 +802,7 @@ async def test_a_harness_that_takes_a_delivery_and_begins_no_turn_is_cut_off(tmp
     clock = ManualClock(1000.0)
 
     async with Session.start(solo_with(TakesIt), root=tmp_path, clock=clock) as session:
-        await in_state(session, "bob", "idle")
+        await until(lambda: of_type(session, "effect.finished"), session, launch_of("bob"))
         await session.send("@bob", "hello")
         await until(
             lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "deliver"
@@ -821,10 +825,6 @@ async def test_a_wake_finishes_when_its_turn_begins(tmp_path):
 
     types = [event.type if event.type != "effect.finished" else event.data["kind"] for event in events]
     assert types.index("turn.started") < types.index("deliver")
-
-
-def launch_of(agent: str) -> Callable[[list[Any]], bool]:
-    return lambda found: any(event.data["kind"] == "launch" and event.agent == agent for event in found)
 
 
 async def test_a_harness_that_says_ready_and_never_begins_its_goal_is_lost(tmp_path):
@@ -925,7 +925,7 @@ async def test_a_late_word_from_an_ended_agent_is_no_loss(tmp_path):
 
     async with Session.start(solo_with(Late), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
 
         row = await ended(session, "bob")
         await until(
@@ -1013,7 +1013,7 @@ async def test_a_stop_that_fails_is_masked_in_the_journal_and_the_log(tmp_path, 
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.cancel("@bob")
+        await session.cancel_agent("@bob")
         failed = await until(lambda: of_type(session, "effect.failed"), session)
 
     assert failed[0].data["error"] == "stop failed with ***"
@@ -1078,7 +1078,7 @@ async def test_leaving_while_a_stop_runs_still_stops_the_harness(tmp_path):
 
     session = await Session.start(solo_with(SlowStop), root=tmp_path)
     await in_state(session, "bob", "idle")
-    await session.cancel("@bob")
+    await session.cancel_agent("@bob")
     await asyncio.wait_for(stopping.wait(), SECONDS)
 
     await asyncio.wait_for(session.leave(0.01), SECONDS)

@@ -25,7 +25,7 @@ from platoon_harness.kernel import (
     Refused,
     SystemClock,
 )
-from platoon_harness.rpc import INVALID_PARAMS, LINE_LIMIT, METHOD_NOT_FOUND, Closed, Peer, RpcError
+from platoon_harness.rpc import BUSY, INVALID_PARAMS, LINE_LIMIT, METHOD_NOT_FOUND, Closed, Peer, RpcError
 
 from .paths import OWNER_TOKEN, VIEW_TOKEN, read_running, socket_path
 
@@ -48,9 +48,7 @@ class Link(Protocol):
     @property
     def clock(self) -> Clock: ...
 
-    async def submit(
-        self, op: str, args: Mapping[str, Any], *, key: str | None = None, expected_version: int | None = None
-    ) -> Outcome: ...
+    async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome: ...
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome: ...
 
@@ -100,16 +98,14 @@ class Local:
         if self._denied is not None:
             raise Refused(self._denied.code, self._denied.detail)
 
-    async def submit(
-        self, op: str, args: Mapping[str, Any], *, key: str | None = None, expected_version: int | None = None
-    ) -> Outcome:
+    async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome:
         kernel = self._kernel
         if self._denied is not None:
             return Outcome(op=op, args_hash="", refusal=self._denied.model_copy(update={"op": op}))
         operation = kernel.ops.get(op)
         if operation is not None and operation.query:
             return kernel.query(self._principal, op, args)
-        return await kernel.submit(self._principal, op, args, key=key, expected_version=expected_version)
+        return await kernel.submit(self._principal, op, args, key=key)
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
         return self._kernel.query(self._principal, op, args)
@@ -131,9 +127,13 @@ class Local:
         return kernel.head if kernel.head > after else None
 
     async def delta(self, agent: str, after: int | None) -> Delta | None:
+        """The next frame. A name nobody holds is refused, or asking for it would keep a ring for ever."""
+        known = self._kernel.query(self._principal, "agent.status", {"agent": agent})
+        if known.refusal is not None:
+            raise Refused.of(known.refusal)
         if self._kernel.read_only:
             return None
-        frames = self._kernel.deltas(agent, after=after)
+        frames = self._kernel.deltas(known.result["agent"], after=after)
         try:
             return await anext(frames, None)
         finally:
@@ -153,6 +153,10 @@ class History(Local):
         detail = f"no runtime holds this session, so this is history: `{resume_with}` restarts it"
         super().__init__(kernel, principal, denied=Refusal(code="unavailable", detail=detail))
 
+    def stale(self) -> bool:
+        """Whether a writer has changed the journal, which an immutable reader cannot read past."""
+        return self._kernel.query(self._principal, "session.status", {}).refusal is not None
+
     async def close(self) -> None:
         self._kernel.close()
 
@@ -161,8 +165,11 @@ def _encoded(body: bytes) -> str:
     return base64.b64encode(body).decode()
 
 
-def _refused(error: RpcError) -> Refused | RpcError:
-    return Refused.of(Refusal.model_validate(error.data)) if error.code == REFUSED else error
+def _refused(error: RpcError) -> Refused:
+    """What the other side said, as the one error a `Link` raises."""
+    if error.code == REFUSED:
+        return Refused.of(Refusal.model_validate(error.data))
+    return Refused("busy" if error.code == BUSY else "unavailable", error.message)
 
 
 class Remote:
@@ -210,11 +217,8 @@ class Remote:
         except RpcError as error:
             raise _refused(error) from None
 
-    async def submit(
-        self, op: str, args: Mapping[str, Any], *, key: str | None = None, expected_version: int | None = None
-    ) -> Outcome:
-        params = {"op": op, "args": args, "key": key, "expected_version": expected_version}
-        return Outcome.model_validate(await self._call("submit", params))
+    async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome:
+        return Outcome.model_validate(await self._call("submit", {"op": op, "args": args, "key": key}))
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
         return Outcome.model_validate(await self._call("query", {"op": op, "args": args}))
@@ -285,8 +289,7 @@ class _Connection:
     async def _answer(self, link: Local, method: str, params: Any) -> Any:
         match method:
             case "submit":
-                key, version = params.get("key"), params.get("expected_version")
-                return (await link.submit(params["op"], params["args"], key=key, expected_version=version)).model_dump()
+                return (await link.submit(params["op"], params["args"], key=params.get("key"))).model_dump()
             case "query":
                 return (await link.query(params["op"], params["args"])).model_dump()
             case "read":
@@ -322,16 +325,17 @@ class Control:
     task and a socket. Pages leave only when asked for, and a client that stops reading is dropped by its `Peer`, so it
     costs its own lag and can hold up nobody else."""
 
-    def __init__(self, kernel: Kernel, human: Principal) -> None:
+    def __init__(self, kernel: Kernel, human: Principal, folder: Path) -> None:
         self._kernel = kernel
         self._human = human
+        self._folder = folder
         self.view_token = secrets.token_urlsafe(32)
         self._server: asyncio.Server | None = None
         self._serving: set[asyncio.Task[None]] = set()
         self._connections: set[_Connection] = set()
 
     async def start(self) -> None:
-        self.path = socket_path(self._kernel.session_id)
+        self.path = socket_path(self._folder)
         self._server = await asyncio.start_unix_server(self._serve, path=self.path)
         self.path.chmod(0o600)
 
@@ -362,6 +366,9 @@ class Control:
         return Local(self._kernel, principal, others=lambda: self.clients() - 1), True, principal.id
 
     async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if self._server is None:  # It was accepted as this runtime stopped, which is too late.
+            writer.transport.abort()
+            return
         task = asyncio.current_task()
         assert task is not None
         self._serving.add(task)
@@ -378,7 +385,7 @@ class Control:
             self._connections.discard(connection)
             self._serving.discard(task)
             expiry.cancel()
-            writer.close()
+            writer.transport.abort()  # A close waits to flush, and a client that stopped reading never lets it.
 
     async def _expire(self, connection: _Connection, peer: Peer) -> None:
         """Drop a connection that never says who it is."""

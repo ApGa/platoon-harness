@@ -5,18 +5,19 @@ import logging
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, Driver, DriverError
 from platoon_harness.extensions import DRIVERS, Installed, load
 from platoon_harness.kernel import NAME, Kernel, Refused
+from platoon_harness.primitives import Policy
 from platoon_harness.schema import ConfigError, Problem, seconds
 from platoon_harness.team import Budget, Command, Role, Team, team_check
 from platoon_harness.topology import Queue, Topic, compile, scopes
 
 from .authority import Authority
-from .paths import MANIFEST, find_root, new_folder, write_private
+from .paths import find_root, new_folder
 
 log = logging.getLogger("platoon_harness.runtime")
 
@@ -49,7 +50,7 @@ def prepare(
     name: str | None = None,
     root: str | Path | None = None,
     human: str = "you",
-    approvals: Literal["ask", "deny", "allow"] | None = None,
+    approvals: Policy | None = None,
     cwd: str | Path | None = None,
 ) -> Path:
     """Check a team and write down how it starts, before any cost. The folder is all a runtime then needs.
@@ -69,9 +70,7 @@ def prepare(
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(resolved, human=f"human:{human}", approvals=approvals, cwd=str(Path(cwd or ".").resolve()))
-    folder = new_folder(find_root(root, writing=True), name)
-    write_private(folder / MANIFEST, manifest.model_dump_json())
-    return folder
+    return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 
 
 def _settings(team: Team, manifest: Manifest, body: str) -> dict[str, Any]:

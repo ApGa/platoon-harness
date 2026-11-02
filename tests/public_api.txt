@@ -1,3 +1,4 @@
+platoon_harness.ConfigError
 platoon_harness.Ending
 platoon_harness.Refused
 platoon_harness.Role

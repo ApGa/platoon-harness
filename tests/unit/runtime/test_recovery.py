@@ -455,7 +455,7 @@ async def test_a_stop_in_flight_is_repeated_with_nothing_left_to_stop(tmp_path):
 
     session = await Session.start(solo_with(HangsOnStop), name="s", root=tmp_path)
     await in_state(session, "bob", "idle")
-    await session.cancel("@bob")
+    await session.cancel_agent("@bob")
     await started("stop")(session)
     await abandon(session)
 
@@ -810,7 +810,7 @@ async def test_a_group_an_ended_agent_left_is_named(tmp_path, monkeypatch):
 
     session = await Session.start(solo_with(ScriptedDriver), name="s", root=tmp_path)
     await in_state(session, "bob", "idle")
-    await session.cancel("@bob")
+    await session.cancel_agent("@bob")
     await in_state(session, "bob", "ended")
     await abandon(session)
     monkeypatch.setattr(recovery, "reap", unproven)

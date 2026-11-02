@@ -54,9 +54,25 @@
   name a stranger.
 - A failed `describe` says what the program said on stderr, and a malformed one is a `DriverError` that names it.
 - `tool_visibility` matches a whole name, or its `__<name>` ending, and with no tools to look for says `unverified`.
+- `wait(on=...)` works for a guest, a mistyped agent is refused by `wait` and `deltas` instead of hanging, and attaching says a refusal
+  such as a protocol mismatch at once instead of blaming the runtime after a minute.
+- Awaiting a session that was left starts nothing, and one never entered says how to start it.
+- `leave` takes a span and stops nothing halfway if it cannot read one.
+- The control socket aborts every connection at a stop, so a client that stopped reading cannot hold one up, and a connection accepted
+  during a stop is dropped. A socket belongs to a folder, so a copied session cannot take a live one's.
+- No client can grow the live text rings by naming agents that do not exist, and a `Link` raises only `Refused` and `Closed`.
+- A guest on history survives a writer touching the journal.
+- A root another user owns or can write is refused, a session folder is built aside so a crash burns no name, an unusable
+  `XDG_RUNTIME_DIR` falls through, and a detached runtime runs from its folder with `-P`.
+- `team_check` refuses a one-shot role that starts with the session, and says nothing of a `count` of zero, which was said on purpose.
 
 ### Changed
 
+- `Session`: boards and queues take their tool's name, `board_post`, `task_claim` and so on, and `agent.release` is plain `release`.
+  `cancel()` stops the session and `cancel_agent(agent)` one agent. `finish`, `join`, `wait_any` and `broadcast` are gone, as `wait` and
+  `send` state them. `spawn` says `role`. `put_body` returns a ref, and `get_body` and `tombstone` take one.
+- `Link.submit` takes no `expected_version`. Ops that need one take it as an argument.
+- `ConfigError` is at the top of the package.
 - `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
 - `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do.
 - `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.

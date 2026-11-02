@@ -54,7 +54,8 @@ def find_root(
     """Where sessions live: `chosen`, then `$PLATOON_HARNESS_HOME`, then `$XDG_STATE_HOME/platoon-harness`.
 
     A default on a network filesystem falls back to a local directory, with a notice. A root someone chose stays theirs,
-    so `writing` there is refused: a closed session is portable, and a live journal is not.
+    so `writing` there is refused: a closed session is portable, and a live journal is not. To write, a root must be
+    this user's and nobody else's to change, since what its folders say can run as this user on a resume.
     """
     explicit = chosen or environ.get(HOME_VARIABLE)
     if explicit:
@@ -63,29 +64,44 @@ def find_root(
         if writing and found.kind == "network":
             what = f"{root} is on {found.name}, a network filesystem, where a live journal is not safe"
             raise ConfigError([Problem(HOME_VARIABLE, f"{what}. Choose a local directory")])
-        return root
+        return _writable(root) if writing else root
     root = Path(environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "platoon-harness"
     if filesystem(root).kind != "network":
-        return root
+        return _writable(root) if writing else root
     fallback = Path(f"/var/tmp/platoon-harness-{os.getuid()}")
     log.warning("%s is on a network filesystem, so sessions live in %s", root, fallback)
+    if writing:
+        _make_private(fallback)
     return fallback
+
+
+def _writable(root: Path) -> Path:
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    found = root.stat()
+    if found.st_uid != os.getuid() or found.st_mode & stat.S_IWOTH:
+        raise Refused("unsupported", f"{root} must be a directory of this user's that nobody else can write")
+    return root
 
 
 def _sessions_of(root: Path) -> Path:
     return root / "sessions"
 
 
-def new_folder(root: Path, name: str | None = None) -> Path:
-    """Make a session's folder. Creating it is what claims the name, so no two sessions can share one."""
-    sessions = _sessions_of(root)
-    sessions.mkdir(mode=0o700, parents=True, exist_ok=True)
+def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
+    """Make a session's folder with its manifest in it. The folder is built aside and renamed into place, so a name is
+    claimed whole or not at all: no two sessions can share one, and a crash here burns none."""
     if name is not None and re.fullmatch(NAME, name) is None:
         raise Refused("invalid", f"{name!r} cannot name a session: it must be safe as a part of a path")
+    sessions = _sessions_of(root)
+    _make_private(sessions)
     folder = sessions / (name or f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}")
+    built = Path(tempfile.mkdtemp(dir=root, prefix=".new-"))
+    write_private(built / MANIFEST, manifest)
     try:
-        folder.mkdir(mode=0o700)
-    except FileExistsError:
+        built.rename(folder)
+    except OSError:
+        (built / MANIFEST).unlink()
+        built.rmdir()
         raise Refused("conflict", f"session {folder.name} exists: resume it, or choose another name") from None
     return folder
 
@@ -127,17 +143,21 @@ def _make_private(folder: Path) -> None:
     folder.chmod(0o700)
 
 
-def socket_path(session_id: str, environ: Mapping[str, str] = os.environ) -> Path:
-    """Where a session's socket goes: a short hash in a private directory, never inside a folder of any depth, since a
-    `bind` takes 107 bytes on Linux and 103 on macOS."""
-    name = f"{hashlib.sha256(session_id.encode()).hexdigest()[:_HASH_LENGTH]}.sock"
+def socket_path(session: Path, environ: Mapping[str, str] = os.environ) -> Path:
+    """Where a session's socket goes: a hash of its folder, since a copy of a closed session keeps its journal and has a
+    folder of its own, in a private directory, never inside a folder of any depth, since a `bind` takes 107 bytes on
+    Linux and 103 on macOS. A runtime directory that cannot be used falls through to the next."""
+    name = f"{hashlib.sha256(str(session.resolve()).encode()).hexdigest()[:_HASH_LENGTH]}.sock"
     runtime_dir = environ.get("XDG_RUNTIME_DIR")
     folders = [Path(runtime_dir) / "platoon-harness"] if runtime_dir else []
     for folder in (*folders, Path(f"/tmp/platoon-harness-{os.getuid()}")):
         if len(os.fsencode(folder / name)) <= _SOCKET_LIMIT:
-            _make_private(folder)
+            try:
+                _make_private(folder)
+            except OSError:
+                continue
             return folder / name
-    raise Refused("unsupported", f"no socket path fits in {_SOCKET_LIMIT} bytes")
+    raise Refused("unsupported", f"no private directory holds a socket path in {_SOCKET_LIMIT} bytes")
 
 
 class Running(Model):

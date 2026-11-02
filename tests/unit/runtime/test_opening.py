@@ -87,7 +87,7 @@ def test_a_warning_stops_nothing(tmp_path, caplog):
     roles = {"lead": {"harness": scripted()}, "alone": {"harness": scripted(), "count": 0}}
 
     assert prepare(team_of(roles=roles), root=tmp_path).exists()
-    assert "never starts" in caplog.text
+    assert "has no path to anyone" in caplog.text
 
 
 def test_a_name_for_the_human_must_be_one(tmp_path):

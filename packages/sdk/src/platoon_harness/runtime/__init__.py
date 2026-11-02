@@ -69,7 +69,7 @@ class Runtime:
         authority = self._authority or LocalAuthority(team)
         cwd = Path(manifest.cwd)
         self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd)
-        self.control = Control(self.kernel, self.human)
+        self.control = Control(self.kernel, self.human, self.folder)
         try:
             incarnation = (await self.kernel.recover()).result
             await open_session(self.kernel, team, manifest, authority, text)

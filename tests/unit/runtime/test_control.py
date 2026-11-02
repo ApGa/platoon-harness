@@ -12,7 +12,7 @@ import pytest
 
 from platoon_harness import Refused, Session, rpc
 from platoon_harness.kernel import ManualClock, Outcome, hash_token
-from platoon_harness.rpc import Closed
+from platoon_harness.rpc import Closed, Peer
 from platoon_harness.runtime import control
 from platoon_harness.runtime.control import REFUSED, Remote
 from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
@@ -411,3 +411,74 @@ async def test_watching_a_view_needs_no_session_of_its_own(guest, owner):
 
     assert (await asyncio.wait_for(changed, SECONDS))["snapshot"] is False
     await views.aclose()
+
+
+# What no client may hold, and what shutdown cannot be made to wait on.
+
+
+async def test_a_name_nobody_holds_gets_no_ring(owner):
+    connection = await Raw.connect(owner.folder)
+    await connection.hello((owner.folder / VIEW_TOKEN).read_text())
+    kernel = owner._runtime.kernel
+    before = len(kernel._rings)
+
+    for index in range(32):
+        answer = await connection.call("delta", {"agent": f"nobody{index}"})
+        assert answer["error"]["code"] == REFUSED
+
+    assert len(kernel._rings) == before
+
+
+async def test_a_client_that_stopped_reading_cannot_hold_up_a_stop(owner, monkeypatch):
+    peers = []
+
+    class Kept(Peer):
+        def __init__(self, *arguments: Any, **options: Any) -> None:
+            super().__init__(*arguments, **options)
+            peers.append(self)
+
+    monkeypatch.setattr(control, "Peer", Kept)
+    for _ in range(50):
+        await owner.send("@bob", "x" * 200)
+    stalled, other = await Raw.connect(owner.folder), await Raw.connect(owner.folder)
+    await stalled.hello(token(owner))
+    await other.hello(token(owner))
+
+    while peers[0]._writer.transport.get_write_buffer_size() < 1024 * 1024:
+        stalled.send("read", {"after": 0})
+        await stalled.writer.drain()
+        await other.call("others")
+
+    await asyncio.wait_for(owner.leave(), SECONDS)
+
+
+@pytest.mark.parametrize("turns", range(5))
+async def test_a_connection_accepted_as_a_runtime_stops_is_dropped(owner, turns):
+    running = read_running(owner.folder)
+    assert running is not None
+    reader, writer = await asyncio.open_unix_connection(running.socket)
+    for _ in range(turns):
+        await asyncio.sleep(0)
+
+    await asyncio.wait_for(owner.leave(), SECONDS)
+
+    assert await asyncio.wait_for(reader.read(), SECONDS) == b""
+    writer.close()
+
+
+async def test_a_refusal_the_transport_makes_is_a_refusal_like_any_other():
+    assert control._refused(rpc.RpcError(rpc.BUSY, "too many requests in flight")).refusal.code == "busy"
+    assert control._refused(rpc.RpcError(rpc.INVALID_PARAMS, "bad params")).refusal.code == "unavailable"
+
+
+async def test_a_protocol_nobody_here_speaks_is_said_at_once(owner, monkeypatch):
+    async def older(self: Remote, token: str) -> None:
+        await self._call("hello", {"token": token, "protocol": control.PROTOCOL + 1})
+
+    monkeypatch.setattr(Remote, "hello", older)
+    guest = Session.attach(owner.name, root=owner.folder.parent.parent)
+
+    with pytest.raises(Refused) as refused:
+        await asyncio.wait_for(guest._entered(), SECONDS)
+
+    assert refused.value.refusal.code == "unsupported"

@@ -63,7 +63,7 @@ async def test_a_killed_runtime_is_resumed_with_nothing_lost_and_nothing_done_tw
     assert (await guest.status("@w1"))["state"] == "running"
     with pytest.raises(Refused) as refused:
         await guest.send("@lead", "are you there?")
-    assert "platoon-harness resume s" in str(refused.value)
+    assert 'Session.resume("s")' in str(refused.value)
     old = (guest.folder / OWNER_TOKEN).read_text()
 
     async with Session.resume("s", root=tmp_path) as owner:
@@ -97,7 +97,7 @@ async def assert_what_a_crash_leaves(
 
     # Nothing logical happened twice: each task claimed once, and the lease survives the crash.
     assert types.count("task.claimed") == 2
-    tasks = (await owner.tasks("tasks"))["tasks"]
+    tasks = (await owner.task_list("tasks"))["tasks"]
     assert {task["state"] for task in tasks} == {"claimed"}
     assert {task["owner"] for task in tasks} == {"@w1", "@w2"}
 
@@ -135,7 +135,9 @@ async def settled_after_the_crash(owner: Session) -> Any:
     """The workers come back to their leases, and the work ends as it should have."""
     for worker in ("@w1", "@w2"):
         await owner.send(worker, "carry on")
-    await until(lambda: owner.tasks("tasks"), owner, lambda listed: {t["state"] for t in listed["tasks"]} == {"done"})
+    await until(
+        lambda: owner.task_list("tasks"), owner, lambda listed: {t["state"] for t in listed["tasks"]} == {"done"}
+    )
     return await owner.settled(timeout="30s")
 
 

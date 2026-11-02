@@ -221,7 +221,8 @@ def _warnings(team: Team) -> Iterable[Problem]:
     starting = {name for name in team.roles if team.starts(name)}
     started = starting.union(*(reach(team, name, "descendants") for name in starting))
     for name in sorted(team.roles.keys() - started):
-        yield Problem(f"roles.{name}", "never starts: its count is 0 and nothing that starts can spawn it", "warning")
+        if team.roles[name].count != 0:  # Zero was said on purpose: a human or a program can spawn any role.
+            yield Problem(f"roles.{name}", "never starts: nothing that starts can spawn it", "warning")
 
     if len(team.roles) > 1:
         for name, targets in arcs(team).items():
@@ -276,6 +277,12 @@ def team_check(
             if role.sandbox is not None and role.sandbox not in known.sandboxes:
                 what = f"`{role.driver}` has no sandbox `{role.sandbox}`.{nearest(role.sandbox, known.sandboxes)}"
                 problems.append(Problem(f"roles.{name}.sandbox", what))
+            if not known.persistent and team.starts(name):
+                what = (
+                    "a one-shot harness needs a goal, and agents that start with the session have none: "
+                    "set `count = 0` and spawn it with one"
+                )
+                problems.append(Problem(f"roles.{name}.count", what))
             problems += _budget_problems(team.budget, "budget", role, known)
             problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:

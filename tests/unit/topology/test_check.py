@@ -21,6 +21,8 @@ from platoon_harness.topology import (
 
 from .support import CAPABILITIES, MEASURING, PRESET_TEAMS
 
+BLIND = Capabilities(persistent=True)
+
 
 def check(team, capabilities=CAPABILITIES, extensions=None):
     return team_check(team, capabilities=capabilities, extensions=extensions)
@@ -120,13 +122,13 @@ def test_max_hops_answers_a_cycle():
 
 
 def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():
-    blind = {"pi": Capabilities()}
+    blind = {"pi": BLIND}
     team = Team(roles={"a": Role(harness="pi")}, budget=Budget(usd=5))
     assert "`pi` cannot measure usd" in text(errors(team, capabilities=blind))
 
 
 def test_a_per_role_budget_is_checked_against_that_role():
-    capabilities = {"pi": Capabilities(), "claude": MEASURING}
+    capabilities = {"pi": BLIND, "claude": MEASURING}
     team = Team(
         roles={
             "a": Role(harness="claude", budget=Budget(tokens=1000)),
@@ -139,19 +141,19 @@ def test_a_per_role_budget_is_checked_against_that_role():
 
 
 def test_a_budget_falls_back_to_turns_only_when_the_team_says_so():
-    blind = {"pi": Capabilities()}
+    blind = {"pi": BLIND}
     role = {"a": Role(harness="pi")}
     assert errors(Team(roles=role, budget=Budget(tokens=10, turns=5, fallback="turns")), capabilities=blind) == []
 
 
 def test_a_fallback_with_no_turns_limit_would_stop_enforcing():
     team = Team(roles={"a": Role(harness="pi")}, budget=Budget(tokens=10, fallback="turns"))
-    assert "no `turns` limit" in text(errors(team, capabilities={"pi": Capabilities()}))
+    assert "no `turns` limit" in text(errors(team, capabilities={"pi": BLIND}))
 
 
 def test_the_runtime_measures_turns_agents_and_wall_for_everyone():
     team = Team(roles={"a": Role(harness="pi")}, budget=Budget(turns=5, agents=2, wall="2h"))
-    assert errors(team, capabilities={"pi": Capabilities()}) == []
+    assert errors(team, capabilities={"pi": BLIND}) == []
 
 
 def test_an_unknown_harness_gets_a_did_you_mean():
@@ -266,7 +268,7 @@ def test_a_grant_of_another_op_is_no_spawning():
 def test_a_fallback_needs_turns_in_its_own_budget_as_budget_set_does():
     limited = Role(harness="pi", budget=Budget(tokens=5, fallback="turns"))
     team = Team(roles={"a": limited}, budget=Budget(turns=3))
-    assert "falls back to turns" in text(errors(team, capabilities={"pi": Capabilities()}))
+    assert "falls back to turns" in text(errors(team, capabilities={"pi": BLIND}))
 
 
 def test_a_channel_cannot_use_a_relation():
@@ -304,7 +306,7 @@ def test_every_problem_is_reported_at_once():
         delivery = "wake"
         """
     )
-    report = team_check(team, capabilities={"pi": Capabilities()}, extensions={"ballot": Extension("ballot")})
+    report = team_check(team, capabilities={"pi": BLIND}, extensions={"ballot": Extension("ballot")})
     wheres = {problem.where for problem in report}
     assert wheres >= {
         "extensions",
@@ -326,9 +328,29 @@ def test_team_check_is_pure():
     assert team == PRESET_TEAMS["mesh"]
 
 
-def test_a_role_that_can_never_start_is_a_warning():
-    team = Team(roles={"lead": Role(harness="pi"), "lost": Role(harness="pi", count=0)})
-    assert "roles.lost: never starts" in text(warnings(team))
+def test_a_count_of_zero_was_said_on_purpose_and_is_no_warning():
+    team = Team(roles={"lead": Role(harness="pi"), "later": Role(harness="pi", count=0)})
+
+    assert "never starts" not in text(warnings(team))
+
+
+def test_a_one_shot_role_that_starts_with_the_session_has_no_goal_and_is_refused():
+    one_shot = Capabilities()
+    team = Team(roles={"lead": Role(harness="pi")})
+
+    assert "set `count = 0`" in text(errors(team, capabilities={"pi": one_shot}))
+
+
+def test_a_one_shot_role_that_is_spawned_is_sound():
+    team = Team(roles={"lead": Role(harness="claude"), "worker": Role(harness="pi", count=0)})
+
+    assert errors(team, capabilities={"claude": MEASURING, "pi": Capabilities()}) == []
+
+
+def test_a_one_shot_role_only_another_role_spawns_is_sound():
+    team = Team(roles={"lead": Role(harness="claude", may_spawn=["worker"]), "worker": Role(harness="pi")})
+
+    assert errors(team, capabilities={"claude": MEASURING, "pi": Capabilities()}) == []
 
 
 def test_a_role_only_a_never_started_role_spawns_never_starts():
@@ -338,7 +360,9 @@ def test_a_role_only_a_never_started_role_spawns_never_starts():
             "leaf": Role(harness="pi"),
         }
     )
-    assert len([w for w in warnings(team) if "never starts" in w]) == 2
+    assert [w for w in warnings(team) if "never starts" in w] == [
+        "roles.leaf: never starts: nothing that starts can spawn it"
+    ]
 
 
 def test_a_role_with_no_path_to_anyone_is_a_warning():

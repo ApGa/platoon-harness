@@ -96,17 +96,17 @@ async def assert_the_journal(session: Session) -> None:
 
 
 async def assert_the_views(session: Session) -> None:
-    tasks = await session.tasks("tasks")
+    tasks = await session.task_list("tasks")
     assert [(task["state"], task["result"]) for task in tasks["tasks"]] == [
         ("done", tasks["tasks"][0]["result"]),
         ("done", tasks["tasks"][1]["result"]),
     ]
     assert {task["result"] for task in tasks["tasks"]} == {"done by w1", "done by w2"}
 
-    found = await session.query("notes")
+    found = await session.board_query("notes")
     assert sorted(row["name"] for row in found["results"]) == ["from-w1", "from-w2"]
     assert found["total"] == 2
-    got = await session.get("notes", "from-w1")
+    got = await session.board_get("notes", "from-w1")
     assert (got["text"], got["version"]) == ("All of it.", 1)
 
     inbox = await session.read()

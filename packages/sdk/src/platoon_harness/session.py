@@ -3,6 +3,7 @@
     async with Session.start(team, name="fix-auth") as session:
         await session.send("@lead", "Fix the flaky test")
         ending = await session.settled(timeout="30m")
+    print(ending.agents[0]["report"]["gist"])
 
 The owner's leaving stops the agents and keeps the folder. A guest's leaving only disconnects. `submit` returns the
 kernel's `Outcome` and never raises a refusal; every typed method returns the result and raises `Refused`.
@@ -24,8 +25,8 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from platoon_harness.config import Manifest
-from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, is_held
-from platoon_harness.primitives import BODY_REF, PRIMITIVES, Condition, Verdict
+from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, first, is_held
+from platoon_harness.primitives import BODY_REF, PRIMITIVES, Condition, Policy, Verdict
 from platoon_harness.rpc import Closed
 from platoon_harness.runtime import GRACE, Authority, Runtime
 from platoon_harness.runtime.control import History, Link, Local, Remote
@@ -40,17 +41,18 @@ _FIRST_PAUSE = 0.005
 _LONGEST_PAUSE = 0.5
 _ATTEMPTS = 8
 _LOG_TAIL = 2048
+_WAITED_OUT = ("not_permitted", "unavailable")
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
-Policy = Literal["ask", "deny", "allow"]
 Span = str | float
 
 __all__ = ["Ending", "Reason", "Session"]
 
 
 class Ending(BaseModel, frozen=True):
-    """What a session came to. `reason` is what an exit code is made from, and `usage` keeps its labels: a unit nobody
-    measured is absent, not zero."""
+    """What a session came to. `reason` is what an exit code is made from. Each of `agents` has its last `report`, a
+    `gist` and the ref of any `body`, or None if it said nothing. `usage` keeps its labels: a unit nobody measured has
+    no amount, which is not zero."""
 
     state: str
     reason: Reason
@@ -80,10 +82,14 @@ async def _pauses(total: float) -> AsyncIterator[None]:
 
 
 def _spawn_runtime(folder: Path) -> subprocess.Popen[bytes]:
-    """A runtime that outlives us. A thread reaps it, whenever it ends."""
-    command = [sys.executable, "-m", "platoon_harness.runtime", str(folder)]
+    """A runtime that outlives us. It runs from its folder with `-P`, so that nothing in our working directory can stand
+    in for a module it imports. A thread reaps it, whenever it ends."""
+    folder = folder.resolve()
+    command = [sys.executable, "-P", "-m", "platoon_harness.runtime", str(folder)]
     log = open_log(folder)
-    process = subprocess.Popen(command, start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+    process = subprocess.Popen(
+        command, cwd=folder, start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log
+    )
     os.close(log)
     threading.Thread(target=process.wait, daemon=True).start()
     return process
@@ -107,7 +113,7 @@ class Session:
     `await` or to use in `async with`. The class holds one link, so everything below is written once."""
 
     def __init__(self, enter: Callable[["Session"], Awaitable[None]]) -> None:
-        self._enter = enter
+        self._enter: Callable[[Session], Awaitable[None]] | None = enter
         self._link: Link | None = None
         self._runtime: Runtime | None = None
         self._view = False
@@ -175,8 +181,10 @@ class Session:
         return self._entered().__await__()
 
     async def _entered(self) -> Self:
-        if self._link is None:
-            await self._enter(self)
+        """Enter, once: restarting something left is what `resume` is for, as it can spend money."""
+        enter, self._enter = self._enter, None
+        if enter is not None:
+            await enter(self)
         return self
 
     async def __aenter__(self) -> Self:
@@ -213,8 +221,13 @@ class Session:
         async for _ in _pauses(_ATTACH_SECONDS):
             if not is_held(self.folder):
                 return self._history()
-            with contextlib.suppress(Closed, Refused):
+            try:
                 return await Remote.connect(self.folder, view=self._view)
+            except Closed:
+                pass
+            except Refused as refused:
+                if refused.refusal.code not in _WAITED_OUT:  # A runtime on its way has last time's credential.
+                    raise
         raise Refused("unavailable", f"a runtime holds session {self.name} and does not answer")
 
     async def _reattach(self, stale: Link) -> Link:
@@ -227,14 +240,15 @@ class Session:
 
     def _current(self) -> Link:
         if self._link is None:
-            raise Refused("unavailable", "this session was left: attach to it again")
+            detail = "not started: `await` it or use `async with`" if self._enter else "this session was left"
+            raise Refused("unavailable", detail)
         return self._link
 
     async def _over_link[T](self, call: Callable[[Link], Awaitable[T]]) -> T:
         """Run one call on the link. A runtime that went gives way to what attaching gives now, and the call goes again,
         so a command keeps its key and stays one operation. A guest on history looks for a runtime each time."""
         link = self._current()
-        if isinstance(link, History) and is_held(self.folder):
+        if isinstance(link, History) and (is_held(self.folder) or link.stale()):
             link = await self._reattach(link)
         for _ in range(_ATTEMPTS):
             try:
@@ -252,12 +266,14 @@ class Session:
         """Whether leaving stops the agents."""
         return self._runtime is not None
 
-    async def leave(self, grace: float = GRACE) -> None:
+    async def leave(self, grace: Span = GRACE) -> None:
         """Go. An owner interrupts turns, waits `grace` and ends the process trees, keeping the folder resumable. A
         guest only disconnects, and changes nothing."""
+        grace = seconds(grace)
         link, self._link = self._link, None
         if self._runtime is not None:
             await self._runtime.stop(grace)
+            self._runtime = None
         elif link is not None:
             await link.close()
 
@@ -282,7 +298,7 @@ class Session:
         """A body as a ref: stored first if it is content, and as it stands if it is a ref already."""
         if body is None or (isinstance(body, str) and re.fullmatch(BODY_REF, body)):
             return body
-        return f"sha256:{await self.put_body(body.encode() if isinstance(body, str) else body)}"
+        return await self.put_body(body.encode() if isinstance(body, str) else body)
 
     async def _changed(self, after: int) -> int | None:
         return await self._over_link(lambda link: link.changed(after))
@@ -295,11 +311,9 @@ class Session:
 
     # Lifecycle.
 
-    async def spawn(
-        self, name: str, child_role: str, goal: str = "", *, body: str | bytes | None = None
-    ) -> dict[str, Any]:
+    async def spawn(self, name: str, role: str, goal: str = "", *, body: str | bytes | None = None) -> dict[str, Any]:
         """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it."""
-        return await self._do("agent.spawn", name=name, child_role=child_role, goal=goal, body=await self._stored(body))
+        return await self._do("agent.spawn", name=name, child_role=role, goal=goal, body=await self._stored(body))
 
     async def status(self, agent: str | None = None) -> dict[str, Any]:
         """How this session stands, or one agent."""
@@ -312,28 +326,29 @@ class Session:
         """Stop an agent's turn. The agent lives on."""
         return await self._do("agent.interrupt", agent=agent)
 
-    async def cancel(self, agent: str | None = None) -> None:
-        """End one agent now, or with no `agent`, the whole session."""
-        await (self._do("session.cancel") if agent is None else self._do("agent.cancel", agent=agent))
+    async def cancel_agent(self, agent: str) -> None:
+        """End one agent now."""
+        await self._do("agent.cancel", agent=agent)
 
     async def retire(self, agent: str) -> None:
         """Take an agent that has stopped working out of the team. Its history stays."""
         await self._do("agent.retire", agent=agent)
 
-    async def finish(self, gist: str = "", *, body: str | bytes | None = None) -> None:
-        await self._do("agent.finish", gist=gist, body=await self._stored(body))
-
     async def takeover(self, agent: str) -> None:
-        """Hold an agent's deliveries so that you can drive its native session."""
+        """Hold an agent's deliveries."""
         await self._do("agent.takeover", agent=agent)
 
-    async def release_agent(self, agent: str) -> None:
+    async def release(self, agent: str) -> None:
         """Hand a held agent back, which records the gap."""
         await self._do("agent.release", agent=agent)
 
     async def close(self) -> None:
         """Drain: nothing new starts, and what is in flight finishes."""
         await self._do("session.close")
+
+    async def cancel(self) -> None:
+        """Stop now: every live agent ends."""
+        await self._do("session.cancel")
 
     async def open_episode(self, episode: str) -> None:
         await self._do("episode.open", episode=episode)
@@ -361,7 +376,7 @@ class Session:
         losing this client loses nothing."""
         placed = await self._do(
             "wait",
-            on=on,
+            on=[condition.model_dump(mode="json") for condition in on],
             agents=agents,
             tasks=tasks,
             board=board,
@@ -377,14 +392,6 @@ class Session:
             if shown["state"] != "open":
                 return shown
         raise Refused("unavailable", f"the runtime of session {self.name} went before the wait closed")
-
-    async def join(self, *agents: str, timeout: Span | None = None) -> dict[str, Any]:  # noqa: ASYNC109
-        """Wait for every one of these agents to end."""
-        return await self.wait(agents=agents, mode="all", timeout=timeout)
-
-    async def wait_any(self, *agents: str, timeout: Span | None = None) -> dict[str, Any]:  # noqa: ASYNC109
-        """Wait for one of these agents to end."""
-        return await self.wait(agents=agents, mode="any", timeout=timeout)
 
     async def cancel_wait(self, id: int | None = None) -> None:
         await self._do("wait.cancel", id=id)
@@ -406,8 +413,8 @@ class Session:
             if status["asking"] and not await self._over_link(lambda link: link.others()):
                 return "needs_human"
             if status["state"] == "open" and status["done"]:
-                with contextlib.suppress(Refused):
-                    await self.close()
+                with contextlib.suppress(Refused):  # A message got in first, or a guest closed it.
+                    await self._do("session.close", if_done=True)
         raise Refused("unavailable", f"the runtime of session {self.name} went before it settled")
 
     async def settled(self, timeout: Span | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.
@@ -415,16 +422,8 @@ class Session:
         says `timed_out`, and leaves the session as it is."""
         clock = self._current().clock
         settling = asyncio.ensure_future(self._settling())
-        waits = {settling}
-        if timeout is not None:
-            waits.add(asyncio.ensure_future(clock.sleep(seconds(timeout))))
-        try:
-            await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
-            reason = settling.result() if settling.done() else "timed_out"
-        finally:
-            for wait in waits:
-                wait.cancel()
-            await asyncio.gather(*waits, return_exceptions=True)
+        rivals = () if timeout is None else (clock.sleep(seconds(timeout)),)
+        reason = settling.result() if await first(settling, *rivals) else "timed_out"
         ending = await self.ending()
         return ending if reason is None else ending.model_copy(update={"reason": reason})
 
@@ -449,10 +448,6 @@ class Session:
     async def reply(self, entry: Mapping[str, Any], gist: str, *, body: str | bytes | None = None) -> dict[str, Any]:
         """Answer an entry from `read`."""
         return await self.send(entry["sender"], gist, body=body, reply_to=entry["ref"])
-
-    async def broadcast(self, group: str, gist: str, *, body: str | bytes | None = None) -> dict[str, Any]:
-        """Send to every member of a group, as it stands at this commit."""
-        return await self.send(f"+{group.removeprefix('+')}", gist, body=body)
 
     async def read(
         self,
@@ -490,7 +485,7 @@ class Session:
 
     # Boards.
 
-    async def post(
+    async def board_post(
         self,
         board: str,
         name: str,
@@ -505,7 +500,7 @@ class Session:
         args = {"board": board, "name": name, "gist": gist, "body": stored, "fields": fields or {}}
         return await self._do("board.post", **args, based_on=based_on)
 
-    async def revise(
+    async def board_revise(
         self,
         board: str,
         name: str,
@@ -521,12 +516,12 @@ class Session:
         args = {"board": board, "name": name, "gist": gist, "body": stored, "fields": fields or {}}
         return await self._do("board.revise", **args, expected_version=expected_version, based_on=based_on)
 
-    async def get(
+    async def board_get(
         self, board: str, name: str, *, version: int | None = None, range: str | None = None
     ) -> dict[str, Any]:
         return await self._ask("board.get", board=board, name=name, version=version, range=range)
 
-    async def query(
+    async def board_query(
         self,
         board: str,
         *,
@@ -544,23 +539,23 @@ class Session:
 
     # Queues.
 
-    async def enqueue(
+    async def task_add(
         self, queue: str, gist: str, *, body: str | bytes | None = None, based_on: Sequence[str] = ()
     ) -> dict[str, Any]:
         """Add a task to a queue."""
         return await self._do("task.add", queue=queue, gist=gist, body=await self._stored(body), based_on=based_on)
 
-    async def claim(self, queue: str, *, task: str | None = None) -> dict[str, Any]:
+    async def task_claim(self, queue: str, *, task: str | None = None) -> dict[str, Any]:
         return await self._do("task.claim", queue=queue, task=task)
 
-    async def renew(self, queue: str, *, task: str | None = None, fence: int | None = None) -> dict[str, Any]:
+    async def task_renew(self, queue: str, *, task: str | None = None, fence: int | None = None) -> dict[str, Any]:
         return await self._do("task.renew", queue=queue, task=task, fence=fence)
 
-    async def release(self, queue: str, *, task: str | None = None, fence: int | None = None) -> None:
+    async def task_release(self, queue: str, *, task: str | None = None, fence: int | None = None) -> None:
         """Give a task back, which spends no attempt."""
         await self._do("task.release", queue=queue, task=task, fence=fence)
 
-    async def complete(
+    async def task_complete(
         self,
         queue: str,
         *,
@@ -573,7 +568,7 @@ class Session:
         stored = await self._stored(body)
         await self._do("task.complete", queue=queue, task=task, fence=fence, gist=gist, body=stored, based_on=based_on)
 
-    async def fail(
+    async def task_fail(
         self,
         queue: str,
         *,
@@ -586,7 +581,9 @@ class Session:
         stored = await self._stored(body)
         await self._do("task.fail", queue=queue, task=task, fence=fence, gist=gist, body=stored, based_on=based_on)
 
-    async def tasks(self, queue: str, *, state: str | None = None, after: int = 0, limit: int = 32) -> dict[str, Any]:
+    async def task_list(
+        self, queue: str, *, state: str | None = None, after: int = 0, limit: int = 32
+    ) -> dict[str, Any]:
         return await self._ask("task.list", queue=queue, state=state, after=after, limit=limit)
 
     # Humans.
@@ -666,23 +663,24 @@ class Session:
                 yield state
 
     async def put_body(self, body: bytes) -> str:
-        """Store a body and return its sha256. An orphan is harmless."""
-        return await self._over_link(lambda link: link.put_body(body))
+        """Store a body and return its ref, which `body=` takes. An orphan is harmless."""
+        return f"sha256:{await self._over_link(lambda link: link.put_body(body))}"
 
-    async def get_body(self, sha256: str, *, limit: int | None = None) -> bytes:
-        return await self._over_link(lambda link: link.get_body(sha256, limit))
+    async def get_body(self, ref: str, *, limit: int | None = None) -> bytes:
+        """A stored body's bytes, by a `body` from any result."""
+        return await self._over_link(lambda link: link.get_body(ref.removeprefix("sha256:"), limit))
 
     async def blob(self, ref: str) -> dict[str, Any]:
         """A stored body's text, by a `body` or `rest` from any result."""
         return await self._ask("blob.get", ref=ref)
 
-    async def tombstone(self, sha256: str) -> None:
+    async def tombstone(self, ref: str) -> None:
         """Redact a body: reads stop now, and its bytes follow. Events citing its hash stay whole."""
-        await self._do("body.tombstone", sha256=sha256)
+        await self._do("body.tombstone", sha256=ref.removeprefix("sha256:"))
 
 
 def _resume_command(folder: Path) -> str:
-    return f"platoon-harness resume {folder.name}"
+    return f'Session.resume("{folder.name}")'
 
 
 def _refuse_across_processes(detach: bool, authority: Authority | None, clock: Clock | None) -> None:

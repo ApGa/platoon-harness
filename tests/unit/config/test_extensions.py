@@ -271,14 +271,14 @@ def test_a_named_extensions_preset_works_from_metadata_to_grants(site):
     site.module("installed_ballot", BALLOT)
     site.install("ballot", entry_points={EXTENSIONS: {"ballot": "installed_ballot:extension"}})
     team = Team.loads('extensions = ["ballot"]\n[roles.a]\nharness = "pi"\n[topology.hub]\ncenter = "a"')
-    assert team_check(team, capabilities={"pi": Capabilities()}, extensions=Installed()) == ()
+    assert team_check(team, capabilities={"pi": Capabilities(persistent=True)}, extensions=Installed()) == ()
     assert team.resolved(Installed()).topology == Topology(edges={"a": ["human"]})
 
 
 def test_team_check_reports_what_loading_an_extension_found(site):
     site.install("old", entry_points={EXTENSIONS: {"old": "old:e"}}, requires=("platoon-harness-sdk>=9",))
     team = Team(roles={"a": Role(harness="pi")}, extensions=["old", "ghost"])
-    report = team_check(team, capabilities={"pi": Capabilities()}, extensions=Installed())
+    report = team_check(team, capabilities={"pi": Capabilities(persistent=True)}, extensions=Installed())
     found = "\n".join(map(str, report))
     assert "needs platoon-harness-sdk>=9" in found
     assert "no extension `ghost`" in found
@@ -301,4 +301,4 @@ def test_a_module_reference_works_with_nothing_installed(site):
     team = Team.loads('extensions = ["nothing_installed_ext:extension"]\n[roles.a]\nharness = "pi"\n')
 
     assert team.resolved(Installed()) == team
-    assert team_check(team, capabilities={"pi": Capabilities()}, extensions=Installed()) == ()
+    assert team_check(team, capabilities={"pi": Capabilities(persistent=True)}, extensions=Installed()) == ()

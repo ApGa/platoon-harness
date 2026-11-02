@@ -159,10 +159,10 @@ async def test_attach_to_a_closed_session_reads_history_and_writes_nothing(tmp_p
     async with Session.attach("s", root=tmp_path) as history:
         assert (await history.status())["state"] == "closing"
         assert [row["status"] for row in await history.agents()] == ["finished"] * 3
-        assert (await history.query("notes"))["total"] == 2
+        assert (await history.board_query("notes"))["total"] == 2
         outcome = await history.submit("message.send", to="@you", gist="too late")
 
-    assert outcome.refusal is not None and "platoon-harness resume s" in str(outcome.refusal.detail)
+    assert outcome.refusal is not None and 'Session.resume("s")' in str(outcome.refusal.detail)
     assert (journal.read_bytes(), journal.stat().st_mtime_ns) == before
     assert not is_held(guest.folder)
 
