@@ -13,6 +13,9 @@ ROLES = {
     "worker": {"harness": "codex", "model": "m", "on_parent_exit": "adopt"},
     "linked": {"harness": "codex", "on_parent_exit": "cancel-subtree"},
     "cramped": {"harness": "codex", "inbox_depth": 2},
+    "steerer": {"harness": "codex", "delivery": "steer"},
+    "quiet": {"harness": "codex", "delivery": "pull"},
+    "narrow": {"harness": "codex", "tools": ["wait", "ops.list"]},
 }
 
 

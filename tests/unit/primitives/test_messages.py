@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from platoon_harness.kernel import Kernel, ManualClock
+from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
 
 from .support import (
@@ -236,11 +236,124 @@ async def test_after_is_clamped_so_a_hallucinated_number_acks_nothing_unshown(ke
     seqs = [(await send(kernel, alice, "@bob", gist))["seq"] for gist in ("one", "two")]
     await read(kernel, bob, "@bob", limit=1)
 
-    await read(kernel, bob, "@bob", after=10**9)
+    await read(kernel, bob, "@bob", after=kernel.head)
 
     place = cursor(kernel, "bob", "inbox/bob")
     assert place.acked == seqs[0] and place.state_of(seqs[1]) == "queued"
     assert gists(await read(kernel, bob, "@bob")) == ["two"]
+
+
+async def test_an_after_past_every_event_is_no_cursor(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await send(kernel, alice, "@bob", "unread")
+
+    outcome = await kernel.submit(bob, "message.read", {"channel": "@bob", "after": kernel.head + 1})
+
+    assert refusal(outcome).code == "invalid"
+    assert gists(await read(kernel, bob, "@bob")) == ["unread"]
+
+
+@pytest.mark.parametrize(
+    ("op", "args"),
+    [
+        ("message.read", {"after": 10**30}),
+        ("wait", {"on": [{"stream": "inbox/bob"}], "after": 10**30}),
+        ("message.send", {"to": "@bob", "gist": "x", "reply_to": "inbox/bob@" + "9" * 30}),
+        ("message.send", {"to": "@bob", "gist": "x", "based_on": ["inbox/bob@" + "9" * 30]}),
+        ("wait.progress", {"id": 10**30}),
+    ],
+)
+async def test_an_enormous_number_is_no_failure_of_infrastructure(kernel, op, args):
+    bob = await spawn(kernel, "bob")
+
+    assert refusal(await kernel.submit(bob, op, args)).code in ("invalid", "not_found", "unsupported")
+
+
+async def test_a_read_acks_nothing_still_in_flight(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = await send(kernel, alice, "@bob", "in flight")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    assert gists(await read(kernel, bob, "@bob")) == []
+
+    assert cursor(kernel, "bob", "inbox/bob").acked < sent["seq"]
+
+
+async def test_a_confirmed_handover_can_be_acked(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = await send(kernel, alice, "@bob", "seen")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": handed["input"]}))
+
+    await read(kernel, bob, "@bob")
+
+    assert cursor(kernel, "bob", "inbox/bob").acked == sent["seq"]
+
+
+async def test_a_read_defaults_to_your_own_inbox(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await send(kernel, alice, "@bob", "hello")
+
+    assert gists(result_of(await kernel.submit(bob, "message.read", {}))) == ["hello"]
+
+
+async def test_a_sender_filter_takes_any_spelling_and_finds_a_childs_report(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "my report"}))
+
+    for spelling in ("bob", "@bob", "agent:bob"):
+        assert gists(await read(kernel, lead, "@lead", sender=spelling, after=0)) == ["my report"]
+
+
+async def test_a_body_that_fits_no_result_leaves_its_hash(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    body = await kernel.put_body(b"x\n" * 5000)
+    await send(kernel, alice, "@bob", "see the body", body=f"sha256:{body}")
+
+    page = await read(kernel, bob, "@bob", bodies=True)
+
+    assert gists(page) == ["see the body"] and page["behind"] == 0
+    assert page["entries"][0]["body"] == f"sha256:{body}" and "text" not in page["entries"][0]
+
+
+async def test_a_filtered_read_can_page_past_its_scan_window(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "t")
+    for number in range(4100):
+        result_of(await kernel.submit(kernel.runtime, "message.send", {"to": "#t", "gist": f"{number}"}))
+    await send(kernel, alice, "#t", "needle")
+
+    first = await read(kernel, bob, "#t", sender="@alice")
+    second = await read(kernel, bob, "#t", sender="@alice", after=first["cursor"])
+
+    assert gists(first) == [] and first["cursor"] > 0
+    assert gists(second) == ["needle"]
+
+
+async def test_a_confirmed_handover_drains_an_inbox_whose_agent_never_reads(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", role="cramped")
+    await send(kernel, alice, "@bob", "one")
+    await send(kernel, alice, "@bob", "two")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": handed["input"]}))
+
+    assert (await send(kernel, alice, "@bob", "three"))["audience"] == 1
+
+
+async def test_a_program_carries_a_chain_by_replying(kernel):
+    program = Principal(id="program:relay")
+    await enroll(kernel, program)
+    await grant(kernel, "program")
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    heard = await send(kernel, alice, "@relay", "pass it on")
+
+    relayed = await send(kernel, program, "@bob", "from alice", reply_to=heard["ref"])
+    fresh = await send(kernel, program, "@bob", "a new piece of work")
+
+    assert (relayed["hops"], fresh["hops"]) == (1, 0)
 
 
 async def test_a_read_past_the_cursor_with_after_moves_nothing_it_skipped(kernel):
@@ -492,8 +605,8 @@ async def test_every_message_carries_one_more_hop_than_its_cause(kernel, ada):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
 
     first = await send(kernel, ada, "@alice", "start")
-    second = await send(kernel, alice, "@bob", "on", cause=[first["seq"]])
-    third = await send(kernel, bob, "@alice", "and on", cause=[second["seq"]])
+    second = await send(kernel, alice, "@bob", "on", reply_to=first["ref"])
+    third = await send(kernel, bob, "@alice", "and on", reply_to=second["ref"])
 
     assert [first["hops"], second["hops"], third["hops"]] == [0, 1, 2]
 
@@ -513,10 +626,10 @@ async def test_hops_follow_what_a_turn_was_offered_with_no_cause_passed(kernel, 
 async def test_a_human_message_resets_hops(kernel, ada):
     alice = await spawn(kernel, "alice")
     bob = await spawn(kernel, "bob")
-    deep = await send(kernel, alice, "@bob", "deep", cause=[])
-    deeper = await send(kernel, bob, "@alice", "deeper", cause=[deep["seq"]])
+    deep = await send(kernel, alice, "@bob", "deep")
+    deeper = await send(kernel, bob, "@alice", "deeper", reply_to=deep["ref"])
 
-    reset = await send(kernel, ada, "@alice", "stop", cause=[deeper["seq"]])
+    reset = await send(kernel, ada, "@alice", "stop", reply_to=deeper["ref"])
 
     assert reset["hops"] == 0
 
@@ -525,9 +638,9 @@ async def test_a_human_message_resets_hops(kernel, ada):
 async def test_a_wake_past_max_hops_is_refused_and_shown_in_attention(kernel, ada, limits):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     first = await send(kernel, ada, "@alice", "go")
-    second = await send(kernel, alice, "@bob", "on", cause=[first["seq"]])
+    second = await send(kernel, alice, "@bob", "on", reply_to=first["ref"])
 
-    third = await send(kernel, bob, "@alice", "too far", cause=[second["seq"]])
+    third = await send(kernel, bob, "@alice", "too far", reply_to=second["ref"])
 
     assert third["hops"] == 2
     refused = of_type(kernel, "wake.refused")
@@ -540,9 +653,9 @@ async def test_a_wake_past_max_hops_is_refused_and_shown_in_attention(kernel, ad
 async def test_a_message_past_max_hops_still_arrives_at_the_next_turn(kernel, limits):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     first = await send(kernel, alice, "@bob", "a")
-    second = await send(kernel, bob, "@alice", "b", cause=[first["seq"]])
+    second = await send(kernel, bob, "@alice", "b", reply_to=first["ref"])
 
-    await send(kernel, alice, "@bob", "c", cause=[second["seq"]])
+    await send(kernel, alice, "@bob", "c", reply_to=second["ref"])
 
     assert gists(await read(kernel, bob, "@bob"))[-1] == "c"
 

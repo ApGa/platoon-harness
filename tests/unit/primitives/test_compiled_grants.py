@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness.kernel import Kernel, ManualClock
+from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.topology.compile import compile
 
-from .support import channel, gists, read, refusal, result_of, send, spawn
+from .support import channel, enroll, gists, read, refusal, result_of, send, spawn
 
 TEAM = """
 [roles.lead]
@@ -109,6 +109,32 @@ async def test_an_ended_child_still_answers_for_itself(team):
 
     assert result_of(team.query(lead, "agent.status", {"agent": "w1"}))["state"] == "ended"
     assert refusal(await team.submit(lead, "message.send", {"to": "@w1", "gist": "there?"})).code == "undeliverable"
+
+
+async def test_a_reply_reaches_only_what_you_can_read(team):
+    lead = await spawn(team, "lead", role="lead")
+    w1, _ = await spawn(team, "w1", by=lead), await spawn(team, "w2", by=lead)
+    sent = await send(team, lead, "@w2", "private", thread="merger")
+
+    denied = await team.submit(w1, "message.send", {"to": "@lead", "gist": "x", "reply_to": sent["ref"]})
+    missing = await team.submit(w1, "message.send", {"to": "@lead", "gist": "x", "reply_to": "inbox/w2@9"})
+
+    assert refusal(denied).code == refusal(missing).code == "not_found"
+    assert refusal(denied).detail.startswith("no message")
+
+
+async def test_only_a_reply_you_may_read_closes_a_mention(team):
+    ada = Principal(id="human:ada")
+    await enroll(team, ada)
+    lead = await spawn(team, "lead", role="lead")
+    w2 = await spawn(team, "w2", by=lead)
+    sent = await send(team, lead, "@ada", "look at this")
+
+    await team.submit(w2, "message.send", {"to": "@lead", "gist": "nothing here", "reply_to": sent["ref"]})
+    assert [row["kind"] for row in result_of(team.query(ada, "attention.list", {}))] == ["mention"]
+
+    await send(team, ada, "@lead", "seen", reply_to=sent["ref"])
+    assert result_of(team.query(ada, "attention.list", {})) == []
 
 
 async def test_any_agent_may_wait_and_finish(team):

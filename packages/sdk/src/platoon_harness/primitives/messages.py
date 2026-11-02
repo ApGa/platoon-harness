@@ -14,19 +14,25 @@ from .channels import Channel, Channels, Groups
 from .common import (
     DIGEST_ITEMS,
     RESULT_LIMIT,
+    WAKING,
+    AgentName,
+    BasedOn,
     BodyRef,
     Exposed,
     Gist,
+    Seq,
+    checked_after,
     decoded,
     expose_read,
     fitted,
     inline_body,
+    size_of,
     stream_of,
 )
 from .sessions import Session
 
 _SCAN_LIMIT = 4096
-_WAKING = ("wake", "steer")
+_VERSION_DIGITS = 18
 _QUEUED = """
     FROM v_deliveries_cursors AS c
     JOIN v_deliveries_audience AS a ON a.reader = c.reader AND a.stream = c.stream AND a.seq > c.offered
@@ -35,7 +41,8 @@ _QUEUED = """
 
 
 class Entry(BaseModel, frozen=True):
-    """One message as readers get it. `sender` is an address to reply to, or `runtime`."""
+    """One message as readers get it. `sender` is an address to reply to, or `runtime`. `monitored` names the children
+    whose monitor has spent this chain's wake."""
 
     seq: int
     ref: str
@@ -46,19 +53,21 @@ class Entry(BaseModel, frozen=True):
     reply_to: str | None = None
     hops: int = 0
     subject: str | None = None
-    monitored: bool = False
+    monitored: tuple[str, ...] = ()
 
     def shown(self) -> dict[str, Any]:
         return self.model_dump(exclude={"monitored"})
 
 
 class Cursor(NamedTuple):
-    """A reader's place in one stream, as seqs. `offered` steps back only when a handover failed."""
+    """A reader's place in one stream, as seqs. `offered` steps back only when a handover failed, and `shown` is how far
+    a tool's result took it, which unlike a handover needs no confirming."""
 
     offered: int = 0
     delivered: int = 0
     acked: int = 0
     closed: bool = False
+    shown: int = 0
 
     def state_of(self, seq: int) -> str:
         """Where one entry stands for this reader. None of these means understood."""
@@ -98,6 +107,7 @@ class Deliveries(View):
         delivered INTEGER NOT NULL DEFAULT 0,
         acked INTEGER NOT NULL DEFAULT 0,
         closed INTEGER NOT NULL DEFAULT 0,
+        shown INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (reader, stream)
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_offers(
@@ -112,7 +122,7 @@ class Deliveries(View):
     CREATE TABLE v_deliveries_heard(
         agent TEXT PRIMARY KEY,
         hops INTEGER NOT NULL,
-        monitored INTEGER NOT NULL
+        monitored TEXT NOT NULL
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
     """
@@ -150,20 +160,23 @@ class Deliveries(View):
     def offered(self, event: Event) -> None:
         data = event.data
         before = {stream: self.cursor(event.agent, stream).offered for stream in data["positions"]}
+        in_a_result = data["how"] in ("read", "notice")
         for stream, seq in data["positions"].items():
             self._touch(event.agent, stream)
             self.db.execute(
-                "UPDATE v_deliveries_cursors SET offered = max(offered, ?) WHERE reader = ? AND stream = ?",
-                (seq, event.agent, stream),
+                "UPDATE v_deliveries_cursors SET offered = max(offered, ?), shown = max(shown, ?) "
+                "WHERE reader = ? AND stream = ?",
+                (seq, seq if in_a_result else 0, event.agent, stream),
             )
         self.db.execute(
             "INSERT INTO v_deliveries_offers VALUES (?, ?, ?, ?, NULL, 0)",
             (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before)),
         )
+        _, spent = self.heard(event.agent) or (0, ())
         self.db.execute(
             "INSERT INTO v_deliveries_heard VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET "
-            "hops = max(hops, excluded.hops), monitored = max(monitored, excluded.monitored)",
-            (event.agent, data["hops"], data["monitored"]),
+            "hops = max(hops, excluded.hops), monitored = excluded.monitored",
+            (event.agent, data["hops"], json.dumps(sorted({*spent, *data["monitored"]}))),
         )
 
     @fold("effect.requested")
@@ -176,16 +189,17 @@ class Deliveries(View):
 
     @fold("effect.failed")
     def handover_failed(self, event: Event) -> None:
-        """What never reached the harness is queued again, unless a newer offer has moved past it."""
+        """What never reached the harness is queued again, even past a newer offer: at-least-once allows the repeat, and
+        the event id dedupes it. Its reservation has come back too, so a refused wake gets another try."""
         row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE effect = ?", (event.data["id"],)).fetchone()
         if row is None:
             return
-        before = json.loads(row["before"])
-        for stream, seq in json.loads(row["positions"]).items():
+        for stream, seq in json.loads(row["before"]).items():
             self.db.execute(
-                "UPDATE v_deliveries_cursors SET offered = ? WHERE reader = ? AND stream = ? AND offered = ?",
-                (before[stream], row["reader"], stream, seq),
+                "UPDATE v_deliveries_cursors SET offered = min(offered, ?) WHERE reader = ? AND stream = ?",
+                (seq, row["reader"], stream),
             )
+        self.db.execute("DELETE FROM v_deliveries_blocked")
 
     @fold("context.delivered")
     def delivered(self, event: Event) -> None:
@@ -219,17 +233,17 @@ class Deliveries(View):
                 "INSERT OR REPLACE INTO v_deliveries_blocked VALUES (?, ?)", (event.agent, event.data["why"])
             )
 
-    @fold("budget.set", "budget.reconciled", "agent.ended")
+    @fold("budget.set", "budget.reconciled", "agent.ended", "turn.lost")
     def unblocked(self, event: Event) -> None:
         """Whatever moved the budget may have made room, so every refused wake gets one more try."""
         self.db.execute("DELETE FROM v_deliveries_blocked")
 
     def cursor(self, reader: str | None, stream: str) -> Cursor:
         row = self.db.execute(
-            "SELECT offered, delivered, acked, closed FROM v_deliveries_cursors WHERE reader = ? AND stream = ?",
+            "SELECT offered, delivered, acked, closed, shown FROM v_deliveries_cursors WHERE reader = ? AND stream = ?",
             (reader, stream),
         ).fetchone()
-        return Cursor() if row is None else Cursor(row["offered"], row["delivered"], row["acked"], bool(row["closed"]))
+        return Cursor() if row is None else Cursor(*row[:3], bool(row["closed"]), row["shown"])
 
     def entries(self, stream: str, reader: str | None, after: int, *, whole: bool) -> Iterator[Entry]:
         """What `reader` may see past `after`. `whole` is the stream, else only entries whose audience held it."""
@@ -253,18 +267,26 @@ class Deliveries(View):
         ).fetchone()
         return None if row is None else Entry.model_validate_json(row["entry"])
 
+    def addressed(self, reader: str, stream: str, seq: int) -> bool:
+        """Whether an entry's recorded audience held this reader."""
+        row = self.db.execute(
+            "SELECT 1 FROM v_deliveries_audience WHERE reader = ? AND stream = ? AND seq = ?", (reader, stream, seq)
+        ).fetchone()
+        return row is not None
+
     def entries_at(self, seqs: Sequence[int]) -> list[Entry]:
         marks = ", ".join("?" * len(seqs))
         rows = self.db.execute(f"SELECT entry FROM v_deliveries WHERE seq IN ({marks})", seqs)
         return [Entry.model_validate_json(row["entry"]) for row in rows]
 
     def depth(self, reader: str, stream: str) -> int:
-        """Entries the reader has not moved past, which is what an inbox cap counts."""
+        """Entries still to reach the reader, which is what an inbox cap counts. One a driver confirmed has reached it,
+        so a harness whose tools are hidden never reads, and its inbox still drains."""
         row = self.db.execute(
             """
             SELECT count(*) AS n FROM v_deliveries_audience
-            WHERE reader = ?1 AND stream = ?2 AND seq > (
-                SELECT coalesce(max(acked), 0) FROM v_deliveries_cursors WHERE reader = ?1 AND stream = ?2
+            WHERE reader = ?1 AND stream = ?2 AND seq > coalesce(
+                (SELECT max(acked, delivered) FROM v_deliveries_cursors WHERE reader = ?1 AND stream = ?2), 0
             )
             """,
             (reader, stream),
@@ -272,9 +294,15 @@ class Deliveries(View):
         return row["n"]
 
     def queued(self, reader: str, modes: Sequence[str]) -> tuple[list[Entry], int]:
-        """The oldest entries the runtime would hand over in these modes, and how many there are in all."""
+        """The oldest entries an offer in these modes hands over, and how many there are in all: on each stream, all up
+        to the newest of those modes, since a cursor cannot pass one left out."""
         marks = ", ".join("?" * len(modes))
-        where = f"WHERE c.reader = ? AND c.closed = 0 AND e.delivery IN ({marks})"
+        where = f"""
+            WHERE c.reader = ? AND c.closed = 0 AND a.seq <= (
+                SELECT max(o.seq) FROM v_deliveries_audience AS o JOIN v_deliveries AS n ON n.seq = o.seq
+                WHERE o.reader = c.reader AND o.stream = c.stream AND n.delivery IN ({marks})
+            )
+        """
         rows = self.db.execute(
             f"SELECT e.entry {_QUEUED} {where} ORDER BY a.seq LIMIT ?", (reader, *modes, DIGEST_ITEMS)
         ).fetchall()
@@ -310,10 +338,10 @@ class Deliveries(View):
                 positions[stream] = entry.seq
         return positions
 
-    def heard(self, agent: str | None) -> tuple[int, bool] | None:
-        """The largest hops offered to this agent's turn, and whether a monitor has spent that chain's wake."""
+    def heard(self, agent: str | None) -> tuple[int, tuple[str, ...]] | None:
+        """The largest hops offered to this agent's turn, and the children whose monitor has spent that chain's wake."""
         row = self.db.execute("SELECT * FROM v_deliveries_heard WHERE agent = ?", (agent,)).fetchone()
-        return None if row is None else (row["hops"], bool(row["monitored"]))
+        return None if row is None else (row["hops"], tuple(json.loads(row["monitored"])))
 
     def blocked(self, agent: str) -> str | None:
         row = self.db.execute("SELECT why FROM v_deliveries_blocked WHERE agent = ?", (agent,)).fetchone()
@@ -361,15 +389,23 @@ def _audience(txn: Txn, stream: str) -> _Reach:
     )
 
 
-def _chain(txn: Txn, cause: Sequence[int], subject: str | None) -> tuple[int, bool]:
-    """One hop more than anything this followed from, and whether a monitor has spent that chain's wake."""
+def chain_of(entries: Sequence[Entry]) -> dict[str, Any]:
+    """What an offer of these entries carries into the turn that hears them."""
+    return {
+        "hops": max((entry.hops for entry in entries), default=0),
+        "monitored": sorted({name for entry in entries for name in entry.monitored}),
+    }
+
+
+def _chain(txn: Txn, cause: Sequence[int], subject: str | None, follows: int) -> tuple[int, tuple[str, ...]]:
+    """One hop more than anything this followed from, and the children whose monitor has spent that chain's wake."""
     if txn.me.kind == "human":
-        return 0, False
+        return 0, ()
     deliveries = txn.view(Deliveries)
-    heard = deliveries.heard(subject or (txn.me.name if txn.me.kind == "agent" else None))
+    heard, spent = deliveries.heard(subject or (txn.me.name if txn.me.kind == "agent" else None)) or (-1, ())
     behind = deliveries.entries_at(cause)
-    hops = [entry.hops for entry in behind] + ([heard[0]] if heard else [])
-    return max(hops, default=-1) + 1, any(entry.monitored for entry in behind) or bool(heard and heard[1])
+    hops = max(follows, heard, *(entry.hops for entry in behind))
+    return hops + 1, tuple(sorted({*spent, *(name for entry in behind for name in entry.monitored)}))
 
 
 def post(
@@ -384,8 +420,10 @@ def post(
     based_on: Sequence[str] = (),
     subject: str | None = None,
     wake: bool = False,
+    follows: int = -1,
 ) -> Event:
-    """Journal one entry for its audience. The runtime posts here too, about a `subject` or to `wake` the reader."""
+    """Journal one entry for its audience. The runtime posts here too, about a `subject` or to `wake` the reader, and
+    `follows` is the hops of what a post follows when no `cause` can say so, as for a wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
@@ -394,11 +432,11 @@ def post(
         if depth >= channel.depth:
             raise Refused("queue_full", {"receipt": "full", "depth": depth, "cap": channel.depth})
 
-    hops, monitored = _chain(txn, cause, subject)
+    hops, spent = _chain(txn, cause, subject, follows)
     max_hops = txn.view(Session).settings().limits.max_hops
     past_hops = max_hops is not None and hops > max_hops
     setting = "wake" if wake else channel.delivery
-    wakes = not past_hops and not (subject is not None and monitored)
+    wakes = not past_hops and subject not in spent
     event = txn.emit(
         "message.sent",
         stream,
@@ -416,15 +454,15 @@ def post(
             "reply_to": reply_to,
             "hops": hops,
             "subject": subject,
-            "monitored": monitored or subject is not None,
+            "monitored": sorted({*spent, subject}) if subject else spent,
             "audience": audience,
             "generation": generation,
-            "delivery": "next-turn" if setting in _WAKING and not wakes else setting,
+            "delivery": "next-turn" if setting in WAKING and not wakes else setting,
             "coalesce": channel.coalesce,
             "mention": human,
         },
     )
-    if setting in _WAKING and past_hops:
+    if setting in WAKING and past_hops:
         ref = f"{event.stream}@{event.version}"
         for reader in audience:
             data = {"why": "hops", "hops": hops, "limit": max_hops, "ref": ref}
@@ -433,34 +471,46 @@ def post(
 
 
 class Send(Args):
-    to: str
+    to: Annotated[str, Field(description="`@agent`, `#channel` or `+group`.")]
     gist: Gist
     body: BodyRef | None = None
-    thread: Annotated[str, Field(max_length=512)] | None = None
-    reply_to: Annotated[str, Field(max_length=512)] | None = None
-    cause: tuple[int, ...] = ()
-    based_on: tuple[str, ...] = ()
+    thread: Annotated[str | None, Field(max_length=512, description="A thread id. `reply_to` sets it for you.")] = None
+    reply_to: Annotated[str | None, Field(max_length=512, description="The `ref` of the entry you answer.")] = None
+    based_on: BasedOn = ()
+
+
+def _reads_whole(txn: Txn, stream: str) -> bool:
+    """Whether the caller reads this stream entire, and not only the entries whose audience held it."""
+    channel = txn.view(Channels).get(stream)
+    return txn.me.kind != "agent" or (channel is not None and channel.history == "full")
 
 
 def _replied(txn: Txn, ref: str) -> Entry:
+    """The entry `ref` names, if the caller may read it. A miss and a denial answer alike, so a ref is no oracle."""
     stream, _, version = ref.partition("@")
-    entry = txn.view(Deliveries).at(stream, int(version)) if version.isdecimal() else None
-    if entry is None:
+    deliveries = txn.view(Deliveries)
+    entry = deliveries.at(stream, int(version)) if version.isdecimal() and len(version) <= _VERSION_DIGITS else None
+    readable = entry is not None and (
+        txn.view(Grants).permits(txn.me, "message.read", stream)
+        and (_reads_whole(txn, stream) or deliveries.addressed(txn.me.name, stream, entry.seq))
+    )
+    if entry is None or not readable:
         raise Refused("not_found", f"no message {ref}")
     return entry
 
 
 @op("message.send", on=lambda a: stream_of(a.to), tool=True)
 def send(txn: Txn, a: Send) -> dict[str, Any]:
-    """Send to `@agent`, `#channel` or `+group`. `gist` is what readers see first; `body` is a stored body's hash. A
-    reply names `reply_to`, a ref from `message.read`, and joins its thread. Refused `not_permitted` when no edge
-    reaches the target: call `peers`. Refused `undeliverable` when the agent has ended, and `queue_full` when its inbox
-    is full: try later or by another route."""
-    thread, cause = a.thread, a.cause
+    """Send to `@agent`, `#channel` or `+group`. `gist`, at most 280 characters, is what readers see first; put anything
+    longer in `body`. To reply, set `to` to the entry's `sender` and `reply_to` to its `ref`. Refused `not_permitted`
+    when you cannot reach the target: call `peers` for agents, `channel.list` for channels. `undeliverable` when the
+    agent has ended: tell someone else. `queue_full` when its inbox is full: try later. `not_found` when `reply_to`
+    names nothing you can read."""
+    thread, cause = a.thread, ()
     if a.reply_to is not None:
         replied = _replied(txn, a.reply_to)
         thread = thread or replied.thread or replied.ref
-        cause = (*cause, replied.seq)
+        cause = (replied.seq,)
     stream = stream_of(a.to)
     event = post(txn, stream, a.gist, body=a.body, thread=thread, reply_to=a.reply_to, cause=cause, based_on=a.based_on)
     data = event.data
@@ -473,21 +523,22 @@ def send(txn: Txn, a: Send) -> dict[str, Any]:
 
 
 def ack(txn: Txn, reader: str, stream: str, upto: int) -> None:
-    """Move past what was offered, clamped to the highest offered, so a made-up number acks nothing unshown."""
+    """Move past what the agent saw: a tool's result, or a handover a driver confirmed. So a made-up number, or a read
+    while an offer is in flight, acks nothing unshown."""
     cursor = txn.view(Deliveries).cursor(reader, stream)
-    upto = min(upto, cursor.offered)
+    upto = min(upto, cursor.offered, max(cursor.shown, cursor.delivered))
     if upto > cursor.acked:
         data = {"stream": stream, "upto": upto}
         txn.emit("message.acked", f"cursor/{reader}", gist=f"{stream} acked to {upto}", agent=reader, data=data)
 
 
 class Read(Args):
-    channel: str
-    after: Annotated[int, Field(ge=0)] | None = None
-    limit: Annotated[int, Field(ge=1, le=DIGEST_ITEMS)] = DIGEST_ITEMS
-    sender: str | None = None
-    thread: str | None = None
-    bodies: bool = False
+    channel: Annotated[str | None, Field(description="`#channel` or `+group`; your own inbox if left out.")] = None
+    after: Annotated[Seq | None, Field(description="A `cursor` from an earlier read.")] = None
+    limit: Annotated[int, Field(ge=1, le=DIGEST_ITEMS, description="The most entries to return.")] = DIGEST_ITEMS
+    sender: Annotated[AgentName | None, Field(description="Only entries from this agent.")] = None
+    thread: Annotated[str | None, Field(description="Only entries of this thread.")] = None
+    bodies: Annotated[bool, Field(description="Add each body's `text` where it fits.")] = False
 
 
 class _Shown(NamedTuple):
@@ -503,43 +554,49 @@ def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
     exposed = [Exposed.of(entry.ref, "gist", entry.gist)]
     if bodies and entry.body is not None:
         data = inline_body(txn, entry.body)
-        text = decoded(data) if data is not None and len(data) <= RESULT_LIMIT else None
-        if data is not None and text is not None:
+        text = None if data is None else decoded(data)
+        if data is not None and text is not None and size_of({**row, "text": text}) <= RESULT_LIMIT:
             row["text"] = text
             exposed.append(Exposed.of(entry.body, "body", data))
     return _Shown(entry, row, exposed)
 
 
-@op("message.read", on=lambda a: stream_of(a.channel), exposes=True, tool=True)
+@op("message.read", on=lambda a: None, exposes=True, tool=True)
 def read(txn: Txn, a: Read) -> dict[str, Any]:
-    """Read `@you`, `#channel` or `+group` from where you left off. Passing `after` acks up to it and reads past it.
-    `sender` and `thread` filter, and a filtered read leaves unread what it skipped. `bodies` adds bodies, recorded
-    apart from gists. `behind` counts what is left. Refused `not_permitted` when you do not read this channel: call
-    `channel.list`."""
-    stream = stream_of(a.channel)
+    """Read your inbox, or `#channel` or `+group`, from where you left off. Passing `after`, a `cursor` from an earlier
+    read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it
+    skipped. `bodies` adds body `text` where it fits, recorded apart from gists; a body too long keeps only its hash.
+    `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel: call
+    `channel.list`. `invalid` for an `after` past every event: leave it out."""
+    stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
+    txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)
-    channel = txn.view(Channels).get(stream)
     reader = txn.me.name if txn.me.kind == "agent" else None
-    whole = reader is None or (channel is not None and channel.history == "full")
-    start = deliveries.cursor(reader, stream).offered if a.after is None else a.after
+    whole = _reads_whole(txn, stream)
+    after = checked_after(txn, a.after)
+    start = deliveries.cursor(reader, stream).offered if after is None else after
     if reader is not None:
         ack(txn, reader, stream, start)
 
     def wanted(entry: Entry) -> bool:
         in_thread = a.thread is None or a.thread in (entry.thread, entry.ref)
-        return in_thread and (a.sender is None or entry.sender == a.sender)
+        return in_thread and (a.sender is None or a.sender in (entry.sender.removeprefix("@"), entry.subject))
 
-    scanned = islice(deliveries.entries(stream, reader, start, whole=whole), _SCAN_LIMIT)
-    matching = islice(filter(wanted, scanned), a.limit)
+    def window(past: int) -> Iterator[Entry]:
+        return islice(deliveries.entries(stream, reader, past, whole=whole), _SCAN_LIMIT)
+
+    matching = islice(filter(wanted, window(start)), a.limit)
     shown = fitted((_show(txn, entry, bodies=a.bodies) for entry in matching), show=lambda item: item.row)
     entries = [item.entry for item in shown]
     expose_read(
         txn,
         [exposed for item in shown for exposed in item.exposed],
         positions=None if reader is None else deliveries.stops(reader, entries, whole=whole),
-        hops=max((entry.hops for entry in entries), default=0),
-        monitored=any(entry.monitored for entry in entries),
+        **chain_of(entries),
     )
     cursor = entries[-1].seq if entries else start
-    behind = sum(1 for _ in islice(deliveries.entries(stream, reader, cursor, whole=whole), _SCAN_LIMIT))
-    return {"entries": [item.row for item in shown], "cursor": cursor, "behind": behind}
+    left = list(window(cursor))
+    if not entries and len(left) == _SCAN_LIMIT:  # A whole window matched nothing, so go on from past it.
+        cursor = left[-1].seq
+        left = list(window(cursor))
+    return {"entries": [item.row for item in shown], "cursor": cursor, "behind": len(left)}

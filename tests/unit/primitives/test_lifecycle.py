@@ -174,7 +174,7 @@ async def test_ended_is_one_event_every_view_folds(kernel, ada, op):
 
     ended = of_type(kernel, "agent.ended", after=head)
     assert len(ended) == 1
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": wait["id"]})) is None
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": wait["id"]}))["state"] == "cancelled"
     assert result_of(kernel.query(kernel.runtime, "task.list", {"queue": "work"}))["tasks"][0]["state"] == "open"
     assert result_of(kernel.query(ada, "attention.list", {})) == []
     assert refusal(await kernel.submit(bob, "message.read", {"channel": "@bob"})).code == "not_permitted"
@@ -416,6 +416,25 @@ async def test_the_monitor_wakes_at_most_once_per_causal_chain(kernel):
     assert second.seq > reply["seq"] and second.data["delivery"] == "next-turn"
 
 
+async def test_a_second_child_still_reports_back_with_a_wake(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    c1, c2 = await spawn(kernel, "c1", by=lead), await spawn(kernel, "c2", by=lead)
+    await send(kernel, lead, "@c1", "step one")
+    await start_turn(kernel, "c1")
+    await read(kernel, c1, "@c1")
+    await end_turn(kernel, "c1")
+    await start_turn(kernel, "lead")
+    await read(kernel, lead, "@lead")
+    await send(kernel, lead, "@c2", "step two")
+    await end_turn(kernel, "lead")
+    await start_turn(kernel, "c2")
+    await read(kernel, c2, "@c2")
+
+    await end_turn(kernel, "c2")
+
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "wake"
+
+
 async def test_a_new_human_message_starts_a_new_chain(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
     bob = await spawn(kernel, "bob", by=lead)
@@ -433,8 +452,8 @@ async def test_the_monitor_stops_at_max_hops(kernel, limits):
     lead = await spawn(kernel, "lead", role="lead")
     bob = await spawn(kernel, "bob", by=lead)
     first = await send(kernel, lead, "@bob", "go")
-    second = await send(kernel, bob, "@lead", "on", cause=[first["seq"]])
-    third = await send(kernel, lead, "@bob", "on", cause=[second["seq"]])
+    second = await send(kernel, bob, "@lead", "on", reply_to=first["ref"])
+    third = await send(kernel, lead, "@bob", "on", reply_to=second["ref"])
     await start_turn(kernel, "bob")
     await read(kernel, bob, "@bob", after=0)
     head = kernel.head
@@ -490,7 +509,38 @@ async def test_settled_means_no_turn_no_delivery_no_effect_and_no_due_timer(kern
 async def test_an_open_effect_unsettles(kernel):
     result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawning("bob")))
 
-    assert status(kernel)["blockers"] == ["open_effect"]
+    assert "open_effect" in status(kernel)["blockers"]
+
+
+async def test_an_agent_on_its_way_to_a_turn_unsettles(kernel):
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawning("bob")))
+    await settle_effects(kernel, "bob")
+    assert status(kernel)["blockers"] == ["starting_agent"]
+
+    await report(kernel, "bob", "ready")
+    await send(kernel, kernel.runtime, "@bob", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await settle_effects(kernel, "bob")
+
+    assert status(kernel)["blockers"] == ["starting_agent"]
+
+
+async def test_a_coalesced_wake_unsettles_before_it_falls_due(kernel):
+    await channel(kernel, "t", delivery="wake", coalesce=5.0)
+    await grant(kernel, "agent")
+    await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(kernel.runtime, "message.send", {"to": "#t", "gist": "soon"}))
+
+    assert status(kernel)["blockers"] == ["deliverable_delivery"]
+
+
+async def test_a_wait_with_a_deadline_to_come_does_not_unsettle(kernel):
+    bob = await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(bob, "wait", {"on": [{"stream": "agent/ghost"}], "timeout": 60.0}))
+
+    assert status(kernel)["settled"]
 
 
 async def test_an_open_turn_unsettles(kernel):

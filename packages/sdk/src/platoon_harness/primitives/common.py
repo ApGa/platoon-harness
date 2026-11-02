@@ -2,18 +2,28 @@
 
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from hashlib import sha256
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Refused, Tombstones, Txn
+from platoon_harness.kernel import GIST_LIMIT, NAME, Refused, Stamps, Tombstones, Txn
+
+
+def _bare(name: str) -> str:
+    return name.removeprefix("@").removeprefix("agent:")
+
 
 Name = Annotated[str, Field(pattern=f"^{NAME}$", max_length=128)]
-Gist = Annotated[str, Field(max_length=GIST_LIMIT)]
-BodyRef = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+AgentName = Annotated[str, Field(pattern=f"^(@|agent:)?{NAME}$", max_length=134), AfterValidator(_bare)]
+Gist = Annotated[str, Field(max_length=GIST_LIMIT, description="What readers see first, at most 280 characters.")]
+BodyRef = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$", description="Anything longer than the gist.")]
+Seq = Annotated[int, Field(ge=0, lt=2**63)]
+BasedOn = Annotated[tuple[str, ...], Field(description="Refs this rests on, such as a `ref` you read.")]
 Delivery = Literal["pull", "next-turn", "wake", "steer"]
+
+WAKING: tuple[Delivery, ...] = ("wake", "steer")
 
 DIGEST_ITEMS = 32
 RESULT_LIMIT = (
@@ -30,6 +40,19 @@ def stream_of(address: str) -> str:
     if match is None:
         raise Refused("invalid", f"an address is @agent, #channel or +group, not {address[:64]!r}")
     return _STREAMS[match[1]] + match[2]
+
+
+def address(principal: str) -> str:
+    """A principal id as an address: `agent:alice` is `@alice`, and the runtime has none."""
+    kind, colon, name = principal.partition(":")
+    return f"@{name}" if colon else kind
+
+
+def checked_after(txn: Txn, after: int | None) -> int | None:
+    """`after` as given. Past the head it is no cursor, and reading from it would hide what is unread."""
+    if after is not None and after > txn.view(Stamps).head():
+        raise Refused("invalid", f"`after` {after} is past every event: leave it out to go on from where you left off")
+    return after
 
 
 def size_of(value: Any) -> int:
@@ -86,7 +109,7 @@ def expose(
     boundary: str,
     positions: dict[str, int] | None = None,
     hops: int = 0,
-    monitored: bool = False,
+    monitored: Sequence[str] = (),
 ) -> int:
     """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input."""
     event = txn.emit(

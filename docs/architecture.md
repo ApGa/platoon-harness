@@ -469,12 +469,16 @@ Each statement here is a promise with a test.
 - **Order.** Total per stream. Nothing is promised across streams.
 - **Delivery.** At-least-once to the driver, deduped by event id. Delivery states are `offered` (the runtime handed it
   over), `delivered` (the driver confirmed injection; this is observed exposure), `acked` (the agent's next read or
-  wait moved past it). None means understood. A handover that fails is queued again and offered under a new input.
+  wait moved past it). None means understood. A handover that fails is queued again and offered under a new input, even past a
+  newer offer: at-least-once allows the repeat, and the event id dedupes it.
 - **Cursors** are per `(reader, stream)` and held by the server. An omitted `after` means the reader's server-held
-  cursor, never the head. `after=n` acks up to `n`, clamped to the highest offered, so a hallucinated number acks
-  nothing unshown. A cut-off wait confirms nothing. A filtered read never moves past what it left out. A cursor is a `seq`,
-  so one `after` covers every stream of a wait. The server-held cursor is the end of the unbroken run offered, and reading
-  from it acks that run. A human or a program holds none and reads from `after`.
+  cursor, never the head. `after=n` acks up to `n`, clamped to what the agent was shown, in a tool's result or by a handover a
+  driver confirmed, so a hallucinated number or a read during a handover acks nothing unshown. A number past the head is no cursor,
+  and reading from it would hide what is unread, so it is refused `invalid`. A cut-off wait confirms nothing. A filtered read never
+  moves past what it left out. A cursor is a `seq`, so one `after` covers every stream of a wait. The server-held cursor is the end
+  of the unbroken run offered, and reading from it acks what was shown of that run. An offer hands over everything up to the newest
+  entry it wants on a stream, even entries its mode would leave, so the cursor always moves. A human or a program holds none and
+  reads from `after`.
 - **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience, and a sender
   is not in its own. Late joiners see history only if the channel says `history = "full"`.
 - **Entries** are a capped `gist` plus an optional body. A digest shows gists. Exposure of a gist is recorded separately
@@ -486,13 +490,16 @@ and an agent creating a channel stops at `next-turn`.
 `tool`, then `model_call`, then `turn`. Tool results of coordination ops also carry pending `steer` notices, which gives
 a tool boundary on any harness whose tools are visible. `coalesce` merges wakes into one turn.
 
-**Hop limit.** Every message carries `hops`, one more than the largest in its `cause` or offered to its turn, since a model
-will not pass `cause`; a human message resets it. A wake past `max_hops` is refused and shown in attention, and the message waits
-for the next turn. This bounds reply loops that budgets only make expensive.
+**Hop limit.** Every message carries `hops`, one more than the largest of what it replies to or what was offered to its turn, so a
+model need not say. A human message resets it. A program has no turn, so its message starts a chain unless it names `reply_to`. A
+wait's notice is one more than what its waiter had heard when it placed the wait, so a loop through a board counts too. A wake past
+`max_hops` is refused and shown in attention, and the message waits for the next turn. This bounds reply loops that budgets only
+make expensive.
 
 **The monitor.** `spawn` installs a monitor. When an agent finishes, or a turn ends with no `finish` and no open wait,
 the runtime posts the turn's final text to the spawning parent's inbox, as a runtime-authored event naming the child as
-subject. It wakes at most once per causal chain and stops at `max_hops`; past either, its message waits for the next turn.
+subject. It wakes at most once per causal chain for each child, so a reply to the same child cannot loop while a second worker
+still reports back, and it stops at `max_hops`; past either, its message waits for the next turn.
 So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
 
 ### Boards
@@ -526,18 +533,23 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 ```
 
 - Check and registration are one transaction from `after`, so the read-then-subscribe race cannot exist.
-- `Waits` folds progress (`have`, `need`, `missing`), which is what the UI shows. `n` counts events. With `distinct`, naming
-  an envelope field, it counts different values, and it may list them, so `n=members` can say who is `missing`.
+- `Waits` folds progress (`have`, `need`, `missing`), which is what the UI shows, and how each wait closed. `n` counts events
+  that are news to the waiter: not its own, and no entry it was never meant to see, so a wait for an answer cannot end on the
+  question. With `distinct`, naming an envelope field, it counts different values, its own too, and it may list them, so
+  `n=members` can say who is `missing`.
 - **One open wait per agent.** Another `wait` replaces it, so a model tracks no ids. A program may hold several.
 - **A wait outlives its turn.** While the agent's turn runs its wait stays open, even once it holds. The runtime closes it when
   the turn ends, so a wake cannot race the turn it follows. A `timeout` closes it the same way and acks nothing.
 - **Parks by default.** The tool result says the wait is registered and to end the turn. When the turn ends the agent is
   `waiting`. When the condition holds, the runtime starts the next turn with its delivery attached. If the model keeps
   working, the wait stays open and nothing breaks.
-- **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending` with a cursor; the
-  agent may call again. A one-shot driver cannot park, so `wait` beyond `hold` is refused `unsupported` with the reason.
-- **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`) and compile to `on(...)`, so a model never learns
-  stream names. `from` counts by subject, so a monitor's report counts as its child's. The Python sugar is `lead.finished()`.
+- **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending`; the agent may call again,
+  and each stream resumes from its own cursor, so nothing is counted twice. A one-shot driver cannot park, so `wait` beyond `hold`
+  is refused `unsupported` with the reason.
+- **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`, `channels`, `queue`) and compile to `on(...)`, which no tool
+  schema shows, so a model never learns stream names. `from` counts by subject, so a monitor's report counts as its child's, and a
+  human or a program by name. `queue` holds on the oldest open task, or else wherever the next will land, so a task added after
+  `queue_empty` cannot slip by. The Python sugar is `lead.finished()`.
 - A parked agent whose harness cannot resume is `lost` through the normal ended transition.
 
 **Barrier** is library code: a topic plus `wait(on(..., n=members, distinct="actor"))`, with member snapshot and generation
@@ -560,8 +572,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 
 ### Completion
 
-`settled` means, checkably: no open turn, no deliverable delivery, no requested or started effect, no due timer. A wait the
-runtime could close counts as a deliverable delivery. A human
+`settled` means, checkably: no agent on its way to a turn, no open turn, no deliverable delivery, no requested or started effect,
+no due timer. A wait the runtime could close counts as a deliverable delivery, and so does a wake not yet due. A human
 message can un-settle a session. Only `close` ends it. `until` picks when a headless session closes: `"settled"`,
 `"role:lead"` or `"program"`. All stop at budget exhaustion. A team with no root uses `"settled"`.
 

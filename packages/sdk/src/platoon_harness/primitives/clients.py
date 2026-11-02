@@ -164,8 +164,8 @@ def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]
     if agent.state == "waiting" and (waits := txn.view(Waits).open_for(agent.id)):
         wait = waits[0]
         missing = wait.missing
-        if len(missing) == 1 and missing[0].startswith("agent/"):
-            return why.Peer(id=missing[0].removeprefix("agent/"))
+        if len(missing) == 1 and missing[0].startswith("@"):
+            return why.Peer(id=missing[0].removeprefix("@"))
         return why.Wait(have=wait.have, need=wait.need, missing=missing)
     if agent.name in dues:
         return why.Timer(at=dues[agent.name])

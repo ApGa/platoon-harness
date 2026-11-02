@@ -3,10 +3,11 @@
 import asyncio
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from platoon_harness.kernel import Kernel, ManualClock
+from platoon_harness.kernel import Kernel, ManualClock, Principal, Refused
 from platoon_harness.primitives import PRIMITIVES, hold_open, on
 from platoon_harness.primitives.waits import wait_for as PRIMITIVE_WAIT
 
@@ -15,6 +16,7 @@ from .support import (
     agent,
     channel,
     end_turn,
+    enroll,
     gists,
     grant,
     of_type,
@@ -23,6 +25,7 @@ from .support import (
     report,
     result_of,
     send,
+    settle_effects,
     spawn,
     start_turn,
 )
@@ -85,7 +88,7 @@ async def test_a_join_waits_for_every_condition(kernel):
     assert released(kernel) == []
 
     shown = result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))
-    assert (shown["have"], shown["need"], shown["missing"]) == (1, 2, ["agent/w2"])
+    assert (shown["have"], shown["need"], shown["missing"]) == (1, 2, ["@w2"])
 
     result_of(await kernel.submit(w2, "agent.finish", {}))
     assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["holds"]
@@ -166,10 +169,164 @@ async def test_tool_arguments_are_friendly_for_senders(kernel):
     await send(kernel, w1, "@lead", "one")
 
     shown = result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))
-    assert (shown["have"], shown["missing"]) == (1, ["w2"])
+    assert (shown["have"], shown["missing"]) == (1, ["@w2"])
 
     await send(kernel, w2, "@lead", "two")
     assert released(kernel) == [placed["id"]]
+
+
+async def test_any_of_several_senders_is_enough(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    w1, _ = await spawn(kernel, "w1"), await spawn(kernel, "w2")
+    placed = result_of(await kernel.submit(lead, "wait", {"from": ["w1", "w2"], "mode": "any"}))
+    assert placed["need"] == 1
+
+    await send(kernel, w1, "@lead", "one")
+
+    shown = result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))
+    assert shown["holds"] and (shown["have"], shown["need"], shown["missing"]) == (1, 1, [])
+
+
+async def test_any_shows_the_condition_nearest_to_holding(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    w1 = await spawn(kernel, "w1")
+    await spawn(kernel, "w2")
+    await send(kernel, w1, "@lead", "one")
+
+    asked = condition("inbox/lead", n=3), condition("agent/w2", types=["agent.ended"])
+
+    shown = await wait(kernel, lead, *asked, mode="any")
+
+    assert (shown["have"], shown["need"]) == (0, 1)
+
+
+async def test_a_wait_on_a_human_counts_their_message(kernel, ada):
+    bob = await spawn(kernel, "bob")
+    placed = result_of(await kernel.submit(bob, "wait", {"from": ["@ada"]}))
+
+    await send(kernel, ada, "@bob", "here")
+
+    assert released(kernel) == [placed["id"]]
+
+
+async def test_a_waiters_own_post_does_not_satisfy_its_wait(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await channel(kernel, "t")
+    await send(kernel, alice, "#t", "anyone there?")
+
+    assert (await wait(kernel, alice, condition("channel/t")))["state"] == "parked"
+
+
+async def test_a_waiters_own_revision_does_not_satisfy_its_wait(kernel):
+    alice = await spawn(kernel, "alice")
+    await channel(kernel, "notes", kind="board")
+    result_of(await kernel.submit(alice, "board.post", {"board": "notes", "name": "spec", "gist": "v1"}))
+
+    assert result_of(await kernel.submit(alice, "wait", {"board": ["notes/spec"]}))["state"] == "parked"
+
+
+async def test_an_entry_from_before_a_reader_joined_is_no_news(kernel):
+    alice = await spawn(kernel, "alice")
+    await channel(kernel, "t")
+    await send(kernel, alice, "#t", "before bob")
+    bob = await spawn(kernel, "bob")
+
+    assert (await wait(kernel, bob, condition("channel/t")))["state"] == "parked"
+
+
+async def test_a_barrier_counts_its_own_arrival(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "gate")
+    await send(kernel, alice, "#gate", "here")
+    await send(kernel, bob, "#gate", "here")
+
+    placed = await wait(kernel, alice, condition("channel/gate", n=["agent:alice", "agent:bob"], distinct="actor"))
+
+    assert placed["state"] == "released"
+
+
+async def test_friendly_channels_name_no_stream(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "t")
+    placed = result_of(await kernel.submit(bob, "wait", {"channels": ["#t"]}))
+    assert placed["missing"] == ["#t"]
+
+    await send(kernel, alice, "#t", "news")
+
+    assert released(kernel) == [placed["id"]]
+
+
+async def test_a_wait_names_what_is_missing_as_a_model_would(kernel):
+    bob = await spawn(kernel, "bob")
+    await spawn(kernel, "w1")
+    await channel(kernel, "notes", kind="board")
+    await channel(kernel, "q", kind="queue")
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "x"}))
+    asked = {"agents": ["w1"], "tasks": ["q/1"], "board": ["notes/spec"]}
+
+    placed = result_of(await kernel.submit(bob, "wait", asked))
+
+    assert placed["missing"] == ["@w1", "q/1", "notes/spec"]
+
+
+async def test_on_is_for_programs_and_not_in_a_tools_schema():
+    assert "on" not in PRIMITIVE_WAIT.input.model_json_schema()["properties"]
+
+
+async def test_an_undeclared_name_for_from_is_refused(kernel):
+    bob = await spawn(kernel, "bob")
+
+    assert refusal(await kernel.submit(bob, "wait", {"senders": ["alice"]})).code == "invalid"
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 2}])
+async def test_a_loop_through_a_wait_stops_at_max_hops(kernel, limits):
+    await channel(kernel, "notes", kind="board")
+    result_of(await kernel.submit(kernel.runtime, "board.post", {"board": "notes", "name": "spec", "gist": "v1"}))
+    alice = await spawn(kernel, "alice")
+    hops = []
+    for version in range(1, 6):
+        await start_turn(kernel, "alice", f"t{version}")
+        await wait(kernel, alice, condition("board/notes/spec", types=["board.revised"]), after=kernel.head)
+        await end_turn(kernel, "alice")
+        revision = {"board": "notes", "name": "spec", "gist": "v", "expected_version": version}
+        result_of(await kernel.submit(kernel.runtime, "board.revise", revision))
+        result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": released(kernel)[0]}))
+        hops.append(of_type(kernel, "message.sent")[-1].data["hops"])
+        if not result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"]:
+            break
+        result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "alice"}))
+        await settle_effects(kernel, "alice")
+
+    assert hops == [0, 1, 2, 3]
+    assert [event.data["why"] for event in of_type(kernel, "wake.refused")] == ["hops"]
+
+
+async def test_a_worker_waits_for_work_on_an_empty_queue(kernel):
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "q", kind="queue")
+    assert refusal(await kernel.submit(bob, "task.claim", {"queue": "q"})).code == "queue_empty"
+
+    placed = result_of(await kernel.submit(bob, "wait", {"queue": ["q"]}))
+    assert placed["state"] == "parked"
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "work"}))
+
+    assert released(kernel) == [placed["id"]]
+
+
+async def test_a_wait_for_work_holds_at_once_when_there_is_some(kernel):
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "q", kind="queue")
+    result_of(await kernel.submit(bob, "task.add", {"queue": "q", "gist": "my own"}))
+
+    assert result_of(await kernel.submit(bob, "wait", {"queue": ["q"]}))["state"] == "released"
+
+
+async def test_a_wait_for_work_on_no_queue_is_refused(kernel):
+    bob = await spawn(kernel, "bob")
+
+    assert refusal(await kernel.submit(bob, "wait", {"queue": ["nope"]})).code == "not_found"
 
 
 async def test_a_monitor_report_counts_as_a_message_from_the_child(kernel):
@@ -319,7 +476,7 @@ async def test_a_parked_agent_whose_harness_cannot_resume_is_lost(kernel):
     await report(kernel, "bob", "exited", reason="cannot resume")
 
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["status"] == "lost"
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]})) is None
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "cancelled"
 
 
 # Timeouts and cut-off waits.
@@ -401,7 +558,40 @@ async def test_wait_cancel_closes_only_your_own_wait(kernel):
     assert refusal(await kernel.submit(alice, "wait.cancel", {"id": placed["id"]})).code == "not_found"
     result_of(await kernel.submit(bob, "wait.cancel", {"id": placed["id"]}))
 
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]})) is None
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "cancelled"
+    assert refusal(await kernel.submit(bob, "wait.cancel", {"id": placed["id"]})).code == "not_found"
+
+
+async def test_wait_ids_default_to_your_open_wait(kernel):
+    bob = await spawn(kernel, "bob")
+    placed = await wait(kernel, bob, condition("inbox/bob"))
+
+    assert result_of(kernel.query(bob, "wait.progress", {}))["id"] == placed["id"]
+    result_of(await kernel.submit(bob, "wait.cancel", {}))
+
+    assert result_of(kernel.query(bob, "wait.progress", {})) is None
+
+
+async def test_wait_progress_shows_only_your_wait(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    placed = await wait(kernel, bob, condition("inbox/bob"))
+
+    assert result_of(kernel.query(alice, "wait.progress", {"id": placed["id"]})) is None
+
+
+async def test_a_wait_is_left_open_for_an_agent_back_in_a_turn(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    asked = condition("agent/alice", types=["agent.ended"])
+    placed = await wait(kernel, bob, asked)
+    result_of(await kernel.submit(alice, "agent.finish", {}))
+    assert released(kernel) == [placed["id"]]
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "open"
+    await end_turn(kernel, "bob")
+    assert released(kernel) == [placed["id"]]
 
 
 async def test_an_agent_holds_one_open_wait(kernel):
@@ -410,8 +600,8 @@ async def test_an_agent_holds_one_open_wait(kernel):
 
     second = await wait(kernel, bob, condition("inbox/bob", n=2))
 
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": first["id"]})) is None
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": second["id"]})) is not None
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": first["id"]}))["state"] == "cancelled"
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": second["id"]}))["state"] == "open"
 
 
 async def test_ending_an_agent_cancels_its_waits(kernel):
@@ -420,7 +610,7 @@ async def test_ending_an_agent_cancels_its_waits(kernel):
 
     result_of(await kernel.submit(bob, "agent.finish", {}))
 
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]})) is None
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "cancelled"
 
 
 async def test_wait_release_is_a_runtime_op(kernel):
@@ -440,7 +630,7 @@ async def test_hold_keeps_a_call_open_and_returns_when_the_wait_holds(kernel, cl
     assert placed["state"] == "pending"
     head = kernel.head
 
-    held = asyncio.create_task(hold_open(kernel, kernel.runtime, placed))
+    held = asyncio.create_task(hold_open(kernel, placed))
     await clock.sleeping()
     await send(kernel, alice, "@bob", "in time")
 
@@ -448,18 +638,69 @@ async def test_hold_keeps_a_call_open_and_returns_when_the_wait_holds(kernel, cl
     assert of_type(kernel, "agent.woken", after=head) == []
 
 
-async def test_hold_returns_pending_with_a_cursor_on_expiry(kernel, clock):
+async def test_hold_returns_pending_on_expiry(kernel, clock):
     bob = await spawn(kernel, "bob", ready={"tool_timeout_s": 300.0})
     await start_turn(kernel, "bob")
     placed = await wait(kernel, bob, condition("inbox/bob"), hold=20.0)
 
-    held = asyncio.create_task(hold_open(kernel, kernel.runtime, placed))
+    held = asyncio.create_task(hold_open(kernel, placed))
     await clock.sleeping()
     clock.advance(20)
     result = await held
 
-    assert result["state"] == "pending" and result["cursor"] == placed["cursor"]
-    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]})) is not None
+    assert result["state"] == "pending"
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "open"
+
+
+async def test_a_pending_wait_called_again_recounts_nothing(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "a")
+    await channel(kernel, "b")
+    await send(kernel, alice, "#a", "already read")
+    await read(kernel, bob, "#a")
+    streams = condition("channel/a"), condition("channel/b")
+
+    first = await wait(kernel, bob, *streams, mode="any", hold=1.0)
+    again = await wait(kernel, bob, *streams, mode="any", hold=1.0)
+
+    assert first["state"] == again["state"] == "pending" and "cursor" not in first
+
+
+@pytest.mark.parametrize(("close", "state"), [("wait.cancel", "cancelled"), (None, "expired")])
+async def test_hold_says_how_a_wait_closed(kernel, clock, close, state):
+    program = Principal(id="program:p")
+    await enroll(kernel, program)
+    await grant(kernel, "program")
+    asked = {"on": [condition("agent/ghost", types=["agent.ended"])], "timeout": 1.0, "hold": 5.0}
+    placed = result_of(await kernel.submit(program, "wait", asked))
+    if close:
+        result_of(await kernel.submit(program, close, {"id": placed["id"]}))
+    else:
+        clock.advance(2.0)
+        result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+
+    assert (await hold_open(kernel, placed))["state"] == state
+
+
+async def test_hold_keeps_a_live_wait_for_a_caller_whose_scopes_hide_its_progress(kernel, clock):
+    lead = await spawn(kernel, "lead", role="narrow")
+    await spawn(kernel, "w1")
+    placed = result_of(await kernel.submit(lead, "wait", {"agents": ["w1"], "hold": 5.0}))
+
+    held = asyncio.create_task(hold_open(kernel, placed))
+    await clock.sleeping()
+    clock.advance(5)
+
+    assert (await held)["state"] == "pending"
+
+
+async def test_hold_says_so_when_the_kernel_closes_under_it(kernel):
+    bob = await spawn(kernel, "bob")
+    placed = await wait(kernel, bob, condition("inbox/bob"), hold=5.0)
+    kernel.close()
+
+    with pytest.raises(Refused):
+        await hold_open(kernel, placed)
 
 
 async def test_hold_stays_below_the_harness_tool_timeout(kernel):

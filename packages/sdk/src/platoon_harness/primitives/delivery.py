@@ -3,17 +3,18 @@
 import asyncio
 from typing import Any, Literal, NamedTuple
 
-from platoon_harness.kernel import Args, Daemon, Kernel, Refused, Txn, op
+from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, op
 
 from .agents import Agent, Agents
 from .budgets import reserve
-from .common import Exposed, Name, expose, fitted
-from .messages import Deliveries, Entry
+from .common import Exposed, Name, Seq, expose, fitted
+from .messages import Deliveries, Entry, chain_of
 from .sessions import Session
-from .waits import OpenWait, Waits
+from .waits import WaitRecord, Waits, out_of_turn
 
 _RETRY_SECONDS = 1.0
 _ATTACHED = ("next-turn", "wake", "steer")
+_SPAWN_STEPS = ("admit", "workspace", "launch")
 
 
 def _steerable(agent: Agent) -> str | None:
@@ -22,19 +23,33 @@ def _steerable(agent: Agent) -> str | None:
 
 
 class Work(NamedTuple):
-    """What the runtime could do now: agents to hand entries to, waits to close, and when more falls due."""
+    """What the runtime could do now: agents to hand entries to, waits to close and spawns to end. Then the agents with
+    a wake to come, and when more falls due."""
 
     agents: list[str]
-    waits: list[OpenWait]
+    waits: list[WaitRecord]
+    stranded: list[str]
+    later: list[str]
     due: float | None
+
+
+def _stranded(txn: Txn) -> list[str]:
+    """Agents still spawning whose admit, workspace or launch failed: what depended on it will never start."""
+    agents = txn.view(Agents)
+    failed = {effect.agent for effect in txn.view(Effects).in_state("failed") if effect.kind in _SPAWN_STEPS}
+    return sorted(
+        name for name in failed if name is not None and (agent := agents.get(name)) and agent.state == "spawning"
+    )
 
 
 def work(txn: Txn) -> Work:
     """The courier's input, and what `settled` asks about. A wait stays open while its agent's turn runs."""
+    stranded = _stranded(txn)
     if not txn.view(Session).accepting():
-        return Work([], [], None)
+        return Work([], [], stranded, [], None)
     agents = txn.view(Agents)
     ready: list[str] = []
+    later: list[str] = []
     dues: list[float] = []
     for reader, due, steer in txn.view(Deliveries).waking():
         agent = agents.get(reader)
@@ -45,18 +60,13 @@ def work(txn: Txn) -> Work:
         if due <= txn.now:
             ready.append(reader)
         else:
+            later.append(reader)
             dues.append(due)
     closing, deadline = txn.view(Waits).closing(txn.now)
-    waits = [wait for wait in closing if _released_now(agents, wait)]
+    waits = [wait for wait in closing if out_of_turn(txn, wait.waiter)]
     if deadline is not None:
         dues.append(deadline)
-    return Work(ready, waits, min(dues, default=None))
-
-
-def _released_now(agents: Agents, wait: OpenWait) -> bool:
-    kind, _, name = wait.waiter.partition(":")
-    agent = agents.get(name) if kind == "agent" else None
-    return agent is None or agent.state in ("idle", "waiting")
+    return Work(ready, waits, stranded, later, min(dues, default=None))
 
 
 class Offer(Args):
@@ -77,8 +87,7 @@ def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how:
         how=how,
         boundary=boundary,
         positions=deliveries.stops(agent, shown),
-        hops=max(entry.hops for entry in shown),
-        monitored=any(entry.monitored for entry in shown),
+        **chain_of(shown),
     )
     return {
         "input": input,
@@ -132,7 +141,7 @@ def offer(txn: Txn, a: Offer) -> dict[str, Any] | None:
 
 
 class Confirm(Args):
-    input: int
+    input: Seq
     boundary: str | None = None
     evidence: str | None = None
 
@@ -160,15 +169,18 @@ def confirm(txn: Txn, a: Confirm) -> None:
 def delivery_ready(txn: Txn, a: Args) -> dict[str, Any]:
     """List what the courier could do now."""
     found = work(txn)
-    return {"agents": found.agents, "waits": [wait.id for wait in found.waits], "due": found.due}
+    waits = [wait.id for wait in found.waits]
+    return {"agents": found.agents, "waits": waits, "stranded": found.stranded, "due": found.due}
 
 
 async def _pass(kernel: Kernel) -> float | None:
     """One level-triggered pass, returning when to look again if nothing commits first."""
     runtime = kernel.runtime
     found = kernel.query(runtime, "delivery.ready", {}).result
+    ended = {"type": "exited", "reason": "its spawn failed"}
     commands = [("wait.release", {"id": id}) for id in found["waits"]]
     commands += [("delivery.offer", {"agent": agent}) for agent in found["agents"]]
+    commands += [("agent.report", {"agent": agent, "report": ended}) for agent in found["stranded"]]
     for name, args in commands:
         outcome = await kernel.submit(runtime, name, args)
         if outcome.refusal is not None:

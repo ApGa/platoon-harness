@@ -416,10 +416,12 @@ def peers(txn: Txn, a: Args) -> list[dict[str, Any]]:
 def _blockers(txn: Txn) -> list[str]:
     """What stands between this session and `settled`: each clause of its definition, checked."""
     found: list[str] = []
+    if any(agent.state in ("spawning", "waking") for agent in txn.view(Agents).live()):
+        found.append("starting_agent")
     if txn.view(Stamps).open_turns():
         found.append("open_turn")
     pending = work(txn)
-    if pending.agents or pending.waits:
+    if pending.agents or pending.waits or pending.later:
         found.append("deliverable_delivery")
     effects = txn.view(Effects)
     if effects.in_state("requested") or effects.in_state("started"):

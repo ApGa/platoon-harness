@@ -81,17 +81,18 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Capability | State | Evidence |
 |---|---|---|
 | Inboxes, topics, `message.send`, address grammar, replies, threads, gist plus body | tested | `test_messages.py` |
-| Reader cursors: `offered`, `delivered`, `acked`, omitted `after`, clamped `after`, filtered reads, delivery states, per-seq acks | tested | `test_messages.py` |
+| Reader cursors: `offered`, `delivered`, `acked`, omitted `after`, clamped `after`, a refused `after` past the head, filtered reads paging past their window, delivery states, per-seq acks | tested | `test_messages.py` |
 | Broadcast: recorded audience, group generation, late joiners, `history` | tested | `test_messages.py` |
 | Inbox depth cap with a `full` receipt, undeliverable on ended readers | tested | `test_messages.py` |
-| Hops, `max_hops`, chains followed through what a turn was offered | tested | `test_messages.py`, `test_lifecycle.py` |
+| Hops, `max_hops`, chains followed through what a turn was offered, replies, and a wait's notice | tested | `test_messages.py`, `test_lifecycle.py`, `test_waits.py` |
 | Injection ladder, coalesce, steer degrading visibly, digests with a gap notice | tested | `test_delivery.py`. Boundaries are whatever a test's `ready` report declares |
 | `steer` notices on a tool result | implemented | `delivery.offer` with `boundary="tool"` is tested. No tool plane exists to attach them yet |
-| At-least-once handover: a failed `deliver` is queued again under a new input | tested | `test_delivery.py` |
+| At-least-once handover: a failed `deliver` is queued again under a new input, even past a newer offer | tested | `test_delivery.py` |
 | Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
 | `channel.create` with attenuation, `channel.list`, `group.define` | tested | `test_messages.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
-| Wait: `on`, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end | tested | `test_waits.py`, properties |
+| Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
+| Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py` |
 | `hold` as a surface keeps it | implemented | `hold_open` is tested. No tool plane calls it yet |
 | One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |
 | Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors | tested | `test_boards.py` |

@@ -1,5 +1,7 @@
 """Injection: `pull < next-turn < wake < steer`, set on the reader's side, and the courier that acts on it."""
 
+import pytest
+
 from platoon_harness.kernel import Principal
 
 from ..kernel.support import supervised, until
@@ -15,6 +17,7 @@ from .support import (
     report,
     result_of,
     send,
+    settle_effects,
     spawn,
     start_turn,
 )
@@ -322,20 +325,73 @@ async def test_a_failed_handover_puts_the_agent_back_and_returns_the_reservation
     assert result_of(kernel.query(kernel.runtime, "budget.status", {}))[0]["held"] == 0
 
 
-async def test_a_failed_handover_does_not_step_back_past_a_newer_offer(kernel):
-    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
-    await send(kernel, alice, "@bob", "one")
-    handed = await offer(kernel, "bob")
-    await send(kernel, alice, "@bob", "two")
-    newest = await read(kernel, bob, "@bob")
-    assert gists(newest) == ["two"]
+async def fail_next_handover(kernel) -> None:
     effect = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[0]
     attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
-
     args = {"id": effect["id"], "attempt": attempt, "error": "the pipe broke"}
     result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
 
-    assert handed["input"] and gists(await read(kernel, bob, "@bob")) == []
+
+async def test_a_failed_handover_is_queued_again_past_a_newer_offer(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await send(kernel, alice, "@bob", "one")
+    await offer(kernel, "bob")
+    await send(kernel, alice, "@bob", "two")
+    assert gists(await read(kernel, bob, "@bob")) == ["two"]
+
+    await fail_next_handover(kernel)
+
+    assert gists(await read(kernel, bob, "@bob")) == ["one", "two"]
+
+
+async def test_two_failed_steers_lose_nothing(kernel):
+    alice = await spawn(kernel, "alice")
+    bob = await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]})
+    await start_turn(kernel, "bob")
+    await send(kernel, alice, "@bob", "one")
+    await offer(kernel, "bob")
+    await send(kernel, alice, "@bob", "two")
+    await offer(kernel, "bob")
+
+    await fail_next_handover(kernel)
+    await fail_next_handover(kernel)
+
+    assert gists(await read(kernel, bob, "@bob")) == ["one", "two"]
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 0}])
+async def test_an_offer_carries_what_stands_before_it_so_it_cannot_repeat(kernel, ada, limits):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]})
+    await start_turn(kernel, "bob")
+    await send(kernel, ada, "@alice", "pass this on")
+    await read(kernel, alice, "@alice")
+    await send(kernel, alice, "@bob", "past max_hops, so it waits")
+    await send(kernel, ada, "@bob", "steer me")
+
+    handed = await offer(kernel, "bob")
+
+    assert [item["gist"] for item in handed["items"]] == ["past max_hops, so it waits", "steer me"]
+    assert ready(kernel) == []
+
+
+async def test_a_wake_for_a_notice_in_a_pull_inbox_comes_once(kernel, clock):
+    alice = await spawn(kernel, "alice")
+    bob = await spawn(kernel, "bob", role="quiet")
+    await send(kernel, alice, "@bob", "read me if you like")
+    wait = {"on": [{"stream": "agent/alice", "types": ["agent.ended"]}], "timeout": 1.0}
+    placed = result_of(await kernel.submit(bob, "wait", wait))
+    clock.advance(2.0)
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+    assert ready(kernel) == ["bob"]
+
+    handed = await offer(kernel, "bob")
+
+    assert [item["gist"] for item in handed["items"]] == ["read me if you like", "Your wait timed out, missing @alice."]
+    await settle_effects(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+    assert ready(kernel) == []
 
 
 async def test_a_refused_wake_is_tried_again_when_a_reservation_comes_back(kernel):

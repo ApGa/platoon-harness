@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from platoon_harness.kernel import Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
 
-from .common import Delivery, Name
+from .common import WAKING, Delivery, Name
 
 _PREFIX = {"topic": "channel", "queue": "queue", "board": "board"}
 _DEFAULT_DELIVERY: dict[str, Delivery] = {"topic": "next-turn", "queue": "pull", "board": "pull"}
@@ -19,7 +19,6 @@ _READ = {
 }
 _ON = {"topic": "channel/{}", "queue": "queue/{}", "board": "board/{}/*"}
 _RULES = ("all", "human", "program")
-_WAKING = ("wake", "steer")
 
 
 class Channel(BaseModel, frozen=True):
@@ -165,7 +164,7 @@ def create(txn: Txn, a: CreateChannel) -> dict[str, Any]:
     for selector in (*a.readers, *a.writers):
         _reach(txn, selector)
     delivery = a.delivery or _DEFAULT_DELIVERY[a.kind]
-    if txn.me.kind == "agent" and delivery in _WAKING:
+    if txn.me.kind == "agent" and delivery in WAKING:
         raise Refused("not_permitted", "an agent cannot buy a wake: delivery is the reader's setting")
     settings = Channel(
         **a.model_dump(include={"kind", "history", "coalesce", "lease", "lease_max", "max_inflight", "max_attempts"}),

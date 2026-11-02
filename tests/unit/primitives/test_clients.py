@@ -265,7 +265,7 @@ async def test_a_wake_past_hops_leaves_attention_when_a_turn_starts(kernel, ada,
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob")
     first = await send(kernel, alice, "@alice", "to myself")
-    await send(kernel, alice, "@bob", "past the limit", cause=[first["seq"]])
+    await send(kernel, alice, "@bob", "past the limit", reply_to=first["ref"])
     assert [row["kind"] for row in result_of(kernel.query(ada, "attention.list", {}))] == ["hops"]
 
     await start_turn(kernel, "bob")
