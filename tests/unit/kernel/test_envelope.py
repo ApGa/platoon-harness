@@ -173,3 +173,20 @@ async def test_events_round_trip_through_the_journal(kernel):
     event = events_of(kernel)[0]
     assert (event.v, event.version, event.gist, event.data) == (1, 1, "héllo", {"text": "héllo"})
     assert event.outcome.seq == event.seq
+
+
+async def test_an_op_can_author_an_event_as_the_runtime_and_nobody_else(folder, clock):
+    @op("relay.post")
+    def post(txn: Txn, a: Args) -> None:
+        """Post as the runtime."""
+        txn.emit("relay.posted", "relay/a", gist="posted", runtime=True)
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[Extension("relay", ops=[post])])
+    await enroll(kernel, ALICE)
+    await grant(kernel, "agent:alice")
+
+    result_of(await kernel.submit(ALICE, "relay.post", {}))
+
+    assert events_of(kernel)[-1].actor == "runtime"
+    assert "actor" not in inspect.signature(Txn.emit).parameters
+    kernel.close()

@@ -13,7 +13,7 @@ _TABLE_ACTIONS = frozenset({sqlite3.SQLITE_READ, sqlite3.SQLITE_INSERT, sqlite3.
 
 
 def fold[F: Callable[..., None]](*types: str) -> Callable[[F], F]:
-    """Mark a view method as the fold for these event types."""
+    """Mark a view method as the fold for these event types. `*` folds every event, for a view that cannot name them."""
 
     def mark(method: F) -> F:
         method.__dict__["_fold_types"] = types
@@ -86,13 +86,14 @@ def refold(db: sqlite3.Connection, view: type[View]) -> None:
         for table in tables:
             db.execute(f"DROP TABLE IF EXISTS {table}")
         db.executescript(view.schema)
+        everywhere = folds.get("*", ())
         after = 0
         while rows := db.execute("SELECT * FROM events WHERE seq > ? ORDER BY seq LIMIT ?", (after, _PAGE)).fetchall():
             after = rows[-1]["seq"]
             db.set_authorizer(_only(tables))
             try:
                 for row in rows:
-                    if applying := folds.get(row["type"]):
+                    if applying := (*folds.get(row["type"], ()), *everywhere):
                         event = decode(row, with_outcome=False)
                         for apply in applying:
                             apply(event)

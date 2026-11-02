@@ -79,6 +79,10 @@ class Tombstones(View):
     def has(self, sha256: str) -> bool:
         return self.db.execute("SELECT 1 FROM v_tombstones WHERE sha256 = ?", (sha256,)).fetchone() is not None
 
+    def inline(self, sha256: str) -> bytes | None:
+        """A body's bytes if the journal holds them; None if they are in `blobs/`, which an op may not read."""
+        return lookup(self.db, sha256)["data"]
+
 
 def record(db: sqlite3.Connection, sha256: str, size: int, inline: bytes | None) -> None:
     """Enter a body in the journal. Redacted content does not come back."""

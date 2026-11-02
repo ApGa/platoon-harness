@@ -55,7 +55,8 @@ def load(extensions: Iterable[Extension]) -> Loaded:
             for table in tables_of(view):
                 claim("table", table, owner)
             for event_type in view._folds:
-                check_event_type(event_type)
+                if event_type != "*":
+                    check_event_type(event_type)
             views.append(view)
         for daemon in extension.daemons:
             claim("daemon", daemon.name, owner)

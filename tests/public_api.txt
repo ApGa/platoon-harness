@@ -26,6 +26,7 @@ platoon_harness.kernel.Effects
 platoon_harness.kernel.Event
 platoon_harness.kernel.Extension
 platoon_harness.kernel.Filesystem
+platoon_harness.kernel.GIST_LIMIT
 platoon_harness.kernel.Grant
 platoon_harness.kernel.Grants
 platoon_harness.kernel.Kernel

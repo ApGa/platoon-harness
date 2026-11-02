@@ -26,6 +26,14 @@ _RELATIONS = {
 }
 
 
+def _condition(relation: str) -> str | None:
+    return "role = :role" if relation.startswith("role:") else _RELATIONS.get(relation)
+
+
+def _values(me: Principal, relation: str) -> dict[str, str | None]:
+    return {"role": relation.removeprefix("role:"), "me": me.id, "parent": me.parent, "path": me.path}
+
+
 class Principals(View):
     """The live graph: `authorize` reads it inside the transaction, and `path` makes `descendants` a prefix test."""
 
@@ -101,16 +109,25 @@ class Principals(View):
 
     def related(self, me: Principal, relation: str, name: str) -> bool:
         """Whether a live principal called `name` stands in `relation` to `me`."""
-        role = relation.removeprefix("role:")
-        condition = "role = :role" if role != relation else _RELATIONS.get(relation)
+        condition = _condition(relation)
         if condition is None:
             return False
         row = self.db.execute(
             "SELECT 1 FROM v_principals WHERE state = 'live' AND substr(id, instr(id, ':') + 1) = :name "
             f"AND {condition}",
-            {"name": name, "role": role, "me": me.id, "parent": me.parent, "path": me.path},
+            _values(me, relation) | {"name": name},
         ).fetchone()
         return row is not None
+
+    def select(self, me: Principal, relation: str) -> list[Principal]:
+        """The live principals standing in `relation` to `me`, or refuse a relation with no evaluator."""
+        condition = _condition(relation)
+        if condition is None:
+            raise Refused("unsupported", f"no relation {relation}")
+        rows = self.db.execute(
+            f"SELECT * FROM v_principals WHERE state = 'live' AND {condition} ORDER BY id", _values(me, relation)
+        )
+        return [principal for row in rows if (principal := self._load(row)) is not None]
 
 
 class Grant(Args):
@@ -168,14 +185,28 @@ class Grants(View):
             return principal
         if operation.runtime:
             raise Refused("not_permitted", "a runtime-only op")
-        principals = Principals(self.db)
-        me = principals.live(principal.id)
+        me = Principals(self.db).live(principal.id)
         if not any(fnmatchcase(operation.name, scope) for scope in me.scopes):
             raise Refused("not_permitted", "outside this credential's scopes")
-        for grant in self.held_by(me):
-            if fnmatchcase(operation.name, grant.ops) and (target is None or _covers(grant.on, target, me, principals)):
-                return me
+        if self._covered(me, operation.name, target):
+            return me
         raise Refused("not_permitted", "no grant covers this")
+
+    def _covered(self, me: Principal, name: str, target: str | None) -> bool:
+        principals = Principals(self.db)
+        for grant in self.held_by(me):
+            if fnmatchcase(name, grant.ops) and (target is None or _covers(grant.on, target, me, principals)):
+                return True
+        return False
+
+    def permits(self, principal: Principal, name: str, target: str) -> bool:
+        """Whether the op called `name` is open to this principal on `target`: a question, where `authorize` refuses."""
+        if principal.kind == "runtime":
+            return True
+        me = Principals(self.db).get(principal.id)
+        if me is None or me.state != "live" or not any(fnmatchcase(name, scope) for scope in me.scopes):
+            return False
+        return self._covered(me, name, target)
 
 
 @lru_cache(maxsize=1024)

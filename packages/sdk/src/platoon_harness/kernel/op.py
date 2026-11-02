@@ -20,13 +20,13 @@ class Args(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
-def _session(args: Args) -> str:
+def _session(args: Args) -> str | None:
     return "session"
 
 
 @dataclass(frozen=True)
 class Op:
-    """An op definition. `on` names the object of one invocation.
+    """An op definition. `on` names the object of one invocation, or None for an op that checks its objects itself.
 
     `query` keeps an op out of history. `exposes` marks a read that is a command for agents and a query for everyone
     else. An op is at most one of the two.
@@ -35,7 +35,7 @@ class Op:
     name: str
     fn: Callable[[Txn, Any], Any]
     input: type[Args]
-    on: Callable[[Any], str] = _session
+    on: Callable[[Any], str | None] = _session
     query: bool = False
     exposes: bool = False
     tool: bool = False
@@ -45,7 +45,7 @@ class Op:
 def op(
     name: str,
     *,
-    on: Callable[[Any], str] = _session,
+    on: Callable[[Any], str | None] = _session,
     query: bool = False,
     exposes: bool = False,
     tool: bool = False,

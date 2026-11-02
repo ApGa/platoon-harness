@@ -225,6 +225,8 @@ class Kernel:
     def _apply(self, event: Event) -> None:
         for apply in self._folds.get(event.type, ()):
             apply(event)
+        for apply in self._folds.get("*", ()):
+            apply(event)
 
     def _writing(self) -> Writer:
         if self._writer is None:
@@ -284,6 +286,8 @@ class Kernel:
             if operation.query:
                 raise Refused("unsupported", "a query has no command form")
             if command.expected_version is not None:
+                if target is None:
+                    raise Refused("unsupported", "this op has no one object to version")
                 current = stream_version(db, target)
                 if current != command.expected_version:
                     raise Refused("conflict", {"expected": command.expected_version, "current": current})

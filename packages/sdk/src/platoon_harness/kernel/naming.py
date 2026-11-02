@@ -8,7 +8,7 @@ from .model import Refused
 # fmt: off
 _PAST_FORMS = frozenset({
     "begun", "built", "chosen", "cut", "done", "drawn", "found", "given", "held", "kept", "left", "lost", "made", "met",
-    "paid", "put", "read", "run", "sent", "set", "shown", "spent", "split", "taken", "told", "won", "written",
+    "paid", "put", "read", "run", "sent", "set", "shown", "spent", "split", "taken", "told", "woken", "won", "written",
 })
 # fmt: on
 _SAME_IN_THE_IMPERATIVE = frozenset({"cut", "put", "read", "run", "set", "split"})

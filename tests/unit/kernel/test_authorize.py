@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from platoon_harness.kernel import Principal, Refused, hash_token
+from platoon_harness.kernel import Grants, Principal, Principals, Refused, hash_token
 
 from .support import ALICE, BOB, HUMAN, enroll, events_of, grant, refusal_of, refused_code, result_of
 
@@ -218,3 +218,31 @@ async def test_ops_list_shows_what_a_caller_holds(kernel):
     assert entries["note.add"]["tool"] is True
     assert entries["note.add"]["schema"]["additionalProperties"] is False
     assert entries["note.add"]["description"].startswith("Add copies")
+
+
+async def test_permits_asks_what_authorize_decides(kernel):
+    await enroll(kernel, ALICE, scopes=("note.*",))
+    await grant(kernel, "agent:alice", "note.add", "note/{self}")
+
+    with kernel._reading() as db:
+        grants = Grants(db)
+        assert grants.permits(ALICE, "note.add", "note/alice")
+        assert not grants.permits(ALICE, "note.add", "note/bob")
+        assert not grants.permits(ALICE, "effect.start", "note/alice")
+        assert not grants.permits(BOB, "note.add", "note/alice")
+        assert grants.permits(kernel.runtime, "anything", "at/all")
+
+
+async def test_select_lists_who_stands_in_a_relation(kernel):
+    await enroll(kernel, ALICE)
+    await enroll(kernel, BOB, parent="agent:alice", role="worker")
+
+    with kernel._reading() as db:
+        principals = Principals(db)
+        me = principals.live("agent:alice")
+        assert [p.id for p in principals.select(me, "children")] == ["agent:bob"]
+        assert [p.id for p in principals.select(me, "role:worker")] == ["agent:bob"]
+        with pytest.raises(Refused) as error:
+            principals.select(me, "next")
+
+    assert refused_code(error) == "unsupported"

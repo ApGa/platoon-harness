@@ -145,3 +145,23 @@ def test_a_view_cannot_claim_foreign_tables(folder, clock):
         Kernel.open(folder, clock=clock, extensions=[Extension("thief", views=[Thief])])
     assert refused_code(error) == "invalid"
     assert not folder.exists()
+
+
+async def test_a_wildcard_fold_sees_every_event_and_rebuilds_the_same(folder, clock):
+    class Everything(View):
+        schema = "CREATE TABLE v_everything(seq INTEGER PRIMARY KEY, type TEXT NOT NULL) STRICT;"
+
+        @fold("*")
+        def seen(self, event: Event) -> None:
+            self.db.execute("INSERT INTO v_everything VALUES (?, ?)", (event.seq, event.type))
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, Extension("every", views=[Everything])])
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    result_of(await kernel.submit(kernel.runtime, "note.silence", {}))
+    before = dump(folder)
+
+    await kernel.rebuild_all()
+
+    assert dump(folder) == before
+    assert [row[1] for row in before["v_everything"]] == ["note.added", "op.completed"]
+    kernel.close()

@@ -221,6 +221,7 @@ through `submit` too, so no second path exists.
 
 Everything else belongs to a primitive. Group generation, topology revision, board version and context version need
 no counters: each is a stream version, which `txn.view(Stamps).version_of(stream)` reads. A fence is the `seq` of the claim event.
+`Stamps` also reads a stream's events and the head, so an op can check history inside its own transaction, as `wait` does.
 
 ### 5.3 The envelope
 
@@ -249,7 +250,8 @@ class Event(BaseModel, frozen=True):
 ```
 
 The session id is a constant of the file and is added only at export. An op cannot pass `seq`, `version`, `actor`,
-`wall_time` or the stamps, which the kernel takes from cheap state at `emit`:
+`wall_time` or the stamps. Its one say in `actor` is `runtime=True`, for what the runtime posts inside someone else's command,
+such as the monitor; it can name nobody else. The kernel takes the rest from cheap state at `emit`:
 
 - `context_version` is the version of the stream `context/<agent>`, and `topology_rev` the version of the stream `topology`.
 - `turn` is open from `turn.started{turn}` through `turn.ended` or `turn.lost`, per agent, and those boundary events carry it.
@@ -301,7 +303,8 @@ A `View` is a class with a schema, `@fold` methods, and typed query methods. Cor
 in kind. Other code reads a view through `txn.view(Tasks).open_in(queue)`, never through its SQL, so a table layout is
 not an API. Its tables are named `v_<name>`, or start with that and `_`, and no two views share one. A version bump drops and
 refolds that view, and so does finding its high-water mark behind the journal, which is what a toggled extension leaves. Folds
-ignore unknown types, which is why unknown events survive. CI compares live views to a rebuild after every scenario.
+ignore unknown types, which is why unknown events survive. `@fold("*")` sees every event, for a view that cannot name what it
+counts, as `Waits` cannot. CI compares live views to a rebuild after every scenario.
 
 A rebuild runs under an SQLite authorizer limited to the view's own tables, so a fold that reaches out fails loudly. A fold
 never sees `outcome`, which does not exist yet when a live fold runs.
@@ -387,10 +390,12 @@ def claim(txn: Txn, a: Claim) -> Lease:
 ```
 
 `Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `emit`, `effect`. An op refuses by raising `Refused`,
-and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`.
+and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`. `permits` asks the same question without
+refusing, and `Principals.select(me, relation)` lists who stands in a relation.
 
 `Op` holds `name`, `fn`, `input`, `on`, `query`, `exposes`, `tool` and `runtime`. `on` gives the object: the stream that
-grants are matched against and `expected_version` is checked on, or `session` when an op has none. `query` keeps an op out of
+grants are matched against and `expected_version` is checked on, or `session` when an op has none, or `None` when the op checks
+its several objects itself, as `wait` does. `query` keeps an op out of
 history. `exposes` marks a read that is a command for agents and a query for everyone else; its body checks `txn.me.kind`,
 because a query cannot emit. An op is at most one of `query` and `exposes`. `runtime` is the runtime-only marker. The runtime
 principal takes no grant.

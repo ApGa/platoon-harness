@@ -11,13 +11,14 @@ from .effects import Effect, Effects
 from .extension import Extension
 from .journal import Filesystem, filesystem
 from .kernel import Kernel
-from .model import Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
+from .model import GIST_LIMIT, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
 from .op import Args, Op, op
 from .timers import Timer, Timers
 from .txn import Stamps, Txn
 from .view import View, fold
 
 __all__ = [
+    "GIST_LIMIT",
     "Args",
     "Clock",
     "Daemon",

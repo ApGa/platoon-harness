@@ -3,10 +3,10 @@
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, Literal
 
-from .journal import insert, last_seq, stream_version
+from .journal import decode, insert, last_seq, stream_version
 from .model import (
     DATA_LIMIT,
     GIST_LIMIT,
@@ -74,6 +74,20 @@ class Stamps(View):
         """
         return stream_version(self.db, stream)
 
+    def events(self, stream: str | None = None, *, after: int = 0) -> Iterator[Event]:
+        """The events past `after`, oldest first, on one stream or all of them. Read it before emitting, too."""
+        if stream is None:
+            rows = self.db.execute("SELECT * FROM events WHERE seq > ? ORDER BY seq", (after,))
+        else:
+            rows = self.db.execute(
+                "SELECT * FROM events WHERE stream = ? AND seq > ? ORDER BY version", (stream, after)
+            )
+        return (decode(row) for row in rows)
+
+    def head(self) -> int:
+        """The newest seq this transaction can see."""
+        return last_seq(self.db)
+
 
 class Txn:
     """What an op receives, and all an op receives. Fixed for one command: `me` and `now`."""
@@ -107,8 +121,12 @@ class Txn:
         native: Mapping[str, str] | None = None,
         model: ModelRef | None = None,
         v: int = 1,
+        runtime: bool = False,
     ) -> Event:
-        """Append one event and run its folds. `refs` are the refs held in `data`."""
+        """Append one event and run its folds. `refs` are the refs held in `data`.
+
+        `runtime` authors the event as the runtime, for what the runtime posts in the middle of someone else's command.
+        """
         if self._apply is None:
             raise Refused("unsupported", "a query cannot emit")
         self._flush()
@@ -152,7 +170,7 @@ class Txn:
             stream=stream,
             version=version,
             type=type,
-            actor=self.me.id,
+            actor="runtime" if runtime else self.me.id,
             agent=agent,
             turn=turn,
             context_version=None if agent is None else self._version_of(context, stream, version),
