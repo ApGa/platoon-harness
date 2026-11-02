@@ -320,14 +320,16 @@ async def test_a_steer_during_a_model_call_is_in_the_next_one_within_the_turn(tm
 async def test_a_tool_a_kill_cut_off_reads_as_aborted_on_resume_and_never_ran_again(tmp_path):
     """What a resumed harness shows of a dangling tool call, which the cut-off notice must not contradict."""
     delivery = Delivery(input="41", boundary="turn", text="carry on", items=())
+    command = ToolCall(
+        "exec_command", {"cmd": "echo ran >> ran; echo running > pipe; exec sleep 600"}, id="call_dangling"
+    )
 
-    async with FakeModel(
-        ToolCall("exec_command", {"cmd": "echo ran >> ran; exec sleep 600"}, id="call_dangling"), "ok"
-    ) as model:
+    async with FakeModel(command, "ok") as model:
         spec = on_fake_model(tmp_path, model, goal="go", sandbox="workspace-write")
+        os.mkfifo(spec.cwd / "pipe")
         first, heard = CodexDriver(), Heard()
         native = (await first.start(spec, heard)).native
-        await heard.until(Item, lambda item: item.native_id == "call_dangling")
+        await asyncio.to_thread((spec.cwd / "pipe").read_text)
         record = Record.read(spec.folder)
         assert record is not None
         os.killpg(record.pid, signal.SIGKILL)
@@ -341,9 +343,9 @@ async def test_a_tool_a_kill_cut_off_reads_as_aborted_on_resume_and_never_ran_ag
         await heard.until(TurnEnded)
         await second.stop(2.0)
 
-    print(json.dumps(model.calls[-1].json["input"][-4:])[:1500])
     assert (spec.cwd / "ran").read_text() == "ran\n"
-    assert model.calls[-1].says("call_dangling")
+    outputs = [item for item in model.calls[-1].json["input"] if item["type"] == "function_call_output"]
+    assert [(output["call_id"], output["output"]) for output in outputs] == [("call_dangling", "aborted")]
 
 
 async def test_a_compaction_reports_its_call_and_a_gap_for_what_it_forgot(tmp_path):
