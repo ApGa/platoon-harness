@@ -52,10 +52,19 @@ class Session(View):
     def opened(self, event: Event) -> None:
         self.db.execute("INSERT INTO v_session VALUES (1, 'open', ?)", (json.dumps(event.data),))
 
-    @fold("session.closed", "session.cancelled", "session.stopped")
+    @fold("session.closed", "session.cancelled")
     def moved(self, event: Event) -> None:
         state = event.type.removeprefix("session.")
         self.db.execute("UPDATE v_session SET state = ?", ({"closed": "closing"}.get(state, state),))
+
+    @fold("session.stopped")
+    def stopped(self, event: Event) -> None:
+        self.db.execute("UPDATE v_session SET state = 'stopped' WHERE state = 'open'")
+
+    @fold("runtime.started")
+    def resumed(self, event: Event) -> None:
+        """A shutdown keeps the folder resumable, so the next incarnation takes up an open session where it stopped."""
+        self.db.execute("UPDATE v_session SET state = 'open' WHERE state = 'stopped'")
 
     def state(self) -> str:
         row = self.db.execute("SELECT state FROM v_session").fetchone()

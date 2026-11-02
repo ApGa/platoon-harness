@@ -7,9 +7,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from platoon_harness.kernel import Kernel, ManualClock
-from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives import PRIMITIVES, Budget, Deliveries
 
-from .support import end_turn, grant, of_type, refusal, report, result_of, send, spawn, start_turn
+from .support import end_turn, grant, of_type, refusal, report, result_of, send, settle_effects, spawn, start_turn
 
 
 async def set_budget(kernel, **fields: Any) -> None:
@@ -25,6 +25,13 @@ async def wake(kernel, name: str) -> dict[str, Any] | None:
     """Queue something for an agent and start its turn, as the courier would."""
     await send(kernel, kernel.runtime, f"@{name}", "go")
     return result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name}))
+
+
+async def fail_next_handover(kernel) -> None:
+    effect = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[0]
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+    args = {"id": effect["id"], "attempt": attempt, "error": "the pipe broke"}
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
 
 
 async def test_a_wake_reserves_an_estimate(kernel):
@@ -116,7 +123,124 @@ async def test_a_turn_lost_to_a_crash_keeps_its_estimate_as_spent(kernel):
     await kernel.recover()
 
     row = limit(kernel, "tokens")
-    assert (row["spent"], row["held"], row["label"]) == (100, 0, "estimated")
+    assert (row["spent"], row["held"], row["label"], row["unmeasured"]) == (100, 0, "unavailable", 1)
+
+
+async def test_a_lost_turn_with_no_estimate_is_unmeasured_and_not_free(kernel):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    await kernel.recover()
+
+    assert limit(kernel, "tokens")["unmeasured"] == 1
+    await send(kernel, kernel.runtime, "@bob", "again")
+    assert result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"})) is None
+    assert of_type(kernel, "wake.refused")[-1].data["why"] == "unavailable"
+
+
+async def test_partial_usage_of_a_lost_turn_does_not_leak_into_the_next(kernel):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=40, label="provider")
+
+    await kernel.recover()
+
+    with kernel._reading() as db:
+        assert Budget(db).turn_usage("bob") == {}
+
+
+async def test_a_failed_steer_leaves_the_running_turn_its_reservation(kernel):
+    await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]})
+    await set_budget(kernel, limits={"turns": 9})
+    await wake(kernel, "bob")
+    await settle_effects(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await wake(kernel, "bob")
+
+    await fail_next_handover(kernel)
+
+    assert limit(kernel, "turns")["held"] == 1
+    await end_turn(kernel, "bob")
+    assert limit(kernel, "turns")["spent"] == 1
+
+
+async def test_a_failed_wake_returns_its_reservation(kernel):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"turns": 9})
+    await wake(kernel, "bob")
+    assert limit(kernel, "turns")["held"] == 1
+
+    await fail_next_handover(kernel)
+
+    assert (limit(kernel, "turns")["held"], limit(kernel, "turns")["spent"]) == (0, 0)
+
+
+async def test_a_failed_spawn_is_charged_nothing_and_blocks_nothing(kernel):
+    await set_budget(kernel, limits={"tokens": 1000, "turns": 9}, estimate={"tokens": 100})
+    args = {"name": "bob", "child_role": "worker", "goal": "x"}
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", args))
+
+    await report(kernel, "bob", "exited", reason="launch failed")
+
+    row = limit(kernel, "tokens")
+    assert (row["spent"], row["unmeasured"], limit(kernel, "turns")["spent"]) == (0, 0, 0)
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {**args, "name": "carol"}))
+
+
+async def test_an_agent_ended_between_turns_is_charged_no_turn(kernel, ada):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000, "turns": 9}, estimate={"tokens": 100})
+    await wake(kernel, "bob")
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    assert (limit(kernel, "tokens")["unmeasured"], limit(kernel, "turns")["spent"]) == (0, 0)
+
+
+async def test_exhausted_means_spent_and_never_merely_held(kernel):
+    await spawn(kernel, "a")
+    await spawn(kernel, "b")
+    await set_budget(kernel, limits={"tokens": 100}, estimate={"tokens": 40})
+    for name in ("a", "b"):
+        await wake(kernel, name)
+        await settle_effects(kernel, name)
+        await start_turn(kernel, name)
+
+    await report(kernel, "a", "usage", tokens=90, usd=0.0, label="provider")
+    await end_turn(kernel, "a")
+
+    assert result_of(kernel.query(kernel.runtime, "session.status", {}))["done"] is False
+
+
+async def test_a_refused_wake_retries_when_a_failed_handover_returns_a_reservation(kernel):
+    await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 100}, estimate={"tokens": 60})
+    await wake(kernel, "alice")
+    assert await wake(kernel, "bob") is None
+
+    await fail_next_handover(kernel)
+
+    assert "bob" in result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"]
+
+
+async def test_a_refused_wake_retries_when_a_lost_turn_moves_the_budget(kernel):
+    await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 700})
+    await wake(kernel, "alice")
+    await settle_effects(kernel, "alice")
+    await start_turn(kernel, "alice")
+    assert await wake(kernel, "bob") is None
+
+    await kernel.recover()
+
+    with kernel._reading() as db:
+        assert Deliveries(db).blocked("bob") is None
 
 
 async def test_measurements_carry_a_label_and_the_weakest_wins(kernel):

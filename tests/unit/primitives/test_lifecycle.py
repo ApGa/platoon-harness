@@ -5,6 +5,7 @@ import pytest
 from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
 from platoon_harness.primitives import PRIMITIVES
 
+from ..kernel.support import supervised, until
 from .support import (
     agent,
     channel,
@@ -167,7 +168,8 @@ async def test_ended_is_one_event_every_view_folds(kernel, ada, op):
     wait = result_of(await kernel.submit(bob, "wait", {"on": [{"stream": "inbox/bob"}]}))
     await send(kernel, alice, "@bob", "queued")
     await kernel.submit(kernel.runtime, "approval.request", {"id": "a1", "agent": "bob", "gist": "rm -rf?"})
-    await report(kernel, "bob", "turn.started", turn="t1")
+    if op == "agent.cancel":
+        await report(kernel, "bob", "turn.started", turn="t1")
     head = kernel.head
 
     result_of(await kernel.submit(ada, op, {"agent": "bob"}))
@@ -196,6 +198,156 @@ async def test_finish_cancel_retire_and_lost_end_the_same_way(kernel, ada):
         ("c", "retired"),
         ("d", "lost"),
     ]
+
+
+async def test_a_lost_child_tells_a_parent_parked_on_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead)
+    placed = result_of(await kernel.submit(lead, "wait", {"from": ["bob"]}))
+
+    await report(kernel, "bob", "exited", reason="segfault")
+
+    assert of_type(kernel, "message.sent")[-1].gist == "bob lost: segfault"
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]
+
+
+@pytest.mark.parametrize(("op", "status"), [("agent.cancel", "cancelled"), ("agent.retire", "retired")])
+async def test_a_child_ended_by_someone_else_is_reported(kernel, ada, op, status):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead)
+
+    result_of(await kernel.submit(ada, op, {"agent": "bob"}))
+
+    report_sent = of_type(kernel, "message.sent")[-1]
+    assert report_sent.gist.startswith(f"bob {status}:") and report_sent.data["subject"] == "bob"
+    assert report_sent.actor == "runtime"
+
+
+async def test_a_failed_spawn_tells_whoever_spawned_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    result_of(await kernel.submit(lead, "agent.spawn", spawning("bob")))
+
+    await report(kernel, "bob", "exited", reason="no such binary")
+
+    assert gists(await read(kernel, lead, "@lead")) == ["bob failed: no such binary"]
+
+
+async def test_a_parent_ended_first_hears_nothing_and_stops_nothing(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", role="linked", by=lead)
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
+
+    assert state_of(kernel, "bob")["status"] == "cancelled"
+    assert of_type(kernel, "message.sent") == []
+
+
+async def test_a_revoked_human_parent_hears_nothing_and_stops_nothing(kernel, ada):
+    bob = await spawn(kernel, "bob", by=ada)
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": ada.id}))
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    assert state_of(kernel, "bob")["status"] == "finished"
+
+
+async def test_a_root_agents_final_report_stays_in_the_journal_and_reaches_a_human(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    body = await kernel.put_body(b"the whole answer")
+
+    result_of(await kernel.submit(lead, "agent.finish", {"gist": "the answer", "body": f"sha256:{body}"}))
+
+    ended = of_type(kernel, "agent.ended")[-1]
+    assert ended.data["report"] == "the answer" and ended.data["body"] == f"sha256:{body}"
+    rows = result_of(kernel.query(ada, "attention.list", {}))
+    assert [(row["kind"], row["gist"]) for row in rows] == [("mention", "lead finished: the answer")]
+
+
+async def test_a_report_that_reached_a_parent_asks_no_human(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    assert result_of(kernel.query(ada, "attention.list", {})) == []
+
+
+async def test_the_monitor_posts_this_turns_final_text_and_no_earlier_one(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead)
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="the result of turn one")
+    await end_turn(kernel, "bob")
+    await start_turn(kernel, "bob", "t2")
+    await report(kernel, "bob", "item", kind="tool", gist="ran something")
+
+    await end_turn(kernel, "bob")
+
+    assert of_type(kernel, "message.sent")[-1].gist == "bob ended its turn with no final text."
+
+
+async def test_ending_cancels_what_an_agent_had_still_to_start(kernel, ada):
+    result_of(await kernel.submit(ada, "agent.spawn", spawning("bob")))
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    ready = result_of(kernel.query(kernel.runtime, "effect.ready", {}))
+    assert [effect["kind"] for effect in ready] == ["stop"]
+    assert [event.data["kind"] for event in of_type(kernel, "effect.cancelled")] == ["admit", "workspace", "launch"]
+
+
+async def test_ending_cancels_a_queued_delivery_too(kernel, ada):
+    await spawn(kernel, "bob")
+    await send(kernel, kernel.runtime, "@bob", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    assert [effect["kind"] for effect in result_of(kernel.query(kernel.runtime, "effect.ready", {}))] == ["stop"]
+
+
+@pytest.mark.parametrize("step", ["admit", "workspace", "launch"])
+async def test_a_failed_spawn_step_ends_the_agent_and_stops_the_rest(kernel, step):
+    await set_limits_turns(kernel)
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawning("bob")))
+    while (effect := result_of(kernel.query(kernel.runtime, "effect.ready", {}))[0])["kind"] != step:
+        attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+        result_of(await kernel.submit(kernel.runtime, "effect.finish", {"id": effect["id"], "attempt": attempt}))
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+    head = kernel.head
+
+    async with supervised(kernel):
+        args = {"id": effect["id"], "attempt": attempt, "error": "refused"}
+        result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
+        ended = await until(kernel, "agent.ended", after=head)
+
+    assert ended.data["status"] == "failed"
+    held = next(row for row in result_of(kernel.query(kernel.runtime, "budget.status", {})) if row["unit"] == "turns")
+    assert held["held"] == 0
+
+
+async def set_limits_turns(kernel) -> None:
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"turns": 9}}))
+
+
+async def test_a_failed_admit_leaves_nothing_to_start_while_it_is_being_ended(kernel):
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawning("bob")))
+    admit = result_of(kernel.query(kernel.runtime, "effect.ready", {}))[0]
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": admit["id"]}))
+
+    args = {"id": admit["id"], "attempt": attempt, "error": "refused"}
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
+
+    assert result_of(kernel.query(kernel.runtime, "effect.ready", {})) == []
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == ["bob"]
+
+
+async def test_retiring_is_refused_while_a_turn_is_open(kernel, ada):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    assert refusal(await kernel.submit(ada, "agent.retire", {"agent": "bob"})).code == "conflict"
+    assert state_of(kernel, "bob")["state"] == "running"
 
 
 async def test_an_agent_ends_once(kernel, ada):
@@ -296,6 +448,18 @@ async def test_takeover_holds_deliveries_and_release_records_a_gap(kernel, ada):
     result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
     assert state_of(kernel, "bob")["state"] == "idle"
     assert of_type(kernel, "gap.recorded")[-1].data["what"] == "takeover"
+
+
+async def test_release_during_an_open_turn_returns_to_that_turn(kernel, ada):
+    await spawn(kernel, "bob", ready={"resume": True})
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+
+    result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
+    await send(kernel, ada, "@bob", "go")
+
+    assert state_of(kernel, "bob")["state"] == "running"
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == []
 
 
 async def test_takeover_is_disabled_with_a_reason_without_resume(kernel, ada):
@@ -485,7 +649,7 @@ async def test_agent_list_shows_no_content(kernel):
 
     rows = result_of(kernel.query(bob, "agent.list", {}))
 
-    assert [row["name"] for row in rows] == ["bob"] and "goal" not in rows[0] and "activity" not in rows[0]
+    assert [row["name"] for row in rows] == ["@bob"] and "goal" not in rows[0] and "activity" not in rows[0]
 
 
 async def test_agent_status_of_nobody_is_refused(kernel):
@@ -611,6 +775,31 @@ async def test_session_cancel_stops_now(kernel, ada):
     assert refusal(await kernel.submit(ada, "session.cancel", {})).code == "conflict"
 
 
+async def test_a_stopped_session_resumes(tmp_path, clock):
+    folder = tmp_path / "session"
+    kernel = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": {"worker": {}}}))
+    await spawn(kernel, "bob")
+    result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+    kernel.close()
+
+    kernel = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    await kernel.recover()
+    await send(kernel, kernel.runtime, "@bob", "after resume")
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == ["bob"]
+    kernel.close()
+
+
+async def test_a_session_closing_when_it_stopped_still_closes(kernel, ada):
+    result_of(await kernel.submit(ada, "session.close", {}))
+    result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+
+    await kernel.recover()
+
+    assert status(kernel)["state"] == "closing"
+
+
 async def test_session_stop_is_the_owners_to_write(kernel, ada):
     assert refusal(await kernel.submit(ada, "session.stop", {})).code == "not_permitted"
 
@@ -722,7 +911,7 @@ async def test_a_program_principal_may_spawn_with_itself_as_parent(kernel):
 
     result_of(await kernel.submit(program, "agent.spawn", spawning("w1")))
 
-    assert state_of(kernel, "w1")["parent"] == "program:driver"
+    assert state_of(kernel, "w1")["parent"] == "@driver"
 
 
 async def test_a_spawned_agent_is_a_principal_at_once_with_no_credential(kernel):
@@ -772,4 +961,4 @@ async def test_an_adopted_orphan_leaves_its_old_ancestors_reach(kernel, ada):
 
     assert refusal(kernel.query(lead, "agent.status", {"agent": "orphan"})).code == "not_permitted"
     assert refusal(kernel.query(lead, "agent.status", {"agent": "below"})).code == "not_permitted"
-    assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == orphan.id
+    assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == "@orphan"

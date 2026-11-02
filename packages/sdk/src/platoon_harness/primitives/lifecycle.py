@@ -20,7 +20,7 @@ from platoon_harness.kernel import (
 from .agents import Agent, Agents
 from .budgets import Budget, Label, reconcile, reserve
 from .channels import Channels, regroup
-from .common import BodyRef, Gist, Name
+from .common import AgentName, BodyRef, Gist, Name, address
 from .delivery import work
 from .messages import post
 from .sessions import Session
@@ -54,16 +54,15 @@ def _live(txn: Txn, name: str) -> Agent:
     return agent
 
 
-def _monitor(txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None) -> None:
-    """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden."""
-    if agent.parent is None:
-        return
-    if agent.parent.startswith("agent:"):
-        parent = txn.view(Agents).get(agent.parent.partition(":")[2])
-        if parent is None or parent.ended:
-            return
+def _monitor(txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None) -> bool:
+    """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden.
+    Returns whether a parent was there to hear it."""
+    parent = None if agent.parent is None else txn.view(Principals).get(agent.parent)
+    if parent is None or parent.state != "live":
+        return False
     text = gist or agent.final_gist or f"{agent.name} ended its turn with no final text."
-    post(txn, _inbox_of(agent.parent), text, body=body or agent.final_body, subject=agent.name)
+    post(txn, _inbox_of(parent.id), text, body=body or agent.final_body, subject=agent.name)
+    return True
 
 
 def end(
@@ -75,16 +74,29 @@ def end(
     gist: str | None = None,
     body: str | None = None,
 ) -> None:
-    """The ended transition: one event every view folds, then what no fold may do. Any open turn ends with it."""
+    """The ended transition: one event every view folds, then what no fold may do. Any open turn ends with it, whoever
+    spawned the agent hears how it ended, and what it had still to start never does. Only a turn is charged."""
     name = agent.name
     owned = txn.view(Tasks).owned(agent.id)
-    reconcile(txn, name, agent.role)
-    if status == "finished":
-        _monitor(txn, agent, gist, body)
-    data = {"status": status, "reason": reason}
-    txn.emit("agent.ended", f"agent/{name}", gist=f"{name} {status}"[:GIST_LIMIT], agent=name, data=data)
+    if txn.view(Stamps).turn(name) is not None or txn.view(Budget).turn_usage(name):
+        reconcile(txn, name, agent.role)
+    ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
+    report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
+    body = body or agent.final_body
+    heard = _monitor(txn, agent, report, body)
+    txn.emit(
+        "agent.ended",
+        f"agent/{name}",
+        gist=(f"{name} finished: {report}" if status == "finished" and report else ending)[:GIST_LIMIT],
+        agent=name,
+        refs=[body] if body else (),
+        data={"status": status, "reason": reason, "report": report, "body": body, "heard": heard},
+    )
     if txn.view(Stamps).turn(name) is not None:
         txn.emit("turn.ended", f"turn/{name}", gist=f"turn ended: {status}", agent=name, data={"reason": status})
+    for effect in txn.view(Effects).requested_for(name):
+        data = {"id": effect.id, "kind": effect.kind}
+        txn.emit("effect.cancelled", f"effect/{effect.id}", gist=f"{effect.kind} cancelled", agent=name, data=data)
     txn.effect("stop", {"agent": name}, on_uncertain="retry", priority=1, agent=name)
     for task in owned:
         bury_if_spent(txn, task, txn.view(Channels).require(f"queue/{task.queue}"))
@@ -97,9 +109,9 @@ def end(
 
 
 class Spawn(Args):
-    name: Name
-    child_role: Name
-    goal: Gist
+    name: Annotated[Name, Field(description="A name nobody in this session has used.")]
+    child_role: Annotated[Name, Field(description="The role to start it in.")]
+    goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")]
     body: BodyRef | None = None
 
 
@@ -117,10 +129,10 @@ def _admit(txn: Txn, depth: int, parent: str | None) -> None:
 
 @op("agent.spawn", on=lambda a: f"role/{a.child_role}", tool=True)
 def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
-    """Start a new agent in a role you may spawn. `goal` is a gist, and a long brief goes in `body`. It reports back to
-    you when it finishes. Refused
-    `not_permitted` for a role or limit outside your reach, `over_budget` when the budget cannot cover another agent,
-    and `conflict` when the name is taken or the session is closing: use another name, or stop spawning."""
+    """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. It reports back to you when
+    it ends, however it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your
+    reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken or the
+    session is closing: use another name, or stop spawning. `not_found` when no such role exists."""
     session = txn.view(Session)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
@@ -170,31 +182,31 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         "workspace", {**spec, "workspace": role.workspace}, on_uncertain="reconcile", agent=a.name, after=admit
     )
     txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name, after=workspace)
-    return {"agent": a.name, "state": "spawning"}
+    return {"agent": f"@{a.name}", "state": "spawning"}
 
 
 class Finish(Args):
-    gist: Gist = ""
+    gist: Annotated[Gist, Field(description="Your final report, at most 280 characters.")] = ""
     body: BodyRef | None = None
 
 
 @op("agent.finish", tool=True)
 def finish(txn: Txn, a: Finish) -> None:
-    """Finish your work for good. `gist` and `body` are your final report, sent to whoever spawned you. Call it last:
-    your credential ends here. Refused `invalid` for anyone but an agent."""
+    """End your own work for good. `gist` and `body` are your final report: your spawner receives them, and the session
+    keeps them either way. Call it last: your tools stop working here."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     end(txn, _live(txn, txn.me.name), "finished", gist=a.gist or None, body=a.body)
 
 
 class Named(Args):
-    agent: Name
+    agent: Annotated[AgentName, Field(description="`@agent`, as `peers` and `agent.list` show it.")]
 
 
 @op("agent.interrupt", on=lambda a: f"agent/{a.agent}", tool=True)
 def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
     """Stop an agent's turn at the boundary its harness can. The agent lives on. Refused `conflict` when it has no open
-    turn: there is nothing to stop."""
+    turn: there is nothing to stop. `not_permitted` when it is not below you."""
     agent = _live(txn, a.agent)
     if txn.view(Stamps).turn(agent.name) is None:
         raise Refused("conflict", f"{agent.name} has no open turn")
@@ -205,14 +217,19 @@ def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
 
 @op("agent.cancel", on=lambda a: f"agent/{a.agent}", tool=True)
 def cancel(txn: Txn, a: Named) -> None:
-    """End an agent now. Refused `conflict` when it has ended already."""
+    """End an agent now, mid-turn if need be, with the children that cannot outlive it. Its tasks reopen. Refused
+    `conflict` when it has ended already: nothing to do. `not_permitted` when it is not below you."""
     end(txn, _live(txn, a.agent), "cancelled", reason=f"cancelled by {txn.me.id}")
 
 
 @op("agent.retire", on=lambda a: f"agent/{a.agent}", tool=True)
 def retire(txn: Txn, a: Named) -> None:
-    """Take an agent out of the live team. Its history stays. Refused `conflict` when it has ended already."""
-    end(txn, _live(txn, a.agent), "retired", reason=f"retired by {txn.me.id}")
+    """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while a
+    turn is open: wait for it, or call `agent.cancel` to stop it now. `conflict` too when it has ended already."""
+    agent = _live(txn, a.agent)
+    if txn.view(Stamps).turn(agent.name) is not None:
+        raise Refused("conflict", f"{agent.name} has a turn open")
+    end(txn, agent, "retired", reason=f"retired by {txn.me.id}")
 
 
 @op("agent.takeover", on=lambda a: f"agent/{a.agent}")
@@ -242,7 +259,9 @@ def release(txn: Txn, a: Named) -> None:
     agent = _live(txn, a.agent)
     if agent.state != "held":
         raise Refused("conflict", f"{agent.name} is not held")
-    txn.emit("agent.released", f"agent/{agent.name}", gist=f"{agent.name} released", agent=agent.name)
+    state = "idle" if txn.view(Stamps).turn(agent.name) is None else "running"
+    data = {"state": state}
+    txn.emit("agent.released", f"agent/{agent.name}", gist=f"{agent.name} released", agent=agent.name, data=data)
     _gap(txn, agent.name, "harness", "takeover")
 
 
@@ -383,18 +402,24 @@ def report(txn: Txn, a: AgentReport) -> None:
 
 def _public(agent: Agent) -> dict[str, Any]:
     """An agent as any peer may see it: its goal and activity are content, and reading content is evidence."""
-    return agent.model_dump(include={"name", "role", "parent", "depth", "state", "status"})
+    parent = None if agent.parent is None else address(agent.parent)
+    return {
+        **agent.model_dump(include={"role", "depth", "state", "status"}),
+        "name": f"@{agent.name}",
+        "parent": parent,
+    }
 
 
 @op("agent.list", query=True, tool=True)
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List every agent of this session, live or ended."""
+    """List every agent of this session, live or ended. Pass `name` as `agent` to the ops that take one."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
 
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)
 def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
-    """Show one agent's state. Refused `not_found` when no such agent ever existed."""
+    """Show one agent's state, live or ended. Refused `not_found` when no such agent ever existed: call `agent.list`.
+    `not_permitted` when it is not below you."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
@@ -445,7 +470,8 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
 
 @op("session.status", query=True, tool=True)
 def session_status(txn: Txn, a: Args) -> dict[str, Any]:
-    """Say whether this session is settled and, if not, what remains. A message can un-settle it; only close ends it."""
+    """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
+    ask. A message can un-settle it; only close ends it."""
     session = txn.view(Session)
     blockers = _blockers(txn)
     until = session.settings().until

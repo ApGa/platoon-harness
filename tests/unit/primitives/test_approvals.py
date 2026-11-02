@@ -5,7 +5,7 @@ import pytest
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
 
-from .support import approval, enroll, grant, of_type, refusal, report, result_of, spawn
+from .support import approval, enroll, grant, of_type, refusal, report, result_of, send, spawn, start_turn
 
 
 async def ask(kernel, id: str = "a1", agent: str = "bob") -> None:
@@ -15,6 +15,20 @@ async def ask(kernel, id: str = "a1", agent: str = "bob") -> None:
 
 def resolving(verdict: str = "allow", version: int = 1, **fields) -> dict:
     return {"id": "a1", "verdict": verdict, "expected_version": version, **fields}
+
+
+async def test_an_answer_does_not_wait_behind_a_hung_delivery(kernel, ada):
+    await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]})
+    await start_turn(kernel, "bob")
+    await send(kernel, kernel.runtime, "@bob", "steer")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    deliver = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[0]
+    result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": deliver["id"]}))
+    await ask(kernel)
+
+    result_of(await kernel.submit(ada, "approval.resolve", resolving()))
+
+    assert [effect["kind"] for effect in result_of(kernel.query(kernel.runtime, "effect.ready", {}))] == ["answer"]
 
 
 async def test_a_request_is_shown_with_actions_carrying_the_version(kernel, ada):

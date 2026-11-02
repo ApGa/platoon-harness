@@ -184,6 +184,36 @@ async def test_an_ended_agent_leaves_nothing_in_attention(kernel, ada):
     assert result_of(kernel.query(ada, "attention.list", {})) == []
 
 
+async def test_a_mention_outlives_its_sender(kernel, ada):
+    bob = await spawn(kernel, "bob")
+    await send(kernel, bob, "@ada", "please look")
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    assert "mention" in [row["kind"] for row in result_of(kernel.query(ada, "attention.list", {}))]
+
+
+async def test_a_childs_report_to_a_human_stays_in_attention(kernel, ada):
+    bob = await spawn(kernel, "bob", by=ada)
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "here is the result"}))
+
+    rows = result_of(kernel.query(ada, "attention.list", {}))
+    assert [(row["kind"], row["gist"]) for row in rows] == [("mention", "here is the result")]
+
+
+async def test_a_dead_task_stays_in_attention_after_its_last_worker_ends(kernel, ada):
+    await channel(kernel, "q", kind="queue", max_attempts=1)
+    bob = await spawn(kernel, "bob")
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "x"}))
+    result_of(await kernel.submit(bob, "task.claim", {"queue": "q"}))
+    result_of(await kernel.submit(bob, "task.fail", {"queue": "q"}))
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    assert [row["kind"] for row in result_of(kernel.query(ada, "attention.list", {}))] == ["dead_task"]
+
+
 async def test_watching_is_a_query_that_writes_nothing(kernel, ada):
     await spawn(kernel, "bob")
     head = kernel.head

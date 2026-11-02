@@ -100,12 +100,13 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Reading a body held in `blobs/` from an op | deferred | An op may do no I/O, so it returns the hash and the surface reads the body. No surface exists yet |
 | Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging | tested | `test_tasks.py`, properties |
 | Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it arrives with drivers |
-| Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
-| Completion: `settled`, `until`, `session.close`, `session.cancel`, episodes | tested | `test_lifecycle.py` |
+| Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor on every ending, a final report kept in the journal | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
+| A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
+| Completion: `settled`, `until`, `session.close`, `session.cancel`, resuming a stopped session, episodes | tested | `test_lifecycle.py` |
 | Closing a headless session at `until` | deferred | `session.status` reports `done`. The owner that acts on it arrives with `Session` |
 | Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |
 | Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
-| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound | tested | `test_budgets.py`, properties |
+| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budget` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
 | `blob.put`, `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
 | `lineage`, `exposure` | deferred | Provenance queries, after drivers |

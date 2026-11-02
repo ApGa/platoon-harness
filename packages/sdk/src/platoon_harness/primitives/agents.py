@@ -113,6 +113,7 @@ class Agents(View):
     @fold("turn.started")
     def working(self, event: Event) -> None:
         self._move(event, "running", "idle", "waking", "waiting")
+        self.db.execute("UPDATE v_agents SET final_gist = NULL, final_body = NULL WHERE name = ?", (event.agent,))
 
     @fold("turn.ended", "turn.lost")
     def stopped(self, event: Event) -> None:
@@ -139,7 +140,9 @@ class Agents(View):
 
     @fold("agent.released")
     def released(self, event: Event) -> None:
-        self.db.execute("UPDATE v_agents SET state = 'idle', held_by = NULL WHERE name = ?", (event.agent,))
+        self.db.execute(
+            "UPDATE v_agents SET state = ?, held_by = NULL WHERE name = ?", (event.data["state"], event.agent)
+        )
 
     @fold("agent.adopted")
     def adopted(self, event: Event) -> None:

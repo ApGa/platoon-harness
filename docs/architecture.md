@@ -147,7 +147,8 @@ can both be watched. Leaving only disconnects.
 - **Attach never has side effects.** With no live runtime, `attach` gives read-only history. Only `resume` restarts
   anything, because restarting can spend money.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
-  reservations, append `session.stopped`, keep the folder resumable.
+  reservations, append `session.stopped`, keep the folder resumable. The next `runtime.started` reopens a session stopped while
+  open; one that was closing or cancelled stays so.
 
 ## 5. Kernel
 
@@ -275,7 +276,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 |---|---|---|
 | `launch` | Native session id; pid and start time written by the launcher **before exec** | Kill the recorded group if still ours; resume if the role allows; else agent `lost` with a gap |
 | `deliver` | Input id (`uuid`, `clientUserMessageId`) | `reconcile` if capable, else redeliver: at-least-once, with the id visible for dedupe |
-| `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred |
+| `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap |
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs |
@@ -313,8 +314,10 @@ never sees `outcome`, which does not exist yet when a live fold runs.
 **One event, many folds** is how a transition stays atomic. `agent.ended` is one event. In that one transaction `Waits`
 cancels the agent's waits, `Budget` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
 input undeliverable, `Approvals` closes pending requests as moot, and `Principals` revokes the token. The op adds one
-message to the monitoring agent's inbox. A failed handover has the same shape: `effect.failed` on a `deliver` queues its entries
-again in `Deliveries`, returns the agent to `idle` in `Agents`, and gives its reservation back in `Budget`.
+message to the monitoring agent's inbox, cancels the effects the agent had still to start, and keeps its final report on the event,
+so a root agent's report stays in the journal and, unheard, in attention. A failed handover has the same shape: `effect.failed` on a
+`deliver` queues its entries again in `Deliveries`, returns the agent to `idle` in `Agents`, and gives a wake's reservation back in
+`Budget`; a failed steer leaves the running turn its own.
 
 ### 5.6 Readers
 
@@ -496,8 +499,9 @@ wait's notice is one more than what its waiter had heard when it placed the wait
 `max_hops` is refused and shown in attention, and the message waits for the next turn. This bounds reply loops that budgets only
 make expensive.
 
-**The monitor.** `spawn` installs a monitor. When an agent finishes, or a turn ends with no `finish` and no open wait,
-the runtime posts the turn's final text to the spawning parent's inbox, as a runtime-authored event naming the child as
+**The monitor.** `spawn` installs a monitor. When an agent ends, however it ends, or a turn ends with no `finish` and no open
+wait, the runtime posts the turn's final text, or `<name> <status>: <reason>` for an agent that did not finish, to the
+spawning parent's inbox, as a runtime-authored event naming the child as
 subject. It wakes at most once per causal chain for each child, so a reply to the same child cannot loop while a second worker
 still reports back, and it stops at `max_hops`; past either, its message waits for the next turn.
 So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
@@ -558,17 +562,19 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 
 ### Lifecycle
 
-- **Spawn** is topology check, budget reservation, `admit`, `workspace`, `launch`. Depth comes from the parent record,
+- **Spawn** is topology check, budget reservation, `admit`, `workspace`, `launch`, each step starting only once the last has
+  finished. One that fails leaves the agent to the courier, which ends it `failed`. Depth comes from the parent record,
   never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success. `may_spawn`
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
-  An ended agent has no open turn.
+  An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
-- **Retiring** removes an agent from relations, never from history.
-- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it and
-  records a gap. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
+- **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
+  refused `conflict`: `cancel` is what stops one.
+- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it, to its
+  open turn if it has one, and records a gap. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
 
 ### Completion
 
@@ -597,7 +603,8 @@ event, tried again when the budget moves.
 
 Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`. A limit in a unit a role cannot measure
 is refused by `team check`, or falls back to `turns` when the team says so; it never silently stops enforcing. A turn nobody
-measured is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused `unavailable`. Native
+measured, a lost one among them, is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused
+`unavailable`. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology

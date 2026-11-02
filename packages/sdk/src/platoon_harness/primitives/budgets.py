@@ -49,6 +49,7 @@ class Budget(View):
         unit TEXT NOT NULL,
         role TEXT NOT NULL,
         amount REAL NOT NULL,
+        waking INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (agent, unit)
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_budget_turn(
@@ -79,10 +80,16 @@ class Budget(View):
         role = event.data["role"]
         for unit, amount in event.data["amounts"].items():
             self.db.execute(
-                "INSERT INTO v_budget_reserved VALUES (?, ?, ?, ?) "
+                "INSERT INTO v_budget_reserved(agent, unit, role, amount) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT DO UPDATE SET amount = max(amount, excluded.amount)",
                 (event.agent, unit, role, amount),
             )
+
+    @fold("agent.woken", "turn.started")
+    def turn_coming(self, event: Event) -> None:
+        """A reservation is a wake's until its turn starts, and only a wake's can come back when a handover fails."""
+        waking = event.type == "agent.woken"
+        self.db.execute("UPDATE v_budget_reserved SET waking = ? WHERE agent = ?", (waking, event.agent))
 
     @fold("usage.reported")
     def usage(self, event: Event) -> None:
@@ -117,16 +124,25 @@ class Budget(View):
 
     @fold("turn.lost")
     def lost(self, event: Event) -> None:
-        """A lost turn's cost is unknown, so its estimate stands."""
-        for row in self.db.execute("SELECT * FROM v_budget_reserved WHERE agent = ?", (event.agent,)).fetchall():
-            if row["unit"] != "agents":
-                self._charge(row["role"], event.agent, row["unit"], row["amount"], "estimated")
+        """A lost turn's cost is unknown, so its estimate stands, and it counts as unmeasured even with no estimate."""
+        rows = self.db.execute(
+            "SELECT * FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,)
+        ).fetchall()
+        held = {row["unit"]: row["amount"] for row in rows}
+        for role in {row["role"] for row in rows}:
+            for unit in _METERED:
+                self._charge(role, event.agent, unit, held.pop(unit, 0.0), "unavailable", 1)
+            for unit, amount in held.items():
+                self._charge(role, event.agent, unit, amount, "estimated")
         self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
+        self.db.execute("DELETE FROM v_budget_turn WHERE agent = ?", (event.agent,))
 
     @fold("effect.failed")
     def wake_failed(self, event: Event) -> None:
         if event.data["kind"] == "deliver":
-            self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
+            self.db.execute(
+                "DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents' AND waking = 1", (event.agent,)
+            )
 
     @fold("agent.ended")
     def ended(self, event: Event) -> None:
@@ -179,9 +195,12 @@ class Budget(View):
         shared, own = self._scope("shared"), self._scope(f"role:{role}")
         return {**(shared.estimate if shared else {}), **(own.estimate if own else {})}
 
+    def _past_wall(self, found: _Scope, limit: float, now: float) -> bool:
+        return now - found.since >= limit
+
     def _check_limit(self, scope: str, found: _Scope, unit: str, limit: float, want: float, now: float) -> None:
         if unit == "wall":
-            if now - found.since >= limit:
+            if self._past_wall(found, limit, now):
                 raise Refused("over_budget", {"scope": scope, "unit": unit, "limit": limit})
             return
         spent, _, unmeasured = self.spent(scope, unit)
@@ -201,12 +220,14 @@ class Budget(View):
                     self._check_limit(scope, found, unit, limit, wanted.get(unit, 0.0), now)
 
     def exhausted(self, now: float) -> bool:
-        """Whether the shared budget has run out, which stops every kind of session."""
-        try:
-            self.check("", {}, now)
-        except Refused as refused:
-            return refused.refusal.code == "over_budget"
-        return False
+        """Whether the shared budget has run out, which stops every kind of session. A reservation has spent nothing."""
+        found = self._scope("shared")
+        if found is None:
+            return False
+        return any(
+            self._past_wall(found, limit, now) if unit == "wall" else self.spent("shared", unit)[0] >= limit
+            for unit, limit in found.limits.items()
+        )
 
     def status(self) -> list[dict[str, Any]]:
         scopes = self.db.execute("SELECT scope FROM v_budget ORDER BY scope").fetchall()

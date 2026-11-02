@@ -16,6 +16,7 @@ from .tasks import Tasks
 from .waits import Waits
 
 WATCH_SPAN = 4096
+_MOOT_WITH_ITS_AGENT = ("approval", "uncertain", "failed", "hops", "budget")
 
 
 def _resolve_actions(event: Event) -> list[dict[str, Any]]:
@@ -71,7 +72,11 @@ class Attention(View):
 
     @fold("agent.ended")
     def agent_gone(self, event: Event) -> None:
-        self._lower(event, "agent = ?", event.agent)
+        """What only that agent could have settled is moot. A final report nobody received waits for a human."""
+        marks = ", ".join("?" * len(_MOOT_WITH_ITS_AGENT))
+        self._lower(event, f"agent = ? AND kind IN ({marks})", event.agent, *_MOOT_WITH_ITS_AGENT)
+        if event.data["status"] == "finished" and not event.data["heard"]:
+            self._raise(event.stream, "mention", event)
 
     @fold("message.sent")
     def mention(self, event: Event) -> None:

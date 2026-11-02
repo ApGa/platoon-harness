@@ -88,7 +88,9 @@ class Approvals(View):
 
 
 def _decide(txn: Txn, id: str, agent: str, verdict: str, by: str, via: str | None) -> None:
-    effect = txn.effect("answer", {"approval": id, "verdict": verdict}, on_uncertain="reconcile", agent=agent)
+    effect = txn.effect(
+        "answer", {"approval": id, "verdict": verdict}, on_uncertain="reconcile", priority=1, agent=agent
+    )
     data = {"id": id, "verdict": verdict, "resolved_by": by, "via": via, "effect": effect}
     txn.emit(
         "approval.resolved", f"approval/{id}", gist=f"approval {id}: {verdict}"[:GIST_LIMIT], agent=agent, data=data
