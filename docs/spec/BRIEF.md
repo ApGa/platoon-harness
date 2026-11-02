@@ -386,3 +386,7 @@ Your final report must list working commands, implemented capabilities, tests ac
 ## Addendum from the project owner (2026-11-02)
 
 Regarding the distributive communication primitives: Basically I want the sdk to make it easy to configure various communication primitives/topologies across the multi-agent systems where the primitives are inspired by distributed computing.
+
+## Second addendum from the project owner (2026-11-02)
+
+Do not look at any existing or upstream platoon-harness implementation for reference. The owner did not like that implementation and wants this project implemented from scratch with very good taste.
