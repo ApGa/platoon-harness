@@ -2,7 +2,7 @@
 
 import pytest
 
-from platoon_harness.kernel import Effect, Effects, Principal
+from platoon_harness.kernel import GIST_LIMIT, Effect, Effects, Principal
 
 from .support import enroll, events_of, grant, refusal_of, result_of, supervised, until
 
@@ -314,3 +314,13 @@ async def test_effects_can_be_listed_by_state_for_recovery(kernel):
 async def test_an_incarnation_is_numbered_from_one(kernel):
     assert result_of(await kernel.recover()) == 1
     assert result_of(await kernel.recover()) == 2
+
+
+async def test_what_changed_under_a_session_stays_whole_past_what_a_gist_holds(kernel):
+    drift = tuple(f"component-{number} 1.0 is now 2.0" for number in range(32))
+
+    await kernel.recover(*drift)
+
+    started = [event for event in events_of(kernel) if event.type == "runtime.started"][-1]
+    assert len(started.gist) == GIST_LIMIT
+    assert tuple(started.data["drift"]) == drift

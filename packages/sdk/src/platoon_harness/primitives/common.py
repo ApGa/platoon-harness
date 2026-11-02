@@ -53,6 +53,11 @@ def address(principal: str) -> str:
     return f"@{name}" if colon else kind
 
 
+def name_of(principal: str) -> str:
+    """A principal id as a row names it: `agent:alice` is `alice`, as a name is unique across kinds."""
+    return principal.partition(":")[2]
+
+
 def checked_after(txn: Txn, after: int | None) -> int | None:
     """`after` as given. Past the head it is no cursor, and reading from it would hide what is unread."""
     if after is not None and after > txn.view(Stamps).head():

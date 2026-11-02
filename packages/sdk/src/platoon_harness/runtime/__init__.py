@@ -71,7 +71,7 @@ class Runtime:
         self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd)
         self.control = Control(self.kernel, self.human, self.folder)
         try:
-            incarnation = (await self.kernel.recover(*manifest.changed())).result
+            incarnation = (await self.kernel.recover(*manifest.drift())).result
             await open_session(self.kernel, team, manifest, authority, text)
             await self.tools.start()
             await self._issue_credentials()

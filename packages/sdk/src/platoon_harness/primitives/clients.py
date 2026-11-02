@@ -11,7 +11,7 @@ from . import why
 from .agents import Agent, Agents
 from .approvals import Approvals
 from .budgets import Budgets
-from .common import address
+from .common import name_of
 from .messages import Deliveries
 from .tasks import Tasks
 from .waits import Waits
@@ -248,11 +248,11 @@ def _roster(txn: Txn) -> list[dict[str, Any]]:
             "role": agent.role,
             "harness": agent.harness,
             "model": agent.model,
-            "parent": agent.parent and address(agent.parent),
+            "parent": agent.parent and name_of(agent.parent),
             "state": agent.state,
             "activity": agent.activity,
             "stopped": agent.stopped,
-            "held_by": agent.held_by and address(agent.held_by),
+            "held_by": agent.held_by and name_of(agent.held_by),
             "why": _why(txn, agent, uncertain, dues),
             "unread": deliveries.unread(agent.name),
             "levels": agent.levels,

@@ -214,7 +214,7 @@ class Manifest(Model):
         )
         return cls(team=sanitized(team, environ), topology_hash=team.topology.hash, components=components, **started)
 
-    def changed(self) -> tuple[str, ...]:
+    def drift(self) -> tuple[str, ...]:
         """What is installed now that differs from what was recorded, in words. Nothing is imported. A resume is
         labelled with this and not refused, since a session survives an upgrade."""
         installed = {(component.group, component.name): component.version for component in discover()}

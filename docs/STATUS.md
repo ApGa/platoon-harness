@@ -130,6 +130,7 @@ under Runtime below, so every effect is now performed, and nothing here has met 
 | `lineage`, `exposure` | deferred | Provenance queries, after the host |
 | `topology.patch`, `topology.show` | planned | Named in architecture sections 6 and 8. Neither is in the registry yet |
 | `platoon_harness.patterns`, the library tier of architecture section 6 | planned | |
+| Per-human unread positions in `marks.sqlite`, architecture section 4 | planned | Nothing creates the file yet. The UI that shows badges arrives with the clients |
 | `doctor`, `docs/security.md`, and guides for training, the TUI and SwarmChat | planned | The architecture holds their promises until then |
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | tested | `tests/unit/runtime/test_opening.py` |
 | An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |

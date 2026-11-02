@@ -115,7 +115,8 @@
 - `Link.submit` takes no `expected_version`. Ops that need one take it as an argument.
 - `ConfigError` is at the top of the package, and `testing` no longer exports `API_KEY` and `BASE_URL`.
 - `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
-- `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do.
+- `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do, and `parent` and
+  `held_by` the same way, so a client can walk them.
 - `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.
 - `reap` returns what it left alone in words, and `Process` masks stderr and leaves reports to the host.
 - `agent.records` takes an `agent`.
@@ -136,10 +137,11 @@
   `shell`, and `operational` needs that last one. `measures_reported` holds `tokens` to what the model said, `call_ids_reported` holds an
   item and a call's usage to the id, and `interrupt` holds a turn's reason to `interrupted`.
 - `ScriptedDriver` sends `spec.instructions` as a system message, and says which call made an item.
-- `runtime.start` takes `changed`, and `Kernel.recover` takes it as arguments. `Manifest.changed()` says what differs from a manifest.
+- `runtime.start` takes `drift`, and `Kernel.recover` takes it as arguments. `Manifest.drift()` says what differs from a manifest.
 - `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
 - `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have
-  `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`.
+  `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`. An
+  id, a reason and a purpose hold 256 characters, `Item.native_id` among them.
 - `Compacted.forgotten` holds native ids, and the host stores it and `summary` as bodies. With `None` the runtime records
   `compaction_opaque`, so a driver no longer reports that gap itself.
 - A `roster` row has `parent`, `stopped`, why the last turn did not stop on its own until the next begins, and `held_by`.

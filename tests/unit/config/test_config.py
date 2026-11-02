@@ -278,10 +278,10 @@ def test_a_manifest_says_what_has_changed_since_it_was_written(monkeypatch):
     )
 
     monkeypatch.setattr("platoon_harness.config.discover", lambda: (then,))
-    assert written.changed() == ("gone 1.0 is now gone",)
+    assert written.drift() == ("gone 1.0 is now gone",)
 
     monkeypatch.setattr("platoon_harness.config.discover", lambda: (replace(then, version="2.0"), gone))
-    assert written.model_copy(update={"sdk_version": "0.0.1"}).changed() == (
+    assert written.model_copy(update={"sdk_version": "0.0.1"}).drift() == (
         f"the SDK 0.0.1 is now {__version__}",
         "kept 1.0 is now 2.0",
     )

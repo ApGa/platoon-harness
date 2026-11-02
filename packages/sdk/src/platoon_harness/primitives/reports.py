@@ -16,7 +16,7 @@ OWNER_STOP = "stopped by its owner"
 CUT_OFF = {"lost": "a crash", OWNER_STOP: "the owner stopping the session"}
 """The reasons only the runtime can give a turn, each with what cut that turn off, as a notice says it."""
 
-CallId = Annotated[str, Field(max_length=256)]
+Short = Annotated[str, Field(max_length=256)]
 Boundary = Literal["turn", "tool", "model_call"]
 Plane = Literal["control", "tool", "model"]
 Attribution = Literal["exact", "declared", "inferred", "forked"]
@@ -64,7 +64,7 @@ class Ready(Args):
 
 class TurnStarted(Args):
     type: Literal["turn.started"] = "turn.started"
-    turn: Annotated[str, Field(max_length=256)]
+    turn: Short
 
 
 class TurnEnded(Args):
@@ -72,7 +72,7 @@ class TurnEnded(Args):
     cannot say a reason in `CUT_OFF`, which are the runtime's own."""
 
     type: Literal["turn.ended"] = "turn.ended"
-    reason: Annotated[str, Field(max_length=256)] = "stopped"
+    reason: Short = "stopped"
 
 
 class Delta(Args):
@@ -91,8 +91,8 @@ class Item(Args):
     kind: Literal["message", "thought", "tool", "patch"]
     gist: Gist
     phase: Literal["started", "completed", "final", "decided"] | None = None
-    native_id: str | None = None
-    call_id: CallId | None = None
+    native_id: Short | None = None
+    call_id: Short | None = None
     body: str | None = None
     approval: Name | None = None
     outcome: str | None = None
@@ -103,10 +103,10 @@ class InputDelivered(Args):
     `native_id` is the harness's own id for what landed."""
 
     type: Literal["input.delivered"] = "input.delivered"
-    input: Annotated[str, Field(max_length=256)]
+    input: Short
     boundary: Boundary
     evidence: str | None = None
-    native_id: CallId | None = None
+    native_id: Short | None = None
 
 
 class ApprovalRequested(Args):
@@ -120,9 +120,9 @@ class ModelCall(Args):
     said why, in its own word, such as `compaction`."""
 
     type: Literal["model.call"] = "model.call"
-    call_id: CallId | None = None
+    call_id: Short | None = None
     model: str | None = None
-    purpose: CallId | None = None
+    purpose: Short | None = None
 
 
 class Usage(Args):
@@ -135,7 +135,7 @@ class Usage(Args):
     usd: float | None = None
     label: Label
     scope: Literal["call", "turn", "tree"] = "turn"
-    call_id: CallId | None = None
+    call_id: Short | None = None
 
 
 class Compacted(Args):
@@ -166,7 +166,7 @@ class Native(Args):
     """A frame nobody's vocabulary covers, as it came, up to 2 KiB. `cut` says how many characters did not fit."""
 
     type: Literal["native"] = "native"
-    kind: Annotated[str, Field(max_length=256)]
+    kind: Short
     raw: Annotated[str, Field(max_length=RAW_LIMIT)]
     cut: int = 0
 

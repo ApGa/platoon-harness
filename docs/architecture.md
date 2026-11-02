@@ -159,7 +159,7 @@ can both be watched. Leaving only disconnects.
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
   through opening is finished by the next runtime. A resume under an SDK or component version other than the manifest's is labelled
-  on `runtime.started`, in its `gist` and its `changed`, and never refused, since a session survives an upgrade.
+  on `runtime.started`, in its `gist` and whole in its `drift`, and never refused, since a session survives an upgrade.
 - **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
@@ -194,7 +194,7 @@ daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `
 `submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. `read` and
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
-`erase_body(hash)`, `recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
+`erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 `is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, and `first(work, *rivals)`
 races awaitables and drops what lost, which is how anything here sleeps on two things.
@@ -1040,8 +1040,8 @@ says why an edge is believed; **attribution** (`exact`, `declared`, `inferred`, 
 an agent, tracking a Platoon draft in our own versioned enum; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
 
-**Late joins.** An `item` or a `usage` that names its model call carries that `call_id` on its envelope, and nothing else does. A tool
-op can commit before the model call that caused it is reported. `call.joined` is a new event citing both, with its quality (`anchor`,
+**Late joins.** A `model.called`, and an `item` or a `usage` that names its call, carry that `call_id` on the envelope, and nothing else
+does. A tool op can commit before the model call that caused it is reported. `call.joined` is a new event citing both, with its quality (`anchor`,
 `response_id`, `turn`), for that late case alone. Tools link to a model call only through a real anchor.
 
 **Coverage.** Standing gaps come from `coverage` at `agent.started`: any harness with a shell is blind to `shell_reads` for life.
@@ -1116,7 +1116,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 
 | View | Row | Answers |
 |---|---|---|
-| `roster` | `agent, role, harness, model, parent, state, activity, stopped, held_by, why, unread, levels, usage` | Who is working, on what, what is blocked |
+| `roster` | `agent, role, harness, model, parent, state, activity, stopped, held_by, why, unread, levels, usage` | Who is working, on what, what is blocked. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
 

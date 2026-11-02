@@ -1198,8 +1198,8 @@ async def test_a_resume_under_other_versions_is_labelled_and_goes_on(tmp_path):
         await in_state(session, "bob", "idle")
         started = await of_type(session, "runtime.started")
 
-    assert started[0].data["changed"] == []
-    assert started[-1].data["changed"] == [f"the SDK 0.0.1 is now {__version__}"]
+    assert started[0].data["drift"] == []
+    assert started[-1].data["drift"] == [f"the SDK 0.0.1 is now {__version__}"]
     assert f"the SDK 0.0.1 is now {__version__}" in started[-1].gist
 
 

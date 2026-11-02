@@ -327,19 +327,19 @@ async def test_a_roster_row_says_a_lost_turn_was_lost(kernel):
     assert roster(kernel, "bob")["stopped"] == "lost"
 
 
-async def test_a_roster_row_names_its_parent_as_an_address(kernel):
+async def test_a_roster_row_names_its_parent_as_that_parent_s_row_does(kernel):
     boss = await spawn(kernel, "boss", role="lead")
     await spawn(kernel, "bob", by=boss)
 
     assert roster(kernel, "boss")["parent"] is None
-    assert roster(kernel, "bob")["parent"] == "@boss"
+    assert roster(kernel, "bob")["parent"] == roster(kernel, "boss")["agent"]
 
 
 async def test_a_roster_row_says_who_holds_an_agent(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
 
     result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
-    assert roster(kernel, "bob")["held_by"] == "@ada"
+    assert roster(kernel, "bob")["held_by"] == "ada"
 
     result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
     assert roster(kernel, "bob")["held_by"] is None

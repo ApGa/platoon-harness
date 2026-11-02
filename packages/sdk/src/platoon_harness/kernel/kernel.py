@@ -335,10 +335,10 @@ class Kernel:
         log.error("an op failed", exc_info=error)
         return Refusal(code="unavailable", detail=f"the op failed: {type(error).__name__}")
 
-    async def recover(self, *changed: str) -> Outcome:
+    async def recover(self, *drift: str) -> Outcome:
         """Begin a new incarnation: started effects become uncertain, a turn in flight is lost, policies apply.
-        `changed` says what runs now that differs from what the session began under, which `runtime.started` keeps."""
-        return await self.submit(self.runtime, "runtime.start", {"changed": changed})
+        `drift` says what runs now that differs from what the session began under, which `runtime.started` keeps."""
+        return await self.submit(self.runtime, "runtime.start", {"drift": drift})
 
     async def rebuild(self, view: type[View]) -> None:
         """Drop one view and refold it."""

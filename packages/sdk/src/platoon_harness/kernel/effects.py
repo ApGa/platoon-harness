@@ -179,7 +179,7 @@ class EffectVerdict(Args):
 
 
 class Incarnation(Args):
-    changed: tuple[str, ...] = ()
+    drift: tuple[str, ...] = ()
 
 
 class EffectKind(Args):
@@ -261,8 +261,8 @@ def start_runtime(txn: Txn, a: Incarnation) -> int:
 
     Started effects become uncertain, and a turn in flight is lost: its tool effects are unknown and never re-run.
     """
-    gist = "; ".join(("runtime started", *a.changed))[:GIST_LIMIT]
-    incarnation = txn.emit("runtime.started", "runtime", gist=gist, data={"changed": a.changed}).version
+    gist = "; ".join(("runtime started", *a.drift))[:GIST_LIMIT]
+    incarnation = txn.emit("runtime.started", "runtime", gist=gist, data={"drift": a.drift}).version
     for effect in txn.view(Effects).in_state("started"):
         _cancel_timeout(txn, effect)
         _mark_uncertain(txn, effect, "the runtime restarted")

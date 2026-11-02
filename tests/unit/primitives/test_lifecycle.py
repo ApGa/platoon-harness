@@ -1494,7 +1494,7 @@ async def test_an_agent_has_one_address_and_takes_any_spelling(kernel, spelling)
 
     shown = result_of(kernel.query(alice, "agent.status", {"agent": spelling}))
 
-    assert (shown["agent"], shown["parent"]) == ("bob", "@alice")
+    assert (shown["agent"], shown["parent"]) == ("bob", "alice")
 
 
 async def test_agent_status_of_nobody_is_refused(kernel):
@@ -1986,7 +1986,7 @@ async def test_a_program_principal_may_spawn_with_itself_as_parent(kernel):
 
     result_of(await kernel.submit(program, "agent.spawn", spawning("w1")))
 
-    assert state_of(kernel, "w1")["parent"] == "@driver"
+    assert state_of(kernel, "w1")["parent"] == "driver"
 
 
 async def test_a_spawned_agent_is_a_principal_at_once_with_no_credential(kernel):
@@ -2036,7 +2036,7 @@ async def test_an_adopted_orphan_leaves_its_old_ancestors_reach(kernel, ada):
 
     assert refusal(kernel.query(lead, "agent.status", {"agent": "orphan"})).code == "not_permitted"
     assert refusal(kernel.query(lead, "agent.status", {"agent": "below"})).code == "not_permitted"
-    assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == "@orphan"
+    assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == "orphan"
 
 
 # What a host needs from the record.

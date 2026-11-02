@@ -24,7 +24,7 @@ from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
 from .clients import Gaps
-from .common import AgentName, Body, Gist, Name, Paging, address, paged
+from .common import AgentName, Body, Gist, Name, Paging, name_of, paged
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
@@ -65,7 +65,7 @@ _NOTICE = (
 
 
 def _inbox_of(principal: str) -> str:
-    return f"inbox/{principal.partition(':')[2]}"
+    return f"inbox/{name_of(principal)}"
 
 
 def _live(txn: Txn, name: str) -> Agent:
@@ -86,7 +86,7 @@ def _starting(txn: Txn) -> list[str]:
 def _at_work(txn: Txn) -> set[str]:
     """Agents in a turn or on their way to one, by a wake that is due or a wait that holds as well."""
     pending = work(txn)
-    waiters = (wait.waiter.partition(":")[2] for wait in pending.waits)
+    waiters = (name_of(wait.waiter) for wait in pending.waits)
     return {*_starting(txn), *txn.view(Stamps).open_turns(), *pending.agents, *pending.later, *waiters}
 
 
@@ -550,7 +550,7 @@ def report(txn: Txn, a: AgentReport) -> None:
 
 def _public(agent: Agent) -> dict[str, Any]:
     """An agent as any peer may see it: its goal and activity are content, and reading content is evidence."""
-    parent = None if agent.parent is None else address(agent.parent)
+    parent = agent.parent and name_of(agent.parent)
     return {**agent.model_dump(include={"role", "depth", "state", "status"}), "agent": agent.name, "parent": parent}
 
 
