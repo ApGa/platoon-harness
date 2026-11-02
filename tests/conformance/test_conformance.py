@@ -27,7 +27,11 @@ ONE_SHOT_SKIPS = {
     "call_ids_reported",
     "dialects_spoken",
     "declared_but_unproven",
+    "preamble_once_per_request",
+    "tool_item_carries_its_anchor",
+    "stop_ends_a_running_tool",
 }
+SCRIPTED_SKIPS = {"one_shot_exits", "declared_but_unproven", "tool_item_carries_its_anchor", "stop_ends_a_running_tool"}
 
 
 def states(result: Conformance) -> dict[str, str]:
@@ -44,7 +48,7 @@ async def test_the_scripted_driver_conforms_in_this_process(tmp_path):
     assert_nothing_failed(result)
     assert (result.driver, result.version) == ("scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"stop_leaves_no_process", "malformed_frame_is_a_gap", "one_shot_exits", "declared_but_unproven"}
+    assert skipped == {*SCRIPTED_SKIPS, "stop_leaves_no_process", "malformed_frame_is_a_gap"}
 
 
 async def test_a_wire_driver_conforms_across_a_process(tmp_path):
@@ -59,7 +63,7 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
     assert_nothing_failed(result)
     assert (result.driver, result.version) == ("wire-scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"one_shot_exits", "declared_but_unproven"}
+    assert skipped == SCRIPTED_SKIPS
 
 
 async def test_the_exec_driver_conforms_as_far_as_a_one_shot_can(tmp_path):

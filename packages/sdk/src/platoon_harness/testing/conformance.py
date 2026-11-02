@@ -8,7 +8,7 @@ import asyncio
 import contextlib
 import os
 import signal
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType
@@ -25,6 +25,7 @@ from platoon_harness.drivers import (
     Exited,
     GapReport,
     InputDelivered,
+    Item,
     ModelCall,
     Native,
     Offered,
@@ -37,8 +38,9 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.levels import Check, Conformance
 from platoon_harness.drivers.process import RECORD, Record, reap
+from platoon_harness.tools.mcp import HARNESS_ANCHORS
 
-from .model import FakeModel, Reply, Request, Stall, ToolCall
+from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Reply, Request, Stall, ToolCall
 from .scripted import API_KEY, BASE_URL
 from .tools import TOOL, FakeTools
 
@@ -46,11 +48,13 @@ _GRACE = 2.0
 _MODEL = "fake-model"
 _GOAL = "conformance goal: the first word is heliotrope"
 _GIST = "conformance delivery: the second word is cinnabar"
+_PREAMBLE = "conformance preamble: the third word is viridian"
 _GATED = ToolCall("shell", {"command": "true"}, id="call_gated")
 
 Factory = Callable[[], Driver]
 Access = Callable[[FakeModel], Mapping[str, Secret]]
 Garble = Callable[[Any], Awaitable[Any]]
+Shell = Callable[[str], ToolCall]
 _Needs = Callable[[Capabilities], str | None]
 
 
@@ -88,6 +92,7 @@ class _Rig:
         self.capabilities = self.driver.describe().capabilities
         self.reports: list[Report] = []
         self.awaiting = "the driver"
+        self.allowing = False
         self.drivers = [self.driver]
         self._arrived = asyncio.Event()
 
@@ -110,6 +115,8 @@ class _Rig:
     async def _report(self, report: Report) -> None:
         self.reports.append(report)
         self._arrived.set()
+        if self.allowing and isinstance(report, ApprovalRequested):
+            await self.driver.answer(report.id, "allow")
 
     async def start(self, **changes: Any) -> Started:
         self.awaiting = "an answer to `start`"
@@ -160,6 +167,7 @@ class _Rig:
 class _Options:
     garble: Garble | None
     gated: ToolCall
+    shell: Shell | None
     timeout: float
 
 
@@ -347,6 +355,42 @@ async def stop_leaves_no_process(rig: _Rig) -> None:
     _expect(not alive, f"groups {alive} outlived `stop`")
 
 
+@contextlib.asynccontextmanager
+async def _named_pipe(path: Path) -> AsyncGenerator[asyncio.StreamReader]:
+    """A pipe a shell can write to by name, which ends when its last writer does, whatever else that writer did."""
+    os.mkfifo(path)
+    reader = asyncio.StreamReader()
+    pipe = os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb", 0)
+    protocol = asyncio.StreamReaderProtocol(reader)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, pipe)
+    try:
+        yield reader
+    finally:
+        transport.close()
+
+
+@_check()
+async def stop_ends_a_running_tool(rig: _Rig) -> None:
+    """The tool holds a pipe open, so only its end ends the pipe, whichever process group it left for."""
+    if rig.options.shell is None:
+        raise _Skipped("nothing was given that makes this harness run a shell command")
+    rig.folder.mkdir(parents=True, exist_ok=True)
+    async with _named_pipe(rig.folder / "tool") as tool:
+        rig.allowing = True
+        rig.model.script([rig.options.shell(f"exec 3>{rig.folder / 'tool'}; echo $$ >&3; exec sleep 600")])
+        await rig.start()
+        rig.awaiting = "the shell tool"
+        pid = int(await tool.readline())
+        try:
+            rig.awaiting = "`stop`"
+            await rig.driver.stop(_GRACE)
+            rig.awaiting = "the end of the running shell tool"
+            await tool.read()
+        finally:
+            if not tool.at_eof():
+                os.kill(pid, signal.SIGKILL)
+
+
 @_check()
 async def malformed_frame_is_a_gap(rig: _Rig) -> None:
     if rig.options.garble is None:
@@ -387,6 +431,10 @@ async def measures_reported(rig: _Rig) -> None:
 
     for unit in rig.capabilities.measures:
         _expect(any(getattr(usage, unit) is not None for usage in usages), f"no {unit} came with the turn")
+    if "tokens" in rig.capabilities.measures:
+        counted = sum(usage.tokens or 0 for usage in usages)
+        said = len(rig.model.calls) * (INPUT_TOKENS + OUTPUT_TOKENS)
+        _expect(counted == said, f"it counted {counted} tokens, and the model said {said} of input and output")
 
 
 def _exact(capabilities: Capabilities) -> str | None:
@@ -400,6 +448,39 @@ async def call_ids_reported(rig: _Rig) -> None:
     call = await rig.call(0)
 
     _expect(reported.call_id == call.response_id, f"it said {reported.call_id}, and the model said {call.response_id}")
+    await rig.until(TurnEnded)
+    items = [report for report in rig.reports if isinstance(report, Item)]
+    _expect(any(item.call_id == call.response_id for item in items), "no item names the model call that made it")
+    usages = [report for report in rig.reports if isinstance(report, Usage) and report.scope == "call"]
+    _expect(all(usage.call_id == call.response_id for usage in usages), "usage of one call does not name it")
+
+
+@_check(_mcp)
+async def preamble_once_per_request(rig: _Rig) -> None:
+    rig.model.script([ToolCall(TOOL, {"note": "preamble"})])
+    await rig.start(instructions=_PREAMBLE)
+    await rig.until(TurnEnded)
+    if _persistent(rig.capabilities) is None:
+        next_call = len(rig.model.calls)
+        await rig.deliver()
+        await rig.call(next_call)
+    times = [call.message.body.decode(errors="replace").count(_PREAMBLE) for call in rig.model.calls]
+
+    _expect(times and set(times) == {1}, f"the preamble came {times} times in its requests")
+
+
+@_check(_mcp)
+async def tool_item_carries_its_anchor(rig: _Rig) -> None:
+    rig.model.script([ToolCall(TOOL, {"note": "anchor"})])
+    await rig.start()
+    await rig.until(TurnEnded)
+    metas = [call.get("_meta") or {} for call in rig.tools.calls]
+    anchors = {meta[name] for meta in metas for name in HARNESS_ANCHORS if name in meta}
+    if not anchors:
+        raise _Skipped("this harness sends no anchor with a tool call")
+    ids = {report.native_id for report in rig.reports if isinstance(report, Item) and report.kind == "tool"}
+
+    _expect(anchors <= ids, f"its tool items say {sorted(map(str, ids))}, and it sent {sorted(anchors)}")
 
 
 def _dialects(capabilities: Capabilities) -> str | None:
@@ -477,6 +558,7 @@ async def check_driver(
     access: Access = chat_access,
     garble: Garble | None = None,
     gated: ToolCall = _GATED,
+    shell: Shell | None = None,
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
     """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver and the
@@ -484,10 +566,11 @@ async def check_driver(
 
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
     write a frame no parser knows, and with none that check is skipped. `gated` is a tool call this harness asks
-    approval for. `timeout` bounds each check, so one wedged harness costs only its own checks.
+    approval for. `shell` turns a command into the tool call that runs it, and with none the check of a stop during a
+    running tool is skipped. `timeout` bounds each check, so one wedged harness costs only its own checks.
     """
     name = factory().describe().name
-    options = _Options(garble, gated, timeout)
+    options = _Options(garble, gated, shell, timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)

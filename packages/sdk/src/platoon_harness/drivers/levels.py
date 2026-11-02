@@ -141,6 +141,8 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
             "resume",
             "approval_answered",
             "steers_at_declared_boundary",
+            "preamble_once_per_request",
+            "stop_ends_a_running_tool",
         ),
     )
     if not capabilities.tool_paths:
@@ -156,7 +158,7 @@ def _observable(capabilities: Capabilities, profile: Profile, conformance: Confo
         profile,
         conformance,
         ("turn_end_reported", "malformed_frame_is_a_gap"),
-        ("measures_reported", "call_ids_reported"),
+        ("measures_reported", "call_ids_reported", "tool_item_carries_its_anchor"),
     )
     blind = [surface for surface in SURFACES if capabilities.coverage.get(surface, "none") == "none"]
     if len(blind) == len(SURFACES):

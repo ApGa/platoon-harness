@@ -149,6 +149,29 @@ async def test_stop_ends_a_harness_with_term_first(tmp_path):
     assert marker.exists()
 
 
+async def test_a_stop_that_came_to_sigkill_says_so(tmp_path):
+    """A tool that leads a group of its own outlives a SIGKILL, and what it does next nobody sees."""
+    ready, heard = asyncio.Event(), Heard()
+    script = "trap '' TERM; echo ready; while :; do sleep 0.01; done"
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready), report=heard)
+    await ready.wait()
+
+    await process.stop(0.05)
+
+    assert GapReport(plane="control", what="crash_window") in heard.reports
+
+
+async def test_a_stop_that_term_answered_leaves_no_gap(tmp_path):
+    ready, heard = asyncio.Event(), Heard()
+    script = "trap 'exit 0' TERM; echo ready; while :; do sleep 0.01; done"
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready), report=heard)
+    await ready.wait()
+
+    await process.stop(5)
+
+    assert not [report for report in heard.reports if isinstance(report, GapReport)]
+
+
 async def test_stop_kills_a_child_that_ignores_term(tmp_path):
     ready = asyncio.Event()
     spec = make_spec(tmp_path)

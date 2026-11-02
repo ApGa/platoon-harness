@@ -896,7 +896,8 @@ leader with the recorded start time proves a group is ours, so a reused pid cann
 leader is gone is left alone and named. `reap` reads the driver's record and a wire program's and no others, because a harness can
 write under its folder, and one it cannot read is named too. Pipes always drain, and stderr goes to a bounded log with credentials
 masked. A driver that cuts text masks it first, since a cut can split a secret. `stop(grace)` is `SIGTERM`, wait, `SIGKILL`, then
-verify. A process that leaves the group by `setsid` escapes it. See [ADR 0018](adr/0018-who-owns-a-process.md).
+verify. A process that leaves the group by `setsid` escapes it, and a stop that came to `SIGKILL` reports `crash_window`, because a
+harness gets no chance to end a tool that leads a group of its own. See [ADR 0018](adr/0018-who-owns-a-process.md).
 
 ### 9.2 Capabilities
 

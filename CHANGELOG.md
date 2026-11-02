@@ -83,6 +83,8 @@
 - A parent that ended its own child is not woken to hear of it.
 - `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
   mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
+- A stop that comes to `SIGKILL` reports `crash_window`. `stop_leaves_no_process` could not see a tool, and a tool that leads its own
+  group outlives a kill of its harness.
 - A resume under other SDK or extension versions leaves a record on `runtime.started`. It left none.
 - A model on a long team can still find its peers: `peers` and `channel.list` go a page at a time, where one past 32 KiB was refused
   with nothing left to try.
@@ -119,6 +121,9 @@
 
 - `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
   page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
+- `check_driver` has `preamble_once_per_request`, `tool_item_carries_its_anchor` and `stop_ends_a_running_tool`, for which it takes
+  `shell`. `measures_reported` holds `tokens` to what the model said, and `call_ids_reported` holds an item and a call's usage to the id.
+- `ScriptedDriver` sends `spec.instructions` as a system message, and says which call made an item.
 - `runtime.start` takes `changed`, and `Kernel.recover` takes it as arguments. `Manifest.changed()` says what differs from a manifest.
 - `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
 - `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have

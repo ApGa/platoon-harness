@@ -129,14 +129,22 @@ async def _gone(group: int, within: float) -> bool:
     return True
 
 
-async def _end(group: int, grace: float) -> None:
-    """End a whole group: TERM, wait, KILL, then verify."""
+async def _termed(group: int, grace: float) -> bool:
+    """Ask a whole group to end, and say whether it did."""
     _signal(group, signal.SIGTERM)
-    if await _gone(group, grace):
-        return
+    return await _gone(group, grace)
+
+
+async def _killed(group: int) -> None:
     _signal(group, signal.SIGKILL)
     if not await _gone(group, _VERIFY):
         raise DriverError(f"process group {group} outlived SIGKILL")
+
+
+async def _end(group: int, grace: float) -> None:
+    """End a whole group: TERM, wait, KILL, then verify."""
+    if not await _termed(group, grace):
+        await _killed(group)
 
 
 async def reap(folder: Path, grace: float) -> tuple[str, ...]:
@@ -424,15 +432,18 @@ class Process:
             self._stopping = asyncio.create_task(self._stop(grace))
 
     async def stop(self, grace: float) -> None:
-        """End the whole tree: TERM, wait, KILL, then verify. A process that left the group by `setsid` escapes it. A
-        second call waits for the first."""
+        """End the whole tree: TERM, wait, KILL, then verify. A process that left the group by `setsid` escapes it, and
+        a stop that came to KILL reports `crash_window`. A second call waits for the first."""
         self._stop_soon(grace)
         assert self._stopping is not None
         await asyncio.shield(self._stopping)
 
     async def _stop(self, grace: float) -> None:
-        if self._record.state() != "gone":
-            await _end(self._record.pid, grace)
+        """A SIGKILL gives a harness no chance to end what it started, and a tool that leads a group of its own lives
+        on, so that is a gap. It is said first, since the leader's end closes the queue."""
+        if self._record.state() != "gone" and not await _termed(self._record.pid, grace):
+            self._enqueue(GapReport(plane="control", what="crash_window"))
+            await _killed(self._record.pid)
         (self._folder / RECORD).unlink(missing_ok=True)
         self._released.set()
         await asyncio.wait({self._owning, self._logging, self._forwarding}, timeout=_FLUSH)

@@ -1,6 +1,8 @@
 """A conformance suite is worth what it catches: each check fails for the lie it exists to catch."""
 
 import asyncio
+import json
+import signal
 import sys
 
 import pytest
@@ -10,6 +12,7 @@ from platoon_harness.drivers import (
     Capabilities,
     DriverError,
     Exited,
+    Item,
     ModelCall,
     Ready,
     Receipt,
@@ -21,8 +24,9 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.wire import WireDriver
-from platoon_harness.testing import ScriptedDriver, check_driver, every_turn_asks_the_model
+from platoon_harness.testing import ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
 from platoon_harness.testing.conformance import _CHECKS
+from platoon_harness.testing.model import OUTPUT_TOKENS
 
 pytestmark = pytest.mark.timeout(60)
 
@@ -71,6 +75,9 @@ def test_every_check_a_level_reads_exists():
         "approval_answered",
         "steers_at_declared_boundary",
         "measures_reported",
+        "preamble_once_per_request",
+        "tool_item_carries_its_anchor",
+        "stop_ends_a_running_tool",
     } <= names
 
 
@@ -279,6 +286,134 @@ async def test_a_process_left_behind_fails(tmp_path):
 
     assert result.get("stop_leaves_no_process").state == "failed"
     assert not list(tmp_path.rglob("proc.json"))
+
+
+class Shelling(ScriptedDriver):
+    """A harness that really runs a shell tool, and that may or may not end it in `stop`."""
+
+    def __init__(self, ends_it: bool) -> None:
+        super().__init__(every_turn_asks_the_model())
+        self._ends_it = ends_it
+        self._tool: asyncio.subprocess.Process | None = None
+
+    async def _run_call(self, call, call_id):
+        self._tool = await asyncio.create_subprocess_shell(json.loads(call["function"]["arguments"])["command"])
+        await self._tool.wait()
+        return {"role": "tool", "tool_call_id": call["id"], "content": ""}
+
+    async def stop(self, grace):
+        if self._ends_it and self._tool is not None:
+            self._tool.kill()
+        await super().stop(grace)
+
+
+def shell(command):
+    return ToolCall("shell", {"command": command})
+
+
+async def test_a_stop_that_ends_a_running_shell_tool_passes(tmp_path):
+    result = await check_driver(lambda: Shelling(True), folder=tmp_path, shell=shell, timeout=5)
+
+    assert result.get("stop_ends_a_running_tool").state == "passed"
+
+
+async def test_a_shell_tool_that_outlives_stop_fails_and_is_ended(tmp_path):
+    drivers: list[Shelling] = []
+
+    def leaky() -> Shelling:
+        drivers.append(Shelling(False))
+        return drivers[-1]
+
+    result = await check_driver(leaky, folder=tmp_path, shell=shell, timeout=2)
+
+    check = result.get("stop_ends_a_running_tool")
+    assert (check.state, check.reason) == ("failed", "the end of the running shell tool never came")
+    ran = [driver._tool for driver in drivers if driver._tool is not None]
+    assert -signal.SIGKILL in [await tool.wait() for tool in ran]
+
+
+async def test_a_stop_during_a_tool_is_a_skip_with_nothing_to_run_it(tmp_path):
+    result = await check(lambda: ScriptedDriver(every_turn_asks_the_model()), tmp_path)
+
+    assert result.get("stop_ends_a_running_tool").state == "skipped"
+
+
+async def test_a_preamble_sent_again_each_turn_fails(tmp_path):
+    class Repeating(Filtered):
+        async def _land(self, delivery, evidence):
+            await super()._land(delivery, evidence)
+            self._messages.append({"role": "user", "content": self._spec.instructions})
+
+    result = await check(Repeating, tmp_path)
+
+    assert result.get("preamble_once_per_request").reason == "the preamble came [1, 1, 2] times in its requests"
+
+
+async def test_a_preamble_that_never_reaches_a_request_fails(tmp_path):
+    class Dropping(Filtered):
+        async def start(self, spec, report):
+            return await super().start(spec.model_copy(update={"instructions": None}), report)
+
+    result = await check(Dropping, tmp_path)
+
+    assert result.get("preamble_once_per_request").state == "failed"
+
+
+class Anchored(Filtered):
+    """A harness whose MCP client names each call, as Claude Code does."""
+
+    async def _mcp(self, method, params):
+        meta = {"_meta": {"claudecode/toolUseId": "toolu_1"}} if method == "tools/call" else {}
+        return await super()._mcp(method, {**params, **meta})
+
+
+async def test_an_item_that_carries_the_anchor_passes(tmp_path):
+    def anchored(report):
+        return report.model_copy(update={"native_id": "toolu_1"}) if isinstance(report, Item) else report
+
+    result = await check(lambda: Anchored(anchored), tmp_path)
+
+    assert result.get("tool_item_carries_its_anchor").state == "passed"
+
+
+async def test_an_item_with_another_id_than_the_anchor_fails(tmp_path):
+    result = await check(Anchored, tmp_path)
+
+    assert result.get("tool_item_carries_its_anchor").state == "failed"
+    assert "toolu_1" in result.get("tool_item_carries_its_anchor").reason
+
+
+async def test_a_harness_with_no_anchor_is_a_skip_and_no_pass(tmp_path):
+    result = await check(lambda: ScriptedDriver(every_turn_asks_the_model()), tmp_path)
+
+    assert result.get("tool_item_carries_its_anchor").state == "skipped"
+
+
+async def test_a_tool_item_that_names_no_model_call_fails(tmp_path):
+    def unlinked(report):
+        return report.model_copy(update={"call_id": None}) if isinstance(report, Item) else report
+
+    result = await check(lambda: Filtered(unlinked), tmp_path)
+
+    assert result.get("call_ids_reported").reason == "no item names the model call that made it"
+
+
+async def test_usage_of_a_call_that_names_no_call_fails(tmp_path):
+    def unlinked(report):
+        return report.model_copy(update={"call_id": None}) if isinstance(report, Usage) else report
+
+    result = await check(lambda: Filtered(unlinked), tmp_path)
+
+    assert result.get("call_ids_reported").reason == "usage of one call does not name it"
+
+
+async def test_tokens_that_leave_out_input_fail(tmp_path):
+    def outputs_only(report):
+        return report.model_copy(update={"tokens": OUTPUT_TOKENS}) if isinstance(report, Usage) else report
+
+    result = await check(lambda: Filtered(outputs_only), tmp_path)
+
+    assert "it counted 3 tokens" in result.get("measures_reported").reason
 
 
 async def test_a_garbled_frame_nobody_reports_fails(tmp_path):

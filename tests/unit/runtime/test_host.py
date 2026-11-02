@@ -211,6 +211,32 @@ async def test_each_agent_gets_its_own_binding_instructions_preamble_and_ph(tmp_
     assert "wait" in ready.data["tools_visible"]
 
 
+async def test_a_narrowed_role_keeps_ops_list_so_it_keeps_its_tools(tmp_path):
+    async with Session.start(solo(tools=["wait"]), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        opened = (await of_type(session, "session.opened"))[0]
+        started = (await of_type(session, "agent.started"))[0]
+
+    assert "ops.list" in opened.data["roles"]["bob"]["tools"]
+    assert started.data["tools_visible"] == ["wait"]
+
+
+async def test_the_preamble_reaches_a_harness_once_and_never_a_delivery(tmp_path, recording):
+    team = solo_with(recording, instructions="Be brief.")
+
+    async with Session.start(team, cwd=tmp_path, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "one")
+        await until(recorded(recording), session)
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "two")
+        await until(recorded(recording), session, lambda handed: len(handed) > 1)
+
+    assert len(recording.specs) == 1
+    assert recording.specs[0].instructions.count("You are @bob.") == 1
+    assert all("You are @bob." not in delivery.text for delivery in recording.deliveries)
+
+
 async def test_a_harness_with_no_tool_path_gets_no_binding(tmp_path, recording):
     def none() -> ScriptedDriver:
         return recording(capabilities=Capabilities(persistent=True, boundaries={"turn"}))

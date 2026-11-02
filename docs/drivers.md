@@ -30,11 +30,14 @@ method promises:
 
 - **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer.
 - **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
-  for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default.
+  for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default. `spec.instructions` holds
+  the role's words and the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash.
 - **`interrupt`** stops the turn. The agent lives on.
-- **`stop`** leaves no process behind.
+- **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
+  harness, so ask a harness to end first, and with real grace. `Process` reports the gap `crash_window` when it comes to `SIGKILL`,
+  and the workspace may still be being written.
 
 ### What a driver reports
 
@@ -108,7 +111,8 @@ harness = { command = ["my-agent", "--task", "{goal}"], mode = "oneshot" }
 exit ends the turn and the agent. It coordinates through `ph`, which is on its `PATH`, along with what `ph` needs to reach the tools.
 
 It cannot park, take a delivery or resume, and every one of those is refused with the reason. All it reports is what stdout and an
-exit can show: the model it ran stays unknown, and nothing pretends otherwise. A `command` in a project file needs explicit trust.
+exit can show: the model it ran stays unknown, and nothing pretends otherwise. It has no way to take the preamble, so `ph --help` is
+what teaches it its tools. A `command` in a project file needs explicit trust.
 
 It needs a goal to start, so set `count = 0` on the role and spawn it with one, and `team check` refuses it otherwise. Its agent ends
 with its turn: `finished` if the turn `stopped`, and `failed` otherwise.
@@ -331,10 +335,13 @@ async def test_my_driver_conforms(tmp_path):
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
+| `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
-| `measures_reported` | Each declared unit comes with a turn |
-| `call_ids_reported` | `model.call` carries the id the model gave. Needs `call_ids = "call"` |
+| `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |
+| `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
+| `preamble_once_per_request` | `spec.instructions` is in every model request exactly once, across a tool call and a next turn. Needs an MCP path |
+| `tool_item_carries_its_anchor` | A tool item's `native_id` equals the anchor its harness sent on the MCP call. Skipped for a harness that sends none |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |
@@ -347,6 +354,7 @@ own checks. What a driver leaves running, the suite reaps.
 | `access` | `chat_access`, which sets `OPENAI_BASE_URL` and `OPENAI_API_KEY` | How your harness reaches the model, as a function of `FakeModel`. The key is a dummy |
 | `garble` | None | A coroutine function, given the driver, that makes the harness write a frame no parser knows |
 | `gated` | A `shell` tool call | A tool call your harness asks approval for |
+| `shell` | None | A function from a command to the tool call that runs it. An approval it asks for is allowed |
 | `timeout` | 10 s | How long one check may take |
 
 The result is pinned to the driver and the harness version it reported, and `levels` reads it. A result for another version says

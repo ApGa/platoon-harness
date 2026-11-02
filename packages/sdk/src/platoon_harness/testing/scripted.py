@@ -268,9 +268,9 @@ class ScriptedDriver:
                     await self._ask_model()
         return "stopped"
 
-    async def _say(self, text: str) -> None:
+    async def _say(self, text: str, call_id: str | None = None) -> None:
         await self._report(Delta(text=text))
-        await self._report(Item(kind="message", phase="final", gist=text[:GIST_LIMIT], body=text))
+        await self._report(Item(kind="message", phase="final", gist=text[:GIST_LIMIT], body=text, call_id=call_id))
 
     async def _ask(self, gist: str) -> Verdict:
         id = f"approval-{uuid.uuid4().hex[:8]}"  # A resumed harness must not ask under an id it has used.
@@ -303,12 +303,16 @@ class ScriptedDriver:
         ]
         return tuple(tool["name"] for tool in tools)
 
-    async def _call(self, tool: str, arguments: Mapping[str, Any]) -> Any:
-        await self._report(Item(kind="tool", phase="started", gist=f"{tool} called"[:GIST_LIMIT]))
+    async def _call(
+        self, tool: str, arguments: Mapping[str, Any], *, native_id: str | None = None, call_id: str | None = None
+    ) -> Any:
+        started = Item(kind="tool", phase="started", gist=f"{tool} called"[:GIST_LIMIT])
+        await self._report(started.model_copy(update={"native_id": native_id, "call_id": call_id}))
         result = await self._mcp("tools/call", {"name": tool, "arguments": dict(arguments)})
         self.results.append(result)
         outcome = "failed" if result.get("isError") else "completed"
-        await self._report(Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome))
+        done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)
+        await self._report(done.model_copy(update={"native_id": native_id, "call_id": call_id}))
         return result
 
     async def _ask_model(self) -> None:
@@ -317,19 +321,19 @@ class ScriptedDriver:
             message = reply["choices"][0]["message"]
             self._messages.append(message)
             if message.get("content"):
-                await self._say(message["content"])
+                await self._say(message["content"], reply["id"])
             if not message.get("tool_calls"):
                 return
             for call in message["tool_calls"]:
-                self._messages.append(await self._run_call(call))
+                self._messages.append(await self._run_call(call, reply["id"]))
             await self._land_steers()
 
-    async def _run_call(self, call: Mapping[str, Any]) -> dict[str, Any]:
+    async def _run_call(self, call: Mapping[str, Any], call_id: str) -> dict[str, Any]:
         function = call["function"]
         name, arguments = function["name"], json.loads(function["arguments"] or "{}")
         ours = any(tool["function"]["name"] == name for tool in self._tools)
         if ours:
-            result = await self._call(name, arguments)
+            result = await self._call(name, arguments, native_id=call["id"], call_id=call_id)
             output = json.dumps(result)
         else:
             output = await self._gate(name)
@@ -345,7 +349,8 @@ class ScriptedDriver:
         if spec.model is None:
             raise DriverError("no model was set, and this harness will not pick one")
         url, key = spec.access[BASE_URL].reveal(), spec.access[API_KEY].reveal()
-        body = {"model": spec.model, "messages": self._messages, "stream": False}
+        system = [{"role": "system", "content": spec.instructions}] if spec.instructions else []
+        body = {"model": spec.model, "messages": [*system, *self._messages], "stream": False}
         status, answer = await post(
             f"{url}/chat/completions", {**body, "tools": self._tools}, {"authorization": f"Bearer {key}"}
         )
@@ -353,7 +358,8 @@ class ScriptedDriver:
             raise DriverError(f"the model answered {status}")
         reply = json.loads(answer)
         await self._report(ModelCall(call_id=reply["id"], model=reply["model"]))
-        await self._report(Usage(tokens=reply["usage"]["total_tokens"], label="provider", scope="call"))
+        usage = Usage(tokens=reply["usage"]["total_tokens"], label="provider", scope="call", call_id=reply["id"])
+        await self._report(usage)
         return reply
 
     async def deliver(self, delivery: Delivery) -> Receipt:
