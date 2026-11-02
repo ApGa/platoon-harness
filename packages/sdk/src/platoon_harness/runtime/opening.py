@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness.config import Manifest
-from platoon_harness.drivers import Capabilities, Driver, DriverError
+from platoon_harness.drivers import Driver, DriverError, DriverInfo
 from platoon_harness.extensions import DRIVERS, Installed, load
 from platoon_harness.kernel import NAME, Kernel, Refused
 from platoon_harness.primitives import Policy
@@ -30,18 +30,29 @@ def make_driver(role: Role) -> Driver:
     return factory(role.harness.command) if isinstance(role.harness, Command) else factory()
 
 
-def _capabilities_of(team: Team) -> tuple[dict[str, Capabilities], list[Problem]]:
+def _described(team: Team) -> tuple[dict[str, DriverInfo], list[Problem]]:
     """What each role's driver says of itself, by role, since a command decides that and a driver's name does not."""
-    known: dict[str, Capabilities] = {}
+    known: dict[str, DriverInfo] = {}
     problems: list[Problem] = []
     for name, role in team.roles.items():
         try:
-            known[name] = make_driver(role).describe().capabilities
+            known[name] = make_driver(role).describe()
         except ConfigError as error:
             problems += [Problem(f"roles.{name}.harness", problem.what) for problem in error.problems]
         except DriverError as error:
             problems.append(Problem(f"roles.{name}.harness", str(error)))
     return known, problems
+
+
+def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Problem]:
+    """Refuse many agents on one plan login. A role with an auth profile is on no login, and one agent alone is
+    ordinary use, unless another role can spawn more."""
+    roles = [name for name, info in known.items() if info.login == "plan" and team.roles[name].auth is None]
+    if sum(map(team.starts, roles)) < 2 and not any(map(team.spawners, roles)):
+        return []
+    names = ", ".join(roles)
+    fix = "pass `plan_login=True` to say this is your own work, or give them an auth profile"
+    return [Problem("roles", f"{names} would run several agents headless on one plan login: {fix}")]
 
 
 def prepare(
@@ -52,19 +63,23 @@ def prepare(
     human: str = "you",
     approvals: Policy | None = None,
     cwd: str | Path | None = None,
+    plan_login: bool = False,
 ) -> Path:
     """Check a team and write down how it starts, before any cost. The folder is all a runtime then needs.
 
-    This blocks, because a wire program describes itself by running.
+    This blocks, because a driver may describe itself by running something.
     """
     if re.fullmatch(NAME, human) is None:
         raise ConfigError([Problem("human", f"{human!r} cannot name a principal")])
     extensions = Installed()
     resolved = team.resolved(extensions)
-    known, problems = _capabilities_of(resolved)
+    known, problems = _described(resolved)
     named = {problem.where for problem in problems}
-    checked = team_check(resolved, capabilities=known, extensions=extensions)
+    capabilities = {role: info.capabilities for role, info in known.items()}
+    checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
     problems += [problem for problem in checked if problem.where not in named]
+    if not plan_login:
+        problems += _on_a_plan_login(resolved, known)
     if errors := [problem for problem in problems if problem.level == "error"]:
         raise ConfigError(errors)
     for warning in problems:

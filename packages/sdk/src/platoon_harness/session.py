@@ -134,17 +134,21 @@ class Session:
         cwd: str | Path | None = None,
         root: str | Path | None = None,
         clock: Clock | None = None,
+        plan_login: bool = False,
     ) -> Self:
         """Start a team. You own it, unless `detach` starts a runtime of its own and gives you a guest.
 
         `human` is who you are in the journal, a name and not a claim: identity comes from the credential. `approvals`
-        states a policy over every role's own, which is durable, so it is said here and not when you wait.
+        states a policy over every role's own, which is durable, so it is said here and not when you wait. `plan_login`
+        says several agents may run headless on one plan login, which is refused otherwise.
         """
         _refuse_across_processes(detach, authority, clock)
 
         async def enter(self: Session) -> None:
             options = {"name": name, "root": root, "human": human, "approvals": approvals, "cwd": cwd}
-            await self._take_up(await asyncio.to_thread(prepare, team, **options), detach, authority, clock)
+            await self._take_up(
+                await asyncio.to_thread(prepare, team, plan_login=plan_login, **options), detach, authority, clock
+            )
 
         return cls(enter)
 

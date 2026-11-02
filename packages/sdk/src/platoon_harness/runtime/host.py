@@ -483,7 +483,7 @@ class Host:
         profile = Profile(
             driver=info.name,
             version=ready.version or info.version,
-            login=info.login,
+            login="key" if self._team.roles[link.role].auth else info.login,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
         )
         args = {

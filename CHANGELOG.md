@@ -31,11 +31,14 @@
   the one race helper. A live text frame is cut at 64 KiB.
 
 - `effort` on `Role` and `AgentSpec`, handed to the harness as it stands. A driver that cannot honor one fails the spawn.
+- `Session.start(team, plan_login=True)`. A driver reports the login kind, and `prepare` refuses several agents on one plan login
+  without it, naming the fix.
 ### Fixed
 
 - A secret split across two deltas reached followers unmasked, on every driver but `exec`. Live text is masked as one stream.
 - An `interrupt` or an `answer` that a harness never took held its effect open for ever. Each fails after a minute, as a handover
   already did.
+- A role with an auth profile was recorded under the login its harness had, though it never used it.
 - `Kernel.changed` no longer wakes on a batch with no events, as it never promised to.
 - `Peer.run` treats a reset connection as the end of the stream.
 - `agent.finish` in an open turn ends the agent with that turn, so what a harness reports at turn end counts. It used to be refused,

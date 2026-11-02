@@ -28,7 +28,9 @@ class Driver(Protocol):
 A method it cannot honor raises `DriverError`, with the reason. That is how "unsupported" stays loud. The rest is what each
 method promises:
 
-- **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer.
+- **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer. `login` comes
+  from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
+  tell. `prepare` reads it to refuse several agents on one plan login.
 - **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
   for a delivery. A driver refuses an unset model where the harness would otherwise pick a hosted default. `spec.instructions` holds
   the role's words and the preamble, fixed at launch: hand them over once, through the harness's supported path, and never per turn.

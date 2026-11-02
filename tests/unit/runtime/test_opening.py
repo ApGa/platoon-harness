@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -88,6 +89,55 @@ def test_a_warning_stops_nothing(tmp_path, caplog):
 
     assert prepare(team_of(roles=roles), root=tmp_path).exists()
     assert "has no path to anyone" in caplog.text
+
+
+class OnAPlan(ScriptedDriver):
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"login": "plan"})
+
+
+def planned(**role: Any) -> dict[str, Any]:
+    return {"harness": harness(OnAPlan), **role}
+
+
+def test_several_agents_on_a_plan_login_are_refused_naming_the_fix(tmp_path):
+    with pytest.raises(ConfigError, match="plan_login=True") as error:
+        prepare(team_of(roles={"worker": planned(count=2)}), root=tmp_path)
+
+    assert "worker would run several agents headless on one plan login" in str(error.value)
+    assert not (tmp_path / "sessions").exists()
+
+
+def test_two_roles_on_a_plan_login_count_together(tmp_path):
+    with pytest.raises(ConfigError, match="a, b would run several agents"):
+        prepare(team_of(roles={"a": planned(), "b": planned()}), root=tmp_path)
+
+
+def test_a_role_that_can_be_spawned_counts_as_several(tmp_path):
+    roles = {"lead": planned(may_spawn=["worker"]), "worker": planned()}
+
+    with pytest.raises(ConfigError, match="plan_login=True"):
+        prepare(team_of(roles=roles), root=tmp_path)
+
+
+def test_one_agent_alone_on_a_plan_login_is_ordinary_use(tmp_path):
+    assert prepare(team_of(roles={"lead": planned()}), root=tmp_path).exists()
+
+
+def test_the_owner_can_say_several_agents_on_a_plan_login_are_their_own_work(tmp_path):
+    assert prepare(team_of(roles={"worker": planned(count=2)}), root=tmp_path, plan_login=True).exists()
+
+
+def test_a_role_with_an_auth_profile_is_on_no_login(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEY", "a-key")
+    fields = {"auth": {"keyed": {"env": ["KEY"]}}, "roles": {"worker": planned(count=2, auth="keyed")}}
+
+    assert prepare(team_of(**fields), root=tmp_path).exists()
+
+
+async def test_session_start_says_so_for_its_owner(tmp_path):
+    async with Session.start(team_of(roles={"worker": planned(count=2)}), root=tmp_path, plan_login=True) as session:
+        await in_state(session, "worker-1", "idle")
 
 
 def test_a_name_for_the_human_must_be_one(tmp_path):

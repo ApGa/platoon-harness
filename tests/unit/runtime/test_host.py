@@ -21,6 +21,7 @@ from platoon_harness.drivers import (
     Delivery,
     Delta,
     DriverError,
+    DriverInfo,
     Exited,
     GapReport,
     Item,
@@ -270,6 +271,22 @@ async def test_a_harness_that_cannot_honor_an_effort_fails_its_spawn(tmp_path):
         row = await asyncio.wait_for(ended(session, "bob"), SECONDS)
 
     assert (row["status"], row["reason"]) == ("failed", "its spawn failed: a scripted harness has no effort to set")
+
+
+async def test_a_role_with_an_auth_profile_is_on_a_key_whatever_login_the_harness_has(tmp_path, monkeypatch):
+    class OnAPlan(ScriptedDriver):
+        def describe(self) -> DriverInfo:
+            return super().describe().model_copy(update={"login": "plan"})
+
+    monkeypatch.setenv("KEY", "a-key")
+    bob = {"harness": harness(OnAPlan), "auth": "keyed", "model": "m"}
+    fields = {"auth": {"keyed": {"env": ["KEY"]}}, "roles": {"bob": bob}}
+
+    async with Session.start(Team.model_validate(fields), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["verified"]["login"] == "key"
 
 
 async def test_capabilities_and_levels_reach_agent_started(tmp_path):
