@@ -615,6 +615,10 @@ class Session:
         """Decide an approval. The first commit wins, and the loser is refused `conflict`, told who won."""
         return await self._do("approval.resolve", id=id, verdict=verdict, expected_version=expected_version, via=via)
 
+    async def settle_effect(self, id: int, happened: bool) -> None:
+        """Say whether an uncertain effect happened, which is what an `uncertain` row of `attention` asks."""
+        await self._do("effect.settle", id=id, happened=happened)
+
     async def budgets(self) -> list[dict[str, Any]]:
         return await self._ask("budget.status")
 

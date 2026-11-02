@@ -25,7 +25,7 @@ A **daemon** is a restartable task that reads views, acts, and reports back thro
 ## Consequences
 
 - Recovery is one function, per agent: reap, resume, reconcile, dispatch. `reconcile` needs a live link, so it runs after resume and answers `unknown` without one.
-- An `uncertain` effect under `surface` waits in `attention` for a principal to decide. Nothing guesses.
+- An `uncertain` effect under `surface` waits in `attention` for a principal to decide, with `effect.settle`. Nothing guesses.
 - Delivery is at-least-once, with the id visible for dedupe. We promise no stronger execution guarantee.
 - The journal side of recovery has tests. Recovery against real harness processes does not yet.
 

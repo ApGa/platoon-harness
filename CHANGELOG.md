@@ -68,6 +68,9 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
 - `ph <tool> --help` for an unknown tool shows what there is.
+- An effect left `uncertain` can be settled by a person with `effect.settle`, as ADR 0005 promised. Nothing could settle one under
+  `surface`.
+- The host retries under one key, since a failed commit may have landed. It used to retry with none, and could run a command twice.
 - A turn a crash or the owner's stop cut off is told to its agent once, on resume, with a wake, and the words keep the two apart. A
   lost turn used to leave its agent idle on its leases with nobody told, so a session read `settled` with its work undone.
 - `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
@@ -104,7 +107,7 @@
 - `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
-- `session.status` says `stalled`.
+- `session.status` says `stalled`, and `Session.settle_effect` says whether an uncertain effect happened.
 - `agent.retell` also tells a resumed harness its last turn was cut off, once, which journals `agent.told`. `Agent` has `cut_off`.
 - `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.
 - An agent that has finished can spawn nothing.

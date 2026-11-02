@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
@@ -171,10 +172,12 @@ class Host:
         return text if link is None else link.redact(text)
 
     async def insist(self, op: str, args: Mapping[str, Any]) -> Outcome:
-        """Submit as the runtime. What left no event may be tried again, so it is, until the kernel closes."""
+        """Submit as the runtime. What left no event may be tried again, so it is, until the kernel closes, under one
+        key: a commit that failed may have landed all the same, and then the key answers from the journal."""
         kernel = self._kernel
+        key = uuid4().hex
         while True:
-            outcome = await kernel.submit(kernel.runtime, op, args)
+            outcome = await kernel.submit(kernel.runtime, op, args, key=key)
             refusal = outcome.refusal
             if refusal is None or outcome.seq is not None or refusal.code not in ("busy", "unavailable"):
                 return outcome

@@ -173,6 +173,11 @@ class EffectAttempt(Args):
     attempt: int
 
 
+class EffectVerdict(Args):
+    id: int
+    happened: bool
+
+
 class EffectKind(Args):
     kind: str | None = None
 
@@ -222,6 +227,20 @@ def fail_effect(txn: Txn, a: EffectError) -> None:
     _cancel_timeout(txn, effect)
     error = a.error if len(a.error) <= _ERROR_LIMIT else f"{a.error[:_ERROR_LIMIT]} [cut]"
     _note(txn, effect, "effect.failed", f"{effect.kind} failed: {error}", error=error)
+
+
+@op("effect.settle", on=lambda a: f"effect/{a.id}")
+def settle_effect(txn: Txn, a: EffectVerdict) -> None:
+    """Say whether an uncertain effect happened, which is what `surface` leaves to a person. Refused `conflict` once it
+    is no longer uncertain, as when recovery got there first."""
+    if txn.me.kind == "agent":
+        raise Refused("not_permitted", "an agent cannot vouch for an effect")
+    effect = _require(txn, a.id, "uncertain")
+    by = f"{txn.me.id} says so"
+    if a.happened:
+        _note(txn, effect, "effect.finished", f"{effect.kind} finished: {by}", result=None)
+    else:
+        _note(txn, effect, "effect.failed", f"{effect.kind} failed: {by}", error=f"it did not happen: {by}")
 
 
 @op("effect.expire", on=lambda a: f"effect/{a.id}", runtime=True)

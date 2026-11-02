@@ -314,8 +314,9 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `reconcile` or `surface`. `reconcile` needs a live link, so it runs after resume, and it is `unknown` when resume is
   unavailable. A turn in flight becomes `turn.lost` plus a gap, because its tool effects are unknown and never re-run.
   `retry` appends `effect.retried`, which returns the effect to `requested`. `reconcile` and `surface` stay `uncertain` until
-  `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names
-  the gap `crash_window`; the incarnation is the version of `runtime.started` on the stream `runtime`.
+  `effect.finish` or `effect.fail`, or until a person says with `effect.settle`, which the row in `attention` offers.
+  `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names the gap `crash_window`; the
+  incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 - **The host** is the daemon that performs these kinds, but for `erase`, which the kernel's own eraser does, on public names. It reads `effect.ready`, level-triggered, and gives each
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
@@ -491,7 +492,7 @@ to do next.
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
-| Humans | `approval.resolve` | `attention.list` `view.watch` |
+| Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
 | Runtime only | `agent.start` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
@@ -1087,7 +1088,7 @@ Three views answer the five questions, through `view.watch(name, after)`: a snap
 
 `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
 `Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `needs-you` is a derived group, not a state. `actions[]` are
-op references with `expected_version`, so any client can draw the buttons.
+op references, each with whatever keeps a stale button from deciding anything, so any client can draw them.
 
 - **TUI.** Textual. One 15 Hz coalescer between the journal and widgets drops render frames, never events. `TranscriptView` is on
   the Line API with paging from the journal, so history is virtual. Untrusted text crosses one `SafeText` boundary, and a lint

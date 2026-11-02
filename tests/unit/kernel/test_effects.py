@@ -1,8 +1,10 @@
 """Effects: an outbox with states, policies, priorities and a recovery path."""
 
-from platoon_harness.kernel import Effect, Effects
+import pytest
 
-from .support import events_of, refusal_of, result_of, supervised, until
+from platoon_harness.kernel import Effect, Effects, Principal
+
+from .support import enroll, events_of, grant, refusal_of, result_of, supervised, until
 
 
 async def dispatch(kernel, **args) -> int:
@@ -218,6 +220,47 @@ async def test_recovery_marks_started_effects_uncertain(kernel):
     assert state_of(kernel, retried) == "requested"
     assert state_of(kernel, untouched) == "requested"
     assert types_of(kernel, retried)[-2:] == ["effect.uncertain", "effect.retried"]
+
+
+async def uncertain(kernel) -> int:
+    effect = await dispatch(kernel, on_uncertain="surface")
+    await start(kernel, effect)
+    await kernel.recover()
+    assert state_of(kernel, effect) == "uncertain"
+    return effect
+
+
+@pytest.mark.parametrize(("happened", "state"), [(True, "finished"), (False, "failed")])
+async def test_a_person_settles_what_nothing_else_can(kernel, happened, state):
+    ada = Principal(id="human:ada")
+    await enroll(kernel, ada)
+    await grant(kernel, "human")
+    effect = await uncertain(kernel)
+
+    result_of(await kernel.submit(ada, "effect.settle", {"id": effect, "happened": happened}))
+
+    assert state_of(kernel, effect) == state
+    assert events_of(kernel)[-1].actor == "human:ada"
+
+
+async def test_only_what_is_uncertain_can_be_settled(kernel):
+    ada = Principal(id="human:ada")
+    await enroll(kernel, ada)
+    await grant(kernel, "human")
+    effect = await dispatch(kernel)
+
+    assert refusal_of(await kernel.submit(ada, "effect.settle", {"id": effect, "happened": True})) == "conflict"
+    assert refusal_of(await kernel.submit(ada, "effect.settle", {"id": 99999, "happened": True})) == "not_found"
+
+
+async def test_an_agent_cannot_say_what_the_world_did(kernel):
+    bob = Principal(id="agent:bob")
+    await enroll(kernel, bob)
+    await grant(kernel, "agent")
+    effect = await uncertain(kernel)
+
+    assert refusal_of(await kernel.submit(bob, "effect.settle", {"id": effect, "happened": True})) == "not_permitted"
+    assert state_of(kernel, effect) == "uncertain"
 
 
 async def test_recovery_loses_a_turn_in_flight(kernel):

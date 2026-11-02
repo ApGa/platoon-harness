@@ -148,6 +148,22 @@ async def test_attention_holds_a_mention_until_it_is_answered(kernel, ada):
     assert result_of(kernel.query(ada, "attention.list", {})) == []
 
 
+async def test_an_uncertain_row_offers_what_settles_it(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+    effect = await started_effect(kernel)
+    await kernel.recover()
+
+    row = next(row for row in attention(kernel) if row["id"] == f"effect/{effect['id']}")
+    assert [(action["op"], action["args"]["happened"]) for action in row["actions"]] == [
+        ("effect.settle", True),
+        ("effect.settle", False),
+    ]
+    action = row["actions"][0]
+    result_of(await kernel.submit(ada, action["op"], action["args"]))
+
+    assert row["id"] not in [found["id"] for found in attention(kernel)]
+
+
 async def test_attention_shows_an_uncertain_effect_until_it_settles(kernel, ada):
     await spawn(kernel, "bob")
     args = await started_effect(kernel)

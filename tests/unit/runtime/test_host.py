@@ -47,6 +47,27 @@ async def ended(session: Session, agent: str) -> dict[str, Any]:
     return next(row for row in (await session.ending()).agents if row["agent"] == agent)
 
 
+async def test_a_commit_that_failed_and_landed_all_the_same_does_not_run_twice(tmp_path):
+    """A failed commit's outcome is unknown. Told `unavailable` of something that landed, the host retries, and the key
+    it keeps across its tries answers from the journal."""
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        runtime = session._runtime
+        kernel, real = runtime.kernel, runtime.kernel.submit
+        answers = iter([Refusal(code="unavailable", retry_after=0.001, detail="journal: disk I/O error")])
+
+        async def lands_but_says_not(*args: Any, **options: Any) -> Outcome:
+            outcome = await real(*args, **options)
+            refusal = next(answers, None)
+            return outcome if refusal is None else Outcome(op=args[1], args_hash="", refusal=refusal)
+
+        kernel.submit = lands_but_says_not
+        await runtime.host.insist("agent.report", {"agent": "bob", "report": Item(kind="message", gist="once")})
+        del kernel.submit
+
+        assert [event.gist for event in await of_type(session, "item.recorded")] == ["once"]
+
+
 class Recording(ScriptedDriver):
     """A scripted harness that keeps what it was started and handed."""
 

@@ -48,7 +48,7 @@ power loss. Nothing here has run on macOS.
 | Spike pragmas and the checkpoint thread | tested | `test_journal.py`. The thread's one-second cadence is not itself timed |
 | Network filesystem refusal, tmpfs and unknown warnings, read-only open of closed and live journals | tested | `test_journal.py`, Linux. The refusal was also seen on this host's Lustre; other network filesystems are simulated |
 | macOS filesystem detection and `F_FULLFSYNC` | experimental | Written from the man page, never run |
-| Writer thread: group commit, ack after commit, admission limits, runtime reserve, every admitted command answered through a failed commit, a failed rollback, an op that exits, and close | tested | `test_writer.py` |
+| Writer thread: group commit, ack after commit, admission limits, runtime reserve, every admitted command answered through a failed commit, a failed rollback, an op that exits, and close | tested | `test_writer.py`. What a failed commit left is unknown, so a retry keeps its key: `tests/unit/runtime/test_host.py` for the host. Keeping a failed commit from going on for ever is planned for M2 |
 | Commands: idempotency through an index on `events`, key reuse, refusals journaled, outcome on the last event, `expected_version`, strict decoding, bounded refusals | tested | `test_commands.py`, properties. In a 5 s closed loop on the shared login node the index, the replace trigger and `secure_delete` left about 5,000 commands/s unchanged |
 | `authorize`: grants, live relations, scopes, runtime-only ops, credentials by hash | tested | `test_authorize.py` |
 | Envelope stamping and payload limits, one open episode | tested | `test_envelope.py` |
@@ -71,6 +71,7 @@ power loss. Nothing here has run on macOS.
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Effects cancelled before they start, and effects that wait for another to finish | tested | `test_effects.py` |
+| A person settling an uncertain effect with `effect.settle`, offered as two actions on its row | tested | `test_effects.py`, `tests/unit/primitives/test_clients.py`, `tests/unit/runtime/test_recovery.py`. No client draws the buttons yet |
 | `native` ids stamped on a command's events and read by nothing | tested | `test_commands.py`, `tests/unit/tools/test_mcp.py` |
 | A reader's limit on a body, and refs that name lines of a body | tested | `test_bodies.py` |
 

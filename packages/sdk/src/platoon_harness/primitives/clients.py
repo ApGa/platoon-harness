@@ -31,6 +31,14 @@ def _resolve_actions(event: Event) -> list[dict[str, Any]]:
     ]
 
 
+def _settle_actions(event: Event) -> list[dict[str, Any]]:
+    """Whether an effect happened is for a person to say, and the first to say wins."""
+    return [
+        {"label": label, "op": "effect.settle", "args": {"id": event.data["id"], "happened": happened}}
+        for label, happened in (("It happened", True), ("It did not", False))
+    ]
+
+
 class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away."""
 
@@ -87,7 +95,7 @@ class Attention(View):
 
     @fold("effect.uncertain")
     def uncertain(self, event: Event) -> None:
-        self._raise(f"effect/{event.data['id']}", "uncertain", event)
+        self._raise(f"effect/{event.data['id']}", "uncertain", event, _settle_actions(event))
 
     @fold("effect.finished", "effect.retried")
     def certain(self, event: Event) -> None:

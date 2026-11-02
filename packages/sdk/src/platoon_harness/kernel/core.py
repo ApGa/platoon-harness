@@ -11,6 +11,7 @@ from .effects import (
     finish_effect,
     list_effects,
     ready_effects,
+    settle_effect,
     start_effect,
     start_runtime,
 )
@@ -26,7 +27,7 @@ CORE = (
     Extension("grant", ops=[add_grant, remove_grant], views=[Grants]),
     Extension(
         "effect",
-        ops=[ready_effects, list_effects, start_effect, finish_effect, fail_effect, expire_effect],
+        ops=[ready_effects, list_effects, start_effect, finish_effect, fail_effect, settle_effect, expire_effect],
         views=[Effects],
     ),
     Extension("runtime", ops=[start_runtime]),
