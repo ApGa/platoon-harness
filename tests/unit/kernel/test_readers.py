@@ -363,3 +363,18 @@ async def test_a_place_past_the_head_of_deltas_is_from_an_earlier_incarnation(ke
 
     assert (await next_frame).text == "new"
     await frames.aclose()
+
+
+async def test_a_commit_that_moves_no_head_wakes_no_one(kernel):
+    await add(kernel, 1)
+    head = kernel.head
+    changed = asyncio.ensure_future(kernel.changed(head))
+    await asyncio.sleep(0)
+
+    await kernel.put_body(b"a body is no event")
+    await asyncio.sleep(0)
+
+    assert not changed.done()
+
+    await add(kernel, 1)
+    await changed

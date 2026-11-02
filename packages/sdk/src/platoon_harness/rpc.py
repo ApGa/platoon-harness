@@ -119,14 +119,17 @@ class Peer:
         self._ended: Closed | None = None
 
     async def run(self) -> None:
-        """Read until the stream ends, then fail every pending call. Past the line limit it raises `LineTooLong`."""
+        """Read until the stream ends, however it ends, then fail every pending call. Past the line limit it raises
+        `LineTooLong`."""
         ended = Closed("the connection closed")
         try:
             async for line in read_lines(self._reader, self._limit):
                 await self._receive(line)
-        except Closed as error:
+        except LineTooLong as error:
             ended = error
             raise
+        except ConnectionError as error:
+            ended = Closed(f"the connection was lost: {error}")
         finally:
             await self._end(ended)
 

@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import threading
 from collections import deque
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from fnmatch import fnmatchcase
 from itertools import takewhile
 from typing import Any
@@ -55,20 +55,21 @@ class Pulse:
         self.publish(self.head)
 
     async def wait(self, after: int) -> bool:
-        """Sleep until the head passes `after`. False means closed."""
-        waiter = asyncio.get_running_loop().create_future()
-        with self._lock:
-            if self.closed:
-                return False
-            if self.head > after:
-                return True
-            self._waiters.add(waiter)
-        try:
-            await waiter
-        finally:
+        """Sleep until the head passes `after`. False means closed. A publish that moves nothing, as a batch with no
+        events does, puts it back to sleep."""
+        while True:
+            waiter = asyncio.get_running_loop().create_future()
             with self._lock:
-                self._waiters.discard(waiter)
-        return not self.closed
+                if self.closed:
+                    return False
+                if self.head > after:
+                    return True
+                self._waiters.add(waiter)
+            try:
+                await waiter
+            finally:
+                with self._lock:
+                    self._waiters.discard(waiter)
 
 
 class Tail:
@@ -121,7 +122,7 @@ class Ring:
     def close(self) -> None:
         self._pulse.close()
 
-    async def frames(self, after: int | None = None) -> AsyncIterator[Delta]:
+    async def frames(self, after: int | None = None) -> AsyncGenerator[Delta]:
         """Yield frames past `after`, or from the oldest still held. Overflow shows up as `lag`, and a place past the
         head belongs to an earlier incarnation, so it counts as the head."""
         seen = self._pulse.head - len(self._held) if after is None else min(after, self._pulse.head)

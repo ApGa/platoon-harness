@@ -7,7 +7,7 @@ import os
 import queue
 import sqlite3
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Generator, Iterable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -517,7 +517,7 @@ class Kernel:
         """Offer a frame of live text. It may be lost and is never journaled."""
         self._ring(agent).push(text)
 
-    def deltas(self, agent: str, *, after: int | None = None) -> AsyncIterator[Delta]:
+    def deltas(self, agent: str, *, after: int | None = None) -> AsyncGenerator[Delta]:
         """Follow an agent's live text until the kernel closes, past frame `after` or from the oldest still held."""
         return self._ring(agent).frames(after)
 

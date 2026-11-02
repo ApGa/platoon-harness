@@ -353,6 +353,18 @@ async def test_too_many_requests_in_flight_are_refused_busy():
         release.set()
 
 
+async def test_a_reset_connection_ends_the_stream_and_fails_the_call():
+    async with Wire() as wire:
+        call = asyncio.create_task(wire.peer.call("go"))
+        await wire.frame()
+
+        wire.peer._reader.set_exception(ConnectionResetError("reset by peer"))
+
+        with pytest.raises(Closed, match="reset by peer"):
+            await call
+        await wire.running
+
+
 async def test_eof_mid_request_fails_the_call():
     async with Wire() as wire:
         call = asyncio.create_task(wire.peer.call("go"))
