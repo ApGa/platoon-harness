@@ -1,6 +1,7 @@
 """One team's harnesses, scripted: in-process, or `scripts.py <name>` as a wire program of its own."""
 
 import asyncio
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -97,6 +98,7 @@ HARNESSES = {
     "hanging": lambda: Resumable([HANG_IN_A_TURN], [AFTER_A_RESUME]),
     "stuck": lambda: Stuck([], [[Say("heard it, the second time")]]),
     "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),
+    "saying": lambda: ScriptedDriver(itertools.repeat([Say("done")])),
 }
 
 

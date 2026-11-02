@@ -5,15 +5,14 @@ import json
 import os
 import stat
 from collections.abc import AsyncIterator
-from functools import partial
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from platoon_harness import Refused, Session
+from platoon_harness import Refused, Session, rpc
 from platoon_harness.kernel import ManualClock, Outcome, hash_token
-from platoon_harness.rpc import Closed, Peer
+from platoon_harness.rpc import Closed
 from platoon_harness.runtime import control
 from platoon_harness.runtime.control import REFUSED, Remote
 from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
@@ -347,7 +346,7 @@ async def test_a_body_too_big_for_a_line_is_refused_before_it_is_sent(guest, mon
 
 
 async def test_a_client_that_stops_reading_is_dropped_and_costs_nobody_else(owner, monkeypatch):
-    monkeypatch.setattr(control, "Peer", partial(Peer, limit=64 * 1024))
+    monkeypatch.setattr(rpc, "LINE_LIMIT", 64 * 1024)
     connection = await Raw.connect(owner.folder)
     await connection.hello(token(owner))
     outcomes = []

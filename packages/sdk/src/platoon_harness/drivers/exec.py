@@ -21,6 +21,7 @@ from . import (
     TurnEnded,
     TurnStarted,
 )
+from .env import Held
 from .process import Process, exit_reason
 
 GOAL = "{goal}"
@@ -50,6 +51,8 @@ class ExecDriver:
             raise DriverError("a one-shot harness cannot resume")
         if not spec.goal:
             raise DriverError("a one-shot harness takes nothing after its goal: set `count = 0` and spawn it with one")
+        if GOAL in self._command and spec.goal.startswith("-"):
+            raise DriverError("a goal that starts with `-` would reach this program as an option: reword it")
         command = [part.replace(GOAL, spec.goal) for part in self._command]
         self._process = await Process.launch(command, spec, report, read=self._read)
         return Started()
@@ -61,13 +64,18 @@ class ExecDriver:
         process.put(Ready())
         process.put(TurnStarted(turn="1"))
         output = bytearray()
+        held = Held(process.redact)
         try:
             while chunk := await process.stdout.read(_CHUNK):
-                process.put(Delta(text=chunk.decode(errors="replace")))
-                output += chunk
+                masked = held.feed(chunk)
+                process.put(Delta(text=masked.decode(errors="replace")))
+                output += masked
                 del output[:-_KEPT]
             await process.exited()
         finally:
+            if rest := held.flush():
+                process.put(Delta(text=rest.decode(errors="replace")))
+                output += rest
             if text := output.decode(errors="replace").strip():
                 process.put(Item(kind="message", gist=text[-GIST_LIMIT:], body=text))
             process.put(TurnEnded(reason=self._ending(process.returncode)))

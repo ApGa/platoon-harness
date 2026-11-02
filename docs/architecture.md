@@ -163,7 +163,9 @@ can both be watched. Leaving only disconnects.
   reservations, append `session.stopped`, keep the folder resumable. To release is to hand back what will not happen now: a turn
   still open ends, which reconciles its reservation, and a handover that never started fails, which queues its entries again. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
-  while open; one that was closing or cancelled stays so, and its harnesses are not resumed, because nothing new may start.
+  while open; one that was closing or cancelled stays so, and its harnesses are not resumed, because nothing new may start. A journal
+  that stops committing holds this up by at most `grace` and a second, a driver that breaks in `stop` holds up nothing, and the process
+  trees end whether or not anything commits.
 
 ## 5. Kernel
 
@@ -296,7 +298,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
-| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs |
+| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again |
 | `erase` | None | Repeat: erasing twice is harmless |
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
@@ -313,14 +315,20 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
   daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
   agent's reports are heard in order, one at a time, and a driver waits for its turn: `Process`'s own queue is what keeps a pipe
-  draining. Observed activity renews an agent's leases past half their time, up to `lease_max`, and it asks `lease.due` first, so idle
-  activity journals nothing. A harness that never says it is ready within a minute fails its spawn. A report that cannot be taken, or a
-  driver that raises anything but `DriverError`, ends in `exited`: nothing that goes wrong there is a silent hang. An approval the
-  journal refuses is answered `deny`, since a harness is blocked on it.
+  draining. Every report is masked on the way in, whichever driver said it. Observed activity renews an agent's leases past half their
+  time, up to `lease_max`, and it asks `lease.due` first, so idle activity journals nothing. A harness that never says it is ready within
+  a minute fails its spawn, as does one that exits first or names a model other than the one pinned. A report that cannot be taken, or a
+  driver that raises anything but `DriverError`, ends in `exited`: nothing that goes wrong there is a silent hang. A report the journal
+  refuses leaves `native` plus a gap first, unless its agent has ended, when it is no loss. An approval the journal refuses is answered
+  `deny`, since a harness is blocked on it. A `deliver` that wakes an agent stays open until the turn begins, so `waking` always has
+  an effect behind it and recovery needs no second path: past a minute, or at an interrupt, it fails, and its entries are queued again.
 - **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
   `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. With no native id, no
-  `resume`, or a failure to resume, its agent is `lost` with the gap `crash_window`, through the normal ended transition. A group
-  `reap` cannot prove ours is left alone and named in a `native` event plus a gap.
+  `resume`, or a failure to resume, its agent is `lost` with the gap `crash_window`, through the normal ended transition, and that is
+  the one agent's: a driver that raises anything, or a group that outlives `SIGKILL`, stops no other. A `reconcile` that does not answer
+  in 10 s, or fails, is `unknown`, and a stop asked during recovery cuts it short. A group `reap` cannot prove ours is left alone and
+  named in a `native` event plus a gap, even for an agent that has ended. `reap` runs after every stop too, because a wire program's own
+  harness leads a group of its own.
 
 **Timers.** A `timer.set` event sets one: `{due, op, args, key}`, where `key` names one firing and `op` and `key` are at most 256
 characters. The clock daemon sleeps on the injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then
@@ -374,7 +382,7 @@ whole journal. A page holding a `principal.revoked` goes by SQL, so a follower i
 | Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}`, which is not journaled. `runtime` has no per-principal limit and 256 more |
 | Payloads | Op names and keys 256 chars, stream names 512, `gist` 280, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list paged |
 | Readers | They pull, so a slow client costs only its own lag |
-| Live text | One 256-frame ring per agent; overflow drops frames with a `lag` marker. The final `item` is authoritative |
+| Live text | One 256-frame ring per agent, each frame cut at 64 KiB; overflow drops frames with a `lag` marker. The final `item` is authoritative |
 | Harness output | Pipes always drain. A driver that stalls its harness's stdout stalls the harness. Reports buffer in a bounded queue; a quota breach stops that agent with a gap |
 | Inbox | A depth cap refuses `queue_full` with a `full` receipt, journaled, never a silent drop |
 | Topic | Writers never block. A lagging reader gets a capped digest and a gap notice |
@@ -839,9 +847,10 @@ driver, coordinating through `ph`. PTY integration is an explicit degraded fallb
 Every subprocess driver builds on `Process`, which holds the rest of what this page asks of one. A harness leads its own group. Its
 pid and start time are on disk before it can exec: `sh` waits for one line on stdin, and exits unexecuted if we die first. Only a
 leader with the recorded start time proves a group is ours, so a reused pid cannot make recovery kill a stranger, and a group whose
-leader is gone is left alone and named. Pipes always drain, and stderr goes to a bounded log with credentials masked. `stop(grace)`
-is `SIGTERM`, wait, `SIGKILL`, then verify. A process that leaves the group by `setsid` escapes it. See
-[ADR 0018](adr/0018-who-owns-a-process.md).
+leader is gone is left alone and named. `reap` reads the driver's record and a wire program's and no others, because a harness can
+write under its folder, and one it cannot read is named too. Pipes always drain, and stderr goes to a bounded log with credentials
+masked. A driver that cuts text masks it first, since a cut can split a secret. `stop(grace)` is `SIGTERM`, wait, `SIGKILL`, then
+verify. A process that leaves the group by `setsid` escapes it. See [ADR 0018](adr/0018-who-owns-a-process.md).
 
 ### 9.2 Capabilities
 
@@ -874,7 +883,8 @@ Absence means unsupported, as in ACP.
   `(driver, harness version)`, and a result pinned elsewhere says nothing of this agent. A wire `describe` runs the program once and
   starts no harness.
 - **Model pinning.** The effective model must equal the requested one, and a driver refuses an unset model where the harness
-  would otherwise pick a hosted default.
+  would otherwise pick a hosted default. The host holds `ready` to this and fails a spawn or a resume that differs. An effective model
+  a harness does not name stays unknown, and refuses nothing.
 
 ### 9.4 Levels
 

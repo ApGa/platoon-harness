@@ -10,14 +10,15 @@ from pydantic_core import PydanticUndefined
 import platoon_harness
 from platoon_harness import Ending, Refused, Role, Session, Team, on
 from platoon_harness.config import Manifest
+from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, op
 from platoon_harness.kernel.core import CORE, list_ops
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
 from platoon_harness.runtime.paths import MANIFEST
-from platoon_harness.testing import Ask, Call, Exit, Hang, Say
+from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
-from .support import SECONDS, in_state, of_type, scripted, solo, until
+from .support import SECONDS, harness, in_state, of_type, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -757,3 +758,92 @@ async def test_a_role_is_a_role(tmp_path):
         items = await until(lambda: of_type(session, "item.recorded"), session)
 
     assert items[0].gist == "from a Role"
+
+
+# What a harness says after `agent_finish`.
+
+
+class ReportsAsItsTurnEnds(ScriptedDriver):
+    """A harness that reports usage when its turn ends, as a real one does."""
+
+    async def _walk(self, steps: Any) -> str:
+        reason = await super()._walk(steps)
+        await self._report(Usage(tokens=1000, label="provider", scope="turn"))
+        return reason
+
+
+async def test_usage_after_agent_finish_is_charged_and_a_teammate_s_next_wake_runs(tmp_path):
+    team = Team.model_validate(
+        {
+            "roles": {
+                "ada": {"harness": harness(lambda: ReportsAsItsTurnEnds([[Say("done"), Call("agent_finish", {})]]))},
+                "bob": {"harness": scripted([Say("bob ran")])},
+            },
+            "budget": {"tokens": 100_000},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@ada", "go")
+        await until(lambda: of_type(session, "agent.ended"), session)
+        await session.send("@bob", "your turn")
+
+        ending = await session.settled(timeout="10s")
+
+    assert ending.reason == "settled"
+    rows = {row["agent"]: row for row in ending.agents}
+    assert rows["ada"]["usage"]["tokens"] == {"amount": 1000.0, "label": "provider"}
+    assert rows["ada"]["report"] == {"gist": "done", "body": rows["ada"]["report"]["body"]}
+    assert rows["bob"]["report"]["gist"] == "bob ran"
+
+
+async def test_an_exec_agent_that_finishes_keeps_what_it_printed(tmp_path):
+    script = tmp_path / "agent.sh"
+    script.write_text('#!/bin/sh\nph agent.finish >/dev/null\necho "my last words"\n')
+    script.chmod(0o700)
+    team = Team.model_validate(
+        {
+            "roles": {
+                "bob": {"harness": scripted()},
+                "ada": {"harness": {"command": [str(script), "{goal}"], "mode": "oneshot"}, "count": 0},
+            }
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.spawn("ada", "ada", "go")
+        await until(lambda: of_type(session, "agent.ended"), session)
+        ending = await session.ending()
+
+    row = next(row for row in ending.agents if row["agent"] == "ada")
+    assert row["status"] == "finished"
+    assert row["report"]["gist"] == "my last words"
+
+
+async def test_a_session_that_ran_a_harness_with_no_meter_says_nothing_of_tokens(tmp_path):
+    async with Session.start(solo([Say("done")]), root=tmp_path) as session:
+        await session.send("@bob", "go")
+
+        ending = await session.settled(timeout="10s")
+
+    assert ending.usage["tokens"] == {"amount": None, "label": "unavailable"}
+    assert ending.usage["turns"] == {"amount": 1.0, "label": "counted"}
+
+
+async def test_a_failed_spawn_says_why_in_the_ending(tmp_path):
+    team = Team.model_validate(
+        {
+            "roles": {
+                "bob": {"harness": {"command": ["true", "{goal}"], "mode": "oneshot"}, "count": 0},
+                "z": {"harness": scripted()},
+            }
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.spawn("ada", "bob")
+        await in_state(session, "ada", "ended")
+        ending = await session.ending()
+
+    row = next(row for row in ending.agents if row["agent"] == "ada")
+    assert row["reason"].startswith("its spawn failed: a one-shot harness takes nothing after its goal")

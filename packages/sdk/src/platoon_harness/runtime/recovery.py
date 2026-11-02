@@ -5,12 +5,13 @@ uncertain, and is shown.
 """
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
-from platoon_harness.drivers import DriverError, Exited, GapReport, InputDelivered, Native, Reconciled, Report
+from platoon_harness.drivers import DriverError, Exited, GapReport, InputDelivered, Native, Report
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel
+from platoon_harness.kernel import Effect, Kernel, Refused
 from platoon_harness.schema import ConfigError
 
 from .authority import SpawnRequest
@@ -19,31 +20,55 @@ from .paths import agent_folder
 
 _CRASH = GapReport(plane="control", what="crash_window")
 
+log = logging.getLogger("platoon_harness.runtime")
+
 __all__ = ["recover_agents"]
 
 
 async def _say(host: Host, agent: str, *reports: Report) -> None:
     for report in reports:
-        await host.insist("agent.report", {"agent": agent, "report": report})
+        outcome = await host.insist("agent.report", {"agent": agent, "report": report})
+        if outcome.refusal is not None:
+            raise Refused.of(outcome.refusal)
 
 
 async def _reap(host: Host, folder: Path, agent: dict[str, Any]) -> None:
-    """End what the crash left of an agent. A group that cannot be proved ours is left alone, and named."""
-    for record in await reap(agent_folder(folder, agent["name"]), GRACE):
-        raw = f"process group {record.pid} outlived its leader and cannot be proved ours"
-        await _say(host, agent["name"], Native(kind="unproven_group", raw=raw), _CRASH)
+    """End what the crash left of an agent. What cannot be proved ours is left alone, and named."""
+    for left in await reap(agent_folder(folder, agent["name"]), GRACE):
+        await _say(host, agent["name"], Native(kind="unproven_group", raw=left), _CRASH)
 
 
 async def _resume(host: Host, agent: dict[str, Any]) -> None:
-    """Bring a harness back on a fresh credential, or lose its agent through the normal ended transition."""
+    """Bring a harness back on a fresh credential. If its goal never began, it is told again, since a resumed harness
+    waits to be told."""
     name, role, native = agent["name"], agent["role"], agent["native"]
+    if native is None or not (await host.describe(role)).capabilities.resume:
+        raise DriverError("its harness cannot resume")
+    admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
+    await host.connect(name, role, admission, resume=native)
+    if agent["unbegun"]:
+        await host.insist("agent.retell", {"agent": name})
+
+
+async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: bool) -> None:
+    """Reap one agent and bring it back, or lose it through the normal ended transition. It answers for itself, so one
+    broken driver takes down one agent."""
+    name = agent["name"]
     try:
-        if native is None or not (await host.describe(role)).capabilities.resume:
-            raise DriverError("its harness cannot resume")
-        admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
-        await host.connect(name, role, admission, resume=native)
+        await _reap(host, folder, agent)
+        if agent["finishing"]:
+            await host.insist("agent.conclude", {"agent": name})
+        elif agent["state"] in ("spawning", "ended"):
+            return
+        elif accepting:
+            await _resume(host, agent)
+        elif agent["unbegun"]:
+            raise DriverError("its session closed before it began its goal")
     except (DriverError, ConfigError) as error:
         await _say(host, name, _CRASH, Exited(reason=str(error)))
+    except Exception as error:
+        log.error("%s could not be taken up: %s", name, type(error).__name__)
+        await _say(host, name, _CRASH, Exited(reason=f"its harness could not resume: {type(error).__name__}"))
 
 
 async def _finish(host: Host, effect: Effect, result: Any = None) -> None:
@@ -54,20 +79,11 @@ async def _fail(host: Host, effect: Effect, error: str) -> None:
     await host.insist("effect.fail", {"id": effect.id, "attempt": effect.attempts, "error": error})
 
 
-async def _found(host: Host, effect: Effect, key: str) -> Reconciled:
-    """What a harness says became of what it was sent. With no harness to ask, or none that can say, nobody knows."""
-    link = host.link(effect.agent)
-    try:
-        return "unknown" if link is None else await link.driver.reconcile(key)
-    except DriverError:
-        return "unknown"
-
-
 async def _reconcile_delivery(host: Host, effect: Effect, agent: dict[str, Any] | None) -> None:
     """A delivery counts if it landed and its turn began. Otherwise it goes again under a new input, at-least-once, and
     its refs dedupe it: a harness that was killed before its turn began will not begin one now."""
     input = str(effect.data["input"])
-    landed = await _found(host, effect, input) == "landed"
+    landed = await host.reconcile(effect.agent, input) == "landed"
     if landed and agent is not None and agent["state"] != "waking":
         report = InputDelivered(input=input, boundary=effect.data["boundary"], evidence="reconcile")
         await _say(host, agent["name"], report)
@@ -78,7 +94,7 @@ async def _reconcile_delivery(host: Host, effect: Effect, agent: dict[str, Any] 
 
 async def _reconcile_answer(host: Host, effect: Effect) -> None:
     """Whether an answer landed is read from the harness, or it stays uncertain in attention."""
-    found = await _found(host, effect, effect.data["approval"])
+    found = await host.reconcile(effect.agent, effect.data["approval"])
     if found == "landed":
         await _finish(host, effect)
     elif found == "not_landed":
@@ -111,12 +127,6 @@ async def recover_agents(kernel: Kernel, host: Host, folder: Path, cwd: Path) ->
     runtime = kernel.runtime
     agents = {row["name"]: row for row in kernel.query(runtime, "agent.records", {}).result}
     accepting = kernel.query(runtime, "session.status", {}).result["state"] == "open"
-
-    async def take_up(agent: dict[str, Any]) -> None:
-        await _reap(host, folder, agent)
-        if accepting and agent["state"] not in ("spawning", "ended"):
-            await _resume(host, agent)
-
-    await asyncio.gather(*map(take_up, agents.values()))
+    await asyncio.gather(*(_take_up(host, folder, agent, accepting) for agent in agents.values()))
     for row in kernel.query(runtime, "effect.list", {"state": "uncertain"}).result:
         await _reconcile(host, cwd, Effect.model_validate(row), agents)

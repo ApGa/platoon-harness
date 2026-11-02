@@ -198,6 +198,34 @@ async def test_a_program_that_cannot_describe_itself_is_refused(tmp_path, comman
 async def test_a_program_that_does_not_exist_is_refused(tmp_path):
     with pytest.raises(DriverError, match="did not describe itself"):
         WireDriver([str(tmp_path / "missing")]).describe()
+
+
+async def test_a_program_that_crashes_at_import_says_what_it_said(tmp_path):
+    path = tmp_path / "broken.py"
+    path.write_text("import no_such_module\n")
+
+    with pytest.raises(DriverError, match=r"(?s)exited with code 1.*no_such_module"):
+        WireDriver([sys.executable, str(path)]).describe()
+
+
+async def test_a_file_python_cannot_find_says_so(tmp_path):
+    with pytest.raises(DriverError, match=r"(?s)exited with code 2.*gone\.py"):
+        WireDriver([sys.executable, str(tmp_path / "gone.py")]).describe()
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': {'protocol': 1, 'name': 5}}), flush=True)",
+        "print(json.dumps([1, 2]), flush=True)",
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'error': 'no'}), flush=True)",
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': 'yes'}), flush=True)",
+    ],
+    ids=["a bad field", "no object", "a bad error", "a bad result"],
+)
+async def test_a_malformed_description_names_the_program(tmp_path, answer):
+    with pytest.raises(DriverError, match="did not describe itself"):
+        WireDriver(raw_program(tmp_path, answer)).describe()
     with pytest.raises(DriverError, match="not an executable"):
         await WireDriver([str(tmp_path / "missing")]).start(make_spec(tmp_path), Heard())
 
@@ -250,6 +278,53 @@ async def test_a_long_unknown_frame_keeps_what_fits_and_says_what_was_cut(tmp_pa
     await driver.stop(2)
 
     assert (len(native.raw), native.cut) == (2048, 7952)
+
+
+async def test_a_credential_is_masked_before_a_frame_is_cut_so_no_part_survives(tmp_path):
+    secret = "k3y" + "z" * 40
+    command = raw_program(
+        tmp_path,
+        DESCRIBING,
+        f"""
+        print("a" * 2040 + {secret!r}, flush=True)
+        sys.stdin.read()
+    """,
+    )
+    driver, heard = await started(tmp_path, command, access={"KEY": Secret(secret)})
+
+    native = await heard.until(Native)
+    await driver.stop(2)
+
+    assert native.raw.rstrip("*").endswith("a") and secret[:8] not in native.raw
+
+
+async def test_an_unknown_report_sent_as_a_request_is_native_plus_a_gap_too(tmp_path):
+    frame = {"id": 99, "method": "report", "params": {"type": "nonsense"}}
+    command = raw_program(
+        tmp_path,
+        DESCRIBING,
+        f"""
+        send({frame!r})
+        sys.stdin.read()
+    """,
+    )
+    driver, heard = await started(tmp_path, command)
+
+    native = await heard.until(Native)
+    await heard.until(GapReport)
+    await driver.stop(2)
+
+    assert "nonsense" in native.raw
+
+
+async def test_a_program_that_goes_points_at_what_it_said(tmp_path):
+    command = raw_program(tmp_path, DESCRIBING)
+    driver, heard = await started(tmp_path, command)
+    await heard.until(Exited)
+
+    with pytest.raises(DriverError, match=LOG):
+        await driver.interrupt()
+    await driver.stop(1)
 
 
 async def test_a_driver_cannot_claim_a_level(tmp_path):
@@ -510,7 +585,7 @@ async def test_a_served_driver_gets_its_credentials_back_from_the_environment(tm
     await heard.until(Item, lambda item: item.gist.endswith("wire"))
     await driver.stop(1)
 
-    assert [item.gist for item in heard.of(Item)] == ["***", "***", str(spec.folder / "wire")]
+    assert [item.gist for item in heard.of(Item)] == ["model-key", tools.token.reveal(), str(spec.folder / "wire")]
 
 
 async def test_stderr_is_the_program_s_log(tmp_path):

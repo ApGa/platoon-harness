@@ -176,3 +176,51 @@ async def test_ph_is_on_the_path_of_the_one_shot(tmp_path):
     _, heard = await run(tmp_path, "sh", "-c", "ph task.claim", tools=tools)
 
     assert heard.of(Item)[0].gist == "ph reached task.claim at http://tools"
+
+
+async def test_a_goal_that_would_be_an_option_is_refused(tmp_path):
+    driver = ExecDriver(["echo", "{goal}"])
+
+    with pytest.raises(DriverError, match="option"):
+        await driver.start(make_spec(tmp_path, goal="--delete-everything"), Heard())
+
+
+async def test_a_goal_inside_an_argument_cannot_be_an_option(tmp_path):
+    driver = ExecDriver(["echo", "--task={goal}"])
+    heard = Heard()
+
+    await driver.start(make_spec(tmp_path, goal="--delete-everything"), heard)
+
+    assert (await heard.until(Item)).gist == "--task=--delete-everything"
+    await driver.stop(1)
+
+
+async def test_a_gist_and_live_text_never_hold_part_of_a_credential(tmp_path):
+    secret = "s3cret-" + "k" * 40
+    tail = "t" * 270
+    driver = ExecDriver(["printf", f"before {secret}{tail}"])
+    heard = Heard()
+
+    await driver.start(make_spec(tmp_path, access={"KEY": Secret(secret)}), heard)
+
+    item = await heard.until(Item)
+    await driver.stop(1)
+    live = "".join(delta.text for delta in heard.of(Delta))
+    assert secret not in (item.body or "") and secret[-8:] not in item.gist
+    assert item.gist.startswith("before ***") and secret not in live
+
+
+async def test_a_credential_split_across_two_writes_is_masked_in_live_text(tmp_path):
+    secret = "s3cret-" + "k" * 40
+    script = (
+        f"import sys,time\nsys.stdout.write({secret[:9]!r});sys.stdout.flush();time.sleep(.05);"
+        f"sys.stdout.write({secret[9:]!r})"
+    )
+    driver = ExecDriver([sys.executable, "-I", "-c", script])
+    heard = Heard()
+
+    await driver.start(make_spec(tmp_path, access={"KEY": Secret(secret)}), heard)
+
+    await heard.until(TurnEnded)
+    await driver.stop(1)
+    assert "".join(delta.text for delta in heard.of(Delta)) == "***"

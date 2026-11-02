@@ -18,11 +18,12 @@ from typing import Any, Literal, Self
 from platoon_harness.primitives import Delta, Exited, GapReport, Native, Report
 from platoon_harness.schema import Model
 
-from . import AgentSpec, DriverError, Reporter
-from .env import Redactor, harness_env, secrets_of
+from . import RAW_LIMIT, AgentSpec, DriverError, Reporter
+from .env import Held, Redactor, harness_env, secrets_of
 
 RECORD = "proc.json"
 LOG = "stderr.log"
+WIRE = "wire"
 LOG_LIMIT = 1024 * 1024
 REPORT_QUOTA = 64 * 1024 * 1024
 
@@ -43,6 +44,7 @@ __all__ = [
     "LOG_LIMIT",
     "RECORD",
     "REPORT_QUOTA",
+    "WIRE",
     "GroupState",
     "Process",
     "Reader",
@@ -137,22 +139,30 @@ async def _end(group: int, grace: float) -> None:
         raise DriverError(f"process group {group} outlived SIGKILL")
 
 
-async def reap(folder: Path, grace: float) -> tuple[Record, ...]:
-    """End what a crash left under an agent's `folder`, and return the groups left alone because they are not provably
-    ours. A reused pid can never make this signal a stranger."""
-    unproven = []
-    for path in sorted(folder.rglob(RECORD)):
-        record = Record.model_validate_json(path.read_bytes())
+async def reap(folder: Path, grace: float) -> tuple[str, ...]:
+    """End what a crash left in an agent's `folder` and return what was left alone, in words: a group not provably ours,
+    or a record that cannot be read. A reused pid can never make this signal a stranger. Only the driver's own record
+    and a wire program's are read, because a harness can write under its folder."""
+    left = []
+    for path in (folder / RECORD, folder / WIRE / RECORD):
+        try:
+            record = Record.model_validate_json(path.read_bytes())
+        except FileNotFoundError:
+            continue
+        except ValueError:
+            left.append(f"{path.relative_to(folder)} cannot be read")
+            path.unlink()
+            continue
         match record.state():
             case "ours":
                 await _end(record.pid, grace)
             case "unproven":
-                unproven.append(record)
+                left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
                 continue
             case "gone":
                 pass
         path.unlink()
-    return tuple(unproven)
+    return tuple(left)
 
 
 class _Streams(SubprocessStreamProtocol):
@@ -202,6 +212,17 @@ def exit_reason(code: int | None) -> str:
     return f"killed by signal {-code}" if code is not None and code < 0 else f"exited with code {code}"
 
 
+def _size(report: Report) -> int:
+    """What a report weighs against the quota: a floor, since each holds a place, and the text it carries."""
+    weight = _REPORT_FLOOR
+    for name, value in report:
+        if isinstance(value, str) and name != "type":
+            weight += len(value)
+        elif isinstance(value, tuple):
+            weight += sum(map(len, value))
+    return weight
+
+
 def _check_program(command: Sequence[str], spec: AgentSpec, env: dict[str, str]) -> None:
     """Refuse a program that cannot run, while the reason can still reach whoever asked."""
     program = spec.cwd / command[0] if os.sep in command[0] else command[0]
@@ -216,7 +237,8 @@ class Process:
 
     `read` is called once, at once, and returns the driver's reader of `stdout`, which must wait only on the pipe, so
     that the pipe drains. It hands what it finds to `put`, which never waits either. A harness's end reaches `report` as
-    `exited`. If nothing stops it, a closing loop or interpreter takes the group down rather than leave it.
+    `exited`. If nothing stops it, a closing loop or interpreter takes the group down rather than leave it. The host
+    masks what `put` passes on, and a driver that cuts text masks it first with `redact`, as a cut can split a secret.
     """
 
     def __init__(
@@ -237,7 +259,7 @@ class Process:
         self._record = record
         self._folder = spec.folder
         self._report = report
-        self._redact = Redactor(secrets_of(spec))
+        self.redact = Redactor(secrets_of(spec))
         self._quota = quota
         self._waiting = 0
         self._queue: deque[tuple[Report, int] | None] = deque()
@@ -304,11 +326,11 @@ class Process:
         await self._streams.exited.wait()
 
     def put(self, report: Report) -> None:
-        """Queue a report, without waiting, so that a pipe always drains. Credentials are masked on the way. Past the
-        quota a delta is dropped, as deltas may be, and anything else stops this agent with a gap."""
+        """Queue a report, without waiting, so that a pipe always drains. Past the quota a delta is dropped, as deltas
+        may be, and anything else stops this agent with a gap."""
         if self._sealed:
             return
-        report, size = self._masked(report)
+        size = _size(report)
         if self._waiting + size <= self._quota:
             self._waiting += size
             self._enqueue(report, size)
@@ -316,22 +338,11 @@ class Process:
         elif not isinstance(report, Delta):
             self._lose("reports passed their quota")
 
-    def _masked(self, report: Report) -> tuple[Report, int]:
-        changes: dict[str, Any] = {}
-        size = _REPORT_FLOOR
-        for name, value in report:
-            if isinstance(value, str) and name != "type":
-                changes[name] = self._redact(value)
-                size += len(value)
-            elif isinstance(value, tuple):
-                changes[name] = tuple(map(self._redact, value))
-        return report.model_copy(update=changes), size
-
     def _lose(self, why: str) -> None:
         """Stop this agent with a gap, since what it reports can no longer be whole."""
         if not self._sealed:
             self._sealed = True
-            self._enqueue(Native(kind="stream", raw=self._redact(why)))
+            self._enqueue(Native(kind="stream", raw=self.redact(why)[:RAW_LIMIT]))
             self._enqueue(GapReport(plane="control", what="stream_lost"))
             self._stop_soon(_LOST_GRACE)
 
@@ -373,16 +384,12 @@ class Process:
                     return
 
     async def _log(self, log: _Log) -> None:
-        """Keep stderr in a bounded log, masked, and out of the journal. A secret cannot straddle two chunks: what could
-        be the start of one is held back until the next."""
-        held, reach = b"", self._redact.reach
+        """Keep stderr in a bounded log, masked, and out of the journal."""
+        held = Held(self.redact)
         try:
             while chunk := await self._stderr.read(_CHUNK):
-                text = self._redact(held + chunk)
-                cut = max(len(text) - reach, 0)
-                log.write(text[:cut])
-                held = text[cut:]
-            log.write(self._redact(held))
+                log.write(held.feed(chunk))
+            log.write(held.flush())
         finally:
             log.close()
 

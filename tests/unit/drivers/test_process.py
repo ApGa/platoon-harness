@@ -13,8 +13,8 @@ from urllib.parse import quote
 import pytest
 
 from platoon_harness.config import Secret
-from platoon_harness.drivers import Delta, DriverError, Exited, GapReport, Item, Native
-from platoon_harness.drivers.process import _SH, _TRAMPOLINE, LOG, LOG_LIMIT, RECORD, Process, Record, reap
+from platoon_harness.drivers import Delta, DriverError, Exited, GapReport, Item, Native, Ready
+from platoon_harness.drivers.process import _SH, _TRAMPOLINE, LOG, LOG_LIMIT, RECORD, Process, Record, _started, reap
 from platoon_harness.rpc import read_lines
 
 from .support import Heard, group_of, make_spec, running, spawn_group
@@ -240,7 +240,7 @@ async def test_a_group_with_its_recorded_leader_is_reaped(tmp_path):
     spec = make_spec(tmp_path)
     process = await launch(tmp_path, "sleep", "100", spec=spec)
 
-    assert await reap(tmp_path, 1) == ()
+    assert await reap(spec.folder, 1) == ()
 
     assert not (spec.folder / RECORD).exists()
     await process.stop(1)
@@ -273,7 +273,7 @@ async def test_a_leaderless_group_cannot_be_proved_ours_so_it_is_left_alone_and_
     try:
         assert record.state() == "unproven"
 
-        assert await reap(tmp_path, 1) == (record,)
+        assert await reap(tmp_path, 1) == (f"process group {leader} outlived its leader and cannot be proved ours",)
 
         assert running(member)
         assert (tmp_path / RECORD).exists()
@@ -292,6 +292,30 @@ async def test_reap_finds_a_wire_program_s_own_record_too(tmp_path):
     await reap(tmp_path, 1)
 
     assert not (inner / RECORD).exists()
+
+
+async def test_reap_reads_no_record_a_harness_left_in_its_own_tmp(tmp_path):
+    stranger = spawn_group("sleep", "100")
+    planted = tmp_path / "tmp"
+    planted.mkdir()
+    started = _started(stranger.pid)
+    assert started is not None
+    Record(pid=stranger.pid, started=started).write(planted)
+    try:
+        assert await reap(tmp_path, 1) == ()
+
+        assert stranger.poll() is None
+    finally:
+        stranger.kill()
+        stranger.wait()
+
+
+@pytest.mark.parametrize("record", [b"", b"not json", b'{"pid": "seven"}'])
+async def test_a_record_that_cannot_be_read_is_named_and_stops_nothing(tmp_path, record):
+    (tmp_path / RECORD).write_bytes(record)
+
+    assert await reap(tmp_path, 1) == (f"{RECORD} cannot be read",)
+    assert not (tmp_path / RECORD).exists()
 
 
 async def test_a_pipe_drains_while_nobody_takes_the_reports(tmp_path):
@@ -501,21 +525,20 @@ async def test_a_credential_split_across_two_writes_is_still_masked(tmp_path):
     assert (spec.folder / LOG).read_text() == "***"
 
 
-async def test_no_credential_reaches_a_report(tmp_path):
-    spec = make_spec(tmp_path, access={"API_KEY": Secret(SECRET)})
+async def test_a_quota_counts_what_a_list_in_a_report_holds(tmp_path):
     heard = Heard()
+    wide = Ready(tools_visible=("x" * 4096,) * 8)
 
     async def read(process: Process) -> None:
-        process.put(Item(kind="message", gist=f"my key is {SECRET}", body=f"{SECRET}\n{SECRET}"))
+        process.put(wide)
         await drain(process)
 
-    process = await launch(tmp_path, "true", read=read, report=heard, spec=spec)
+    process = await launch(tmp_path, "true", read=read, report=heard, quota=16 * 1024)
 
-    item = await heard.until(Item)
+    await heard.until(GapReport)
     await process.stop(1)
 
-    assert item.gist == "my key is ***"
-    assert item.body == "***\n***"
+    assert heard.of(Ready) == []
 
 
 LEFT_BEHIND = textwrap.dedent(

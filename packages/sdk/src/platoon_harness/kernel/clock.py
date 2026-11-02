@@ -52,7 +52,8 @@ class ManualClock:
         for sleeper, due in tuple(self._sleepers.items()):
             if due <= self._now:
                 del self._sleepers[sleeper]
-                sleeper.set_result(None)
+                if not sleeper.done():
+                    sleeper.set_result(None)
 
     async def sleeping(self) -> None:
         """Wait until a task is asleep, so that `advance` cannot race it."""

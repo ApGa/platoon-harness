@@ -14,6 +14,7 @@ platoon_harness.config.load_team
 platoon_harness.config.merge
 platoon_harness.config.sanitized
 platoon_harness.drivers.AgentSpec
+platoon_harness.drivers.RAW_LIMIT
 platoon_harness.drivers.ApprovalRequested
 platoon_harness.drivers.Boundary
 platoon_harness.drivers.Capabilities
@@ -44,6 +45,7 @@ platoon_harness.drivers.TurnEnded
 platoon_harness.drivers.TurnStarted
 platoon_harness.drivers.Usage
 platoon_harness.drivers.Verdict
+platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.inherited
@@ -67,6 +69,7 @@ platoon_harness.drivers.process.LOG_LIMIT
 platoon_harness.drivers.process.Process
 platoon_harness.drivers.process.RECORD
 platoon_harness.drivers.process.REPORT_QUOTA
+platoon_harness.drivers.process.WIRE
 platoon_harness.drivers.process.Reader
 platoon_harness.drivers.process.Record
 platoon_harness.drivers.process.exit_reason
@@ -182,17 +185,15 @@ platoon_harness.primitives.stream_of
 platoon_harness.rpc.BUSY
 platoon_harness.rpc.Closed
 platoon_harness.rpc.Handler
-platoon_harness.rpc.INTERNAL_ERROR
 platoon_harness.rpc.INVALID_PARAMS
-platoon_harness.rpc.INVALID_REQUEST
 platoon_harness.rpc.LINE_LIMIT
 platoon_harness.rpc.LineTooLong
 platoon_harness.rpc.METHOD_NOT_FOUND
-platoon_harness.rpc.PARSE_ERROR
 platoon_harness.rpc.Peer
 platoon_harness.rpc.RpcError
 platoon_harness.rpc.Stray
 platoon_harness.rpc.read_lines
+platoon_harness.rpc.strict_loads
 platoon_harness.runtime.Admission
 platoon_harness.runtime.AgentOutcome
 platoon_harness.runtime.AgentRef

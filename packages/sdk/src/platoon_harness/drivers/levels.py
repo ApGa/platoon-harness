@@ -1,6 +1,6 @@
 """The three levels of an agent, computed from what was verified. No driver can claim one."""
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from typing import Literal
 
 from platoon_harness.primitives import Capabilities
@@ -84,12 +84,14 @@ class Levels(Model):
     trainable: Level
 
 
-def tool_visibility(shown: tuple[str, ...] | None, ours: Iterable[str]) -> Visibility:
+def tool_visibility(shown: tuple[str, ...] | None, ours: Sequence[str]) -> Visibility:
     """Whether a harness shows our tools. `shown` comes from `ready`, and is None unless it was observed. A harness may
-    prefix a name, so ours need only appear within one."""
-    if shown is None:
+    prefix a name with `mcp__<ns>__`, so a tool is seen by its name or that ending. With no tools to look for, nothing
+    was seen."""
+    if shown is None or not ours:
         return "unverified"
-    return "visible" if all(any(tool in name for name in shown) for tool in ours) else "hidden"
+    seen = all(any(name == tool or name.endswith(f"__{tool}") for name in shown) for tool in ours)
+    return "visible" if seen else "hidden"
 
 
 def _level(findings: Iterable[_Finding]) -> Level:

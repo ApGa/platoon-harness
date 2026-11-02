@@ -14,16 +14,18 @@ from platoon_harness.drivers import (
     Capabilities,
     Delivery,
     DriverError,
+    Exited,
     Ready,
     Receipt,
+    Reconciled,
     Reporter,
     Started,
     TurnStarted,
 )
-from platoon_harness.drivers.process import Record
-from platoon_harness.runtime import Admission, LocalAuthority, SpawnRequest, recovery
+from platoon_harness.kernel import is_held
+from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.schema import ConfigError, Problem
-from platoon_harness.testing import Ask, Hang, Say, ScriptedDriver
+from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
 from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, until
 
@@ -280,8 +282,8 @@ async def test_an_agent_with_no_native_id_cannot_resume(tmp_path):
 
 
 async def test_a_group_that_cannot_be_proved_ours_is_left_and_named(tmp_path, monkeypatch):
-    async def unproven(folder: Path, grace: float) -> tuple[Record, ...]:
-        return (Record(pid=4242, started="then"),)
+    async def unproven(folder: Path, grace: float) -> tuple[str, ...]:
+        return ("process group 4242 outlived its leader and cannot be proved ours",)
 
     session = await Session.start(solo_with(ScriptedDriver), name="s", root=tmp_path)
     await in_state(session, "bob", "idle")
@@ -502,3 +504,320 @@ async def test_a_crashed_session_rebuilds_to_what_it_held(tmp_path):
         await in_state(session, "bob", "idle")
 
     await rebuilt_equals_live(folder)
+
+
+# What only a harness's next report could have moved.
+
+
+class TakesItAndBeginsNothing(ScriptedDriver):
+    """A harness that accepts a handover and goes quiet, until it comes back from a resume."""
+
+    async def deliver(self, delivery: Delivery) -> Receipt:
+        if self._spec.resume is None:
+            return Receipt(boundary=delivery.boundary)
+        return await super().deliver(delivery)
+
+
+def begins_nothing() -> ScriptedDriver:
+    return TakesItAndBeginsNothing([[Say("heard")]])
+
+
+async def a_wake_with_no_turn(session: Session) -> None:
+    await in_state(session, "bob", "idle")
+    await session.send("@bob", "hello")
+    await in_state(session, "bob", "waking")
+    await started("deliver")(session)
+
+
+@pytest.mark.parametrize("ending", ["a crash", "an owner's stop"])
+async def test_a_wake_that_began_no_turn_goes_again(tmp_path, ending):
+    session = await Session.start(solo_with(begins_nothing), name="s", root=tmp_path)
+    await a_wake_with_no_turn(session)
+
+    if ending == "a crash":
+        await abandon(session)
+    else:
+        await session.leave()
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        await in_state(session, "bob", "idle")
+
+    assert items[0].gist == "heard"
+
+
+async def test_a_launch_cut_short_by_a_stop_is_not_recorded_as_finished(tmp_path):
+    class NeverReady(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            return Started(native="n")
+
+    async with Session.start(solo_with(NeverReady), name="s", root=tmp_path) as session:
+        await started("launch")(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "ended")
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+        launches = [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "launch"]
+
+    assert launches == []
+    assert ending.agents[0]["status"] == "failed"
+    assert any(row["what"] == "crash_window" for row in ending.gaps)
+
+
+class QuietAtFirst(ScriptedDriver):
+    """A harness that says ready and takes its time over its goal, as a real one does, until a crash has come."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        if spec.resume is not None:
+            return await super().start(spec, report)
+        native = f"n-{spec.agent}"
+        await report(Ready(native=native))
+        return Started(native=native)
+
+
+def quiet() -> ScriptedDriver:
+    return QuietAtFirst([[Say("on it")]])
+
+
+async def test_a_goal_that_never_began_is_told_again_and_runs(tmp_path):
+    team = Team.model_validate(
+        {"roles": {"bob": {"harness": scripted()}, "ada": {"harness": harness(quiet), "count": 0}}}
+    )
+    session = await Session.start(team, name="s", root=tmp_path)
+    await session.spawn("ada", "ada", "the important thing")
+    await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) == 2)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        delivered = await of_type(session, "message.sent")
+
+    assert items[0].gist == "on it"
+    assert [event.gist for event in delivered] == ["the important thing"]
+
+
+async def test_a_goal_that_never_began_with_no_way_back_is_named(tmp_path):
+    class NoResume(QuietAtFirst):
+        pass
+
+    capabilities = NO_RESUME
+    roles = {
+        "bob": {"harness": scripted()},
+        "ada": {"harness": harness(lambda: NoResume([], capabilities=capabilities)), "count": 0},
+    }
+    session = await Session.start(Team.model_validate({"roles": roles}), name="s", root=tmp_path)
+    await session.spawn("ada", "ada", "the important thing")
+    await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) == 2)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "ada", "ended")
+        ending = await session.ending()
+
+    row = next(row for row in ending.agents if row["agent"] == "ada")
+    assert row["status"] == "lost"
+    assert {"agent": "ada", "what": "crash_window", "plane": "control", "count": 1} in ending.gaps
+
+
+async def test_a_goal_that_never_began_in_a_closing_session_is_named_and_settles(tmp_path):
+    team = Team.model_validate(
+        {"roles": {"bob": {"harness": scripted()}, "ada": {"harness": harness(quiet), "count": 0}}}
+    )
+    session = await Session.start(team, name="s", root=tmp_path)
+    await session.spawn("ada", "ada", "the important thing")
+    await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) == 2)
+    await session.close()
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    row = next(row for row in ending.agents if row["agent"] == "ada")
+    assert (row["status"], row["reason"]) == ("lost", "its session closed before it began its goal")
+
+
+async def test_a_turn_lost_after_a_finish_still_finishes_the_agent(tmp_path):
+    session = await Session.start(
+        solo_with(lambda: ScriptedDriver([[Call("agent_finish", {"gist": "done"}), Hang()]])), name="s", root=tmp_path
+    )
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "agent.finished"), session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "ended")
+        ending = await session.ending()
+
+    assert ending.agents[0]["status"] == "finished"
+    assert ending.agents[0]["report"] == {"gist": "done", "body": None}
+
+
+async def test_an_approval_pending_at_a_crash_asks_nobody_afterwards(tmp_path):
+    session = await Session.start(solo_with(lambda: ScriptedDriver([[Ask("may I?")]])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(session.approvals, session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert ending.reason != "needs_human"
+
+
+# What nobody may wait on for ever.
+
+
+class NeverSays(ScriptedDriver):
+    """A harness whose handover hangs, and which hangs again when asked what became of it."""
+
+    async def deliver(self, delivery: Delivery) -> Receipt:
+        await asyncio.Event().wait()
+        raise AssertionError
+
+    async def reconcile(self, input_id: str) -> Reconciled:
+        await asyncio.Event().wait()
+        raise AssertionError
+
+
+async def a_handover_nobody_will_explain(tmp_path: Path, make: type[NeverSays] = NeverSays) -> None:
+    session = await Session.start(solo_with(make), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await session.send("@bob", "hello")
+    await started("deliver")(session)
+    await abandon(session)
+
+
+async def test_a_harness_that_hangs_in_reconcile_answers_unknown(tmp_path, monkeypatch):
+    monkeypatch.setattr(host, "_RECONCILE_SECONDS", 0.01)
+    await a_handover_nobody_will_explain(tmp_path)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+
+    assert "in flight" in failed[0].data["error"]
+
+
+async def test_a_harness_that_breaks_in_reconcile_answers_unknown(tmp_path):
+    class Broken(NeverSays):
+        async def reconcile(self, input_id: str) -> Reconciled:
+            raise RuntimeError("a bug in the driver")
+
+    session = await Session.start(solo_with(Broken), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await session.send("@bob", "hello")
+    await started("deliver")(session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        assert await until(lambda: of_type(session, "effect.failed"), session)
+
+
+async def test_a_stop_asked_during_recovery_ends_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(host, "_RECONCILE_SECONDS", 3600.0)
+    asked = asyncio.Event()
+
+    class Telling(NeverSays):
+        async def reconcile(self, input_id: str) -> Reconciled:
+            asked.set()
+            return await super().reconcile(input_id)
+
+    await a_handover_nobody_will_explain(tmp_path, Telling)
+    runtime = Runtime(tmp_path / "sessions" / "s")
+
+    starting = asyncio.ensure_future(runtime.start())
+    await asyncio.wait_for(asked.wait(), SECONDS)
+    runtime.ask_to_stop()
+    await asyncio.wait_for(starting, SECONDS)
+    await asyncio.wait_for(runtime.run(), SECONDS)
+    await runtime.stop()
+
+    assert not is_held(runtime.folder)
+
+
+class BrokenOnResume(ScriptedDriver):
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        if spec.resume is not None:
+            raise RuntimeError("a bug in the driver")
+        return await super().start(spec, report)
+
+
+async def test_one_broken_driver_on_resume_loses_one_agent(tmp_path):
+    team = Team.model_validate(
+        {"roles": {"bad": {"harness": harness(BrokenOnResume)}, "good": {"harness": scripted()}}}
+    )
+    session = await Session.start(team, name="s", root=tmp_path)
+    await in_state(session, "bad", "idle")
+    await in_state(session, "good", "idle")
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bad", "ended")
+        await in_state(session, "good", "idle")
+        ending = await session.ending()
+
+    assert next(row for row in ending.agents if row["agent"] == "bad")["reason"] == (
+        "its harness could not resume: RuntimeError"
+    )
+    assert any(row["what"] == "crash_window" for row in ending.gaps)
+
+
+async def test_a_group_that_will_not_die_loses_its_own_agent_and_no_other(tmp_path, monkeypatch):
+    team = Team.model_validate({"roles": {"bad": {"harness": scripted()}, "good": {"harness": scripted()}}})
+    session = await Session.start(team, name="s", root=tmp_path)
+    await in_state(session, "bad", "idle")
+    await in_state(session, "good", "idle")
+    await abandon(session)
+
+    async def stubborn(folder: Path, grace: float) -> tuple[str, ...]:
+        if folder.name == "bad":
+            raise DriverError("process group 7 outlived SIGKILL")
+        return ()
+
+    monkeypatch.setattr(recovery, "reap", stubborn)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bad", "ended")
+        await in_state(session, "good", "idle")
+        ending = await session.ending()
+
+    assert next(row for row in ending.agents if row["agent"] == "bad")["reason"] == "process group 7 outlived SIGKILL"
+
+
+async def test_a_harness_that_exits_at_once_on_resume_costs_no_wait_and_says_why(tmp_path):
+    class ExitsOnResume(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            if spec.resume is None:
+                return await super().start(spec, report)
+            await report(Exited(reason="no such session"))
+            return Started(native=spec.resume)
+
+    session = await Session.start(solo_with(ExitsOnResume), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await abandon(session)
+
+    resumed = await asyncio.wait_for(Session.resume("s", root=tmp_path)._entered(), SECONDS)
+    await in_state(resumed, "bob", "ended")
+    ending = await resumed.ending()
+    await resumed.leave()
+
+    assert ending.agents[0]["reason"] == "no such session"
+    assert any(row["what"] == "crash_window" for row in ending.gaps)
+
+
+async def test_a_group_an_ended_agent_left_is_named(tmp_path, monkeypatch):
+    async def unproven(folder: Path, grace: float) -> tuple[str, ...]:
+        return ("process group 4242 outlived its leader and cannot be proved ours",)
+
+    session = await Session.start(solo_with(ScriptedDriver), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await session.cancel("@bob")
+    await in_state(session, "bob", "ended")
+    await abandon(session)
+    monkeypatch.setattr(recovery, "reap", unproven)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        recorded = await of_type(session, "native.recorded")
+        gaps = await of_type(session, "gap.recorded")
+
+    assert "process group 4242" in recorded[0].data["raw"]
+    assert gaps[0].data["what"] == "crash_window"

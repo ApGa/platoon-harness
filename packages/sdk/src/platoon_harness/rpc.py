@@ -17,16 +17,13 @@ _CHUNK = 64 * 1024
 _SERVING = 256
 
 Handler = Callable[[str, Any], Awaitable[Any]]
-Stray = Callable[[bytes, str], None]
+Stray = Callable[[bytes], None]
 
 __all__ = [
     "BUSY",
-    "INTERNAL_ERROR",
     "INVALID_PARAMS",
-    "INVALID_REQUEST",
     "LINE_LIMIT",
     "METHOD_NOT_FOUND",
-    "PARSE_ERROR",
     "Closed",
     "Handler",
     "LineTooLong",
@@ -34,6 +31,7 @@ __all__ = [
     "RpcError",
     "Stray",
     "read_lines",
+    "strict_loads",
 ]
 
 
@@ -88,12 +86,17 @@ def _not_a_number(constant: str) -> NoReturn:
     raise ValueError(f"{constant} is not JSON")
 
 
+def strict_loads(text: str | bytes) -> Any:
+    """JSON as JSON is, which has no NaN and no Infinity, whatever Python's parser lets through."""
+    return json.loads(text, parse_constant=_not_a_number)
+
+
 class Peer:
     """Both ends of JSON-RPC on one connection. Nothing moves until `run` reads.
 
     `handler` takes `(method, params)`. Each request runs in its own task, so a slow one holds up no other, and
     notifications run in order on the read loop, so that handler must not wait on the world: it would stop the reads.
-    `stray` hears what no method covers and no call awaits, with the raw line and why.
+    `stray` hears the raw line of what no method took and no call awaits.
     `jsonrpc=False` drops the `jsonrpc` member, which Codex omits.
     """
 
@@ -105,14 +108,12 @@ class Peer:
         *,
         stray: Stray | None = None,
         jsonrpc: bool = True,
-        limit: int = LINE_LIMIT,
     ) -> None:
         self._reader = reader
         self._writer = writer
         self._handler = handler
-        self._stray = stray or (lambda line, why: None)
+        self._stray = stray or (lambda line: None)
         self._jsonrpc = jsonrpc
-        self._limit = limit
         self._last_id = 0
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._serving: dict[int | str, asyncio.Task[None]] = {}
@@ -123,7 +124,7 @@ class Peer:
         `LineTooLong`."""
         ended = Closed("the connection closed")
         try:
-            async for line in read_lines(self._reader, self._limit):
+            async for line in read_lines(self._reader, LINE_LIMIT):
                 await self._receive(line)
         except LineTooLong as error:
             ended = error
@@ -157,7 +158,7 @@ class Peer:
             raise self._ended or Closed(str(error)) from error
 
     def close(self) -> None:
-        """Close the write side. The other end reads EOF, and `run` returns when it answers with its own."""
+        """Close this end. The other reads EOF, and `run` returns when the transport has gone."""
         self._writer.close()
 
     def _message(self, method: str, params: Any) -> dict[str, Any]:
@@ -165,12 +166,12 @@ class Peer:
 
     def _send(self, frame: dict[str, Any]) -> None:
         """Queue one frame without waiting, so that a reply cannot stall the read loop. A peer that stops reading is
-        dropped once `limit` bytes wait for it, since a client must not hold memory here."""
+        dropped once a line's worth of bytes wait for it, since a client must not hold memory here."""
         if self._ended is not None:
             raise self._ended
         if self._writer.is_closing():
             raise Closed("the connection is closed")
-        if self._writer.transport.get_write_buffer_size() > self._limit:
+        if self._writer.transport.get_write_buffer_size() > LINE_LIMIT:
             self._writer.transport.abort()
             raise Closed("the peer stopped reading")
         frame = {"jsonrpc": "2.0", **frame} if self._jsonrpc else frame
@@ -187,7 +188,7 @@ class Peer:
         if not line.strip():
             return
         try:
-            frame = json.loads(line.decode(), parse_constant=_not_a_number)
+            frame = strict_loads(line.decode())
         except (ValueError, RecursionError) as error:
             self._reject(line, PARSE_ERROR, f"not JSON: {error}")
             return
@@ -205,7 +206,7 @@ class Peer:
                 code, message = error.get("code", INTERNAL_ERROR), str(error.get("message", ""))
                 self._pending[id].set_exception(RpcError(code, message, error.get("data")))
             case {"id": _, "result": _} | {"id": _, "error": _}:
-                self._stray(line, "an answer to nothing pending")
+                self._stray(line)
             case _:
                 self._reject(line, INVALID_REQUEST, "neither a request nor an answer")
 
@@ -215,13 +216,13 @@ class Peer:
     def _reject(self, line: bytes, code: int, why: str) -> None:
         """Answer what could not be read. An answer with a null id is stray at the other end, so peers cannot echo."""
         self._answer({"id": None, "error": {"code": code, "message": why}})
-        self._stray(line, why)
+        self._stray(line)
 
     def _request(self, line: bytes, id: Any, method: str, params: Any) -> None:
         if type(id) not in (int, str):
             self._reject(line, INVALID_REQUEST, "an id is a string or an integer")
         elif id in self._serving:
-            self._stray(line, f"id {id} is in use")
+            self._stray(line)
         elif len(self._serving) >= _SERVING:
             self._answer({"id": id, "error": {"code": BUSY, "message": "too many requests in flight"}})
         else:
@@ -234,8 +235,7 @@ class Peer:
             self._answer({"id": id, "result": await self._handler(method, params)})
         except RpcError as error:
             self._answer({"id": id, "error": error.frame()})
-            if error.code == METHOD_NOT_FOUND:
-                self._stray(line, error.message)
+            self._stray(line)
         except Exception as error:
             message = f"{type(error).__name__}: {error}"
             self._answer({"id": id, "error": {"code": INTERNAL_ERROR, "message": message}})
@@ -243,8 +243,8 @@ class Peer:
     async def _notified(self, line: bytes, method: str, params: Any) -> None:
         try:
             await self._handler(method, params)
-        except RpcError as error:
-            self._stray(line, error.message)
+        except RpcError:
+            self._stray(line)
 
     async def _end(self, why: Closed) -> None:
         self._ended = why

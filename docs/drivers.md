@@ -266,9 +266,12 @@ architecture asks for and is easy to get wrong:
 - its own process group, recorded before exec, so no harness can exist unrecorded, and a reused pid cannot make recovery kill a
   stranger;
 - pipes that always drain, and reports in a bounded queue whose breach stops the agent with a gap;
-- stderr in a bounded log, never journaled, with credentials masked there and in reports;
+- stderr in a bounded log, never journaled, with credentials masked;
 - `stop(grace)`: `SIGTERM`, wait, `SIGKILL`, then verify;
 - the allowlisted environment from `harness_env(spec)`.
+
+The host masks every report on its way in, whichever driver said it. So if you cut text to fit a field, mask it first with
+`process.redact`, because a cut can split a secret. `Held(process.redact)` does the same for a stream of chunks.
 
 For a line protocol, `read_lines` in `platoon_harness.rpc` splits on LF only and bounds a line. For JSON-RPC, `Peer` is the whole
 client: it takes a handler for inbound calls, and `jsonrpc=False` for a peer that omits that member.

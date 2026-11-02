@@ -2,7 +2,10 @@
 
 import asyncio
 import json
+import os
+import signal
 import stat
+import sys
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -17,8 +20,10 @@ from platoon_harness.drivers import (
     Delivery,
     Delta,
     DriverError,
+    Exited,
     GapReport,
     Item,
+    Ready,
     Receipt,
     Report,
     Reporter,
@@ -27,7 +32,8 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.kernel import ManualClock, hash_token
+from platoon_harness.drivers.process import RECORD, Record
+from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
@@ -69,6 +75,10 @@ def recorded(driver: type[Recording]) -> Callable[[], Awaitable[list[Delivery]]]
         return driver.deliveries
 
     return handed
+
+
+def solo_with(make: Callable[[], Any], **role: Any) -> Team:
+    return Team.model_validate({"roles": {"bob": {"harness": harness(make), **role}}})
 
 
 class Stuck(ScriptedDriver):
@@ -739,3 +749,374 @@ async def test_a_token_works_only_while_its_agent_lives(tmp_path, recording):
 
         with pytest.raises(Exception, match="unknown credential"):
             kernel.authenticate(binding.token.reveal())
+
+
+# What a harness may leave hanging, and what comes of it.
+
+
+async def test_an_interrupt_fails_a_delivery_that_hangs_and_queues_it_again(tmp_path):
+    async with Session.start(solo_with(Stuck), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "hang")
+        await in_state(session, "bob", "waking")
+        await until(
+            lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "deliver"
+        )
+
+        await session.interrupt("@bob")
+
+        await in_state(session, "bob", "idle")
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+        assert failed[0].data["error"] == "it was interrupted"
+        assert (await session.status("@bob"))["state"] == "idle"
+        assert len(await session.attention()) >= 1
+
+
+async def test_a_delivery_that_hangs_is_cut_off_and_queued_again(tmp_path):
+    clock = ManualClock(1000.0)
+
+    async with Session.start(solo_with(Stuck), root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "hang")
+        await until(
+            lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "deliver"
+        )
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+
+        clock.advance(60.0)
+
+        await in_state(session, "bob", "idle")
+        assert (await of_type(session, "effect.failed"))[0].data["error"] == "its harness did not take it in time"
+
+
+async def test_a_harness_that_takes_a_delivery_and_begins_no_turn_is_cut_off(tmp_path):
+    class TakesIt(ScriptedDriver):
+        async def deliver(self, delivery: Delivery) -> Receipt:
+            return Receipt(boundary=delivery.boundary)
+
+    clock = ManualClock(1000.0)
+
+    async with Session.start(solo_with(TakesIt), root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "hello")
+        await until(
+            lambda: of_type(session, "effect.started"), session, lambda found: found[-1].data["kind"] == "deliver"
+        )
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+
+        clock.advance(60.0)
+
+        await in_state(session, "bob", "idle")
+
+
+async def test_a_wake_finishes_when_its_turn_begins(tmp_path):
+    async with Session.start(solo([Say("heard")]), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "hello")
+        await until(lambda: of_type(session, "turn.ended"), session)
+
+        events = await journal(session)
+
+    types = [event.type if event.type != "effect.finished" else event.data["kind"] for event in events]
+    assert types.index("turn.started") < types.index("deliver")
+
+
+def launch_of(agent: str) -> Callable[[list[Any]], bool]:
+    return lambda found: any(event.data["kind"] == "launch" and event.agent == agent for event in found)
+
+
+async def test_a_harness_that_says_ready_and_never_begins_its_goal_is_lost(tmp_path):
+    class Dawdling(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            await report(Ready(native="n"))
+            return Started(native="n")
+
+    clock = ManualClock(1000.0)
+    team = Team.model_validate(
+        {"roles": {"bob": {"harness": scripted()}, "ada": {"harness": harness(Dawdling), "count": 0}}}
+    )
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.spawn("ada", "ada", "the important thing")
+        launched = await until(lambda: of_type(session, "effect.finished"), session, launch_of("ada"))
+        assert launched and "starting_agent" in (await session.status())["blockers"]
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+
+        clock.advance(60.0)
+
+        row = await ended(session, "ada")
+
+    assert (row["status"], row["reason"]) == ("lost", "it said it was ready and never began its goal")
+
+
+async def test_a_harness_that_exits_before_it_is_ready_fails_its_spawn_with_its_reason(tmp_path):
+    class Gone(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            await report(Exited(reason="no licence"))
+            return Started()
+
+    async with Session.start(solo_with(Gone), root=tmp_path) as session:
+        row = await ended(session, "bob")
+
+    assert (row["status"], row["reason"]) == ("failed", "its spawn failed: no licence")
+
+
+# Reports the journal refuses.
+
+
+class Saying(ScriptedDriver):
+    """A harness that says one thing as soon as it is up."""
+
+    said: Report
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        started = await super().start(spec, report)
+        await report(self.said)
+        return started
+
+
+def saying(report: Report) -> type[Saying]:
+    return type("Said", (Saying,), {"said": report})
+
+
+async def test_a_ready_the_journal_refuses_fails_the_spawn_and_says_why(tmp_path):
+    class TooMuch(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            await report(Ready(native="n", tools_visible=("x" * 40_000,)))
+            return Started(native="n")
+
+    async with Session.start(solo_with(TooMuch), root=tmp_path) as session:
+        row = await asyncio.wait_for(ended(session, "bob"), SECONDS)
+
+    assert row["status"] == "failed"
+    assert "ready report was refused: invalid" in row["reason"]
+
+
+async def test_an_exit_with_a_reason_of_any_length_still_ends_the_agent(tmp_path):
+    async with Session.start(solo_with(saying(Exited(reason="x" * 20_000))), root=tmp_path) as session:
+        row = await ended(session, "bob")
+
+    assert row["status"] == "lost"
+
+
+async def test_a_report_the_journal_refuses_ends_the_harness_and_leaves_a_gap(tmp_path):
+    item = Item(kind="tool", gist="ran it", outcome="x" * 20_000)
+
+    async with Session.start(solo_with(saying(item)), root=tmp_path) as session:
+        row = await ended(session, "bob")
+        native = await of_type(session, "native.recorded")
+        ending = await session.ending()
+
+    assert row["status"] == "lost"
+    assert "item report was refused: invalid" in row["reason"]
+    assert native[0].data["kind"] == "item"
+    assert {"agent": "bob", "what": "unknown_update", "plane": "control", "count": 1} in ending.gaps
+
+
+async def test_a_late_word_from_an_ended_agent_is_no_loss(tmp_path):
+    class Late(ScriptedDriver):
+        async def stop(self, grace: float) -> None:
+            await self._report(Item(kind="message", gist="too late"))
+            await super().stop(grace)
+
+    async with Session.start(solo_with(Late), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.cancel("@bob")
+
+        row = await ended(session, "bob")
+        await until(
+            lambda: of_type(session, "effect.finished"), session, lambda found: found[-1].data["kind"] == "stop"
+        )
+
+        assert await of_type(session, "native.recorded") == []
+
+    assert row["status"] == "cancelled"
+
+
+# Model pinning and assurance.
+
+
+async def test_a_model_other_than_the_one_pinned_fails_the_spawn(tmp_path):
+    class Hosted(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            await report(Ready(native="n", effective_model="some-hosted-default"))
+            return Started(native="n")
+
+    async with Session.start(solo_with(Hosted, model="asked"), root=tmp_path) as session:
+        row = await ended(session, "bob")
+
+        assert await of_type(session, "agent.started") == []
+
+    assert row["reason"] == "its spawn failed: it runs some-hosted-default, and its role pins asked"
+
+
+async def test_a_model_nobody_can_name_stays_unknown_and_refuses_nothing(tmp_path):
+    class Unsaid(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+            await report(Ready(native="n"))
+            return Started(native="n")
+
+    async with Session.start(solo_with(Unsaid, model="asked"), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+        assert (await of_type(session, "agent.started"))[0].data["effective_model"] is None
+
+
+async def test_assurance_is_recorded_once_on_a_harness_coming_up(tmp_path):
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+        assert (await of_type(session, "agent.started"))[0].data["assurance"] == "cooperative"
+
+
+# Credentials.
+
+SECRET = "s3cret-" + "k" * 40
+
+
+class Keyed(LocalAuthority):
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        admission = await super().admit(spawn)
+        return admission.model_copy(update={"access": {"KEY": Secret(SECRET)}})
+
+
+async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_path):
+    team = solo_with(saying(Item(kind="message", gist=f"my key is {SECRET}", body=f"{SECRET}\n")))
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        body = await session.blob(items[0].data["body"])
+
+    assert items[0].gist == "my key is ***"
+    assert body["text"] == "***\n"
+
+
+async def test_live_text_is_masked_too(tmp_path):
+    team = solo_with(saying(Delta(text=f"the key is {SECRET}")))
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        frame = await asyncio.wait_for(anext(session.deltas("@bob")), SECONDS)
+
+    assert frame.text == "the key is ***"
+
+
+async def test_a_stop_that_fails_is_masked_in_the_journal_and_the_log(tmp_path, caplog):
+    class BadStop(ScriptedDriver):
+        async def stop(self, grace: float) -> None:
+            raise DriverError(f"stop failed with {SECRET}")
+
+    team = solo_with(BadStop)
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.cancel("@bob")
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+
+    assert failed[0].data["error"] == "stop failed with ***"
+    assert SECRET not in caplog.text
+
+
+async def test_a_driver_that_breaks_leaves_no_credential_in_the_log(tmp_path, caplog):
+    class Breaks(ScriptedDriver):
+        async def deliver(self, delivery: Delivery) -> Receipt:
+            raise RuntimeError(f"boom {SECRET}")
+
+    team = solo_with(Breaks)
+
+    async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "hello")
+        failed = await until(lambda: of_type(session, "effect.failed"), session)
+
+    assert failed[0].data["error"] == "RuntimeError: boom ***"
+    assert SECRET not in caplog.text
+
+
+# Shutdown.
+
+
+async def test_a_wire_program_s_own_harness_goes_with_the_agent(tmp_path):
+    program = tmp_path / "inner.py"
+    program.write_text(
+        "from platoon_harness.drivers.exec import ExecDriver\n"
+        "from platoon_harness.drivers.wire import serve\n"
+        "serve(ExecDriver(['sleep', '{goal}']))\n"
+    )
+    harnessed = {"command": [sys.executable, str(program)], "mode": "wire"}
+    team = Team.model_validate({"roles": {"bob": {"harness": harnessed, "count": 0}, "z": {"harness": scripted()}}})
+
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "z", "idle")
+        await session.spawn("ada", "bob", "1000")
+        await in_state(session, "ada", "running")
+        folder = session.folder / "agents" / "ada"
+        wire, inner = Record.read(folder), Record.read(folder / "wire")
+        os.killpg(wire.pid, signal.SIGKILL)
+        await in_state(session, "ada", "ended")
+        await until(
+            lambda: of_type(session, "effect.finished"), session, lambda found: found[-1].data["kind"] == "stop"
+        )
+
+        assert inner.state() == "gone"
+        assert not (folder / "wire" / RECORD).exists()
+
+
+async def test_leaving_while_a_stop_runs_still_stops_the_harness(tmp_path):
+    stopping, stopped = asyncio.Event(), []
+
+    class SlowStop(ScriptedDriver):
+        async def stop(self, grace: float) -> None:
+            stopped.append("asked")
+            stopping.set()
+            if len(stopped) == 1:
+                await asyncio.Event().wait()
+            stopped.append("done")
+
+    session = await Session.start(solo_with(SlowStop), root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await session.cancel("@bob")
+    await asyncio.wait_for(stopping.wait(), SECONDS)
+
+    await asyncio.wait_for(session.leave(0.01), SECONDS)
+
+    assert stopped == ["asked", "asked", "done"]
+
+
+async def test_a_journal_that_will_not_commit_holds_up_no_shutdown(tmp_path, monkeypatch):
+    session = await Session.start(solo([Hang()]), root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    runtime = session._runtime
+    assert runtime is not None
+
+    async def failing(self: Kernel, principal: Any, op: str, args: Any, **options: Any) -> Outcome:
+        return Outcome(op=op, args_hash="", refusal=Refusal(code="unavailable", detail="the disk is full"))
+
+    monkeypatch.setattr(Kernel, "submit", failing)
+    await asyncio.wait_for(session.leave(0.01), SECONDS)
+
+    assert runtime.kernel.closed
+    assert runtime.host._links == {}
+
+
+async def test_a_driver_that_breaks_in_stop_leaves_nothing_half_closed(tmp_path):
+    class BadStop(ScriptedDriver):
+        async def stop(self, grace: float) -> None:
+            raise RuntimeError("a bug in stop")
+
+    team = Team.model_validate({"roles": {"bad": {"harness": harness(BadStop)}, "good": {"harness": scripted()}}})
+    session = await Session.start(team, root=tmp_path)
+    await in_state(session, "bad", "idle")
+    await in_state(session, "good", "idle")
+    runtime, folder = session._runtime, session.folder
+    assert runtime is not None
+
+    await session.leave()
+
+    assert runtime.kernel.closed
+    assert not is_held(folder)
+    assert not (folder / "runtime.json").exists()

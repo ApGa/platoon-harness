@@ -22,9 +22,12 @@ from platoon_harness.drivers import (
     Item,
     Offered,
     Ready,
+    Receipt,
+    Reconciled,
     Report,
     Started,
     ToolBinding,
+    unknown_frame,
 )
 from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
@@ -42,6 +45,8 @@ NAMESPACE = "ph"
 GRACE = 5.0
 
 _READY_SECONDS = 60.0
+_HANDOVER_SECONDS = 60.0
+_RECONCILE_SECONDS = 10.0
 _RETRY_SECONDS = 1.0
 _RENEW_EVERY = 5.0
 _GOAL_BODY_LIMIT = 16 * 1024 * 1024
@@ -54,7 +59,8 @@ __all__ = ["GRACE", "NAMESPACE", "DriverLink", "Host"]
 
 class DriverLink:
     """One harness as the host holds it. Links live on the `Host` and not in the daemon, so a restarted daemon loses
-    none. `leaving` means its end is our doing, and `ready` is set once `agent.start` commits or nobody needs it to."""
+    none. `leaving` means its end is our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or
+    `refused` says why it never will. `handing` is set to drop a handover under way."""
 
     def __init__(self, agent: str, role: str, driver: Driver, info: DriverInfo, *, resumed: bool) -> None:
         self.agent = agent
@@ -64,10 +70,16 @@ class DriverLink:
         self.resumed = resumed
         self.leaving = False
         self.ready = asyncio.Event()
+        self.refused: str | None = None
+        self.handing: asyncio.Event | None = None
         self.redact = Redactor(())
         self.ours: tuple[str, ...] = ()
         self.order = asyncio.Lock()
         self.renewal = 0.0
+
+    def refuse(self, why: str) -> None:
+        self.refused = why
+        self.ready.set()
 
 
 class Host:
@@ -139,12 +151,17 @@ class Host:
         except (DriverError, ConfigError) as error:
             await self.insist("effect.fail", {**attempt, "error": self._masked(effect, str(error))})
         except Exception as error:
-            log.exception("%s failed for %s", effect.kind, effect.agent)
             said = self._masked(effect, f"{type(error).__name__}: {error}")
+            log.error("%s failed for %s: %s", effect.kind, effect.agent, said)
             await self.insist("effect.fail", {**attempt, "error": said})
             await self._lose(effect.agent, f"its {effect.kind} failed: {type(error).__name__}")
         else:
             await self.insist("effect.finish", {**attempt, "result": result})
+            if effect.kind == "launch" and not await first(
+                self._owed(effect.data["agent"], lambda agent: agent["unbegun"]),
+                self._kernel.clock.sleep(_READY_SECONDS),
+            ):
+                await self._lose(effect.agent, "it said it was ready and never began its goal")
 
     def _masked(self, effect: Effect, text: str) -> str:
         """What a harness said is journaled with any credential it held masked."""
@@ -162,6 +179,16 @@ class Host:
             if kernel.closed:
                 return outcome
             await kernel.clock.sleep(refusal.retry_after or _RETRY_SECONDS)
+
+    async def _owed(self, agent: str, owing: Callable[[Mapping[str, Any]], bool]) -> None:
+        """Sleep while an agent's record says a turn is still to begin. Once it has ended, nothing is owed."""
+        kernel = self._kernel
+        while True:
+            head = kernel.head
+            found = kernel.query(kernel.runtime, "agent.records", {"agent": agent}).result
+            if not found or not owing(found[0]):
+                return
+            await kernel.changed(head)
 
     # Effects.
 
@@ -214,12 +241,13 @@ class Host:
         async def up() -> Started:
             started = await driver.start(spec, partial(self._heard, link))
             await link.ready.wait()
+            if link.refused is not None:
+                raise DriverError(link.refused)
             return started
 
         coming = asyncio.ensure_future(up())
         try:
-            await first(asyncio.shield(coming), self._kernel.clock.sleep(_READY_SECONDS))
-            if not coming.done():
+            if not await first(asyncio.shield(coming), self._kernel.clock.sleep(_READY_SECONDS)):
                 raise DriverError(f"{agent}'s harness never said it was ready")
             return coming.result().native
         except BaseException as error:
@@ -230,10 +258,19 @@ class Host:
             raise
 
     async def _discard(self, link: DriverLink) -> None:
-        link.leaving = True
         self._links.pop(link.agent, None)
         with contextlib.suppress(Exception):
-            await link.driver.stop(GRACE)
+            await self._end(link, GRACE)
+
+    async def _end(self, link: DriverLink, grace: float) -> None:
+        """End a harness, then whatever its driver left: a wire program's own harness is a group of its own, and only
+        `reap` looks for it. A driver has what `stop` promises, which is twice `grace`."""
+        link.leaving = True
+        try:
+            async with asyncio.timeout(2 * grace + _RETRY_SECONDS):
+                await link.driver.stop(grace)
+        finally:
+            await reap(agent_folder(self._folder, link.agent), grace)
 
     async def describe(self, role: str) -> DriverInfo:
         """What a role's driver says of itself, kept, because a wire program says it by running."""
@@ -279,6 +316,8 @@ class Host:
         return link
 
     async def _deliver(self, effect: Effect) -> dict[str, Any]:
+        """Hand entries over, and for a wake stay open until its turn begins, so `waking` always has an effect behind it
+        and a crash cannot strand one. Past a time, or at an interrupt, the handover fails, which queues it again."""
         link, data = self._required(effect), effect.data
         surface = harness_name(NAMESPACE) if link.info.capabilities.tool_paths & _MCP else shell_name
         delivery = Delivery(
@@ -288,35 +327,68 @@ class Host:
             items=tuple(Offered(**item) for item in data["items"]),
             behind=data["behind"],
         )
-        return (await link.driver.deliver(delivery)).model_dump(mode="json")
+        link.handing = asyncio.Event()
+        handed = asyncio.ensure_future(self._hand_over(link, delivery))
+        try:
+            if await first(handed, link.handing.wait(), self._kernel.clock.sleep(_HANDOVER_SECONDS)):
+                return handed.result().model_dump(mode="json")
+            raise DriverError("it was interrupted" if link.handing.is_set() else "its harness did not take it in time")
+        finally:
+            link.handing = None
+
+    async def _hand_over(self, link: DriverLink, delivery: Delivery) -> Receipt:
+        receipt = await link.driver.deliver(delivery)
+        if delivery.boundary == "turn":
+            await self._owed(link.agent, lambda agent: agent["state"] == "waking")
+        return receipt
 
     async def _interrupt(self, effect: Effect) -> dict[str, Any] | None:
         link = self.link(effect.agent)
-        return None if link is None else (await link.driver.interrupt()).model_dump(mode="json")
+        if link is None:
+            return None
+        if link.handing is not None:
+            link.handing.set()
+        return (await link.driver.interrupt()).model_dump(mode="json")
 
     async def _answer(self, effect: Effect) -> None:
         await self._required(effect).driver.answer(effect.data["approval"], effect.data["verdict"])
 
     async def _stop(self, effect: Effect) -> None:
-        """End what an ended agent left. With no link, a crash may have left it, and `reap` proves what is ours."""
+        """End what an ended agent left. With no link, a crash may have left it, and `reap` proves what is ours. A link
+        stays until its harness has stopped, so a shutdown that cuts this short can still stop it."""
         name = effect.data["agent"]
-        link = self._links.pop(name, None)
+        link = self.link(name)
         if link is None:
             await reap(agent_folder(self._folder, name), GRACE)
         else:
-            link.leaving = True
             link.ready.set()
-            await link.driver.stop(GRACE)
+            await self._end(link, GRACE)
+            self._links.pop(name, None)
         status = self._kernel.query(self._kernel.runtime, "agent.status", {"agent": name})
         role = link.role if link else status.result["role"]
         await self._authority.finish(AgentRef(agent=name, role=role), AgentOutcome(status=status.result["status"]))
 
+    async def reconcile(self, agent: str | None, key: str) -> Reconciled:
+        """What a harness says became of what it was sent. With no harness to ask, or none that says in time, nobody
+        knows."""
+        link = self.link(agent)
+        if link is None:
+            return "unknown"
+        asked = asyncio.ensure_future(link.driver.reconcile(key))
+        try:
+            return asked.result() if await first(asked, self._kernel.clock.sleep(_RECONCILE_SECONDS)) else "unknown"
+        except Exception as error:
+            log.error("%s could not reconcile: %s", agent, link.redact(f"{type(error).__name__}: {error}"))
+            return "unknown"
+
     # Reports.
 
     async def _heard(self, link: DriverLink, report: Report) -> None:
-        """Take one report, in the order its harness said it: a driver waits here, and its own queue keeps a pipe
-        draining. Nothing it cannot hear goes unsaid: a report that cannot be taken ends the harness, not the host."""
+        """Take one report, in the order its harness said it, with every credential masked, whichever driver said it: a
+        driver waits here, and its own queue keeps a pipe draining. Nothing it cannot hear goes unsaid: a report that
+        cannot be taken ends the harness, not the host."""
         kernel = self._kernel
+        report = link.redact.masked(report)
         try:
             if isinstance(report, Delta):
                 kernel.push_delta(link.agent, report.text)
@@ -335,15 +407,38 @@ class Host:
                 return
             case Exited() if link.leaving:
                 return
+            case Exited(reason=reason) if not link.ready.is_set():
+                link.refuse(reason)  # Nobody has heard of this harness, so `connect` fails, which says so.
+                return
             case Item(body=str(text)):
                 sha256 = await self._kernel.put_body(text.encode(errors="replace"))
                 report = report.model_copy(update={"body": f"sha256:{sha256}"})
-        outcome = await self.insist("agent.report", {"agent": link.agent, "report": report})
-        if isinstance(report, ApprovalRequested) and outcome.refusal is not None:
-            await link.driver.answer(report.id, "deny")  # It is blocked on an answer the journal will not hold.
+        await self._taken(link, report, await self.insist("agent.report", {"agent": link.agent, "report": report}))
+
+    async def _taken(self, link: DriverLink, report: Report, outcome: Outcome) -> None:
+        """What comes of a report the journal refused. The evidence is gone, so a gap says so and the harness ends. But
+        an approval is answered `deny`, as a harness is blocked on it, and an ended agent's late word is no loss."""
+        kernel, refusal = self._kernel, outcome.refusal
+        if refusal is None or link.leaving:
+            return
+        if isinstance(report, ApprovalRequested):
+            await link.driver.answer(report.id, "deny")
+            return
+        status = kernel.query(kernel.runtime, "agent.status", {"agent": link.agent}).result
+        if refusal.code == "conflict" and status["state"] == "ended":
+            return
+        why = f"its {report.type} report was refused: {refusal.code}: {refusal.detail}"
+        for dropped in unknown_frame(report.type, why):
+            await self.insist("agent.report", {"agent": link.agent, "report": dropped})
+        await self._lose(link.agent, why)
 
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
-        """Commit what was declared with what was verified, so no driver can claim a level."""
+        """Commit what was declared with what was verified, so no driver can claim a level. A model that is not the one
+        pinned is refused here: the effective model must equal the requested one, and an unknown one stays unknown."""
+        pinned = self._team.roles[link.role].model
+        if pinned is not None and ready.effective_model not in (None, pinned):
+            link.refuse(f"it runs {ready.effective_model}, and its role pins {pinned}")
+            return
         info = link.info
         profile = Profile(
             driver=info.name,
@@ -357,9 +452,10 @@ class Host:
             "declared": info.capabilities,
             "verified": profile.model_dump(mode="json"),
             "levels": levels(info.capabilities, profile, None).model_dump(mode="json"),
+            "assurance": "cooperative",
             "resumed": link.resumed,
         }
-        await self.insist("agent.start", args)
+        await self._taken(link, ready, await self.insist("agent.start", args))
         link.ready.set()
 
     async def _renew(self, link: DriverLink) -> None:
@@ -374,8 +470,12 @@ class Host:
     async def _lose(self, agent: str | None, reason: str) -> None:
         """A harness nothing can hear any more has exited, as far as anyone can tell: no silent hang."""
         link = self.link(agent)
-        if link is not None and not link.leaving:
+        if link is None or link.leaving:
+            return
+        if link.ready.is_set():
             await self.insist("agent.report", {"agent": link.agent, "report": Exited(reason=reason)})
+        else:
+            link.refuse(reason)
 
     # Shutdown.
 
@@ -386,19 +486,17 @@ class Host:
             link.leaving = True
 
     async def close(self, grace: float) -> None:
-        """End every process tree, and drop whatever was still in flight. A dropped effect stays `started`, so the next
-        runtime marks it uncertain, which is the truth."""
+        """End every process tree, whatever a driver does, and drop whatever was in flight. A dropped effect stays
+        `started`, so the next runtime marks it uncertain, which is the truth. A launch cut short stays so too: a
+        harness that never said it was ready has not started."""
         links = tuple(self._links.values())
         self._links.clear()
 
         async def ended(link: DriverLink) -> None:
-            link.leaving = True
-            link.ready.set()
             try:
-                async with asyncio.timeout(2 * grace + _RETRY_SECONDS):
-                    await link.driver.stop(grace)
-            except (DriverError, TimeoutError):
-                log.exception("%s did not stop", link.agent)
+                await self._end(link, grace)
+            except Exception as error:
+                log.error("%s did not stop: %s", link.agent, link.redact(f"{type(error).__name__}: {error}"))
 
         await asyncio.gather(*map(ended, links))
         acting = tuple(self._acting.values())

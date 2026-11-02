@@ -33,13 +33,14 @@ from . import (
     unknown_frame,
 )
 from .env import inherited
-from .process import Process
+from .process import LOG, WIRE, Process, exit_reason
 
 DRIVER_ERROR = -32001
 UNKNOWN_PROTOCOL = -32002
 
 _DESCRIBE_TIMEOUT = 30.0
 _END_GRACE = 5.0
+_STDERR_TAIL = 2048
 
 __all__ = ["DRIVER_ERROR", "UNKNOWN_PROTOCOL", "WireDriver", "serve"]
 
@@ -49,7 +50,7 @@ def _to_frame(spec: AgentSpec) -> dict[str, Any]:
     stay apart, and `reap` finds both."""
     tools = None if spec.tools is None else spec.tools.model_dump(mode="json", exclude={"token"})
     fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder"})
-    return {**fields, "folder": str(spec.folder / "wire"), "tools": tools, "access": sorted(spec.access)}
+    return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": sorted(spec.access)}
 
 
 def _from_frame(frame: Mapping[str, Any], environ: Mapping[str, str]) -> AgentSpec:
@@ -67,6 +68,7 @@ class WireDriver:
         self._info: DriverInfo | None = None
         self._process: Process | None = None
         self._peer: Peer | None = None
+        self._log = LOG
 
     def describe(self) -> DriverInfo:
         """Ask the program, which stays up only long enough to answer, so no harness starts. This blocks, as the method
@@ -76,6 +78,8 @@ class WireDriver:
         return self._info
 
     def _ask_for_description(self) -> DriverInfo:
+        """What a program said of itself. Whatever went wrong instead, the reason names the program."""
+        name = self._command[0]
         request = {"jsonrpc": "2.0", "id": 1, "method": "describe", "params": {"protocol": WIRE_PROTOCOL}}
         try:
             done = subprocess.run(
@@ -86,11 +90,19 @@ class WireDriver:
                 timeout=_DESCRIBE_TIMEOUT,
                 check=False,
             )
-            frame = json.loads(done.stdout.partition(b"\n")[0])
-        except (OSError, subprocess.TimeoutExpired, ValueError) as error:
-            raise DriverError(f"{self._command[0]} did not describe itself: {error}") from error
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise DriverError(f"{name} did not describe itself: {error}") from error
+        if not done.stdout.strip():
+            said = done.stderr.decode(errors="replace")[-_STDERR_TAIL:]
+            raise DriverError(f"{name} did not describe itself: {exit_reason(done.returncode)}: {said}")
+        try:
+            return self._described(json.loads(done.stdout.partition(b"\n")[0]))
+        except (AttributeError, TypeError, ValueError) as error:
+            raise DriverError(f"{name} did not describe itself: {error}") from error
+
+    def _described(self, frame: Mapping[str, Any]) -> DriverInfo:
         if "error" in frame:
-            raise DriverError(f"{self._command[0]} did not describe itself: {frame['error'].get('message')}")
+            raise ValueError(frame["error"].get("message"))
         result = frame.get("result", {})
         if result.get("protocol") != WIRE_PROTOCOL:
             raise DriverError(f"{self._command[0]} speaks protocol {result.get('protocol')}, not {WIRE_PROTOCOL}")
@@ -110,9 +122,9 @@ class WireDriver:
         except ValidationError as error:
             raise RpcError(INVALID_PARAMS, "not a report in the vocabulary") from error
 
-    def _stray(self, line: bytes, why: str) -> None:
+    def _stray(self, line: bytes) -> None:
         assert self._process is not None
-        for report in unknown_frame("frame", line.decode(errors="replace")):
+        for report in unknown_frame("frame", self._process.redact(line.decode(errors="replace"))):
             self._process.put(report)
 
     async def _call(self, verb: str, params: Any = None) -> Any:
@@ -123,9 +135,10 @@ class WireDriver:
         except RpcError as error:
             raise DriverError(error.message) from error
         except Closed as error:
-            raise DriverError(f"{self._command[0]} is gone: {error}") from error
+            raise DriverError(f"{self._command[0]} is gone: {error}: see {self._log}") from error
 
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        self._log = spec.folder / LOG
         await Process.launch(self._command, spec, report, read=self._read)
         return Started.model_validate(await self._call("start", {"protocol": WIRE_PROTOCOL, "spec": _to_frame(spec)}))
 

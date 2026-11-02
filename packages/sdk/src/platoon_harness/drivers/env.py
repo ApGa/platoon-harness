@@ -6,18 +6,18 @@ import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import overload
+from typing import Any, overload
 from urllib.parse import quote, quote_plus
 
 from platoon_harness.config import Secret
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
-from . import AgentSpec
+from . import AgentSpec, Report
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
 
-__all__ = ["Redactor", "harness_env", "inherited", "secrets_of"]
+__all__ = ["Held", "Redactor", "harness_env", "inherited", "secrets_of"]
 
 
 def inherited(environ: Mapping[str, str] = os.environ) -> dict[str, str]:
@@ -64,7 +64,7 @@ def _forms(value: str) -> set[bytes]:
 
 class Redactor:
     """Masks secrets, in their encoded forms too, wherever a harness's words go next. `reach` is one byte short of the
-    longest form, so holding that much back keeps a secret from straddling two chunks."""
+    longest form, so holding that much back keeps a secret from straddling two chunks, and `Held` does."""
 
     def __init__(self, secrets: Iterable[Secret]) -> None:
         forms = {form for secret in secrets if (value := secret.reveal()) for form in _forms(value)}
@@ -84,3 +84,31 @@ class Redactor:
         if isinstance(text, str):
             return self._pattern.sub(_MASK, text.encode(errors="surrogatepass")).decode(errors="surrogatepass")
         return self._pattern.sub(_MASK, text)
+
+    def masked(self, report: Report) -> Report:
+        """A report with every text in it masked."""
+        changes: dict[str, Any] = {}
+        for name, value in report:
+            if isinstance(value, str) and name != "type":
+                changes[name] = self(value)
+            elif isinstance(value, tuple):
+                changes[name] = tuple(map(self, value))
+        return report.model_copy(update=changes)
+
+
+class Held:
+    """One stream through a `Redactor`. What could be the start of a secret waits for the next chunk."""
+
+    def __init__(self, redact: Redactor) -> None:
+        self._redact = redact
+        self._held = b""
+
+    def feed(self, chunk: bytes) -> bytes:
+        text = self._redact(self._held + chunk)
+        cut = max(len(text) - self._redact.reach, 0)
+        self._held = text[cut:]
+        return text[:cut]
+
+    def flush(self) -> bytes:
+        text, self._held = self._redact(self._held), b""
+        return text

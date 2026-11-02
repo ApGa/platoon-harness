@@ -27,14 +27,41 @@
 - `from platoon_harness import Session, Team, Role, Ending, Refused, on, load_team`.
 - `session.ending`, `agent.records`, `effect.list`, `lease.due`, `budget.lapse`, `Kernel.read_only`, `is_held`, and
   `schema.seconds`.
+- `session.ending` gives each agent's last `report`. `agent.conclude` and `agent.retell` are runtime-only ops, and `kernel.first` is
+  the one race helper. A live text frame is cut at 64 KiB.
 
 ### Fixed
 
 - `Kernel.changed` no longer wakes on a batch with no events, as it never promised to.
 - `Peer.run` treats a reset connection as the end of the stream.
+- `agent.finish` in an open turn ends the agent with that turn, so what a harness reports at turn end counts. It used to be refused,
+  which lost the usage and last message and could stall a budgeted team.
+- `usage` has no amount for a unit nobody measured. It used to say 0.0. `turns` and `agents` are labelled `counted`, not `provider`.
+- A crash or a stop between a handover and its turn no longer strands an agent in `waking`, a goal no turn began is told again on
+  resume, and a launch cut short by a stop is no longer recorded as finished.
+- A handover that keeps failing backs off and, after six, loses the agent with the reason. It used to loop and grow the journal.
+- `agent.interrupt` takes an agent whose handover hangs, and that handover fails. It used to be refused.
+- Recovery gives each agent its own failure. One broken driver, or one `reconcile` that hangs, used to stop every other.
+- `Runtime.stop` always lets go, and a journal that will not commit holds it up for at most `grace`.
+- A wire program's own harness ends with its agent, and a stop already running no longer leaves a harness alive.
+- A report the journal refuses ends its harness with a gap. A `ready`, an item or an exit used to be dropped, which could hang an agent.
+- `ready` naming a model other than the one pinned fails the spawn.
+- Every report is masked on the way to the journal, whichever driver said it, and text is masked before it is cut.
+- `session.close` takes `if_done`, and `settled()` uses it, so a message that gets in first keeps a session open. `message.send` is
+  refused once a session is closing, because it would reach nobody.
+- An approval goes moot with the turn that asked. One pending at a crash used to end in `needs_human` for nothing.
+- `reap` reads only the driver's record and a wire program's, so a file a harness left under its folder can neither stop a resume nor
+  name a stranger.
+- A failed `describe` says what the program said on stderr, and a malformed one is a `DriverError` that names it.
+- `tool_visibility` matches a whole name, or its `__<name>` ending, and with no tools to look for says `unverified`.
 
 ### Changed
 
+- `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
+- `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do.
+- `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.
+- `reap` returns what it left alone in words, and `Process` masks stderr and leaves reports to the host.
+- `agent.records` takes an `agent`.
 - The view `primitives.Session` is now `SessionRecord`, leaving the name to the facade.
 - An agent has no goal unless given one: `agent.spawn` takes none, such an agent holds no turn's reservation, and a driver waits for
   a delivery. `check_driver` has `no_goal_takes_no_turn`, and the `exec` driver refuses a start with no goal.

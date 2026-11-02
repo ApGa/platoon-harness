@@ -25,6 +25,8 @@ from .recovery import recover_agents
 
 log = logging.getLogger("platoon_harness.runtime")
 
+_SUBMIT_SECONDS = 1.0
+
 __all__ = [
     "GRACE",
     "Admission",
@@ -42,7 +44,8 @@ class Runtime:
     from the journal, then per agent reap, resume and reconcile.
 
     `stop` is the owner's shutdown: interrupt turns, wait `grace`, end the process trees, hand back what will not
-    happen, append `session.stopped`, and keep the folder resumable.
+    happen, append `session.stopped`, and keep the folder resumable. A journal that stops answering holds up none of it
+    past `grace`, and nothing a driver does keeps it from letting go.
     """
 
     def __init__(self, folder: Path, *, authority: Authority | None = None, clock: Clock | None = None) -> None:
@@ -72,7 +75,7 @@ class Runtime:
             await open_session(self.kernel, team, manifest, authority, text)
             await self.tools.start()
             await self._issue_credentials()
-            await recover_agents(self.kernel, self.host, self.folder, cwd)
+            await first(recover_agents(self.kernel, self.host, self.folder, cwd), self._stop_asked.wait())
             self._supervising = asyncio.create_task(self.kernel.supervise())
             await self.control.start()
             running = Running(
@@ -118,14 +121,18 @@ class Runtime:
             return
         self._stopped = True
         kernel, host = self.kernel, self.host
+        limit = grace + _SUBMIT_SECONDS
         host.closing()
-        await self._interrupt_turns(grace)
-        await self._end_daemons()
-        await host.close(grace)
-        await self._hand_back()
-        await host.insist("session.stop", {})
-        await self._close()
-        log.info("session %s stopped at %d", self.folder.name, kernel.head)
+        try:
+            await first(self._interrupt_turns(grace), kernel.clock.sleep(limit))
+        finally:
+            try:
+                await self._end_daemons()
+                await host.close(grace)
+                await first(self._hand_back(), kernel.clock.sleep(limit))
+            finally:
+                await self._close()
+        log.info("session %s stopped", self.folder.name)
 
     async def _interrupt_turns(self, grace: float) -> None:
         kernel, host = self.kernel, self.host
@@ -155,6 +162,7 @@ class Runtime:
             if started.refusal is None:
                 failed = {"id": row["id"], "attempt": started.result, "error": "the owner stopped before it started"}
                 await host.insist("effect.fail", failed)
+        await host.insist("session.stop", {})
 
     async def _end_daemons(self) -> None:
         if self._supervising is not None:

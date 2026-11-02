@@ -150,24 +150,24 @@ inside a session. The drivers for `claude`, `codex` and `pi` do not exist.
 
 | Capability | State | Evidence |
 |---|---|---|
-| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames: no Codex session has run on it. The control socket and ACP do not use it yet |
+| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames: no Codex session has run on it. ACP does not use it yet |
 | The contract: seven methods, `DriverInfo`, `AgentSpec`, `ToolBinding`, `Delivery`, `Receipt`, `Started`, every field of section 9.2 | tested | `test_public_api.py`, `tests/unit/primitives/test_reports.py`, and every driver below |
 | One closed report vocabulary, serializable for the wire, with a path through `agent.report` for each | tested | `tests/unit/primitives/test_reports.py`, against the architecture's list |
 | `agent.start`: what the runtime concluded, which a report has no field for, so no driver can claim a level or a capability | tested | `test_reports.py`, `test_wire.py`, with a real program trying |
 | `levels`: a pure function, reasons for each, a result pinned to `(driver, version)`, a skip no pass, three-valued tool visibility | tested | `test_levels.py`, and from a live agent in `tests/unit/runtime/test_host.py`. Nothing stores a conformance result yet, so a live agent's levels are `unverified`. The rules are a first reading of compatibility section 4, and no real harness has been through them |
 | A harness in its own group, recorded before it can exec, with nothing run if we die first | tested | `test_process.py` |
-| Recognising a group on restart: a reused pid signals nobody | tested | `test_process.py`. A group whose leader is gone stays `unproven`: `reap` leaves it and names it, so a forked child can outlive a crash |
+| Recognising a group on restart: a reused pid signals nobody | tested | `test_process.py`. A group whose leader is gone stays `unproven`: `reap` leaves it and names it, so a forked child can outlive a crash. `reap` reads the driver's record and a wire program's and no others, and names one it cannot read. A harness at the same UID can still forge those two: see security tiers in architecture section 15 |
 | `stop`: TERM, wait, KILL, verify, for a child that ignores TERM, forks, or outlives its leader holding the pipes | tested | `test_process.py`, `test_wire.py` |
-| Pipes always drain, a report quota that stops the agent with a gap, a lost reader, a lost stdout, a reporter that fails, a delta dropped first | tested | `test_process.py`, `test_wire.py` |
+| Pipes always drain, a report quota that counts what a report holds and stops the agent with a gap, a lost reader, a lost stdout, a reporter that fails, a delta dropped first | tested | `test_process.py`, `test_wire.py` |
 | A closing loop or interpreter takes the group down | tested | `test_process.py`, in a real interpreter with three endings. SIGKILL of the runtime is left to `reap` |
 | Stderr in a bounded, masked log, never journaled, surviving a full disk | tested | `test_process.py` on Linux, with `/dev/full` |
 | The harness environment as an allowlist | tested | `test_env.py`, on a real child with a poisoned parent environment |
 | `Process` on macOS | experimental | `ps -o lstart=` and the rest are written from the man page and have never run |
 | A process that leaves its group by `setsid` | deferred | It escapes `stop`. Only a cgroup would hold it. See ADR 0018 |
-| `WireDriver` and `serve`: verbs equal to the methods, an integer protocol refused both ways, credentials by name, unknown frames as `native` plus a gap, a program's own record kept apart | tested | `test_wire.py`, `tests/conformance`, and against the real tool plane in `tests/integration/test_scripted_tool_plane.py` |
-| Wire `describe` | tested | `test_wire.py`. It runs the program once with a blocking `subprocess.run`, so the host calls it on a thread, and keeps the answer per role |
+| `WireDriver` and `serve`: verbs equal to the methods, an integer protocol refused both ways, credentials by name, unknown frames and reports as `native` plus a gap, whether notifications or requests, a program's own record kept apart | tested | `test_wire.py`, `tests/conformance`, and against the real tool plane in `tests/integration/test_scripted_tool_plane.py` |
+| Wire `describe`, with what a program said on stderr when it did not answer | tested | `test_wire.py`. It runs the program once with a blocking `subprocess.run`, so the host calls it on a thread, and keeps the answer per role. It runs in the caller's directory and a harness in the session's `cwd`, so a relative `command` can pass one and fail the other: `docs/drivers.md` says to use an absolute path |
 | OpenHands as a wire worker | planned | The path is real. That worker does not exist |
-| The `exec` driver, with `{goal}`, `ph` on the path, and what it cannot do refused with the reason | tested | `test_exec.py`, and `tests/conformance` with a small CLI that calls the model |
+| The `exec` driver, with `{goal}`, `ph` on the path, and what it cannot do refused with the reason, a goal that would be an option among it | tested | `test_exec.py`, and `tests/conformance` with a small CLI that calls the model |
 | `harness = { command = [...], mode = "wire" }` and the `exec` and `wire` entry points | tested | `test_exec.py`, `test_config.py`, and launched from a role in `tests/integration/` |
 | `ScriptedDriver`: every step, capabilities as data, real MCP, real model calls, resume | tested | `test_scripted.py`, and against the real `ToolServer` in `test_scripted_tool_plane.py` |
 | `FakeModel`: three dialects, whole and streamed, a script, a log of what arrived | tested | `test_fake_model.py`. `tests/integration/test_fake_model_clients.py`, marked `slow`, ran with dummy keys: Codex 0.164.0 and Claude Code 2.1.316 on text and a tool call, pi 1.4.0 on text. It skips a client that is not installed, and a skip proves nothing |
@@ -190,17 +190,23 @@ has run on macOS. The fast suite covers everything below except a second crash d
 | Opening: `team_check` on each driver's `describe` before any cost, the manifest and its body, roles, limits, `until`, policy, grants, channels, groups, budgets in seconds, starting agents | tested | `test_opening.py` |
 | Opening again after a crash part of the way through | tested | `test_opening.py`, by a kill between two steps, in-process |
 | Effects performed level-triggered: `admit`, `workspace` (`shared`, and any other fails loudly), `launch`, `deliver`, `interrupt`, `stop`, `answer` | tested | `test_host.py` |
-| `interrupt`, `stop` and `answer` around a delivery that hangs | tested | `test_host.py` |
+| `interrupt`, `stop` and `answer` around a delivery that hangs, and an interrupt or a minute failing a handover under way | tested | `test_host.py` |
+| A wake's `deliver` open until its turn begins, so a crash or a quiet harness cannot strand `waking` | tested | `test_host.py`, `test_recovery.py`, and the kill matrix in `tests/integration/test_kill_matrix.py` |
+| A harness that says ready and never begins its goal is lost, and one resumed before it began is told again | tested | `test_host.py`, `test_recovery.py` |
+| Model pinning: `ready` naming another model fails the spawn or the resume, and an unnamed one stays unknown | tested | `test_host.py`. No real harness has been through it |
+| `assurance` on `agent.started` and `agent.resumed` | tested | `test_host.py`. Always `cooperative`: nothing earns `isolated` until OS isolation exists |
 | A token in memory and its hash in the journal, a binding per agent, `ph` in `agents/<id>/bin`, instructions and preamble | tested | `test_host.py` |
 | A delivery as text in the words of its surface, with refs and the input id | tested | `test_host.py`, `tests/unit/tools/test_surface.py` |
 | Reports in order, bodies stored by hash, deltas to followers and never the journal, capabilities and levels on `agent.started` | tested | `test_host.py` |
 | A takeover holding deliveries, already requested ones too | tested | `test_host.py`. Driving the native session during one is not built, so `agent.takeover` holds and releases and no more |
-| A report stream that dies, a driver that raises, a harness that never starts or never says ready: `exited`, never a silent hang | tested | `test_host.py`. A Python driver whose own background task dies without a word is out of reach: nothing reports, and nothing raises |
-| Credentials masked in what a driver said | tested | `test_host.py` |
+| A report stream that dies, a driver that raises, a harness that never starts or never says ready, a report the journal refuses: `exited` and a gap, never a silent hang | tested | `test_host.py`. A Python driver whose own background task dies without a word is out of reach: nothing reports, and nothing raises |
+| Credentials masked in every report of every driver, deltas too, in failed effects, and in the runtime's log | tested | `test_host.py`, `test_exec.py`, `test_wire.py`. A secret can be cut by a driver that does not mask first: `Process` gives one what it needs, and the ones here use it |
+| Shutdown bounded: a journal that will not commit, a driver that breaks in `stop`, a stop already running | tested | `test_host.py` |
+| Every process tree gone with its agent, a wire program's own harness among them | tested | `test_host.py`, on real processes |
 | Links that outlive a daemon restart | tested | `test_host.py` |
 | Several runtimes in one process, nothing global, signals only in the entry point | tested | `test_host.py`, `test_public_api.py` |
-| Per-agent recovery: reap, resume, reconcile, on a fresh credential | tested | `test_recovery.py` for each effect kind, `tests/integration/test_crash.py` for `kill -9` on real processes. Grace is the host's `GRACE` per group |
-| A group that cannot be proved ours left alone and named | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
+| Per-agent recovery: reap, resume, reconcile, on a fresh credential, one broken driver losing one agent, a `reconcile` that hangs, and a stop asked during it | tested | `test_recovery.py` for each effect kind, `tests/integration/test_crash.py` and the kill matrix for `kill -9` on real processes. Grace is the host's `GRACE` per group |
+| A group that cannot be proved ours left alone and named, for an agent that has ended too | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
 | `Session`: `start`, `attach`, `resume`, as `await` or `async with`, one link in two forms | tested | `test_session.py`, `test_control.py` |
 | Typed wrappers checked against the registry: every client op has a method, each method takes what its op declares, defaults agree | tested | `test_session.py` |
 | `settled()` and its six reasons, a quiet session past its wall limit among them | tested | `test_session.py`, on a manual clock where time matters |

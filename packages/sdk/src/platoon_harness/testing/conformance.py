@@ -153,7 +153,7 @@ class _Rig:
         for driver in self.drivers:
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(driver.stop(_GRACE), self.options.timeout)
-        await reap(self.folder, _GRACE)
+        await reap(self.folder / "agent", _GRACE)
 
 
 @dataclass(frozen=True)

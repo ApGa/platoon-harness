@@ -12,6 +12,7 @@ from urllib.parse import parse_qs
 
 from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refused, first
 from platoon_harness.primitives import hold_open, lines_of
+from platoon_harness.rpc import strict_loads
 from platoon_harness.version import __version__
 
 from .surface import Surface, body_fields, list_tools, named_surface, notices_text, refusal_text, tool_name
@@ -108,10 +109,6 @@ def _length(headers: Mapping[str, str]) -> int:
     if len(value) > len(str(_REQUEST_LIMIT)) or int(value) > _REQUEST_LIMIT:
         raise _Rejected(413)
     return int(value)
-
-
-def _refuse_constant(constant: str) -> None:
-    raise ValueError(f"{constant} is not JSON")
 
 
 def _anchor(meta: Any) -> dict[str, str] | None:
@@ -287,7 +284,7 @@ class ToolServer:
 
     async def _answer(self, request: _Request) -> bytes:
         try:
-            message = json.loads(request.body, parse_constant=_refuse_constant)
+            message = strict_loads(request.body)
         except (ValueError, RecursionError):
             reply = _failure(None, -32700, "Parse error")
         else:

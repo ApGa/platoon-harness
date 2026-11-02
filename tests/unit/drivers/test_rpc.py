@@ -6,9 +6,11 @@ import socket
 
 import pytest
 
+from platoon_harness import rpc
 from platoon_harness.rpc import (
     BUSY,
     INTERNAL_ERROR,
+    INVALID_PARAMS,
     INVALID_REQUEST,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
@@ -33,7 +35,7 @@ class Wire:
         reader, writer = await asyncio.open_connection(sock=ours)
         self.raw_reader, self.raw_writer = await asyncio.open_connection(sock=theirs)
         args = (self.handler,) if self.handler else ()
-        self.peer = Peer(reader, writer, *args, stray=lambda line, why: self.strays.append((line, why)), **self.options)
+        self.peer = Peer(reader, writer, *args, stray=self.strays.append, **self.options)
         self.running = asyncio.create_task(self.peer.run())
         return self
 
@@ -53,7 +55,7 @@ class Wire:
         await self.send(b'{"jsonrpc":"2.0","method":"no.such.method","id":"sync"}')
         while (await self.frame()).get("id") != "sync":
             pass
-        strays = [stray for stray in self.strays if b"sync" not in stray[0]]
+        strays = [stray for stray in self.strays if b"sync" not in stray]
         assert len(strays) == count
         return strays
 
@@ -218,7 +220,18 @@ async def test_a_method_nobody_knows_is_answered_and_is_stray():
         await wire.send(b'{"jsonrpc":"2.0","id":1,"method":"unknown"}')
 
         assert (await wire.frame())["error"]["code"] == METHOD_NOT_FOUND
-        assert wire.strays[0][0] == b'{"jsonrpc":"2.0","id":1,"method":"unknown"}'
+        assert wire.strays[0] == b'{"jsonrpc":"2.0","id":1,"method":"unknown"}'
+
+
+async def test_a_request_its_handler_refuses_is_answered_and_is_stray():
+    async def handler(method, params):
+        raise RpcError(INVALID_PARAMS, "not that")
+
+    async with Wire(handler) as wire:
+        await wire.send(b'{"jsonrpc":"2.0","id":1,"method":"report"}')
+
+        assert (await wire.frame())["error"]["code"] == INVALID_PARAMS
+        assert wire.strays == [b'{"jsonrpc":"2.0","id":1,"method":"report"}']
 
 
 async def test_a_notification_nobody_knows_is_stray():
@@ -253,12 +266,9 @@ async def test_a_notification_nobody_knows_is_stray():
 async def test_a_malformed_frame_is_answered_stray_and_survived(line, code):
     async with Wire(echo) as wire:
         await wire.send(line)
-        assert await wire.frame() == {
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": code, "message": wire.strays[0][1]},
-        }
-        assert wire.strays[0][0] == line
+        answer = await wire.frame()
+        assert (answer["id"], answer["error"]["code"]) == (None, code)
+        assert wire.strays[0] == line
 
         await wire.send(b'{"jsonrpc":"2.0","id":1,"method":"still"}')
         assert (await wire.frame())["result"]["method"] == "still"
@@ -281,8 +291,7 @@ async def test_an_answer_to_nothing_is_stray_and_is_not_answered(line):
 
         await wire.send(line)
 
-        strays = await wire.strayed()
-        assert strays[0][0] == line
+        assert (await wire.strayed())[0] == line
         assert not pending.done()
         pending.cancel()
 
@@ -319,10 +328,9 @@ async def test_a_duplicate_id_in_flight_runs_nothing_twice():
 
     async with Wire(handler) as wire:
         await wire.send(b'{"jsonrpc":"2.0","id":1,"method":"a"}', b'{"jsonrpc":"2.0","id":1,"method":"b"}')
-        strays = await wire.strayed()
+        await wire.strayed()
 
         assert ran == ["a"]
-        assert strays[0][1] == "id 1 is in use"
         release.set()
         assert (await wire.frame()) == {"jsonrpc": "2.0", "id": 1, "result": "done"}
 
@@ -408,8 +416,9 @@ async def test_eof_cancels_what_was_being_served():
     assert cancelled.is_set()
 
 
-async def test_an_oversized_line_ends_the_connection_loudly():
-    async with Wire(limit=1024) as wire:
+async def test_an_oversized_line_ends_the_connection_loudly(monkeypatch):
+    monkeypatch.setattr(rpc, "LINE_LIMIT", 1024)
+    async with Wire() as wire:
         call = asyncio.create_task(wire.peer.call("go"))
         await wire.frame()
 
@@ -432,8 +441,9 @@ async def test_a_call_cancelled_by_a_timeout_leaves_a_stray_answer_harmless():
         await wire.strayed()
 
 
-async def test_a_peer_that_stops_reading_is_dropped_rather_than_held_in_memory():
-    async with Wire(limit=4096) as wire:
+async def test_a_peer_that_stops_reading_is_dropped_rather_than_held_in_memory(monkeypatch):
+    monkeypatch.setattr(rpc, "LINE_LIMIT", 4096)
+    async with Wire() as wire:
         with pytest.raises(Closed):
             for _ in range(10_000):
                 await asyncio.wait_for(wire.peer.notify("flood", "x" * 1024), 1)
@@ -441,10 +451,8 @@ async def test_a_peer_that_stops_reading_is_dropped_rather_than_held_in_memory()
 
 async def test_two_peers_cannot_echo_errors_for_ever():
     left_sock, right_sock = socket.socketpair()
-    left = Peer(*await asyncio.open_connection(sock=left_sock), stray=lambda line, why: strays.append(("left", line)))
-    right = Peer(
-        *await asyncio.open_connection(sock=right_sock), stray=lambda line, why: strays.append(("right", line))
-    )
+    left = Peer(*await asyncio.open_connection(sock=left_sock), stray=lambda line: strays.append(("left", line)))
+    right = Peer(*await asyncio.open_connection(sock=right_sock), stray=lambda line: strays.append(("right", line)))
     strays = []
     running = [asyncio.create_task(left.run()), asyncio.create_task(right.run())]
 

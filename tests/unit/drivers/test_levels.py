@@ -154,3 +154,13 @@ def test_tool_visibility_has_three_values():
     assert tool_visibility((), ["wait"]) == "hidden"
     assert tool_visibility(("mcp__ph__wait", "bash"), ["wait"]) == "visible"
     assert tool_visibility(("mcp__ph__wait",), ["wait", "task_claim"]) == "hidden"
+
+
+def test_a_tool_is_seen_by_its_name_and_not_by_a_name_that_holds_it():
+    assert tool_visibility(("wait",), ["wait"]) == "visible"
+    assert tool_visibility(("mcp__other__await_all",), ["wait"]) == "hidden"
+
+
+def test_with_no_tools_to_look_for_nothing_was_seen():
+    assert tool_visibility((), ()) == "unverified"
+    assert tool_visibility(("bash",), ()) == "unverified"
