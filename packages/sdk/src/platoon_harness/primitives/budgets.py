@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import Field
 
-from platoon_harness.kernel import NAME, Args, Event, Refused, Txn, View, fold, op
+from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Timer, Txn, View, fold, op
 
 Unit = Literal["tokens", "usd", "turns", "agents", "wall"]
 Label = Literal["provider", "estimated", "lower_bound", "unavailable"]
@@ -303,7 +303,20 @@ def set_budget(txn: Txn, a: SetBudget) -> None:
     """Set a scope's limits and turn estimate. `fallback` lets `turns` stand in for what a role cannot measure."""
     if a.fallback == "turns" and "turns" not in a.limits:
         raise Refused("invalid", "a fallback to turns needs a turns limit, or nothing would be enforced")
-    txn.emit("budget.set", f"budget/{a.scope}", gist=f"budget set for {a.scope}", data=a)
+    stream = f"budget/{a.scope}"
+    txn.emit("budget.set", stream, gist=f"budget set for {a.scope}", data=a)
+    if a.scope == "shared" and "wall" in a.limits:
+        key = f"{stream}/{txn.view(Stamps).version_of(stream)}"
+        timer = Timer(due=txn.now + a.limits["wall"], op="budget.lapse", args={}, key=key)
+        txn.emit("timer.set", f"timer/{key}", gist=f"timer {key} set", data=timer)
+
+
+@op("budget.lapse", on=lambda a: "budget/shared", runtime=True)
+def lapse(txn: Txn, a: Args) -> None:
+    """Fired by a timer: the shared wall clock ran out. Time passing alone exhausts a budget, and only this tells anyone
+    who sleeps until the journal moves."""
+    if txn.view(Budgets).exhausted(txn.now):
+        txn.emit("budget.lapsed", "budget/shared", gist="the wall budget ran out")
 
 
 @op("budget.status", query=True)

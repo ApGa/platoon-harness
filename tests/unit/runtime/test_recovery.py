@@ -42,7 +42,7 @@ async def abandon(session: Session) -> None:
         task.cancel()
     await asyncio.gather(*acting, return_exceptions=True)
     runtime.host.closing()
-    await runtime.host.close(1.0)
+    await runtime.host.close(0.0)
     await runtime._close()
 
 

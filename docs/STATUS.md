@@ -203,7 +203,7 @@ has run on macOS. The fast suite covers everything below except a second crash d
 | A group that cannot be proved ours left alone and named | tested | `test_recovery.py`, with a stubbed `reap`. `test_process.py` proves the state itself |
 | `Session`: `start`, `attach`, `resume`, as `await` or `async with`, one link in two forms | tested | `test_session.py`, `test_control.py` |
 | Typed wrappers checked against the registry: every client op has a method, each method takes what its op declares, defaults agree | tested | `test_session.py` |
-| `settled()` and its six reasons | tested | `test_session.py`, on a manual clock where time matters |
+| `settled()` and its six reasons, a quiet session past its wall limit among them | tested | `test_session.py`, on a manual clock where time matters |
 | `detach=True`, the entry point, `SIGTERM` as the owner's shutdown, an exit once drained | tested | `tests/integration/test_detached.py` |
 | The control socket: a credential checked once, the principal bound, refusals as data, long-polls, a client that stops reading is dropped | tested | `test_control.py`. The drop is shown at a 64 KiB limit. The real limit is 16 MiB per client, since one frame shares it with a body |
 | View and control credentials | tested | `test_control.py`. A view token reads and never writes, and a try leaves no event |

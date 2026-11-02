@@ -366,3 +366,25 @@ def test_overshoot_is_bounded_by_the_largest_turn_times_the_live_agents(
         kernel.close()
 
     asyncio.run(body())
+
+
+async def test_a_wall_limit_that_runs_out_tells_whoever_sleeps_on_the_journal(kernel, clock):
+    await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}})
+    due = result_of(kernel.query(kernel.runtime, "timer.next", {}))[0]
+    assert due["due"] == clock.now() + 60
+
+    clock.advance(60.0)
+    result_of(await kernel.submit(kernel.runtime, "budget.lapse", {}))
+
+    assert of_type(kernel, "budget.lapsed")[0].gist == "the wall budget ran out"
+    assert result_of(kernel.query(kernel.runtime, "attention.list", {}))[-1]["kind"] == "budget"
+
+
+async def test_a_wall_limit_that_was_raised_does_not_lapse_early(kernel, clock):
+    await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}})
+    await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 600}})
+
+    clock.advance(60.0)
+    result_of(await kernel.submit(kernel.runtime, "budget.lapse", {}))
+
+    assert of_type(kernel, "budget.lapsed") == []

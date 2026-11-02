@@ -25,7 +25,8 @@
 - The control socket: JSON-RPC lines with a credential checked once per connection, separate view and control credentials, pull only.
 - `Authority` and `LocalAuthority`, and `Session.start(team, authority=...)`.
 - `from platoon_harness import Session, Team, Role, Ending, Refused, on, load_team`.
-- `session.ending`, `agent.records`, `effect.list`, `lease.due`, `Kernel.read_only`, `is_held`, and `schema.seconds`.
+- `session.ending`, `agent.records`, `effect.list`, `lease.due`, `budget.lapse`, `Kernel.read_only`, `is_held`, and
+  `schema.seconds`.
 
 ### Fixed
 

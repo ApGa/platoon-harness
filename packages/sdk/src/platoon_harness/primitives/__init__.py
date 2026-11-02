@@ -70,7 +70,7 @@ PRIMITIVES = (
         views=[SessionRecord],
     ),
     Extension("episode", ops=[sessions.open_episode, sessions.close_episode]),
-    Extension("budget", ops=[budgets.set_budget, budgets.budget_status], views=[Budgets]),
+    Extension("budget", ops=[budgets.set_budget, budgets.lapse, budgets.budget_status], views=[Budgets]),
     Extension(
         "agent",
         ops=[

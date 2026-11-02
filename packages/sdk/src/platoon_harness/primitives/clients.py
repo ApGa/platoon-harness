@@ -105,6 +105,10 @@ class Attention(View):
     def wake_refused(self, event: Event) -> None:
         self._raise(f"wake/{event.agent}", "hops" if event.data["why"] == "hops" else "budget", event)
 
+    @fold("budget.lapsed")
+    def budget_lapsed(self, event: Event) -> None:
+        self._raise(event.stream, "budget", event)
+
     @fold("budget.set")
     def budget_set(self, event: Event) -> None:
         self._lower(event, "kind = 'budget'")

@@ -10,7 +10,7 @@ from pydantic_core import PydanticUndefined
 import platoon_harness
 from platoon_harness import Ending, Refused, Role, Session, Team, on
 from platoon_harness.config import Manifest
-from platoon_harness.kernel import Kernel, ManualClock, Op, Outcome
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, op
 from platoon_harness.kernel.core import CORE, list_ops
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
@@ -635,6 +635,23 @@ async def test_a_budget_spent_is_exit_2(tmp_path):
     assert ending.reason == "budget_exhausted"
 
 
+async def test_a_quiet_session_past_its_wall_limit_ends_and_does_not_hang(tmp_path):
+    clock = ManualClock(1000.0)
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted()}}, "budget": {"wall": "1m"}})
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        settling = asyncio.ensure_future(session.settled())
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+
+        clock.advance(60.0)
+
+        ending = await asyncio.wait_for(settling, SECONDS)
+
+    assert (ending.state, ending.reason) == ("closing", "budget_exhausted")
+
+
 async def test_timing_out_is_exit_3_and_leaves_the_session_as_it_is(tmp_path):
     clock = ManualClock(1000.0)
 
@@ -705,6 +722,31 @@ async def test_a_guest_can_settle_and_close(tmp_path):
             ending = await guest.settled(timeout="10s")
 
     assert ending.reason == "settled"
+
+
+class Vote(Args):
+    choice: str
+
+
+@op("ballot.cast", on=lambda a: "ballot/votes")
+def cast(txn: Txn, a: Vote) -> dict[str, str]:
+    """Cast a vote."""
+    txn.emit("ballot.voted", "ballot/votes", gist=f"a vote for {a.choice}", data=a)
+    return {"choice": a.choice}
+
+
+ballot = Extension("ballot", ops=[cast])
+
+
+async def test_an_op_a_team_s_extension_adds_works_with_no_core_edit(tmp_path):
+    role = Role(harness=scripted())
+    team = Team(roles={"bob": role}, extensions=(f"{__name__}:ballot",))
+
+    async with Session.start(team, root=tmp_path) as session:
+        outcome = await session.submit("ballot.cast", choice="yes")
+
+        assert outcome.result == {"choice": "yes"}
+        assert [event.gist for event in await of_type(session, "ballot.voted")] == ["a vote for yes"]
 
 
 async def test_a_role_is_a_role(tmp_path):
