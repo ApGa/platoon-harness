@@ -109,8 +109,7 @@ async def test_an_authority_that_refuses_ends_the_spawn(tmp_path):
     async with Session.start(team, authority=Refusing(team), root=tmp_path) as session:
         row = await ended(session, "bob")
 
-        assert (row["status"], row["reason"]) == ("failed", "its spawn failed")
-        assert "not on this budget" in (await of_type(session, "effect.failed"))[0].gist
+        assert (row["status"], row["reason"]) == ("failed", "its spawn failed: not on this budget")
         assert await of_type(session, "agent.started") == []
 
 

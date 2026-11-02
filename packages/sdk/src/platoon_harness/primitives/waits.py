@@ -1,6 +1,5 @@
 """Wait: one condition, checked and registered in one transaction, kept in the service and not in the model."""
 
-import asyncio
 import json
 from collections.abc import Iterable
 from typing import Annotated, Any, Literal, Self
@@ -14,10 +13,12 @@ from platoon_harness.kernel import (
     Event,
     Grants,
     Kernel,
+    Principals,
     Refused,
     Stamps,
     Txn,
     View,
+    first,
     fold,
     op,
 )
@@ -281,11 +282,18 @@ def _work_on(txn: Txn, queue: str) -> Condition:
     return Condition(stream=f"task/{queue}/{id}", types=("task.added",), distinct="actor")
 
 
+def _ending_of(txn: Txn, name: str) -> Condition:
+    """An agent's end. A spawn adds its principal in its own transaction, so a name nobody holds is a typo."""
+    if txn.view(Principals).named(name) is None:
+        raise Refused("not_found", f"no agent {name}")
+    return Condition(stream=f"agent/{name}", types=("agent.ended",))
+
+
 def _conditions(txn: Txn, a: Wait) -> tuple[Condition, ...]:
     """What a wait asks for, as conditions. `from` counts by subject, so a monitor's report counts as its child's."""
     conditions = (
         *a.on,
-        *(Condition(stream=f"agent/{name}", types=("agent.ended",)) for name in a.agents),
+        *(_ending_of(txn, name) for name in a.agents),
         *(Condition(stream=f"inbox/{txn.me.name}", n=(name,), distinct="agent") for name in a.senders),
         *(Condition(stream=f"task/{task}", types=_TASK_SETTLED) for task in a.tasks),
         *(Condition(stream=f"board/{name}", types=_BOARD_VERSIONED) for name in a.board),
@@ -348,9 +356,9 @@ def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
     version of `board` newer than you read, a new entry on `channels`, or work on `queue`. `mode` is `all` or `any`. One
     wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the
     runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran
-    out, call again or end your turn. Refused `not_permitted` for what you may not watch, and `unsupported` when this
-    harness cannot park: pass `timeout` and a `hold` at least as long. `invalid` for an `after` past every event: leave
-    it out."""
+    out, call again or end your turn. Refused `not_permitted` for what you may not watch, `not_found` for an agent
+    nobody spawned: call `agent.list`. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least
+    as long. `invalid` for an `after` past every event: leave it out."""
     _check_call(txn, a)
     after = checked_after(txn, a.after)
     asked = _conditions(txn, a)
@@ -461,9 +469,4 @@ async def hold_open(kernel: Kernel, placed: dict[str, Any]) -> dict[str, Any]:
         remaining = expiry - kernel.clock.now()
         if remaining <= 0:
             return {**placed, **shown, "state": "pending"}
-        tasks = [asyncio.ensure_future(kernel.changed(head)), asyncio.ensure_future(kernel.clock.sleep(remaining))]
-        try:
-            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            for task in tasks:
-                task.cancel()
+        await first(kernel.changed(head), kernel.clock.sleep(remaining))

@@ -483,8 +483,8 @@ async def test_lifecycle_through_the_facade(tmp_path):
         await in_state(session, "eve", "idle")
         await session.cancel("@eve")
 
-        rows = {row["name"]: row["status"] for row in await session.agents()}
-        assert rows["@ada"] == "retired" and rows["@eve"] == "cancelled"
+        rows = {row["agent"]: row["status"] for row in await session.agents()}
+        assert rows["ada"] == "retired" and rows["eve"] == "cancelled"
         assert await session.peers() is not None
         assert await session.channels() == []
         assert "session.status" in {op["name"] for op in await session.ops()}

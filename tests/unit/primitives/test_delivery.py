@@ -308,16 +308,81 @@ async def failed_delivery(kernel) -> tuple[dict, dict]:
     return handed, effect
 
 
-async def test_delivery_is_at_least_once_a_failed_handover_is_offered_again(kernel):
+async def test_delivery_is_at_least_once_a_failed_handover_is_offered_again(kernel, clock):
     alice, _ = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     sent = await send(kernel, alice, "@bob", "must arrive")
     first, _ = await failed_delivery(kernel)
+
+    clock.advance(1)
 
     assert ready(kernel) == ["bob"]
     second = await offer(kernel, "bob")
 
     assert second["input"] != first["input"]
     assert [item["ref"] for item in second["items"]] == [sent["ref"]]
+
+
+async def test_each_failed_handover_waits_twice_as_long_as_the_last(kernel, clock):
+    await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+    waited = []
+
+    for _ in range(3):
+        await failed_delivery(kernel)
+        assert ready(kernel) == []
+        due = result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["due"]
+        waited.append(due - clock.now())
+        clock.advance(due - clock.now())
+        assert ready(kernel) == ["bob"]
+
+    assert waited == [1.0, 2.0, 4.0]
+
+
+async def test_a_failing_handover_keeps_the_session_unsettled_until_it_ends(kernel, clock):
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+
+    await failed_delivery(kernel)
+
+    assert result_of(kernel.query(kernel.runtime, "session.status", {}))["blockers"] == ["deliverable_delivery"]
+
+
+async def test_a_harness_that_refuses_every_handover_ends_with_why(kernel, clock):
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+
+    for _ in range(6):
+        await failed_delivery(kernel)
+        clock.advance(60)
+
+    found = result_of(kernel.query(kernel.runtime, "delivery.ready", {}))
+    assert found["agents"] == []
+    assert found["stranded"] == [["bob", "6 handovers failed: the pipe broke"]]
+
+
+async def test_a_turn_that_begins_forgets_the_handovers_that_failed(kernel, clock):
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+    await failed_delivery(kernel)
+
+    await report(kernel, "bob", "turn.started", turn="t1")
+
+    assert result_of(kernel.query(kernel.runtime, "agent.records", {"agent": "bob"}))[0]["failures"] == 0
+
+
+async def test_steers_that_keep_failing_leave_the_turn_its_own_and_wait_for_its_end(kernel, clock):
+    await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]}, goal="")
+    await report(kernel, "bob", "turn.started", turn="t1")
+    await send(kernel, kernel.runtime, "@bob", "steer")
+
+    for _ in range(6):
+        await failed_delivery(kernel)
+        clock.advance(60)
+
+    found = result_of(kernel.query(kernel.runtime, "delivery.ready", {}))
+    assert (found["agents"], found["stranded"]) == ([], [])
+    await report(kernel, "bob", "turn.ended")
+    assert ready(kernel) == ["bob"]
 
 
 async def test_a_failed_handover_leaves_the_message_for_the_reader(kernel):

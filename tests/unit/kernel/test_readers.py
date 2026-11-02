@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from platoon_harness.kernel import Args, Extension, Kernel, Principal, Refused, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, Principal, Refused, Txn, first, op
 
 from .support import ALICE, HUMAN, enroll, events_of, notes, refusal_of, refused_code, result_of
 
@@ -378,3 +378,31 @@ async def test_a_commit_that_moves_no_head_wakes_no_one(kernel):
 
     await add(kernel, 1)
     await changed
+
+
+async def test_a_frame_of_live_text_is_cut_so_a_ring_is_bounded_in_bytes(kernel):
+    kernel.push_delta("alice", "x" * (1024 * 1024))
+
+    frame = await anext(kernel.deltas("alice"))
+
+    assert len(frame.text) == 64 * 1024
+
+
+async def test_first_says_whether_the_work_won_and_drops_what_lost():
+    held = asyncio.Event()
+    rival = asyncio.ensure_future(held.wait())
+
+    assert await first(asyncio.sleep(0), rival)
+    assert rival.cancelled()
+
+    work = asyncio.ensure_future(held.wait())
+    assert not await first(work, asyncio.sleep(0))
+    assert work.cancelled()
+
+
+async def test_first_raises_what_the_work_raised():
+    async def fails() -> None:
+        raise ValueError("no")
+
+    with pytest.raises(ValueError, match="no"):
+        await first(fails(), asyncio.Event().wait())

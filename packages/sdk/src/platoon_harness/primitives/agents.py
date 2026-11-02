@@ -12,7 +12,9 @@ AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held",
 
 class Agent(BaseModel, frozen=True):
     """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `native` is the id
-    its harness resumes by, when it gave one."""
+    its harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it.
+    `finishing` says it called `agent.finish` in a turn that has not ended. `failure` is what the last effect to fail
+    for it said, `failures` counts handovers failed in a row, and the next waits until `retry_at`."""
 
     name: str
     role: str
@@ -31,9 +33,17 @@ class Agent(BaseModel, frozen=True):
     boundaries: tuple[str, ...]
     held_by: str | None
     goal: str
+    goal_body: str | None
+    unbegun: bool
     activity: str | None
     final_gist: str | None
     final_body: str | None
+    finishing: bool
+    finish_gist: str | None
+    finish_body: str | None
+    failure: str | None
+    failures: int
+    retry_at: float
     levels: dict[str, Any]
 
     @property
@@ -67,10 +77,18 @@ class Agents(View):
         boundaries TEXT NOT NULL,
         held_by TEXT,
         goal TEXT NOT NULL,
+        goal_body TEXT,
+        unbegun INTEGER NOT NULL,
         activity TEXT,
         final_gist TEXT,
         final_body TEXT,
-        levels TEXT NOT NULL
+        finishing INTEGER NOT NULL DEFAULT 0,
+        finish_gist TEXT,
+        finish_body TEXT,
+        failure TEXT,
+        failures INTEGER NOT NULL DEFAULT 0,
+        retry_at REAL NOT NULL DEFAULT 0,
+        levels TEXT NOT NULL DEFAULT '{}'
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_agents_parent ON v_agents(parent);
     CREATE INDEX v_agents_state ON v_agents(state);
@@ -81,12 +99,14 @@ class Agents(View):
         data = event.data
         self.db.execute(
             """
-            INSERT INTO v_agents VALUES (
-                :name, :role, :parent, :depth, 'spawning', NULL, NULL, :harness, :model, :on_parent_exit,
-                NULL, NULL, NULL, NULL, '[]', NULL, :goal, NULL, NULL, NULL, '{}'
+            INSERT INTO v_agents(
+                name, role, parent, depth, state, harness, model, on_parent_exit, boundaries, goal, goal_body, unbegun
+            ) VALUES (
+                :name, :role, :parent, :depth, 'spawning', :harness, :model, :on_parent_exit, '[]', :goal, :body,
+                :unbegun
             )
             """,
-            {**data, "harness": json.dumps(data["harness"])},
+            {**data, "harness": json.dumps(data["harness"]), "unbegun": bool(data["goal"] or data["body"])},
         )
 
     @fold("agent.started", "agent.resumed")
@@ -126,23 +146,36 @@ class Agents(View):
             f"UPDATE v_agents SET state = ? WHERE name = ? AND state IN ({marks})", (state, event.agent, *only)
         )
 
+    def _reachable(self, event: Event) -> None:
+        self.db.execute("UPDATE v_agents SET failures = 0, retry_at = 0 WHERE name = ?", (event.agent,))
+
     @fold("turn.started")
     def working(self, event: Event) -> None:
         self._move(event, "running", "idle", "waking", "waiting")
-        self.db.execute("UPDATE v_agents SET final_gist = NULL, final_body = NULL WHERE name = ?", (event.agent,))
+        self._reachable(event)
+        self.db.execute(
+            "UPDATE v_agents SET unbegun = 0, final_gist = NULL, final_body = NULL WHERE name = ?", (event.agent,)
+        )
 
     @fold("turn.ended", "turn.lost")
     def stopped(self, event: Event) -> None:
         self._move(event, "idle", "running", "waking")
+        self._reachable(event)
 
     @fold("agent.woken")
     def woken(self, event: Event) -> None:
         self._move(event, "waking", "idle", "waiting")
 
     @fold("effect.failed")
-    def wake_failed(self, event: Event) -> None:
+    def failed(self, event: Event) -> None:
+        """A failed handover gives back its wake, and the next waits twice as long as the last."""
+        self.db.execute("UPDATE v_agents SET failure = ? WHERE name = ?", (event.data["error"], event.agent))
         if event.data["kind"] == "deliver":
             self._move(event, "idle", "waking")
+            self.db.execute(
+                "UPDATE v_agents SET failures = failures + 1, retry_at = ? + (1 << failures) WHERE name = ?",
+                (event.wall_time, event.agent),
+            )
 
     @fold("agent.parked")
     def parked(self, event: Event) -> None:
@@ -164,12 +197,28 @@ class Agents(View):
     def adopted(self, event: Event) -> None:
         self.db.execute("UPDATE v_agents SET parent = NULL WHERE name = ?", (event.agent,))
 
+    @fold("agent.finished")
+    def finishing(self, event: Event) -> None:
+        self.db.execute(
+            "UPDATE v_agents SET finishing = 1, finish_gist = ?, finish_body = ? WHERE name = ?",
+            (event.data["gist"], event.data["body"], event.agent),
+        )
+
     @fold("agent.ended")
     def ended(self, event: Event) -> None:
+        data = event.data
         self.db.execute(
-            "UPDATE v_agents SET state = 'ended', status = ?, reason = ?, held_by = NULL WHERE name = ?",
-            (event.data["status"], event.data["reason"], event.agent),
+            """
+            UPDATE v_agents SET state = 'ended', status = ?, reason = ?, held_by = NULL, unbegun = 0, finishing = 0
+            WHERE name = ?
+            """,
+            (data["status"], data["reason"], event.agent),
         )
+        if data["status"] == "finished":
+            self.db.execute(
+                "UPDATE v_agents SET final_gist = ?, final_body = ? WHERE name = ?",
+                (data["report"], data["body"], event.agent),
+            )
 
     @fold("item.recorded")
     def item(self, event: Event) -> None:

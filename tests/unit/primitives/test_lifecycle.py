@@ -350,7 +350,9 @@ async def test_a_failed_admit_leaves_nothing_to_start_while_it_is_being_ended(ke
     result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
 
     assert result_of(kernel.query(kernel.runtime, "effect.ready", {})) == []
-    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == ["bob"]
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == [
+        ["bob", "its spawn failed: refused"]
+    ]
 
 
 async def test_retiring_is_refused_while_a_turn_is_open(kernel, ada):
@@ -379,15 +381,155 @@ async def test_ending_stops_the_process_and_closes_an_open_turn(kernel, ada):
     assert "open_turn" not in result_of(kernel.query(kernel.runtime, "session.status", {}))["blockers"]
 
 
-async def test_a_late_turn_end_after_finish_changes_nothing(kernel):
+async def test_finishing_outside_a_turn_ends_the_agent_at_once(kernel):
+    bob = await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    assert state_of(kernel, "bob")["status"] == "finished"
+
+
+async def test_finishing_in_a_turn_ends_the_agent_with_that_turn(kernel):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    assert state_of(kernel, "bob")["state"] == "running"
+    await end_turn(kernel, "bob")
+    assert state_of(kernel, "bob")["status"] == "finished"
+    assert of_type(kernel, "agent.ended")[-1].data["report"] == "done"
+    assert [event.data["key"] for event in of_type(kernel, "timer.cleared")] == ["agent/bob/finish"]
+
+
+async def test_what_a_harness_says_as_its_turn_ends_counts_after_a_finish(kernel):
     bob = await spawn(kernel, "bob")
     await start_turn(kernel, "bob")
     result_of(await kernel.submit(bob, "agent.finish", {}))
-    head = kernel.head
 
+    await report(kernel, "bob", "item", kind="message", gist="my last words")
+    await report(kernel, "bob", "usage", tokens=1000, label="provider")
     await end_turn(kernel, "bob")
 
-    assert of_type(kernel, "turn.ended", after=head) == []
+    assert of_type(kernel, "agent.ended")[-1].data["report"] == "my last words"
+    ending = result_of(kernel.query(kernel.runtime, "session.ending", {}))
+    assert ending["usage"]["tokens"] == {"amount": 1000.0, "label": "provider"}
+
+
+async def test_a_stated_report_outranks_a_last_message(kernel):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "the report"}))
+
+    await report(kernel, "bob", "item", kind="message", gist="bye")
+    await end_turn(kernel, "bob")
+
+    assert of_type(kernel, "agent.ended")[-1].data["report"] == "the report"
+
+
+async def test_finishing_twice_is_refused(kernel):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "agent.finish", {}))
+
+    assert refusal(await kernel.submit(bob, "agent.finish", {})).code == "conflict"
+
+
+async def test_a_turn_that_goes_on_after_a_finish_is_cut_off_by_a_timer(kernel, clock):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    timer = of_type(kernel, "timer.set")[-1]
+    assert (timer.data["op"], timer.data["due"]) == ("agent.conclude", clock.now() + 60.0)
+    result_of(await kernel.submit(kernel.runtime, "agent.conclude", {"agent": "bob"}))
+    assert (state_of(kernel, "bob")["status"], state_of(kernel, "bob")["turn"]) == ("finished", None)
+
+
+async def test_a_conclusion_leaves_an_agent_that_has_ended_alone(kernel, ada):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "agent.finish", {}))
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    result_of(await kernel.submit(kernel.runtime, "agent.conclude", {"agent": "bob"}))
+
+    assert state_of(kernel, "bob")["status"] == "cancelled"
+
+
+async def test_a_harness_that_exits_after_a_finish_has_finished(kernel):
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+
+    await report(kernel, "bob", "exited", reason="it went")
+
+    assert state_of(kernel, "bob")["status"] == "finished"
+
+
+async def test_a_one_shot_agent_that_finished_is_finished_however_its_turn_ended(kernel):
+    bob = await spawn(kernel, "bob", ready={"persistent": False})
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "agent.finish", {}))
+
+    await end_turn(kernel, "bob", "exited with code 1")
+
+    assert state_of(kernel, "bob")["status"] == "finished"
+
+
+async def test_an_ended_agent_can_still_be_named_in_evidence(kernel, ada):
+    await spawn(kernel, "bob")
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    await report(kernel, "bob", "native", kind="unproven_group", raw="group 7")
+    await report(kernel, "bob", "gap", plane="control", what="crash_window")
+
+    assert of_type(kernel, "native.recorded")[-1].data["raw"] == "group 7"
+    assert of_type(kernel, "gap.recorded")[-1].agent == "bob"
+
+
+async def test_an_ended_agent_says_nothing_else(kernel, ada):
+    await spawn(kernel, "bob")
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
+
+    args = {"agent": "bob", "report": {"type": "usage", "tokens": 1, "label": "provider"}}
+    assert refusal(await kernel.submit(kernel.runtime, "agent.report", args)).code == "conflict"
+
+
+async def test_a_reason_of_any_length_can_end_an_agent(kernel):
+    await spawn(kernel, "bob")
+
+    await report(kernel, "bob", "exited", reason="x" * 20_000)
+
+    assert state_of(kernel, "bob")["status"] == "lost"
+    assert len(of_type(kernel, "agent.ended")[-1].data["reason"]) == 1024
+
+
+async def test_an_interrupt_reaches_a_wake_whose_turn_has_not_begun(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, ada, "@bob", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))
+
+    assert "interrupt" in [effect["kind"] for effect in result_of(kernel.query(kernel.runtime, "effect.ready", {}))]
+
+
+async def test_an_interrupt_with_nothing_under_way_is_refused(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+
+    assert refusal(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"})).code == "conflict"
+
+
+async def test_a_goal_never_begun_is_told_again_as_a_delivery(kernel):
+    await spawn(kernel, "bob", goal="do the important thing")
+
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    assert [item["gist"] for item in handed["items"]] == ["do the important thing"]
+    assert state_of(kernel, "bob")["state"] == "waking"
 
 
 async def test_retiring_removes_an_agent_from_relations_never_from_history(kernel):
@@ -660,7 +802,7 @@ async def test_agent_list_shows_no_content(kernel):
 
     rows = result_of(kernel.query(bob, "agent.list", {}))
 
-    assert [row["name"] for row in rows] == ["@bob"] and "goal" not in rows[0] and "activity" not in rows[0]
+    assert [row["agent"] for row in rows] == ["bob"] and "goal" not in rows[0] and "activity" not in rows[0]
 
 
 @pytest.mark.parametrize("spelling", ["bob", "@bob", "agent:bob"])
@@ -670,7 +812,7 @@ async def test_an_agent_has_one_address_and_takes_any_spelling(kernel, spelling)
 
     shown = result_of(kernel.query(alice, "agent.status", {"agent": spelling}))
 
-    assert (shown["name"], shown["parent"]) == ("@bob", "@alice")
+    assert (shown["agent"], shown["parent"]) == ("bob", "@alice")
 
 
 async def test_agent_status_of_nobody_is_refused(kernel):
@@ -687,7 +829,17 @@ def status(kernel) -> dict:
 async def test_settled_means_no_turn_no_delivery_no_effect_and_no_due_timer(kernel, clock):
     assert status(kernel)["settled"]
 
-    await spawn(kernel, "bob")
+    await spawn(kernel, "bob", goal="")
+    assert status(kernel)["settled"]
+
+
+async def test_a_goal_not_begun_unsettles(kernel):
+    await spawn(kernel, "bob", goal="do it")
+    assert status(kernel)["blockers"] == ["starting_agent"]
+
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+
     assert status(kernel)["settled"]
 
 
@@ -713,7 +865,7 @@ async def test_an_agent_on_its_way_to_a_turn_unsettles(kernel):
 async def test_a_coalesced_wake_unsettles_before_it_falls_due(kernel):
     await channel(kernel, "t", delivery="wake", coalesce=5.0)
     await grant(kernel, "agent")
-    await spawn(kernel, "bob")
+    await spawn(kernel, "bob", goal="")
 
     result_of(await kernel.submit(kernel.runtime, "message.send", {"to": "#t", "gist": "soon"}))
 
@@ -721,7 +873,7 @@ async def test_a_coalesced_wake_unsettles_before_it_falls_due(kernel):
 
 
 async def test_a_wait_with_a_deadline_to_come_does_not_unsettle(kernel):
-    bob = await spawn(kernel, "bob")
+    bob = await spawn(kernel, "bob", goal="")
 
     result_of(await kernel.submit(bob, "wait", {"on": [{"stream": "agent/ghost"}], "timeout": 60.0}))
 
@@ -737,7 +889,7 @@ async def test_an_open_turn_unsettles(kernel):
 
 
 async def test_a_due_timer_unsettles(kernel, clock):
-    bob = await spawn(kernel, "bob")
+    bob = await spawn(kernel, "bob", goal="")
     await channel(kernel, "work", kind="queue", lease=60.0)
     result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "work", "gist": "x"}))
     result_of(await kernel.submit(bob, "task.claim", {"queue": "work"}))
@@ -749,7 +901,7 @@ async def test_a_due_timer_unsettles(kernel, clock):
 
 
 async def test_a_human_message_can_unsettle_a_session(kernel, ada):
-    await spawn(kernel, "bob")
+    await spawn(kernel, "bob", goal="")
     assert status(kernel)["settled"]
 
     await send(kernel, ada, "@bob", "one more thing")
@@ -766,6 +918,30 @@ async def test_a_wait_that_holds_keeps_the_session_unsettled(kernel):
     await settle_effects(kernel)
 
     assert status(kernel)["blockers"] == ["deliverable_delivery"]
+
+
+async def test_a_close_that_asks_is_refused_when_a_message_got_in_first(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, ada, "@bob", "one more thing")
+
+    assert refusal(await kernel.submit(ada, "session.close", {"if_done": True})).code == "conflict"
+    assert status(kernel)["state"] == "open"
+
+
+async def test_a_close_that_asks_closes_a_session_that_is_done(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+
+    result_of(await kernel.submit(ada, "session.close", {"if_done": True}))
+
+    assert status(kernel)["state"] == "closing"
+
+
+async def test_a_message_is_refused_once_the_session_is_closing(kernel, ada):
+    await spawn(kernel, "bob", goal="")
+    result_of(await kernel.submit(ada, "session.close", {}))
+
+    args = {"to": "@bob", "gist": "too late"}
+    assert refusal(await kernel.submit(ada, "message.send", args)).code == "conflict"
 
 
 async def test_only_close_ends_a_session(kernel, ada):
@@ -1233,3 +1409,39 @@ async def test_status_counts_what_is_left_to_a_human(kernel):
     await report(kernel, "bob", "approval.requested", id="a1", gist="may I")
 
     assert result_of(kernel.query(kernel.runtime, "session.status", {}))["asking"] == 1
+
+
+async def test_the_ending_holds_what_each_agent_said_last(kernel):
+    await spawn(kernel, "bob")
+    await spawn(kernel, "eve", goal="")
+    body = f"sha256:{await kernel.put_body(b'the whole answer')}"
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="the answer", body=body)
+    await end_turn(kernel, "bob")
+
+    ending = result_of(kernel.query(kernel.runtime, "session.ending", {}))
+
+    assert {row["agent"]: row["report"] for row in ending["agents"]} == {
+        "bob": {"gist": "the answer", "body": body},
+        "eve": None,
+    }
+
+
+async def test_the_ending_holds_a_finished_agent_s_report(kernel):
+    bob = await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "shipped"}))
+
+    rows = result_of(kernel.query(kernel.runtime, "session.ending", {}))["agents"]
+    assert rows[0]["report"] == {"gist": "shipped", "body": None}
+
+
+async def test_a_lost_agent_keeps_what_it_said_and_not_how_it_ended(kernel):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="so far")
+    await report(kernel, "bob", "exited", reason="it fell over")
+
+    rows = result_of(kernel.query(kernel.runtime, "session.ending", {}))["agents"]
+
+    assert rows[0]["report"] == {"gist": "so far", "body": None}

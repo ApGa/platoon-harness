@@ -13,6 +13,7 @@ from .journal import Filesystem, filesystem, is_held
 from .kernel import Kernel
 from .model import GIST_LIMIT, NAME, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
 from .op import Args, Op, op
+from .pulse import first
 from .timers import Timer, Timers
 from .txn import Stamps, Txn
 from .view import View, fold
@@ -49,6 +50,7 @@ __all__ = [
     "Txn",
     "View",
     "filesystem",
+    "first",
     "fold",
     "hash_token",
     "is_held",

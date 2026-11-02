@@ -824,3 +824,11 @@ def test_watch_race_nothing_sent_is_lost_under_any_interleaving(tmp_path_factory
         assert seen == sent
 
     asyncio.run(body())
+
+
+async def test_a_wait_on_an_agent_nobody_spawned_is_refused(kernel):
+    bob = await spawn(kernel, "bob")
+
+    outcome = await kernel.submit(bob, "wait", {"agents": ["@nobody"]})
+
+    assert refusal(outcome).code == "not_found"

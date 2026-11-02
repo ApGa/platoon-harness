@@ -1,7 +1,7 @@
 """Budgets: limits, reservations, and what each turn turned out to cost."""
 
 import json
-from typing import Annotated, Any, Literal, NamedTuple
+from typing import Annotated, Any, Literal, NamedTuple, get_args
 
 from pydantic import Field
 
@@ -10,7 +10,7 @@ from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Timer, Tx
 Unit = Literal["tokens", "usd", "turns", "agents", "wall"]
 Label = Literal["provider", "estimated", "lower_bound", "unavailable"]
 
-_FROM_BEST = ("provider", "estimated", "lower_bound", "unavailable")
+_FROM_BEST = ("counted", *get_args(Label))
 _METERED = ("tokens", "usd")
 
 
@@ -119,7 +119,7 @@ class Budgets(View):
             "SELECT role, amount FROM v_budgets_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,)
         ).fetchone()
         if row is not None:
-            self._charge(row["role"], event.agent, "agents", row["amount"], "provider")
+            self._charge(row["role"], event.agent, "agents", row["amount"], "counted")
             self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,))
 
     @fold("turn.lost")
@@ -133,7 +133,7 @@ class Budgets(View):
             for unit in _METERED:
                 self._charge(role, event.agent, unit, held.pop(unit, 0.0), "unavailable", 1)
             for unit, amount in held.items():
-                self._charge(role, event.agent, unit, amount, "estimated")
+                self._charge(role, event.agent, unit, amount, "counted")
         self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
         self.db.execute("DELETE FROM v_budgets_turn WHERE agent = ?", (event.agent,))
 
@@ -170,7 +170,7 @@ class Budgets(View):
     def spent(self, scope: str, unit: str) -> tuple[float, str, int]:
         """The amount spent, its weakest label, and how many turns went unmeasured."""
         row = self.db.execute("SELECT * FROM v_budgets_spent WHERE scope = ? AND unit = ?", (scope, unit)).fetchone()
-        return (0.0, "provider", 0) if row is None else (row["amount"], row["label"], row["unmeasured"])
+        return (0.0, "counted", 0) if row is None else (row["amount"], row["label"], row["unmeasured"])
 
     def held(self, scope: str, unit: str) -> float:
         """What is reserved in a scope and not yet reconciled."""
@@ -251,9 +251,13 @@ class Budgets(View):
         return rows
 
     def usage_of(self, scope: str) -> dict[str, dict[str, Any]]:
-        """What `shared` or one `agent:x` has spent, with labels: empty until something is measured, and not zero."""
+        """What `shared` or one `agent:x` has spent, with labels: a unit nobody measured has no amount. The row may hold
+        an estimate, which the budget charges and nobody may read as a measurement."""
         rows = self.db.execute("SELECT * FROM v_budgets_spent WHERE scope = ? AND unit != 'agents'", (scope,))
-        return {row["unit"]: {"amount": row["amount"], "label": row["label"]} for row in rows}
+        return {
+            row["unit"]: {"amount": None if row["label"] == "unavailable" else row["amount"], "label": row["label"]}
+            for row in rows
+        }
 
 
 def reserve(txn: Txn, agent: str, role: str, *, turn: bool = True, **extra: float) -> None:
@@ -286,7 +290,7 @@ def reconcile(txn: Txn, agent: str, role: str) -> None:
             }
         )
     if "turns" in held:
-        charges.append({"unit": "turns", "amount": 1.0, "label": "provider", "unmeasured": 0})
+        charges.append({"unit": "turns", "amount": 1.0, "label": "counted", "unmeasured": 0})
     data = {"role": role, "charges": charges}
     txn.emit("budget.reconciled", f"budget/agent:{agent}", gist=f"{agent} reconciled", agent=agent, data=data)
 

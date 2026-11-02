@@ -11,14 +11,14 @@ from typing import Any
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import TurnEnded
 from platoon_harness.extensions import Installed
-from platoon_harness.kernel import Clock, Daemon, Extension, Kernel, Principal, Refused, hash_token
+from platoon_harness.kernel import Clock, Daemon, Extension, Kernel, Principal, Refused, first, hash_token
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, LocalAuthority, SpawnRequest
 from .control import Control
-from .host import GRACE, Host, first
+from .host import GRACE, Host
 from .opening import open_session
 from .paths import MANIFEST, OWNER_TOKEN, RUNNING, VIEW_TOKEN, Running, write_private
 from .recovery import recover_agents

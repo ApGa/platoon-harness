@@ -477,7 +477,7 @@ to do next.
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.report` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
+| Runtime only | `agent.start` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -507,7 +507,9 @@ Each statement here is a promise with a test.
 - **Delivery.** At-least-once to the driver, deduped by event id. Delivery states are `offered` (the runtime handed it
   over), `delivered` (the driver confirmed injection; this is observed exposure), `acked` (the agent's next read or
   wait moved past it). None means understood. A handover that fails is queued again and offered under a new input, even past a
-  newer offer: at-least-once allows the repeat, and the event id dedupes it.
+  newer offer: at-least-once allows the repeat, and the event id dedupes it. The next try waits twice as long as the last, from one
+  second. Six in a row lose an agent out of a turn, with the reason; a working agent keeps its turn, and what is queued waits for
+  its end.
 - **Cursors** are per `(reader, stream)` and held by the server. An omitted `after` means the reader's server-held
   cursor, never the head. `after=n` acks up to `n`, clamped to what the agent was shown, in a tool's result or by a handover a
   driver confirmed, so a hallucinated number or a read during a handover acks nothing unshown. A number past the head is no cursor,
@@ -605,7 +607,7 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 ### Lifecycle
 
 - **Spawn** is topology check, budget reservation, `admit`, `workspace`, `launch`, each step starting only once the last has
-  finished. One that fails leaves the agent to the courier, which ends it `failed`. Depth comes from the parent record,
+  finished. One that fails leaves the agent to the courier, which ends it `failed` with that step's error. Depth comes from the parent record,
   never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success. `may_spawn`
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
@@ -614,7 +616,12 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
   that exits ends its agent `lost`, or `failed` if it never started. A one-shot agent ends with its turn: `finished` if that turn
   `stopped`, and `failed` otherwise.
+- **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
+  the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
+  still going a minute later is cut off, so what it had yet to report goes unmeasured. A harness that exits has finished all the same.
 - **Goals.** An agent has no goal unless given one. With none it holds no turn's reservation, and it starts idle until a message wakes it.
+  A goal no turn has begun on keeps the session unsettled. A harness that says ready and begins none within a minute is lost, and one
+  resumed before it began takes the goal as a delivery, at-least-once, since a resumed harness waits to be told.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
   refused `conflict`: `cancel` is what stops one.
@@ -625,8 +632,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 
 `settled` means, checkably: no agent on its way to a turn, no open turn, no deliverable delivery, no requested or started effect,
 no due timer. A wait the runtime could close counts as a deliverable delivery, and so does a wake not yet due. A human
-message can un-settle a session. Only `close` ends it. `until` picks when a headless session closes: `"settled"`,
-`"role:lead"` or `"program"`. All stop at budget exhaustion. A team with no root uses `"settled"`.
+message can un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so
+a message that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would
+reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
+A team with no root uses `"settled"`.
 
 ### Approvals
 
@@ -637,7 +646,8 @@ the harness), and the observed item outcome. Codex's `accept` does not fix the r
 information. **Approval policy is a durable session setting** (`ask`, `deny`, `allow`, per role), journaled at open, and
 `Session.start(approvals=)` states one over every role's own. A headless session states one before its first turn. An `ask` that no
 human can answer ends with exit 4: `settled()` returns `needs_human` at once when an approval is left to ask and no other client
-holding a control credential is attached. A message from an agent can never carry an approval.
+holding a control credential is attached. A message from an agent can never carry an approval. An approval goes moot with the turn
+that asked, however that turn ended, since a resumed harness has forgotten it.
 
 ### Budgets
 
@@ -648,10 +658,11 @@ largest turn's cost times the live agents. Spawn reserves in the admission trans
 event, tried again when the budget moves.
 
 Time alone exhausts a `wall` limit, so a timer fires `budget.lapse` at the shared one, which moves the journal for whoever sleeps
-until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`. A limit in a unit a role cannot measure
+until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`, and what the runtime counts itself,
+`turns` and `agents`, is `counted`, which no driver can claim. A limit in a unit a role cannot measure
 is refused by `team check`, or falls back to `turns` when that budget also limits `turns`; it never silently stops enforcing. A turn nobody
 measured, a lost one among them, is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused
-`unavailable`. Budget exhaustion means spent, never merely reserved. Native
+`unavailable`, and usage shows that unit with no amount: unknown is not zero. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology

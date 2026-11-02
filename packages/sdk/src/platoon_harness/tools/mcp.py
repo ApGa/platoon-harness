@@ -5,12 +5,12 @@ import contextlib
 import hashlib
 import json
 import logging
-from collections.abc import Awaitable, Iterator, Mapping
+from collections.abc import Awaitable, Coroutine, Iterator, Mapping
 from http import HTTPStatus
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refused
+from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refused, first
 from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.version import __version__
 
@@ -61,18 +61,12 @@ class _BadParams(Exception):
     """JSON-RPC -32602."""
 
 
-async def _first[T](work: Awaitable[T], rival: Awaitable[Any]) -> T:
+async def _unless[T](rival: Awaitable[Any], work: Coroutine[Any, Any, T]) -> T:
     """`work`'s result, unless `rival` finishes first, which drops the work and raises `_Cut`."""
-    racers = asyncio.ensure_future(work), asyncio.ensure_future(rival)
-    try:
-        await asyncio.wait(racers, return_when=asyncio.FIRST_COMPLETED)
-        if not racers[0].done():
-            raise _Cut
-        return racers[0].result()
-    finally:
-        for racer in racers:
-            racer.cancel()
-        await asyncio.gather(*racers, return_exceptions=True)
+    task = asyncio.ensure_future(work)
+    if not await first(task, rival):
+        raise _Cut
+    return task.result()
 
 
 async def _hung_up(reader: asyncio.StreamReader) -> None:
@@ -228,7 +222,7 @@ class ToolServer:
         self._serving.add(task)
         try:
             reply = await self._reply(reader)
-            await _first(_send(writer, reply), self._kernel.clock.sleep(_IO_SECONDS))
+            await _unless(self._kernel.clock.sleep(_IO_SECONDS), _send(writer, reply))
         except (_Cut, ConnectionError, asyncio.IncompleteReadError):
             pass  # A client that stalled or left is owed nothing.
         finally:
@@ -239,8 +233,8 @@ class ToolServer:
         if self._server is None or len(self._serving) > _CONNECTION_LIMIT:
             return _response(503)
         try:
-            request = await _first(self._receive(reader), self._kernel.clock.sleep(_IO_SECONDS))
-            return await _first(self._answer(request), _hung_up(reader))
+            request = await _unless(self._kernel.clock.sleep(_IO_SECONDS), self._receive(reader))
+            return await _unless(_hung_up(reader), self._answer(request))
         except _Rejected as rejected:
             return rejected.reply
         except (_Cut, ConnectionError, asyncio.IncompleteReadError):

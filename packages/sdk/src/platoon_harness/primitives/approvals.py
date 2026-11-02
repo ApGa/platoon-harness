@@ -74,8 +74,9 @@ class Approvals(View):
                 "UPDATE v_approvals SET outcome = ? WHERE id = ?", (event.data["outcome"], event.data["approval"])
             )
 
-    @fold("agent.ended")
+    @fold("agent.ended", "turn.ended", "turn.lost")
     def moot(self, event: Event) -> None:
+        """Nothing waits on an approval once the turn that asked has gone: a resumed harness has forgotten it."""
         self.db.execute("UPDATE v_approvals SET state = 'moot' WHERE agent = ? AND state = 'pending'", (event.agent,))
 
     def get(self, id: str) -> Approval | None:

@@ -7,7 +7,7 @@ from pydantic import Field, JsonValue
 
 from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .common import BodyRef, Delivery, Name
+from .common import BodyRef, Injection, Name, Policy
 
 
 class Role(Args):
@@ -18,8 +18,8 @@ class Role(Args):
     workspace: str = "shared"
     tools: tuple[str, ...] = ("*",)
     on_parent_exit: Literal["cancel-subtree", "adopt"] = "cancel-subtree"
-    approvals: Literal["ask", "deny", "allow"] = "ask"
-    delivery: Delivery = "wake"
+    approvals: Policy = "ask"
+    delivery: Injection = "wake"
     inbox_depth: Annotated[int, Field(ge=1)] = 1024
 
 

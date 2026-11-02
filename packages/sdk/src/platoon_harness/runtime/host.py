@@ -29,7 +29,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel, Outcome, hash_token
+from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Team
 from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, list_tools, preamble, shell_name
@@ -49,18 +49,7 @@ _MCP = frozenset({"mcp-http", "mcp-stdio"})
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["GRACE", "NAMESPACE", "DriverLink", "Host", "first"]
-
-
-async def first(*waits: Awaitable[Any]) -> None:
-    """Sleep until one of `waits` is done, and drop the rest."""
-    racers = [asyncio.ensure_future(wait) for wait in waits]
-    try:
-        await asyncio.wait(racers, return_when=asyncio.FIRST_COMPLETED)
-    finally:
-        for racer in racers:
-            racer.cancel()
-        await asyncio.gather(*racers, return_exceptions=True)
+__all__ = ["GRACE", "NAMESPACE", "DriverLink", "Host"]
 
 
 class DriverLink:

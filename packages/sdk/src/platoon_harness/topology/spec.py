@@ -19,7 +19,7 @@ from pydantic import (
 )
 
 from platoon_harness.kernel import NAME, Grant
-from platoon_harness.primitives import Delivery
+from platoon_harness.primitives import Injection
 from platoon_harness.schema import ConfigError, Duration, Model, Name, Positive, Problem, Sorted, nearest
 
 RELATIONS = ("self", "parent", "children", "siblings", "ancestors", "descendants", "next", "prev")
@@ -87,7 +87,7 @@ class Topic(_Channel):
     """A log every reader follows by cursor. `entry`, `requires` and `validator` constrain what may be posted."""
 
     kind: Literal["topic"] = "topic"
-    delivery: Delivery = "next-turn"
+    delivery: Injection = "next-turn"
     history: Literal["from-join", "full"] = "from-join"
     digest: Digest = Digest()
     coalesce: Duration | None = None
@@ -100,7 +100,7 @@ class Queue(_Channel):
     """Tasks leased to one claimant at a time. Unless `pull`, `delivery` announces work; it never assigns it."""
 
     kind: Literal["queue"] = "queue"
-    delivery: Delivery = "pull"
+    delivery: Injection = "pull"
     lease: Duration | None = None
     lease_max: Duration | None = None
     max_attempts: Positive = 3
@@ -111,7 +111,7 @@ class Board(_Channel):
     """Named objects with immutable versions. `keys` names the field an object is keyed by."""
 
     kind: Literal["board"] = "board"
-    delivery: Delivery = "pull"
+    delivery: Injection = "pull"
     keys: str | None = None
 
 

@@ -34,6 +34,54 @@ async def fail_next_handover(kernel) -> None:
     result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
 
 
+async def test_a_unit_nobody_measured_has_no_amount_and_keeps_its_estimate_for_the_budget(kernel):
+    await spawn(kernel, "bob", goal="")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+
+    usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
+
+    assert usage["tokens"] == {"amount": None, "label": "unavailable"}
+    assert usage["usd"] == {"amount": None, "label": "unavailable"}
+    assert limit(kernel, "tokens")["spent"] == 100
+
+
+async def test_what_the_runtime_counts_is_no_provider_s_word(kernel):
+    await spawn(kernel, "bob", goal="")
+    await set_budget(kernel, limits={"agents": 5, "turns": 5})
+    await spawn(kernel, "eve", goal="")
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+
+    usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
+
+    assert usage["turns"] == {"amount": 1.0, "label": "counted"}
+    assert limit(kernel, "agents")["label"] == "counted"
+
+
+async def test_a_driver_cannot_claim_a_count(kernel):
+    await spawn(kernel, "bob", goal="")
+
+    args = {"agent": "bob", "report": {"type": "usage", "tokens": 1, "label": "counted"}}
+    assert refusal(await kernel.submit(kernel.runtime, "agent.report", args)).code == "invalid"
+
+
+async def test_a_lost_turn_is_a_turn_counted_and_tokens_unmeasured(kernel):
+    await spawn(kernel, "bob", goal="")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.recover())
+
+    usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
+    assert usage["turns"] == {"amount": 1.0, "label": "counted"}
+    assert usage["tokens"] == {"amount": None, "label": "unavailable"}
+
+
 async def test_a_wake_reserves_an_estimate(kernel):
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})

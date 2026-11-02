@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import threading
 from collections import deque
-from collections.abc import AsyncGenerator, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from fnmatch import fnmatchcase
 from itertools import takewhile
 from typing import Any
@@ -13,6 +13,7 @@ from .model import Delta, Event, Page
 
 _TAIL_SIZE = 1024
 _RING_SIZE = 256
+_FRAME_LIMIT = 64 * 1024
 
 
 def _finish(outcomes: list[tuple[asyncio.Future[Any], Any]]) -> None:
@@ -33,6 +34,22 @@ def settle(outcomes: Iterable[tuple[asyncio.Future[Any], Any]]) -> None:
     for loop, batch in loops.items():
         with contextlib.suppress(RuntimeError):
             loop.call_soon_threadsafe(_finish, batch)
+
+
+async def first(work: Awaitable[Any], *rivals: Awaitable[Any]) -> bool:
+    """Race `work` against `rivals` and drop whatever is left. True if `work` finished first, and if it failed this
+    raises what it raised."""
+    racers = [asyncio.ensure_future(racer) for racer in (work, *rivals)]
+    try:
+        await asyncio.wait(racers, return_when=asyncio.FIRST_COMPLETED)
+        won = racers[0].done()
+        if won:
+            racers[0].result()
+        return won
+    finally:
+        for racer in racers:
+            racer.cancel()
+        await asyncio.gather(*racers, return_exceptions=True)
 
 
 class Pulse:
@@ -107,7 +124,8 @@ class Tail:
 
 
 class Ring:
-    """A bounded lossy buffer of one agent's live text, separate from the journal."""
+    """A bounded lossy buffer of one agent's live text, separate from the journal. A frame is cut at 64 KiB, so a ring
+    holds at most 16 MiB, and the `item` that follows is the truth anyway."""
 
     def __init__(self, agent: str) -> None:
         self._agent = agent
@@ -116,7 +134,7 @@ class Ring:
 
     def push(self, text: str) -> None:
         frame = self._pulse.head + 1
-        self._held.append(Delta(agent=self._agent, frame=frame, text=text))
+        self._held.append(Delta(agent=self._agent, frame=frame, text=text[:_FRAME_LIMIT]))
         self._pulse.publish(frame)
 
     def close(self) -> None:

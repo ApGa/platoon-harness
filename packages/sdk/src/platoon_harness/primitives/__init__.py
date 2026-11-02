@@ -22,7 +22,7 @@ from .boards import Boards
 from .budgets import Budgets
 from .channels import Channels, Groups, channel_grants
 from .clients import Attention, Changes, Gaps
-from .common import BODY_REF, WAKING, Delivery, Lines, lines_of, stream_of
+from .common import BODY_REF, WAKING, Injection, Lines, Policy, lines_of, stream_of
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
 from .reports import (
@@ -76,12 +76,14 @@ PRIMITIVES = (
         ops=[
             lifecycle.spawn,
             lifecycle.finish,
+            lifecycle.conclude,
             lifecycle.interrupt,
             lifecycle.cancel,
             lifecycle.retire,
             lifecycle.takeover,
             lifecycle.release,
             lifecycle.start,
+            lifecycle.retell,
             lifecycle.report,
             lifecycle.list_agents,
             lifecycle.agent_records,
@@ -137,7 +139,6 @@ __all__ = [
     "Condition",
     "Cursor",
     "Deliveries",
-    "Delivery",
     "Delta",
     "Entry",
     "Exited",
@@ -145,12 +146,14 @@ __all__ = [
     "GapReport",
     "Gaps",
     "Groups",
+    "Injection",
     "InputDelivered",
     "Item",
     "Lines",
     "ModelCall",
     "Native",
     "Plane",
+    "Policy",
     "Ready",
     "Report",
     "SessionRecord",

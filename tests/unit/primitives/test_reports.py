@@ -229,7 +229,7 @@ async def test_a_native_child_is_recorded_and_stays_on_its_parent(kernel):
 
     event = of_type(kernel, "child.seen")[-1]
     assert event.data == {"native": "thread-2", "parent": "thread-1", "attribution": "inferred"}
-    assert [row["name"] for row in result_of(kernel.query(agent("bob"), "agent.list", {}))] == ["@bob"]
+    assert [row["agent"] for row in result_of(kernel.query(agent("bob"), "agent.list", {}))] == ["bob"]
 
 
 async def test_a_native_frame_is_recorded_as_it_came(kernel):

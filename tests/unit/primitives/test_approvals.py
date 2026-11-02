@@ -31,6 +31,22 @@ async def test_an_answer_does_not_wait_behind_a_hung_delivery(kernel, ada):
     assert [effect["kind"] for effect in result_of(kernel.query(kernel.runtime, "effect.ready", {}))] == ["answer"]
 
 
+@pytest.mark.parametrize("ending", ["a crash", "the turn's end"])
+async def test_an_approval_goes_moot_with_the_turn_that_asked(kernel, ada, ending):
+    await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await ask(kernel)
+
+    if ending == "a crash":
+        result_of(await kernel.recover())
+    else:
+        await report(kernel, "bob", "turn.ended")
+
+    assert result_of(kernel.query(kernel.runtime, "session.status", {}))["asking"] == 0
+    assert [row for row in result_of(kernel.query(ada, "attention.list", {})) if row["kind"] == "approval"] == []
+    assert refusal(await kernel.submit(ada, "approval.resolve", resolving(version=1))).code == "conflict"
+
+
 async def test_a_request_is_shown_with_actions_carrying_the_version(kernel, ada):
     await spawn(kernel, "bob")
 

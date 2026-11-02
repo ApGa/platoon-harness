@@ -1,9 +1,8 @@
 """Delivery: handing queued entries to a harness, and the courier that decides when."""
 
-import asyncio
 from typing import Any, Literal, NamedTuple
 
-from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, op
+from platoon_harness.kernel import Args, Daemon, Kernel, Refused, Txn, first, op
 
 from .agents import Agent, Agents
 from .budgets import reserve
@@ -14,7 +13,7 @@ from .waits import WaitRecord, Waits, out_of_turn
 
 _RETRY_SECONDS = 1.0
 _ATTACHED = ("next-turn", "wake", "steer")
-_SPAWN_STEPS = ("admit", "workspace", "launch")
+_HANDOVERS = 6
 
 
 def _steerable(agent: Agent) -> str | None:
@@ -23,23 +22,26 @@ def _steerable(agent: Agent) -> str | None:
 
 
 class Work(NamedTuple):
-    """What the runtime could do now: agents to hand entries to, waits to close and spawns to end. Then the agents with
-    a wake to come, and when more falls due."""
+    """What the runtime could do now: agents to hand entries to, waits to close, and agents to end, with why. Then the
+    agents with a wake to come, and when more falls due."""
 
     agents: list[str]
     waits: list[WaitRecord]
-    stranded: list[str]
+    stranded: list[tuple[str, str]]
     later: list[str]
     due: float | None
 
 
-def _stranded(txn: Txn) -> list[str]:
-    """Agents still spawning whose admit, workspace or launch failed: what depended on it will never start."""
-    agents = txn.view(Agents)
-    failed = {effect.agent for effect in txn.view(Effects).in_state("failed") if effect.kind in _SPAWN_STEPS}
-    return sorted(
-        name for name in failed if name is not None and (agent := agents.get(name)) and agent.state == "spawning"
-    )
+def _stranded(txn: Txn) -> list[tuple[str, str]]:
+    """Agents nothing more can come of: a spawn with a step that failed, so what depended on it will never start, and an
+    agent out of a turn whose harness has refused handover after handover."""
+    found = []
+    for agent in txn.view(Agents).live():
+        if agent.state == "spawning" and agent.failure is not None:
+            found.append((agent.name, f"its spawn failed: {agent.failure}"))
+        elif agent.state in ("idle", "waiting") and agent.failures >= _HANDOVERS:
+            found.append((agent.name, f"{agent.failures} handovers failed: {agent.failure}"))
+    return found
 
 
 def work(txn: Txn) -> Work:
@@ -53,10 +55,11 @@ def work(txn: Txn) -> Work:
     dues: list[float] = []
     for reader, due, steer in txn.view(Deliveries).waking():
         agent = agents.get(reader)
-        if agent is None or not (
-            agent.state in ("idle", "waiting") or (agent.state == "running" and steer and _steerable(agent))
-        ):
+        if agent is None or agent.failures >= _HANDOVERS:
             continue
+        if not (agent.state in ("idle", "waiting") or (agent.state == "running" and steer and _steerable(agent))):
+            continue
+        due = max(due, agent.retry_at)
         if due <= txn.now:
             ready.append(reader)
         else:
@@ -192,10 +195,12 @@ async def _pass(kernel: Kernel) -> float | None:
     """One level-triggered pass, returning when to look again if nothing commits first."""
     runtime = kernel.runtime
     found = kernel.query(runtime, "delivery.ready", {}).result
-    ended = {"type": "exited", "reason": "its spawn failed"}
     commands = [("wait.release", {"id": id}) for id in found["waits"]]
     commands += [("delivery.offer", {"agent": agent}) for agent in found["agents"]]
-    commands += [("agent.report", {"agent": agent, "report": ended}) for agent in found["stranded"]]
+    commands += [
+        ("agent.report", {"agent": agent, "report": {"type": "exited", "reason": why}})
+        for agent, why in found["stranded"]
+    ]
     for name, args in commands:
         outcome = await kernel.submit(runtime, name, args)
         if outcome.refusal is not None:
@@ -207,14 +212,7 @@ async def _run(kernel: Kernel) -> None:
     while not kernel.closed:
         head = kernel.head
         due = await _pass(kernel)
-        waits = [asyncio.ensure_future(kernel.changed(head))]
-        if due is not None:
-            waits.append(asyncio.ensure_future(kernel.clock.sleep(due - kernel.clock.now())))
-        try:
-            await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            for wait in waits:
-                wait.cancel()
+        await first(kernel.changed(head), *(() if due is None else (kernel.clock.sleep(due - kernel.clock.now()),)))
 
 
 courier = Daemon("courier", _run)

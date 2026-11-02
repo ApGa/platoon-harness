@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictFloat, StrictInt, StringConstraints, ValidationError, field_validator, model_validator
 
 from platoon_harness.kernel import Extension
-from platoon_harness.primitives import WAKING, Capabilities, Delivery
+from platoon_harness.primitives import WAKING, Capabilities, Injection, Policy
 from platoon_harness.schema import (
     ConfigError,
     Duration,
@@ -83,12 +83,12 @@ class Role(Model):
     workspace: Literal["shared", "worktree", "snapshot", "isolated"] = "shared"
     sandbox: str | None = None
     tools: tuple[str, ...] = ("*",)
-    delivery: Delivery = "wake"
+    delivery: Injection = "wake"
     inbox_depth: Positive = 1024
     may_spawn: tuple[str, ...] = ()
     count: Annotated[StrictInt, Field(ge=0)] | None = None
     on_parent_exit: Literal["cancel-subtree", "adopt"] = "cancel-subtree"
-    approvals: Literal["ask", "deny", "allow"] = "ask"
+    approvals: Policy = "ask"
     budget: Budget = Budget()
 
     @property

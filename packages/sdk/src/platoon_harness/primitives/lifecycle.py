@@ -13,6 +13,7 @@ from platoon_harness.kernel import (
     Principals,
     Refused,
     Stamps,
+    Timer,
     Timers,
     Txn,
     op,
@@ -51,6 +52,9 @@ from .tasks import Tasks, bury_if_spent
 from .waits import Waits
 
 Status = Literal["finished", "cancelled", "retired", "lost", "failed"]
+
+_FINISH_SECONDS = 60.0
+_REASON_LIMIT = 1024
 
 
 def _inbox_of(principal: str) -> str:
@@ -92,6 +96,7 @@ def end(
     owned = txn.view(Tasks).owned(agent.id)
     if txn.view(Stamps).turn(name) is not None or txn.view(Budgets).turn_usage(name):
         reconcile(txn, name, agent.role)
+    reason = reason and reason[:_REASON_LIMIT]
     ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
     body = body or agent.final_body
@@ -106,6 +111,9 @@ def end(
     )
     if txn.view(Stamps).turn(name) is not None:
         txn.emit("turn.ended", f"turn/{name}", gist=f"turn ended: {status}", agent=name, data={"reason": status})
+    if agent.finishing:
+        key = _finish_key(name)
+        txn.emit("timer.cleared", f"timer/{key}", gist=f"timer {key} cleared", data={"key": key})
     for effect in txn.view(Effects).requested_for(name):
         data = {"id": effect.id, "kind": effect.kind}
         txn.emit("effect.cancelled", f"effect/{effect.id}", gist=f"{effect.kind} cancelled", agent=name, data=data)
@@ -203,25 +211,56 @@ class Finish(Args):
     body: Body = None
 
 
+def _finish_key(name: str) -> str:
+    return f"agent/{name}/finish"
+
+
+def _conclude(txn: Txn, agent: Agent) -> None:
+    end(txn, agent, "finished", gist=agent.finish_gist or None, body=agent.finish_body)
+
+
 @op("agent.finish", tool=True)
 def finish(txn: Txn, a: Finish) -> None:
-    """End your own work for good. `gist` and `body` are your final report: your spawner receives them, and the session
-    keeps them either way. Call it last: your tools stop working here."""
+    """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
+    your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
+    a turn still going a minute from now is cut off. Refused `conflict` when you have finished already."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
-    end(txn, _live(txn, txn.me.name), "finished", gist=a.gist or None, body=a.body)
+    agent = _live(txn, txn.me.name)
+    if agent.finishing:
+        raise Refused("conflict", f"{agent.name} has finished: end your turn")
+    if txn.view(Stamps).turn(agent.name) is None:
+        end(txn, agent, "finished", gist=a.gist or None, body=a.body)
+        return
+    data = {"gist": a.gist, "body": a.body}
+    stream = f"agent/{agent.name}"
+    refs = [a.body] if a.body else ()
+    txn.emit("agent.finished", stream, gist=f"{agent.name} finishing", agent=agent.name, refs=refs, data=data)
+    key = _finish_key(agent.name)
+    timer = Timer(due=txn.now + _FINISH_SECONDS, op="agent.conclude", args={"agent": agent.name}, key=key)
+    txn.emit("timer.set", f"timer/{key}", gist=f"timer {key} set", data=timer)
 
 
 class Named(Args):
     agent: Annotated[AgentName, Field(description="`@agent`, as `peers` and `agent.list` show it.")]
 
 
+@op("agent.conclude", on=lambda a: f"agent/{a.agent}", runtime=True)
+def conclude(txn: Txn, a: Named) -> None:
+    """End an agent that finished, whether or not its turn did: fired by a timer, and by recovery once that turn is
+    lost. One that has ended since is left alone."""
+    agent = txn.view(Agents).get(a.agent)
+    if agent is not None and agent.finishing:
+        _conclude(txn, agent)
+
+
 @op("agent.interrupt", on=lambda a: f"agent/{a.agent}", tool=True)
 def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
-    """Stop an agent's turn at the boundary its harness can. The agent lives on. Refused `conflict` when it has no open
-    turn: there is nothing to stop. `not_permitted` when it is not below you."""
+    """Stop an agent's turn at the boundary its harness can, or a handover that has begun none, which goes back on its
+    queue. The agent lives on. Refused `conflict` when neither is under way: there is nothing to stop. `not_permitted`
+    when it is not below you."""
     agent = _live(txn, a.agent)
-    if txn.view(Stamps).turn(agent.name) is None:
+    if txn.view(Stamps).turn(agent.name) is None and agent.state != "waking":
         raise Refused("conflict", f"{agent.name} has no open turn")
     return {
         "effect": txn.effect("interrupt", {"agent": agent.name}, on_uncertain="retry", priority=1, agent=agent.name)
@@ -289,6 +328,7 @@ class Start(Args):
     declared: Capabilities
     verified: dict[str, JsonValue] | None = None
     levels: dict[str, JsonValue] = {}
+    assurance: Literal["cooperative", "isolated"] = "cooperative"
     resumed: bool = False
 
 
@@ -299,13 +339,21 @@ def start(txn: Txn, a: Start) -> None:
     agent = _live(txn, a.agent)
     if (agent.state != "spawning") != a.resumed:
         raise Refused("conflict", f"{agent.name} has started" if not a.resumed else f"{agent.name} has not started")
-    data = {**a.ready.model_dump(exclude={"type"}), **a.model_dump(include={"declared", "verified", "levels"})}
+    stated = a.model_dump(include={"declared", "verified", "levels", "assurance"})
+    data = {**a.ready.model_dump(exclude={"type"}), **stated}
     stream = f"agent/{agent.name}"
     if a.resumed:
         txn.emit("agent.resumed", stream, gist=f"{agent.name} resumed", agent=agent.name, data=data)
     else:
         txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, data=data)
         regroup(txn, agent.name, agent.role, joined=True)
+
+
+@op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)
+def retell(txn: Txn, a: Named) -> None:
+    """Hand a resumed harness the goal it never began, as a delivery, since a resume starts no turn of its own."""
+    agent = _live(txn, a.agent)
+    post(txn, f"inbox/{agent.name}", agent.goal, body=agent.goal_body, wake=True)
 
 
 class AgentReport(Args):
@@ -318,6 +366,9 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished."""
     name = agent.name
     if txn.view(Stamps).turn(name) is None:
+        return
+    if agent.finishing:
+        _conclude(txn, agent)
         return
     if agent.persistent is False:
         finished = reason == "stopped"
@@ -346,10 +397,18 @@ def report(txn: Txn, a: AgentReport) -> None:
         case Ready() | Delta():
             raise Refused("invalid", f"a {a.report.type} report is not journaled through agent.report")
         case Exited(reason=reason):
-            if not agent.ended:
+            if agent.finishing:
+                _conclude(txn, agent)
+            elif not agent.ended:
                 end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)
+        case Native() as native:
+            data = native.model_dump(exclude={"type"})
+            gist = f"unknown {native.kind}"[:GIST_LIMIT]
+            txn.emit("native.recorded", f"agent/{name}", gist=gist, agent=name, data=data)
+        case GapReport(plane=plane, what=what):
+            _gap(txn, name, plane, what)
         case _ if agent.ended:
             raise Refused("conflict", f"{name} has ended: {agent.status}")
         case TurnStarted(turn=turn):
@@ -378,12 +437,6 @@ def report(txn: Txn, a: AgentReport) -> None:
         case ChildSeen() as child:
             data = child.model_dump(exclude={"type"})
             txn.emit("child.seen", f"agent/{name}", gist=f"{name} has a native child", agent=name, data=data)
-        case Native() as native:
-            data = native.model_dump(exclude={"type"})
-            gist = f"unknown {native.kind}"[:GIST_LIMIT]
-            txn.emit("native.recorded", f"agent/{name}", gist=gist, agent=name, data=data)
-        case GapReport(plane=plane, what=what):
-            _gap(txn, name, plane, what)
         case Changed() as change:
             data = change.model_dump(exclude={"type"})
             txn.emit("change.recorded", f"agent/{name}", gist=change.path[:GIST_LIMIT], agent=name, data=data)
@@ -392,24 +445,26 @@ def report(txn: Txn, a: AgentReport) -> None:
 def _public(agent: Agent) -> dict[str, Any]:
     """An agent as any peer may see it: its goal and activity are content, and reading content is evidence."""
     parent = None if agent.parent is None else address(agent.parent)
-    return {
-        **agent.model_dump(include={"role", "depth", "state", "status"}),
-        "name": f"@{agent.name}",
-        "parent": parent,
-    }
+    return {**agent.model_dump(include={"role", "depth", "state", "status"}), "agent": agent.name, "parent": parent}
 
 
 @op("agent.list", query=True, tool=True)
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List every agent of this session, live or ended. Pass `name` as `agent` to the ops that take one."""
+    """List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
 
 
+class Records(Args):
+    agent: Name | None = None
+
+
 @op("agent.records", query=True, runtime=True)
-def agent_records(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List every agent as the runtime keeps it, with its open turn. Recovery and shutdown work through these."""
+def agent_records(txn: Txn, a: Records) -> list[dict[str, Any]]:
+    """List every agent as the runtime keeps it, or one, with its open turn. Recovery and shutdown read these."""
     stamps = txn.view(Stamps)
-    return [{**agent.model_dump(), "turn": stamps.turn(agent.name)} for agent in txn.view(Agents).listed()]
+    agents = txn.view(Agents)
+    found = agents.listed() if a.agent is None else filter(None, [agents.get(a.agent)])
+    return [{**agent.model_dump(), "turn": stamps.turn(agent.name)} for agent in found]
 
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)
@@ -437,12 +492,12 @@ def peers(txn: Txn, a: Args) -> list[dict[str, Any]]:
 def _blockers(txn: Txn) -> list[str]:
     """What stands between this session and `settled`: each clause of its definition, checked."""
     found: list[str] = []
-    if any(agent.state in ("spawning", "waking") for agent in txn.view(Agents).live()):
+    if any(agent.state in ("spawning", "waking") or agent.unbegun for agent in txn.view(Agents).live()):
         found.append("starting_agent")
     if txn.view(Stamps).open_turns():
         found.append("open_turn")
     pending = work(txn)
-    if pending.agents or pending.waits or pending.later:
+    if pending.agents or pending.waits or pending.stranded or pending.later:
         found.append("deliverable_delivery")
     effects = txn.view(Effects)
     if effects.in_state("requested") or effects.in_state("started"):
@@ -492,7 +547,8 @@ def _came_to(txn: Txn, state: str) -> str:
 
 @op("session.ending", query=True)
 def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
-    """What this session has come to: its state, why, each agent, what was spent with its labels, and every gap."""
+    """What this session has come to: its state, why, each agent and its last report, what was spent with its labels,
+    and every gap."""
     state = txn.view(SessionRecord).state()
     budget = txn.view(Budgets)
     return {
@@ -502,6 +558,7 @@ def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
             {
                 **agent.model_dump(include={"role", "state", "status", "reason"}),
                 "agent": agent.name,
+                "report": None if agent.final_gist is None else {"gist": agent.final_gist, "body": agent.final_body},
                 "usage": budget.usage_of(f"agent:{agent.name}"),
             }
             for agent in txn.view(Agents).listed()
@@ -511,12 +568,20 @@ def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
     }
 
 
+class Close(Args):
+    if_done: bool = False
+
+
 @op("session.close")
-def close(txn: Txn, a: Args) -> None:
-    """Drain: nothing new starts, and what is in flight finishes. Refused `conflict` when the session is not open."""
-    state = txn.view(SessionRecord).state()
+def close(txn: Txn, a: Close) -> None:
+    """Drain: nothing new starts, and what is in flight finishes. Refused `conflict` when the session is not open, and
+    with `if_done` when `session.status` would no longer say done, as a message that got in first makes it."""
+    session = txn.view(SessionRecord)
+    state = session.state()
     if state != "open":
         raise Refused("conflict", f"the session is {state}")
+    if a.if_done and not _done(txn, session.settings().until, not _blockers(txn)):
+        raise Refused("conflict", "this session is not done")
     txn.emit("session.closed", "session", gist="session closing")
 
 

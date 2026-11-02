@@ -8,10 +8,10 @@ from pydantic.json_schema import SkipJsonSchema
 
 from platoon_harness.kernel import Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
 
-from .common import WAKING, Delivery, Name
+from .common import WAKING, Injection, Name
 
 _PREFIX = {"topic": "channel", "queue": "queue", "board": "board"}
-_DEFAULT_DELIVERY: dict[str, Delivery] = {"topic": "next-turn", "queue": "pull", "board": "pull"}
+_DEFAULT_DELIVERY: dict[str, Injection] = {"topic": "next-turn", "queue": "pull", "board": "pull"}
 _WRITE = {"topic": ("message.send",), "queue": ("task.add", "task.list"), "board": ("board.post", "board.revise")}
 _READ = {
     "topic": ("message.read",),
@@ -35,7 +35,7 @@ class Channel(BaseModel, frozen=True):
 
     stream: str
     kind: Literal["inbox", "topic", "queue", "board"]
-    delivery: Delivery = "pull"
+    delivery: Injection = "pull"
     history: Literal["from-join", "full"] = "from-join"
     coalesce: float = 0.0
     depth: int | None = None
@@ -149,7 +149,7 @@ class CreateChannel(Args):
     kind: Annotated[Literal["topic", "queue", "board"], Field(description="What sort of channel this is.")]
     readers: Annotated[tuple[str, ...], Field(description="Who else may read: selectors, such as `children`.")] = ()
     writers: Annotated[tuple[str, ...], Field(description="Who else may write: selectors, such as `role:x`.")] = ()
-    delivery: Annotated[Delivery | None, Field(description="`pull` or `next-turn`, the most you may choose.")] = None
+    delivery: Annotated[Injection | None, Field(description="`pull` or `next-turn`, the most you may choose.")] = None
     history: SkipJsonSchema[Literal["from-join", "full"]] = "from-join"
     coalesce: SkipJsonSchema[Annotated[float, Field(ge=0)]] = 0.0
     lease: SkipJsonSchema[Annotated[float, Field(gt=0)]] = 1800.0
@@ -229,7 +229,7 @@ class DefineGroup(Args):
     name: Name
     roles: tuple[Name, ...] = ()
     members: tuple[str, ...] = ()
-    delivery: Delivery = "next-turn"
+    delivery: Injection = "next-turn"
     history: Literal["from-join", "full"] = "from-join"
     coalesce: Annotated[float, Field(ge=0)] = 0.0
 

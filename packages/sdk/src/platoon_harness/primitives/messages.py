@@ -511,7 +511,12 @@ def send(txn: Txn, a: Send) -> dict[str, Any]:
     longer in `body`. To reply, set `to` to the entry's `sender` and `reply_to` to its `ref`. Refused `not_permitted`
     when you cannot reach the target: call `peers` for agents, `channel.list` for channels. `undeliverable` when the
     agent has ended: tell someone else. `queue_full` when its inbox is full: try later. `not_found` when `reply_to`
-    names nothing you can read."""
+    names nothing you can read. `conflict` once the session is closing, when it would reach nobody."""
+    session = txn.view(SessionRecord)
+    if not session.accepting():
+        raise Refused(
+            "conflict", f"the session is {session.state()}, so nothing new starts and this would reach nobody"
+        )
     thread, cause = a.thread, ()
     if a.reply_to is not None:
         replied = _replied(txn, a.reply_to)

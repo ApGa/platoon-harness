@@ -30,9 +30,10 @@ async def spawn(
     role: str = "worker",
     by: Principal | None = None,
     ready: dict[str, Any] | None = None,
+    goal: str | None = None,
 ) -> Principal:
     """Spawn an agent through to started, doing what the host does between the two."""
-    args = {"name": name, "child_role": role, "goal": f"be {name}"}
+    args = {"name": name, "child_role": role, "goal": f"be {name}" if goal is None else goal}
     result_of(await kernel.submit(by or kernel.runtime, "agent.spawn", args))
     await settle_effects(kernel, name)
     await start(kernel, name, **(ready or {}))

@@ -118,6 +118,10 @@ class Attention(View):
         """Nobody knows what a lost turn did, and nothing will wake its agent to find out."""
         self._raise(f"turn/{event.agent}", "uncertain", event)
 
+    @fold("turn.ended", "turn.lost")
+    def approval_moot(self, event: Event) -> None:
+        self._lower(event, "agent = ? AND kind = 'approval'", event.agent)
+
     @fold("turn.started")
     def turn_started(self, event: Event) -> None:
         turn = f"turn/{event.agent}"

@@ -23,9 +23,10 @@ BodyRef = Annotated[str, Field(pattern=BODY_REF)]
 Body = Annotated[BodyRef | None, Field(description="Anything longer than the gist.")]
 Seq = Annotated[int, Field(ge=0, lt=2**63)]
 BasedOn = Annotated[tuple[str, ...], Field(description="Refs this rests on, such as a `ref` you read.")]
-Delivery = Literal["pull", "next-turn", "wake", "steer"]
+Injection = Literal["pull", "next-turn", "wake", "steer"]
+Policy = Literal["ask", "deny", "allow"]
 
-WAKING: tuple[Delivery, ...] = ("wake", "steer")
+WAKING: tuple[Injection, ...] = ("wake", "steer")
 
 DIGEST_ITEMS = 32
 RESULT_LIMIT = (

@@ -154,7 +154,7 @@ async def test_a_connection_that_never_says_who_it_is_is_dropped(tmp_path):
 
 async def test_a_view_token_reads(viewer):
     assert (await viewer.status())["state"] == "open"
-    assert [row["name"] for row in await viewer.agents()] == ["@bob"]
+    assert [row["agent"] for row in await viewer.agents()] == ["bob"]
     assert (await journal(viewer))[0].type == "runtime.started"
 
 

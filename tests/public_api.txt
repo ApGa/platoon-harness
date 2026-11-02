@@ -116,6 +116,7 @@ platoon_harness.kernel.Tombstones
 platoon_harness.kernel.Txn
 platoon_harness.kernel.View
 platoon_harness.kernel.filesystem
+platoon_harness.kernel.first
 platoon_harness.kernel.fold
 platoon_harness.kernel.hash_token
 platoon_harness.kernel.is_held
@@ -142,7 +143,6 @@ platoon_harness.primitives.Compacted
 platoon_harness.primitives.Condition
 platoon_harness.primitives.Cursor
 platoon_harness.primitives.Deliveries
-platoon_harness.primitives.Delivery
 platoon_harness.primitives.Delta
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
@@ -150,6 +150,7 @@ platoon_harness.primitives.Gap
 platoon_harness.primitives.GapReport
 platoon_harness.primitives.Gaps
 platoon_harness.primitives.Groups
+platoon_harness.primitives.Injection
 platoon_harness.primitives.InputDelivered
 platoon_harness.primitives.Item
 platoon_harness.primitives.Lines
@@ -157,6 +158,7 @@ platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
 platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.Plane
+platoon_harness.primitives.Policy
 platoon_harness.primitives.RAW_LIMIT
 platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Ready
@@ -216,7 +218,6 @@ platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
 platoon_harness.runtime.host.NAMESPACE
-platoon_harness.runtime.host.first
 platoon_harness.runtime.opening.make_driver
 platoon_harness.runtime.opening.open_session
 platoon_harness.runtime.opening.prepare
@@ -296,7 +297,6 @@ platoon_harness.tools.shell_name
 platoon_harness.tools.tool_name
 platoon_harness.topology.Board
 platoon_harness.topology.Channel
-platoon_harness.topology.Delivery
 platoon_harness.topology.Digest
 platoon_harness.topology.Group
 platoon_harness.topology.Limits
