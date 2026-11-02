@@ -46,15 +46,14 @@ class Blobs:
 
     def write(self, sha256: str, body: bytes) -> None:
         path = self._path(sha256)
-        if path.exists():
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary = tempfile.mkstemp(dir=path.parent)
-        with os.fdopen(fd, "wb") as file:
-            file.write(body)
-            file.flush()
-            _sync(file.fileno())
-        os.replace(temporary, path)
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary = tempfile.mkstemp(dir=path.parent)
+            with os.fdopen(fd, "wb") as file:
+                file.write(body)
+                file.flush()
+                _sync(file.fileno())
+            os.replace(temporary, path)
         for folder in (path.parent, self._root, self._root.parent):
             _sync_folder(folder)
 
@@ -122,9 +121,9 @@ async def _erase_tombstoned(kernel: "Kernel") -> None:
     while not kernel.closed:
         head = kernel.head
         for effect in kernel.query(runtime, "effect.ready", {"kind": "erase"}).result:
-            await kernel.submit(runtime, "effect.start", {"id": effect["id"]})
+            started = await kernel.submit(runtime, "effect.start", {"id": effect["id"]})
             await kernel.erase_body(effect["data"]["sha256"])
-            await kernel.submit(runtime, "effect.finish", {"id": effect["id"]})
+            await kernel.submit(runtime, "effect.finish", {"id": effect["id"], "attempt": started.result})
         await kernel.changed(head)
 
 

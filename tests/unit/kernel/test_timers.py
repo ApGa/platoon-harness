@@ -1,9 +1,14 @@
 """Timers: set by an event, fired by the clock daemon, moved only by the injected clock."""
 
+import asyncio
+import sqlite3
+
+import pytest
+
 from platoon_harness.kernel import Kernel
 from platoon_harness.kernel.timers import fire_timers
 
-from .support import events_of, notes, result_of, supervised, until
+from .support import events_of, notes, refusal_of, result_of, supervised, until
 
 
 async def remind(kernel, due: float, key: str) -> None:
@@ -62,6 +67,69 @@ async def test_a_refiring_after_a_crash_runs_the_op_once(kernel, clock):
     assert reminders(kernel) == ["ring"]
     assert first["version"] == 1
     assert [event.type for event in events_of(kernel, after=head)] == ["timer.cleared"]
+
+
+async def test_a_firing_lost_to_a_failed_commit_stays_set(kernel, clock):
+    await remind(kernel, 1000.0, "ring")
+    writer = kernel._writer
+    seal, faults = writer._seal, [sqlite3.OperationalError("disk I/O error")]
+
+    def failing(db):
+        if faults:
+            raise faults.pop()
+        return seal(db)
+
+    writer._seal = failing
+
+    assert await fire_timers(kernel) == 1001.0
+
+    assert pending(kernel) == ["ring"]
+    assert reminders(kernel) == []
+    assert await fire_timers(kernel) is None
+    assert reminders(kernel) == ["ring"]
+    assert pending(kernel) == []
+
+
+async def test_a_busy_firing_stays_set_until_told_when_to_retry(kernel, clock, gate):
+    await remind(kernel, 1000.0, "ring")
+    held = asyncio.create_task(kernel.submit(kernel.runtime, "gate.hold", {}))
+    await gate.wait_entered()
+    tasks = [asyncio.create_task(kernel.submit(kernel.runtime, "note.silence", {})) for _ in range(1279)]
+    await asyncio.sleep(0)
+
+    due = await fire_timers(kernel)
+
+    assert due > 1000.0
+    assert pending(kernel) == ["ring"]
+    gate.release.set()
+    await asyncio.gather(held, *tasks)
+
+
+async def test_an_exposed_op_can_fire(kernel, clock):
+    timer = {"due": 1000.0, "op": "note.read", "args": {}, "key": "peek"}
+    args = {"type": "timer.set", "stream": "timer/peek", "data": timer}
+    result_of(await kernel.submit(kernel.runtime, "note.mark", args))
+
+    assert await fire_timers(kernel) is None
+
+    assert pending(kernel) == []
+
+
+@pytest.mark.parametrize("field", ["key", "op"])
+async def test_a_timer_name_past_the_limit_cannot_be_set(kernel, field):
+    timer = {"due": 1000.0, "op": "note.add", "args": {}, "key": "k"} | {field: "x" * 257}
+    args = {"type": "timer.set", "stream": "timer/k", "data": timer}
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.mark", args)) == "unavailable"
+    assert pending(kernel) == []
+
+
+async def test_a_timer_at_the_limit_fires_and_clears(kernel, clock):
+    await remind(kernel, 1000.0, "k" * 256)
+
+    await fire_timers(kernel)
+
+    assert reminders(kernel) == ["k" * 256]
+    assert pending(kernel) == []
 
 
 async def test_the_clock_daemon_sleeps_until_the_next_due_time(kernel, clock):

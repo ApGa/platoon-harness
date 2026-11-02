@@ -37,8 +37,12 @@ commands = st.lists(
         st.tuples(
             st.just("note.remind"), st.fixed_dictionaries({"due": st.just(1.0), "key": st.sampled_from("xy")}), KEYS
         ),
-        st.tuples(st.just("effect.start"), st.fixed_dictionaries({"id": st.integers(1, 12).map(str)}), KEYS),
-        st.tuples(st.just("effect.finish"), st.fixed_dictionaries({"id": st.integers(1, 12).map(str)}), KEYS),
+        st.tuples(st.just("effect.start"), st.fixed_dictionaries({"id": st.integers(1, 12)}), KEYS),
+        st.tuples(
+            st.just("effect.finish"),
+            st.fixed_dictionaries({"id": st.integers(1, 12), "attempt": st.integers(1, 2)}),
+            KEYS,
+        ),
         st.tuples(
             st.just("grant.add"),
             st.fixed_dictionaries({"who": st.sampled_from(["all", "role:x"]), "ops": st.just("*")}),

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .auth import Grants, Principals, add_grant, add_principal, authorize, remove_grant, revoke_principal
+from .auth import Grants, Principals, add_grant, add_principal, remove_grant, revoke_principal
 from .bodies import Tombstones, eraser_daemon, tombstone_body
 from .effects import (
     Effects,
@@ -17,11 +17,10 @@ from .extension import Extension
 from .model import Refused
 from .op import Args, Op, op
 from .timers import Timers, clear_timer, clock_daemon, next_timers
-from .txn import Commands, Stamps, Txn
+from .txn import Stamps, Txn
 
 CORE = (
-    Extension("command", views=[Commands]),
-    Extension("stamp", views=[Stamps]),
+    Extension("op", views=[Stamps]),
     Extension("principal", ops=[add_principal, revoke_principal], views=[Principals]),
     Extension("grant", ops=[add_grant, remove_grant], views=[Grants]),
     Extension(
@@ -36,11 +35,11 @@ CORE = (
 
 
 def list_ops(ops: dict[str, Op]) -> Op:
-    """Define `ops.list`, which every surface derives from, over a loaded op table."""
+    """Define `ops.list`, which every surface derives from, over a table filled once everything has loaded."""
 
     def permitted(txn: Txn, operation: Op) -> bool:
         try:
-            authorize(txn._db, txn.me, operation)
+            txn.view(Grants).authorize(txn.me, operation)
         except Refused:
             return False
         return True

@@ -102,6 +102,16 @@ async def test_a_path_prefix_does_not_confuse_descendants(kernel):
     assert not await allowed(kernel, Principal(id="agent:a"), "inbox/ab")
 
 
+async def test_a_namesake_of_another_kind_is_not_a_relative(kernel):
+    await enroll(kernel, Principal(id="agent:x"))
+    await enroll(kernel, Principal(id="human:x"))
+    await grant(kernel, "agent:x", "note.add", "inbox/{descendants}")
+    assert not await allowed(kernel, Principal(id="agent:x"), "inbox/x")
+
+    await enroll(kernel, Principal(id="agent:y"), parent="agent:x")
+    assert await allowed(kernel, Principal(id="agent:x"), "inbox/y")
+
+
 async def test_an_unknown_relation_is_refused_at_the_grant(kernel):
     outcome = await kernel.submit(kernel.runtime, "grant.add", {"who": "all", "ops": "*", "on": "inbox/{next}"})
     assert refusal_of(outcome) == "unsupported"
@@ -128,7 +138,7 @@ async def test_runtime_only_ops_cannot_be_granted(kernel):
     await enroll(kernel, HUMAN)
     await grant(kernel, "all", "*", "*")
 
-    for op_name, args in (("note.reset", {}), ("effect.start", {"id": "1"}), ("principal.revoke", {"id": "x"})):
+    for op_name, args in (("note.reset", {}), ("effect.start", {"id": 1}), ("principal.revoke", {"id": "x"})):
         assert refusal_of(await kernel.submit(HUMAN, op_name, args)) == "not_permitted"
     assert result_of(await kernel.submit(kernel.runtime, "note.reset", {})) is None
 
@@ -190,6 +200,12 @@ async def test_adding_a_principal_is_checked(kernel):
     assert [e.type for e in events_of(kernel)].count("principal.added") == 1
 
 
+async def test_one_token_names_one_principal(kernel):
+    await enroll(kernel, ALICE, token="s3cret")
+    args = {"id": "agent:bob", "token_hash": hash_token("s3cret")}
+    assert refusal_of(await kernel.submit(kernel.runtime, "principal.add", args)) == "conflict"
+
+
 async def test_ops_list_shows_what_a_caller_holds(kernel):
     await enroll(kernel, ALICE, scopes=["note.*", "ops.list"])
     await grant(kernel, "agent:alice", "note.add")
@@ -197,7 +213,8 @@ async def test_ops_list_shows_what_a_caller_holds(kernel):
 
     listed = result_of(kernel.query(ALICE, "ops.list", {}))
 
-    assert [entry["name"] for entry in listed] == ["note.add", "ops.list"]
-    assert listed[0]["tool"] is True
-    assert listed[0]["schema"]["additionalProperties"] is False
-    assert listed[0]["description"].startswith("Add copies")
+    entries = {entry["name"]: entry for entry in listed}
+    assert set(entries) == {"note.add", "ops.list"}
+    assert entries["note.add"]["tool"] is True
+    assert entries["note.add"]["schema"]["additionalProperties"] is False
+    assert entries["note.add"]["description"].startswith("Add copies")

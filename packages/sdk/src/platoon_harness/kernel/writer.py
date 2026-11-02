@@ -1,7 +1,9 @@
 """The writer thread: one connection, group commit, ack after COMMIT."""
 
 import asyncio
+import fcntl
 import logging
+import os
 import queue
 import sqlite3
 import threading
@@ -9,8 +11,10 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from .journal import Checkpointer, scrub_wal, truncate_wal
 from .model import Refused
 from .pulse import Pulse, settle
 
@@ -30,10 +34,22 @@ class _Job:
 
 
 class Writer:
-    """Drains jobs into transactions of up to BATCH_LIMIT, so one fsync covers a whole batch."""
+    """Holds the journal for writing: the one connection, the lock and the checkpoints.
 
-    def __init__(self, db: sqlite3.Connection, pulse: Pulse, seal: Callable[[sqlite3.Connection], int]) -> None:
+    Drains jobs into transactions of up to BATCH_LIMIT, so one fsync covers a whole batch.
+    """
+
+    def __init__(
+        self,
+        db: sqlite3.Connection,
+        flock: int,
+        path: Path,
+        pulse: Pulse,
+        seal: Callable[[sqlite3.Connection], int],
+    ) -> None:
         self._db = db
+        self._flock = flock
+        self._path = path
         self._pulse = pulse
         self._seal = seal
         self._jobs: queue.SimpleQueue[_Job | None] = queue.SimpleQueue()
@@ -42,26 +58,30 @@ class Writer:
         self._inflight: Counter[str] = Counter()
         self._batch_seconds = 0.001
         self._stopping = False
+        self._checkpointer = Checkpointer(path)
         self._thread = threading.Thread(target=self._run, name="journal-writer", daemon=True)
         self._thread.start()
 
-    async def call[T](self, run: Callable[[sqlite3.Connection], T], *, owner: str | None, runtime: bool = False) -> T:
+    async def call[T](self, run: Callable[[sqlite3.Connection], T], *, owner: str | None) -> T:
         """Run `run` on the writer thread and return once its transaction is durable."""
-        future = asyncio.get_running_loop().create_future()
-        self._admit(owner, runtime)
-        self._jobs.put(_Job(run, future, owner))
-        return await future
+        job = _Job(run, asyncio.get_running_loop().create_future(), owner)
+        self._admit(job)
+        return await job.future
 
-    def _admit(self, owner: str | None, runtime: bool) -> None:
+    def _admit(self, job: _Job) -> None:
+        """Queue a job or refuse it. Queueing under the lock puts every job ahead of the stop."""
+        owner = job.owner
+        reserved = owner == "runtime"
         with self._lock:
             if self._stopping:
                 raise Refused("unavailable", "the kernel is closing")
-            limit = SESSION_LIMIT + RUNTIME_RESERVE if runtime else SESSION_LIMIT
-            if self._depth >= limit or (not runtime and owner and self._inflight[owner] >= PRINCIPAL_LIMIT):
+            limit = SESSION_LIMIT + RUNTIME_RESERVE if reserved else SESSION_LIMIT
+            if self._depth >= limit or (not reserved and owner and self._inflight[owner] >= PRINCIPAL_LIMIT):
                 raise Refused("busy", retry_after=(self._depth / BATCH_LIMIT + 1) * self._batch_seconds)
             self._depth += 1
             if owner:
                 self._inflight[owner] += 1
+            self._jobs.put(job)
 
     def _done(self, job: _Job) -> None:
         with self._lock:
@@ -71,12 +91,25 @@ class Writer:
                 if not self._inflight[job.owner]:
                     del self._inflight[job.owner]
 
+    def scrub(self) -> None:
+        """Take erased bytes out of the WAL, or refuse `busy` while a reader holds them there."""
+        if not scrub_wal(self._path):
+            raise Refused("busy", "a reader is holding the WAL", retry_after=1.0)
+
     def stop(self) -> None:
-        """Finish everything queued, then end the thread."""
+        """Finish everything queued, checkpoint the WAL to empty, and let go of the journal."""
         with self._lock:
             self._stopping = True
-        self._jobs.put(None)
+            self._jobs.put(None)
         self._thread.join()
+        self._checkpointer.stop()
+        try:
+            if not truncate_wal(self._db):
+                log.warning("%s keeps a WAL: a reader held it, so the folder is not portable yet", self._path)
+        finally:
+            self._db.close()
+            fcntl.flock(self._flock, fcntl.LOCK_UN)
+            os.close(self._flock)
 
     def _run(self) -> None:
         running = True
@@ -105,28 +138,31 @@ class Writer:
             db.execute("BEGIN IMMEDIATE")
             for job in jobs:
                 results.append(self._attempt(job))
-            head = self._seal(db)
+            sealed = self._seal(db)
             db.execute("COMMIT")
-        except Exception as error:
+            head = sealed
+        except BaseException as error:
             log.exception("batch of %d failed", len(jobs))
-            if db.in_transaction:
-                db.execute("ROLLBACK")
+            self._roll_back()
             results = [Refused("unavailable", f"journal: {error}")] * len(jobs)
-            head = None
         if head is not None:
-            self._pulse.head = head  # Whoever is acked must find their write under `head`.
+            self._pulse.publish(head)
         settle((job.future, result) for job, result in zip(jobs, results, strict=True))
         for job in jobs:
             self._done(job)
-        if head is not None:
-            self._pulse.publish(head)
         self._batch_seconds = time.perf_counter() - started
 
     def _attempt(self, job: _Job) -> Any:
-        """A job's failure is its own, unless it took the transaction with it."""
+        """A refusal is the job's own. Anything else takes the batch with it."""
         try:
             return job.run(self._db)
-        except Exception as error:
-            if not self._db.in_transaction:
-                raise
-            return error
+        except Refused as refused:
+            return refused
+
+    def _roll_back(self) -> None:
+        """Leave no batch behind. If that fails too, the next batch fails at BEGIN and says so."""
+        try:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+        except sqlite3.Error:
+            log.exception("a rollback failed")

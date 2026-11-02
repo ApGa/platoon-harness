@@ -5,9 +5,9 @@ import sqlite3
 
 import pytest
 
-from platoon_harness.kernel import Args, Extension, Kernel, Refused, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, Principal, Refused, Txn, op
 
-from .support import ALICE, HUMAN, events_of, notes, refusal_of, refused_code, result_of
+from .support import ALICE, HUMAN, enroll, events_of, notes, refusal_of, refused_code, result_of
 
 
 async def add(kernel, count: int, stream: str = "note/a") -> None:
@@ -18,9 +18,9 @@ async def add(kernel, count: int, stream: str = "note/a") -> None:
 async def test_read_pages_through_the_journal(kernel):
     await add(kernel, 5)
 
-    first = kernel.read(HUMAN, after=0, limit=2)
-    second = kernel.read(HUMAN, after=first.cursor, limit=2)
-    third = kernel.read(HUMAN, after=second.cursor, limit=2)
+    first = kernel.read(kernel.runtime, after=0, limit=2)
+    second = kernel.read(kernel.runtime, after=first.cursor, limit=2)
+    third = kernel.read(kernel.runtime, after=second.cursor, limit=2)
 
     assert [e.seq for e in first.events] == [1, 2]
     assert [e.seq for e in second.events] == [3, 4]
@@ -32,7 +32,7 @@ async def test_read_matches_stream_names(kernel):
     await add(kernel, 2, "note/a")
     await add(kernel, 1, "other/b")
 
-    page = kernel.read(HUMAN, after=0, match="note/*")
+    page = kernel.read(kernel.runtime, after=0, match="note/*")
 
     assert [e.stream for e in page.events] == ["note/a", "note/a"]
     assert page.cursor == 3
@@ -42,17 +42,53 @@ async def test_a_filtered_page_is_bounded_by_what_it_scans(kernel):
     await add(kernel, 3, "other/b")
     await add(kernel, 3, "note/a")
 
-    page = kernel.read(HUMAN, after=0, match="note/*", limit=2)
+    page = kernel.read(kernel.runtime, after=0, match="note/*", limit=2)
 
     assert [e.seq for e in page.events] == [4, 5]
     assert page.cursor == 5
-    assert kernel.read(HUMAN, after=page.cursor, match="note/*", limit=2).events[0].seq == 6
+    assert kernel.read(kernel.runtime, after=page.cursor, match="note/*", limit=2).events[0].seq == 6
 
 
 async def test_reading_past_the_head_is_empty(kernel):
     await add(kernel, 1)
-    page = kernel.read(HUMAN, after=9)
+    page = kernel.read(kernel.runtime, after=9)
     assert (page.events, page.cursor, page.head) == ((), 9, 1)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"after": 0, "limit": 0},
+        {"after": 0, "limit": -1},
+        {"after": 0, "limit": 4097},
+        {"after": 0, "limit": 2**64},
+        {"after": -1},
+        {"after": 2**70},
+        {"after": 0, "match": "\ud800"},
+    ],
+)
+async def test_a_bad_page_is_refused_and_harms_no_reader(kernel, args):
+    await add(kernel, 1)
+
+    with pytest.raises(Refused) as error:
+        kernel.read(kernel.runtime, **args)
+
+    assert refused_code(error) == "invalid"
+    assert len(kernel.read(kernel.runtime, after=0).events) == 1
+
+
+async def test_a_failure_inside_a_read_leaves_no_transaction_behind(kernel):
+    with pytest.raises(sqlite3.ProgrammingError), kernel._reading() as db:
+        db.execute("SELECT ?", (object(),))
+
+    assert not kernel._idle.get_nowait().in_transaction
+
+
+async def test_a_connection_that_cannot_end_cleanly_does_not_go_back(kernel):
+    with kernel._reading() as db:
+        db.execute("COMMIT")
+
+    assert kernel._idle.empty()
 
 
 async def test_read_is_refused_for_agents(kernel):
@@ -63,9 +99,47 @@ async def test_read_is_refused_for_agents(kernel):
         await anext(aiter(kernel.follow(ALICE, after=0)))
 
 
+async def test_read_is_for_live_principals(kernel):
+    with pytest.raises(Refused) as error:
+        kernel.read(Principal(id="human:ghost"), after=0)
+    assert refused_code(error) == "not_permitted"
+    with pytest.raises(Refused):
+        await anext(aiter(kernel.follow(Principal(id="human:ghost"), after=0)))
+
+    await enroll(kernel, HUMAN)
+    assert kernel.read(HUMAN, after=0).head == 1
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": HUMAN.id}))
+    with pytest.raises(Refused):
+        kernel.read(HUMAN, after=0)
+
+
+async def test_a_follower_stops_at_its_revocation(kernel):
+    await enroll(kernel, HUMAN)
+    follower = kernel.follow(HUMAN, after=0)
+    await anext(follower)
+
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": HUMAN.id}))
+
+    with pytest.raises(Refused) as error:
+        await anext(follower)
+    assert refused_code(error) == "not_permitted"
+
+
+async def test_another_followers_revocation_changes_nothing(kernel):
+    await enroll(kernel, HUMAN)
+    await enroll(kernel, Principal(id="human:bo"))
+    follower = kernel.follow(HUMAN, after=0)
+    await anext(follower)
+
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": "human:bo"}))
+
+    assert [event.type for event in (await anext(follower)).events] == ["principal.revoked"]
+    await follower.aclose()
+
+
 async def test_follow_is_catch_up_then_live(kernel):
     await add(kernel, 2)
-    follower = kernel.follow(HUMAN, after=0)
+    follower = kernel.follow(kernel.runtime, after=0)
 
     caught_up = await anext(follower)
     pending = asyncio.ensure_future(anext(follower))
@@ -80,7 +154,7 @@ async def test_follow_is_catch_up_then_live(kernel):
 
 
 async def test_follow_does_not_wake_for_events_it_filters_out(kernel):
-    follower = kernel.follow(HUMAN, after=0, match="note/*")
+    follower = kernel.follow(kernel.runtime, after=0, match="note/*")
     pending = asyncio.ensure_future(anext(follower))
     await add(kernel, 1, "other/b")
     await add(kernel, 1, "note/a")
@@ -95,7 +169,7 @@ async def test_followers_at_the_tail_share_one_read(kernel):
     fetches = []
     fetch = kernel._tail._fetch
     kernel._tail._fetch = lambda after: fetches.append(after) or fetch(after)
-    followers = [kernel.follow(HUMAN, after=0) for _ in range(20)]
+    followers = [kernel.follow(kernel.runtime, after=0) for _ in range(20)]
     pending = [asyncio.ensure_future(anext(follower)) for follower in followers]
     await asyncio.sleep(0)
 
@@ -111,7 +185,7 @@ async def test_followers_at_the_tail_share_one_read(kernel):
 async def test_a_follower_past_the_tail_pages_by_sql(kernel):
     await asyncio.gather(*(kernel.submit(kernel.runtime, "note.add", {}) for _ in range(1100)))
     seen = []
-    async for page in kernel.follow(HUMAN, after=0):
+    async for page in kernel.follow(kernel.runtime, after=0):
         seen += [event.seq for event in page.events]
         if page.cursor >= page.head:
             break
@@ -125,7 +199,7 @@ async def test_the_tail_and_a_read_agree_on_what_matches(kernel):
     await add(kernel, 1, "note/b")
     for pattern in ("note/*", "note/[!a]", "*/a", "note/?"):
         by_tail = kernel._tail.page(0, pattern, kernel.head)
-        by_sql = kernel.read(HUMAN, after=0, match=pattern)
+        by_sql = kernel.read(kernel.runtime, after=0, match=pattern)
         assert [e.seq for e in by_tail.events] == [e.seq for e in by_sql.events]
 
 
@@ -140,7 +214,7 @@ async def test_follow_ends_when_the_kernel_closes(kernel):
     pages = []
 
     async def collect() -> None:
-        async for page in kernel.follow(HUMAN, after=0):
+        async for page in kernel.follow(kernel.runtime, after=0):
             pages.append(page)
 
     task = asyncio.create_task(collect())
@@ -159,7 +233,7 @@ async def test_follow_of_a_closed_journal_ends_at_the_head(folder, clock):
     kernel.close()
 
     reader = Kernel.open(folder, clock=clock, read_only=True)
-    pages = [page async for page in reader.follow(HUMAN, after=0)]
+    pages = [page async for page in reader.follow(reader.runtime, after=0)]
     assert [len(page.events) for page in pages] == [2]
     reader.close()
 
@@ -191,14 +265,19 @@ async def test_queries_cannot_write(folder, clock):
     kernel.close()
 
 
-async def test_a_query_sees_one_snapshot(kernel):
+async def test_a_read_sees_one_snapshot(kernel):
     with kernel._reading() as db:
-        db.execute("BEGIN")
         assert db.execute("SELECT count(*) FROM events").fetchone()[0] == 0
         await add(kernel, 1)
         assert db.execute("SELECT count(*) FROM events").fetchone()[0] == 0
-        db.execute("COMMIT")
+    with kernel._reading() as db:
         assert db.execute("SELECT count(*) FROM events").fetchone()[0] == 1
+
+
+async def test_a_closed_kernel_refuses_queries_with_an_outcome(kernel):
+    kernel.close()
+    assert refusal_of(kernel.query(kernel.runtime, "note.list", {})) == "unavailable"
+    assert refusal_of(await kernel.submit(HUMAN, "note.read", {})) == "unavailable"
 
 
 def test_read_connections_are_read_only(folder, clock):
@@ -218,7 +297,7 @@ async def test_deltas_are_live_and_never_journaled(kernel):
     frame = await pending
     kernel.push_delta("bob", "other")
 
-    assert (frame.agent, frame.n, frame.text, frame.lag) == ("alice", 1, "hel", 0)
+    assert (frame.agent, frame.frame, frame.text, frame.lag) == ("alice", 1, "hel", 0)
     assert events_of(kernel) == []
     await frames.aclose()
 
@@ -248,6 +327,11 @@ async def test_a_late_reader_of_deltas_starts_with_what_is_held(kernel):
 
     assert (frame.text, frame.lag) == ("44", 0)
     await frames.aclose()
+
+
+async def test_deltas_asked_for_after_close_end_at_once(kernel):
+    kernel.close()
+    assert [delta async for delta in kernel.deltas("nobody-yet")] == []
 
 
 async def test_deltas_end_when_the_kernel_closes(kernel):

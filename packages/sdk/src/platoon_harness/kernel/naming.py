@@ -4,12 +4,11 @@ from functools import lru_cache
 
 from .model import Refused
 
-# Words that read as past tense without ending in -ed, and `uncertain`, the one state the design names as an event.
+# Words that read as past tense without ending in -ed.
 # fmt: off
 _PAST_FORMS = frozenset({
     "begun", "built", "chosen", "cut", "done", "drawn", "found", "given", "held", "kept", "left", "lost", "made", "met",
-    "paid", "put", "read", "run", "sent", "set", "shown", "spent", "split", "taken", "told", "uncertain", "won",
-    "written",
+    "paid", "put", "read", "run", "sent", "set", "shown", "spent", "split", "taken", "told", "won", "written",
 })
 # fmt: on
 _SAME_IN_THE_IMPERATIVE = frozenset({"cut", "put", "read", "run", "set", "split"})
@@ -32,7 +31,7 @@ def check_op_name(name: str, extension: str) -> None:
 
 @lru_cache(maxsize=4096)
 def check_event_type(event_type: str) -> None:
-    """Refuse an event type that is not `<namespace>.<past tense>`."""
+    """Refuse an event type that is not `<namespace>.<past tense>`. `effect.uncertain` names a state."""
     namespace, _, word = event_type.rpartition(".")
-    if not namespace or not _past_tense(word):
+    if event_type != "effect.uncertain" and (not namespace or not _past_tense(word)):
         raise Refused("invalid", f"event {event_type} must be past tense under a namespace")

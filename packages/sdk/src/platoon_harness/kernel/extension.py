@@ -1,8 +1,7 @@
 """Extensions: what a kernel loads, core and third party alike."""
 
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 from .daemon import Daemon
 from .model import Refused
@@ -13,22 +12,18 @@ from .view import View, tables_of
 
 @dataclass(frozen=True)
 class Extension:
-    """A named set of ops, views, daemons and components. The name is the ops' namespace."""
+    """A named set of ops, views and daemons. The name is the ops' namespace."""
 
     name: str
     ops: Sequence[Op] = ()
     views: Sequence[type[View]] = ()
     daemons: Sequence[Daemon] = ()
-    presets: Mapping[str, Any] = field(default_factory=dict)
-    workspaces: Mapping[str, Any] = field(default_factory=dict)
-    exporters: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class Loaded:
     """Several extensions with every collision and naming fault refused."""
 
-    extensions: tuple[Extension, ...]
     ops: dict[str, Op]
     views: tuple[type[View], ...]
     daemons: tuple[Daemon, ...]
@@ -36,8 +31,7 @@ class Loaded:
 
 def load(extensions: Iterable[Extension]) -> Loaded:
     """Check extensions against each other and the naming law."""
-    extensions = tuple(extensions)
-    owners: dict[tuple[str, str], str] = {}
+    owners = {("table", "v_folds"): "the kernel"}
 
     def claim(kind: str, name: str, owner: str) -> None:
         if (kind, name) in owners:
@@ -56,15 +50,12 @@ def load(extensions: Iterable[Extension]) -> Loaded:
             ops[operation.name] = operation
         for view in extension.views:
             claim("view", view.name, owner)
-            tables_of(view)
+            for table in tables_of(view):
+                claim("table", table, owner)
             for event_type in view._folds:
-                if event_type != "*":
-                    check_event_type(event_type)
+                check_event_type(event_type)
             views.append(view)
         for daemon in extension.daemons:
             claim("daemon", daemon.name, owner)
             daemons.append(daemon)
-        for kind in ("presets", "workspaces", "exporters"):
-            for name in getattr(extension, kind):
-                claim(kind, name, owner)
-    return Loaded(extensions, ops, tuple(views), tuple(daemons))
+    return Loaded(ops, tuple(views), tuple(daemons))

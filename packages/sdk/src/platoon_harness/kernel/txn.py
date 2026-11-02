@@ -4,9 +4,9 @@ import json
 import re
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any, Literal, NoReturn
+from typing import Any, Literal
 
-from .journal import head, insert, stream_version
+from .journal import insert, last_seq, stream_version
 from .model import (
     DATA_LIMIT,
     GIST_LIMIT,
@@ -14,7 +14,6 @@ from .model import (
     ModelRef,
     Outcome,
     Principal,
-    RefusalCode,
     Refused,
     canonical,
     jsonable,
@@ -23,53 +22,21 @@ from .naming import check_event_type
 from .view import View, fold
 
 _STREAM = re.compile(r"[^\s@#]+")
+_STREAM_LIMIT = 512
 _REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>\d+)(#\S+)?")
 _BODY_REF = re.compile(r"sha256:(?P<sha256>[0-9a-f]{64})")
 
 
-class Commands(View):
-    """The answer to each keyed command, so a retry receives the first one."""
-
-    _folds_outcomes = True
-    schema = """
-    CREATE TABLE v_commands(
-        actor TEXT NOT NULL,
-        key TEXT NOT NULL,
-        op TEXT NOT NULL,
-        args_hash TEXT NOT NULL,
-        outcome TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        PRIMARY KEY (actor, key)
-    ) WITHOUT ROWID, STRICT;
-    """
-
-    @fold("*")
-    def recorded(self, event: Event) -> None:
-        outcome = event.outcome
-        if outcome is not None and outcome.key is not None:
-            self.db.execute(
-                "INSERT OR IGNORE INTO v_commands VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    event.actor,
-                    outcome.key,
-                    outcome.op,
-                    outcome.args_hash,
-                    outcome.model_dump_json(exclude={"seq"}),
-                    event.seq,
-                ),
-            )
-
-    def get(self, actor: str, key: str) -> Outcome | None:
-        row = self.db.execute(
-            "SELECT outcome, seq FROM v_commands WHERE actor = ? AND key = ?", (actor, key)
-        ).fetchone()
-        return (
-            None if row is None else Outcome.model_validate_json(row["outcome"]).model_copy(update={"seq": row["seq"]})
-        )
+def _named(payload: Any, field: str) -> str:
+    """The name a boundary event opens."""
+    name = payload.get(field) if isinstance(payload, dict) else None
+    if not isinstance(name, str):
+        raise Refused("invalid", f"this event needs a {field}")
+    return name
 
 
 class Stamps(View):
-    """The open turn of each agent and the open episode, for stamping the envelope."""
+    """What `emit` stamps: the open turn of each agent, the open episode, and the version of any stream."""
 
     schema = "CREATE TABLE v_stamps(scope TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID, STRICT;"
 
@@ -92,19 +59,32 @@ class Stamps(View):
     def turn(self, agent: str | None) -> str | None:
         return None if agent is None else self._get(f"turn/{agent}")
 
+    def open_turns(self) -> dict[str, str]:
+        """Each agent with a turn in flight, and that turn."""
+        rows = self.db.execute("SELECT scope, value FROM v_stamps WHERE scope GLOB 'turn/*'")
+        return {row["scope"].removeprefix("turn/"): row["value"] for row in rows}
+
     def episode(self) -> str | None:
         return self._get("episode")
+
+    def version_of(self, stream: str) -> int:
+        """A stream's version: a group's generation, a board object's version. Read it before emitting.
+
+        A command's last event is written when the op returns, so this cannot see that one.
+        """
+        return stream_version(self.db, stream)
 
 
 class Txn:
     """What an op receives, and all an op receives. Fixed for one command: `me` and `now`."""
 
-    __slots__ = ("_apply", "_db", "_held", "me", "now")
+    __slots__ = ("_apply", "_db", "_fault", "_held", "me", "now")
 
     def __init__(self, db: sqlite3.Connection, me: Principal, now: float, apply: Callable[[Event], None] | None = None):
         self._db = db
         self._apply = apply
         self._held: tuple[Event, str] | None = None
+        self._fault: BaseException | None = None
         self.me = me
         self.now = now
 
@@ -133,19 +113,18 @@ class Txn:
             raise Refused("unsupported", "a query cannot emit")
         self._flush()
         check_event_type(type)
-        if _STREAM.fullmatch(stream) is None:
+        if _STREAM.fullmatch(stream) is None or len(stream) > _STREAM_LIMIT:
             raise Refused("invalid", f"bad stream name: {stream!r}")
         if len(gist) > GIST_LIMIT:
             raise Refused("invalid", f"gist exceeds {GIST_LIMIT} characters")
         text = self._encode(data)
-        if len(text.encode()) > DATA_LIMIT:
-            raise Refused("invalid", f"data exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
-
-        db = self._db
-        seq = head(db) + 1
-        version = stream_version(db, stream) + 1
         cause = tuple(cause)
         based_on = tuple(based_on)
+        self._encode((cause, based_on, native, correlation))
+
+        db = self._db
+        seq = last_seq(db) + 1
+        version = stream_version(db, stream) + 1
         for earlier in cause:
             if not 0 < earlier < seq:
                 raise Refused("not_found", f"cause {earlier} does not point backward")
@@ -156,6 +135,16 @@ class Txn:
         if agent is None and self.me.kind == "agent":
             agent = self.me.name
         stamps = Stamps(db)
+        turn = stamps.turn(agent)
+        episode = stamps.episode()
+        if type == "turn.started":
+            turn = _named(payload, "turn")
+            if agent is None:
+                raise Refused("invalid", "a turn belongs to an agent")
+        elif type == "episode.opened":
+            if episode is not None:
+                raise Refused("conflict", f"episode {episode} is open")
+            episode = _named(payload, "episode")
         context = f"context/{agent}"
         event = Event.model_construct(
             v=v,
@@ -165,9 +154,9 @@ class Txn:
             type=type,
             actor=self.me.id,
             agent=agent,
-            turn=payload["turn"] if type == "turn.started" else stamps.turn(agent),
+            turn=turn,
             context_version=None if agent is None else self._version_of(context, stream, version),
-            episode=payload["episode"] if type == "episode.opened" else stamps.episode(),
+            episode=episode,
             topology_rev=self._version_of("topology", stream, version),
             correlation=correlation,
             cause=cause,
@@ -180,7 +169,11 @@ class Txn:
             outcome=None,
         )
         self._held = (event, text)
-        self._apply(event)
+        try:
+            self._apply(event)
+        except BaseException as error:
+            self._fault = error  # An op may catch this. The command must still fail, or a half fold commits.
+            raise
         return event
 
     def effect(
@@ -192,13 +185,13 @@ class Txn:
         timeout: float | None = None,
         priority: int = 0,
         agent: str | None = None,
-    ) -> str:
+    ) -> int:
         """Request a touch of the world and return the effect's id.
 
         Effects of one agent run in order; a priority above zero goes first and bypasses that order.
         """
         self._flush()
-        effect = str(head(self._db) + 1)
+        effect = last_seq(self._db) + 1
         self.emit(
             "effect.requested",
             f"effect/{effect}",
@@ -215,22 +208,15 @@ class Txn:
         )
         return effect
 
-    def refuse(
-        self,
-        code: RefusalCode,
-        detail: Any = "",
-        *,
-        reachable: tuple[str, ...] | None = None,
-        retry_after: float | None = None,
-    ) -> NoReturn:
-        """End the command with a refusal. Its events roll back and the refusal is journaled."""
-        raise Refused(code, detail, reachable=reachable, retry_after=retry_after)
-
     def _encode(self, data: Any) -> str:
         try:
-            return canonical(jsonable(data))
+            text = canonical(jsonable(data))
+            size = len(text.encode())
         except ValueError as error:
             raise Refused("invalid", f"data is not JSON: {error}") from None
+        if size > DATA_LIMIT:
+            raise Refused("invalid", f"data exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
+        return text
 
     def _version_of(self, name: str, stream: str, version: int) -> int:
         return version if name == stream else stream_version(self._db, name)
@@ -254,15 +240,16 @@ class Txn:
             insert(self._db, *self._held)
             self._held = None
 
-    def _finish(self, outcome: Outcome) -> Event:
+    def _finish(self, outcome: Outcome) -> Outcome:
         """Put the outcome on the command's last event, which only now can be written."""
+        if self._fault is not None:
+            raise self._fault
         if self._held is None:
             stream = f"commands/{self.me.id}"
             self.emit("op.completed", stream, gist=f"{outcome.op} completed", data={"op": outcome.op})
         assert self._held is not None
         event, text = self._held
-        event = event.model_copy(update={"outcome": outcome})
-        insert(self._db, event, text)
+        outcome = outcome.model_copy(update={"seq": event.seq})
+        insert(self._db, event.model_copy(update={"outcome": outcome}), text)
         self._held = None
-        Commands(self._db).recorded(event)
-        return event
+        return outcome

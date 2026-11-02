@@ -72,7 +72,7 @@ def add(txn: Txn, a: Note) -> dict[str, Any]:
             refs=a.refs,
         )
     if a.fail:
-        txn.refuse("conflict", "told to fail")
+        raise Refused("conflict", "told to fail")
     assert event is not None
     return {"seq": event.seq, "version": event.version}
 
@@ -117,7 +117,7 @@ class Dispatch(Args):
 
 
 @op("note.dispatch")
-def dispatch(txn: Txn, a: Dispatch) -> str:
+def dispatch(txn: Txn, a: Dispatch) -> int:
     """Request an effect."""
     return txn.effect(
         a.kind, {"kind": a.kind}, on_uncertain=a.on_uncertain, timeout=a.timeout, priority=a.priority, agent=a.agent

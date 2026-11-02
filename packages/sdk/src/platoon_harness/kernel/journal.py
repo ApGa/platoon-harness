@@ -12,6 +12,7 @@ import platform
 import sqlite3
 import sys
 import threading
+import time
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import NamedTuple
@@ -25,6 +26,8 @@ SCHEMA_VERSION = 1
 CHECKPOINT_SECONDS = 1.0
 WAL_ALARM_FRAMES = 16000
 
+_LOCK_PAUSES = (0.001, 0.01, 0.0)
+_TRUNCATE_WAIT_MS = 250
 _READ_PRAGMAS = ("cache_size=-8192", "mmap_size=0", "temp_store=MEMORY")
 _WRITE_PRAGMAS = (
     "synchronous=FULL",
@@ -32,6 +35,7 @@ _WRITE_PRAGMAS = (
     "checkpoint_fullfsync=ON",
     "wal_autocheckpoint=16000",
     "journal_size_limit=67108864",
+    "secure_delete=ON",
 )
 
 _SCHEMA = """
@@ -61,6 +65,8 @@ CREATE TABLE events(
     UNIQUE (stream, version)
 ) STRICT;
 
+CREATE INDEX events_command ON events(actor, outcome ->> '$.key') WHERE outcome ->> '$.key' IS NOT NULL;
+
 CREATE TABLE bodies(sha256 TEXT PRIMARY KEY, size INTEGER NOT NULL, data BLOB) WITHOUT ROWID, STRICT;
 
 CREATE TABLE v_folds(
@@ -68,6 +74,10 @@ CREATE TABLE v_folds(
     version INTEGER NOT NULL,
     high_water INTEGER NOT NULL
 ) WITHOUT ROWID, STRICT;
+
+CREATE TRIGGER events_no_replace BEFORE INSERT ON events
+WHEN EXISTS (SELECT 1 FROM events WHERE seq = NEW.seq OR (stream = NEW.stream AND version = NEW.version))
+BEGIN SELECT RAISE(ABORT, 'events are immutable'); END;
 
 CREATE TRIGGER events_no_update BEFORE UPDATE ON events
 BEGIN SELECT RAISE(ABORT, 'events are immutable'); END;
@@ -176,14 +186,19 @@ def require_local(path: Path) -> None:
 
 
 def take_lock(path: Path) -> int:
-    """Become the one live writer, or refuse. The lock dies with the process."""
+    """Become the one live writer, or refuse. The lock dies with the process.
+
+    A first refusal may be `is_live` holding the lock for an instant, so only a lasting one counts.
+    """
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(fd)
-        raise Refused("unavailable", f"another runtime holds {path}") from None
-    return fd
+    for pause in _LOCK_PAUSES:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except BlockingIOError:
+            time.sleep(pause)
+    os.close(fd)
+    raise Refused("unavailable", f"another runtime holds {path}")
 
 
 def is_live(folder: Path) -> bool:
@@ -202,6 +217,13 @@ def is_live(folder: Path) -> bool:
     finally:
         os.close(fd)
     return False
+
+
+def fingerprint(folder: Path) -> tuple[int, int, int]:
+    """What a writer changes. `immutable=1` tells SQLite not to look, so a reader of a closed journal must."""
+    journal = (folder / "journal.sqlite").stat()
+    wal = folder / "journal.sqlite-wal"
+    return journal.st_mtime_ns, journal.st_size, wal.stat().st_size if wal.exists() else 0
 
 
 def reader_uri(folder: Path, *, immutable: bool = False) -> str:
@@ -240,11 +262,14 @@ def open_writer(path: Path, created: float) -> sqlite3.Connection:
             [("schema_version", str(SCHEMA_VERSION)), ("session_id", uuid4().hex), ("created", repr(created))],
         )
         db.execute("COMMIT")
+    return db
+
+
+def check_schema(db: sqlite3.Connection) -> None:
+    """Refuse a journal this kernel cannot read."""
     found = int(db.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0])
     if found != SCHEMA_VERSION:
-        db.close()
         raise Refused("unsupported", f"journal schema {found}; this kernel reads {SCHEMA_VERSION}")
-    return db
 
 
 def checkpoint(db: sqlite3.Connection) -> None:
@@ -252,6 +277,21 @@ def checkpoint(db: sqlite3.Connection) -> None:
     _, logged, moved = db.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
     if logged - moved > WAL_ALARM_FRAMES:
         log.warning("%d WAL frames cannot be checkpointed: a reader is holding a snapshot", logged - moved)
+
+
+def truncate_wal(db: sqlite3.Connection) -> bool:
+    """Checkpoint the WAL to empty. False means a reader kept it from emptying."""
+    db.execute(f"PRAGMA busy_timeout={_TRUNCATE_WAIT_MS}")
+    return db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0] == 0
+
+
+def scrub_wal(path: Path) -> bool:
+    """Truncate the WAL beside a working writer, on a connection of its own."""
+    db = _connect_writable(path)
+    try:
+        return truncate_wal(db)
+    finally:
+        db.close()
 
 
 class Checkpointer:
@@ -276,7 +316,7 @@ class Checkpointer:
         self._thread.join()
 
 
-def head(db: sqlite3.Connection) -> int:
+def last_seq(db: sqlite3.Connection) -> int:
     return db.execute("SELECT coalesce(max(seq), 0) FROM events").fetchone()[0]
 
 
@@ -294,16 +334,24 @@ def insert(db: sqlite3.Connection, event: Event, data: str) -> None:
             json.dumps(dict(event.native), sort_keys=True),
             None if event.model is None else event.model.model_dump_json(),
             data,
-            None if event.outcome is None else event.outcome.model_dump_json(exclude={"seq"}),
+            None if event.outcome is None else event.outcome.model_dump_json(),
         ),
     )
+
+
+def prior_outcome(db: sqlite3.Connection, actor: str, key: str) -> Outcome | None:
+    """The first answer given under a key, so a retry receives it, refusals included."""
+    row = db.execute(
+        "SELECT outcome FROM events WHERE actor = ? AND outcome ->> '$.key' = ? ORDER BY seq LIMIT 1", (actor, key)
+    ).fetchone()
+    return None if row is None else Outcome.model_validate_json(row["outcome"])
 
 
 def decode(row: sqlite3.Row, *, with_outcome: bool = True) -> Event:
     """Rebuild an event from its row. Rows are ours, so nothing is revalidated."""
     outcome = None
     if with_outcome and row["outcome"] is not None:
-        outcome = Outcome.model_validate_json(row["outcome"]).model_copy(update={"seq": row["seq"]})
+        outcome = Outcome.model_validate_json(row["outcome"])
     return Event.model_construct(
         **{column: row[column] for column in _PLAIN_COLUMNS},
         cause=tuple(json.loads(row["cause"])),

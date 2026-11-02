@@ -1,5 +1,6 @@
 """The session folder: one writer, a versioned schema, and where a journal may live."""
 
+import fcntl
 import logging
 import os
 import sqlite3
@@ -7,6 +8,7 @@ import sqlite3
 import pytest
 
 from platoon_harness.kernel import Filesystem, Kernel, Refused, filesystem, journal
+from platoon_harness.kernel import writer as writer_module
 
 from .support import dump, events_of, notes, refusal_of, refused_code, result_of
 
@@ -23,10 +25,11 @@ from .support import dump, events_of, notes, refusal_of, refused_code, result_of
         ("temp_store", 2),
         ("wal_autocheckpoint", 16000),
         ("journal_size_limit", 67108864),
+        ("secure_delete", 1),
     ],
 )
 async def test_journal_uses_the_pragmas_the_spike_chose(kernel, pragma, value):
-    assert kernel._db.execute(f"PRAGMA {pragma}").fetchone()[0] == value
+    assert kernel._writer._db.execute(f"PRAGMA {pragma}").fetchone()[0] == value
 
 
 async def test_a_checkpoint_moves_the_wal_off_the_commit_path(kernel, folder):
@@ -59,10 +62,41 @@ async def test_a_pinned_wal_raises_an_alarm(kernel, folder, caplog, monkeypatch)
 
 async def test_closing_stops_the_checkpoint_thread(folder, clock):
     kernel = Kernel.open(folder, clock=clock)
-    thread = kernel._checkpointer._thread
+    thread = kernel._writer._checkpointer._thread
     assert thread.is_alive()
     kernel.close()
     assert not thread.is_alive()
+
+
+async def test_closing_with_a_reader_on_the_wal_says_so(folder, clock, caplog):
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    reader = sqlite3.connect(folder / "journal.sqlite", autocommit=True)
+    reader.execute("BEGIN")
+    reader.execute("SELECT count(*) FROM events").fetchone()
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+
+    with caplog.at_level(logging.WARNING, "platoon_harness.kernel"):
+        kernel.close()
+
+    assert "keeps a WAL" in caplog.text
+    reader.close()
+    Kernel.open(folder, clock=clock, extensions=[notes]).close()
+
+
+async def test_a_failing_close_still_lets_go_of_the_lock(folder, clock, monkeypatch):
+    kernel = Kernel.open(folder, clock=clock)
+
+    def failing(db):
+        raise sqlite3.OperationalError("database table is locked")
+
+    monkeypatch.setattr(writer_module, "truncate_wal", failing)
+    with pytest.raises(sqlite3.OperationalError):
+        kernel.close()
+    monkeypatch.undo()
+
+    assert kernel.closed
+    Kernel.open(folder, clock=clock).close()
 
 
 def test_one_writer_holds_the_lock(folder, clock):
@@ -71,6 +105,15 @@ def test_one_writer_holds_the_lock(folder, clock):
         Kernel.open(folder, clock=clock)
     assert refused_code(error) == "unavailable"
     first.close()
+    Kernel.open(folder, clock=clock).close()
+
+
+def test_a_reader_probing_the_lock_cannot_refuse_a_writer(folder, clock, monkeypatch):
+    Kernel.open(folder, clock=clock).close()
+    probe = os.open(folder / "lock", os.O_RDONLY)
+    fcntl.flock(probe, fcntl.LOCK_SH)
+    monkeypatch.setattr(journal.time, "sleep", lambda seconds: os.close(probe))
+
     Kernel.open(folder, clock=clock).close()
 
 
@@ -94,6 +137,16 @@ def test_schema_version_lives_in_meta(folder, clock):
     db.close()
     with pytest.raises(Refused) as error:
         Kernel.open(folder, clock=clock)
+    assert refused_code(error) == "unsupported"
+
+
+def test_a_read_only_kernel_checks_the_schema_too(folder, clock):
+    Kernel.open(folder, clock=clock).close()
+    db = sqlite3.connect(folder / "journal.sqlite")
+    db.executescript("DROP TRIGGER meta_no_update; UPDATE meta SET value = '2' WHERE key = 'schema_version';")
+    db.close()
+    with pytest.raises(Refused) as error:
+        Kernel.open(folder, clock=clock, read_only=True)
     assert refused_code(error) == "unsupported"
 
 
@@ -193,6 +246,46 @@ async def test_read_only_refuses_stale_views_loudly(folder, clock):
     reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
     assert refusal_of(reader.query(reader.runtime, "note.list", {})) == "unavailable"
     assert len(events_of(reader)) == 1
+    reader.close()
+
+
+async def test_read_only_notices_a_view_falling_behind(kernel, folder, clock):
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
+    assert result_of(reader.query(reader.runtime, "note.list", {})) == ["hello"]
+    kernel.close()
+
+    other = Kernel.open(folder, clock=clock)
+    result_of(await other.submit(other.runtime, "runtime.start", {}))
+
+    assert refusal_of(reader.query(reader.runtime, "note.list", {})) == "unavailable"
+    reader.close()
+    other.close()
+
+
+async def test_a_read_only_head_moves_with_the_journal(kernel, folder, clock):
+    reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
+    assert reader.head == 0
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    assert reader.head == 1
+    reader.close()
+
+
+async def test_a_reader_of_a_closed_journal_stops_when_a_writer_returns(folder, clock):
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    kernel.close()
+    reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
+    assert len(events_of(reader)) == 1
+
+    again = Kernel.open(folder, clock=clock, extensions=[notes])
+    result_of(await again.submit(again.runtime, "note.add", {}))
+    again.close()
+
+    with pytest.raises(Refused) as error:
+        reader.read(reader.runtime, after=0)
+    assert refused_code(error) == "unavailable"
+    assert refusal_of(reader.query(reader.runtime, "note.list", {})) == "unavailable"
     reader.close()
 
 

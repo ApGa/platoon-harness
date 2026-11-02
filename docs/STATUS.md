@@ -48,18 +48,21 @@ power loss. Nothing here has run on macOS.
 | Spike pragmas and the checkpoint thread | tested | `test_journal.py`. The thread's one-second cadence is not itself timed |
 | Network filesystem refusal, tmpfs and unknown warnings, read-only open of closed and live journals | tested | `test_journal.py`, Linux. The refusal was also seen on this host's Lustre; other network filesystems are simulated |
 | macOS filesystem detection and `F_FULLFSYNC` | experimental | Written from the man page, never run |
-| Writer thread: group commit, ack after commit, admission limits, runtime reserve | tested | `test_writer.py` |
-| Commands: idempotency, key reuse, refusals journaled, outcome on the last event, `expected_version` | tested | `test_commands.py`, properties |
+| Writer thread: group commit, ack after commit, admission limits, runtime reserve, every admitted command answered through a failed commit, a failed rollback, an op that exits, and close | tested | `test_writer.py` |
+| Commands: idempotency through an index on `events`, key reuse, refusals journaled, outcome on the last event, `expected_version`, strict decoding, bounded refusals | tested | `test_commands.py`, properties. In a 5 s closed loop on the shared login node the index, the replace trigger and `secure_delete` left about 5,000 commands/s unchanged |
 | `authorize`: grants, live relations, scopes, runtime-only ops, credentials by hash | tested | `test_authorize.py` |
-| Envelope stamping and payload limits | tested | `test_envelope.py` |
-| Bodies: inline, `blobs/`, fsync before citation, tombstones | tested | `test_bodies.py` |
-| Effects: lifecycle, timeouts, `on_uncertain`, priority, recovery of the journal side | tested | `test_effects.py` |
-| Timers and the clock daemon on an injected clock | tested | `test_timers.py` |
+| Envelope stamping and payload limits, one open episode | tested | `test_envelope.py` |
+| Bodies: inline, `blobs/`, fsync before citation, tombstones, erased bytes gone from the journal, the WAL and `blobs/`, redacted content kept out | tested | `test_bodies.py` on Linux. Bytes on the device below the filesystem are out of scope |
+| Effects: lifecycle, timeouts, `on_uncertain`, priority, attempt fence, recovery of the journal side including `turn.lost` | tested | `test_effects.py` |
+| Timers and the clock daemon on an injected clock, unjournaled firings kept | tested | `test_timers.py` |
 | Views: versions, per-view rebuild, high-water marks, `rebuild_all` | tested | `test_views.py`, properties |
-| Readers: `read`, `follow` with one shared read per pulse, `query`, lossy `deltas` | tested | `test_readers.py` |
+| Readers: `read`, `follow` with one shared read per pulse, `query`, lossy `deltas`, live principals only, a follower stopped at its revocation | tested | `test_readers.py` |
+| Read-only kernels: schema check, staleness per query, a moving head, a closed journal refused once a writer touches it | tested | `test_journal.py` |
 | Daemon supervision with backoff | tested | `test_daemon.py` |
 | Extension loading and the naming law | tested | `test_extension.py` |
-| Laws 1 to 9 and the kernel's half of law 11 | tested | `test_laws.py` |
+| Laws 1 to 9 and 12 | tested | `test_laws.py` |
+| Law 10, for what the kernel owns: unknown stays `None` in the envelope and in `Effect` | tested | `test_laws.py`. Rewards, usage, tool visibility and exposure do not exist yet |
+| Law 11: the kernel's own extensions reach no private name, and code outside the kernel imports only `__all__` | tested | `test_laws.py`. No code exists outside the kernel yet, so that half guards an empty set |
 | Rebuild equals live, idempotent retry, gapless versions, backward references | tested | `test_properties.py` (hypothesis) |
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
 | `v`-based upcasting of old payloads | deferred | `v` is recorded. No upcaster exists until a second payload version does |

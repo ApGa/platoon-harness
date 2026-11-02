@@ -13,7 +13,7 @@ _TABLE_ACTIONS = frozenset({sqlite3.SQLITE_READ, sqlite3.SQLITE_INSERT, sqlite3.
 
 
 def fold[F: Callable[..., None]](*types: str) -> Callable[[F], F]:
-    """Mark a view method as the fold for these event types. `*` means every type."""
+    """Mark a view method as the fold for these event types."""
 
     def mark(method: F) -> F:
         method.__dict__["_fold_types"] = types
@@ -31,7 +31,6 @@ class View:
     name: ClassVar[str]
     version: ClassVar[int] = 1
     schema: ClassVar[str] = ""
-    _folds_outcomes: ClassVar[bool] = False
     _folds: ClassVar[dict[str, list[str]]]
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -68,21 +67,20 @@ def tables_of(view: type[View]) -> tuple[str, ...]:
 def _only(tables: tuple[str, ...]) -> Callable[..., int]:
     """An authorizer that keeps SQL inside `tables`."""
 
-    def authorize(action: int, table: str | None, *_: object) -> int:
+    def guard(action: int, table: str | None, *_: object) -> int:
         outside = action in _TABLE_ACTIONS and table not in tables
         return sqlite3.SQLITE_DENY if outside else sqlite3.SQLITE_OK
 
-    return authorize
+    return guard
 
 
-def rebuild(db: sqlite3.Connection, view: type[View]) -> None:
+def refold(db: sqlite3.Connection, view: type[View]) -> None:
     """Drop one view and refold it from the journal, inside the caller's transaction.
 
     The authorizer makes law 2 checkable: a fold that reaches outside its own tables fails here, loudly.
     """
     tables = tables_of(view)
     folds = view(db).bound_folds()
-    every = folds.get("*", [])
     db.execute("SAVEPOINT rebuild")
     try:
         for table in tables:
@@ -94,9 +92,8 @@ def rebuild(db: sqlite3.Connection, view: type[View]) -> None:
             db.set_authorizer(_only(tables))
             try:
                 for row in rows:
-                    applying = [*folds.get(row["type"], ()), *every]
-                    if applying:
-                        event = decode(row, with_outcome=view._folds_outcomes)
+                    if applying := folds.get(row["type"]):
+                        event = decode(row, with_outcome=False)
                         for apply in applying:
                             apply(event)
             finally:

@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
 ENROLLED_ID = r"(agent|human|program|judge):[\w.-]+"
+NAME_LIMIT = 256
 GIST_LIMIT = 280
 DATA_LIMIT = 16 * 1024
 BODY_LIMIT = 64 * 1024
@@ -42,10 +43,9 @@ def canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 
-def args_hash(op: str, args: Mapping[str, Any]) -> str:
-    """Hash a command's identity for idempotency."""
-    text = json.dumps(args, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str)
-    return sha256(f"{op}\0{text}".encode()).hexdigest()
+def args_hash(op: str, text: str) -> str:
+    """Hash a command's identity for idempotency, from its canonical arguments."""
+    return sha256(f"{op}\0{text}".encode(errors="surrogatepass")).hexdigest()
 
 
 def hash_token(token: str) -> str:
@@ -137,7 +137,7 @@ class Delta(BaseModel, frozen=True):
     """One frame of lossy live text. `lag` counts the frames lost just before it."""
 
     agent: str
-    n: int
+    frame: int
     text: str
     lag: int = 0
 
@@ -159,11 +159,3 @@ class Principal(BaseModel, frozen=True):
     @property
     def name(self) -> str:
         return self.id.partition(":")[2] or self.id
-
-
-class Grant(BaseModel, frozen=True):
-    """Who may run which ops on what. Absence means deny."""
-
-    who: str
-    ops: str
-    on: str = "*"

@@ -1,7 +1,6 @@
 """The kernel: one journal, one writer, and every way in and out."""
 
 import asyncio
-import fcntl
 import hashlib
 import logging
 import os
@@ -10,25 +9,28 @@ import sqlite3
 from collections import defaultdict
 from collections.abc import AsyncIterator, Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from pydantic import ValidationError
 
-from .auth import Principals, authorize
-from .bodies import Blobs, forget, lookup, record
+from . import bodies
+from .auth import Grants, Principals
+from .bodies import Blobs
 from .clock import Clock, SystemClock
 from .core import CORE, list_ops
 from .daemon import keep_running
 from .extension import Extension, Loaded, load
 from .journal import (
-    Checkpointer,
+    check_schema,
     decode,
-    head,
+    fingerprint,
     is_live,
+    last_seq,
     open_reader,
     open_writer,
+    prior_outcome,
     reader_uri,
     require_local,
     stream_version,
@@ -38,6 +40,7 @@ from .model import (
     BODY_LIMIT,
     DATA_LIMIT,
     GIST_LIMIT,
+    NAME_LIMIT,
     Delta,
     Event,
     Outcome,
@@ -52,29 +55,61 @@ from .model import (
 )
 from .op import Args, Op
 from .pulse import Pulse, Ring, Tail
-from .txn import Commands, Txn
-from .view import View, rebuild
+from .txn import Txn
+from .view import View, refold
 from .writer import Writer
 
 log = logging.getLogger("platoon_harness.kernel")
 
-_NAME_LIMIT = 256
 _DETAIL_LIMIT = 512
 _SCAN_LIMIT = 4096
+_SEQ_LIMIT = 2**63
 _IDLE_READERS = 4
 
 
 @dataclass(frozen=True)
 class _Command:
+    """One invocation. `text` is its arguments as canonical JSON, which is what gets hashed and decoded."""
+
     principal: Principal
     op: str
-    args: Mapping[str, Any]
+    text: str
     args_hash: str
     key: str | None = None
     expected_version: int | None = None
 
+    @classmethod
+    def of(
+        cls,
+        principal: Principal,
+        op: str,
+        args: Mapping[str, Any],
+        key: str | None = None,
+        expected_version: int | None = None,
+    ) -> Self:
+        try:
+            text = canonical(jsonable(args))
+        except (TypeError, ValueError, RecursionError):
+            text = ""  # Decoding refuses this.
+        return cls(principal, op, text, args_hash(op, text), key, expected_version)
+
+    def check(self) -> None:
+        """Refuse what could never be journaled, even as a refusal."""
+        names = f"{self.op}{self.key or ''}"
+        if not names.isprintable() or max(len(self.op), len(self.key or "")) > NAME_LIMIT:
+            raise Refused("invalid", f"op names and keys are printable and at most {NAME_LIMIT} characters")
+
     def refused(self, refusal: Refusal, target: str | None) -> Outcome:
-        filled = refusal.model_copy(update={"op": self.op, "object": target})
+        """Fill in a refusal. Caller text is cut, because a journaled refusal is permanent."""
+        detail = refusal.detail
+        text = detail if isinstance(detail, str) else canonical(detail)
+        filled = refusal.model_copy(
+            update={
+                "op": self.op,
+                "object": None if target is None else target[:NAME_LIMIT],
+                "detail": text[:_DETAIL_LIMIT] if len(text) > _DETAIL_LIMIT else detail,
+            }
+        )
         return Outcome(op=self.op, key=self.key, args_hash=self.args_hash, refusal=filled)
 
     def answered(self, result: Any) -> Outcome:
@@ -89,36 +124,39 @@ class Kernel:
 
     runtime = Principal(id="runtime")
 
-    def __init__(self, folder: Path, clock: Clock, loaded: Loaded, db: sqlite3.Connection | None, uri: str) -> None:
+    def __init__(
+        self,
+        folder: Path,
+        clock: Clock,
+        loaded: Loaded,
+        uri: str,
+        *,
+        frozen: bool = False,
+        writing: tuple[sqlite3.Connection, int] | None = None,
+    ) -> None:
         self.clock = clock
-        self.extensions = loaded.extensions
         self.ops = loaded.ops
-        self.ops["ops.list"] = list_ops(self.ops)
-        self.daemons = loaded.daemons
+        self._daemons = loaded.daemons
         self._views = loaded.views
+        self._folder = folder
         self._blobs = Blobs(folder / "blobs")
-        self._db = db
         self._uri = uri
+        self._frozen = fingerprint(folder) if frozen else None
         self._idle: queue.SimpleQueue[sqlite3.Connection] = queue.SimpleQueue()
-        self._lock: int | None = None
         self._rings: dict[str, Ring] = {}
         self._folds: dict[str, list[Callable[[Event], None]]] = defaultdict(list)
-        self._stale: tuple[str, ...] = ()
         self._pulse = Pulse()
         self._writer: Writer | None = None
-        self._checkpointer: Checkpointer | None = None
-        if db is None:
+        if writing is None:
             with self._reading() as reader:
-                reader.execute("BEGIN")
-                self._pulse.head = head(reader)
-                self._stale = self._find_stale(reader)
-                reader.execute("COMMIT")
+                check_schema(reader)
         else:
+            db, lock = writing
+            check_schema(db)
             self._prepare_views(db)
-            self._pulse.head = head(db)
-            self._writer = Writer(db, self._pulse, self._seal)
-            self._checkpointer = Checkpointer(folder / "journal.sqlite")
-        self._tail = Tail(lambda after: self.read(self.runtime, after=after).events, self._pulse.head)
+            self._pulse.head = last_seq(db)
+            self._writer = Writer(db, lock, folder / "journal.sqlite", self._pulse, self._seal)
+        self._tail = Tail(lambda after: self.read(self.runtime, after=after).events, self.head)
 
     @classmethod
     def open(
@@ -135,31 +173,31 @@ class Kernel:
         """
         folder = Path(path)
         clock = SystemClock() if clock is None else clock
-        loaded = load([*CORE, *extensions])
+        ops: dict[str, Op] = {}
+        loaded = load([*CORE, Extension("ops", ops=[list_ops(ops)]), *extensions])
+        ops.update(loaded.ops)
         if read_only:
             live = is_live(folder)
             if live:
                 require_local(folder)
-            return cls(folder, clock, loaded, None, reader_uri(folder, immutable=not live))
+            return cls(folder, clock, loaded, reader_uri(folder, immutable=not live), frozen=not live)
         require_local(folder)
         folder.mkdir(parents=True, exist_ok=True)
         lock = take_lock(folder / "lock")
         db = None
         try:
             db = open_writer(folder / "journal.sqlite", clock.now())
-            kernel = cls(folder, clock, loaded, db, reader_uri(folder))
+            return cls(folder, clock, loaded, reader_uri(folder), writing=(db, lock))
         except BaseException:
             if db is not None:
                 db.close()
             os.close(lock)
             raise
-        kernel._lock = lock
-        return kernel
 
     def _find_stale(self, db: sqlite3.Connection) -> tuple[str, ...]:
         """Views that are new, of another version, or were away while the journal grew."""
         marks = {row["view"]: (row["version"], row["high_water"]) for row in db.execute("SELECT * FROM v_folds")}
-        last = head(db)
+        last = last_seq(db)
         return tuple(view.name for view in self._views if marks.get(view.name) != (view.version, last))
 
     def _prepare_views(self, db: sqlite3.Connection) -> None:
@@ -168,7 +206,7 @@ class Kernel:
             stale = self._find_stale(db)
             for view in self._views:
                 if view.name in stale:
-                    rebuild(db, view)
+                    refold(db, view)
                 for event_type, folds in view(db).bound_folds().items():
                     self._folds[event_type].extend(folds)
             db.execute("COMMIT")
@@ -178,7 +216,7 @@ class Kernel:
 
     def _seal(self, db: sqlite3.Connection) -> int:
         """Move the high-water marks, as the batch's last write."""
-        seq = head(db)
+        seq = last_seq(db)
         names = [view.name for view in self._views]
         marks = ", ".join("?" * len(names))
         db.execute(f"UPDATE v_folds SET high_water = ? WHERE view IN ({marks})", (seq, *names))
@@ -186,8 +224,6 @@ class Kernel:
 
     def _apply(self, event: Event) -> None:
         for apply in self._folds.get(event.type, ()):
-            apply(event)
-        for apply in self._folds.get("*", ()):
             apply(event)
 
     def _writing(self) -> Writer:
@@ -207,33 +243,32 @@ class Kernel:
         expected_version: int | None = None,
     ) -> Outcome:
         """Run one command and return its outcome once durable. A refusal is an outcome, not an exception."""
+        command = _Command.of(principal, op, args, key, expected_version)
         operation = self.ops.get(op)
         if operation is not None and operation.exposes and principal.kind != "agent":
-            return self.query(principal, op, args)
-        command = _Command(principal, op, args, args_hash(op, args), key, expected_version)
+            if expected_version is None:
+                return self.query(principal, op, args)
+            return command.refused(Refusal(code="unsupported", detail="a query has no version to expect"), None)
         try:
-            if len(op) > _NAME_LIMIT or (key is not None and len(key) > _NAME_LIMIT):
-                raise Refused("invalid", f"op names and keys are at most {_NAME_LIMIT} characters")
-            writer = self._writing()
-            run = lambda db: self._execute(db, command)  # noqa: E731
-            return await writer.call(run, owner=principal.id, runtime=principal.kind == "runtime")
+            command.check()
+            return await self._writing().call(lambda db: self._execute(db, command), owner=principal.id)
         except Refused as refused:
             return command.refused(refused.refusal, None)
 
-    def _decode(self, name: str, args: Mapping[str, Any]) -> tuple[Op, Args]:
-        operation = self.ops.get(name)
+    def _decode(self, command: _Command) -> tuple[Op, Args]:
+        operation = self.ops.get(command.op)
         if operation is None:
             raise Refused("not_found", "no such op")
         try:
-            return operation, operation.input.model_validate(args)
+            return operation, operation.input.model_validate_json(command.text)
         except ValidationError as error:
             faults = (f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in error.errors(include_url=False))
-            raise Refused("invalid", "; ".join(faults)[:_DETAIL_LIMIT]) from None
+            raise Refused("invalid", "; ".join(faults)) from None
 
     def _execute(self, db: sqlite3.Connection, command: _Command) -> Outcome:
         """Run one command inside the open transaction. It ends on one event carrying its outcome."""
         principal = command.principal
-        prior = None if command.key is None else Commands(db).get(principal.id, command.key)
+        prior = None if command.key is None else prior_outcome(db, principal.id, command.key)
         if prior is not None and prior.args_hash == command.args_hash:
             return prior
 
@@ -243,10 +278,10 @@ class Kernel:
         try:
             if prior is not None:
                 raise Refused("key_reused", f"this key answered other arguments at seq {prior.seq}")
-            operation, args = self._decode(command.op, command.args)
-            target = operation.target(args)
-            me = authorize(db, principal, operation, target)
-            if operation.query and not operation.exposes:
+            operation, args = self._decode(command)
+            target = operation.on(args)
+            me = Grants(db).authorize(principal, operation, target)
+            if operation.query:
                 raise Refused("unsupported", "a query has no command form")
             if command.expected_version is not None:
                 current = stream_version(db, target)
@@ -256,36 +291,47 @@ class Kernel:
             result = jsonable(operation.fn(txn, args))
             if len(canonical(result).encode()) > DATA_LIMIT:
                 raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
-            outcome = command.answered(result)
-            event = txn._finish(outcome)
-        except Exception as error:
+            outcome = txn._finish(command.answered(result))
+        except BaseException as error:
             db.execute("ROLLBACK TO command")
-            refusal = self._as_refusal(error)
-            outcome = command.refused(refusal, target)
-            txn = Txn(db, principal, now, self._apply)
+            if not isinstance(error, Refused):
+                command = replace(command, key=None)  # A crash answers nothing, so a retry runs.
+            outcome = self._refuse(db, command, self._as_refusal(error), target, now)
+        db.execute("RELEASE command")
+        return outcome
+
+    def _refuse(
+        self, db: sqlite3.Connection, command: _Command, refusal: Refusal, target: str | None, now: float
+    ) -> Outcome:
+        """End a command on `op.refused`. If even that fails, nothing happened and a retry may run."""
+        outcome = command.refused(refusal, target)
+        try:
+            txn = Txn(db, command.principal, now, self._apply)
             txn.emit(
                 "op.refused",
-                f"commands/{principal.id}",
+                f"commands/{command.principal.id}",
                 gist=f"{command.op} refused: {refusal.code}"[:GIST_LIMIT],
-                data={"op": command.op, "code": refusal.code, "object": target},
+                data={"op": command.op, "code": refusal.code, "object": target and target[:NAME_LIMIT]},
             )
-            event = txn._finish(outcome)
-        db.execute("RELEASE command")
-        return outcome.model_copy(update={"seq": event.seq})
+            return txn._finish(outcome)
+        except Exception:
+            log.exception("a refusal of %s could not be journaled", command.op)
+            db.execute("ROLLBACK TO command")
+            return command.refused(Refusal(code="unavailable", detail="the refusal could not be journaled"), target)
 
-    def _as_refusal(self, error: Exception) -> Refusal:
+    def _as_refusal(self, error: BaseException) -> Refusal:
         if isinstance(error, Refused):
             return error.refusal
         log.error("an op failed", exc_info=error)
         return Refusal(code="unavailable", detail=f"the op failed: {type(error).__name__}")
 
     async def recover(self) -> Outcome:
-        """Begin a new incarnation: every effect left `started` becomes uncertain and its policy applies."""
+        """Begin a new incarnation: started effects become uncertain, a turn in flight is lost, policies apply."""
         return await self.submit(self.runtime, "runtime.start", {})
 
     async def rebuild(self, view: type[View]) -> None:
         """Drop one view and refold it."""
-        await self._writing().call(lambda db: rebuild(db, view), owner=None, runtime=True)
+        await self._writing().call(lambda db: refold(db, view), owner="runtime")
 
     async def rebuild_all(self) -> None:
         """Drop every view and refold it. Identical contents are the point."""
@@ -301,59 +347,80 @@ class Kernel:
         inline = body if len(body) <= BODY_LIMIT else None
         if inline is None:
             await asyncio.to_thread(self._blobs.write, sha256, body)
-        await writer.call(lambda db: record(db, sha256, len(body), inline), owner=None)
+        try:
+            await writer.call(lambda db: bodies.record(db, sha256, len(body), inline), owner=None)
+        except Refused as refused:
+            if inline is None and refused.refusal.code == "conflict":  # Redacted: these bytes may not stay.
+                await asyncio.to_thread(self._blobs.erase, sha256)
+            raise
         return sha256
 
     def get_body(self, sha256: str) -> bytes:
         """Read a body, or refuse `not_found` with the reason. An op decides who may; this checks no grant."""
         with self._reading() as db:
-            data = lookup(db, sha256)["data"]
-        return self._blobs.read(sha256) if data is None else data
+            data = bodies.lookup(db, sha256)["data"]
+        if data is not None:
+            return data
+        try:
+            return self._blobs.read(sha256)
+        except FileNotFoundError:
+            raise Refused("not_found", "this body was tombstoned") from None
 
     async def erase_body(self, sha256: str) -> None:
-        """Remove a tombstoned body's bytes. A daemon does this once the tombstone has committed."""
-        await self._writing().call(lambda db: forget(db, sha256), owner=None)
+        """Remove a tombstoned body's bytes from the journal, `blobs/` and the WAL. A daemon does this.
+
+        Refuses `busy` while a reader holds the WAL, so the erase effect stays open until the bytes are gone.
+        """
+        writer = self._writing()
+        await writer.call(lambda db: bodies.forget(db, sha256), owner=None)
         await asyncio.to_thread(self._blobs.erase, sha256)
+        await asyncio.to_thread(writer.scrub)
 
     # Reads.
 
     @contextmanager
     def _reading(self) -> Generator[sqlite3.Connection]:
+        """A connection inside one short read transaction."""
         if self.closed:
             raise Refused("unavailable", "the kernel is closed")
+        if self._frozen is not None and fingerprint(self._folder) != self._frozen:
+            raise Refused("unavailable", "a writer changed this journal; open it again")
         try:
             db = self._idle.get_nowait()
         except queue.Empty:
             db = open_reader(self._uri)
         try:
+            db.execute("BEGIN")
             yield db
         finally:
-            if self._idle.qsize() < _IDLE_READERS:
-                self._idle.put(db)
-            else:
+            try:
+                db.execute("COMMIT")
+            except sqlite3.Error:
                 db.close()
+            else:
+                if self._idle.qsize() < _IDLE_READERS:
+                    self._idle.put(db)
+                else:
+                    db.close()
 
     def query(self, principal: Principal, op: str, args: Mapping[str, Any]) -> Outcome:
         """Run a read-only op on a read connection. It enters no history."""
-        command = _Command(principal, op, args, args_hash(op, args))
+        command = _Command.of(principal, op, args)
         target = None
-        with self._reading() as db:
-            db.execute("BEGIN")
-            try:
-                if self._stale:
-                    raise Refused("unavailable", f"stale views: {', '.join(self._stale)}")
-                operation, decoded = self._decode(op, args)
-                target = operation.target(decoded)
-                me = authorize(db, principal, operation, target)
+        try:
+            with self._reading() as db:
+                if self._writer is None and (stale := self._find_stale(db)):
+                    raise Refused("unavailable", f"stale views: {', '.join(stale)}")
+                operation, decoded = self._decode(command)
+                target = operation.on(decoded)
+                me = Grants(db).authorize(principal, operation, target)
                 if not (operation.query or operation.exposes):
                     raise Refused("unsupported", "this op is a command")
                 if operation.exposes and principal.kind == "agent":
                     raise Refused("unsupported", "an agent's read is a command, because it records exposure")
                 return command.answered(jsonable(operation.fn(Txn(db, me, self.clock.now()), decoded)))
-            except Exception as error:
-                return command.refused(self._as_refusal(error), target)
-            finally:
-                db.execute("COMMIT")
+        except Exception as error:
+            return command.refused(self._as_refusal(error), target)
 
     def authenticate(self, token: str) -> Principal:
         """Resolve a credential by its hash, or refuse."""
@@ -363,38 +430,41 @@ class Kernel:
             raise Refused("not_permitted", "unknown credential")
         return principal
 
-    def _refuse_agents(self, principal: Principal) -> None:
-        if principal.kind == "agent":
-            raise Refused("not_permitted", "an agent's reads are ops")
-
     def read(self, principal: Principal, *, after: int, match: str | None = None, limit: int = 512) -> Page:
         """Read a page past `after` in one short transaction. `match` globs stream names.
 
-        Agents never get this: their reads are ops, checked against grants.
+        This is for the runtime and live principals other than agents, whose reads are ops, checked against grants.
         """
-        self._refuse_agents(principal)
+        if principal.kind == "agent":
+            raise Refused("not_permitted", "an agent's reads are ops")
+        if not 0 < limit <= _SCAN_LIMIT:
+            raise Refused("invalid", f"limit is 1 to {_SCAN_LIMIT}")
+        if not 0 <= after < _SEQ_LIMIT:
+            raise Refused("invalid", "after is a seq")
+        if match is not None and not match.isprintable():
+            raise Refused("invalid", "match is a glob over stream names")
         with self._reading() as db:
-            db.execute("BEGIN")
-            last = head(db)
+            if principal.kind != "runtime":
+                Principals(db).live(principal.id)
+            last = last_seq(db)
             end = min(last, after + (limit if match is None else _SCAN_LIMIT))
             rows = db.execute(
                 "SELECT * FROM events WHERE seq > ? AND seq <= ? AND (? IS NULL OR matches(stream, ?)) "
                 "ORDER BY seq LIMIT ?",
                 (after, end, match, match, limit),
             ).fetchall()
-            db.execute("COMMIT")
         cursor = rows[-1]["seq"] if len(rows) == limit else max(after, end)
         return Page(events=tuple(decode(row) for row in rows), cursor=cursor, head=last)
 
     async def follow(self, principal: Principal, *, after: int, match: str | None = None) -> AsyncIterator[Page]:
         """Yield pages past `after` while the kernel is open. Catch-up and live are one loop.
 
-        Near the head, followers share one read per pulse. One that has fallen behind pages by SQL.
+        Near the head, followers share one read per pulse. One that has fallen behind pages by SQL, as does a page
+        holding a revocation, so a revoked reader is refused there.
         """
-        self._refuse_agents(principal)
+        self.read(principal, after=after, match=match, limit=1)  # The tail checks neither the reader nor the page.
         while not self.closed:
-            page = None if self._writer is None else self._tail.page(after, match, self.head)
-            page = page or self.read(principal, after=after, match=match)
+            page = self._tail.page(after, match, self.head) or self.read(principal, after=after, match=match)
             after = page.cursor
             if page.events:
                 yield page
@@ -404,7 +474,10 @@ class Kernel:
     @property
     def head(self) -> int:
         """The newest committed seq."""
-        return self._pulse.head
+        if self._writer is not None:
+            return self._pulse.head
+        with self._reading() as db:
+            return last_seq(db)
 
     @property
     def session_id(self) -> str:
@@ -418,7 +491,12 @@ class Kernel:
         await self._pulse.wait(after)
 
     def _ring(self, agent: str) -> Ring:
-        return self._rings.setdefault(agent, Ring(agent))
+        ring = self._rings.get(agent)
+        if ring is None:
+            ring = self._rings[agent] = Ring(agent)
+            if self.closed:
+                ring.close()
+        return ring
 
     def push_delta(self, agent: str, text: str) -> None:
         """Offer a frame of live text. It may be lost and is never journaled."""
@@ -426,14 +504,14 @@ class Kernel:
 
     def deltas(self, agent: str) -> AsyncIterator[Delta]:
         """Follow an agent's live text until the kernel closes."""
-        return self._ring(agent).tail()
+        return self._ring(agent).frames()
 
     # Lifetime.
 
     async def supervise(self) -> None:
         """Run every daemon, one for one, until cancelled. Cancel this before `close`."""
         self._writing()
-        await asyncio.gather(*(keep_running(daemon, self) for daemon in self.daemons))
+        await asyncio.gather(*(keep_running(daemon, self) for daemon in self._daemons))
 
     @property
     def closed(self) -> bool:
@@ -443,18 +521,10 @@ class Kernel:
         """Finish queued commands, checkpoint the WAL to empty, and let go of the lock."""
         if self.closed:
             return
-        if self._writer is not None:
-            self._writer.stop()
-        if self._checkpointer is not None:
-            self._checkpointer.stop()
         self._pulse.close()
-        for ring in self._rings.values():
+        for ring in tuple(self._rings.values()):
             ring.close()
         while not self._idle.empty():
             self._idle.get_nowait().close()
-        if self._db is not None:
-            self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            self._db.close()
-        if self._lock is not None:
-            fcntl.flock(self._lock, fcntl.LOCK_UN)
-            os.close(self._lock)
+        if self._writer is not None:
+            self._writer.stop()

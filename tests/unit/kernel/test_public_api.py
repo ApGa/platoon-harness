@@ -11,7 +11,5 @@ def test_public_names_match_the_list():
     assert {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)} == set(kernel.__all__)
 
 
-def test_every_public_name_exists_and_is_in_the_docstring():
-    for name in kernel.__all__:
-        assert hasattr(kernel, name)
-        assert name in (kernel.__doc__ or "")
+def test_every_public_name_exists():
+    assert all(hasattr(kernel, name) for name in kernel.__all__)

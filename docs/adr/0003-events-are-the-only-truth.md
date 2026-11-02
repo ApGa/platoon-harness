@@ -8,7 +8,7 @@ Three needs pull against each other. A credit estimator written next year cannot
 
 ## Decision
 
-`events` is the only truth. Triggers abort `UPDATE` and `DELETE` on it, and dropping every other table and refolding gives identical contents. Commands, effects, timers and principals are all folds. A command's result is the `outcome` on its last event, and `v_commands` folds from that. Bodies live in `bodies` and `blobs/`, keyed by SHA-256, and events cite the hash. `body.tombstone` erases the bytes while the event and its hash survive, so the graph stays whole.
+`events` is the only truth. Triggers abort `UPDATE`, `DELETE` and a replacing `INSERT` on it, and dropping every view and refolding gives identical contents. Effects, timers and principals are all folds. A command's result is the `outcome` on its last event, and a retry finds it through an index over `events`. Bodies live in `bodies` and `blobs/`, keyed by SHA-256, and events cite the hash. `body.tombstone` erases the bytes while the event and its hash survive, so the graph stays whole.
 
 ## Alternatives considered
 
@@ -25,7 +25,7 @@ Three needs pull against each other. A credit estimator written next year cannot
 
 - Law 1 is checkable: a property test compares live views to a rebuild. Running that after every scenario in CI is planned, since neither exists yet.
 - A secret in a `gist` or in `data` cannot be erased in place. It needs an offline rewrite that produces a new session.
-- A command's last event is held back from `events` until the op returns, because its `outcome` does not exist before then. Folds never see `outcome`, and only `v_commands` is written from it.
+- A command's last event is held back from `events` until the op returns, because its `outcome` does not exist before then. Folds never see `outcome`.
 - A refused or empty command still ends on one event, on `commands/<actor>`, so a failed attempt moves no object's version.
 - Folds ignore unknown types, so an extension's events survive export and replay.
 

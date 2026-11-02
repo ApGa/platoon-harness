@@ -2,7 +2,9 @@
 
 import inspect
 
-from platoon_harness.kernel import Principal, Txn
+import pytest
+
+from platoon_harness.kernel import Args, Extension, Kernel, Principal, Stamps, Txn, op
 
 from .support import ALICE, enroll, events_of, grant, refusal_of, result_of
 
@@ -12,8 +14,8 @@ async def mark(kernel, type, stream, *, principal=None, agent=None, **data):
     return result_of(await kernel.submit(principal or kernel.runtime, "note.mark", args))
 
 
-def test_txn_is_exactly_me_now_view_emit_effect_refuse():
-    assert {name for name in dir(Txn) if not name.startswith("_")} == {"me", "now", "view", "emit", "effect", "refuse"}
+def test_txn_is_exactly_me_now_view_emit_effect():
+    assert {name for name in dir(Txn) if not name.startswith("_")} == {"me", "now", "view", "emit", "effect"}
 
 
 def test_ops_cannot_pass_stamped_fields():
@@ -79,6 +81,44 @@ async def test_an_episode_is_stamped_between_its_boundaries(kernel):
     assert [e.episode for e in events_of(kernel)] == [None, "e1", "e1", "e1", None]
 
 
+async def test_a_session_has_one_open_episode(kernel):
+    await mark(kernel, "episode.opened", "episode/e1", episode="e1")
+
+    args = {"type": "episode.opened", "stream": "episode/e2", "data": {"episode": "e2"}}
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.mark", args)) == "conflict"
+
+    await mark(kernel, "episode.closed", "episode/e1")
+    await mark(kernel, "episode.opened", "episode/e2", episode="e2")
+
+
+@pytest.mark.parametrize(
+    ("type", "agent", "data"),
+    [
+        ("turn.started", "alice", {}),
+        ("turn.started", None, {"turn": "t1"}),
+        ("turn.started", "alice", {"turn": 7}),
+        ("episode.opened", None, {}),
+    ],
+)
+async def test_a_boundary_event_must_name_what_it_opens(kernel, type, agent, data):
+    args = {"type": type, "stream": "boundary", "agent": agent, "data": data}
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.mark", args)) == "invalid"
+
+
+async def test_a_stream_reports_its_version(folder, clock):
+    @op("seen.version")
+    def version(txn: Txn, a: Args) -> int:
+        """Say how far a stream has got, then add to it."""
+        current = txn.view(Stamps).version_of("seen/a")
+        txn.emit("seen.noted", "seen/a", gist="noted")
+        return current
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[Extension("seen", ops=[version])])
+    assert result_of(await kernel.submit(kernel.runtime, "seen.version", {})) == 0
+    assert result_of(await kernel.submit(kernel.runtime, "seen.version", {})) == 1
+    kernel.close()
+
+
 async def test_wall_time_comes_from_the_injected_clock(kernel, clock):
     clock.advance(5)
     result_of(await kernel.submit(kernel.runtime, "note.add", {}))
@@ -98,6 +138,22 @@ async def test_data_is_capped_loudly(kernel):
     assert result_of(await kernel.submit(kernel.runtime, "note.mark", args | {"data": fits}))
     too_much = {"blob": "x" * (16 * 1024)}
     assert refusal_of(await kernel.submit(kernel.runtime, "note.mark", args | {"data": too_much})) == "invalid"
+
+
+async def test_data_that_is_not_text_is_refused(kernel):
+    args = {"type": "note.happened", "stream": "note/a", "data": {"text": "\ud800"}}
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.mark", args)) == "invalid"
+
+
+async def test_the_envelope_is_capped_too(kernel):
+    first = result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    args = {"cause": [first["seq"]] * 16 * 1024}
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", args)) == "invalid"
+
+
+async def test_stream_names_are_capped(kernel):
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {"stream": "x" * 513})) == "invalid"
+    assert result_of(await kernel.submit(kernel.runtime, "note.add", {"stream": "x" * 512}))
 
 
 async def test_event_names_must_be_past_tense(kernel):

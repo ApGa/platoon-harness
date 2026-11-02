@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import sqlite3
 
 import pytest
 
@@ -61,6 +62,16 @@ async def test_blobs_are_fsynced_before_they_can_be_cited(kernel, folder, monkey
     assert synced == ["file", "rename", "folder", "folder", "folder"]
 
 
+async def test_storing_a_body_again_syncs_what_a_crash_left_unsynced(kernel, monkeypatch):
+    await kernel.put_body(LARGE)
+    synced = []
+    monkeypatch.setattr(os, "fsync", synced.append)
+
+    await kernel.put_body(LARGE)
+
+    assert len(synced) == 3
+
+
 async def test_a_cited_body_must_exist(kernel):
     sha256 = await kernel.put_body(SMALL)
     assert result_of(await kernel.submit(kernel.runtime, "note.add", {"refs": [f"sha256:{sha256}"]}))
@@ -71,6 +82,14 @@ async def test_a_cited_body_must_exist(kernel):
 async def test_an_unknown_body_is_not_found(kernel):
     with pytest.raises(Refused) as error:
         kernel.get_body("0" * 64)
+    assert refused_code(error) == "not_found"
+
+
+async def test_a_blob_erased_during_a_read_is_not_found(kernel, folder):
+    sha256 = await kernel.put_body(LARGE)
+    blob_path(folder, sha256).unlink()
+    with pytest.raises(Refused) as error:
+        kernel.get_body(sha256)
     assert refused_code(error) == "not_found"
 
 
@@ -88,7 +107,8 @@ async def test_a_tombstone_erases_bytes_and_keeps_the_event_and_hash(kernel, fol
         await until(kernel, "effect.finished", after=head)
 
     assert not blob_path(folder, sha256).exists()
-    assert kernel._db.execute("SELECT count(*) FROM bodies").fetchone()[0] == 0
+    with kernel._reading() as db:
+        assert db.execute("SELECT count(*) FROM bodies").fetchone()[0] == 0
     assert result_of(kernel.query(kernel.runtime, "note.list", {})) == [sha256]
     assert events_of(kernel)[citing.seq - 1].gist == sha256
 
@@ -98,12 +118,58 @@ async def test_a_tombstone_names_a_hash_and_never_a_path(kernel):
     assert refusal_of(await kernel.submit(kernel.runtime, "body.tombstone", args)) == "invalid"
 
 
-async def test_tombstoned_content_does_not_come_back(kernel):
+@pytest.mark.parametrize("body", [SMALL, LARGE], ids=["inline", "blob"])
+async def test_tombstoned_content_does_not_come_back(kernel, folder, body):
+    sha256 = await kernel.put_body(body)
+    result_of(await kernel.submit(kernel.runtime, "body.tombstone", {"sha256": sha256}))
+    await kernel.erase_body(sha256)
+
+    with pytest.raises(Refused) as error:
+        await kernel.put_body(body)
+
+    assert refused_code(error) == "conflict"
+    assert not blob_path(folder, sha256).exists()
+
+
+async def test_a_busy_writer_leaves_a_stored_blob_alone(kernel, monkeypatch):
+    sha256 = await kernel.put_body(LARGE)
+
+    async def full(run, *, owner):
+        raise Refused("busy", retry_after=1.0)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(kernel._writer, "call", full)
+        with pytest.raises(Refused):
+            await kernel.put_body(LARGE)
+
+    assert kernel.get_body(sha256) == LARGE
+
+
+async def test_erased_bytes_leave_the_journal_and_the_wal_while_it_runs(kernel, folder):
+    secret = b"TOPSECRET-" * 100
+    sha256 = await kernel.put_body(secret)
+    result_of(await kernel.submit(kernel.runtime, "body.tombstone", {"sha256": sha256}))
+
+    await kernel.erase_body(sha256)
+
+    stored = b"".join(path.read_bytes() for path in folder.glob("journal.sqlite*"))
+    assert b"TOPSECRET-" not in stored
+
+
+async def test_a_reader_holding_the_wal_keeps_the_erase_open(kernel, folder):
     sha256 = await kernel.put_body(SMALL)
     result_of(await kernel.submit(kernel.runtime, "body.tombstone", {"sha256": sha256}))
+    reader = sqlite3.connect(folder / "journal.sqlite", autocommit=True)
+    reader.execute("BEGIN")
+    reader.execute("SELECT count(*) FROM events").fetchone()
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+
     with pytest.raises(Refused) as error:
-        await kernel.put_body(SMALL)
-    assert refused_code(error) == "conflict"
+        await kernel.erase_body(sha256)
+
+    assert refused_code(error) == "busy"
+    reader.close()
+    await kernel.erase_body(sha256)
 
 
 async def test_only_a_tombstoned_body_can_be_erased(kernel):

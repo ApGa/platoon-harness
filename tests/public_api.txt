@@ -19,9 +19,11 @@ platoon_harness.kernel.Principal
 platoon_harness.kernel.Principals
 platoon_harness.kernel.Refusal
 platoon_harness.kernel.Refused
+platoon_harness.kernel.Stamps
 platoon_harness.kernel.SystemClock
 platoon_harness.kernel.Timer
 platoon_harness.kernel.Timers
+platoon_harness.kernel.Tombstones
 platoon_harness.kernel.Txn
 platoon_harness.kernel.View
 platoon_harness.kernel.filesystem

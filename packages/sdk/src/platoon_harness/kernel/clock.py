@@ -54,9 +54,9 @@ class ManualClock:
                 del self._sleepers[sleeper]
                 sleeper.set_result(None)
 
-    async def sleeping(self, count: int = 1) -> None:
-        """Wait until `count` tasks are asleep, so that `advance` cannot race them."""
-        await self._parked_until(lambda: len(self._sleepers) >= count)
+    async def sleeping(self) -> None:
+        """Wait until a task is asleep, so that `advance` cannot race it."""
+        await self._parked_until(lambda: bool(self._sleepers))
 
     async def slept_until(self, due: float) -> None:
         """Wait until a task sleeps until `due`."""

@@ -62,7 +62,7 @@ For extension and training authors:
 | **Effect** | A tracked request to touch the world: requested, started, then finished, failed or uncertain. |
 | **Daemon** | A supervised task that performs effects or reacts to views, keeping nothing that must survive a restart. |
 | **Principal** | An authenticated actor (`agent`, `human`, `program`, `judge`, `runtime`), resolved from a credential. |
-| **Grant** | `(who, ops, on)`, the only authorization input. Absence means deny. |
+| **Grant** | `(who, ops, on)`, the only authorization input for an op. Absence means deny. |
 | **Driver** | The adapter that presents one harness session to the runtime. |
 | **Episode** | An explicitly opened span of a session with one outcome. Only events inside one can become training data. |
 | **Evidence** | Why a dependency is believed: observed, declared, judged or validated. |
@@ -70,8 +70,9 @@ For extension and training authors:
 
 ### Naming law
 
-Checked by a test, and by the kernel at load and at `emit`: an op may not be past tense, an event must be, and the namespace
-must equal the extension's name. `effect.uncertain` is the one event named for a state.
+Checked by a test and by the kernel. At load, an op may not be past tense and its namespace must equal its extension's name. At
+`emit`, an event must be past tense; it may carry another extension's namespace, because extensions are trusted code (§15).
+`effect.uncertain` is the one event named for a state.
 
 - Ops are imperative (`task.claim`); events are past tense (`task.claimed`).
 - The extension's name is the namespace. Collisions are refused at load. There is no `x.` prefix.
@@ -88,8 +89,8 @@ must equal the extension's name. `effect.uncertain` is the one event named for a
 
 Each law is a sentence, and each has a test of the same name.
 
-1. **The journal is the only truth.** Triggers abort `UPDATE` and `DELETE` on `events`. Dropping every other
-   table and refolding gives identical contents.
+1. **The journal is the only truth.** Triggers abort `UPDATE`, `DELETE` and a replacing `INSERT` on `events`.
+   Dropping every view and refolding gives identical contents.
 2. **Folds are pure.** A fold sees its own tables and one event: no clock, no network, no other view, no emit.
 3. **Operations cannot wait on the world.** An op is synchronous, does no I/O, and runs inside one transaction.
 4. **Ack follows commit.** A caller learns a result only after the fsync that made it durable.
@@ -163,24 +164,28 @@ class Kernel:
 
 The kernel knows streams, principals, grants and effects. It does not know what a message, board, task or harness
 is; those are primitives, written as `Extension` values on the same contract a third party uses. Its own ops, views and
-daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime` and `ops` are taken names.
+daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime`, `op` and `ops` are taken names.
 
 `submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. `read` and
 `follow`, which are not ops, raise `Refused`. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash)`,
-`recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)` and `push_delta(agent, text)`.
+`erase_body(hash)`, `recover()`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
+`push_delta(agent, text)`, `session_id` and `closed`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 
 ### 5.1 One write
 
-`submit → authorize → op → emit → fold → commit → ack → pulse.` Timers, driver reports and effect results enter
+`submit → authorize → op → emit → fold → commit → pulse → ack.` Timers, driver reports and effect results enter
 through `submit` too, so no second path exists.
 
-1. **Ingress.** The transport maps its credential to a `Principal`. Decoding is strict: an undeclared field is refused
-   and journaled. Bodies are written to the content store first, so a retry or an orphan is harmless.
+1. **Ingress.** The transport maps its credential to a `Principal`. Decoding is strict: nothing is coerced, and an undeclared
+   field or an argument that is not JSON is refused and journaled. An op name or key that is not printable, or is over 256
+   characters, could not be journaled even as a refusal, so it is refused here with no event. Bodies are written to the content
+   store first, so a retry or an orphan is harmless.
 2. **Queue.** The command joins a bounded queue drained by the session's one **writer thread**, never the event loop,
    so an fsync cannot stall a client or a Platoon rollout worker. A full queue returns `busy{retry_after}`. `runtime`
    principals have reserved capacity, so evidence is never shed to admit a client.
 3. **Transaction.** `BEGIN IMMEDIATE`, then up to 64 commands, each in a `SAVEPOINT`:
-   - dedupe on `(actor, key)`: same args hash returns the stored outcome; different hash refuses `key_reused`;
+   - dedupe on `(actor, key)`, through an index over `events`: same args hash returns the first outcome; different hash
+     refuses `key_reused`;
    - `authorize(principal, op, op.on(args))`;
    - check `expected_version` if given;
    - run the op, which may read views and emit events and effects, or refuse;
@@ -190,27 +195,32 @@ through `submit` too, so no second path exists.
    denial stays evidence. A command always ends on one event carrying its `outcome`: the last event an op emits is
    folded at once but held back from `events` until the op returns, and an op that emits nothing ends on `op.completed`.
    `op.refused` and `op.completed` go on the stream `commands/<actor>`, so a failed attempt moves no object's version.
-4. **Commit.** One fsync per batch. Only then are futures resolved, and the head pulses. If the commit fails, no command
-   in the batch happened: each gets `unavailable`, journals nothing, and may retry under its key.
+
+   An op that crashes is refused `unavailable` and journaled without its key: a crash answers nothing, so a retry runs. A fold
+   failure fails its command even if the op catches it. If `op.refused` itself cannot be written, the command gets
+   `unavailable`, journals nothing, and may retry. A refusal's `object` is cut to 256 characters and its `detail` to 512, so
+   caller text cannot grow the journal.
+4. **Commit.** One fsync per batch. Only then does the head pulse and are futures resolved, so whoever is acked finds their
+   write under `head`. If the commit fails, no command in the batch happened: each gets `unavailable`, journals nothing, and
+   may retry under its key.
 
 ### 5.2 Tables
 
 | Table | Kind | Why it cannot be removed |
 |---|---|---|
-| `events` | truth | The journal. `UNIQUE(stream, version)` is optimistic concurrency. |
+| `events` | truth | The journal. `UNIQUE(stream, version)` is optimistic concurrency. An index over `outcome` gives a retry the first answer, including a refusal. |
 | `bodies` | content | `sha256 → bytes`, inline up to 64 KiB; a larger body has a row and a file in `blobs/`. Separate from `events` so redaction can erase a body while the event and its hash survive. |
 | `meta` | fixed | Schema version, session id, creation time. Written once. |
-| `v_commands(actor, key, op, args_hash, outcome, seq)` | fold | A retry must receive the first answer, including a refusal. |
-| `v_principals(id, kind, role, parent, path, state, token_hash, scopes)` | fold | `authorize` needs the live graph in-transaction. `path` makes `descendants` a prefix test. |
+| `v_principals(id, kind, role, parent, path, state, token_hash, scopes)` | fold | `authorize` needs the live graph in-transaction. `path`, a chain of ids, makes `descendants` a prefix test. |
 | `v_grants(who, ops, on, rev)` | fold | The compiled topology. |
-| `v_effects(id, kind, state, on_uncertain, timeout, deadline, priority, agent, attempts, data, seq)` | fold | The outbox and the input to recovery. |
+| `v_effects(id, kind, state, on_uncertain, timeout, priority, agent, attempts, data)` | fold | The outbox and the input to recovery. |
 | `v_timers(key, due, op, args, seq)` | fold | The clock daemon's work, which must survive a restart. |
 | `v_stamps(scope, value)` | fold | The open turn per agent and the open episode, read at every `emit`. |
 | `v_tombstones(sha256, seq)` | fold | Reads of a redacted body stop at commit, before its bytes are gone. |
 | `v_folds(view, version, high_water)` | fold bookkeeping | Lets one view rebuild alone, and stops a toggled extension leaving a stale view. |
 
 Everything else belongs to a primitive. Group generation, topology revision, board version and context version need
-no counters: each is a stream version. A fence is the `seq` of the claim event.
+no counters: each is a stream version, which `txn.view(Stamps).version_of(stream)` reads. A fence is the `seq` of the claim event.
 
 ### 5.3 The envelope
 
@@ -243,17 +253,20 @@ The session id is a constant of the file and is added only at export. An op cann
 
 - `context_version` is the version of the stream `context/<agent>`, and `topology_rev` the version of the stream `topology`.
 - `turn` is open from `turn.started{turn}` through `turn.ended` or `turn.lost`, per agent, and those boundary events carry it.
-- `episode` is open from `episode.opened{episode}` through `episode.closed`. A session has one open at a time.
+- `episode` is open from `episode.opened{episode}` through `episode.closed`. A session has one open at a time, so `emit`
+  refuses a second `conflict`. A boundary event that does not name what it opens is `invalid`.
 
 `refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
-refuses. A ref is `stream@version`, with an optional `#range`, or `sha256:<hash>` for a body.
+refuses. A ref is `stream@version`, with an optional `#range`, or `sha256:<hash>` for a body. `cause`, `based_on`, `native` and
+`correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
 
 ### 5.4 Effects
 
-An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=..., priority=...)` appends
-`effect.requested` and returns the effect's id, which is that event's `seq`. A daemon commits `effect.start`, acts, then
-commits `effect.finish` or `effect.fail`. Daemons read `v_effects`, so they are level-triggered and hold no durable
-position. One agent's effects start in order. A `priority` above zero starts first and ignores that order.
+An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=..., priority=..., agent=...)` appends
+`effect.requested` and returns the effect's id, which is that event's `seq`. A daemon commits `effect.start`, which returns the
+attempt, acts, then commits `effect.finish` or `effect.fail` naming that attempt. While a newer attempt runs, a late report from
+an older one is refused `conflict`. Daemons read `v_effects`, so they are level-triggered and hold no durable position. One
+agent's effects start in order. A `priority` above zero starts first and ignores that order.
 
 | Kind | Key sent outward | After a crash |
 |---|---|---|
@@ -263,33 +276,35 @@ position. One agent's effects start in order. A `priority` above zero starts fir
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap |
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs |
+| `erase` | None | Repeat: erasing twice is harmless |
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
   sets a timer for it, and `effect.finish` clears that timer.
-- **Recovery** is one function: take `lock`, write `runtime.started{incarnation}`, then per agent **reap, resume,
+- **Recovery** is one function: take `lock`, write `runtime.started`, then per agent **reap, resume,
   reconcile, dispatch**. Every `started` row becomes `effect.uncertain` and its declared policy applies: `retry`,
   `reconcile` or `surface`. `reconcile` needs a live link, so it runs after resume, and it is `unknown` when resume is
   unavailable. A turn in flight becomes `turn.lost` plus a gap, because its tool effects are unknown and never re-run.
   `retry` appends `effect.retried`, which returns the effect to `requested`. `reconcile` and `surface` stay `uncertain` until
-  `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this; the incarnation is the version of
-  `runtime.started` on the stream `runtime`.
+  `effect.finish` or `effect.fail`. `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names
+  the gap `crash_window`; the incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 
-**Timers.** A `timer.set` event sets one: `{due, op, args, key}`, where `key` names one firing. The clock daemon sleeps on the
-injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then submits `timer.clear`. A crash between the two
-fires again under the same key, which answers from `v_commands`, so the op runs once. A refused firing is still cleared and stays
-journaled. Any op can emit `timer.cleared` to cancel.
+**Timers.** A `timer.set` event sets one: `{due, op, args, key}`, where `key` names one firing and `op` and `key` are at most 256
+characters. The clock daemon sleeps on the injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then
+submits `timer.clear`. A crash between the two fires again under the same key, which answers from the journal, so the op runs once.
+A refused firing is still cleared and stays journaled. A firing that left no event, because the writer was busy or its commit
+failed, stays set and is tried again. Any op can emit `timer.set`, and `timer.cleared` to cancel.
 
 ### 5.5 Views
 
 A `View` is a class with a schema, `@fold` methods, and typed query methods. Core and extension views are identical
 in kind. Other code reads a view through `txn.view(Tasks).open_in(queue)`, never through its SQL, so a table layout is
-not an API. Its tables are named `v_<name>`, or start with that and `_`. A version bump drops and refolds that view, and so
-does finding its high-water mark behind the journal, which is what a toggled extension leaves. Folds ignore unknown types,
-which is why unknown events survive. CI compares live views to a rebuild after every scenario.
+not an API. Its tables are named `v_<name>`, or start with that and `_`, and no two views share one. A version bump drops and
+refolds that view, and so does finding its high-water mark behind the journal, which is what a toggled extension leaves. Folds
+ignore unknown types, which is why unknown events survive. CI compares live views to a rebuild after every scenario.
 
 A rebuild runs under an SQLite authorizer limited to the view's own tables, so a fold that reaches out fails loudly. A fold
-never sees `outcome`, which does not exist yet when a live fold runs; only `v_commands` is written from it.
+never sees `outcome`, which does not exist yet when a live fold runs.
 
 **One event, many folds** is how a transition stays atomic. `agent.ended` is one event. In that one transaction `Waits`
 cancels the agent's waits, `Budget` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
@@ -304,19 +319,23 @@ the WAL. Catch-up and live are one loop. `match` is a glob over stream names, a 
 and `Page.cursor` is where to continue, so a page can be empty with more to come.
 
 Followers at the tail share one read per pulse into a bounded tail and take a slice; a lagging follower pages by SQL through
-a small bounded pool. A private read per follower does not keep up at 100 followers, and slows the writer. A reader takes one
-short transaction per page and never holds a cursor, because a half-read cursor pins the WAL while `in_transaction` says false.
-The checkpoint thread alarms when unbackfilled frames pass 16,000.
+a small pool of idle connections. A private read per follower does not keep up at 100 followers, and slows the writer. A reader
+takes one short transaction per page and never holds a cursor, because a half-read cursor pins the WAL while `in_transaction`
+says false. The checkpoint thread alarms when unbackfilled frames pass 16,000.
 
 Clients may rely on per-stream order only. Agents never get `read`: their reads are ops, checked per page against
 grants. Runtime-only ops are excluded by principal kind, so no grant glob can reach them.
+
+`read` and `follow` are not ops, so they take no grant: the runtime and any live principal that is not an agent may read the
+whole journal. A page holding a `principal.revoked` goes by SQL, so a follower is refused at its own revocation. `limit` is 1 to
+4,096.
 
 ### 5.7 Backpressure
 
 | Pressure | Answer |
 |---|---|
 | Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}`, which is not journaled. `runtime` has no per-principal limit and 256 more |
-| Payloads | `gist` 280 chars, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list paged |
+| Payloads | Op names and keys 256 chars, stream names 512, `gist` 280, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list paged |
 | Readers | They pull, so a slow client costs only its own lag |
 | Live text | One 256-frame ring per agent; overflow drops frames with a `lag` marker. The final `item` is authoritative |
 | Harness output | Pipes always drain. A driver that stalls its harness's stdout stalls the harness. Reports buffer in a bounded queue; a quota breach stops that agent with a gap |
@@ -327,10 +346,11 @@ grants. Runtime-only ops are excluded by principal kind, so no grant glob can re
 ### 5.8 Durability and portability
 
 Pragmas: `journal_mode=WAL`, `synchronous=FULL`, `cache_size=-8192`, `mmap_size=0`, `temp_store=MEMORY`,
-`wal_autocheckpoint=16000`, `journal_size_limit=67108864`, plus `fullfsync=ON` and `checkpoint_fullfsync=ON` on macOS. Blob file
-and directory are fsynced before citation. Checkpoints stay off the commit path: a background thread runs `PASSIVE` every second
-on its own connection, with `wal_autocheckpoint` as the writer's hard cap, because the thread alone lets the WAL grow without
-bound at saturation. A rebuild runs with `FULL` in one transaction; `OFF` saves little and risks the file that holds the journal.
+`wal_autocheckpoint=16000`, `journal_size_limit=67108864`, `secure_delete=ON`, plus `fullfsync=ON` and `checkpoint_fullfsync=ON`
+on macOS. Blob file and directory are fsynced before citation, on a retry too. Erasing a body zeroes its pages and then truncates
+the WAL, refusing `busy` while a reader holds it, so an erase effect stays open until the bytes are gone. Checkpoints stay off the
+commit path: a background thread runs `PASSIVE` every second on its own connection, with `wal_autocheckpoint` as the writer's hard
+cap, because the thread alone lets the WAL grow without bound at saturation. A rebuild runs with `FULL` in one transaction; `OFF` saves little and risks the file that holds the journal.
 A client that misses an ack retries under the same key, since a commit without an ack is expected.
 
 | Storage | An ack means | Status |
@@ -342,9 +362,11 @@ A client that misses an ack retries under the same key, since a commit without a
 | WSL | Linux rules inside the distro filesystem; `/mnt/c` is 9p and refused | Not run |
 
 A closed session is portable: `session.close` checkpoints the WAL to empty, so the folder can be copied anywhere
-and opened read-only with `immutable=1`. Estimators and exports use this form; a live journal is never read over a
-network filesystem. `Kernel.open(path, read_only=True)` picks between the two by whether `lock` is held or the WAL has
-content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it holds is behind the journal.
+and opened read-only with `immutable=1`. A reader holding the WAL stops that, and the close logs it. Estimators and exports use
+this form; a live journal is never read over a network filesystem. `Kernel.open(path, read_only=True)` picks between the two by
+whether `lock` is held or the WAL has content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it
+holds is behind the journal. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
+refuses `unavailable` once a writer has touched the file.
 
 `filesystem(path)` says what holds a path, from `statfs(2)` so that links and bind mounts resolve, and from the mount table by
 device for a FUSE subtype. A live journal is refused on a network filesystem with the name of a local directory to use, and
@@ -353,7 +375,7 @@ warned on tmpfs or a type not known to be local.
 ## 6. Operations
 
 ```python
-class Claim(Args):                 # Args forbids unknown fields and any identity field
+class Claim(Args):                 # Args refuses undeclared fields and coerces nothing
     queue: str
     task: str | None = None
 
@@ -364,12 +386,17 @@ def claim(txn: Txn, a: Claim) -> Lease:
     ...
 ```
 
-`Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `emit`, `effect`, `refuse`.
+`Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `emit`, `effect`. An op refuses by raising `Refused`,
+and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`.
 
 `Op` holds `name`, `fn`, `input`, `on`, `query`, `exposes`, `tool` and `runtime`. `on` gives the object: the stream that
 grants are matched against and `expected_version` is checked on, or `session` when an op has none. `query` keeps an op out of
 history. `exposes` marks a read that is a command for agents and a query for everyone else; its body checks `txn.me.kind`,
-because a query cannot emit. `runtime` is the runtime-only marker. The runtime principal takes no grant.
+because a query cannot emit. An op is at most one of `query` and `exposes`. `runtime` is the runtime-only marker. The runtime
+principal takes no grant.
+
+`op()` refuses at definition an input that is not `Args` or lets undeclared fields through, a `tool` whose schema claims the
+caller's identity by name or alias (law 6), and a `tool` with no description.
 
 One definition reaches every surface.
 
@@ -387,7 +414,8 @@ derived from `(turn, op, canonical args hash)`. Either way a harness retry after
 
 **Commands and queries.** A query enters no history and reads a read connection. A command is journaled and returns a
 result. An agent's read of content is a command, because it records exposure. A human's read of the same content is a
-query.
+query. A query that decoding refuses leaves no event, so the tool plane submits an agent's `invalid` query again: `submit` refuses
+it the same way and journals it, which keeps law 6.
 
 **Refusals are data:** `{code, op, object, reachable?, retry_after?, detail}`. Codes: `not_permitted invalid not_found
 conflict stale_fence lease_lost queue_full queue_empty over_budget unsupported busy unavailable key_reused undeliverable`.
@@ -407,9 +435,9 @@ to do next.
 | Evidence, kernel | `body.tombstone` | |
 | Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` | `effect.ready` `timer.next` |
 
-An agent's `board.get`, `board.query`, `message.read` and `task.claim` are commands; for a human or a program they run
-as queries and write nothing. `reply` is `send(reply_to=)`. Broadcast is `send("+group")`. `join` and `wait_any` are
-`wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`.
+An agent's `board.get`, `board.query` and `message.read` are commands; for a human or a program they run
+as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`.
 
 ### Library tier
 
@@ -606,6 +634,7 @@ ops by glob, so an extension's op is authorized with no new vocabulary. `who` is
 | `delivery` | Negotiated with the driver, degraded visibly | Nothing | "Queued until turn end" |
 
 - **Role `tools`** attenuates: it lists op globs, which become the token's scopes, so the effective set is grants ∩ tools.
+  Compilation always keeps `ops.list` in scope and grants it to `all`, because every surface derives from it.
 - **Role `sandbox`** (`read-only`, ...) is a harness-plane setting, not a grant, and an unsupported value fails at `team check`.
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so `peers`
   and the turn preamble list them; tool schemas never enumerate them.
@@ -860,7 +889,7 @@ freely, because credit-critical evidence is an event and deltas are not.
 ## 17. Extensions and configuration
 
 ```python
-extension = Extension("ballot", ops=[cast], views=[Votes], daemons=[], presets={}, workspaces={}, exporters={})
+extension = Extension("ballot", ops=[cast], views=[Votes], daemons=[])
 ```
 
 Two entry-point groups: `platoon_harness.drivers` (name → driver) and `platoon_harness.extensions` (name → `Extension`). A kind gets a group when a

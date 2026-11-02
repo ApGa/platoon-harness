@@ -18,7 +18,8 @@ alien = Extension("alien", ops=[land])
 
 
 def fold_marks(kernel) -> dict[str, tuple[int, int]]:
-    rows = kernel._db.execute("SELECT * FROM v_folds")
+    with kernel._reading() as db:
+        rows = db.execute("SELECT * FROM v_folds").fetchall()
     return {row["view"]: (row["version"], row["high_water"]) for row in rows}
 
 
@@ -42,7 +43,7 @@ async def test_an_op_reads_its_own_writes(folder, clock):
 async def test_one_view_rebuilds_alone(kernel, folder):
     result_of(await kernel.submit(kernel.runtime, "note.add", {"text": "kept"}))
     before = dump(folder)
-    kernel._db.execute("DELETE FROM v_notes")
+    kernel._writer._db.execute("DELETE FROM v_notes")
 
     await kernel.rebuild(Notes)
 
@@ -57,11 +58,7 @@ async def test_rebuild_all_produces_identical_contents_after_every_kind_of_event
     effect = result_of(await kernel.submit(runtime, "note.dispatch", {"timeout": 9.0, "on_uncertain": "retry"}))
     result_of(await kernel.submit(runtime, "effect.start", {"id": effect}))
     result_of(await kernel.submit(runtime, "note.remind", {"due": 5.0, "key": "k"}))
-    result_of(
-        await kernel.submit(runtime, "note.add", {"fail": True}, key="refused")
-        if False
-        else await kernel.submit(runtime, "note.add", {}, key="kept")
-    )
+    result_of(await kernel.submit(runtime, "note.add", {}, key="kept"))
     await kernel.submit(runtime, "note.add", {"fail": True}, key="refused")
     args = {"type": "turn.started", "stream": "turn/a", "agent": "a", "data": {"turn": "t1"}}
     result_of(await kernel.submit(runtime, "note.mark", args))
@@ -91,7 +88,7 @@ async def test_a_version_bump_drops_and_refolds(folder, clock):
             self.db.execute("INSERT INTO v_notes VALUES (?)", (event.data["text"].upper(),))
 
     reopened = Kernel.open(folder, clock=clock, extensions=[Extension("notes2", views=[NotesV2])])
-    assert reopened._db.execute("SELECT body FROM v_notes").fetchall()[0]["body"] == "AGAIN"
+    assert dump(folder)["v_notes"] == [("AGAIN",)]
     assert fold_marks(reopened)["notes"] == (2, 1)
     reopened.close()
 
@@ -128,8 +125,8 @@ async def test_a_fold_never_sees_an_outcome(folder, clock):
     class Watcher(View):
         schema = "CREATE TABLE v_watcher(n INTEGER) STRICT;"
 
-        @fold("*")
-        def anything(self, event: Event) -> None:
+        @fold("note.added")
+        def added(self, event: Event) -> None:
             seen.append(event.outcome)
 
     kernel = Kernel.open(folder, clock=clock, extensions=[notes, Extension("watcher", views=[Watcher])])

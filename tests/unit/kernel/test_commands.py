@@ -1,11 +1,13 @@
 """One command: idempotency, refusals, outcomes and optimistic concurrency."""
 
 import asyncio
+import contextlib
 import logging
+import sqlite3
 
-from platoon_harness.kernel import Args, Extension, Kernel, Txn, op
+from platoon_harness.kernel import Args, Event, Extension, Kernel, Txn, View, fold, op
 
-from .support import ALICE, BOB, HUMAN, enroll, events_of, grant, refusal_of, result_of
+from .support import ALICE, BOB, HUMAN, dump, enroll, events_of, grant, notes, refusal_of, result_of
 
 
 async def granted(kernel, *principals):
@@ -137,8 +139,157 @@ async def test_a_crashing_op_is_refused_and_the_writer_lives_on(folder, clock, c
     assert refusal_of(outcome) == "unavailable"
     assert "an op failed" in caplog.text
     assert [event.type for event in events_of(kernel)] == ["op.refused"]
-    assert await kernel.submit(kernel.runtime, "bug.crash", {}, key="k") == outcome
     kernel.close()
+
+
+async def test_a_crash_answers_nothing_so_its_key_can_retry(folder, clock):
+    runs = []
+
+    @op("bug.flaky")
+    def flaky(txn: Txn, a: Args) -> str:
+        """Fail the first time."""
+        runs.append(1)
+        if len(runs) == 1:
+            raise sqlite3.OperationalError("database or disk is full")
+        return "worked"
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[Extension("bug", ops=[flaky])])
+
+    assert refusal_of(await kernel.submit(kernel.runtime, "bug.flaky", {}, key="k")) == "unavailable"
+    assert result_of(await kernel.submit(kernel.runtime, "bug.flaky", {}, key="k")) == "worked"
+    assert result_of(await kernel.submit(kernel.runtime, "bug.flaky", {}, key="k")) == "worked"
+    assert len(runs) == 2
+    kernel.close()
+
+
+def half_folded(event_type: str) -> type[View]:
+    """A view of two folds on one event: the first writes and the second fails."""
+
+    class Half(View):
+        schema = "CREATE TABLE v_half(seq INTEGER PRIMARY KEY) STRICT;"
+
+        @fold(event_type)
+        def first(self, event: Event) -> None:
+            self.db.execute("INSERT INTO v_half VALUES (?)", (event.seq,))
+
+        @fold(event_type)
+        def second(self, event: Event) -> None:
+            raise RuntimeError("a bug in a fold")
+
+    return Half
+
+
+async def test_a_fold_failure_on_the_refusal_path_leaves_nothing(folder, clock):
+    half = Extension("half", views=[half_folded("op.refused")])
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, half])
+
+    outcome = await kernel.submit(kernel.runtime, "note.add", {"fail": True})
+
+    assert refusal_of(outcome) == "unavailable"
+    assert outcome.seq is None
+    assert kernel.head == 0
+    assert dump(folder)["v_half"] == []
+    assert result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    kernel.close()
+
+
+async def test_an_op_cannot_swallow_a_fold_failure(folder, clock):
+    @op("half.swallow")
+    def swallow(txn: Txn, a: Args) -> str:
+        """Catch a fold's failure and carry on."""
+        with contextlib.suppress(RuntimeError):
+            txn.emit("half.done", "half/a", gist="half")
+        return "fine"
+
+    half = Extension("half", ops=[swallow], views=[half_folded("half.done")])
+    kernel = Kernel.open(folder, clock=clock, extensions=[half])
+
+    outcome = await kernel.submit(kernel.runtime, "half.swallow", {})
+
+    assert refusal_of(outcome) == "unavailable"
+    assert [event.type for event in events_of(kernel)] == ["op.refused"]
+    assert dump(folder)["v_half"] == []
+    kernel.close()
+
+
+async def test_a_denial_of_a_long_object_stays_evidence(kernel):
+    await enroll(kernel, ALICE)
+    head = kernel.head
+
+    outcome = await kernel.submit(ALICE, "note.add", {"stream": "x" * 20000}, key="k")
+
+    assert refusal_of(outcome) == "not_permitted"
+    assert outcome.refusal.object == "x" * 256
+    assert kernel.head == head + 1
+    assert events_of(kernel)[-1].outcome == outcome
+    assert await kernel.submit(ALICE, "note.add", {"stream": "x" * 20000}, key="k") == outcome
+
+
+async def test_caller_text_cannot_grow_a_refusal_without_bound(kernel, folder):
+    outcome = await kernel.submit(kernel.runtime, "note.add", {"refs": ["bad ref" + "z" * 1_000_000]})
+
+    assert refusal_of(outcome) == "invalid"
+    assert len(outcome.refusal.detail) == 512
+    assert len(events_of(kernel)[-1].outcome.model_dump_json()) < 2048
+
+
+async def test_structured_detail_survives_when_it_fits(kernel):
+    args = {"stream": "note/a"}
+    outcome = await kernel.submit(kernel.runtime, "note.add", args, expected_version=9)
+    assert outcome.refusal.detail == {"expected": 9, "current": 0}
+
+
+async def test_a_lone_surrogate_is_refused_and_journaled(kernel):
+    outcome = await kernel.submit(kernel.runtime, "note.add", {"text": "\ud800"}, key="k")
+
+    assert refusal_of(outcome) == "invalid"
+    assert events_of(kernel)[-1].outcome == outcome
+    assert refusal_of(kernel.query(kernel.runtime, "note.list", {"stream": "\ud800"})) == "invalid"
+
+
+async def test_arguments_that_are_not_json_are_refused_and_journaled(kernel):
+    looped: dict[str, object] = {}
+    looped["self"] = looped
+    for args in ({"text": object()}, {"text": float("nan")}, looped, {1: "a", "b": 2}):
+        outcome = await kernel.submit(kernel.runtime, "ops.list", args)
+        assert refusal_of(outcome) == "invalid"
+        assert events_of(kernel)[-1].outcome == outcome
+        assert refusal_of(kernel.query(kernel.runtime, "ops.list", args)) == "invalid"
+
+
+async def test_decoding_coerces_nothing(kernel):
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {"copies": "2"})) == "invalid"
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {"fail": 1})) == "invalid"
+    assert result_of(await kernel.submit(kernel.runtime, "note.add", {"cause": [], "copies": 1}))
+
+
+async def test_a_version_expected_of_a_query_is_refused(kernel):
+    outcome = await kernel.submit(HUMAN, "note.read", {}, expected_version=9)
+    assert refusal_of(outcome) == "unsupported"
+
+
+async def test_a_retry_after_key_reuse_still_gets_the_first_answer(kernel):
+    first = await kernel.submit(kernel.runtime, "note.add", {"text": "one"}, key="k")
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {"text": "two"}, key="k")) == "key_reused"
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {"text": "two"}, key="k")) == "key_reused"
+    assert await kernel.submit(kernel.runtime, "note.add", {"text": "one"}, key="k") == first
+
+
+async def test_a_retry_finds_its_answer_through_the_index(kernel):
+    with kernel._reading() as db:
+        plan = db.execute(
+            "EXPLAIN QUERY PLAN SELECT outcome FROM events WHERE actor = ? AND outcome ->> '$.key' = ? "
+            "ORDER BY seq LIMIT 1",
+            ("runtime", "k"),
+        ).fetchall()
+    assert "USING INDEX events_command" in plan[0]["detail"]
+    assert all("TEMP B-TREE" not in row["detail"] for row in plan)
+
+
+async def test_a_retry_outlives_a_rebuild(kernel):
+    first = await kernel.submit(kernel.runtime, "note.add", {}, key="k")
+    await kernel.rebuild_all()
+    assert await kernel.submit(kernel.runtime, "note.add", {}, key="k") == first
 
 
 async def test_a_result_too_large_for_the_journal_is_refused(folder, clock):
@@ -155,6 +306,8 @@ async def test_a_result_too_large_for_the_journal_is_refused(folder, clock):
 async def test_names_are_bounded_before_they_reach_the_journal(kernel):
     assert refusal_of(await kernel.submit(HUMAN, "x" * 300, {})) == "invalid"
     assert refusal_of(await kernel.submit(HUMAN, "note.silence", {}, key="k" * 300)) == "invalid"
+    assert refusal_of(await kernel.submit(HUMAN, "note.\ud800", {})) == "invalid"
+    assert refusal_of(await kernel.submit(HUMAN, "note.silence", {}, key="\ud800")) == "invalid"
     assert events_of(kernel) == []
 
 

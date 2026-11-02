@@ -8,7 +8,7 @@ from functools import lru_cache
 
 from pydantic import Field
 
-from .model import ENROLLED_ID, GIST_LIMIT, Event, Grant, Principal, Refused
+from .model import ENROLLED_ID, GIST_LIMIT, Event, Principal, Refused
 from .op import Args, Op, op
 from .txn import Txn
 from .view import View, fold
@@ -56,7 +56,7 @@ class Principals(View):
                 principal.kind,
                 principal.role,
                 principal.parent,
-                f"{parent.path if parent else '/'}{principal.name}/",
+                f"{parent.path if parent else '/'}{principal.id}/",
                 data["token_hash"],
                 json.dumps(principal.scopes),
             ),
@@ -88,6 +88,13 @@ class Principals(View):
     def get(self, id: str) -> Principal | None:
         return self._load(self.db.execute("SELECT * FROM v_principals WHERE id = ?", (id,)).fetchone())
 
+    def live(self, id: str) -> Principal:
+        """The principal with this id, or refuse if it is unknown or revoked."""
+        principal = self.get(id)
+        if principal is None or principal.state != "live":
+            raise Refused("not_permitted", "unknown or revoked principal")
+        return principal
+
     def by_token(self, token_hash: str) -> Principal | None:
         row = self.db.execute("SELECT * FROM v_principals WHERE token_hash = ?", (token_hash,)).fetchone()
         return self._load(row)
@@ -104,6 +111,14 @@ class Principals(View):
             {"name": name, "role": role, "me": me.id, "parent": me.parent, "path": me.path},
         ).fetchone()
         return row is not None
+
+
+class Grant(Args):
+    """Who may run which ops on what. Absence means deny."""
+
+    who: str
+    ops: str
+    on: str = "*"
 
 
 class Grants(View):
@@ -143,9 +158,24 @@ class Grants(View):
         )
         return [Grant(who=row["who"], ops=row["ops"], on=row["on"]) for row in rows]
 
-    def all(self) -> list[Grant]:
-        rows = self.db.execute('SELECT who, ops, "on" FROM v_grants ORDER BY who, ops, "on"')
-        return [Grant(who=row["who"], ops=row["ops"], on=row["on"]) for row in rows]
+    def authorize(self, principal: Principal, operation: Op, target: str | None = None) -> Principal:
+        """Return the live principal if it may run `operation` on `target`, or refuse.
+
+        With no target this asks about any object. The runtime is trusted and takes no grant; runtime-only ops are
+        excluded by principal kind, so no glob reaches them. Scopes only attenuate.
+        """
+        if principal.kind == "runtime":
+            return principal
+        if operation.runtime:
+            raise Refused("not_permitted", "a runtime-only op")
+        principals = Principals(self.db)
+        me = principals.live(principal.id)
+        if not any(fnmatchcase(operation.name, scope) for scope in me.scopes):
+            raise Refused("not_permitted", "outside this credential's scopes")
+        for grant in self.held_by(me):
+            if fnmatchcase(operation.name, grant.ops) and (target is None or _covers(grant.on, target, me, principals)):
+                return me
+        raise Refused("not_permitted", "no grant covers this")
 
 
 @lru_cache(maxsize=1024)
@@ -166,28 +196,6 @@ def _covers(pattern: str, target: str, me: Principal, principals: Principals) ->
     return all(principals.related(me, *pair) for pair in zip(relations, match.groups(), strict=True))
 
 
-def authorize(db: sqlite3.Connection, principal: Principal, operation: Op, target: str | None = None) -> Principal:
-    """Return the live principal if it may run `operation` on `target`, or refuse.
-
-    With no target this asks about any object. The runtime is trusted and takes no grant; runtime-only ops are
-    excluded by principal kind, so no glob reaches them. Scopes only attenuate.
-    """
-    if principal.kind == "runtime":
-        return principal
-    if operation.runtime:
-        raise Refused("not_permitted", "a runtime-only op")
-    principals = Principals(db)
-    me = principals.get(principal.id)
-    if me is None or me.state != "live":
-        raise Refused("not_permitted", "unknown or revoked principal")
-    if not any(fnmatchcase(operation.name, scope) for scope in me.scopes):
-        raise Refused("not_permitted", "outside this credential's scopes")
-    for grant in Grants(db).held_by(me):
-        if fnmatchcase(operation.name, grant.ops) and (target is None or _covers(grant.on, target, me, principals)):
-            return me
-    raise Refused("not_permitted", "no grant covers this")
-
-
 class AddPrincipal(Args):
     id: str = Field(pattern=f"^{ENROLLED_ID}$")
     role: str | None = None
@@ -205,9 +213,11 @@ def add_principal(txn: Txn, a: AddPrincipal) -> None:
     """Add a principal to the live graph."""
     principals = txn.view(Principals)
     if principals.get(a.id) is not None:
-        txn.refuse("conflict", f"{a.id} exists")
+        raise Refused("conflict", f"{a.id} exists")
     if a.parent is not None and principals.get(a.parent) is None:
-        txn.refuse("not_found", f"no parent {a.parent}")
+        raise Refused("not_found", f"no parent {a.parent}")
+    if a.token_hash is not None and principals.by_token(a.token_hash) is not None:
+        raise Refused("conflict", "this token is in use")
     txn.emit("principal.added", f"principal/{a.id}", gist=f"{a.id} added", data=a)
 
 
@@ -215,26 +225,20 @@ def add_principal(txn: Txn, a: AddPrincipal) -> None:
 def revoke_principal(txn: Txn, a: RevokePrincipal) -> None:
     """Take a principal out of the live graph. Its history stays."""
     if txn.view(Principals).get(a.id) is None:
-        txn.refuse("not_found", f"no principal {a.id}")
+        raise Refused("not_found", f"no principal {a.id}")
     txn.emit("principal.revoked", f"principal/{a.id}", gist=f"{a.id} revoked", data=a)
 
 
-class GrantArgs(Args):
-    who: str
-    ops: str
-    on: str = "*"
-
-
 @op("grant.add", on=lambda a: "topology", runtime=True)
-def add_grant(txn: Txn, a: GrantArgs) -> None:
+def add_grant(txn: Txn, a: Grant) -> None:
     """Add a grant. Each change is a topology revision."""
     for relation in _compile(a.on)[1]:
         if relation not in _RELATIONS and not relation.startswith("role:"):
-            txn.refuse("unsupported", f"no relation {relation}")
+            raise Refused("unsupported", f"no relation {relation}")
     txn.emit("grant.added", "topology", gist=f"{a.who} may {a.ops} on {a.on}"[:GIST_LIMIT], data=a)
 
 
 @op("grant.remove", on=lambda a: "topology", runtime=True)
-def remove_grant(txn: Txn, a: GrantArgs) -> None:
+def remove_grant(txn: Txn, a: Grant) -> None:
     """Remove a grant. Each change is a topology revision."""
     txn.emit("grant.removed", "topology", gist=f"{a.who} may no longer {a.ops} on {a.on}"[:GIST_LIMIT], data=a)

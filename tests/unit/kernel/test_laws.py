@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import Field, create_model
 
 from platoon_harness import kernel as kernel_package
 from platoon_harness.kernel import Args, Event, Extension, Kernel, Refused, Txn, View, fold, op
@@ -36,7 +37,11 @@ async def test_the_journal_is_the_only_truth(kernel, folder):
 
     assert dump(folder) == before
     db = sqlite3.connect(folder / "journal.sqlite")
-    for statement in ("UPDATE events SET gist = 'edited'", "DELETE FROM events"):
+    for statement in (
+        "UPDATE events SET gist = 'edited'",
+        "DELETE FROM events",
+        "INSERT OR REPLACE INTO events SELECT * FROM events WHERE seq = 1",
+    ):
         with pytest.raises(sqlite3.IntegrityError, match="events are immutable"):
             db.execute(statement)
     db.close()
@@ -111,12 +116,22 @@ async def test_replay_executes_nothing(kernel, folder):
     spied.close()
 
 
+@pytest.mark.parametrize("field", ["actor", "role", "session", "token"])
+def test_no_tool_schema_claims_an_identity(field):
+    declared = create_model("Spoof", __base__=Args, **{field: (str, ...)})
+    aliased = create_model("Aliased", __base__=Args, name=(str, Field(alias=field)))
+
+    def tool(txn: Txn, a: Args) -> None:
+        """Claim to be someone."""
+
+    for spoof in (declared, aliased):
+        tool.__annotations__["a"] = spoof
+        with pytest.raises(TypeError, match="identity"):
+            op("note.spoof", tool=True)(tool)
+        assert op("note.spoof", runtime=True)(tool).input is spoof
+
+
 async def test_identity_comes_from_a_credential(kernel):
-    with pytest.raises(TypeError, match="identity"):
-
-        class Spoof(Args):
-            actor: str
-
     await enroll(kernel, ALICE)
     await grant(kernel, "agent:alice")
     refused = await kernel.submit(ALICE, "note.add", {"text": "hi", "agent": "bob"})
@@ -127,6 +142,20 @@ async def test_identity_comes_from_a_credential(kernel):
     assert journaled.type == "op.refused"
     assert journaled.actor == "agent:alice"
     assert journaled.outcome.refusal.code == "invalid"
+
+
+async def test_a_spoof_on_a_query_can_be_journaled(kernel):
+    await enroll(kernel, ALICE)
+    await grant(kernel, "agent:alice")
+    head = kernel.head
+    spoof = {"actor": "human:ada"}
+    assert refusal_of(kernel.query(ALICE, "note.list", spoof)) == "invalid"
+    assert kernel.head == head
+
+    assert refusal_of(await kernel.submit(ALICE, "note.list", spoof)) == "invalid"
+
+    journaled = events_of(kernel)[-1]
+    assert (journaled.type, journaled.actor) == ("op.refused", "agent:alice")
 
 
 async def test_references_point_backward(kernel):
@@ -176,7 +205,60 @@ async def test_agent_reads_are_evidence_human_reads_are_nothing(kernel):
     assert refused_code(error) == "not_permitted"
 
 
+async def test_absence_stays_honest(kernel):
+    effect = result_of(await kernel.submit(kernel.runtime, "note.dispatch", {}))
+
+    event = events_of(kernel)[0]
+
+    unknown = (event.agent, event.turn, event.context_version, event.episode, event.correlation, event.model)
+    assert unknown == (None, None, None, None, None, None)
+    listed = result_of(kernel.query(kernel.runtime, "effect.ready", {}))
+    assert [(row["id"], row["timeout"], row["agent"]) for row in listed] == [(effect, None, None)]
+
+
+def private_reaches(tree: ast.AST) -> list[str]:
+    """Underscored names reached on anything but `self` or `cls`."""
+    return [
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and node.attr.startswith("_")
+        and not (node.attr.startswith("__") and node.attr.endswith("__"))
+        and not (isinstance(node.value, ast.Name) and node.value.id in ("self", "cls"))
+    ]
+
+
 def test_nothing_has_a_private_api():
+    kernel_folder = Path(kernel_package.__file__).parent
+    for name in ("auth", "bodies", "effects", "timers", "core"):
+        path = kernel_folder / f"{name}.py"
+        assert private_reaches(ast.parse(path.read_text())) == [], path.name
+
+    root = Path(__file__).parents[3]
+    for path in (*root.glob("packages/*/src/**/*.py"), *root.glob("extensions/**/*.py")):
+        if kernel_folder in path.parents:
+            continue
+        tree = ast.parse(path.read_text())
+        assert private_reaches(tree) == [], path.name
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("platoon_harness.kernel"):
+                assert node.module == "platoon_harness.kernel", f"{path.name} reaches into {node.module}"
+                assert {alias.name for alias in node.names} <= set(kernel_package.__all__), path.name
+
+
+def test_nothing_claims_mid_generation():
+    root = Path(__file__).parents[3]
+    texts = (*root.glob("packages/*/src/**/*.py"), *root.glob("docs/*.md"), *root.glob("docs/adr/*.md"))
+    claims = [
+        f"{path.name}: {line}"
+        for path in texts
+        for line in path.read_text().splitlines()
+        if "mid-generation" in line.lower() and "Nothing claims mid-generation" not in line
+    ]
+    assert claims == []
+
+
+def test_the_kernel_imports_only_the_standard_library_and_pydantic():
     allowed = set(sys.stdlib_module_names) | {"pydantic"}
     for path in Path(kernel_package.__file__).parent.glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text())):

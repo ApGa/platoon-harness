@@ -10,45 +10,42 @@ from pydantic import BaseModel, ConfigDict
 from .txn import Txn
 
 _IDENTITY_FIELDS = frozenset(
-    {"actor", "caller", "credential", "identity", "policy", "principal", "session", "session_id", "token"}
+    {"actor", "caller", "credential", "identity", "policy", "principal", "role", "session", "session_id", "token"}
 )
 
 
 class Args(BaseModel):
-    """An op's arguments. Unknown fields are refused, and no field may claim who is calling."""
+    """An op's arguments. Undeclared fields are refused, and no type is coerced."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        claims = _IDENTITY_FIELDS & set(cls.model_fields)
-        if claims:
-            raise TypeError(f"{cls.__name__} declares identity fields: {sorted(claims)}")
+
+def _session(args: Args) -> str:
+    return "session"
 
 
 @dataclass(frozen=True)
 class Op:
-    """An op definition. `exposes` marks a read that is a command for agents and a query for everyone else."""
+    """An op definition. `on` names the object of one invocation.
+
+    `query` keeps an op out of history. `exposes` marks a read that is a command for agents and a query for everyone
+    else. An op is at most one of the two.
+    """
 
     name: str
     fn: Callable[[Txn, Any], Any]
     input: type[Args]
-    on: Callable[[Any], str] | None = None
+    on: Callable[[Any], str] = _session
     query: bool = False
     exposes: bool = False
     tool: bool = False
     runtime: bool = False
 
-    def target(self, args: Args) -> str:
-        """The object stream this invocation is about."""
-        return "session" if self.on is None else self.on(args)
-
 
 def op(
     name: str,
     *,
-    on: Callable[[Any], str] | None = None,
+    on: Callable[[Any], str] = _session,
     query: bool = False,
     exposes: bool = False,
     tool: bool = False,
@@ -60,6 +57,16 @@ def op(
         if inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn) or inspect.isgeneratorfunction(fn):
             raise TypeError(f"op {name} must be a plain function: operations cannot wait on the world")
         _, parameter = inspect.signature(fn).parameters
-        return Op(name, fn, get_type_hints(fn)[parameter], on, query, exposes, tool, runtime)
+        input = get_type_hints(fn).get(parameter)
+        if not (isinstance(input, type) and issubclass(input, Args)) or input.model_config.get("extra") != "forbid":
+            raise TypeError(f"op {name} must take Args that refuse undeclared fields")
+        if query and exposes:
+            raise TypeError(f"op {name} cannot be both a query and an exposed read")
+        fields = input.model_json_schema().get("properties", {})
+        if tool and (claims := _IDENTITY_FIELDS & fields.keys()):
+            raise TypeError(f"tool op {name} declares identity fields: {sorted(claims)}")
+        if tool and not fn.__doc__:
+            raise TypeError(f"tool op {name} needs a description")
+        return Op(name, fn, input, on, query, exposes, tool, runtime)
 
     return define

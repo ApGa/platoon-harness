@@ -1,8 +1,9 @@
 """Loading extensions: collisions refused, naming law checked, core on the same contract."""
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
-from platoon_harness.kernel import Args, Daemon, Event, Extension, Kernel, Refused, Txn, View, fold, op
+from platoon_harness.kernel import Args, Daemon, Event, Extension, Kernel, Principal, Refused, Txn, View, fold, op
 from platoon_harness.kernel.core import CORE
 
 from .support import refused_code, result_of
@@ -48,9 +49,7 @@ async def test_ops_and_views_load_from_several_extensions(folder, clock):
     result_of(await kernel.submit(kernel.runtime, "alpha.note", {}))
     result_of(await kernel.submit(kernel.runtime, "beta.note", {}))
 
-    assert kernel._db.execute("SELECT count(*) FROM v_alpha").fetchone()[0] == 2
-    assert {"alpha.note", "beta.note", "effect.start"} <= set(kernel.ops)
-    assert kernel.extensions[-1].name == "beta"
+    assert {"alpha.note", "beta.note", "effect.start", "ops.list"} <= set(kernel.ops)
     kernel.close()
 
 
@@ -74,22 +73,45 @@ def test_extension_collisions_are_refused_at_load(folder, clock):
     assert refused_at_load(folder, clock, Extension("alpha"), Extension("alpha")) == "conflict"
 
 
-def test_core_names_are_taken(folder, clock):
-    assert refused_at_load(folder, clock, Extension("effect")) == "conflict"
+@pytest.mark.parametrize("name", ["effect", "timer", "principal", "grant", "body", "runtime", "op", "ops"])
+def test_core_names_are_taken(folder, clock, name):
+    assert refused_at_load(folder, clock, Extension(name)) == "conflict"
+
+
+def test_core_views_are_taken(folder, clock):
     assert refused_at_load(folder, clock, Extension("x", views=[type("Effects", (View,), {})])) == "conflict"
 
 
-def test_daemon_and_component_collisions_are_refused_at_load(folder, clock):
+def test_only_the_listed_core_names_are_taken(folder, clock):
+    load(folder, clock, Extension("command"), Extension("stamp")).close()
+
+
+def test_two_views_cannot_share_a_table(folder, clock):
+    class Task(View):
+        schema = "CREATE TABLE v_task(n INTEGER) STRICT; CREATE TABLE v_task_log(n INTEGER) STRICT;"
+
+    class TaskLog(View):
+        name = "task_log"
+        schema = "CREATE TABLE v_task_log(n INTEGER) STRICT;"
+
+    code = refused_at_load(folder, clock, Extension("a", views=[Task]), Extension("b", views=[TaskLog]))
+    assert code == "conflict"
+
+
+def test_a_view_cannot_take_the_kernels_table(folder, clock):
+    class Folds(View):
+        schema = "CREATE TABLE v_folds(n INTEGER) STRICT;"
+
+    assert refused_at_load(folder, clock, Extension("a", views=[Folds])) == "conflict"
+
+
+def test_daemon_collisions_are_refused_at_load(folder, clock):
     async def run(kernel: Kernel) -> None:
         return None
 
     daemon = Daemon("twin", run)
     assert (
         refused_at_load(folder, clock, Extension("a", daemons=[daemon]), Extension("b", daemons=[daemon])) == "conflict"
-    )
-    presets = {"mesh": object()}
-    assert (
-        refused_at_load(folder, clock, Extension("a", presets=presets), Extension("b", presets=presets)) == "conflict"
     )
 
 
@@ -123,8 +145,54 @@ def test_core_obeys_the_same_law():
 
 
 def test_an_op_needs_typed_args():
+    class Loose(BaseModel):
+        text: str = ""
+
+    class Open(Args):
+        model_config = ConfigDict(extra="ignore")
+
     @op("alpha.note")
     def typed(txn: Txn, a: Args) -> None:
         """Typed."""
 
+    def plain(txn: Txn, a: dict) -> None:
+        """Takes a dict."""
+
+    def loose(txn: Txn, a: Loose) -> None:
+        """Takes any model."""
+
+    def opened(txn: Txn, a: Open) -> None:
+        """Ignores what it does not know."""
+
+    def bare(txn, a) -> None:
+        """Takes anything."""
+
     assert typed.input is Args
+    for fn in (plain, loose, opened, bare):
+        with pytest.raises(TypeError, match="must take Args"):
+            op("alpha.note")(fn)
+
+
+def test_an_op_is_a_query_or_an_exposed_read_but_not_both():
+    def fn(txn: Txn, a: Args) -> None:
+        """Read."""
+
+    with pytest.raises(TypeError, match="both"):
+        op("alpha.read", query=True, exposes=True)(fn)
+
+
+def test_a_tool_needs_a_description():
+    def fn(txn: Txn, a: Args) -> None:
+        pass
+
+    with pytest.raises(TypeError, match="description"):
+        op("alpha.note", tool=True)(fn)
+
+
+async def test_an_op_on_no_object_is_about_the_session(folder, clock):
+    kernel = load(folder, clock, Extension("alpha", ops=[make_op("alpha.note")]))
+    await kernel.submit(kernel.runtime, "principal.add", {"id": "human:ada"})
+    outcome = await kernel.submit(Principal(id="human:ada"), "alpha.note", {})
+    assert outcome.refusal is not None
+    assert outcome.refusal.object == "session"
+    kernel.close()

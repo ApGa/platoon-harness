@@ -1,8 +1,9 @@
 """One writer thread: group commit, bounded admission, safe acks."""
 
 import asyncio
+import sqlite3
 
-from platoon_harness.kernel import Kernel, Principal
+from platoon_harness.kernel import Args, Extension, Kernel, Principal, Txn, op
 from platoon_harness.kernel.writer import BATCH_LIMIT, PRINCIPAL_LIMIT, RUNTIME_RESERVE, SESSION_LIMIT
 
 from .support import HUMAN, enroll, events_of, grant, notes, refusal_of, result_of
@@ -16,13 +17,14 @@ async def hold_writer(kernel, gate) -> asyncio.Task:
 
 async def test_a_batch_is_one_transaction_of_at_most_64_commands(kernel, gate):
     statements: list[str] = []
-    kernel._db.set_trace_callback(statements.append)
+    db = kernel._writer._db
+    db.set_trace_callback(statements.append)
     held = await hold_writer(kernel, gate)
     tasks = [asyncio.create_task(kernel.submit(kernel.runtime, "note.add", {})) for _ in range(150)]
     await asyncio.sleep(0)
     gate.release.set()
     await asyncio.gather(held, *tasks)
-    kernel._db.set_trace_callback(None)
+    db.set_trace_callback(None)
 
     sizes, size = [], 0
     for statement in statements:
@@ -54,6 +56,61 @@ async def test_a_commit_failure_acks_nothing_and_commands_can_retry(kernel, gate
     assert refusal_of(await task) == "unavailable"
     assert result_of(await kernel.submit(kernel.runtime, "note.add", {}, key="k"))
     assert [event.type for event in events_of(kernel)].count("note.added") == 1
+
+
+async def test_a_failed_rollback_still_answers_and_the_journal_stays_loud(folder, clock):
+    class Broken:
+        """A connection on a disk that has gone: nothing can be committed or rolled back."""
+
+        def __init__(self, db):
+            self.db = db
+
+        def __getattr__(self, name):
+            return getattr(self.db, name)
+
+        def execute(self, sql, *args):
+            if sql in ("COMMIT", "ROLLBACK"):
+                raise sqlite3.OperationalError(f"disk I/O error on {sql}")
+            return self.db.execute(sql, *args)
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
+    real = kernel._writer._db
+    kernel._writer._db = Broken(real)
+
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {})) == "unavailable"
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {})) == "unavailable"
+
+    kernel._writer._db = real
+    real.execute("ROLLBACK")
+    assert result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    kernel.close()
+
+
+async def test_an_op_that_exits_does_not_end_the_writer(folder, clock):
+    @op("exit.now", runtime=True)
+    def exits(txn: Txn, a: Args) -> None:
+        """Exit, as a library might."""
+        raise SystemExit(3)
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, Extension("exit", ops=[exits])])
+
+    assert refusal_of(await kernel.submit(kernel.runtime, "exit.now", {})) == "unavailable"
+    assert result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    kernel.close()
+
+
+async def test_a_command_admitted_as_the_kernel_closes_is_answered(folder, clock):
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
+    writer = kernel._writer
+    admit = writer._admit
+
+    def racing(job):
+        admit(job)
+        kernel.close()
+
+    writer._admit = racing
+
+    assert result_of(await asyncio.wait_for(kernel.submit(kernel.runtime, "note.add", {}), 30))
 
 
 async def test_a_principal_holds_at_most_32_inflight(kernel, gate):
