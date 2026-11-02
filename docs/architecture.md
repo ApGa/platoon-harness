@@ -312,7 +312,8 @@ never sees `outcome`, which does not exist yet when a live fold runs.
 **One event, many folds** is how a transition stays atomic. `agent.ended` is one event. In that one transaction `Waits`
 cancels the agent's waits, `Budget` returns its reservation, `Tasks` frees its leases, `Deliveries` marks queued
 input undeliverable, `Approvals` closes pending requests as moot, and `Principals` revokes the token. The op adds one
-message to the monitoring agent's inbox.
+message to the monitoring agent's inbox. A failed handover has the same shape: `effect.failed` on a `deliver` queues its entries
+again in `Deliveries`, returns the agent to `idle` in `Agents`, and gives its reservation back in `Budget`.
 
 ### 5.6 Readers
 
@@ -342,7 +343,7 @@ whole journal. A page holding a `principal.revoked` goes by SQL, so a follower i
 | Readers | They pull, so a slow client costs only its own lag |
 | Live text | One 256-frame ring per agent; overflow drops frames with a `lag` marker. The final `item` is authoritative |
 | Harness output | Pipes always drain. A driver that stalls its harness's stdout stalls the harness. Reports buffer in a bounded queue; a quota breach stops that agent with a gap |
-| Inbox | A depth cap returns a `full` receipt, journaled, never a silent drop |
+| Inbox | A depth cap refuses `queue_full` with a `full` receipt, journaled, never a silent drop |
 | Topic | Writers never block. A lagging reader gets a capped digest and a gap notice |
 | Queue | `max_inflight` per reader, default 1 |
 
@@ -433,16 +434,19 @@ to do next.
 | Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
-| Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` | `task.list` |
-| Wait | `wait` `wait.cancel` | |
+| Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
+| Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
-| Evidence | `blob.put` | `blob.get` `lineage` `exposure` |
+| Evidence | `blob.put` `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` | `effect.ready` `timer.next` |
+| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` |
 
-An agent's `board.get`, `board.query` and `message.read` are commands; for a human or a program they run
-as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
-Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`.
+An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
+run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
+requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
+body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
+comes back as its hash, for the surface to fetch.
 
 ### Library tier
 
@@ -459,42 +463,49 @@ Each statement here is a promise with a test.
 ### Inboxes and topics
 
 - **`inbox`**: one per agent (`inbox/<id>`). **`topic`**: one stream per channel (`channel/<name>`); `+group` has an
-  implicit topic.
+  implicit topic, `channel/+<name>`. These streams hold entries and nothing else, so a version numbers an entry.
 - **Order.** Total per stream. Nothing is promised across streams.
 - **Delivery.** At-least-once to the driver, deduped by event id. Delivery states are `offered` (the runtime handed it
   over), `delivered` (the driver confirmed injection; this is observed exposure), `acked` (the agent's next read or
-  wait moved past it). None means understood.
+  wait moved past it). None means understood. A handover that fails is queued again and offered under a new input.
 - **Cursors** are per `(reader, stream)` and held by the server. An omitted `after` means the reader's server-held
   cursor, never the head. `after=n` acks up to `n`, clamped to the highest offered, so a hallucinated number acks
-  nothing unshown. A cut-off wait confirms nothing. A filtered read never moves past what it left out.
-- **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience. Late joiners
-  see history only if the channel says `history = "full"`.
+  nothing unshown. A cut-off wait confirms nothing. A filtered read never moves past what it left out. A cursor is a `seq`,
+  so one `after` covers every stream of a wait. The server-held cursor is the end of the unbroken run offered, and reading
+  from it acks that run. A human or a program holds none and reads from `after`.
+- **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience, and a sender
+  is not in its own. Late joiners see history only if the channel says `history = "full"`.
 - **Entries** are a capped `gist` plus an optional body. A digest shows gists. Exposure of a gist is recorded separately
   from exposure of a body.
 
-**Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so a sender cannot buy a wake.
-`wake` starts a turn if the agent is idle. `steer` asks for the earliest boundary the harness has and degrades visibly:
+**Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so a sender cannot buy a wake,
+and an agent creating a channel stops at `next-turn`.
+`wake` starts a turn if the agent is idle or parked. `steer` asks for the earliest boundary the harness has and degrades visibly:
 `tool`, then `model_call`, then `turn`. Tool results of coordination ops also carry pending `steer` notices, which gives
 a tool boundary on any harness whose tools are visible. `coalesce` merges wakes into one turn.
 
-**Hop limit.** Every message carries `hops`, one more than the largest in its `cause`; a human message resets it. A wake
-past `max_hops` is refused and shown in attention. This bounds reply loops that budgets only make expensive.
+**Hop limit.** Every message carries `hops`, one more than the largest in its `cause` or offered to its turn, since a model
+will not pass `cause`; a human message resets it. A wake past `max_hops` is refused and shown in attention, and the message waits
+for the next turn. This bounds reply loops that budgets only make expensive.
 
 **The monitor.** `spawn` installs a monitor. When an agent finishes, or a turn ends with no `finish` and no open wait,
 the runtime posts the turn's final text to the spawning parent's inbox, as a runtime-authored event naming the child as
-subject. It wakes at most once per causal chain and stops at `max_hops`. So a worker reports back even if its harness
-hides our tools. Tools add power rather than being the only way in.
+subject. It wakes at most once per causal chain and stops at `max_hops`; past either, its message waits for the next turn.
+So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
 
 ### Boards
 
-Objects have stable names and immutable versions (`board/<board>/<name>`). `board.revise` requires `expected_version`; a
-conflict returns the current version and silently overwrites nothing. `board.query` is structured; results carry exact
-refs, the true total and a cursor. Text search uses SQLite FTS5 when present. Semantic search is an extension. A board
-object version with a body is also how artifacts are stored.
+Objects have stable names and immutable versions (`board/<board>/<name>`). `board.post` makes version 1, and on a taken name
+conflicts as a stale `board.revise` does. `board.revise` requires `expected_version`; a
+conflict returns the current version and silently overwrites nothing. `board.get` returns a ref naming exactly what it gave, so
+a body too long for one result comes back cut, with a ref saying where. `board.query` is structured; results carry exact
+refs, the true total and a cursor. Text search uses SQLite FTS5 when present, over names, gists and fields and never bodies: a
+fold cannot read a body, and a tombstoned body must leave nothing behind. Without FTS5 it is refused `unsupported`. Semantic
+search is an extension. A board object version with a body is also how artifacts are stored.
 
 ### Queues
 
-One stream per task. States: `open → claimed → done | failed | dead`.
+One stream per task. States: `open → claimed → done | failed | dead`. A `failed` task can be claimed again.
 
 - **Claim.** Atomic, one live lease, fence = `seq` of the claim event.
 - **Expiry.** A lease is live until `lease_until` by the transaction's clock. `task.claim` treats an expired lease as
@@ -502,7 +513,7 @@ One stream per task. States: `open → claimed → done | failed | dead`.
   reassignment.
 - **Fence default.** The caller's live lease, because a model can lose an integer to compaction.
 - **Renewal.** The host renews from observed harness activity up to `lease_max`. `task.renew` stays for programs.
-- **Retries.** `max_attempts`, then `dead`, shown in attention.
+- **Retries.** `max_attempts`, then `dead`, shown in attention. Each claim spends an attempt, and `task.release` returns it.
 - Exclusive ownership is **not** exactly-once execution. External effects cannot be fenced by us, and the docs say so.
 
 ### Wait
@@ -513,14 +524,18 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 ```
 
 - Check and registration are one transaction from `after`, so the read-then-subscribe race cannot exist.
-- `Waits` folds progress (`have`, `need`, `missing`), which is what the UI shows.
+- `Waits` folds progress (`have`, `need`, `missing`), which is what the UI shows. `n` counts events. With `distinct`, naming
+  an envelope field, it counts different values, and it may list them, so `n=members` can say who is `missing`.
+- **One open wait per agent.** Another `wait` replaces it, so a model tracks no ids. A program may hold several.
+- **A wait outlives its turn.** While the agent's turn runs its wait stays open, even once it holds. The runtime closes it when
+  the turn ends, so a wake cannot race the turn it follows. A `timeout` closes it the same way and acks nothing.
 - **Parks by default.** The tool result says the wait is registered and to end the turn. When the turn ends the agent is
   `waiting`. When the condition holds, the runtime starts the next turn with its delivery attached. If the model keeps
   working, the wait stays open and nothing breaks.
 - **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending` with a cursor; the
   agent may call again. A one-shot driver cannot park, so `wait` beyond `hold` is refused `unsupported` with the reason.
 - **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`) and compile to `on(...)`, so a model never learns
-  stream names. The Python sugar is `lead.finished()`.
+  stream names. `from` counts by subject, so a monitor's report counts as its child's. The Python sugar is `lead.finished()`.
 - A parked agent whose harness cannot resume is `lost` through the normal ended transition.
 
 **Barrier** is library code: a topic plus `wait(on(..., n=members, distinct="actor"))`, with member snapshot and generation
@@ -530,8 +545,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 ### Lifecycle
 
 - **Spawn** is topology check, budget reservation, `admit`, `workspace`, `launch`. Depth comes from the parent record,
-  never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success.
-- **Ended transition.** `finish`, `cancel`, `retire` and `lost` are one event, `agent.ended{status}` (§5.5).
+  never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success. `may_spawn`
+  is a grant on `role/<name>`. The host adds the child's principal before launch, because its token never enters the journal.
+- **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
+  An ended agent has no open turn.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
 - **Retiring** removes an agent from relations, never from history.
 - **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it and
@@ -539,7 +556,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 
 ### Completion
 
-`settled` means, checkably: no open turn, no deliverable delivery, no requested or started effect, no due timer. A human
+`settled` means, checkably: no open turn, no deliverable delivery, no requested or started effect, no due timer. A wait the
+runtime could close counts as a deliverable delivery. A human
 message can un-settle a session. Only `close` ends it. `until` picks when a headless session closes: `"settled"`,
 `"role:lead"` or `"program"`. All stop at budget exhaustion. A team with no root uses `"settled"`.
 
@@ -557,11 +575,13 @@ agent can never carry an approval.
 
 `Budget` holds limits for `tokens`, `usd`, `turns`, `agents`, `wall`, shared and per role.
 
-A wake reserves an estimate; turn end reconciles it. So overshoot is bounded by the largest turn's cost times the live
-agents. Spawn reserves in the admission transaction.
+A wake reserves an estimate; turn end reconciles it. An agent holds one turn's reservation. So overshoot is bounded by the
+largest turn's cost times the live agents. Spawn reserves in the admission transaction, and a wake refused for budget is an
+event, tried again when the budget moves.
 
 Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`. A limit in a unit a role cannot measure
-is refused by `team check`, or falls back to `turns` when the team says so; it never silently stops enforcing. Native
+is refused by `team check`, or falls back to `turns` when the team says so; it never silently stops enforcing. A turn nobody
+measured is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused `unavailable`. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology
@@ -827,10 +847,10 @@ can exist. Three views answer the five questions, through `view.watch(name, afte
 | View | Row | Answers |
 |---|---|---|
 | `roster` | `agent, role, harness, model, state, activity, why, unread, levels, usage` | Who is working, on what, what is blocked |
-| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget` |
+| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
 
-`why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(kind)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
+`why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
 `Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `needs-you` is a derived group, not a state. `actions[]` are
 op references with `expected_version`, so any client can draw the buttons.
 

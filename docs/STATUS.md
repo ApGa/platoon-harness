@@ -22,8 +22,8 @@ pass, and the row says which kind), **experimental** (works, but rests on an uns
 | Mixed backends | planned | |
 | End-to-end collaboration | planned | |
 | Human parity | planned | |
-| Claim race | planned | |
-| Watch race | planned | |
+| Claim race | tested | `tests/unit/primitives/test_tasks.py`, `test_claim_race_*`, including a hypothesis interleaving. Concurrent commands on one writer; no real harness |
+| Watch race | tested | `tests/unit/primitives/test_waits.py`, `test_watch_race_*`, including a hypothesis interleaving of sends, reads, waits and reopening the journal. No real harness |
 | Retry and crash | planned | |
 | Provenance | planned | |
 | Identity | planned | |
@@ -61,13 +61,52 @@ power loss. Nothing here has run on macOS.
 | Daemon supervision with backoff | tested | `test_daemon.py` |
 | Extension loading and the naming law | tested | `test_extension.py` |
 | Laws 1 to 9 and 12 | tested | `test_laws.py` |
-| Law 10, for what the kernel owns: unknown stays `None` in the envelope and in `Effect` | tested | `test_laws.py`. Rewards, usage, tool visibility and exposure do not exist yet |
+| Law 10, for what the kernel owns: unknown stays `None` in the envelope and in `Effect` | tested | `test_laws.py`. Usage labels are tested in `test_budgets.py`. Rewards, tool visibility and exposure queries do not exist yet |
 | Law 11: the kernel's own extensions reach no private name, and code outside the kernel imports only `__all__` | tested | `test_laws.py`, over everything outside the kernel too |
 | Rebuild equals live, idempotent retry, gapless versions, backward references | tested | `test_properties.py` (hypothesis) |
+| Wildcard folds for a view that cannot name what it counts | tested | `tests/unit/kernel/test_views.py` |
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
 | `v`-based upcasting of old payloads | deferred | `v` is recorded. No upcaster exists until a second payload version does |
 | `next`, `prev` and `group:x` as kernel relations | deferred | `grant.add` still refuses them. Compilation expands them over roles, so a team never needs them |
 | Credential rotation for a live principal | deferred | Arrives with resume, in M2 |
+
+### Primitives (`platoon_harness.primitives`)
+
+Rows marked tested have CPU-only unit tests in `tests/unit/primitives`, named for the promises in architecture section 7, and each
+test's fixture compares live views to a full rebuild when it ends. No driver exists yet: a test does what a host would, by hand, so
+nothing here has met a real harness. Effects such as `deliver`, `launch` and `answer` are requested and tracked, and nothing performs them.
+
+| Capability | State | Evidence |
+|---|---|---|
+| Inboxes, topics, `message.send`, address grammar, replies, threads, gist plus body | tested | `test_messages.py` |
+| Reader cursors: `offered`, `delivered`, `acked`, omitted `after`, clamped `after`, filtered reads, delivery states, per-seq acks | tested | `test_messages.py` |
+| Broadcast: recorded audience, group generation, late joiners, `history` | tested | `test_messages.py` |
+| Inbox depth cap with a `full` receipt, undeliverable on ended readers | tested | `test_messages.py` |
+| Hops, `max_hops`, chains followed through what a turn was offered | tested | `test_messages.py`, `test_lifecycle.py` |
+| Injection ladder, coalesce, steer degrading visibly, digests with a gap notice | tested | `test_delivery.py`. Boundaries are whatever a test's `ready` report declares |
+| `steer` notices on a tool result | implemented | `delivery.offer` with `boundary="tool"` is tested. No tool plane exists to attach them yet |
+| At-least-once handover: a failed `deliver` is queued again under a new input | tested | `test_delivery.py` |
+| Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
+| `channel.create` with attenuation, `channel.list`, `group.define` | tested | `test_messages.py` |
+| Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
+| Wait: `on`, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end | tested | `test_waits.py`, properties |
+| `hold` as a surface keeps it | implemented | `hold_open` is tested. No tool plane calls it yet |
+| One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |
+| Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors | tested | `test_boards.py` |
+| Board text search on FTS5, over names, gists and fields | tested | `test_boards.py`. Bodies are not searched, on purpose. The no-FTS5 refusal is tested by flag, not on a build without it |
+| Reading a body held in `blobs/` from an op | deferred | An op may do no I/O, so it returns the hash and the surface reads the body. No surface exists yet |
+| Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging | tested | `test_tasks.py`, properties |
+| Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it arrives with drivers |
+| Lifecycle: spawn admission, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor | tested | `test_lifecycle.py` |
+| Completion: `settled`, `until`, `session.close`, `session.cancel`, episodes | tested | `test_lifecycle.py` |
+| Closing a headless session at `until` | deferred | `session.status` reports `done`. The owner that acts on it arrives with `Session` |
+| Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |
+| Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
+| Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound | tested | `test_budgets.py`, properties |
+| Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
+| `blob.put`, `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
+| `lineage`, `exposure` | deferred | Provenance queries, after drivers |
+| Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | planned | Both ends exist; nothing joins them yet |
 
 ### Teams and topologies (`platoon_harness.team`, `platoon_harness.topology`)
 
