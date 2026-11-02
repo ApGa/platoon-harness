@@ -91,8 +91,16 @@ async def test_a_relation_stays_true_as_the_graph_changes(kernel):
     await enroll(kernel, Principal(id="agent:newcomer"), parent="agent:lead")
     assert await allowed(kernel, LEAD, "inbox/newcomer")
 
+
+async def test_a_relation_outlives_its_far_end(kernel):
+    """An op on an ended agent gives its own answer, which `not_permitted` would hide."""
+    await family(kernel)
+    await grant(kernel, "agent:lead", "note.add", "inbox/{children}")
+    await enroll(kernel, Principal(id="agent:newcomer"), parent="agent:lead")
+
     result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": "agent:newcomer"}))
-    assert not await allowed(kernel, LEAD, "inbox/newcomer")
+
+    assert await allowed(kernel, LEAD, "inbox/newcomer")
 
 
 async def test_a_path_prefix_does_not_confuse_descendants(kernel):
@@ -102,14 +110,56 @@ async def test_a_path_prefix_does_not_confuse_descendants(kernel):
     assert not await allowed(kernel, Principal(id="agent:a"), "inbox/ab")
 
 
-async def test_a_namesake_of_another_kind_is_not_a_relative(kernel):
+async def test_a_name_is_unique_across_kinds(kernel):
+    """Inboxes and relations go by the bare name, so a namesake would reach another's mail."""
     await enroll(kernel, Principal(id="agent:x"))
-    await enroll(kernel, Principal(id="human:x"))
-    await grant(kernel, "agent:x", "note.add", "inbox/{descendants}")
-    assert not await allowed(kernel, Principal(id="agent:x"), "inbox/x")
 
-    await enroll(kernel, Principal(id="agent:y"), parent="agent:x")
-    assert await allowed(kernel, Principal(id="agent:x"), "inbox/y")
+    outcome = await kernel.submit(kernel.runtime, "principal.add", {"id": "human:x"})
+
+    assert refusal_of(outcome) == "conflict"
+
+
+async def test_a_name_is_a_safe_path_part(kernel):
+    for name in ("..", "-rf", "w\u0430"):
+        outcome = await kernel.submit(kernel.runtime, "principal.add", {"id": f"agent:{name}"})
+        assert refusal_of(outcome) == "invalid"
+
+
+async def test_a_credential_arrives_after_the_principal(kernel):
+    await enroll(kernel, Principal(id="agent:x"))
+    with pytest.raises(Refused):
+        kernel.authenticate("tok")
+
+    args = {"id": "agent:x", "token_hash": hash_token("tok")}
+    result_of(await kernel.submit(kernel.runtime, "principal.issue", args))
+
+    assert kernel.authenticate("tok").id == "agent:x"
+
+
+async def test_a_revoked_principal_gets_no_credential(kernel):
+    await enroll(kernel, Principal(id="agent:x"))
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": "agent:x"}))
+
+    outcome = await kernel.submit(kernel.runtime, "principal.issue", {"id": "agent:x", "token_hash": hash_token("t")})
+
+    assert refusal_of(outcome) == "conflict"
+
+
+async def test_a_token_serves_one_principal(kernel):
+    await enroll(kernel, Principal(id="agent:x"), token="tok")
+    await enroll(kernel, Principal(id="agent:y"))
+
+    outcome = await kernel.submit(kernel.runtime, "principal.issue", {"id": "agent:y", "token_hash": hash_token("tok")})
+
+    assert refusal_of(outcome) == "conflict"
+
+
+async def test_a_role_called_none_is_not_the_role_of_those_with_none(kernel):
+    judge = Principal(id="judge:j")
+    await enroll(kernel, judge)
+    await grant(kernel, "role:None", "note.add")
+
+    assert not await allowed(kernel, judge, "note/a")
 
 
 async def test_an_unknown_relation_is_refused_at_the_grant(kernel):

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .auth import Grants, Principals, add_grant, add_principal, remove_grant, revoke_principal
+from .auth import Grants, Principals, add_grant, add_principal, issue_credential, remove_grant, revoke_principal
 from .bodies import Tombstones, eraser_daemon, tombstone_body
 from .effects import (
     Effects,
@@ -21,7 +21,7 @@ from .txn import Stamps, Txn
 
 CORE = (
     Extension("op", views=[Stamps]),
-    Extension("principal", ops=[add_principal, revoke_principal], views=[Principals]),
+    Extension("principal", ops=[add_principal, issue_credential, revoke_principal], views=[Principals]),
     Extension("grant", ops=[add_grant, remove_grant], views=[Grants]),
     Extension(
         "effect",

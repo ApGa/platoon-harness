@@ -35,7 +35,8 @@ def _values(me: Principal, relation: str) -> dict[str, str | None]:
 
 
 class Principals(View):
-    """The live graph: `authorize` reads it inside the transaction, and `path` makes `descendants` a prefix test."""
+    """The graph of principals: `authorize` reads it inside the transaction, and `path` makes `descendants` a prefix
+    test. A name is unique across kinds, so an inbox or a relation can go by the bare name."""
 
     schema = """
     CREATE TABLE v_principals(
@@ -70,6 +71,12 @@ class Principals(View):
             ),
         )
 
+    @fold("principal.issued")
+    def issued(self, event: Event) -> None:
+        self.db.execute(
+            "UPDATE v_principals SET token_hash = ? WHERE id = ?", (event.data["token_hash"], event.data["id"])
+        )
+
     @fold("principal.revoked")
     def revoked(self, event: Event) -> None:
         self._revoke(event.data["id"])
@@ -77,6 +84,18 @@ class Principals(View):
     @fold("agent.ended")
     def agent_ended(self, event: Event) -> None:
         self._revoke(f"agent:{event.agent}")
+
+    @fold("agent.adopted")
+    def agent_adopted(self, event: Event) -> None:
+        """An orphan's subtree hangs from the session now, so its old ancestors lose their relations to it."""
+        orphan = self.get(f"agent:{event.agent}")
+        if orphan is None:
+            return
+        self.db.execute("UPDATE v_principals SET parent = NULL WHERE id = ?", (orphan.id,))
+        self.db.execute(
+            "UPDATE v_principals SET path = ? || substr(path, length(?) + 1) WHERE substr(path, 1, length(?)) = ?",
+            (f"/{orphan.id}/", orphan.path, orphan.path, orphan.path),
+        )
 
     def _revoke(self, id: str) -> None:
         self.db.execute("UPDATE v_principals SET state = 'revoked', token_hash = NULL WHERE id = ?", (id,))
@@ -96,6 +115,11 @@ class Principals(View):
     def get(self, id: str) -> Principal | None:
         return self._load(self.db.execute("SELECT * FROM v_principals WHERE id = ?", (id,)).fetchone())
 
+    def named(self, name: str) -> Principal | None:
+        """The principal called `name`, of any kind."""
+        row = self.db.execute("SELECT * FROM v_principals WHERE substr(id, instr(id, ':') + 1) = ?", (name,))
+        return self._load(row.fetchone())
+
     def live(self, id: str) -> Principal:
         """The principal with this id, or refuse if it is unknown or revoked."""
         principal = self.get(id)
@@ -108,13 +132,13 @@ class Principals(View):
         return self._load(row)
 
     def related(self, me: Principal, relation: str, name: str) -> bool:
-        """Whether a live principal called `name` stands in `relation` to `me`."""
+        """Whether a principal called `name` stands in `relation` to `me`, even once it has ended, so that an op on an
+        ended agent gives its own answer. A revoked `me` never gets here."""
         condition = _condition(relation)
         if condition is None:
             return False
         row = self.db.execute(
-            "SELECT 1 FROM v_principals WHERE state = 'live' AND substr(id, instr(id, ':') + 1) = :name "
-            f"AND {condition}",
+            f"SELECT 1 FROM v_principals WHERE substr(id, instr(id, ':') + 1) = :name AND {condition}",
             _values(me, relation) | {"name": name},
         ).fetchone()
         return row is not None
@@ -169,10 +193,9 @@ class Grants(View):
 
     def held_by(self, me: Principal) -> list[Grant]:
         """Every grant naming `me` by id, by kind, by role or as `all`."""
-        rows = self.db.execute(
-            'SELECT who, ops, "on" FROM v_grants WHERE who IN (?, ?, ?, ?)',
-            (me.id, me.kind, f"role:{me.role}", "all"),
-        )
+        names = (me.id, me.kind, "all", *(() if me.role is None else (f"role:{me.role}",)))
+        marks = ", ".join("?" * len(names))
+        rows = self.db.execute(f'SELECT who, ops, "on" FROM v_grants WHERE who IN ({marks})', names)
         return [Grant(who=row["who"], ops=row["ops"], on=row["on"]) for row in rows]
 
     def authorize(self, principal: Principal, operation: Op, target: str | None = None) -> Principal:
@@ -235,6 +258,11 @@ class AddPrincipal(Args):
     token_hash: str | None = None
 
 
+class IssueCredential(Args):
+    id: str
+    token_hash: str
+
+
 class RevokePrincipal(Args):
     id: str
 
@@ -243,13 +271,27 @@ class RevokePrincipal(Args):
 def add_principal(txn: Txn, a: AddPrincipal) -> None:
     """Add a principal to the live graph."""
     principals = txn.view(Principals)
-    if principals.get(a.id) is not None:
-        raise Refused("conflict", f"{a.id} exists")
+    if principals.named(a.id.partition(":")[2]) is not None:
+        raise Refused("conflict", f"{a.id.partition(':')[2]} is taken")
     if a.parent is not None and principals.get(a.parent) is None:
         raise Refused("not_found", f"no parent {a.parent}")
     if a.token_hash is not None and principals.by_token(a.token_hash) is not None:
         raise Refused("conflict", "this token is in use")
     txn.emit("principal.added", f"principal/{a.id}", gist=f"{a.id} added", data=a)
+
+
+@op("principal.issue", on=lambda a: f"principal/{a.id}", runtime=True)
+def issue_credential(txn: Txn, a: IssueCredential) -> None:
+    """Give a principal its credential, replacing any it held. A revoked principal is refused: nothing revives one."""
+    principals = txn.view(Principals)
+    principal = principals.get(a.id)
+    if principal is None:
+        raise Refused("not_found", f"no principal {a.id}")
+    if principal.state != "live":
+        raise Refused("conflict", f"{a.id} is revoked")
+    if principals.by_token(a.token_hash) is not None:
+        raise Refused("conflict", "this token is in use")
+    txn.emit("principal.issued", f"principal/{a.id}", gist=f"{a.id} issued a credential", data=a)
 
 
 @op("principal.revoke", on=lambda a: f"principal/{a.id}", runtime=True)

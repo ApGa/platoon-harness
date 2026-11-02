@@ -8,9 +8,9 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from platoon_harness.kernel import GIST_LIMIT, Refused, Tombstones, Txn
+from platoon_harness.kernel import GIST_LIMIT, NAME, Refused, Tombstones, Txn
 
-Name = Annotated[str, Field(pattern=r"^[\w.-]+$", max_length=128)]
+Name = Annotated[str, Field(pattern=f"^{NAME}$", max_length=128)]
 Gist = Annotated[str, Field(max_length=GIST_LIMIT)]
 BodyRef = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 Delivery = Literal["pull", "next-turn", "wake", "steer"]
@@ -20,7 +20,7 @@ RESULT_LIMIT = (
     12 * 1024
 )  # The kernel refuses a command's result past 16 KiB; this leaves room for what frames the rows.
 
-_ADDRESS = re.compile(r"([@#+])([\w.-]{1,128})")
+_ADDRESS = re.compile(rf"([@#+])({NAME})")
 _STREAMS = {"@": "inbox/", "#": "channel/", "+": "channel/+"}
 
 

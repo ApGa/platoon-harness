@@ -31,8 +31,6 @@ async def spawn(
     """Spawn an agent through to started, doing what the host does between the two."""
     args = {"name": name, "child_role": role, "goal": f"be {name}"}
     result_of(await kernel.submit(by or kernel.runtime, "agent.spawn", args))
-    parent = None if by is None else by.id
-    await enroll(kernel, agent(name), role=role, parent=parent)
     await settle_effects(kernel, name)
     await report(kernel, name, "ready", **(ready or {}))
     return agent(name)

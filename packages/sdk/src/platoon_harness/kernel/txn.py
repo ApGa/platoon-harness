@@ -23,7 +23,7 @@ from .view import View, fold
 
 _STREAM = re.compile(r"[^\s@#]+")
 _STREAM_LIMIT = 512
-_REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>\d+)(#\S+)?")
+_REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>\d{1,18})(#\S+)?")
 _BODY_REF = re.compile(r"sha256:(?P<sha256>[0-9a-f]{64})")
 
 
@@ -203,10 +203,12 @@ class Txn:
         timeout: float | None = None,
         priority: int = 0,
         agent: str | None = None,
+        after: int | None = None,
     ) -> int:
         """Request a touch of the world and return the effect's id.
 
-        Effects of one agent run in order; a priority above zero goes first and bypasses that order.
+        Effects of one agent run in order; a priority above zero goes first and bypasses that order. With `after`, this
+        one starts only once that one has finished, so a failure stops what depended on it.
         """
         self._flush()
         effect = last_seq(self._db) + 1
@@ -222,6 +224,7 @@ class Txn:
                 "on_uncertain": on_uncertain,
                 "timeout": timeout,
                 "priority": priority,
+                "after": after,
             },
         )
         return effect

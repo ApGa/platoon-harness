@@ -127,9 +127,9 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     role = session.settings().roles.get(a.child_role)
     if role is None:
         raise Refused("not_found", f"no role {a.child_role}")
+    if txn.view(Principals).named(a.name) is not None:
+        raise Refused("conflict", f"{a.name} is taken")
     agents = txn.view(Agents)
-    if agents.get(a.name) is not None or txn.view(Principals).get(f"agent:{a.name}") is not None:
-        raise Refused("conflict", f"{a.name} exists")
     spawner = agents.get(txn.me.name) if txn.me.kind == "agent" else None
     depth = 0 if spawner is None else spawner.depth + 1
     parent = None if txn.me.kind == "runtime" else txn.me.id
@@ -155,18 +155,21 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "inbox_depth": role.inbox_depth,
         },
     )
+    principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
+    txn.emit(
+        "principal.added",
+        f"principal/agent:{a.name}",
+        gist=f"agent:{a.name} added"[:GIST_LIMIT],
+        agent=a.name,
+        data={**principal, "token_hash": None},
+    )
     spec = {"agent": a.name, "role": a.child_role}
-    launch = {
-        **spec,
-        "goal": a.goal,
-        "body": a.body,
-        "model": role.model,
-        "harness": role.harness,
-        "scopes": role.tools,
-    }
-    txn.effect("admit", spec, on_uncertain="surface", agent=a.name)
-    txn.effect("workspace", {**spec, "workspace": role.workspace}, on_uncertain="reconcile", agent=a.name)
-    txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name)
+    launch = {**spec, "goal": a.goal, "body": a.body, "model": role.model, "harness": role.harness}
+    admit = txn.effect("admit", spec, on_uncertain="surface", agent=a.name)
+    workspace = txn.effect(
+        "workspace", {**spec, "workspace": role.workspace}, on_uncertain="reconcile", agent=a.name, after=admit
+    )
+    txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name, after=workspace)
     return {"agent": a.name, "state": "spawning"}
 
 

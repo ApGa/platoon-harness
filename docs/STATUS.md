@@ -68,7 +68,9 @@ power loss. Nothing here has run on macOS.
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
 | `v`-based upcasting of old payloads | deferred | `v` is recorded. No upcaster exists until a second payload version does |
 | `next`, `prev` and `group:x` as kernel relations | deferred | `grant.add` still refuses them. Compilation expands them over roles, so a team never needs them |
-| Credential rotation for a live principal | deferred | Arrives with resume, in M2 |
+| A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
+| Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
+| Effects cancelled before they start, and effects that wait for another to finish | tested | `test_effects.py` |
 
 ### Primitives (`platoon_harness.primitives`)
 
@@ -97,7 +99,7 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Reading a body held in `blobs/` from an op | deferred | An op may do no I/O, so it returns the hash and the surface reads the body. No surface exists yet |
 | Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging | tested | `test_tasks.py`, properties |
 | Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it arrives with drivers |
-| Lifecycle: spawn admission, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor | tested | `test_lifecycle.py` |
+| Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
 | Completion: `settled`, `until`, `session.close`, `session.cancel`, episodes | tested | `test_lifecycle.py` |
 | Closing a headless session at `until` | deferred | `session.status` reports `done`. The owner that acts on it arrives with `Session` |
 | Approvals: four facts, one winner, per-role policy journaled at open | tested | `test_approvals.py` |

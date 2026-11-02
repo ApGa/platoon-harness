@@ -21,12 +21,13 @@ class Effect(BaseModel, frozen=True):
 
     id: int
     kind: str
-    state: Literal["requested", "started", "finished", "failed", "uncertain"]
+    state: Literal["requested", "started", "finished", "failed", "uncertain", "cancelled"]
     on_uncertain: Literal["retry", "reconcile", "surface"]
     timeout: float | None
     priority: int
     agent: str | None
     attempts: int
+    after: int | None
     data: JsonValue
 
 
@@ -43,6 +44,7 @@ class Effects(View):
         priority INTEGER NOT NULL,
         agent TEXT,
         attempts INTEGER NOT NULL,
+        after INTEGER,
         data TEXT NOT NULL
     ) STRICT;
     CREATE INDEX v_effects_state ON v_effects(state, priority);
@@ -52,7 +54,7 @@ class Effects(View):
     def requested(self, event: Event) -> None:
         data = event.data
         self.db.execute(
-            "INSERT INTO v_effects VALUES (?, ?, 'requested', ?, ?, ?, ?, 0, ?)",
+            "INSERT INTO v_effects VALUES (?, ?, 'requested', ?, ?, ?, ?, 0, ?, ?)",
             (
                 data["id"],
                 data["kind"],
@@ -60,6 +62,7 @@ class Effects(View):
                 data["timeout"],
                 data["priority"],
                 event.agent,
+                data["after"],
                 json.dumps(data["data"]),
             ),
         )
@@ -70,7 +73,7 @@ class Effects(View):
             "UPDATE v_effects SET state = 'started', attempts = attempts + 1 WHERE id = ?", (event.data["id"],)
         )
 
-    @fold("effect.finished", "effect.failed", "effect.uncertain", "effect.retried")
+    @fold("effect.finished", "effect.failed", "effect.uncertain", "effect.retried", "effect.cancelled")
     def moved(self, event: Event) -> None:
         state = "requested" if event.type == "effect.retried" else event.type.removeprefix("effect.")
         self.db.execute("UPDATE v_effects SET state = ? WHERE id = ?", (state, event.data["id"]))
@@ -85,12 +88,18 @@ class Effects(View):
     def in_state(self, state: str) -> list[Effect]:
         return self._load(self.db.execute("SELECT * FROM v_effects WHERE state = ? ORDER BY id", (state,)).fetchall())
 
+    def requested_for(self, agent: str) -> list[Effect]:
+        rows = self.db.execute("SELECT * FROM v_effects WHERE agent = ? AND state = 'requested' ORDER BY id", (agent,))
+        return self._load(rows.fetchall())
+
     def ready(self, kind: str | None = None) -> list[Effect]:
         """Requested effects a daemon may start now: per agent in order, unless priority bypasses that."""
         rows = self.db.execute(
             """
             SELECT * FROM v_effects AS e
-            WHERE e.state = 'requested' AND (:kind IS NULL OR e.kind = :kind) AND (
+            WHERE e.state = 'requested' AND (:kind IS NULL OR e.kind = :kind)
+            AND (e.after IS NULL OR e.after IN (SELECT id FROM v_effects WHERE state = 'finished'))
+            AND (
                 e.priority > 0 OR e.agent IS NULL OR NOT EXISTS (
                     SELECT 1 FROM v_effects AS o
                     WHERE o.agent = e.agent AND o.priority = 0 AND o.id < e.id

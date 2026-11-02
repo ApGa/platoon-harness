@@ -1,6 +1,7 @@
 """Operations: named, typed, synchronous functions, the only way to change a session."""
 
 import inspect
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, get_type_hints
@@ -10,7 +11,25 @@ from pydantic import BaseModel, ConfigDict
 from .txn import Txn
 
 _IDENTITY_FIELDS = frozenset(
-    {"actor", "caller", "credential", "identity", "policy", "principal", "role", "session", "session_id", "token"}
+    {
+        "actor",
+        "agentid",
+        "apikey",
+        "apitoken",
+        "authorization",
+        "bearer",
+        "caller",
+        "callerrole",
+        "credential",
+        "identity",
+        "onbehalfof",
+        "policy",
+        "principal",
+        "role",
+        "session",
+        "token",
+        "user",
+    }
 )
 
 
@@ -22,6 +41,21 @@ class Args(BaseModel):
 
 def _session(args: Args) -> str | None:
     return "session"
+
+
+def _claims(input: type[Args]) -> list[str]:
+    """Fields that claim the caller's identity, nested ones and aliases too. A denylist, so it catches the usual
+    spellings and no more: what stops a spoof is that identity comes from a credential."""
+    schema = input.model_json_schema()
+    names = {*input.model_fields}
+    for table in (schema, *schema.get("$defs", {}).values()):
+        names |= table.get("properties", {}).keys()
+
+    def claims(name: str) -> bool:
+        plain = re.sub(r"[\W_]", "", name).casefold()
+        return plain in _IDENTITY_FIELDS or plain.removesuffix("id") in _IDENTITY_FIELDS
+
+    return sorted(filter(claims, names))
 
 
 @dataclass(frozen=True)
@@ -62,9 +96,8 @@ def op(
             raise TypeError(f"op {name} must take Args that refuse undeclared fields")
         if query and exposes:
             raise TypeError(f"op {name} cannot be both a query and an exposed read")
-        fields = input.model_json_schema().get("properties", {})
-        if tool and (claims := _IDENTITY_FIELDS & fields.keys()):
-            raise TypeError(f"tool op {name} declares identity fields: {sorted(claims)}")
+        if tool and (claims := _claims(input)):
+            raise TypeError(f"tool op {name} declares identity fields: {claims}")
         if tool and not fn.__doc__:
             raise TypeError(f"tool op {name} needs a description")
         return Op(name, fn, input, on, query, exposes, tool, runtime)

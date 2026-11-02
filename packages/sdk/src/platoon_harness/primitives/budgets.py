@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import Field
 
-from platoon_harness.kernel import Args, Event, Refused, Txn, View, fold, op
+from platoon_harness.kernel import NAME, Args, Event, Refused, Txn, View, fold, op
 
 Unit = Literal["tokens", "usd", "turns", "agents", "wall"]
 Label = Literal["provider", "estimated", "lower_bound", "unavailable"]
@@ -270,7 +270,7 @@ def reconcile(txn: Txn, agent: str, role: str) -> None:
 
 
 class SetBudget(Args):
-    scope: Annotated[str, Field(pattern=r"^(shared|role:[\w.-]+)$")] = "shared"
+    scope: Annotated[str, Field(pattern=rf"^(shared|role:{NAME})$")] = "shared"
     limits: dict[Unit, Annotated[float, Field(gt=0, strict=False)]] = {}
     estimate: dict[Literal["tokens", "usd"], Annotated[float, Field(ge=0, strict=False)]] = {}
     fallback: Literal["turns"] | None = None

@@ -80,6 +80,37 @@ async def test_everyone_shares_the_board(team):
     assert result_of(await team.submit(lead, "board.query", {"board": "notes"}))["total"] == 1
 
 
+async def test_a_parent_can_write_to_a_child_before_it_has_started(team):
+    lead = await spawn(team, "lead", role="lead")
+    result_of(await team.submit(lead, "agent.spawn", {"name": "w1", "child_role": "worker", "goal": "x"}))
+
+    await send(team, lead, "@w1", "your brief")
+
+
+async def test_a_join_on_a_child_that_has_not_started_parks(team):
+    lead = await spawn(team, "lead", role="lead")
+    result_of(await team.submit(lead, "agent.spawn", {"name": "w1", "child_role": "worker", "goal": "x"}))
+
+    assert result_of(await team.submit(lead, "wait", {"agents": ["w1"]}))["state"] == "parked"
+
+
+async def test_a_join_on_a_child_that_has_ended_releases(team):
+    lead = await spawn(team, "lead", role="lead")
+    worker = await spawn(team, "w1", by=lead)
+    result_of(await team.submit(worker, "agent.finish", {"gist": "done"}))
+
+    assert result_of(await team.submit(lead, "wait", {"agents": ["w1"]}))["state"] == "released"
+
+
+async def test_an_ended_child_still_answers_for_itself(team):
+    lead = await spawn(team, "lead", role="lead")
+    worker = await spawn(team, "w1", by=lead)
+    result_of(await team.submit(worker, "agent.finish", {"gist": "done"}))
+
+    assert result_of(team.query(lead, "agent.status", {"agent": "w1"}))["state"] == "ended"
+    assert refusal(await team.submit(lead, "message.send", {"to": "@w1", "gist": "there?"})).code == "undeliverable"
+
+
 async def test_any_agent_may_wait_and_finish(team):
     lead = await spawn(team, "lead", role="lead")
     worker = await spawn(team, "w1", by=lead)

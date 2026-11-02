@@ -2,7 +2,7 @@
 
 import pytest
 
-from platoon_harness.kernel import Kernel, Principal
+from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
 from platoon_harness.primitives import PRIMITIVES
 
 from .support import (
@@ -675,9 +675,51 @@ async def test_a_program_principal_may_spawn_with_itself_as_parent(kernel):
     assert state_of(kernel, "w1")["parent"] == "program:driver"
 
 
-async def test_a_spawning_agent_is_not_yet_enrolled(kernel):
+async def test_a_spawned_agent_is_a_principal_at_once_with_no_credential(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    result_of(await kernel.submit(lead, "agent.spawn", spawning("w1")))
+
+    assert any(peer["address"] == "@w1" for peer in result_of(kernel.query(lead, "peers", {})))
+    with pytest.raises(Refused):
+        kernel.authenticate("tok")
+
+    token = {"id": "agent:w1", "token_hash": hash_token("tok")}
+    result_of(await kernel.submit(kernel.runtime, "principal.issue", token))
+
+    assert kernel.authenticate("tok").parent == lead.id
+
+
+async def test_an_agent_ended_before_launch_gets_no_credential(kernel, ada):
     result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawning("w1")))
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "w1"}))
 
-    outcome = await kernel.submit(agent("w1"), "agent.finish", {})
+    token = {"id": "agent:w1", "token_hash": hash_token("tok")}
 
-    assert refusal(outcome).code == "not_permitted"
+    assert refusal(await kernel.submit(kernel.runtime, "principal.issue", token)).code == "conflict"
+    assert refusal(await kernel.submit(kernel.runtime, "principal.add", {"id": "agent:w1"})).code == "conflict"
+
+
+async def test_an_agent_cannot_take_a_name_of_another_kind(kernel, ada):
+    outcome = await kernel.submit(kernel.runtime, "agent.spawn", spawning("ada"))
+
+    assert refusal(outcome).code == "conflict"
+
+
+async def test_a_name_that_is_no_safe_path_part_is_refused(kernel):
+    for name in ("..", ".", "-rf", "--help", "w\u0430"):
+        assert refusal(await kernel.submit(kernel.runtime, "agent.spawn", spawning(name))).code == "invalid"
+
+
+async def test_an_adopted_orphan_leaves_its_old_ancestors_reach(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    middle = await spawn(kernel, "middle", role="linked", by=lead)
+    orphan = await spawn(kernel, "orphan", role="worker", by=middle)
+    await spawn(kernel, "below", role="worker", by=orphan)
+    await kernel.submit(kernel.runtime, "grant.remove", {"who": "agent", "ops": "*", "on": "*"})
+    await grant(kernel, "agent", "agent.status", "agent/{descendants}")
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "middle"}))
+
+    assert refusal(kernel.query(lead, "agent.status", {"agent": "orphan"})).code == "not_permitted"
+    assert refusal(kernel.query(lead, "agent.status", {"agent": "below"})).code == "not_permitted"
+    assert result_of(kernel.query(orphan, "agent.status", {"agent": "below"}))["parent"] == orphan.id

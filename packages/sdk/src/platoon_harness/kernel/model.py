@@ -7,7 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
-ENROLLED_ID = r"(agent|human|program|judge):[\w.-]+"
+NAME = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"
+ENROLLED_ID = rf"(agent|human|program|judge):{NAME}"
 NAME_LIMIT = 256
 GIST_LIMIT = 280
 DATA_LIMIT = 16 * 1024
@@ -19,7 +20,6 @@ type RefusalCode = Literal[
     "not_found",
     "conflict",
     "stale_fence",
-    "lease_lost",
     "queue_full",
     "queue_empty",
     "over_budget",

@@ -219,7 +219,7 @@ def claim(txn: Txn, a: Claim) -> dict[str, Any]:
         expire(txn, lapsed, channel)
     held = sum(task.live(txn.now) for task in tasks.held_by(a.queue, txn.me.id))
     if held >= channel.max_inflight:
-        raise Refused("queue_full", {"held": held, "max_inflight": channel.max_inflight})
+        raise Refused("conflict", {"held": held, "max_inflight": channel.max_inflight})
     if a.task is None:
         task = tasks.next_open(a.queue)
         if task is None:
@@ -257,7 +257,7 @@ class Held(Args):
     fence: int | None = None
 
 
-def _caller_lease(txn: Txn, a: Held, lapsed: Literal["stale_fence", "lease_lost"]) -> Task:
+def _caller_lease(txn: Txn, a: Held) -> Task:
     """The task a caller's lease covers. With no `task` or `fence`, that is its live lease, since a model can lose both.
 
     Expiry alone stales a lease, reassigned or not. The runtime may act on an owner's behalf, fence in hand.
@@ -268,15 +268,15 @@ def _caller_lease(txn: Txn, a: Held, lapsed: Literal["stale_fence", "lease_lost"
         if task is None:
             raise Refused("not_found", f"no task {a.task} on {a.queue}")
     else:
-        held = tasks.held_by(a.queue, txn.me.id)
+        held = [task for task in tasks.held_by(a.queue, txn.me.id) if task.live(txn.now)]
         if len(held) > 1:
             raise Refused("invalid", {"holding": [task.id for task in held], "detail": "name a task"})
         if not held:
-            raise Refused(lapsed, f"you hold no lease on {a.queue}")
+            raise Refused("stale_fence", f"you hold no live lease on {a.queue}")
         task = held[0]
     mine = txn.me.kind == "runtime" or task.owner == txn.me.id
     if not (mine and task.live(txn.now)) or a.fence not in (None, task.fence):
-        raise Refused(lapsed, {"task": task.id, "fence": a.fence, "current": task.fence, "state": task.state})
+        raise Refused("stale_fence", {"task": task.id, "fence": a.fence, "current": task.fence, "state": task.state})
     return task
 
 
@@ -285,7 +285,7 @@ def renew(txn: Txn, a: Held) -> dict[str, Any]:
     """Extend your lease, up to the queue's `lease_max`. The runtime already does this while you are active. Refused
     `lease_lost` when the lease has gone: claim again."""
     channel = _queue(txn, a.queue)
-    task = _caller_lease(txn, a, "lease_lost")
+    task = _caller_lease(txn, a)
     assert task.claimed_at is not None and task.fence is not None
     until = _lease_until(txn.now, task.claimed_at, channel)
     if task.lease_until is not None and until <= task.lease_until:
@@ -298,7 +298,7 @@ def renew(txn: Txn, a: Held) -> dict[str, Any]:
 @op("task.release", on=lambda a: f"queue/{a.queue}", tool=True)
 def release(txn: Txn, a: Held) -> None:
     """Give a task back unfinished, which spends no attempt. Refused `stale_fence` when your lease has gone."""
-    task = _caller_lease(txn, a, "stale_fence")
+    task = _caller_lease(txn, a)
     txn.emit("task.released", task.stream, gist=f"task {task.id} released", data=_note(task))
 
 
@@ -312,7 +312,7 @@ class Finish(Held):
 def complete(txn: Txn, a: Finish) -> None:
     """Finish your task. `fence` defaults to your live lease. Refused `stale_fence` once the lease has expired, even if
     nobody else took the task: your work may be lost, so check the task and claim it again if it is open."""
-    task = _caller_lease(txn, a, "stale_fence")
+    task = _caller_lease(txn, a)
     assert task.fence is not None
     data = _note(task, fence=task.fence, body=a.body)
     gist = a.gist or f"task {task.id} completed"
@@ -325,7 +325,7 @@ def fail(txn: Txn, a: Finish) -> None:
     """Report that this attempt failed. Someone may claim the task again until `max_attempts`, when it is dead and shown
     to a human. Refused `stale_fence` once your lease has expired: the task has moved on without you."""
     channel = _queue(txn, a.queue)
-    task = _caller_lease(txn, a, "stale_fence")
+    task = _caller_lease(txn, a)
     assert task.fence is not None
     gist = a.gist or f"task {task.id} failed"
     txn.emit("task.failed", task.stream, gist=gist, cause=[task.fence], data=_note(task, fence=task.fence, body=a.body))

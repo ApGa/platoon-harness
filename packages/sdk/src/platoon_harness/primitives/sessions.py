@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, JsonValue
 
-from platoon_harness.kernel import Args, Event, Refused, Stamps, Txn, View, fold, op
+from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
 from .common import BodyRef, Delivery, Name
 
@@ -37,7 +37,7 @@ class Settings(Args):
 
     roles: dict[Name, Role] = {}
     limits: Limits = Limits()
-    until: Annotated[str, Field(pattern=r"^(settled|program|role:[\w.-]+)$")] = "settled"
+    until: Annotated[str, Field(pattern=rf"^(settled|program|role:{NAME})$")] = "settled"
     manifest: BodyRef | None = None
 
 

@@ -333,22 +333,21 @@ class _Reach(NamedTuple):
     human: str | None = None
 
 
-def _reach(txn: Txn, stream: str) -> _Reach:
+def _audience(txn: Txn, stream: str) -> _Reach:
     """A message's settings and its audience at this commit."""
     channel = txn.view(Channels).get(stream)
     if stream.startswith("inbox/"):
         name = stream.removeprefix("inbox/")
-        agent = txn.view(Agents).get(name)
-        if agent is not None and agent.ended:
-            raise Refused("undeliverable", f"{name} has ended: {agent.status}")
-        if channel is not None:
-            return _Reach(channel, (name,))
-        principals = txn.view(Principals)
-        if principals.get(f"human:{name}") is not None:
-            return _Reach(Channel(stream=stream, kind="inbox"), (name,), human=f"human:{name}")
-        if principals.get(f"program:{name}") is not None:
-            return _Reach(Channel(stream=stream, kind="inbox"), (name,))
-        raise Refused("not_found", f"nobody is called {name}")
+        principal = txn.view(Principals).named(name)
+        if principal is None:
+            raise Refused("not_found", f"nobody is called {name}")
+        if principal.state != "live":
+            agent = txn.view(Agents).get(name)
+            raise Refused("undeliverable", f"{name} has ended: {agent.status}" if agent else f"{name} has left")
+        if channel is None and principal.kind not in ("human", "program"):
+            raise Refused("not_found", f"{name} has no inbox")
+        human = principal.id if principal.kind == "human" else None
+        return _Reach(channel or Channel(stream=stream, kind="inbox"), (name,), human=human)
     if channel is None:
         raise Refused("not_found", f"no channel {stream}")
     if stream.startswith("channel/+"):
@@ -387,7 +386,7 @@ def post(
     wake: bool = False,
 ) -> Event:
     """Journal one entry for its audience. The runtime posts here too, about a `subject` or to `wake` the reader."""
-    channel, readers, generation, human = _reach(txn, stream)
+    channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
     if channel.depth is not None and not by_runtime:

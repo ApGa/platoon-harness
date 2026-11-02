@@ -114,13 +114,30 @@ class Dispatch(Args):
     timeout: float | None = None
     priority: int = 0
     agent: str | None = None
+    after: int | None = None
+
+
+class Cancel(Args):
+    id: int
+
+
+@op("note.cancel")
+def cancel(txn: Txn, a: Cancel) -> None:
+    """Cancel a requested effect, as a primitive does when what it served has gone."""
+    txn.emit("effect.cancelled", f"effect/{a.id}", gist="cancelled", data={"id": a.id})
 
 
 @op("note.dispatch")
 def dispatch(txn: Txn, a: Dispatch) -> int:
     """Request an effect."""
     return txn.effect(
-        a.kind, {"kind": a.kind}, on_uncertain=a.on_uncertain, timeout=a.timeout, priority=a.priority, agent=a.agent
+        a.kind,
+        {"kind": a.kind},
+        on_uncertain=a.on_uncertain,
+        timeout=a.timeout,
+        priority=a.priority,
+        agent=a.agent,
+        after=a.after,
     )
 
 
@@ -153,7 +170,7 @@ def mark(txn: Txn, a: Span) -> dict[str, Any]:
 
 notes = Extension(
     "note",
-    ops=[add, silence, list_notes, read_notes, reset, dispatch, remind, mark],
+    ops=[add, silence, list_notes, read_notes, reset, dispatch, cancel, remind, mark],
     views=[Notes],
 )
 

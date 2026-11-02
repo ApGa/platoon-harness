@@ -88,7 +88,7 @@ async def test_max_inflight_limits_a_reader(kernel, queue):
 
     refused = refusal(await kernel.submit(bob, "task.claim", {"queue": "work"}))
 
-    assert refused.code == "queue_full" and refused.detail == {"held": 1, "max_inflight": 1}
+    assert refused.code == "conflict" and refused.detail == {"held": 1, "max_inflight": 1}
 
 
 async def test_complete_finishes_a_task(kernel, queue):
@@ -180,7 +180,7 @@ async def test_renew_extends_a_lease_and_its_timer(kernel, queue, clock):
     result_of(await kernel.submit(bob, "task.complete", {"queue": "work"}))
 
 
-async def test_renew_after_expiry_is_lease_lost(kernel, queue, clock):
+async def test_renew_after_expiry_is_stale(kernel, queue, clock):
     bob = await spawn(kernel, "bob")
     id = await add(kernel)
     await claim(kernel, bob)
@@ -188,7 +188,7 @@ async def test_renew_after_expiry_is_lease_lost(kernel, queue, clock):
 
     outcome = await kernel.submit(bob, "task.renew", {"queue": "work", "task": id})
 
-    assert refusal(outcome).code == "lease_lost"
+    assert refusal(outcome).code == "stale_fence"
 
 
 async def test_the_runtime_renews_for_the_owner_up_to_lease_max(kernel, clock):
@@ -203,7 +203,7 @@ async def test_the_runtime_renews_for_the_owner_up_to_lease_max(kernel, clock):
     clock.advance(40)
     assert result_of(await kernel.submit(kernel.runtime, "task.renew", args))["lease_until"] == 1100.0
     clock.advance(10)
-    assert refusal(await kernel.submit(kernel.runtime, "task.renew", args)).code == "lease_lost"
+    assert refusal(await kernel.submit(kernel.runtime, "task.renew", args)).code == "stale_fence"
 
 
 async def test_release_gives_a_task_back_and_spends_no_attempt(kernel, queue):

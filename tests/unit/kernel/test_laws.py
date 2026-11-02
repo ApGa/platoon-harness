@@ -131,6 +131,44 @@ def test_no_tool_schema_claims_an_identity(field):
         assert op("note.spoof", runtime=True)(tool).input is spoof
 
 
+class _Who(Args):
+    principal: str
+
+
+class _Nested(Args):
+    who: _Who
+
+
+class _Listed(Args):
+    who: tuple[_Who, ...] = ()
+
+
+class _Renamed(Args):
+    role: str = Field(alias="r")
+
+
+@pytest.mark.parametrize("spoof", [_Nested, _Listed, _Renamed])
+def test_no_tool_schema_hides_an_identity(spoof):
+    def tool(txn: Txn, a: Args) -> None:
+        """Claim to be someone."""
+
+    tool.__annotations__["a"] = spoof
+    with pytest.raises(TypeError, match="identity"):
+        op("note.spoof", tool=True)(tool)
+
+
+@pytest.mark.parametrize(
+    "field", ["Actor", "actor_id", "sessionId", "api_token", "agent_id", "caller_role", "on_behalf_of", "user"]
+)
+def test_the_usual_spellings_of_an_identity_are_refused(field):
+    def tool(txn: Txn, a: Args) -> None:
+        """Claim to be someone."""
+
+    tool.__annotations__["a"] = create_model("Near", __base__=Args, **{field: (str, ...)})
+    with pytest.raises(TypeError, match="identity"):
+        op("note.spoof", tool=True)(tool)
+
+
 async def test_identity_comes_from_a_credential(kernel):
     await enroll(kernel, ALICE)
     await grant(kernel, "agent:alice")

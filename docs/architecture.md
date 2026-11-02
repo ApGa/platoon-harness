@@ -59,9 +59,9 @@ For extension and training authors:
 | **Operation (op)** | A named, typed, synchronous function; the only way to change a session. |
 | **Command** | One invocation of an op, with an idempotency key. |
 | **View** | A table folded from events: droppable, and rebuilt to identical contents. |
-| **Effect** | A tracked request to touch the world: requested, started, then finished, failed or uncertain. |
+| **Effect** | A tracked request to touch the world: requested, started, then finished, failed or uncertain; or cancelled before it starts. |
 | **Daemon** | A supervised task that performs effects or reacts to views, keeping nothing that must survive a restart. |
-| **Principal** | An authenticated actor (`agent`, `human`, `program`, `judge`, `runtime`), resolved from a credential. |
+| **Principal** | An authenticated actor (`agent`, `human`, `program`, `judge`, `runtime`), resolved from a credential. A name is unique across kinds and safe as a path part. |
 | **Grant** | `(who, ops, on)`, the only authorization input for an op. Absence means deny. |
 | **Driver** | The adapter that presents one harness session to the runtime. |
 | **Episode** | An explicitly opened span of a session with one outcome. Only events inside one can become training data. |
@@ -264,11 +264,12 @@ refuses. A ref is `stream@version`, with an optional `#range`, or `sha256:<hash>
 
 ### 5.4 Effects
 
-An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=..., priority=..., agent=...)` appends
+An op never touches the world. `txn.effect(kind, data, on_uncertain=..., timeout=..., priority=..., agent=..., after=...)` appends
 `effect.requested` and returns the effect's id, which is that event's `seq`. A daemon commits `effect.start`, which returns the
 attempt, acts, then commits `effect.finish` or `effect.fail` naming that attempt. While a newer attempt runs, a late report from
 an older one is refused `conflict`. Daemons read `v_effects`, so they are level-triggered and hold no durable position. One
-agent's effects start in order. A `priority` above zero starts first and ignores that order.
+agent's effects start in order. A `priority` above zero starts first and ignores that order. With `after`, an effect starts only
+once that one has finished, so a failed `admit` stops its `launch`. An op may emit `effect.cancelled` for one still requested.
 
 | Kind | Key sent outward | After a crash |
 |---|---|---|
@@ -402,7 +403,8 @@ because a query cannot emit. An op is at most one of `query` and `exposes`. `run
 principal takes no grant.
 
 `op()` refuses at definition an input that is not `Args` or lets undeclared fields through, a `tool` whose schema claims the
-caller's identity by name or alias (law 6), and a `tool` with no description.
+caller's identity by name or alias, at any depth and in the usual spellings (law 6), and a `tool` with no description. That scan
+is a denylist, so it catches mistakes; what stops a spoof is that identity comes from a credential.
 
 One definition reaches every surface.
 
@@ -424,7 +426,7 @@ query. A query that decoding refuses leaves no event, so the tool plane submits 
 it the same way and journals it, which keeps law 6.
 
 **Refusals are data:** `{code, op, object, reachable?, retry_after?, detail}`. Codes: `not_permitted invalid not_found
-conflict stale_fence lease_lost queue_full queue_empty over_budget unsupported busy unavailable key_reused undeliverable`.
+conflict stale_fence queue_full queue_empty over_budget unsupported busy unavailable key_reused undeliverable`.
 `over_budget` is policy; `unavailable` is infrastructure. Each tool description ends with what a refusal means and what
 to do next.
 
@@ -439,7 +441,7 @@ to do next.
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
 | Evidence | `blob.put` `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` |
+| Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -546,7 +548,9 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 
 - **Spawn** is topology check, budget reservation, `admit`, `workspace`, `launch`. Depth comes from the parent record,
   never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success. `may_spawn`
-  is a grant on `role/<name>`. The host adds the child's principal before launch, because its token never enters the journal.
+  is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
+  and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
+  journal, and an agent that has ended cannot be given one.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
   An ended agent has no open turn.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
@@ -651,8 +655,9 @@ lease = "30m"
 | `until` | §7, Completion |
 
 **Selectors** are the same everywhere: `self parent children siblings ancestors descendants next prev human program all
-role:x group:x`. They are evaluated on the live graph. A channel in a team has no agent to be relative to, so its `writers` and
-`readers` take only `human program all role:x group:x`.
+role:x group:x`. They are evaluated on the graph as it stands. A relation outlives its far end, so an op on an ended agent gives
+its own answer: `wait` releases, `agent.status` answers, and `message.send` says `undeliverable`. A channel in a team has no agent
+to be relative to, so its `writers` and `readers` take only `human program all role:x group:x`.
 
 **Rules.** Default deny. Presets and keys form a union, `a | b` in Python, so order never matters and the hash cannot tell how a
 topology was mixed. Edges and grants add up. There is no `deny`, because it would make mixing non-commutative. Two sources defining

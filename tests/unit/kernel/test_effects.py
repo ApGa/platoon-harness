@@ -131,6 +131,36 @@ async def test_interrupt_bypasses_a_hanging_delivery(kernel):
     assert queued not in ready(kernel)
 
 
+async def test_an_effect_after_another_waits_for_it_to_finish(kernel):
+    first = await dispatch(kernel, kind="admit")
+    second = await dispatch(kernel, kind="launch", after=first)
+
+    assert ready(kernel) == [first]
+    await start(kernel, first)
+    await finish(kernel, first)
+
+    assert ready(kernel) == [second]
+
+
+async def test_a_failure_stops_what_depended_on_it(kernel):
+    first = await dispatch(kernel, kind="admit")
+    second = await dispatch(kernel, kind="launch", after=first)
+    attempt = await start(kernel, first)
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", {"id": first, "attempt": attempt, "error": "no"}))
+
+    assert second not in ready(kernel)
+
+
+async def test_a_cancelled_effect_never_starts(kernel):
+    effect = await dispatch(kernel, agent="alice")
+    queued = await dispatch(kernel, agent="alice")
+
+    result_of(await kernel.submit(kernel.runtime, "note.cancel", {"id": effect}))
+
+    assert state_of(kernel, effect) == "cancelled"
+    assert ready(kernel) == [queued]
+
+
 async def test_priority_runs_first(kernel):
     plain = await dispatch(kernel)
     urgent = await dispatch(kernel, priority=1)
