@@ -25,18 +25,18 @@ class _Scope(NamedTuple):
     since: float
 
 
-class Budget(View):
+class Budgets(View):
     """Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster."""
 
     schema = """
-    CREATE TABLE v_budget(
+    CREATE TABLE v_budgets(
         scope TEXT PRIMARY KEY,
         limits TEXT NOT NULL,
         estimate TEXT NOT NULL,
         fallback TEXT,
         since REAL NOT NULL
     ) WITHOUT ROWID, STRICT;
-    CREATE TABLE v_budget_spent(
+    CREATE TABLE v_budgets_spent(
         scope TEXT NOT NULL,
         unit TEXT NOT NULL,
         amount REAL NOT NULL,
@@ -44,7 +44,7 @@ class Budget(View):
         unmeasured INTEGER NOT NULL,
         PRIMARY KEY (scope, unit)
     ) WITHOUT ROWID, STRICT;
-    CREATE TABLE v_budget_reserved(
+    CREATE TABLE v_budgets_reserved(
         agent TEXT NOT NULL,
         unit TEXT NOT NULL,
         role TEXT NOT NULL,
@@ -52,7 +52,7 @@ class Budget(View):
         waking INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (agent, unit)
     ) WITHOUT ROWID, STRICT;
-    CREATE TABLE v_budget_turn(
+    CREATE TABLE v_budgets_turn(
         agent TEXT NOT NULL,
         unit TEXT NOT NULL,
         amount REAL NOT NULL,
@@ -65,7 +65,7 @@ class Budget(View):
     def limits_set(self, event: Event) -> None:
         data = event.data
         self.db.execute(
-            "INSERT OR REPLACE INTO v_budget VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO v_budgets VALUES (?, ?, ?, ?, ?)",
             (
                 data["scope"],
                 json.dumps(data["limits"]),
@@ -80,7 +80,7 @@ class Budget(View):
         role = event.data["role"]
         for unit, amount in event.data["amounts"].items():
             self.db.execute(
-                "INSERT INTO v_budget_reserved(agent, unit, role, amount) VALUES (?, ?, ?, ?) "
+                "INSERT INTO v_budgets_reserved(agent, unit, role, amount) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT DO UPDATE SET amount = max(amount, excluded.amount)",
                 (event.agent, unit, role, amount),
             )
@@ -89,7 +89,7 @@ class Budget(View):
     def turn_coming(self, event: Event) -> None:
         """A reservation is a wake's until its turn starts, and only a wake's can come back when a handover fails."""
         waking = event.type == "agent.woken"
-        self.db.execute("UPDATE v_budget_reserved SET waking = ? WHERE agent = ?", (waking, event.agent))
+        self.db.execute("UPDATE v_budgets_reserved SET waking = ? WHERE agent = ?", (waking, event.agent))
 
     @fold("usage.reported")
     def usage(self, event: Event) -> None:
@@ -98,10 +98,10 @@ class Budget(View):
                 self._seen(event.agent, unit, amount or 0.0, event.data["label"])
 
     def _seen(self, agent: str | None, unit: str, amount: float, label: str) -> None:
-        row = self.db.execute("SELECT label FROM v_budget_turn WHERE agent = ? AND unit = ?", (agent, unit)).fetchone()
+        row = self.db.execute("SELECT label FROM v_budgets_turn WHERE agent = ? AND unit = ?", (agent, unit)).fetchone()
         label = _weaker(label, row["label"]) if row else label
         self.db.execute(
-            "INSERT INTO v_budget_turn VALUES (?, ?, ?, ?) "
+            "INSERT INTO v_budgets_turn VALUES (?, ?, ?, ?) "
             "ON CONFLICT DO UPDATE SET amount = amount + excluded.amount, label = excluded.label",
             (agent, unit, amount, label),
         )
@@ -110,23 +110,23 @@ class Budget(View):
     def reconciled(self, event: Event) -> None:
         for charge in event.data["charges"]:
             self._charge(event.data["role"], event.agent, **charge)
-        self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
-        self.db.execute("DELETE FROM v_budget_turn WHERE agent = ?", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_turn WHERE agent = ?", (event.agent,))
 
     @fold("agent.started")
     def started(self, event: Event) -> None:
         row = self.db.execute(
-            "SELECT role, amount FROM v_budget_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,)
+            "SELECT role, amount FROM v_budgets_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,)
         ).fetchone()
         if row is not None:
             self._charge(row["role"], event.agent, "agents", row["amount"], "provider")
-            self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,))
+            self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit = 'agents'", (event.agent,))
 
     @fold("turn.lost")
     def lost(self, event: Event) -> None:
         """A lost turn's cost is unknown, so its estimate stands, and it counts as unmeasured even with no estimate."""
         rows = self.db.execute(
-            "SELECT * FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,)
+            "SELECT * FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,)
         ).fetchall()
         held = {row["unit"]: row["amount"] for row in rows}
         for role in {row["role"] for row in rows}:
@@ -134,60 +134,60 @@ class Budget(View):
                 self._charge(role, event.agent, unit, held.pop(unit, 0.0), "unavailable", 1)
             for unit, amount in held.items():
                 self._charge(role, event.agent, unit, amount, "estimated")
-        self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
-        self.db.execute("DELETE FROM v_budget_turn WHERE agent = ?", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_turn WHERE agent = ?", (event.agent,))
 
     @fold("effect.failed")
     def wake_failed(self, event: Event) -> None:
         if event.data["kind"] == "deliver":
             self.db.execute(
-                "DELETE FROM v_budget_reserved WHERE agent = ? AND unit != 'agents' AND waking = 1", (event.agent,)
+                "DELETE FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents' AND waking = 1", (event.agent,)
             )
 
     @fold("agent.ended")
     def ended(self, event: Event) -> None:
-        self.db.execute("DELETE FROM v_budget_reserved WHERE agent = ?", (event.agent,))
-        self.db.execute("DELETE FROM v_budget_turn WHERE agent = ?", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ?", (event.agent,))
+        self.db.execute("DELETE FROM v_budgets_turn WHERE agent = ?", (event.agent,))
 
     def _charge(self, role: str, agent: str | None, unit: str, amount: float, label: str, unmeasured: int = 0) -> None:
         for scope in ("shared", f"role:{role}", f"agent:{agent}"):
             row = self.db.execute(
-                "SELECT label FROM v_budget_spent WHERE scope = ? AND unit = ?", (scope, unit)
+                "SELECT label FROM v_budgets_spent WHERE scope = ? AND unit = ?", (scope, unit)
             ).fetchone()
             self.db.execute(
-                "INSERT INTO v_budget_spent VALUES (?, ?, ?, ?, ?) ON CONFLICT DO UPDATE SET "
+                "INSERT INTO v_budgets_spent VALUES (?, ?, ?, ?, ?) ON CONFLICT DO UPDATE SET "
                 "amount = amount + excluded.amount, label = excluded.label, "
                 "unmeasured = unmeasured + excluded.unmeasured",
                 (scope, unit, amount, _weaker(label, row["label"]) if row else label, unmeasured),
             )
 
     def _scope(self, scope: str) -> _Scope | None:
-        row = self.db.execute("SELECT * FROM v_budget WHERE scope = ?", (scope,)).fetchone()
+        row = self.db.execute("SELECT * FROM v_budgets WHERE scope = ?", (scope,)).fetchone()
         if row is None:
             return None
         return _Scope(json.loads(row["limits"]), json.loads(row["estimate"]), row["fallback"], row["since"])
 
     def spent(self, scope: str, unit: str) -> tuple[float, str, int]:
         """The amount spent, its weakest label, and how many turns went unmeasured."""
-        row = self.db.execute("SELECT * FROM v_budget_spent WHERE scope = ? AND unit = ?", (scope, unit)).fetchone()
+        row = self.db.execute("SELECT * FROM v_budgets_spent WHERE scope = ? AND unit = ?", (scope, unit)).fetchone()
         return (0.0, "provider", 0) if row is None else (row["amount"], row["label"], row["unmeasured"])
 
     def held(self, scope: str, unit: str) -> float:
         """What is reserved in a scope and not yet reconciled."""
         role = scope.removeprefix("role:")
         row = self.db.execute(
-            "SELECT coalesce(sum(amount), 0) AS held FROM v_budget_reserved "
+            "SELECT coalesce(sum(amount), 0) AS held FROM v_budgets_reserved "
             "WHERE unit = ? AND (? = 'shared' OR role = ?)",
             (unit, scope, role),
         ).fetchone()
         return row["held"]
 
     def reservation(self, agent: str) -> dict[str, float]:
-        rows = self.db.execute("SELECT unit, amount FROM v_budget_reserved WHERE agent = ?", (agent,))
+        rows = self.db.execute("SELECT unit, amount FROM v_budgets_reserved WHERE agent = ?", (agent,))
         return {row["unit"]: row["amount"] for row in rows}
 
     def turn_usage(self, agent: str) -> dict[str, tuple[float, str]]:
-        rows = self.db.execute("SELECT * FROM v_budget_turn WHERE agent = ?", (agent,))
+        rows = self.db.execute("SELECT * FROM v_budgets_turn WHERE agent = ?", (agent,))
         return {row["unit"]: (row["amount"], row["label"]) for row in rows}
 
     def estimate(self, role: str) -> dict[str, float]:
@@ -220,7 +220,7 @@ class Budget(View):
                     self._check_limit(scope, found, unit, limit, wanted.get(unit, 0.0), now)
 
     def exhausted(self, now: float) -> bool:
-        """Whether the shared budget has run out, which stops every kind of session. A reservation has spent nothing."""
+        """Whether the shared budget has run out, which stops every kind of session. A reservation spends nothing."""
         found = self._scope("shared")
         if found is None:
             return False
@@ -230,7 +230,7 @@ class Budget(View):
         )
 
     def status(self) -> list[dict[str, Any]]:
-        scopes = self.db.execute("SELECT scope FROM v_budget ORDER BY scope").fetchall()
+        scopes = self.db.execute("SELECT scope FROM v_budgets ORDER BY scope").fetchall()
         rows = []
         for scope in (row["scope"] for row in scopes):
             found = self._scope(scope)
@@ -252,13 +252,15 @@ class Budget(View):
 
     def usage_of(self, agent: str) -> dict[str, dict[str, Any]]:
         """What one agent has spent, with labels: empty until something is measured, which is not zero."""
-        rows = self.db.execute("SELECT * FROM v_budget_spent WHERE scope = ? AND unit != 'agents'", (f"agent:{agent}",))
+        rows = self.db.execute(
+            "SELECT * FROM v_budgets_spent WHERE scope = ? AND unit != 'agents'", (f"agent:{agent}",)
+        )
         return {row["unit"]: {"amount": row["amount"], "label": row["label"]} for row in rows}
 
 
 def reserve(txn: Txn, agent: str, role: str, **extra: float) -> None:
     """Hold one turn's estimate against every limit, or refuse. An agent holds one, since it runs one turn at a time."""
-    budget = txn.view(Budget)
+    budget = txn.view(Budgets)
     amounts = {**budget.estimate(role), "turns": 1.0, **extra}
     budget.check(role, amounts, txn.now)
     data = {"role": role, "amounts": amounts}
@@ -267,7 +269,7 @@ def reserve(txn: Txn, agent: str, role: str, **extra: float) -> None:
 
 def reconcile(txn: Txn, agent: str, role: str) -> None:
     """Turn end: charge what was measured and return the rest. A unit nobody measured is charged its estimate."""
-    budget = txn.view(Budget)
+    budget = txn.view(Budgets)
     held, seen = budget.reservation(agent), budget.turn_usage(agent)
     held.pop("agents", None)
     if not held and not seen:
@@ -308,4 +310,4 @@ def set_budget(txn: Txn, a: SetBudget) -> None:
 @op("budget.status", query=True)
 def budget_status(txn: Txn, a: Args) -> list[dict[str, Any]]:
     """Each limit with what is spent, held, and how well that is known."""
-    return txn.view(Budget).status()
+    return txn.view(Budgets).status()

@@ -89,16 +89,17 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | `steer` notices on a tool result | implemented | `delivery.offer` with `boundary="tool"` is tested. No tool plane exists to attach them yet |
 | At-least-once handover: a failed `deliver` is queued again under a new input, even past a newer offer | tested | `test_delivery.py` |
 | Courier daemon: wakes, wait releases, coalesce and deadlines, a refused wake not retried until the budget moves | tested | `test_delivery.py`, `test_waits.py`, on the kernel's supervisor and a manual clock |
-| `channel.create` with attenuation, `channel.list`, `group.define` | tested | `test_messages.py` |
+| `channel.create` with attenuation, `channel.list` naming what the next call takes, `group.define` | tested | `test_messages.py`, `test_compiled_grants.py` |
 | Context stream, `context.offered`, `context.delivered`, compaction, a human's read writing nothing | tested | `test_messages.py`, `test_delivery.py` |
 | Wait: `on`, friendly arguments, `all`/`any`, `after`, `timeout`, `hold`, atomic check, progress, parking at turn end, how each closed | tested | `test_waits.py`, properties |
 | Waiting for work on a queue, from `queue_empty` with no gap | tested | `test_waits.py` |
 | `hold` as a surface keeps it | implemented | `hold_open` is tested. No tool plane calls it yet |
 | One-shot refusal and the `tool_timeout_s` cap | tested | `test_waits.py`, from a test's `ready` report |
-| Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors | tested | `test_boards.py` |
+| Boards: immutable versions, `expected_version`, ranges, exact refs, structured query, true totals, cursors, a wait counting only versions unread | tested | `test_boards.py` |
 | Board text search on FTS5, over names, gists and fields | tested | `test_boards.py`. Bodies are not searched, on purpose. The no-FTS5 refusal is tested by flag, not on a build without it |
 | Reading a body held in `blobs/` from an op | deferred | An op may do no I/O, so it returns the hash and the surface reads the body. No surface exists yet |
-| Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging | tested | `test_tasks.py`, properties |
+| Queues: atomic claim, fence, default fence, expiry through timers, `stale_fence`, `max_attempts`, `dead`, `max_inflight`, paging, results read back | tested | `test_tasks.py`, properties |
+| `delivery` on queues and boards, as an entry on the channel | tested | `test_tasks.py`, `test_boards.py` |
 | Lease renewal from observed harness activity | deferred | `task.renew` is tested, for the runtime too. The host that would call it arrives with drivers |
 | Lifecycle: spawn admission and enrolment in one transaction, one `agent.ended`, `on_parent_exit`, retire, interrupt, takeover, the monitor on every ending, a final report kept in the journal | tested | `test_lifecycle.py`, `test_compiled_grants.py` |
 | A failed admit, workspace or launch ends the agent `failed`, through the courier, and what it had still to start never starts | tested | `test_lifecycle.py`, on the kernel's supervisor |
@@ -108,7 +109,9 @@ nothing here has met a real harness. Effects such as `deliver`, `launch` and `an
 | Exit 4 for an `ask` no human can answer | deferred | Arrives with the headless CLI |
 | Budgets: limits, reservations, reconciliation, labels, `over_budget` versus `unavailable`, overshoot bound, a failed wake returning its reservation and a failed steer keeping the turn's, a lost turn counting as unmeasured | tested | `test_budgets.py`, properties. A lost turn with no reservation, which only a harness-started turn can be, charges nothing: `Budget` has no role for it |
 | Client views: `roster` with typed `why`, `attention` with actions, `changes`, `view.watch` | tested | `test_clients.py`. `changes` is fed by a test's report; the turn-end probe arrives with workspaces |
-| `blob.put`, `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
+| `blob.get` | tested | `test_lifecycle.py`. A surface stores the bytes first |
+| A `body` argument offered as text on the tool plane | planned | Architecture section 10. No tool plane exists, so only `Kernel.put_body` makes a body today |
+| Tool descriptions: every argument described, what a refusal means, real op names | tested | `test_tool_surface.py`. Rendering op names per surface arrives with the tool plane |
 | `lineage`, `exposure` | deferred | Provenance queries, after drivers |
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | planned | Both ends exist; nothing joins them yet |
 

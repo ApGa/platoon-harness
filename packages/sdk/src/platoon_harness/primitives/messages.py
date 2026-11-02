@@ -7,7 +7,7 @@ from typing import Annotated, Any, NamedTuple
 
 from pydantic import BaseModel, Field
 
-from platoon_harness.kernel import Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
+from platoon_harness.kernel import GIST_LIMIT, Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
 
 from .agents import Agents
 from .channels import Channel, Channels, Groups
@@ -17,7 +17,7 @@ from .common import (
     WAKING,
     AgentName,
     BasedOn,
-    BodyRef,
+    Body,
     Exposed,
     Gist,
     Seq,
@@ -384,9 +384,8 @@ def _audience(txn: Txn, stream: str) -> _Reach:
         return _Reach(channel, txn.view(Groups).get(group).members, generation)
     grants = txn.view(Grants)
     live = txn.view(Principals).select(txn.me, "all")
-    return _Reach(
-        channel, tuple(p.name for p in live if p.kind == "agent" and grants.permits(p, "message.read", stream))
-    )
+    readers = (p.name for p in live if p.kind == "agent" and grants.permits(p, channel.reading, channel.object))
+    return _Reach(channel, tuple(readers))
 
 
 def chain_of(entries: Sequence[Entry]) -> dict[str, Any]:
@@ -470,10 +469,17 @@ def post(
     return event
 
 
+def announce(txn: Txn, channel: Channel, gist: str, cause: int) -> None:
+    """Tell a queue's or board's readers of a write as an entry, so `delivery` works as it does on a topic. It announces
+    work and never assigns it. `pull` wants no telling, and an entry nobody takes would pile up unread."""
+    if channel.delivery != "pull":
+        post(txn, channel.stream, gist[:GIST_LIMIT], cause=[cause])
+
+
 class Send(Args):
     to: Annotated[str, Field(description="`@agent`, `#channel` or `+group`.")]
     gist: Gist
-    body: BodyRef | None = None
+    body: Body = None
     thread: Annotated[str | None, Field(max_length=512, description="A thread id. `reply_to` sets it for you.")] = None
     reply_to: Annotated[str | None, Field(max_length=512, description="The `ref` of the entry you answer.")] = None
     based_on: BasedOn = ()

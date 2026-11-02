@@ -25,6 +25,21 @@ manager = "lead"
 workers = "worker"
 """
 
+STAR = """
+[roles.hub]
+harness = "claude"
+
+[roles.a]
+harness = "codex"
+
+[roles.b]
+harness = "codex"
+
+[topology.star]
+hub = "hub"
+spokes = ["a", "b"]
+"""
+
 
 @pytest.fixture
 async def team(tmp_path: Path) -> AsyncIterator[Kernel]:
@@ -109,6 +124,80 @@ async def test_an_ended_child_still_answers_for_itself(team):
 
     assert result_of(team.query(lead, "agent.status", {"agent": "w1"}))["state"] == "ended"
     assert refusal(await team.submit(lead, "message.send", {"to": "@w1", "gist": "there?"})).code == "undeliverable"
+
+
+async def test_a_creator_may_use_its_own_channel(team):
+    lead = await spawn(team, "lead", role="lead")
+
+    created = result_of(await team.submit(lead, "channel.create", {"name": "side", "kind": "topic"}))
+
+    assert created == {"name": "#side", "kind": "topic"}
+    await send(team, lead, "#side", "a note to myself")
+    result_of(await team.submit(lead, "wait", {"channels": ["#side"]}))
+
+
+async def test_a_reader_may_wait_on_a_channel_created_at_runtime(team):
+    lead = await spawn(team, "lead", role="lead")
+    worker = await spawn(team, "w1", by=lead)
+    asked = {"name": "news", "kind": "topic", "readers": ["children"]}
+    result_of(await team.submit(lead, "channel.create", asked))
+
+    assert result_of(await team.submit(worker, "wait", {"channels": ["#news"]}))["state"] == "parked"
+
+
+async def test_a_selector_means_those_it_covers_now(team):
+    lead = await spawn(team, "lead", role="lead")
+    await spawn(team, "w1", by=lead)
+    asked = {"name": "news", "kind": "topic", "readers": ["children"]}
+    result_of(await team.submit(lead, "channel.create", asked))
+
+    later = await spawn(team, "w2", by=lead)
+
+    assert refusal(await team.submit(later, "message.read", {"channel": "#news"})).code == "not_permitted"
+
+
+async def test_a_selector_that_covers_nobody_is_refused(team):
+    lead = await spawn(team, "lead", role="lead")
+
+    asked = {"name": "n", "kind": "topic", "readers": ["children"]}
+
+    assert refusal(await team.submit(lead, "channel.create", asked)).code == "invalid"
+
+
+async def test_a_refusal_names_nobody_beyond_your_reach(team):
+    lead = await spawn(team, "lead", role="lead")
+    worker = await spawn(team, "w1", by=lead)
+    await spawn(team, "hidden", by=lead)
+
+    refused = refusal(await team.submit(worker, "channel.create", {"name": "n", "kind": "topic", "readers": ["all"]}))
+
+    assert refused.code == "not_permitted" and "hidden" not in str(refused.detail)
+
+
+async def test_a_spoke_cannot_open_a_path_to_a_role_with_nobody_live(tmp_path):
+    kernel = Kernel.open(tmp_path / "star", clock=ManualClock(1000.0), extensions=PRIMITIVES)
+    result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": {"hub": {}, "a": {}, "b": {}}}))
+    built = Team.loads(STAR)
+    for grant in compile(built):
+        result_of(await kernel.submit(kernel.runtime, "grant.add", grant.model_dump()))
+    spoke = await spawn(kernel, "s-a", role="a")
+
+    asked = {"name": "side", "kind": "topic", "readers": ["role:b"], "writers": ["role:b"]}
+    refused = refusal(await kernel.submit(spoke, "channel.create", asked))
+
+    assert refused.code == "invalid"
+    kernel.close()
+
+
+async def test_a_worker_waits_for_work_under_real_grants(team):
+    lead = await spawn(team, "lead", role="lead")
+    worker = await spawn(team, "w1", by=lead)
+    assert refusal(await team.submit(worker, "task.claim", {"queue": "tasks"})).code == "queue_empty"
+
+    placed = result_of(await team.submit(worker, "wait", {"queue": ["tasks"]}))
+    result_of(await team.submit(lead, "task.add", {"queue": "tasks", "gist": "work"}))
+
+    assert result_of(team.query(team.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]
 
 
 async def test_a_reply_reaches_only_what_you_can_read(team):

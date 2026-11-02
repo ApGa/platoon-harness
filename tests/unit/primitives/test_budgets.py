@@ -7,7 +7,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from platoon_harness.kernel import Kernel, ManualClock
-from platoon_harness.primitives import PRIMITIVES, Budget, Deliveries
+from platoon_harness.primitives import PRIMITIVES, Budgets, Deliveries
 
 from .support import end_turn, grant, of_type, refusal, report, result_of, send, settle_effects, spawn, start_turn
 
@@ -150,7 +150,7 @@ async def test_partial_usage_of_a_lost_turn_does_not_leak_into_the_next(kernel):
     await kernel.recover()
 
     with kernel._reading() as db:
-        assert Budget(db).turn_usage("bob") == {}
+        assert Budgets(db).turn_usage("bob") == {}
 
 
 async def test_a_failed_steer_leaves_the_running_turn_its_reservation(kernel):

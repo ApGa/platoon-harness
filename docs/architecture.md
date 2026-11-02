@@ -442,7 +442,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` | `attention.list` `view.watch` |
-| Evidence | `blob.put` `blob.get` | `lineage` `exposure` |
+| Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
 | Runtime only | `agent.report` `delivery.offer` `delivery.confirm` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `effect.ready` `timer.next` `delivery.ready` |
 
@@ -451,7 +451,8 @@ run as queries and write nothing. `task.claim` writes a lease, so it is a comman
 Broadcast is `send("+group")`. `join` and `wait_any` are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
 requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
 body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
-comes back as its hash, for the surface to fetch.
+comes back as its hash, for the surface to fetch. A hash is a capability: `blob.get` checks no stream, so whoever holds a hash may
+read that body. A ref names where content is, and that it exists is no secret: `based_on` is checked to exist and nothing more.
 
 ### Library tier
 
@@ -508,7 +509,8 @@ So a worker reports back even if its harness hides our tools. Tools add power ra
 
 ### Boards
 
-Objects have stable names and immutable versions (`board/<board>/<name>`). `board.post` makes version 1, and on a taken name
+Objects have stable names and immutable versions (`board/<board>/<name>`). A read of one moves the reader's cursor on it, so
+`wait` counts only versions it has not seen. `board.post` makes version 1, and on a taken name
 conflicts as a stale `board.revise` does. `board.revise` requires `expected_version`; a
 conflict returns the current version and silently overwrites nothing. `board.get` returns a ref naming exactly what it gave, so
 a body too long for one result comes back cut, with a ref saying where. `board.query` is structured; results carry exact
@@ -527,6 +529,10 @@ One stream per task. States: `open → claimed → done | failed | dead`. A `fai
 - **Fence default.** The caller's live lease, because a model can lose an integer to compaction.
 - **Renewal.** The host renews from observed harness activity up to `lease_max`. `task.renew` stays for programs.
 - **Retries.** `max_attempts`, then `dead`, shown in attention. Each claim spends an attempt, and `task.release` returns it.
+- **Results.** What `task.complete` or `task.fail` reports stays on the task, and `task.list` shows it, as evidence for an agent.
+- **`delivery`** works on a queue or board as on a topic. Unless it is `pull`, each `task.add`, `board.post` or `board.revise` posts
+  one entry on `queue/<name>` or `board/<name>`, for whoever holds `task.claim` or `board.get`, so `coalesce`, hops and attention
+  come with it. It announces work and never assigns it.
 - Exclusive ownership is **not** exactly-once execution. External effects cannot be fenced by us, and the docs say so.
 
 ### Wait
@@ -707,9 +713,10 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `count`** is how many agents start with the session. Left out, that is one, or none if another role spawns this one.
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so `peers`
   and the turn preamble list them; tool schemas never enumerate them.
-- **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may name
-  only readers and writers within its own reach. `topology.patch` comes from a human or program, and every event carries
-  `topology_rev`.
+- **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
+  it makes, and may name only readers and writers within its own reach. For an agent each selector means those it covers at that
+  moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
+  from a human or program, and every event carries `topology_rev`.
 - **`team check`** runs before any cost and reports everything at once. It refuses recursive `may_spawn` without `max_depth`, a
   cycle without `max_hops`, a budget unit a role cannot measure, and an unknown preset, harness, extension, role, group or auth
   profile. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`, `ancestors` and
@@ -815,8 +822,12 @@ against the official client and against each real harness.
 - Identity never comes from `clientInfo`, `_meta` or arguments. `_meta` anchors are correlation evidence only.
 - `tools/list` is filtered by authorization and enforced again at call time.
 - Coordination state uses explicit handles (`cursor`, `lease`, `version`). No session semantics.
+- A body argument is offered as a string of text. Ingress stores it and puts the hash in its place before `submit`, as ingress
+  already stores bodies first, so a model never handles a hash it has to make.
 
-**Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools. We append through each harness's
+**Everyday instruction surface.** The turn preamble and the tool descriptions teach the tools. A description names ops as `task.claim`, and each surface renders that as its own name for the tool. A test holds every argument to
+a description, every description to what a refusal means, and every op it names to one that exists. Tool schemas leave out what is
+for programs and team files, such as `on` and a queue's lease. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in
 [compatibility.md](compatibility.md).
@@ -944,6 +955,7 @@ Threat tiers stay separate, in docs and in events.
 | Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only OS isolation earns `isolated` |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 
+- **Bodies.** A body's hash is a capability, and a low-entropy body can be guessed: bodies are for content, not for secrets.
 - **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
   No model-access credential reaches a log, event, artifact, export or resolved config.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an

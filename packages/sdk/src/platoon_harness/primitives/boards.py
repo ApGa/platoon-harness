@@ -9,8 +9,24 @@ from pydantic import Field, JsonValue
 
 from platoon_harness.kernel import Args, Event, Refused, Txn, View, fold, op
 
-from .channels import Channels
-from .common import RESULT_LIMIT, BodyRef, Exposed, Gist, Name, decoded, expose_read, fitted, inline_body, size_of
+from .channels import Channel, Channels
+from .common import (
+    RESULT_LIMIT,
+    AgentName,
+    BasedOn,
+    Body,
+    Exposed,
+    Gist,
+    Name,
+    Seq,
+    address,
+    decoded,
+    expose_read,
+    fitted,
+    inline_body,
+    size_of,
+)
+from .messages import announce
 
 _RANGE = re.compile(r"L([1-9]\d*)-([1-9]\d*)")
 _FIELDS_LIMIT = 4096
@@ -32,12 +48,12 @@ def _has_fts5() -> bool:
 FTS5 = _has_fts5()
 
 
-class Board(View):
+class Boards(View):
     """One row per version. Text search covers names, gists and fields, never a body: a fold cannot read one, and a
     tombstoned body must leave nothing behind."""
 
     schema = """
-    CREATE TABLE v_board(
+    CREATE TABLE v_boards(
         seq INTEGER PRIMARY KEY,
         board TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -48,22 +64,22 @@ class Board(View):
         fields TEXT NOT NULL,
         latest INTEGER NOT NULL
     ) STRICT;
-    CREATE UNIQUE INDEX v_board_version ON v_board(board, name, version);
-    CREATE INDEX v_board_latest ON v_board(board, latest, seq);
-    """ + ("CREATE VIRTUAL TABLE v_board_text USING fts5(name, gist, fields);" if FTS5 else "")
+    CREATE UNIQUE INDEX v_boards_version ON v_boards(board, name, version);
+    CREATE INDEX v_boards_latest ON v_boards(board, latest, seq);
+    """ + ("CREATE VIRTUAL TABLE v_boards_text USING fts5(name, gist, fields);" if FTS5 else "")
 
     @fold("board.posted", "board.revised")
     def versioned(self, event: Event) -> None:
         data = event.data
         fields = json.dumps(data["fields"], sort_keys=True)
-        self.db.execute("UPDATE v_board SET latest = 0 WHERE board = ? AND name = ?", (data["board"], data["name"]))
+        self.db.execute("UPDATE v_boards SET latest = 0 WHERE board = ? AND name = ?", (data["board"], data["name"]))
         self.db.execute(
-            "INSERT INTO v_board VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            "INSERT INTO v_boards VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
             (event.seq, data["board"], data["name"], event.version, event.actor, event.gist, data["body"], fields),
         )
         if FTS5:
             self.db.execute(
-                "INSERT INTO v_board_text(rowid, name, gist, fields) VALUES (?, ?, ?, ?)",
+                "INSERT INTO v_boards_text(rowid, name, gist, fields) VALUES (?, ?, ?, ?)",
                 (event.seq, data["name"], event.gist, fields),
             )
 
@@ -71,7 +87,7 @@ class Board(View):
         """One version, the latest if none is named."""
         pick = "latest = 1" if version is None else "version = :version"
         return self.db.execute(
-            f"SELECT * FROM v_board WHERE board = :board AND name = :name AND {pick}",
+            f"SELECT * FROM v_boards WHERE board = :board AND name = :name AND {pick}",
             {"board": board, "name": name, "version": version},
         ).fetchone()
 
@@ -96,18 +112,18 @@ class Board(View):
             terms.append("substr(b.name, 1, length(?)) = ?")
             values += [prefix, prefix]
         if author is not None:
-            terms.append("b.actor = ?")
+            terms.append("substr(b.actor, instr(b.actor, ':') + 1) = ?")
             values.append(author)
         for key, value in where.items():
             terms.append("b.fields ->> ? IS ?")
             values += [f'$."{key}"', value]
         if text is not None:
-            terms.append("b.seq IN (SELECT rowid FROM v_board_text WHERE v_board_text MATCH ?)")
+            terms.append("b.seq IN (SELECT rowid FROM v_boards_text WHERE v_boards_text MATCH ?)")
             values.append(" ".join(f'"{word.replace(chr(34), chr(34) * 2)}"' for word in text.split()))
         clause = " AND ".join(terms)
-        total = self.db.execute(f"SELECT count(*) AS n FROM v_board AS b WHERE {clause}", values).fetchone()["n"]
+        total = self.db.execute(f"SELECT count(*) AS n FROM v_boards AS b WHERE {clause}", values).fetchone()["n"]
         rows = self.db.execute(
-            f"SELECT * FROM v_board AS b WHERE {clause} AND b.seq > ? ORDER BY b.seq LIMIT ?", (*values, after, limit)
+            f"SELECT * FROM v_boards AS b WHERE {clause} AND b.seq > ? ORDER BY b.seq LIMIT ?", (*values, after, limit)
         ).fetchall()
         return rows, total
 
@@ -116,25 +132,31 @@ def _ref(row: sqlite3.Row) -> str:
     return f"board/{row['board']}/{row['name']}@{row['version']}"
 
 
-ObjectName = Annotated[str, Field(pattern=r"^[\w.-]+(/[\w.-]+)*$", max_length=256)]
+def _board(txn: Txn, name: str) -> Channel:
+    return txn.view(Channels).require(f"board/{name}")
+
+
+ObjectName = Annotated[str, Field(pattern=r"^[\w.-]+(/[\w.-]+)*$", max_length=256, description="The object's name.")]
+BoardName = Annotated[Name, Field(description="The board, as `channel.list` names it.")]
 
 
 class Post(Args):
-    board: Name
+    board: BoardName
     name: ObjectName
     gist: Gist
-    body: BodyRef | None = None
-    fields: dict[Name, JsonValue] = {}
-    based_on: tuple[str, ...] = ()
+    body: Body = None
+    fields: Annotated[
+        dict[Name, JsonValue], Field(description="Short JSON values that `board.query` can match with `where`.")
+    ] = {}
+    based_on: BasedOn = ()
 
 
 class Revise(Post):
-    expected_version: int
+    expected_version: Annotated[int, Field(description="The version you read.")]
 
 
 def _write(txn: Txn, event_type: str, a: Post) -> dict[str, Any]:
-    if txn.view(Channels).get(f"board/{a.board}") is None:
-        raise Refused("not_found", f"no board {a.board}")
+    channel = _board(txn, a.board)
     if size_of(a.fields) > _FIELDS_LIMIT:
         raise Refused("invalid", f"fields exceed {_FIELDS_LIMIT} bytes; store a body and cite its hash")
     event = txn.emit(
@@ -145,14 +167,15 @@ def _write(txn: Txn, event_type: str, a: Post) -> dict[str, Any]:
         refs=[a.body] if a.body else (),
         data={"board": a.board, "name": a.name, "body": a.body, "fields": a.fields},
     )
+    announce(txn, channel, f"{a.name}: {a.gist}", event.seq)
     return {"ref": f"{event.stream}@{event.version}", "version": event.version}
 
 
 @op("board.post", on=lambda a: f"board/{a.board}/{a.name}", tool=True)
 def post(txn: Txn, a: Post) -> dict[str, Any]:
-    """Create an object on a board, at version 1. Refused `conflict`, with the current version, when the name exists:
-    read it, then `board.revise`."""
-    found = txn.view(Board).get(a.board, a.name)
+    """Create an object on a board, at version 1. Put anything longer than `gist` in `body`. Refused `conflict`, with
+    the current version, when the name exists: read it, then `board.revise`. `not_found` when no such board exists."""
+    found = txn.view(Boards).get(a.board, a.name)
     if found is not None:
         raise Refused("conflict", {"current": found["version"], "ref": _ref(found)})
     return _write(txn, "board.posted", a)
@@ -163,7 +186,7 @@ def revise(txn: Txn, a: Revise) -> dict[str, Any]:
     """Add a version to an object. `expected_version` is the version you read. Refused `conflict`, with the current
     version, when someone got there first and nothing was overwritten: read it, then revise again. `not_found` when no
     such object exists."""
-    found = txn.view(Board).get(a.board, a.name)
+    found = txn.view(Boards).get(a.board, a.name)
     if found is None:
         raise Refused("not_found", f"no object {a.name} on {a.board}")
     if found["version"] != a.expected_version:
@@ -172,34 +195,39 @@ def revise(txn: Txn, a: Revise) -> dict[str, Any]:
 
 
 class Get(Args):
-    board: Name
+    board: BoardName
     name: ObjectName
-    version: Annotated[int, Field(ge=1)] | None = None
-    range: Annotated[str, Field(pattern=_RANGE.pattern)] | None = None
+    version: Annotated[Seq | None, Field(ge=1, description="A version; the latest if left out.")] = None
+    range: Annotated[str | None, Field(pattern=_RANGE.pattern, description="Lines of the body, as `L10-40`.")] = None
 
 
-def _slice(text: str, wanted: str | None) -> tuple[str, int, int, int] | None:
-    """The lines of `wanted` that fit a result: text, first, last and total. A line too long to fit gives nothing."""
+def _slice(text: str, wanted: str | None, room: int) -> tuple[str, int, int] | None:
+    """The lines of `wanted` that fit in `room`: text, first and last. A line too long to fit gives nothing, and a range
+    no line stands in is refused with how many there are."""
     lines = text.splitlines(keepends=True)
     match = _RANGE.fullmatch(wanted) if wanted else None
     first = int(match[1]) if match else 1
     last = min(int(match[2]) if match else len(lines), len(lines))
+    if first > max(last, 1):
+        raise Refused("invalid", {"lines": len(lines), "detail": f"no lines {wanted}"})
     size = 0
     kept = first - 1
     for line in lines[first - 1 : last]:
         size += size_of(line)
-        if size > RESULT_LIMIT:
+        if size > room:
             break
         kept += 1
-    return None if kept < first else ("".join(lines[first - 1 : kept]), first, kept, len(lines))
+    return None if kept < first else ("".join(lines[first - 1 : kept]), first, kept)
 
 
 @op("board.get", on=lambda a: f"board/{a.board}/{a.name}", exposes=True, tool=True)
 def get(txn: Txn, a: Get) -> dict[str, Any]:
-    """Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`.
-    `ref` names exactly what you got, so cite it. A body too large to return comes back as its hash. Refused `not_found`
-    when the object or version does not exist."""
-    row = txn.view(Board).get(a.board, a.name, a.version)
+    """Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`. A
+    long body comes back cut: `ref` says which lines you got and `lines` how many exist, so ask for the next range. Cite
+    `ref`. `text` is absent for a binary body or one stored outside the journal. Refused `invalid`, with `lines`, for a
+    range past the end. `not_found` when the board, object or version does not exist."""
+    _board(txn, a.board)
+    row = txn.view(Boards).get(a.board, a.name, a.version)
     if row is None:
         raise Refused("not_found", f"no such version of {a.name} on {a.board}")
     ref = _ref(row)
@@ -213,36 +241,44 @@ def get(txn: Txn, a: Get) -> dict[str, Any]:
     exposed = [Exposed.of(ref, "gist", row["gist"])]
     data = None if row["body"] is None else inline_body(txn, row["body"])
     text = None if data is None else decoded(data)
-    cut = None if text is None else _slice(text, a.range)
-    if cut is not None:
-        content, first, last, total = cut
-        whole = first == 1 and last == total and a.range is None
-        ref = ref if whole else f"{ref}#L{first}-{last}"
-        shown |= {"ref": ref, "text": content, "lines": total}
-        exposed.append(Exposed.of(ref, "body", content))
-    expose_read(txn, exposed)
+    if text is not None:
+        total = len(text.splitlines())
+        shown["lines"] = total
+        cut = _slice(text, a.range, RESULT_LIMIT - size_of(shown))
+        if cut is not None:
+            content, first, last = cut
+            whole = first == 1 and last == total and a.range is None
+            ref = ref if whole else f"{ref}#L{first}-{last}"
+            shown |= {"ref": ref, "text": content}
+            exposed.append(Exposed.of(ref, "body", content))
+    expose_read(txn, exposed, positions={f"board/{a.board}/{a.name}": row["seq"]})
     return shown
 
 
 class Query(Args):
-    board: Name
-    prefix: str | None = None
-    author: str | None = None
-    where: dict[Name, Scalar] = {}
-    text: Annotated[str, Field(pattern=r"^[^\x00]*\S[^\x00]*$", max_length=512)] | None = None
-    history: bool = False
-    after: Annotated[int, Field(ge=0)] = 0
-    limit: Annotated[int, Field(ge=1, le=32)] = 20
+    board: BoardName
+    prefix: Annotated[str | None, Field(description="Only names starting with this.")] = None
+    author: Annotated[AgentName | None, Field(description="Only what this author wrote.")] = None
+    where: Annotated[dict[Name, Scalar], Field(description="Exact matches on `fields`.")] = {}
+    text: Annotated[
+        str | None,
+        Field(pattern=r"^[^\x00]*\S[^\x00]*$", max_length=512, description="Words to find in names, gists and fields."),
+    ] = None
+    history: Annotated[bool, Field(description="Include old versions.")] = False
+    after: Annotated[Seq, Field(description="A `cursor` from an earlier query.")] = 0
+    limit: Annotated[int, Field(ge=1, le=32, description="The most results to return.")] = 20
 
 
 @op("board.query", on=lambda a: f"board/{a.board}/*", exposes=True, tool=True)
 def query(txn: Txn, a: Query) -> dict[str, Any]:
     """Find objects by `prefix` of name, `author`, exact `where` on fields, or `text` over names, gists and fields,
     never bodies. Results are gists with exact refs, the true `total`, and a `cursor` to pass as `after`. `history`
-    includes old versions. Refused `unsupported` for `text` when this SQLite has no FTS5: use structured filters."""
+    includes old versions. Refused `unsupported` for `text` when this SQLite has no FTS5: use structured filters.
+    `not_found` when no such board exists."""
+    _board(txn, a.board)
     if a.text is not None and not FTS5:
         raise Refused("unsupported", "this SQLite has no FTS5, so use structured filters")
-    rows, total = txn.view(Board).find(
+    rows, total = txn.view(Boards).find(
         a.board,
         prefix=a.prefix,
         author=a.author,
@@ -258,13 +294,14 @@ def query(txn: Txn, a: Query) -> dict[str, Any]:
             "ref": _ref(row),
             "name": row["name"],
             "version": row["version"],
-            "actor": row["actor"],
+            "author": address(row["actor"]),
             "gist": row["gist"],
             "fields": json.loads(row["fields"]),
         }
 
     kept = fitted(rows, show=shown)
-    expose_read(txn, [Exposed.of(_ref(row), "gist", row["gist"]) for row in kept])
+    positions = {f"board/{a.board}/{row['name']}": row["seq"] for row in kept}
+    expose_read(txn, [Exposed.of(_ref(row), "gist", row["gist"]) for row in kept], positions=positions)
     more = len(kept) < len(rows) or len(rows) == a.limit
     return {
         "results": [shown(row) for row in kept],

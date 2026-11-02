@@ -713,10 +713,25 @@ async def test_channel_list_shows_what_a_caller_may_use(kernel):
     await channel(kernel, "notes", kind="board", writers=["role:lead"])
 
     assert result_of(kernel.query(alice, "channel.list", {})) == []
-    assert [row["stream"] for row in result_of(kernel.query(bob, "channel.list", {}))] == [
-        "board/notes",
-        "channel/news",
+    assert result_of(kernel.query(bob, "channel.list", {})) == [
+        {"name": "notes", "kind": "board"},
+        {"name": "#news", "kind": "topic"},
     ]
+
+
+async def test_channel_list_gives_what_the_next_call_takes(kernel):
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "news")
+    await channel(kernel, "tasks", kind="queue")
+    result_of(await kernel.submit(kernel.runtime, "group.define", {"name": "crew", "roles": ["worker"]}))
+
+    names = {row["kind"]: [] for row in result_of(kernel.query(bob, "channel.list", {}))}
+    for row in result_of(kernel.query(bob, "channel.list", {})):
+        names[row["kind"]].append(row["name"])
+
+    assert names == {"topic": ["+crew", "#news"], "queue": ["tasks"]}
+    assert result_of(await kernel.submit(bob, "message.send", {"to": "#news", "gist": "hi"}))["audience"] == 0
+    assert result_of(await kernel.submit(bob, "task.add", {"queue": "tasks", "gist": "go"}))["task"] == "1"
 
 
 async def test_rebuild_after_reopening_keeps_cursors(folder, clock):

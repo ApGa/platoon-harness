@@ -18,14 +18,14 @@ from . import (
 )
 from .agents import Agent, Agents
 from .approvals import Approval, Approvals
-from .boards import Board
-from .budgets import Budget
-from .channels import Channel, Channels, Groups
+from .boards import Boards
+from .budgets import Budgets
+from .channels import Channels, Groups, channel_grants
 from .clients import Attention, Changes
-from .common import stream_of
+from .common import WAKING, Delivery, stream_of
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
-from .sessions import Limits, Role, Session, Settings
+from .sessions import Session, Settings
 from .tasks import Task, Tasks
 from .waits import Condition, Waits, hold_open, on
 from .why import Why
@@ -44,7 +44,7 @@ PRIMITIVES = (
         views=[Session],
     ),
     Extension("episode", ops=[sessions.open_episode, sessions.close_episode]),
-    Extension("budget", ops=[budgets.set_budget, budgets.budget_status], views=[Budget]),
+    Extension("budget", ops=[budgets.set_budget, budgets.budget_status], views=[Budgets]),
     Extension(
         "agent",
         ops=[
@@ -71,7 +71,7 @@ PRIMITIVES = (
         daemons=[courier],
     ),
     Extension("wait", ops=[waits.wait_for, waits.cancel, waits.release, waits.progress_of], views=[Waits]),
-    Extension("board", ops=[boards.post, boards.revise, boards.get, boards.query], views=[Board]),
+    Extension("board", ops=[boards.post, boards.revise, boards.get, boards.query], views=[Boards]),
     Extension(
         "task",
         ops=[tasks.add, tasks.claim, tasks.renew, tasks.release, tasks.complete, tasks.fail, tasks.list_tasks],
@@ -79,36 +79,36 @@ PRIMITIVES = (
     ),
     Extension("lease", ops=[tasks.expire_lease]),
     Extension("approval", ops=[approvals.request, approvals.resolve], views=[Approvals]),
-    Extension("blob", ops=[blobs.put, blobs.get]),
+    Extension("blob", ops=[blobs.get]),
     Extension("attention", ops=[clients.attention_list], views=[Attention]),
     Extension("view", ops=[clients.watch], views=[Changes]),
 )
 
 __all__ = [
     "PRIMITIVES",
+    "WAKING",
     "Agent",
     "Agents",
     "Approval",
     "Approvals",
     "Attention",
-    "Board",
-    "Budget",
+    "Boards",
+    "Budgets",
     "Changes",
-    "Channel",
     "Channels",
     "Condition",
     "Cursor",
     "Deliveries",
+    "Delivery",
     "Entry",
     "Groups",
-    "Limits",
-    "Role",
     "Session",
     "Settings",
     "Task",
     "Tasks",
     "Waits",
     "Why",
+    "channel_grants",
     "hold_open",
     "on",
     "stream_of",

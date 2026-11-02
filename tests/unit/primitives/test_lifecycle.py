@@ -887,11 +887,10 @@ async def test_closing_no_episode_is_refused(kernel, ada):
     assert refusal(await kernel.submit(ada, "episode.close", {})).code == "conflict"
 
 
-async def test_a_blob_can_be_cited_and_read(kernel):
+async def test_a_blob_can_be_read(kernel):
     bob = await spawn(kernel, "bob")
     sha = await kernel.put_body(b"a stored thing")
 
-    assert result_of(await kernel.submit(bob, "blob.put", {"sha256": sha})) == {"ref": f"sha256:{sha}"}
     read_back = result_of(await kernel.submit(bob, "blob.get", {"sha256": sha}))
 
     assert read_back["text"] == "a stored thing"
@@ -901,7 +900,14 @@ async def test_a_blob_can_be_cited_and_read(kernel):
 async def test_a_blob_that_was_never_stored_is_not_found(kernel):
     bob = await spawn(kernel, "bob")
 
-    assert refusal(await kernel.submit(bob, "blob.put", {"sha256": "0" * 64})).code == "not_found"
+    assert refusal(await kernel.submit(bob, "blob.get", {"sha256": "0" * 64})).code == "not_found"
+
+
+async def test_a_blob_too_long_for_a_result_comes_back_without_text(kernel):
+    bob = await spawn(kernel, "bob")
+    sha = await kernel.put_body(b"x" * (20 * 1024))
+
+    assert result_of(await kernel.submit(bob, "blob.get", {"sha256": sha}))["text"] is None
 
 
 async def test_a_program_principal_may_spawn_with_itself_as_parent(kernel):

@@ -18,9 +18,9 @@ from platoon_harness.kernel import (
 )
 
 from .agents import Agent, Agents
-from .budgets import Budget, Label, reconcile, reserve
+from .budgets import Budgets, Label, reconcile, reserve
 from .channels import Channels, regroup
-from .common import AgentName, BodyRef, Gist, Name, address
+from .common import AgentName, Body, BodyRef, Gist, Name, address
 from .delivery import work
 from .messages import post
 from .sessions import Session
@@ -78,7 +78,7 @@ def end(
     spawned the agent hears how it ended, and what it had still to start never does. Only a turn is charged."""
     name = agent.name
     owned = txn.view(Tasks).owned(agent.id)
-    if txn.view(Stamps).turn(name) is not None or txn.view(Budget).turn_usage(name):
+    if txn.view(Stamps).turn(name) is not None or txn.view(Budgets).turn_usage(name):
         reconcile(txn, name, agent.role)
     ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
@@ -112,7 +112,7 @@ class Spawn(Args):
     name: Annotated[Name, Field(description="A name nobody in this session has used.")]
     child_role: Annotated[Name, Field(description="The role to start it in.")]
     goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")]
-    body: BodyRef | None = None
+    body: Body = None
 
 
 def _admit(txn: Txn, depth: int, parent: str | None) -> None:
@@ -187,7 +187,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
 
 class Finish(Args):
     gist: Annotated[Gist, Field(description="Your final report, at most 280 characters.")] = ""
-    body: BodyRef | None = None
+    body: Body = None
 
 
 @op("agent.finish", tool=True)
@@ -458,7 +458,7 @@ def _blockers(txn: Txn) -> list[str]:
 
 def _done(txn: Txn, until: str, settled: bool) -> bool:
     """Whether a headless session may close. Every kind stops at budget exhaustion."""
-    if txn.view(Budget).exhausted(txn.now):
+    if txn.view(Budgets).exhausted(txn.now):
         return True
     if until == "settled":
         return settled

@@ -129,6 +129,81 @@ async def test_a_body_too_big_for_a_result_comes_back_cut_with_a_ref_saying_so(k
     assert got["text"].count("\n") == int(got["ref"].rpartition("-")[2])
 
 
+async def test_a_long_body_beside_long_fields_is_cut_and_not_refused(kernel, notes):
+    bob = await spawn(kernel, "bob")
+    body = await body_of(kernel, f"{'x' * 60}\n" * 1000)
+    long = post(gist="g" * 280, body=body, fields={"note": "y" * 4000})
+    result_of(await kernel.submit(bob, "board.post", long))
+
+    got = result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
+
+    assert got["lines"] == 1000 and "#L1-" in got["ref"]
+
+
+@pytest.mark.parametrize("wanted", ["L10-40", "L3-1"])
+async def test_a_range_no_line_stands_in_is_refused_with_how_many_there_are(kernel, notes, wanted):
+    bob = await spawn(kernel, "bob")
+    result_of(await kernel.submit(bob, "board.post", post(body=await body_of(kernel, "one\ntwo\nthree\n"))))
+
+    refused = refusal(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec", "range": wanted}))
+
+    assert refused.code == "invalid" and refused.detail["lines"] == 3
+
+
+async def test_a_wait_counts_only_versions_you_have_not_read(kernel, notes):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    result_of(await kernel.submit(alice, "board.post", post()))
+    result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
+
+    placed = result_of(await kernel.submit(bob, "wait", {"board": ["notes/spec"]}))
+
+    assert placed["state"] == "parked"
+
+
+async def test_a_wait_after_a_query_counts_only_what_the_query_did_not_show(kernel, notes):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    result_of(await kernel.submit(alice, "board.post", post()))
+    result_of(await kernel.submit(bob, "board.query", {"board": "notes"}))
+
+    placed = result_of(await kernel.submit(bob, "wait", {"board": ["notes/spec"]}))
+
+    assert placed["state"] == "parked"
+
+
+async def test_a_version_you_never_read_holds_a_wait_at_once(kernel, notes):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    result_of(await kernel.submit(alice, "board.post", post()))
+
+    assert result_of(await kernel.submit(bob, "wait", {"board": ["notes/spec"]}))["state"] == "released"
+
+
+async def test_a_board_that_wakes_says_which_object_changed(kernel):
+    await channel(kernel, "notes", kind="board", delivery="wake")
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(alice, "board.post", post()))
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == ["bob"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    assert [item["gist"] for item in handed["items"]] == ["spec: first"]
+
+
+@pytest.mark.parametrize("spelling", ["alice", "@alice", "agent:alice"])
+async def test_a_query_takes_any_spelling_of_an_author(kernel, notes, spelling):
+    alice = await spawn(kernel, "alice")
+    result_of(await kernel.submit(alice, "board.post", post()))
+
+    found = result_of(await kernel.submit(alice, "board.query", {"board": "notes", "author": spelling}))
+
+    assert found["total"] == 1 and found["results"][0]["author"] == "@alice"
+
+
+async def test_a_read_of_no_board_is_refused_even_for_a_human(kernel, ada):
+    assert refusal(await kernel.submit(ada, "board.query", {"board": "nots"})).code == "not_found"
+    assert refusal(await kernel.submit(ada, "board.get", {"board": "nots", "name": "x"})).code == "not_found"
+
+
 async def test_a_body_in_blobs_comes_back_as_its_hash(kernel, notes):
     bob = await spawn(kernel, "bob")
     body = await body_of(kernel, "x" * (70 * 1024))

@@ -7,13 +7,15 @@ from pydantic import BaseModel, Field
 from platoon_harness.kernel import Args, Event, Refused, Timer, Txn, View, fold, op
 
 from .channels import Channel, Channels
-from .common import DIGEST_ITEMS, BodyRef, Exposed, Gist, Name, expose_read, fitted
+from .common import DIGEST_ITEMS, BasedOn, Body, Exposed, Gist, Name, Seq, address, expose_read, fitted
+from .messages import announce
 
 TaskState = Literal["open", "claimed", "done", "failed", "dead"]
 
 
 class Task(BaseModel, frozen=True):
-    """One task. `fence` and `lease_until` belong to its latest claim. A failed task may be claimed again."""
+    """One task. `fence` and `lease_until` belong to its latest claim. A failed task may be claimed again. `result` is
+    what its latest attempt reported."""
 
     queue: str
     id: str
@@ -26,10 +28,17 @@ class Task(BaseModel, frozen=True):
     claimed_at: float | None
     attempts: int
     seq: int
+    result: str | None
+    result_body: str | None
+    result_ref: str | None
 
     @property
     def stream(self) -> str:
         return f"task/{self.queue}/{self.id}"
+
+    def shown(self) -> dict[str, Any]:
+        owner = None if self.owner is None else address(self.owner)
+        return {**self.model_dump(exclude={"result_ref"}), "owner": owner}
 
     def live(self, now: float) -> bool:
         """Whether its lease holds by this clock. Time passing is enough: no event need have said so."""
@@ -52,6 +61,9 @@ class Tasks(View):
         claimed_at REAL,
         attempts INTEGER NOT NULL,
         seq INTEGER NOT NULL,
+        result TEXT,
+        result_body TEXT,
+        result_ref TEXT,
         PRIMARY KEY (queue, id)
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_tasks_state ON v_tasks(queue, state, seq);
@@ -62,7 +74,7 @@ class Tasks(View):
     def added(self, event: Event) -> None:
         data = event.data
         self.db.execute(
-            "INSERT INTO v_tasks VALUES (?, ?, 'open', ?, ?, NULL, NULL, NULL, NULL, 0, ?)",
+            "INSERT INTO v_tasks VALUES (?, ?, 'open', ?, ?, NULL, NULL, NULL, NULL, 0, ?, NULL, NULL, NULL)",
             (data["queue"], data["task"], event.gist, data["body"], event.seq),
         )
 
@@ -101,13 +113,14 @@ class Tasks(View):
     def expired(self, event: Event) -> None:
         self._settle(event, "open")
 
-    @fold("task.completed")
-    def completed(self, event: Event) -> None:
-        self._settle(event, "done")
-
-    @fold("task.failed")
-    def failed(self, event: Event) -> None:
-        self._settle(event, "failed")
+    @fold("task.completed", "task.failed")
+    def reported(self, event: Event) -> None:
+        data = event.data
+        self._settle(event, "done" if event.type == "task.completed" else "failed")
+        self.db.execute(
+            "UPDATE v_tasks SET result = ?, result_body = ?, result_ref = ? WHERE queue = ? AND id = ?",
+            (event.gist, data["body"], f"{event.stream}@{event.version}", data["queue"], data["task"]),
+        )
 
     @fold("task.died")
     def died(self, event: Event) -> None:
@@ -184,35 +197,42 @@ def _arm(txn: Txn, task: str, queue: str, fence: int, due: float, step: int) -> 
     txn.emit("timer.set", f"timer/{key}", gist=f"timer {key} set", data=timer)
 
 
+QueueName = Annotated[Name, Field(description="The queue, as `channel.list` names it.")]
+TaskId = Annotated[str | None, Field(description="A task's id; your live lease if left out.")]
+
+
 class Add(Args):
-    queue: Name
+    queue: QueueName
     gist: Gist
-    body: BodyRef | None = None
-    based_on: tuple[str, ...] = ()
+    body: Body = None
+    based_on: BasedOn = ()
 
 
 @op("task.add", on=lambda a: f"queue/{a.queue}", tool=True)
 def add(txn: Txn, a: Add) -> dict[str, Any]:
-    """Add a task to a queue. Refused `not_permitted` when you may not write this queue: call `channel.list`."""
-    _queue(txn, a.queue)
+    """Add a task to a queue. `gist` says what to do; put anything longer in `body`. Refused `not_permitted` when you
+    may not write this queue: call `channel.list`. `not_found` when no such queue exists."""
+    channel = _queue(txn, a.queue)
     id = str(txn.view(Tasks).count(a.queue) + 1)
     data = {"queue": a.queue, "task": id, "body": a.body}
     refs = [a.body] if a.body else ()
-    txn.emit("task.added", f"task/{a.queue}/{id}", gist=a.gist, based_on=a.based_on, refs=refs, data=data)
+    event = txn.emit("task.added", f"task/{a.queue}/{id}", gist=a.gist, based_on=a.based_on, refs=refs, data=data)
+    announce(txn, channel, a.gist, event.seq)
     return {"task": id}
 
 
 class Claim(Args):
-    queue: Name
-    task: str | None = None
+    queue: QueueName
+    task: Annotated[str | None, Field(description="A task's id; the next open task if left out.")] = None
 
 
 @op("task.claim", on=lambda a: f"queue/{a.queue}", tool=True)
 def claim(txn: Txn, a: Claim) -> dict[str, Any]:
-    """Claim the next open task, or `task`. First claim wins; a loss names the owner. Keep working: the runtime renews
-    your lease while you are active, and `task.complete` finds it without being told. Exclusive ownership is not
-    exactly-once execution. Refused `queue_empty` when nothing is open, `queue_full` at your `max_inflight`: finish
-    what you hold first."""
+    """Claim the next open task, or `task` by id. Keep working: the runtime renews your lease while you are active, and
+    `task.complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it
+    safe to repeat. Refused `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks:
+    claim another, or finish one first. `queue_empty` when nothing is open: call `wait` with `queue` and end your turn.
+    `not_found` when no such task or queue exists."""
     channel = _queue(txn, a.queue)
     tasks = txn.view(Tasks)
     for lapsed in tasks.lapsed(a.queue, txn.now):
@@ -229,7 +249,7 @@ def claim(txn: Txn, a: Claim) -> dict[str, Any]:
         if task is None:
             raise Refused("not_found", f"no task {a.task} on {a.queue}")
         if task.state not in ("open", "failed"):
-            raise Refused("conflict", {"state": task.state, "owner": task.owner})
+            raise Refused("conflict", {"state": task.state, "owner": task.shown()["owner"]})
     until = _lease_until(txn.now, txn.now, channel)
     data = _note(task, lease_until=until)
     event = txn.emit("task.claimed", task.stream, gist=f"task {task.id} claimed", data=data)
@@ -252,9 +272,9 @@ def _lease_until(now: float, claimed_at: float, channel: Channel) -> float:
 
 
 class Held(Args):
-    queue: Name
-    task: str | None = None
-    fence: int | None = None
+    queue: QueueName
+    task: TaskId = None
+    fence: Annotated[int | None, Field(description="The `fence` from your claim; your live lease if left out.")] = None
 
 
 def _caller_lease(txn: Txn, a: Held) -> Task:
@@ -283,7 +303,7 @@ def _caller_lease(txn: Txn, a: Held) -> Task:
 @op("task.renew", on=lambda a: f"queue/{a.queue}", tool=True)
 def renew(txn: Txn, a: Held) -> dict[str, Any]:
     """Extend your lease, up to the queue's `lease_max`. The runtime already does this while you are active. Refused
-    `lease_lost` when the lease has gone: claim again."""
+    `stale_fence` when the lease has gone: claim again."""
     channel = _queue(txn, a.queue)
     task = _caller_lease(txn, a)
     assert task.claimed_at is not None and task.fence is not None
@@ -297,39 +317,42 @@ def renew(txn: Txn, a: Held) -> dict[str, Any]:
 
 @op("task.release", on=lambda a: f"queue/{a.queue}", tool=True)
 def release(txn: Txn, a: Held) -> None:
-    """Give a task back unfinished, which spends no attempt. Refused `stale_fence` when your lease has gone."""
+    """Give a task back unfinished, which spends no attempt. Refused `stale_fence` when your lease has gone: there is
+    nothing to give back."""
     task = _caller_lease(txn, a)
     txn.emit("task.released", task.stream, gist=f"task {task.id} released", data=_note(task))
 
 
 class Finish(Held):
-    gist: Gist = ""
-    body: BodyRef | None = None
-    based_on: tuple[str, ...] = ()
+    gist: Annotated[Gist, Field(description="The result, at most 280 characters: `task.list` shows it.")] = ""
+    body: Body = None
+    based_on: BasedOn = ()
+
+
+def _report(txn: Txn, a: Finish, event_type: str, outcome: str) -> Task:
+    """Settle the caller's lease with its result. A failure says what it rests on as much as a success does."""
+    task = _caller_lease(txn, a)
+    assert task.fence is not None
+    data = _note(task, fence=task.fence, body=a.body)
+    gist = a.gist or f"task {task.id} {outcome}"
+    refs = [a.body] if a.body else ()
+    txn.emit(event_type, task.stream, gist=gist, cause=[task.fence], based_on=a.based_on, refs=refs, data=data)
+    return task
 
 
 @op("task.complete", on=lambda a: f"queue/{a.queue}", tool=True)
 def complete(txn: Txn, a: Finish) -> None:
-    """Finish your task. `fence` defaults to your live lease. Refused `stale_fence` once the lease has expired, even if
-    nobody else took the task: your work may be lost, so check the task and claim it again if it is open."""
-    task = _caller_lease(txn, a)
-    assert task.fence is not None
-    data = _note(task, fence=task.fence, body=a.body)
-    gist = a.gist or f"task {task.id} completed"
-    refs = [a.body] if a.body else ()
-    txn.emit("task.completed", task.stream, gist=gist, cause=[task.fence], based_on=a.based_on, refs=refs, data=data)
+    """Finish your task, with `gist` and `body` as its result, which `task.list` shows. Refused `stale_fence` once the
+    lease has expired, even if nobody else took the task: your work may be lost, so check the task and claim it again if
+    it is open. `invalid` when you hold several: name `task`."""
+    _report(txn, a, "task.completed", "completed")
 
 
 @op("task.fail", on=lambda a: f"queue/{a.queue}", tool=True)
 def fail(txn: Txn, a: Finish) -> None:
-    """Report that this attempt failed. Someone may claim the task again until `max_attempts`, when it is dead and shown
-    to a human. Refused `stale_fence` once your lease has expired: the task has moved on without you."""
-    channel = _queue(txn, a.queue)
-    task = _caller_lease(txn, a)
-    assert task.fence is not None
-    gist = a.gist or f"task {task.id} failed"
-    txn.emit("task.failed", task.stream, gist=gist, cause=[task.fence], data=_note(task, fence=task.fence, body=a.body))
-    bury_if_spent(txn, task, channel)
+    """Report that this attempt failed, and why. Someone may claim the task again until `max_attempts`, when it is dead
+    and shown to a human. Refused `stale_fence` once your lease has expired: the task has moved on without you."""
+    bury_if_spent(txn, _report(txn, a, "task.failed", "failed"), _queue(txn, a.queue))
 
 
 class Fence(Args):
@@ -347,21 +370,26 @@ def expire_lease(txn: Txn, a: Fence) -> None:
 
 
 class ListTasks(Args):
-    queue: Name
-    state: TaskState | None = None
-    after: Annotated[int, Field(ge=0)] = 0
-    limit: Annotated[int, Field(ge=1, le=DIGEST_ITEMS)] = DIGEST_ITEMS
+    queue: QueueName
+    state: Annotated[TaskState | None, Field(description="Only tasks in this state.")] = None
+    after: Annotated[Seq, Field(description="A `cursor` from an earlier list.")] = 0
+    limit: Annotated[int, Field(ge=1, le=DIGEST_ITEMS, description="The most tasks to return.")] = DIGEST_ITEMS
 
 
 @op("task.list", on=lambda a: f"queue/{a.queue}", exposes=True, tool=True)
 def list_tasks(txn: Txn, a: ListTasks) -> dict[str, Any]:
-    """List a queue's tasks as gists, oldest first, with the true `total` and a `cursor` to pass as `after`. Refused
-    `not_permitted` when you may not read this queue."""
+    """List a queue's tasks, oldest first, each with its `result` once it has one, with the true `total` and a `cursor`
+    to pass as `after`, or none at the end. Refused `not_permitted` when you may not read this queue: call
+    `channel.list`. `not_found` when no such queue exists."""
+    _queue(txn, a.queue)
     rows, total = txn.view(Tasks).listed(a.queue, a.state, a.after, a.limit)
-    tasks = fitted(rows, show=lambda task: task.model_dump())
-    expose_read(txn, [Exposed.of(f"{task.stream}@1", "gist", task.gist) for task in tasks])
+    tasks = fitted(rows, show=Task.shown)
+    exposed = [Exposed.of(f"{task.stream}@1", "gist", task.gist) for task in tasks]
+    exposed += [Exposed.of(task.result_ref, "gist", task.result) for task in tasks if task.result_ref and task.result]
+    expose_read(txn, exposed)
+    more = len(tasks) < len(rows) or len(rows) == a.limit
     return {
-        "tasks": [task.model_dump() for task in tasks],
+        "tasks": [task.shown() for task in tasks],
         "total": total,
-        "cursor": tasks[-1].seq if tasks else a.after,
+        "cursor": tasks[-1].seq if tasks and more else None,
     }

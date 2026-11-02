@@ -4,6 +4,7 @@ import json
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from platoon_harness.kernel import Args, Event, Grants, Principals, Refused, Stamps, Txn, View, fold, op
 
@@ -18,7 +19,15 @@ _READ = {
     "board": ("board.get", "board.query"),
 }
 _ON = {"topic": "channel/{}", "queue": "queue/{}", "board": "board/{}/*"}
+_WATCHED = {"topic": "channel/{}", "queue": "task/{}/*", "board": "board/{}/*"}
 _RULES = ("all", "human", "program")
+
+
+def channel_grants(kind: str, name: str, *, write: bool) -> list[tuple[str, str]]:
+    """The `(ops, on)` pairs that writing or reading one channel takes. Whoever reads a channel may wait on it, and
+    whoever adds to a queue may wait on its tasks."""
+    pairs = [(ops, _ON[kind].format(name)) for ops in (_WRITE if write else _READ)[kind]]
+    return [*pairs, ("wait", _WATCHED[kind].format(name))] if not write or kind == "queue" else pairs
 
 
 class Channel(BaseModel, frozen=True):
@@ -34,6 +43,22 @@ class Channel(BaseModel, frozen=True):
     lease_max: float | None = None
     max_inflight: int = 1
     max_attempts: int = 3
+
+    @property
+    def object(self) -> str:
+        """What grants on this channel name: a board's objects sit under its stream."""
+        return f"{self.stream}/*" if self.kind == "board" else self.stream
+
+    @property
+    def reading(self) -> str:
+        """The op that makes someone a reader of this channel."""
+        return _READ[self.kind][0]
+
+    @property
+    def address(self) -> str:
+        """What the ops that use this channel take: `#topic`, `+group`, or a queue's or board's bare name."""
+        name = self.stream.partition("/")[2]
+        return name if self.kind != "topic" or name.startswith("+") else f"#{name}"
 
 
 class Channels(View):
@@ -118,51 +143,59 @@ def regroup(txn: Txn, agent: str, role: str, *, joined: bool) -> None:
 
 
 class CreateChannel(Args):
-    name: Name
-    kind: Literal["topic", "queue", "board"]
-    readers: tuple[str, ...] = ()
-    writers: tuple[str, ...] = ()
-    delivery: Delivery | None = None
-    history: Literal["from-join", "full"] = "from-join"
-    coalesce: Annotated[float, Field(ge=0)] = 0.0
-    lease: Annotated[float, Field(gt=0)] = 1800.0
-    lease_max: Annotated[float, Field(gt=0)] | None = None
-    max_inflight: Annotated[int, Field(ge=1)] = 1
-    max_attempts: Annotated[int, Field(ge=1)] = 3
+    # A surface shows what a model decides. The settings it leaves out are for a person, a program or a team file.
+
+    name: Annotated[Name, Field(description="A name no channel of this kind has.")]
+    kind: Annotated[Literal["topic", "queue", "board"], Field(description="What sort of channel this is.")]
+    readers: Annotated[tuple[str, ...], Field(description="Who else may read: selectors, such as `children`.")] = ()
+    writers: Annotated[tuple[str, ...], Field(description="Who else may write: selectors, such as `role:x`.")] = ()
+    delivery: Annotated[Delivery | None, Field(description="`pull` or `next-turn`, the most you may choose.")] = None
+    history: SkipJsonSchema[Literal["from-join", "full"]] = "from-join"
+    coalesce: SkipJsonSchema[Annotated[float, Field(ge=0)]] = 0.0
+    lease: SkipJsonSchema[Annotated[float, Field(gt=0)]] = 1800.0
+    lease_max: SkipJsonSchema[Annotated[float, Field(gt=0)] | None] = None
+    max_inflight: SkipJsonSchema[Annotated[int, Field(ge=1)]] = 1
+    max_attempts: SkipJsonSchema[Annotated[int, Field(ge=1)]] = 3
 
 
-def _reach(txn: Txn, selector: str) -> None:
+def _within_reach(txn: Txn, selector: str) -> None:
     """A creator may name only readers and writers it could reach itself."""
     grants = txn.view(Grants)
-    for principal in txn.view(Principals).select(txn.me, selector):
+    covered = txn.view(Principals).select(txn.me, selector)
+    if txn.me.kind == "agent" and not covered:
+        raise Refused("invalid", f"`{selector}` covers nobody yet")
+    for principal in covered:
         if principal.id != txn.me.id and not grants.permits(txn.me, "message.send", f"inbox/{principal.name}"):
-            raise Refused("not_permitted", f"{selector} covers {principal.id}, beyond your reach")
+            raise Refused("not_permitted", f"`{selector}` reaches beyond you")
 
 
 def _grantees(txn: Txn, selector: str) -> list[str]:
-    """Whom a selector grants to: a rule stays one, and a relation names today's holders, as `who` has no relations."""
-    if selector in _RULES or selector.startswith("role:"):
+    """Whom a selector grants to. A person's or program's rule stays one. An agent's names only those it was just found
+    to reach, since a rule would go on to cover agents past its reach, and `who` has no relations."""
+    if txn.me.kind != "agent" and (selector in _RULES or selector.startswith("role:")):
         return [selector]
     return [principal.id for principal in txn.view(Principals).select(txn.me, selector)]
 
 
-def _grant(txn: Txn, name: str, kind: str, selectors: tuple[str, ...], verbs: dict[str, tuple[str, ...]]) -> None:
+def _grant(txn: Txn, name: str, kind: str, selectors: tuple[str, ...], *, write: bool) -> None:
     for selector in selectors:
         for who in _grantees(txn, selector):
-            for ops in verbs[kind]:
-                data = {"who": who, "ops": ops, "on": _ON[kind].format(name)}
+            for ops, on in channel_grants(kind, name, write=write):
+                data = {"who": who, "ops": ops, "on": on}
                 txn.emit("grant.added", "topology", gist=f"{who} may {ops} on {name}", data=data)
 
 
 @op("channel.create", on=lambda a: f"{_PREFIX[a.kind]}/{a.name}", tool=True)
 def create(txn: Txn, a: CreateChannel) -> dict[str, Any]:
-    """Create a topic, queue or board. `readers` and `writers` are selectors such as `children` or `role:x`, within
-    your own reach. Refused `not_permitted` past it, and `conflict` when the name is taken: choose another."""
+    """Create a topic, queue or board that you can read and write. `readers` and `writers` add others: each selector
+    means those it covers now, so a later arrival is not among them. Refused `not_permitted` when one reaches beyond
+    you, or for `wake` or `steer`, which belong to the reader: use `next-turn`. `invalid` when one covers nobody yet.
+    `conflict` when the name is taken: choose another."""
     stream = f"{_PREFIX[a.kind]}/{a.name}"
     if txn.view(Channels).get(stream) is not None:
         raise Refused("conflict", f"{stream} exists")
     for selector in (*a.readers, *a.writers):
-        _reach(txn, selector)
+        _within_reach(txn, selector)
     delivery = a.delivery or _DEFAULT_DELIVERY[a.kind]
     if txn.me.kind == "agent" and delivery in WAKING:
         raise Refused("not_permitted", "an agent cannot buy a wake: delivery is the reader's setting")
@@ -171,25 +204,25 @@ def create(txn: Txn, a: CreateChannel) -> dict[str, Any]:
         stream=stream,
         delivery=delivery,
     )
-    _grant(txn, a.name, a.kind, a.readers, _READ)
-    _grant(txn, a.name, a.kind, a.writers, _WRITE)
+    mine = ("self",) if txn.me.kind == "agent" else ()
+    _grant(txn, a.name, a.kind, (*mine, *a.readers), write=False)
+    _grant(txn, a.name, a.kind, (*mine, *a.writers), write=True)
     txn.emit("channel.created", "topology", gist=f"{a.kind} {a.name} created", data=settings)
-    return {"stream": stream}
+    return {"name": settings.address, "kind": a.kind}
 
 
 @op("channel.list", query=True, tool=True)
 def list_channels(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List the channels you may read or write."""
+    """List the channels you may use. Pass `name` as `to` or `channel` for a topic, `queue` for a queue, `board` for a
+    board."""
     grants = txn.view(Grants)
 
     def usable(channel: Channel) -> bool:
-        target = f"{channel.stream}/*" if channel.kind == "board" else channel.stream
-        verbs = (*_READ.get(channel.kind, ("message.read",)), *_WRITE.get(channel.kind, ("message.send",)))
-        return any(grants.permits(txn.me, verb, target) for verb in verbs)
+        return any(
+            grants.permits(txn.me, verb, channel.object) for verb in (*_READ[channel.kind], *_WRITE[channel.kind])
+        )
 
-    return [
-        {"stream": c.stream, "kind": c.kind} for c in txn.view(Channels).listed() if c.kind != "inbox" and usable(c)
-    ]
+    return [{"name": c.address, "kind": c.kind} for c in txn.view(Channels).listed() if c.kind != "inbox" and usable(c)]
 
 
 class DefineGroup(Args):

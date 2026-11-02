@@ -10,7 +10,7 @@ from platoon_harness.kernel import Args, Effect, Effects, Event, Stamps, Txn, Vi
 from . import why
 from .agents import Agent, Agents
 from .approvals import Approvals
-from .budgets import Budget
+from .budgets import Budgets
 from .messages import Deliveries
 from .tasks import Tasks
 from .waits import Waits
@@ -183,7 +183,7 @@ def _roster(txn: Txn, names: set[str] | None = None) -> list[dict[str, Any]]:
     uncertain = txn.view(Effects).in_state("uncertain")
     dues = {reader: due for reader, due, _ in txn.view(Deliveries).waking() if due > txn.now}
     deliveries = txn.view(Deliveries)
-    budget = txn.view(Budget)
+    budget = txn.view(Budgets)
     return [
         {
             "agent": agent.name,

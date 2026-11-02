@@ -12,7 +12,7 @@ from platoon_harness.kernel.timers import fire_timers
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.primitives.tasks import claim as claim_op
 
-from .support import channel, grant, of_type, refusal, result_of, spawn
+from .support import channel, grant, of_type, read, refusal, result_of, send, spawn
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ async def test_a_loss_names_the_owner(kernel, queue):
 
     refused = refusal(await kernel.submit(bob, "task.claim", {"queue": "work", "task": id}))
 
-    assert refused.code == "conflict" and refused.detail["owner"] == "agent:alice"
+    assert refused.code == "conflict" and refused.detail["owner"] == "@alice"
 
 
 async def test_max_inflight_limits_a_reader(kernel, queue):
@@ -162,7 +162,7 @@ async def test_a_late_timer_changes_nothing_after_a_reclaim(kernel, queue, clock
     await fire_timers(kernel)
 
     assert of_type(kernel, "lease.expired", after=head) == []
-    assert tasks(kernel)[0]["owner"] == "agent:bob"
+    assert tasks(kernel)[0]["owner"] == "@bob"
 
 
 async def test_renew_extends_a_lease_and_its_timer(kernel, queue, clock):
@@ -289,8 +289,116 @@ async def test_an_agents_task_list_records_exposure(kernel, queue):
     assert of_type(kernel, "context.offered")[-1].data["items"][0]["ref"] == "task/work/1@1"
 
 
-def test_the_claim_tool_says_ownership_is_not_exactly_once():
-    assert "not exactly-once" in " ".join(claim_op.fn.__doc__.split())
+def test_the_claim_tool_says_work_may_be_redone():
+    assert "make it safe to repeat" in " ".join(claim_op.fn.__doc__.split())
+
+
+async def test_the_default_fence_is_the_callers_live_lease_past_a_lapsed_one(kernel, clock):
+    await channel(kernel, "many", kind="queue", max_inflight=2, lease=10.0)
+    bob = await spawn(kernel, "bob")
+    for _ in range(2):
+        result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "many", "gist": "x"}))
+    result_of(await kernel.submit(bob, "task.claim", {"queue": "many"}))
+    clock.advance(6)
+    second = result_of(await kernel.submit(bob, "task.claim", {"queue": "many"}))
+    clock.advance(6)
+
+    result_of(await kernel.submit(bob, "task.complete", {"queue": "many"}))
+
+    listed = result_of(kernel.query(kernel.runtime, "task.list", {"queue": "many"}))["tasks"]
+    assert next(task for task in listed if task["id"] == second["task"])["state"] == "done"
+
+
+async def test_a_failed_task_keeps_what_it_rests_on(kernel, queue):
+    bob = await spawn(kernel, "bob")
+    await add(kernel)
+    await claim(kernel, bob)
+    source = result_of(await kernel.submit(kernel.runtime, "message.send", {"to": "@bob", "gist": "why"}))
+
+    result_of(await kernel.submit(bob, "task.fail", {"queue": "work", "based_on": [source["ref"]]}))
+
+    assert of_type(kernel, "task.failed")[0].based_on == (source["ref"],)
+
+
+@pytest.mark.parametrize(("field", "value"), [("based_on", ["nothing/here@9"]), ("body", "sha256:" + "0" * 64)])
+async def test_a_failed_task_cites_only_what_exists(kernel, queue, field, value):
+    bob = await spawn(kernel, "bob")
+    await add(kernel)
+    await claim(kernel, bob)
+
+    assert refusal(await kernel.submit(bob, "task.fail", {"queue": "work", field: value})).code == "not_found"
+
+
+async def test_a_workers_result_can_be_read_back_and_reading_it_is_evidence(kernel, queue):
+    lead, bob = await spawn(kernel, "lead"), await spawn(kernel, "bob")
+    await add(kernel)
+    await claim(kernel, bob)
+    body = await kernel.put_body(b"the working")
+    done = {"queue": "work", "gist": "the answer is 42", "body": f"sha256:{body}"}
+    result_of(await kernel.submit(bob, "task.complete", done))
+
+    listed = result_of(await kernel.submit(lead, "task.list", {"queue": "work"}))["tasks"][0]
+
+    assert (listed["result"], listed["result_body"]) == ("the answer is 42", f"sha256:{body}")
+    assert "task/work/1@3" in of_type(kernel, "context.offered")[-1].data["items"][1]["ref"]
+
+
+async def test_a_list_of_no_queue_is_refused_even_for_a_human(kernel, ada):
+    assert refusal(await kernel.submit(ada, "task.list", {"queue": "wrok"})).code == "not_found"
+
+
+async def test_a_list_says_when_it_has_reached_the_end(kernel, queue):
+    await add(kernel)
+
+    page = result_of(kernel.query(kernel.runtime, "task.list", {"queue": "work"}))
+
+    assert page["cursor"] is None
+
+
+async def test_a_queue_that_wakes_announces_work_to_its_readers(kernel):
+    await channel(kernel, "tasks", kind="queue", delivery="wake")
+    await spawn(kernel, "bob")
+
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "tasks", "gist": "do it"}))
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == ["bob"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    assert [item["gist"] for item in handed["items"]] == ["do it"]
+
+
+async def test_a_queue_announcement_goes_to_who_may_claim_and_to_nobody_else(kernel):
+    await channel(kernel, "tasks", kind="queue", delivery="wake")
+    await spawn(kernel, "bob")
+    await spawn(kernel, "alice")
+    await kernel.submit(kernel.runtime, "grant.remove", {"who": "agent", "ops": "*", "on": "*"})
+    await grant(kernel, "agent:bob", "task.claim", "queue/tasks")
+
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "tasks", "gist": "do it"}))
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == ["bob"]
+
+
+async def test_a_pull_queue_posts_no_entry(kernel, queue):
+    await spawn(kernel, "bob")
+
+    await add(kernel)
+
+    assert of_type(kernel, "message.sent") == []
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 1}])
+async def test_a_chain_through_a_queue_stops_at_max_hops(kernel, limits):
+    await channel(kernel, "tasks", kind="queue", delivery="wake")
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await send(kernel, kernel.runtime, "@alice", "go")
+    await read(kernel, alice, "@alice")
+    await send(kernel, alice, "@alice", "and on")
+    await read(kernel, alice, "@alice")
+
+    result_of(await kernel.submit(alice, "task.add", {"queue": "tasks", "gist": "past the limit"}))
+
+    assert [event.data["why"] for event in of_type(kernel, "wake.refused")][-1] == "hops"
 
 
 async def test_a_claim_records_exposure_of_the_task(kernel, queue):
