@@ -806,6 +806,154 @@ async def test_an_ask_a_guest_could_answer_waits_for_it(tmp_path):
         await guest.leave()
 
 
+def until_lead(*turns: Any, **fields: Any) -> Team:
+    """A team that closes when `lead` ends."""
+    roles = {"lead": {"harness": scripted(*turns)}}
+    return Team.model_validate({"roles": roles, "topology": {"until": "role:lead"}, **fields})
+
+
+async def stalled_in(session: Session) -> None:
+    await until(session.status, session, lambda status: status["stalled"])
+
+
+async def test_a_session_settled_short_of_until_is_exit_4_and_never_a_hang(tmp_path):
+    async with Session.start(until_lead([Say("I think we are done")]), root=tmp_path) as session:
+        await session.send("@lead", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert (ending.state, ending.reason) == ("open", "needs_human")
+
+
+async def test_two_agents_waiting_on_each_other_is_exit_4_and_never_a_hang(tmp_path):
+    team = Team.model_validate(
+        {
+            "roles": {
+                "lead": {"harness": scripted([Call("wait", {"from": ["peer"]})])},
+                "peer": {"harness": scripted([Call("wait", {"from": ["lead"]})])},
+            },
+            "topology": {"until": "role:lead"},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await session.send("@peer", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert ending.reason == "needs_human"
+
+
+async def test_a_wall_limit_to_come_is_waited_for_and_ends_the_session(tmp_path):
+    clock = ManualClock(1000.0)
+    team = until_lead([Say("I think we are done")], budget={"wall": "1m"})
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await session.send("@lead", "go")
+        settling = asyncio.ensure_future(session.settled())
+        await in_state(session, "lead", "idle")
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+        assert not settling.done()
+
+        clock.advance(60.0)
+
+        ending = await asyncio.wait_for(settling, SECONDS)
+
+    assert ending.reason == "budget_exhausted"
+
+
+async def test_a_wait_deadline_to_come_is_waited_for_and_then_it_is_a_human_s_turn(tmp_path):
+    clock = ManualClock(1000.0)
+    team = until_lead([Call("wait", {"from": ["you"], "timeout": 60.0})], [Say("nobody came")])
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await session.send("@lead", "go")
+        settling = asyncio.ensure_future(session.settled())
+        await in_state(session, "lead", "waiting")
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+        assert not settling.done()
+
+        clock.advance(60.0)
+
+        ending = await asyncio.wait_for(settling, SECONDS)
+        said = [event.gist for event in await of_type(session, "item.recorded")]
+
+    assert ending.reason == "needs_human"
+    assert "nobody came" in said
+
+
+async def test_a_finish_cut_off_by_its_timer_brings_the_session_to_until(tmp_path):
+    clock = ManualClock(1000.0)
+    team = until_lead([Call("agent_finish", {"gist": "done"}), Hang()])
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await session.send("@lead", "go")
+        settling = asyncio.ensure_future(session.settled())
+        await until(lambda: of_type(session, "agent.finished"), session)
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1060.0)
+
+        clock.advance(60.0)
+
+        ending = await asyncio.wait_for(settling, SECONDS)
+
+    assert ending.reason == "settled"
+    assert ending.agents[0]["status"] == "finished"
+
+
+async def test_a_guest_that_could_act_holds_off_needs_human(tmp_path):
+    team = until_lead([Say("I think we are done")], [Call("agent_finish", {"gist": "done"})])
+
+    async with Session.start(team, name="s", root=tmp_path) as session:
+        guest = await Session.attach("s", root=tmp_path)
+        await session.send("@lead", "go")
+        settling = asyncio.ensure_future(session.settled())
+        await stalled_in(session)
+        assert not settling.done()
+
+        await guest.send("@lead", "finish up")
+
+        assert (await asyncio.wait_for(settling, SECONDS)).reason == "settled"
+        await guest.leave()
+
+
+@pytest.mark.parametrize("wanted", ["a stall", "an ask"])
+async def test_a_guest_that_leaves_having_done_nothing_ends_the_wait_for_it(tmp_path, wanted):
+    clock = ManualClock(1000.0)
+    team = until_lead([Say("I think we are done") if wanted == "a stall" else Ask("may I?")])
+
+    async with Session.start(team, name="s", root=tmp_path, clock=clock) as session:
+        guest = await Session.attach("s", root=tmp_path)
+        await session.send("@lead", "go")
+        settling = asyncio.ensure_future(session.settled())
+        await until(session.status, session, lambda status: status["stalled"] or status["asking"])
+        async with asyncio.timeout(SECONDS):
+            await clock.slept_until(1001.0)
+        assert not settling.done()
+
+        serving = tuple(session._runtime.control._serving)
+        await guest.leave()
+        await asyncio.wait_for(asyncio.gather(*serving), SECONDS)
+        clock.advance(1.0)
+
+        assert (await asyncio.wait_for(settling, SECONDS)).reason == "needs_human"
+
+
+async def test_a_view_credential_cannot_act_so_it_holds_nothing_off(tmp_path):
+    async with Session.start(until_lead([Say("I think we are done")]), name="s", root=tmp_path) as session:
+        viewer = await Session.attach("s", view=True, root=tmp_path)
+        await session.send("@lead", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+        await viewer.leave()
+
+    assert ending.reason == "needs_human"
+
+
 async def test_cancel_stops_the_session_and_cannot_be_handed_an_agent_by_accident(tmp_path):
     async with Session.start(solo(), root=tmp_path) as session:
         with pytest.raises(TypeError):

@@ -68,6 +68,8 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold.
 - `ph <tool> --help` for an unknown tool shows what there is.
+- `settled()` with no timeout can no longer hang on a session settled short of `until`, or on a guest that leaves having done nothing.
+  It says `needs_human`. A wake the budget refused keeps a session from closing as `settled`.
 - A waiter's own `agent.cancel` or `task.complete` counts for its wait. A join after a cancel used to hang.
 - A report the parent is counting no longer wakes it, unless the child ended badly, so a join of N costs one turn and not N. The same
   goes for a join on tasks.
@@ -100,6 +102,7 @@
 - `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
 - `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
 
+- `session.status` says `stalled`.
 - An agent that has finished can spawn nothing.
 - `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
 - `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.

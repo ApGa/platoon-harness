@@ -347,6 +347,10 @@ class Deliveries(View):
         row = self.db.execute("SELECT why FROM v_deliveries_blocked WHERE agent = ?", (agent,)).fetchone()
         return None if row is None else row["why"]
 
+    def any_blocked(self) -> bool:
+        """Whether a budget has refused a wake that nothing has given another try."""
+        return self.db.execute("SELECT 1 FROM v_deliveries_blocked LIMIT 1").fetchone() is not None
+
     def offer(self, input: int) -> tuple[str, dict[str, int], bool] | None:
         row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE input = ?", (input,)).fetchone()
         return None if row is None else (row["reader"], json.loads(row["positions"]), bool(row["delivered"]))

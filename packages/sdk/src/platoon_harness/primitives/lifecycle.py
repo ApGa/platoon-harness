@@ -26,7 +26,7 @@ from .channels import Channels, regroup
 from .clients import Gaps
 from .common import AgentName, Body, Gist, Name, address
 from .delivery import confirmed, work
-from .messages import post
+from .messages import Deliveries, post
 from .reports import (
     ApprovalRequested,
     Capabilities,
@@ -560,11 +560,12 @@ def _blockers(txn: Txn) -> list[str]:
 
 
 def _done(txn: Txn, until: str, settled: bool) -> bool:
-    """Whether a headless session may close. Every kind stops at budget exhaustion."""
+    """Whether a headless session may close. Every kind stops at budget exhaustion. A wake the budget refused is work
+    left undone, and only a human can raise that budget."""
     if txn.view(Budgets).exhausted(txn.now):
         return True
     if until == "settled":
-        return settled
+        return settled and not txn.view(Deliveries).any_blocked()
     if until == "program":
         return False
     leads = [agent for agent in txn.view(Agents).listed() if agent.role == until.removeprefix("role:")]
@@ -574,18 +575,27 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
 @op("session.status", query=True, tool=True)
 def session_status(txn: Txn, a: Args) -> dict[str, Any]:
     """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
-    ask. A message can un-settle it; only close ends it."""
+    ask. A message can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing
+    scheduled, so only someone acting can move it."""
     session = txn.view(SessionRecord)
     blockers = _blockers(txn)
     until = session.settings().until
+    done = _done(txn, until, not blockers)
     return {
         "state": session.state(),
         "settled": not blockers,
         "blockers": blockers,
         "until": until,
-        "done": _done(txn, until, not blockers),
+        "done": done,
         "asking": txn.view(Approvals).asking(),
+        "stalled": not blockers and not done and until != "program" and not _scheduled(txn),
     }
+
+
+def _scheduled(txn: Txn) -> bool:
+    """Whether anything the journal knows of can still move this session with nobody acting. An extension daemon's
+    private schedule is not in the journal."""
+    return bool(txn.view(Timers).next()) or work(txn).due is not None
 
 
 def _came_to(txn: Txn, state: str) -> str:

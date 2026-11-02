@@ -41,6 +41,7 @@ _FIRST_PAUSE = 0.005
 _LONGEST_PAUSE = 0.5
 _ATTEMPTS = 8
 _LOG_TAIL = 2048
+_CLIENT_SECONDS = 1.0
 _WAITED_OUT = ("not_permitted", "unavailable")
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
@@ -303,11 +304,11 @@ class Session:
     async def _changed(self, after: int) -> int | None:
         return await self._over_link(lambda link: link.changed(after))
 
-    async def _moves(self) -> AsyncIterator[None]:
-        """Yield now, and again each time the journal moves, until nothing more can come."""
+    async def _moves(self) -> AsyncIterator[int]:
+        """Yield the head now, and again each time the journal moves, until nothing more can come."""
         head: int | None = 0
         while (head := await self._changed(head)) is not None:
-            yield
+            yield head
 
     # Lifecycle.
 
@@ -403,18 +404,29 @@ class Session:
         """What this session has come to so far."""
         return Ending.model_validate(await self._ask("session.ending"))
 
+    async def _others(self) -> int:
+        return await self._over_link(lambda link: link.others())
+
+    async def _alone(self) -> None:
+        """Return once nobody else could act. A client can go without moving the journal, so this has to look."""
+        while await self._others():
+            await self._current().clock.sleep(_CLIENT_SECONDS)
+
     async def _settling(self) -> Reason | None:
-        """Close at `until`, and return once the session has drained. An `ask` nobody else could answer ends this with
-        `needs_human`, and never hangs."""
-        async for _ in self._moves():
+        """Close at `until`, and return once the session has drained. What only a person could move ends this with
+        `needs_human`, once nobody else could be that person, and never hangs."""
+        async for head in self._moves():
             status = await self.status()
             if status["state"] != "open" and status["settled"]:
                 return None
-            if status["asking"] and not await self._over_link(lambda link: link.others()):
+            for_a_human = status["asking"] or status["stalled"]
+            if for_a_human and not await self._others():
                 return "needs_human"
             if status["state"] == "open" and status["done"]:
                 with contextlib.suppress(Refused):  # A message got in first, or a guest closed it.
                     await self._do("session.close", if_done=True)
+            elif for_a_human and await first(self._alone(), self._changed(head)):
+                return "needs_human"
         raise Refused("unavailable", f"the runtime of session {self.name} went before it settled")
 
     async def settled(self, timeout: Span | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.

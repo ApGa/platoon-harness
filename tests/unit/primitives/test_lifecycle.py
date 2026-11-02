@@ -1478,6 +1478,95 @@ async def test_every_until_stops_at_budget_exhaustion(tmp_path, clock):
     kernel.close()
 
 
+async def short_of_until(tmp_path, clock, until: str = "role:lead"):
+    """A session whose lead has ended a turn and has not finished, so nothing but a human can bring it to `until`."""
+    kernel = await until_session(tmp_path, clock, until)
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await start_turn(kernel, "lead")
+    await report(kernel, "lead", "item", kind="message", gist="I think we are done")
+    await end_turn(kernel, "lead")
+    return kernel, lead
+
+
+async def test_a_session_settled_short_of_until_with_nothing_scheduled_has_stalled(tmp_path, clock):
+    kernel, _ = await short_of_until(tmp_path, clock)
+
+    assert status(kernel)["settled"] and not status(kernel)["done"]
+    assert status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_session_that_reached_until_has_not_stalled(kernel):
+    assert status(kernel)["done"] and not status(kernel)["stalled"]
+
+
+async def test_a_session_with_work_under_way_has_not_stalled(tmp_path, clock):
+    kernel, _ = await short_of_until(tmp_path, clock)
+    await start_turn(kernel, "lead", "t2")
+
+    assert not status(kernel)["settled"] and not status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_program_session_is_left_to_its_program_and_never_stalls(tmp_path, clock):
+    kernel, _ = await short_of_until(tmp_path, clock, "program")
+
+    assert not status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_lease_to_expire_can_still_move_a_session_so_it_has_not_stalled(tmp_path, clock):
+    kernel, lead = await short_of_until(tmp_path, clock)
+    await channel(kernel, "q", "queue")
+    result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do"}))
+    result_of(await kernel.submit(lead, "task.claim", {"queue": "q"}))
+
+    assert not status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_wall_limit_to_come_can_still_end_a_session_so_it_has_not_stalled(tmp_path, clock):
+    kernel, _ = await short_of_until(tmp_path, clock)
+
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}}))
+
+    assert not status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_wait_deadline_to_come_can_still_wake_an_agent_so_it_has_not_stalled(tmp_path, clock):
+    kernel, lead = await short_of_until(tmp_path, clock)
+    await start_turn(kernel, "lead", "t2")
+    result_of(await kernel.submit(lead, "wait", {"from": ["nobody-yet"], "timeout": 60.0}))
+    await end_turn(kernel, "lead")
+
+    assert status(kernel)["settled"] and not status(kernel)["stalled"]
+    kernel.close()
+
+
+async def test_a_wake_the_budget_refused_is_not_settled_enough_to_close(kernel, ada):
+    limits = {"limits": {"tokens": 10}, "estimate": {"tokens": 100}}
+    result_of(await kernel.submit(kernel.runtime, "budget.set", limits))
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, ada, "@bob", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    assert of_type(kernel, "wake.refused")[-1].data["why"] == "over_budget"
+
+    assert status(kernel)["settled"] and not status(kernel)["done"]
+    assert status(kernel)["stalled"]
+    assert refusal(await kernel.submit(ada, "session.close", {"if_done": True})).code == "conflict"
+
+
+async def test_a_spent_budget_is_done_whatever_it_refused(kernel, ada):
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}}))
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, ada, "@bob", "go")
+    kernel.clock.advance(60)
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    assert status(kernel)["done"] and not status(kernel)["stalled"]
+
+
 async def test_session_open_is_once(kernel):
     assert refusal(await kernel.submit(kernel.runtime, "session.open", {})).code == "conflict"
 

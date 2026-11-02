@@ -667,6 +667,11 @@ a message that gets in first keeps a session open, and once it is closing `messa
 reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
 A team with no root uses `"settled"`.
 
+A session has **stalled** when it is settled short of `until` with nothing scheduled: no timer and no wait deadline to come. So a wall
+limit, a lease or a wait's `timeout` is waited for, and two agents parked on each other come to this too. A wake the budget refused
+is never `done`, even at `"settled"`, because it is work left that only a human can unblock. A `"program"` session is left to its
+program. An extension daemon's private schedule is not in the journal, so it cannot hold off a stall: such a daemon sets a timer.
+
 ### Approvals
 
 Four facts stay apart: `approval.requested`, `approval.resolved` (a principal decided), `effect.finished` (the answer reached
@@ -1045,7 +1050,10 @@ A stop aborts every connection, so no client can hold up shutdown either.
 
 `settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the
 state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves
-the session as it is.
+the session as it is. What only a person can move, an approval left to `ask` or a session that has stalled, ends it with `needs_human`
+and leaves the session as it is, unless another client holding a control credential is attached. It waits for that client to act or
+to go, and looks once a second, because a client can leave without moving the journal. So `settled()` with no timeout cannot hang
+on anything the journal knows of.
 
 | Reason | Exit code |
 |---|---|
