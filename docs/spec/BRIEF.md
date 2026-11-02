@@ -382,3 +382,7 @@ At each milestone, keep the repository runnable and update tests, docs, and a co
 Deliver source, tests, a no-key clearly labeled demo, real-provider quickstarts, SDK examples, CLI help, configuration reference, extension tutorial, architecture/provenance diagrams, training integration notes, compatibility matrix, troubleshooting guide, and release/CI configuration. Include screenshots or terminal recordings of the actual working UX where tooling permits.
 
 Your final report must list working commands, implemented capabilities, tests actually run and their results, upstream changes proposed, limitations, and the next bounded milestones. Preserve the project's central promise throughout: **bring existing agents together with excellent interaction, explicit distributed primitives, and honest provenance suitable for training.**
+
+## Addendum from the project owner (2026-11-02)
+
+Regarding the distributive communication primitives: Basically I want the sdk to make it easy to configure various communication primitives/topologies across the multi-agent systems where the primitives are inspired by distributed computing.
