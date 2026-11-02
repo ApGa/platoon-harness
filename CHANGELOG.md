@@ -81,8 +81,8 @@
 - A turn that did not stop on its own says so to the parent, as `<name> turn <reason>: <text>`, and an `interrupted` one wakes nobody.
   It used to read as a final answer and wake the parent.
 - A parent that ended its own child is not woken to hear of it.
-- `agent.finish` and `agent.retire` are refused over working children, naming them and what to do next. They used to cancel a child
-  mid-turn in silence. `team_check` warns of a one-shot role over children that would end with its turn.
+- `agent.finish` and `agent.retire` are refused over working children, a wake that is due and a wait that holds among them, naming them
+  and what to do next. They used to cancel a child mid-turn in silence, or with a message unread. `team_check` warns of a one-shot role over children that would end with its turn.
 - A stop that comes to `SIGKILL` reports `crash_window`. `stop_leaves_no_process` could not see a tool, and a tool that leads its own
   group outlives a kill of its harness.
 - A resume under other SDK or extension versions leaves a record on `runtime.started`. It left none.

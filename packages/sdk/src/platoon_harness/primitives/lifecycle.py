@@ -77,26 +77,39 @@ def _live(txn: Txn, name: str) -> Agent:
     return agent
 
 
-def _working(txn: Txn, agent: Agent) -> list[str]:
-    """Who would end with this agent and is on its way to a turn or in one. A child that holds no turn is left to
-    `on_parent_exit`, and an adopted child outlives it, with all below that child."""
+def _starting(txn: Txn) -> list[str]:
+    """Agents a turn is on its way to. One the budget refused to wake is on its way nowhere until the budget moves."""
+    deliveries = txn.view(Deliveries)
+    return [agent.name for agent in txn.view(Agents).live() if agent.starting and not deliveries.blocked(agent.name)]
+
+
+def _at_work(txn: Txn) -> set[str]:
+    """Agents in a turn or on their way to one, by a wake that is due or a wait that holds as well."""
+    pending = work(txn)
+    waiters = (wait.waiter.partition(":")[2] for wait in pending.waits)
+    return {*_starting(txn), *txn.view(Stamps).open_turns(), *pending.agents, *pending.later, *waiters}
+
+
+def _working(txn: Txn, agent: Agent, at_work: set[str]) -> list[str]:
+    """Who would end with this agent and is at work. A child that holds no turn is left to `on_parent_exit`, and an
+    adopted child outlives it, with all below that child."""
     found: list[str] = []
     for child in txn.view(Agents).children(agent.id):
         if child.on_parent_exit != "adopt":
-            if child.starting or txn.view(Stamps).turn(child.name) is not None:
-                found.append(child.name)
-            found += _working(txn, child)
+            found += [child.name] if child.name in at_work else []
+            found += _working(txn, child, at_work)
     return found
 
 
 def _refuse_over_working(txn: Txn, agent: Agent) -> None:
-    """A refusal names what would be lost, and what to do next comes first, since a long one is cut."""
-    if working := _working(txn, agent):
+    """A refusal is cut to 512 characters, so the names go last. Each tool has a sentence of its own, which a reader who
+    does not hold it goes without."""
+    if working := _working(txn, agent, _at_work(txn)):
         names = ", ".join(f"@{name}" for name in working)
         raise Refused(
             "conflict",
-            f"Call `wait` with `agents` and end your turn, or `agent.cancel` each. Working, and ending with "
-            f"{agent.name}: {names}",
+            f"{agent.name} has children at work, who would end with it. `wait` with `agents` lets them finish. "
+            f"`agent.cancel` stops one now. They are {names}",
         )
 
 
@@ -261,12 +274,12 @@ def _conclude(txn: Txn, agent: Agent) -> None:
     end(txn, agent, "finished", gist=agent.finish_gist or None, body=agent.finish_body)
 
 
-@op("agent.finish", tool=True)
+@op("agent.finish", on=lambda a: None, tool=True)
 def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
     a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
-    children that would end with you are working. Call `wait` with `agents` for them, or `agent.cancel` each."""
+    children that would end with you are working. Call `wait` with `agents` for them. `agent.cancel` stops one now."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
@@ -321,8 +334,8 @@ def cancel(txn: Txn, a: Named) -> None:
 @op("agent.retire", on=lambda a: f"agent/{a.agent}", tool=True)
 def retire(txn: Txn, a: Named) -> None:
     """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while a
-    turn is open, or while children that would end with it are working, and when it has ended already. Call `wait` for
-    them, or `agent.cancel` to stop them now."""
+    turn is open, or while children that would end with it are working, and when it has ended already. Call `wait` with
+    `agents` for them. `agent.cancel` stops one now."""
     agent = _live(txn, a.agent)
     if txn.view(Stamps).turn(agent.name) is not None:
         raise Refused("conflict", f"{agent.name} has a turn open")
@@ -571,7 +584,7 @@ def peers(txn: Txn, a: Paging) -> dict[str, Any]:
 def _blockers(txn: Txn) -> list[str]:
     """What stands between this session and `settled`: each clause of its definition, checked."""
     found: list[str] = []
-    if any(agent.starting for agent in txn.view(Agents).live()):
+    if _starting(txn):
         found.append("starting_agent")
     if txn.view(Stamps).open_turns():
         found.append("open_turn")

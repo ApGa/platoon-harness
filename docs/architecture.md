@@ -655,9 +655,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
   still going a minute later is cut off, so what it had yet to report goes unmeasured. A harness that exits has finished all the same.
 - **Working children.** `agent.finish` and `agent.retire` are refused `conflict`, naming each descendant that would end with the agent
-  and is on its way to a turn or in one. The walk follows `cancel-subtree` edges, through a child that holds no turn, and stops at an
-  `adopt` child. A child `waiting` or `idle` holds no turn, so it does not block, and `on_parent_exit` decides for it. The refusal says
-  what to do next: `wait` for them, or `agent.cancel` each, which is never refused. An agent that has finished can spawn nothing. This
+  and is on its way to a turn or in one, which a wake that is due or a wait that holds also means. A wake the budget refused is on its
+  way nowhere. The walk follows `cancel-subtree` edges, through a child that holds no turn, and stops at an `adopt` child. Any other
+  child `waiting` or `idle` holds no turn, so it does not block, and `on_parent_exit` decides for it. The refusal says what to do next:
+  `wait` for them, or `agent.cancel` each, which is never refused. An agent that has finished can spawn nothing. This
   is a check at the call, not a hold, so it has limits: a child that begins work after an accepted `finish` ends with its parent,
   whether the turn ends, the timer fires or the harness exits. So do the working children of a harness that exits, which nothing can
   refuse, and of a one-shot parent, which ends with its turn whatever it was told, as `team check` warns.

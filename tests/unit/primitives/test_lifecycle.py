@@ -501,6 +501,42 @@ async def test_finishing_is_refused_over_a_child_on_its_way_to_a_turn_or_in_one(
     assert state_of(kernel, "bob")["status"] is None
 
 
+async def test_finishing_is_refused_over_a_child_the_courier_is_about_to_wake(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", role="linked", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    await send(kernel, lead, "@bob", "do the last thing")
+
+    assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {"gist": "all done"})).detail
+
+
+async def test_finishing_is_refused_over_a_child_whose_wait_holds(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await channel(kernel, "t")
+    bob = await spawn(kernel, "bob", role="linked", by=lead, goal="")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(bob, "wait", {"channels": ["#t"]}))
+    await end_turn(kernel, "bob")
+    await start_turn(kernel, "lead")
+    await send(kernel, lead, "#t", "go on")
+
+    assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {"gist": "all done"})).detail
+
+
+async def test_finishing_goes_through_over_a_child_the_budget_will_not_wake(kernel):
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"scope": "role:linked", "limits": {"turns": 1}}))
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", role="linked", by=lead)
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+    await send(kernel, lead, "@bob", "more")
+    assert result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"})) is None
+
+    result_of(await kernel.submit(lead, "agent.finish", {"gist": "all done"}))
+
+    assert state_of(kernel, "lead")["status"] == "finished"
+
+
 async def test_finishing_out_of_a_turn_is_refused_over_a_working_child_too(kernel):
     lead = await working_child(kernel)
 
@@ -515,6 +551,14 @@ async def test_a_refused_finish_says_what_to_do_next(kernel):
 
     text = refusal_text(refused, shell_name, kernel.ops, {"wait", "agent.cancel"})
     assert "`ph wait`" in text and "`ph agent.cancel`" in text
+    assert " on session" not in text
+    assert text.index("who would end with it") < text.index("`ph wait`") < text.index("@bob")
+
+
+async def test_a_retire_refused_tells_a_person_nothing_of_a_turn(kernel, ada):
+    await working_child(kernel)
+
+    assert "turn" not in refusal(await kernel.submit(ada, "agent.retire", {"agent": "lead"})).detail
 
 
 async def test_a_finish_refused_over_many_children_keeps_what_to_do_next(kernel):
