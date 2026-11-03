@@ -7,7 +7,6 @@ Every approval the harness asks for comes to the runtime, and a role's budget is
 import asyncio
 import contextlib
 import json
-import os
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -45,7 +44,7 @@ from . import (
     Usage,
     unknown_frame,
 )
-from .env import harness_env, inherited
+from .env import harness_env, inherited, private, refuse_unset_model, signed_in
 from .process import LOG, Process
 
 _CLAUDE = "claude"
@@ -108,30 +107,16 @@ _CAPABILITIES = Capabilities(
 __all__ = ["ClaudeDriver"]
 
 
-def _signed_in() -> dict[str, str]:
-    """What `claude` needs from the shell to sign in as it does there: where its login lives, and its way out to the
-    network. Provider keys stay in auth profiles."""
-    return {name: os.environ[name] for name in _SIGN_IN if name in os.environ}
-
-
 def _login() -> Login | None:
     """Which kind of login `claude` says it has, or None if it cannot tell. Only that field is read, since the rest
     of what it says can name an account."""
     command = (_CLAUDE, "auth", "status", "--json")
-    env = {**inherited(), **_signed_in()}
+    env = {**inherited(), **signed_in(_SIGN_IN)}
     try:
         done = subprocess.run(command, capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
         return _LOGINS.get(json.loads(done.stdout).get("authMethod"))
     except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError, TypeError):
         return None
-
-
-def _private(path: Path, text: str) -> str:
-    """Write a file nobody else may read, and return where."""
-    path.touch(mode=0o600)
-    path.chmod(0o600)
-    path.write_text(text)
-    return str(path)
 
 
 def _call_tokens(usage: Mapping[str, Any]) -> int:
@@ -197,15 +182,14 @@ class ClaudeDriver:
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-        if spec.model is None and spec.access:
-            raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
+        refuse_unset_model(spec)
         named = {*spec.env, *spec.access}
         if _GATEWAY_URL in named and not named.intersection(_GATEWAY_CREDENTIALS):
             raise DriverError(f"{_GATEWAY_URL} with no credential would send a saved login there: name one too")
         self._native = spec.resume or str(uuid4())
         self._folder = spec.folder
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        launched = spec.model_copy(update={"env": {**_signed_in(), **_ENVIRONMENT, **spec.env}})
+        launched = spec.model_copy(update={"env": {**signed_in(_SIGN_IN), **_ENVIRONMENT, **spec.env}})
         env = harness_env(launched)
         self._config = Path(env.get("CLAUDE_CONFIG_DIR") or Path(env.get("HOME", "")) / ".claude")
         self._process = await Process.launch(self._command(spec), launched, report, read=self._read)
@@ -226,10 +210,10 @@ class ClaudeDriver:
             headers = {"Authorization": f"Bearer {tools.token.reveal()}"}
             server = {"type": "http", "url": tools.url, "headers": headers, "alwaysLoad": True}
             servers = json.dumps({"mcpServers": {tools.namespace: server}})
-            command += ["--mcp-config", _private(spec.folder / _SERVERS, servers)]
+            command += ["--mcp-config", private(spec.folder / _SERVERS, servers)]
             command += ["--allowedTools", f"mcp__{tools.namespace}__*"]
         if spec.instructions is not None:
-            command += ["--append-system-prompt-file", _private(spec.folder / _INSTRUCTIONS, spec.instructions)]
+            command += ["--append-system-prompt-file", private(spec.folder / _INSTRUCTIONS, spec.instructions)]
         return command
 
     async def _handshake(self, spec: AgentSpec) -> None:

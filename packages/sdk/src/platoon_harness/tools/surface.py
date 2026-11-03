@@ -237,7 +237,12 @@ def notices_text(handed: dict[str, Any], surface: Surface, ops: Collection[str],
     return "\n".join(["Messages arrived, and they may change what you should do next:", *entries])
 
 
+def delivery_heading(input: object) -> str:
+    """The line a handover opens with, which holds its id, because a handover can come twice."""
+    return f"New messages (delivery {input}):"
+
+
 def delivery_text(handed: dict[str, Any], surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
-    """A handover as a harness's prompt reads it. Its id goes with it, because a handover can come twice."""
+    """A handover as a harness's prompt reads it."""
     entries = _entries(handed, _teacher(surface, ops, held))
-    return "\n".join([f"New messages (delivery {handed['input']}):", *entries])
+    return "\n".join([delivery_heading(handed["input"]), *entries])

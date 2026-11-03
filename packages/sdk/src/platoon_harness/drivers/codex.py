@@ -7,7 +7,6 @@ of it. Every approval the harness asks for comes to the runtime, and a role's bu
 import asyncio
 import contextlib
 import json
-import os
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -46,7 +45,7 @@ from . import (
     Usage,
     unknown_frame,
 )
-from .env import inherited
+from .env import inherited, refuse_unset_model, signed_in
 from .process import LOG, Process
 
 _CODEX = "codex"
@@ -62,7 +61,7 @@ _SIGN_IN = (
     "http_proxy",
     "all_proxy",
     "no_proxy",
-    "DBUS_SESSION_BUS_ADDRESS",
+    "DBUS_SESSION_BUS_ADDRESS",  # The session bus a keyring login sits behind.
 )
 _BASE_URL = "OPENAI_BASE_URL"
 _KEY = "OPENAI_API_KEY"
@@ -137,16 +136,10 @@ _CAPABILITIES = Capabilities(
 __all__ = ["CodexDriver"]
 
 
-def _signed_in() -> dict[str, str]:
-    """What `codex` needs from the shell to sign in as it does there: where its login lives, its way out to the network,
-    and the session bus a keyring login sits behind. Provider keys stay in auth profiles."""
-    return {name: os.environ[name] for name in _SIGN_IN if name in os.environ}
-
-
 def _login() -> Login | None:
     """Which kind of login `codex` says it has, or None if it cannot tell. Nothing else it said is kept."""
     command = (_CODEX, "login", "status")
-    env = {**inherited(), **_signed_in()}
+    env = {**inherited(), **signed_in(_SIGN_IN)}
     try:
         done = subprocess.run(command, capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
     except (OSError, subprocess.TimeoutExpired):
@@ -280,12 +273,11 @@ class CodexDriver:
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-        if spec.model is None and spec.access:
-            raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
+        refuse_unset_model(spec)
         if _BASE_URL in spec.access and _KEY not in spec.access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._folder = spec.folder
-        launched = spec.model_copy(update={"env": {**_signed_in(), **spec.env}})
+        launched = spec.model_copy(update={"env": {**signed_in(_SIGN_IN), **spec.env}})
         await Process.launch((_CODEX, "app-server"), launched, report, read=self._read)
         await self._call("initialize", {"clientInfo": {"name": "platoon_harness", "version": __version__}})
         await self._notify("initialized")

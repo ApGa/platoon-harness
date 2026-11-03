@@ -12,20 +12,32 @@ from urllib.parse import quote, quote_plus
 from platoon_harness.config import Secret
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
-from . import AgentSpec, Report
+from . import AgentSpec, DriverError, Report
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
 _CONTINUATION = 0b1000_0000
 _CONTINUATION_MASK = 0b1100_0000
 
-__all__ = ["Held", "Redactor", "harness_env", "inherited", "secrets_of"]
+__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "refuse_unset_model", "secrets_of", "signed_in"]
 
 
 def inherited(environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """All a process takes from ours. A variable that would change a harness's behavior, or that leaks a parent's
     identity, has no way through."""
     return {name: environ[name] for name in _INHERITED if name in environ}
+
+
+def refuse_unset_model(spec: AgentSpec) -> None:
+    """On a harness's own login its default is the user's. Where access was given, it may go somewhere nobody chose."""
+    if spec.model is None and spec.access:
+        raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
+
+
+def signed_in(names: Iterable[str], environ: Mapping[str, str] = os.environ) -> dict[str, str]:
+    """What a harness needs from the shell to sign in as it does there, out of `names`: where its login lives, and its
+    way out to the network. Provider keys stay in auth profiles."""
+    return {name: environ[name] for name in names if name in environ}
 
 
 def harness_env(spec: AgentSpec, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
@@ -43,6 +55,14 @@ def _tmpdir(folder: Path) -> Path:
     path = folder / "tmp"
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
+
+
+def private(path: Path, text: str) -> str:
+    """Write a file nobody else may read, and return where."""
+    path.touch(mode=0o600)
+    path.chmod(0o600)
+    path.write_text(text)
+    return str(path)
 
 
 def secrets_of(spec: AgentSpec) -> tuple[Secret, ...]:

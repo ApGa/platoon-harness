@@ -52,7 +52,10 @@ platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.inherited
+platoon_harness.drivers.env.private
+platoon_harness.drivers.env.refuse_unset_model
 platoon_harness.drivers.env.secrets_of
+platoon_harness.drivers.env.signed_in
 platoon_harness.drivers.exec.ExecDriver
 platoon_harness.drivers.exec.GOAL
 platoon_harness.drivers.levels.Check
@@ -295,6 +298,7 @@ platoon_harness.tools.PH
 platoon_harness.tools.SHIM
 platoon_harness.tools.Surface
 platoon_harness.tools.ToolServer
+platoon_harness.tools.delivery_heading
 platoon_harness.tools.delivery_text
 platoon_harness.tools.harness_name
 platoon_harness.tools.held_tools
