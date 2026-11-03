@@ -512,7 +512,7 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -893,7 +893,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
   resolve, a setting no primitive enforces yet, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
 and one that says it stays, and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
-It warns of a role that lets its harness start agents of its own, saying what that gives up.
+It warns of a role that lets its harness start agents of its own, saying what that gives up, and of what a preamble template
+leaves out or a user's words name that a role lacks (§10).
 
 ## 9. Drivers
 
@@ -911,7 +912,7 @@ class Driver(Protocol):
 ```
 
 `AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, effort (a string handed to the harness as it stands), sandbox
-(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path; native
+(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path and journaled; native
 project files are never touched) and resume. A fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a
 delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
 such setting refuses an effort.
@@ -1074,6 +1075,23 @@ of every agent, so a test holds each default role's list under a ceiling. We app
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in
 [compatibility.md](compatibility.md).
+
+**The preamble is a template.** `Team.preamble` is every role's and `Role.preamble` one role's in its place, and left out it is
+`PREAMBLE`, which renders what the preamble said before it was a template byte for byte, as a test holds for every preset's roles on
+each surface. A slot is a word in braces, and `{{` and `}}` write a brace. Per agent and per surface the runtime fills `name`, `tools`
+by their exact names, `help` on how to ask `ph` for a tool's arguments, on that surface alone, `peers` it can message, `roles` it can
+start, and `channels`, which are values, and `waiting` and `ending`, which are sentences of ours, taught as above, so one that names a
+tool the agent lacks is left out. A line whose slots are all empty is left out, and a slot nobody fills is refused when the team loads.
+An op named in backticks, in the template's own words or in `Role.instructions`, becomes the surface's name for the tool, and words a
+user wrote are never dropped: `team check` warns of one that names a tool its role lacks. It warns of a template that leaves out
+`tools`, as a harness can keep a server's tools from a model that knows none of their names, or `ending`, as an agent never told how
+to end can leave its parent waiting for ever. The role's own `instructions` come last, so a role has the last word.
+
+`agent.instructed` journals the exact text the runtime adds to each harness, at a launch and at every resume, so a session's record
+shows what every agent was told, and on each real binary a test finds that text whole, once, in the first request. The harness's own
+system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude Code's settings and `CLAUDE.md`
+files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role would be told, on a session of
+its own in a folder thrown away after, which starts no harness. Tool descriptions, refusals and handovers stay fixed.
 
 ## 11. Provenance
 

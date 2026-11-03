@@ -4,6 +4,7 @@ import asyncio
 import itertools
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from platoon_harness.drivers.wire import serve
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
 PROGRAM = str(Path(__file__))
+TOLD = "Begin every reply with the word kestrel, then use `peers`."
 
 WORKERS = ["w1", "w2"]
 FIX_THE_TEST = [
@@ -163,6 +165,18 @@ def manager_worker(lead: Any, worker: Any, **roles: Any) -> Team:
             "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}},
         }
     )
+
+
+def strings(value: Any) -> Iterator[str]:
+    """Every string in a JSON value, as decoded, so that text is found whatever escapes carried it."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from strings(item)
 
 
 if __name__ == "__main__":

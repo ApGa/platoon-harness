@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Session, Team, told
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
@@ -223,6 +223,64 @@ async def test_a_role_has_the_last_word_in_its_agents_instructions(tmp_path, rec
         "nothing of the kind, stay: it ends you for good, and a turn that only ends leaves you "
         "here for the next message.\n\nNever call agent_finish."
     )
+
+
+async def test_what_a_harness_is_told_is_journaled_at_launch_and_at_every_resume(tmp_path, recording):
+    """A harness that took no turn is started anew on a resume, which tells it again."""
+    async with Session.start(solo_with(recording, instructions="Be brief."), name="told", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+    async with Session.resume("told", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        instructed = await of_type(session, "agent.instructed")
+        told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+
+    assert len(told) == 2 and told == [spec.instructions for spec in recording.specs]
+
+
+async def test_nothing_told_is_journaled_as_nothing(tmp_path, recording):
+    def none() -> ScriptedDriver:
+        return recording(capabilities=Capabilities(persistent=True, boundaries={"turn"}))
+
+    async with Session.start(solo_with(none), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        instructed = await of_type(session, "agent.instructed")
+
+    assert [event.data["instructions"] for event in instructed] == [None]
+
+
+async def test_a_role_s_preamble_is_told_in_place_of_its_team_s_and_its_words_come_last(tmp_path, recording):
+    role = {"harness": harness(recording), "preamble": "Role: @{name}.", "instructions": "Use `peers`."}
+    team = Team.model_validate(
+        {"preamble": "Team: @{name}.", "roles": {"bob": role, "ann": {**role, "preamble": None}}}
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "ann", "idle")
+        await in_state(session, "bob", "idle")
+
+    assert sorted(spec.instructions for spec in recording.specs) == [
+        "Role: @bob.\n\nUse `mcp__ph__peers`.",
+        "Team: @ann.\n\nUse `mcp__ph__peers`.",
+    ]
+
+
+async def test_what_each_role_would_be_told_is_what_a_session_tells_it(tmp_path, recording):
+    def leading() -> ScriptedDriver:
+        return recording([[Call("agent_spawn", {"name": "worker", "child_role": "worker"}), Say("started")]])
+
+    roles = {
+        "lead": {"harness": harness(leading), "may_spawn": ["worker"], "instructions": "Start `agent.spawn` once."},
+        "worker": {"harness": harness(recording), "preamble": "You are @{name}.\n{ending}"},
+    }
+    topology = {"edges": {"lead": ["children", "human"], "worker": ["parent"]}, "limits": {"max_hops": 4}}
+    team = Team.model_validate({"roles": roles, "topology": topology})
+    expected = await told(team)
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@lead", "go")
+        await until(lambda: of_type(session, "agent.started"), session, lambda started: len(started) == 2)
+
+    assert {spec.role: spec.instructions for spec in recording.specs} == expected
 
 
 @pytest.mark.parametrize("allowed", [False, True])

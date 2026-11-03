@@ -8,6 +8,7 @@ from fnmatch import fnmatchcase
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
+    AfterValidator,
     Field,
     StrictBool,
     StrictFloat,
@@ -19,7 +20,7 @@ from pydantic import (
 )
 
 from platoon_harness.kernel import Extension
-from platoon_harness.primitives import WAKING, Capabilities, Injection, Policy
+from platoon_harness.primitives import PRIMITIVES, WAKING, Capabilities, Injection, Policy
 from platoon_harness.schema import (
     ConfigError,
     Duration,
@@ -32,7 +33,9 @@ from platoon_harness.schema import (
     nearest,
     problems_in,
 )
-from platoon_harness.topology.compile import arcs, reach, structure
+from platoon_harness.tools import slots
+from platoon_harness.tools.surface import OP_NAMED
+from platoon_harness.topology.compile import arcs, compile, reach, scopes, structure
 from platoon_harness.topology.presets import PRESETS, Preset, expand, finish, preset_name
 from platoon_harness.topology.show import describe
 from platoon_harness.topology.spec import RELATIONS, Topology
@@ -42,6 +45,15 @@ _MEASURED = ("tokens", "usd")
 _UNENFORCED = frozenset({"digest", "entry", "keys", "requires", "validator"})
 
 EnvName = Annotated[str, StringConstraints(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
+
+
+def _template(text: str) -> str:
+    slots(text)
+    return text
+
+
+Template = Annotated[str, AfterValidator(_template)]
+"""A preamble template, whose every slot is one the runtime fills."""
 
 __all__ = [
     "AuthProfile",
@@ -88,12 +100,14 @@ class Role(Model):
     started stays and one spawned does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
     of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
     otherwise, and `adopt` gives it to the session. `native_children` lets its harness start agents of its own, beside
-    ours.
+    ours. `preamble` is the template of what its agents are told before `instructions`, its own words, in place of the
+    team's.
     """
 
     harness: str | Command
     model: str | None = None
     effort: str | None = None
+    preamble: Template | None = None
     instructions: str | None = None
     auth: str | None = None
     workspace: Literal["shared", "worktree", "snapshot", "isolated"] = "shared"
@@ -118,9 +132,11 @@ class Role(Model):
 
 
 class Team(Model):
-    """Roles plus a topology. It says what may happen, never what happens next."""
+    """Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
+    agent is told before its role's words, unless its role gives its own: left out, `PREAMBLE`."""
 
     extensions: tuple[str, ...] = ()
+    preamble: Template | None = None
     roles: Annotated[Mapping[Name, Role], Field(min_length=1), Sorted]
     auth: Annotated[Mapping[Name, AuthProfile], Sorted] = {}
     budget: Budget = Budget()
@@ -161,10 +177,11 @@ class Team(Model):
 
     def resolved(self, extensions: Mapping[str, Extension] | None = None) -> Self:
         """This team with every preset expanded, using the extensions it names from `extensions`."""
-        presets, problems = _presets_of(self, {} if extensions is None else extensions)
+        loaded, problems = _extensions_of(self, {} if extensions is None else extensions)
+        presets, named = _presets_of(loaded)
         topology, more = finish(self.topology, presets)
-        if problems + more:
-            raise ConfigError(problems + more)
+        if problems + named + more:
+            raise ConfigError(problems + named + more)
         return self.model_copy(update={"topology": topology})
 
     def show(self, *, resolved: bool = False) -> str:
@@ -175,21 +192,26 @@ class Team(Model):
         return dumps(self.canonical()) if resolved else describe(self)
 
 
-def _presets_of(team: Team, extensions: Mapping[str, Extension]) -> tuple[dict[str, Preset], list[Problem]]:
-    """The presets of the extensions `team` names. Installing activates nothing."""
-    presets: dict[str, Preset] = {}
+def _extensions_of(team: Team, extensions: Mapping[str, Extension]) -> tuple[list[Extension], list[Problem]]:
+    """The extensions `team` names. Installing activates nothing."""
+    loaded: list[Extension] = []
     problems: list[Problem] = []
     for reference in team.extensions:
         try:
-            extension = extensions[reference]
+            loaded.append(extensions[reference])
         except ConfigError as error:
             problems.extend(error.problems)
-            continue
         except KeyError:
             problems.append(
                 Problem("extensions", f"unknown extension `{reference}`.{nearest(reference, [*extensions])}")
             )
-            continue
+    return loaded, problems
+
+
+def _presets_of(loaded: Iterable[Extension]) -> tuple[dict[str, Preset], list[Problem]]:
+    presets: dict[str, Preset] = {}
+    problems: list[Problem] = []
+    for extension in loaded:
         for preset in extension.presets:
             name = preset_name(preset)
             if name in presets or name in PRESETS or name in Topology.model_fields:
@@ -261,6 +283,39 @@ def _native(role: Role, known: Capabilities) -> str:
     )
 
 
+def _told(team: Team, tools: set[str]) -> Iterable[Problem]:
+    """What a template leaves out, and the tools a user's words name that a role does not hold. Words a user wrote are
+    never dropped, so these are said here."""
+    grants = compile(team)
+    if team.preamble is not None:
+        yield from _left_out(team.preamble, "preamble")
+    for name, role in team.roles.items():
+        if role.preamble is not None:
+            yield from _left_out(role.preamble, f"roles.{name}.preamble")
+        whos = ("agent", "all", f"role:{name}")
+        held = {
+            tool
+            for tool in tools
+            if any(fnmatchcase(tool, scope) for scope in scopes(role))
+            and any(grant.who in whos and fnmatchcase(tool, grant.ops) for grant in grants)
+        }
+        template = ("preamble", team.preamble) if role.preamble is None else (f"roles.{name}.preamble", role.preamble)
+        for where, words in (template, (f"roles.{name}.instructions", role.instructions)):
+            for tool in sorted(set(OP_NAMED.findall(words or "")) & tools - held):
+                what = f"names `{tool}`, which `{name}` does not hold: its agents are told of a tool they cannot call"
+                yield Problem(where, what, "warning")
+
+
+def _left_out(template: str, where: str) -> Iterable[Problem]:
+    filled = slots(template)
+    if "tools" not in filled:
+        what = "leaves out `{tools}`: a harness can keep a server's tools from a model that knows none of their names"
+        yield Problem(where, what, "warning")
+    if "ending" not in filled:
+        what = "leaves out `{ending}`: an agent never told how to end can leave its parent waiting for ever"
+        yield Problem(where, what, "warning")
+
+
 def _taken_down(team: Team, name: str) -> Iterable[Problem]:
     """A one-shot role's turn is its end, and no refusal can stand in the way of that."""
     for child in sorted(_spawning(team)[name] & team.roles.keys()):
@@ -316,12 +371,14 @@ def team_check(
     `extensions` maps the references a team may name to their extensions. Errors stop a team from running; warnings do
     not.
     """
-    presets, problems = _presets_of(team, {} if extensions is None else extensions)
+    loaded, problems = _extensions_of(team, {} if extensions is None else extensions)
+    presets, named = _presets_of(loaded)
     topology, more = finish(team.topology, presets)
-    problems += more
+    problems += named + more
     team = team.model_copy(update={"topology": topology})
     limits = topology.limits
-    problems += structure(team)
+    unsound = structure(team)
+    problems += unsound
 
     for name, role in team.roles.items():
         known = capabilities.get(name) or capabilities.get(role.driver)
@@ -364,4 +421,7 @@ def team_check(
             problems.append(Problem("topology.limits.max_hops", what, "warning"))
 
     problems += _warnings(team)
+    if not unsound:
+        ops = (operation for extension in (*PRIMITIVES, *loaded) for operation in extension.ops)
+        problems += _told(team, {operation.name for operation in ops if operation.tool})
     return tuple(problems)

@@ -295,7 +295,9 @@ plan login is never Trainable. Token ids and logprobs come only from the gateway
 
 Rules that hold on every harness:
 
-- **Instructions.** We append through the supported path. We never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks.
+- **Instructions.** We append through the supported path. We never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. What we
+  append is journaled as `agent.instructed`, and on FakeModel Claude Code, Codex and pi each sent it whole, once, in the first
+  request [L]. What is the user's or the harness's own we neither record nor change.
 - **Teaching tools.** The preamble and tool descriptions name tools exactly. No harness's tool discovery is relied on.
 - **Tool set.** Fixed per role at launch, with the preamble. Valid targets change, so `peers` lists them as they stand. On FakeModel,
   Claude Code, Codex and pi each kept the tool block byte for byte across a tool call, a wake and a resume by a new process, and said

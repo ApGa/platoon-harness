@@ -49,11 +49,11 @@ from platoon_harness.testing import (
 )
 from platoon_harness.testing.loopback import answer
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
-from platoon_harness.tools import delivery_heading
+from platoon_harness.tools import PREAMBLE, delivery_heading
 
 from ..unit.drivers.support import Heard, running
 from ..unit.runtime.support import in_state, of_type, until
-from .scripts import following_up
+from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
@@ -296,6 +296,23 @@ async def test_two_identical_calls_in_a_turn_are_two_calls_through_the_shim(tmp_
     assert all("platoon-harness/callId" in event.native for event in claimed)
     assert started.data["effective_model"] == MODEL
     assert started.data["declared"]["approvals"] == "gated"
+
+
+async def test_what_the_journal_says_a_harness_was_told_is_what_it_sent_its_model(tmp_path, monkeypatch):
+    """The text journaled at launch is in the first request whole, once, beside whatever the harness says itself."""
+    async with FakeModel("kestrel, done") as model:
+        role = {"preamble": f"{PREAMBLE}\nA team of one.", "instructions": TOLD}
+        team = keyed(tmp_path / "home", model, monkeypatch, **role)
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "go")
+            await until(lambda: of_type(session, "turn.ended"), session)
+            instructed = await of_type(session, "agent.instructed")
+            told = (await session.get_body(instructed[0].data["instructions"])).decode()
+
+    assert told.endswith("A team of one.\n\nBegin every reply with the word kestrel, then use `mcp__ph__peers`.")
+    assert sum(text.count(told) for text in strings(model.calls[0].json)) == 1
 
 
 async def test_a_real_harness_that_stays_answers_a_task_a_follow_up_and_a_question_on_one_process(

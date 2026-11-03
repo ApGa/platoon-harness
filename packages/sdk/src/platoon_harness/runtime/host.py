@@ -5,13 +5,14 @@ import contextlib
 import json
 import logging
 import shutil
-from collections.abc import Awaitable, Callable, Coroutine, Mapping
+import tempfile
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from platoon_harness.config import Secret
+from platoon_harness.config import Manifest, Secret
 from platoon_harness.drivers import (
     AgentSpec,
     ApprovalRequested,
@@ -35,14 +36,25 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.env import Held, Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel, Outcome, Refused, first, hash_token, tool_name
-from platoon_harness.primitives import CUT_OFF, OWNER_STOP
+from platoon_harness.extensions import Installed
+from platoon_harness.kernel import Effect, Kernel, Outcome, Principal, Refused, first, hash_token, tool_name
+from platoon_harness.primitives import CUT_OFF, OWNER_STOP, PRIMITIVES
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Team
-from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, held_tools, preamble, shell_name
+from platoon_harness.tools import (
+    PH,
+    PREAMBLE,
+    Surface,
+    ToolServer,
+    delivery_text,
+    harness_name,
+    held_tools,
+    instructions,
+    shell_name,
+)
 
-from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
-from .opening import PLAN_LOGIN_FIX, make_driver
+from .authority import Admission, AgentOutcome, AgentRef, Authority, LocalAuthority, SpawnRequest
+from .opening import PLAN_LOGIN_FIX, make_driver, open_session
 from .paths import agent_folder
 
 NAMESPACE = "ph"
@@ -58,7 +70,71 @@ _MCP = frozenset({"mcp-http", "mcp-stdio"})
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["GRACE", "NAMESPACE", "DriverLink", "Host"]
+__all__ = ["GRACE", "NAMESPACE", "DriverLink", "Host", "told"]
+
+
+def _surface_of(capabilities: Capabilities) -> Surface | None:
+    """How a harness names our tools to its model: by MCP under our namespace, by `ph`, or not at all."""
+    paths = capabilities.tool_paths
+    if not paths:
+        return None
+    return harness_name(NAMESPACE) if paths & _MCP else shell_name
+
+
+def _told(kernel: Kernel, agent: Principal, team: Team, role: str, surface: Surface | None) -> str | None:
+    """What the runtime adds to an agent's harness: the preamble its role or team asks for, then the role's words, or
+    the role's words alone for a harness that cannot reach our tools."""
+    asked = team.roles[role]
+    if surface is None:
+        return asked.instructions or None
+    return instructions(kernel, agent, surface, asked.preamble or team.preamble or PREAMBLE, asked.instructions)
+
+
+async def told(team: Team) -> dict[str, str | None]:
+    """What an agent of each role would be told at launch, which is all the runtime adds to its harness. It is rendered
+    on a session of its own, in a folder thrown away after, and no harness starts. A role nothing starts is shown as an
+    agent of its own name that its first spawner started, since an agent's name is its spawner's to choose."""
+    resolved = team.resolved(Installed())
+    described = {name: await asyncio.to_thread(make_driver(role).describe) for name, role in resolved.roles.items()}
+    capabilities = {name: info.capabilities for name, info in described.items()}
+    async with _rehearsed(resolved, capabilities) as kernel:
+        return {
+            name: _told(kernel, agent, resolved, name, _surface_of(capabilities[name]))
+            async for name, agent in _one_of_each(kernel, resolved)
+        }
+
+
+@contextlib.asynccontextmanager
+async def _rehearsed(team: Team, capabilities: Mapping[str, Capabilities]) -> AsyncGenerator[Kernel]:
+    """A resolved team's session, opened as a runtime opens one, in a folder thrown away after, with no harness."""
+    loaded = [*PRIMITIVES, *(Installed()[name] for name in team.extensions)]
+    with tempfile.TemporaryDirectory() as folder:
+        kernel = Kernel.open(Path(folder), extensions=loaded)
+        try:
+            manifest = Manifest(team=team.show(resolved=True), topology_hash=team.topology.hash, components=())
+            await open_session(kernel, team, manifest, LocalAuthority(team), manifest.model_dump_json(), capabilities)
+            yield kernel
+        finally:
+            kernel.close()
+
+
+async def _one_of_each(kernel: Kernel, team: Team) -> AsyncGenerator[tuple[str, Principal]]:
+    """An agent of each role, as each comes to be: one the session started, or else one of the role's name, spawned by
+    an agent of the first role that may spawn it, or by the session where no role that has an agent may."""
+    found: dict[str, Principal] = {}
+    for record in kernel.query(kernel.runtime, "agent.records", {}).result:
+        if record["role"] not in found:
+            found[record["role"]] = Principal(id=f"agent:{record['name']}")
+            yield record["role"], found[record["role"]]
+    while missing := [name for name in team.roles if name not in found]:
+        spawners = {name: [found[role] for role in sorted(team.spawners(name)) if role in found] for name in missing}
+        for name in [name for name in missing if spawners[name]] or missing[:1]:
+            by = next(iter(spawners[name]), kernel.runtime)
+            spawned = await kernel.submit(by, "agent.spawn", {"name": name, "child_role": name})
+            if spawned.refusal is not None:
+                raise Refused.of(spawned.refusal)
+            found[name] = Principal(id=f"agent:{name}")
+            yield name, found[name]
 
 
 class DriverLink:
@@ -256,6 +332,7 @@ class Host:
         link.live = Held(link.redact)
 
         async def up() -> None:
+            await self._instructed(agent, spec.instructions)
             await driver.start(spec, partial(self._heard, link))
             await link.ready.wait()
             if link.refused is not None:
@@ -272,6 +349,12 @@ class Host:
             if isinstance(error, DriverError):
                 raise DriverError(link.redact(str(error))) from error
             raise
+
+    async def _instructed(self, agent: str, text: str | None) -> None:
+        """Journal what a harness is told, as the body it is, before it hears it."""
+        args = {"agent": agent, "instructions": await self._stored(text)}
+        if (recorded := await self.insist("agent.instruct", args)).refusal is not None:
+            raise DriverError(f"what {agent} is told could not be journaled: {recorded.refusal.detail}")
 
     async def _discard(self, link: DriverLink) -> None:
         self._links.pop(link.agent, None)
@@ -336,13 +419,13 @@ class Host:
         """How an agent starts. Its instructions are the preamble and then the role's words, so a role has the last."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
-        teaching, binding = None, None
-        if paths := link.info.capabilities.tool_paths:
-            surface = harness_name(NAMESPACE) if paths & _MCP else shell_name
-            principal = self._kernel.authenticate(admission.token.reveal())
-            teaching = preamble(self._kernel, principal, surface)
+        surface = _surface_of(link.info.capabilities)
+        principal = self._kernel.authenticate(admission.token.reveal())
+        binding = None
+        if surface is not None:
             link.held = held_tools(self._kernel, principal)
-            binding = self._binding(folder, admission.token, surface=f"mcp__{NAMESPACE}" if paths & _MCP else "ph")
+            mcp = link.info.capabilities.tool_paths & _MCP
+            binding = self._binding(folder, admission.token, surface=f"mcp__{NAMESPACE}" if mcp else "ph")
         return AgentSpec(
             agent=link.agent,
             role=link.role,
@@ -355,7 +438,7 @@ class Host:
             native_children=role.native_children,
             tools=binding,
             access=admission.access,
-            instructions="\n\n".join(filter(None, (teaching, role.instructions))) or None,
+            instructions=_told(self._kernel, principal, self._team, link.role, surface),
             resume=resume,
         )
 

@@ -8,12 +8,36 @@ import pytest
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Principal, Refusal, Txn, op
 from platoon_harness.kernel.model import RefusalCode
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.tools import Surface, harness_name, list_tools, preamble, shell_name, tool_name
-from platoon_harness.tools.surface import delivery_text, describe, named_surface, notices_text, refusal_text
+from platoon_harness.runtime.host import _one_of_each, _rehearsed
+from platoon_harness.team import Capabilities
+from platoon_harness.tools import (
+    PREAMBLE,
+    Surface,
+    harness_name,
+    instructions,
+    list_tools,
+    preamble,
+    shell_name,
+    slots,
+    tool_name,
+)
+from platoon_harness.tools.surface import (
+    _PARKING,
+    _ending,
+    _held,
+    _listed,
+    _teacher,
+    delivery_text,
+    describe,
+    named_surface,
+    notices_text,
+    refusal_text,
+)
 
 from ..kernel.support import grant
 from ..primitives.support import spawn
 from ..primitives.test_tool_surface import NEVER_REFUSED
+from ..topology.support import PRESET_TEAMS
 from .support import BUILT, enrolled
 
 SURFACES: dict[str, Surface] = {"mcp": tool_name, "harness": harness_name("coord"), "shell": shell_name}
@@ -380,3 +404,90 @@ def test_a_refusal_keeps_a_next_step_a_model_can_take():
     text = refusal_text(Refusal(code="queue_empty"), tool_name, OPS, {"wait"})
 
     assert "Next: Call `wait` with `queue` and end your turn." in text
+
+
+def before_templates(kernel: Kernel, agent: Principal, surface: Surface) -> str:
+    """The preamble as the code said it before it was a template, kept to hold the default template to it."""
+    held = sorted(op["name"] for op in _held(kernel, agent))
+    names = ", ".join(f"`{surface(op)}`" for op in held)
+    lines = [
+        f"You are @{agent.name}. You coordinate with this session through these tools, by exactly these names: {names}."
+    ]
+    if surface is shell_name:
+        lines.append("Run `ph --help`, or `ph <tool> --help` for one tool's arguments.")
+    if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
+        reach = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
+        lines.append(f"You can message: {reach or 'nobody yet'}.")
+        if peers.result["roles"]:
+            lines.append(f"You can start agents in these roles: {', '.join(peers.result['roles'])}.")
+    if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
+        kept = _listed(
+            channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
+        )
+        lines.append(f"Channels: {kept or 'none yet'}.")
+    teach = _teacher(surface, kernel.ops, held)
+    return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_ending(kernel, agent)))))
+
+
+TEAMS = {**PRESET_TEAMS, "built": BUILT}
+
+
+@pytest.mark.parametrize("name", TEAMS)
+async def test_the_default_template_says_byte_for_byte_what_the_preamble_said(name):
+    """For every preset's roles, and a team with a narrow role and a child that stays, on each surface."""
+    team = TEAMS[name].resolved()
+    capabilities = dict.fromkeys(team.roles, Capabilities(persistent=True))
+    async with _rehearsed(team, capabilities) as kernel:
+        agents = {role: agent async for role, agent in _one_of_each(kernel, team)}
+        if name == "built":
+            args = {"name": "keeper", "child_role": "worker", "stays": True}
+            assert (await kernel.submit(agents["lead"], "agent.spawn", args)).refusal is None
+            agents["keeper"] = Principal(id="agent:keeper")
+        for agent in agents.values():
+            for surface in SURFACES.values():
+                assert preamble(kernel, agent, surface) == before_templates(kernel, agent, surface)
+
+
+async def test_a_template_fills_its_slots_and_leaves_out_a_line_whose_slots_are_all_empty(kernel, server, lead, worker):
+    template = "{{{name}}} holds {tools}\n\nStarts: {roles}\nReaches: {peers}; {channels}\n{help}\nEnd: {ending}"
+
+    text = preamble(kernel, worker[0], harness_name("coord"), template)
+
+    lines = text.split("\n")
+    assert lines[0].startswith("{w1} holds `mcp__coord__agent_finish`")
+    assert lines[1:] == [
+        "",
+        "Reaches: @lead; notes (board), tasks (queue)",
+        "End: When your goal is done, make `mcp__coord__agent_finish` your last call, with your report: a turn that "
+        "only ends leaves you idle, and whoever waits on you still waiting.",
+    ]
+
+
+async def test_a_template_s_own_words_name_a_tool_as_its_surface_does_and_are_never_dropped(kernel, server, lead):
+    narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    text = preamble(kernel, narrow, harness_name("coord"), "Call `task.claim`, then `wait`.\n{ending}")
+
+    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`."
+
+
+def test_a_slot_nobody_fills_is_refused_with_the_nearest():
+    with pytest.raises(ValueError, match=r"no slot `\{tool\}`. Did you mean `tools`\?"):
+        slots("{name} holds {tool}")
+    with pytest.raises(ValueError, match="takes no"):
+        slots("{tools!r}")
+    with pytest.raises(ValueError, match="write a brace"):
+        slots("a } alone")
+
+
+def test_the_default_template_fills_every_slot():
+    assert set(slots(PREAMBLE)) == {"name", "tools", "help", "peers", "roles", "channels", "waiting", "ending"}
+
+
+async def test_a_role_s_words_come_last_naming_tools_as_the_surface_does(kernel, server, lead):
+    narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    text = instructions(kernel, narrow, harness_name("coord"), PREAMBLE, "Use `task.claim`,\n  never `peers`.")
+
+    told = preamble(kernel, narrow, harness_name("coord"))
+    assert text == f"{told}\n\nUse `mcp__coord__task_claim`,\n  never `mcp__coord__peers`."

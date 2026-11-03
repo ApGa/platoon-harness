@@ -24,7 +24,7 @@ from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
 from .clients import Gaps
-from .common import AgentName, Body, Gist, Name, Paging, name_of, paged
+from .common import AgentName, Body, BodyRef, Gist, Name, Paging, name_of, paged
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
@@ -464,6 +464,30 @@ def start(txn: Txn, a: Start) -> None:
     else:
         txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, data=data)
         regroup(txn, agent.name, agent.role, joined=True)
+
+
+class Instruct(Args):
+    agent: Name
+    instructions: BodyRef | None
+
+
+@op("agent.instruct", on=lambda a: f"agent/{a.agent}", runtime=True)
+def instruct(txn: Txn, a: Instruct) -> None:
+    """Record the exact text the runtime adds to an agent's harness, at a launch and at every resume, or that it adds
+    none. The harness's own prompt and the user's own configuration are theirs, and neither is here."""
+    agent = txn.view(Agents).get(a.agent)
+    if agent is None:
+        raise Refused("not_found", f"no agent {a.agent}")
+    refs = [a.instructions] if a.instructions else ()
+    data = {"instructions": a.instructions}
+    txn.emit(
+        "agent.instructed",
+        f"agent/{agent.name}",
+        gist=f"{agent.name} instructed",
+        agent=agent.name,
+        refs=refs,
+        data=data,
+    )
 
 
 @op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)

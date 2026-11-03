@@ -50,6 +50,12 @@
   after its first, on the same harness, until it is told to finish, retired or cancelled. It is resolved once, at the spawn, from the
   spawn, then the role, then whether the session started it, and refused for a harness that is not persistent. `agent.status` shows it,
   and the result of a spawn that stays says how to end it. See ADR 0023.
+- `preamble` on `Team` and `Role`: the generated part of what an agent is told is a template, a role's in place of its team's, with
+  eight slots the runtime fills per agent and per surface, and `PREAMBLE`, the default, renders what it said before byte for byte.
+  A slot nobody fills is refused when the team loads, an op in backticks in a template's words or a role's `instructions` is named
+  as the surface names it, and `team_check` warns of a template that leaves out `tools` or `ending` and of words that name a tool
+  a role lacks. `agent.instructed` journals the exact text added to each harness, at launch and at every resume, and `told(team)`
+  renders what each role would be told, starting no harness.
 - `native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
   reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's token. Claude Code's
   `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by

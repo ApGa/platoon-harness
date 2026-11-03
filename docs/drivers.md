@@ -38,7 +38,8 @@ method promises:
   `sandboxes`, and None leaves it to the harness. Unless `spec.native_children` says otherwise, the harness offers its model nothing of
   its own for starting agents: turn that off by a setting for this launch alone, and say in your docs what that cannot reach, such as
   an extension's tool. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
-  them over once, through the harness's supported path, and never per turn.
+  them over once, as they are, through the harness's supported path, and never per turn. The runtime journals them as what the agent
+  was told.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads

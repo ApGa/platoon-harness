@@ -86,6 +86,7 @@ PRIMITIVES = (
             lifecycle.takeover,
             lifecycle.release,
             lifecycle.start,
+            lifecycle.instruct,
             lifecycle.retell,
             lifecycle.report,
             lifecycle.list_agents,

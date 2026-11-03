@@ -18,7 +18,7 @@ from platoon_harness.tools import ToolServer
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, LocalAuthority, SpawnRequest
 from .control import Control
-from .host import GRACE, Host
+from .host import GRACE, Host, told
 from .opening import open_session
 from .paths import MANIFEST, OWNER_TOKEN, RUNNING, VIEW_TOKEN, Running, write_private
 from .recovery import recover_agents
@@ -36,6 +36,7 @@ __all__ = [
     "LocalAuthority",
     "Runtime",
     "SpawnRequest",
+    "told",
 ]
 
 

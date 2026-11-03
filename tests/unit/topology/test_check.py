@@ -5,6 +5,7 @@ import pytest
 from platoon_harness.kernel import Extension, Grant
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Budget, Capabilities, Command, Role, Team, team_check
+from platoon_harness.tools import PREAMBLE
 from platoon_harness.topology import (
     Group,
     Limits,
@@ -186,6 +187,31 @@ def test_a_role_that_allows_agents_its_harness_never_starts_is_told_so():
     assert warnings(team, capabilities={"pi": BLIND}) == [
         "roles.lead.native_children: `pi` starts no agents of its own, so this allows nothing"
     ]
+
+
+def test_a_template_that_leaves_out_how_to_reach_tools_or_how_to_end_is_told_what_breaks():
+    team = Team(preamble="You are @{name}.", roles={"lead": Role(harness="claude", preamble="{tools}")})
+
+    tools = "leaves out `{tools}`: a harness can keep a server's tools from a model that knows none of their names"
+    ending = "leaves out `{ending}`: an agent never told how to end can leave its parent waiting for ever"
+
+    assert warnings(team) == [f"preamble: {tools}", f"preamble: {ending}", f"roles.lead.preamble: {ending}"]
+
+
+def test_words_that_name_a_tool_a_role_does_not_hold_are_warned_of():
+    lead = Role(harness="claude", instructions="Post with `board.post`, then `agent.finish`.")
+    team = Team(preamble=f"{PREAMBLE}\nClaim with `task.claim`.", roles={"lead": lead})
+
+    assert warnings(team) == [
+        "preamble: names `task.claim`, which `lead` does not hold: its agents are told of a tool they cannot call",
+        "roles.lead.instructions: names `board.post`, which `lead` does not hold: its agents are told of a tool they "
+        "cannot call",
+    ]
+
+
+def test_a_template_with_a_slot_nobody_fills_is_refused_when_the_team_loads():
+    with pytest.raises(ConfigError, match=r"roles\.lead\.preamble: no slot `\{nam\}`\. Did you mean `name`\?"):
+        Team.loads('[roles.lead]\nharness = "claude"\npreamble = "You are @{nam}."\n')
 
 
 def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():

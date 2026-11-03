@@ -152,6 +152,7 @@ def test_what_a_user_needs_is_at_the_top():
         "__version__",
         "load_team",
         "on",
+        "told",
     }
     assert platoon_harness.Session.__module__ == "platoon_harness.session"
 
