@@ -206,6 +206,8 @@ class Peer:
             await self._writer.drain()
             return await answer
         except ConnectionError as error:
+            if answer.done():
+                answer.exception()  # `run` failed it as the connection went, and this raises in its place.
             raise self._ended or Closed(str(error)) from error
         except asyncio.CancelledError:
             self._abandoned.add(id)

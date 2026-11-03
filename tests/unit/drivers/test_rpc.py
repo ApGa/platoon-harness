@@ -1,6 +1,7 @@
 """One JSON-RPC peer: framing, both directions, and everything a broken other end can send."""
 
 import asyncio
+import gc
 import json
 import socket
 
@@ -372,6 +373,28 @@ async def test_a_reset_connection_ends_the_stream_and_fails_the_call():
         with pytest.raises(Closed, match="reset by peer"):
             await call
         await wire.running
+
+
+async def test_a_call_whose_send_fails_as_the_connection_goes_leaves_nothing_unread(monkeypatch):
+    """`run` fails the answer as the connection goes, and then the send fails too: what the answer held is the call's
+    to raise, or asyncio says on stderr that nobody read it."""
+    loop, unread = asyncio.get_running_loop(), []
+    loop.set_exception_handler(lambda _, context: unread.append(context["message"]))
+    try:
+        async with Wire() as wire:
+
+            async def drain() -> None:
+                await wire.peer._end(Closed("the connection closed"))
+                raise ConnectionResetError("reset by peer")
+
+            monkeypatch.setattr(wire.peer._writer, "drain", drain)
+            with pytest.raises(Closed, match="the connection closed"):
+                await wire.peer.call("go")
+        gc.collect()
+    finally:
+        loop.set_exception_handler(None)
+
+    assert unread == []
 
 
 async def test_eof_mid_request_fails_the_call():
