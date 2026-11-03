@@ -146,15 +146,15 @@ Each law is a sentence, and each has a test of the same name.
 
 | Mode | Who keeps the process alive | Leaving ends the agents? |
 |---|---|---|
-| `Session.start(team)` in your script, `platoon-harness run` | You | Yes: documented context-manager shutdown |
+| `Session.start(team)` in your script, `platoon-harness run` and `session resume` | You | Yes: documented context-manager shutdown |
 | The TUI | A detached runtime it starts, the way tmux starts its server | No: `^D` detaches |
 | `platoon-harness serve` | A supervisor | No |
 
 `Session.attach(name)` gives the same class as a guest in every mode, so a script's session and a training rollout
 can both be watched. Leaving only disconnects.
 
-- **Attach never has side effects.** With no live runtime, `attach` gives read-only history. Only `resume` restarts
-  anything, because restarting can spend money.
+- **Attach never has side effects.** With no live runtime, `attach` gives read-only history, whose writes are refused naming
+  `platoon-harness session resume`. Only `resume` restarts anything, because restarting can spend money.
 - **One path up.** `Session.start` checks the team and writes the manifest before any cost, and that folder is all a runtime
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
@@ -164,7 +164,9 @@ can both be watched. Leaving only disconnects.
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
   on `SIGTERM`, which runs the shutdown below, and once a session that has stopped accepting work has drained. Signal handlers
-  live in that entry point and nowhere else, so that several runtimes can share a process.
+  live in the entry points, that one and the command line's `run`, `serve` and `session resume`, and nowhere else, so that several
+  runtimes can share a process. `platoon-harness session stop` is that `SIGTERM`, sent from another shell to a runtime whose lock is
+  held and whose `runtime.json` names the incarnation the journal last started; a script's own process does what its handler says.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
   reservations, append `session.stopped`, keep the folder resumable. To release is to hand back what will not happen now: a turn
   still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started fails,
@@ -476,10 +478,10 @@ One definition reaches every surface.
 
 | Surface | Derivation |
 |---|---|
-| Python | `session.submit("task.claim", ...)` returns the `Outcome`; typed facade methods are thin wrappers that return the result and raise `Refused`, checked against the registry by a test. Boards and queues use the tool's name, `session.task_claim`, since `session.fail` alone reads as failing the session. An agent-only op has no method |
+| Python | `session.submit("task.claim", ...)` returns the `Outcome`, and answers a read as a query, since no client is an agent; typed facade methods are thin wrappers that return the result and raise `Refused`, checked against the registry by a test. Boards and queues use the tool's name, `session.task_claim`, since `session.fail` alone reads as failing the session. An agent-only op has no method |
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
-| CLI | `platoon-harness tasks claim ...` for curated groups, `platoon-harness op <name>` for any op, flags built from the schema |
+| CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, its name split at the dot, a flag per argument from its schema, a read on a view credential. An extension's op has no command yet |
 | Web | `POST /x/command {op, args, key, expected_version}` |
 | TUI | Palette entries and generated forms; buttons come from `actions[]`; disabled entries carry `authorize`'s reason |
 
@@ -1203,6 +1205,18 @@ timeout. A harness that never ends its turn can hang it too, which is what a wal
 | `needs_human` | 4 |
 | `cancelled` | 130 |
 
+`platoon-harness run` and `session resume` exit with these. Every command exits 64 for a command line that cannot run as it was
+given, and 78 for a configuration error: a team, a root or a machine that cannot be used as it is, as `team check`, `doctor` and a
+plan login refused headless say. Any other command exits 1 when it is refused, as `ph` does.
+
+**The command line** is a client like any other, a thin one: `run` is `Session.start`, a person's message and `settled()`, then the
+owner's shutdown, and says the session's name on stderr at once, so another shell can reach it. Ctrl+C or `SIGTERM` cancels the wait
+and the shutdown still runs, so a run ends `cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a
+supervisor. Every other command on a session runs one op as a guest, a read on a view credential, and is derived from the op registry.
+With `--json`, stdout holds one line per journal event, in a shape versioned by its `format`, then the Ending, and nothing else; logs go
+to stderr. Nothing prompts: an `ask` with nobody attached ends `needs_human` at once, and `--approvals` states a policy over every
+role's, which the manifest keeps. [cli.md](cli.md) is its reference, made from the command definitions.
+
 Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes. Almost any event can move a
 roster row, under a name that is not that agent's, so `roster` answers with every row whenever the journal has moved, which is about
 21 KB at 100 agents.
@@ -1295,15 +1309,17 @@ Threat tiers stay separate, in docs and in events.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an
   offline rewrite that produces a new session.
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan
-  login exits 78 and names the fix unless the user opts in, with `Session.start(team, plan_login=True)`. `prepare` refuses it from each role's
+  login exits 78 and names the fix unless the user opts in, with `Session.start(team, plan_login=True)` or `--plan-login` on the command
+  line. `prepare` refuses it from each role's
   `DriverInfo.login`, which comes from the harness's own status command, and a role with an auth profile is on no login. One agent alone is not
   refused, unless another role can spawn more. The manifest keeps the opt-in, and without it the runtime holds the same line later, on what each
   harness says then: a launch that would put an agent on a plan login beside a live one fails, as a human can spawn more than a team said, and a
   resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. `web --remote`
   refuses a second person on a plan-login session.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
-  `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step in a project or team file. The check reads where
-  each value came from, since mappings merge across layers.
+  `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step when it comes from a project or team
+  file: `--trust` on the command line, `trust_project` to `load_team`. The check reads where each value came from, since mappings merge
+  across layers.
 - **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same
   allowlist plus its token variable. Nothing is inherited by default, so variables that change a harness's behavior or leak a parent's
   identity cannot pass through. A role with no auth profile signs in as the harness does in the user's shell, so a driver adds by name what
@@ -1330,12 +1346,14 @@ are caught before any code loads or any cost is spent. Installing activates noth
 `name@version` is always accepted, and `module:attr` is accepted from a trusted layer, since it imports. First-party and third-party extensions use
 the same contracts.
 
-An extension op is usable through the SDK, MCP, `ph`, the CLI and the generic UI with no core edit: every surface derives from `ops.list`, and any client
-can render any event from its `gist`. Unknown events survive export and replay.
+An extension op is usable through the SDK, MCP, `ph` and the generic UI with no core edit: every surface derives from `ops.list`, and any client
+can render any event from its `gist`. Unknown events survive export and replay. The command line derives its commands before any session exists, from
+the SDK's own `registry`, so an extension's op has no command yet, and `Session.submit` is how to run one.
 
 **Configuration** is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `tomllib`, or built in Python. Precedence, low to high: defaults, user
 config (`$XDG_CONFIG_HOME/platoon-harness/config.toml`), project config (`platoon-harness.toml`), team file, environment (`PLATOON_HARNESS_CONFIG`, TOML text),
-command line (TOML lines, such as `budget.usd = 5`). Mappings merge and lists replace. Every problem is reported at once, with did-you-mean.
+command line (TOML lines, such as `--set 'budget.usd = 5'`, and `--harness claude`, which is `roles.claude.harness = "claude"`). Mappings
+merge and lists replace. Every problem is reported at once, with did-you-mean.
 The sanitized resolved form reloads alone, and is refused if it holds the value of a variable an auth profile names. The manifest records it with resolved
 component versions, and schema and protocol versions.
 

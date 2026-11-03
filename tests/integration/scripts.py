@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness import Team
-from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Reporter
+from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, DriverInfo, Reporter
 from platoon_harness.drivers.wire import serve
-from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
+from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 PROGRAM = str(Path(__file__))
 TOLD = "Begin every reply with the word kestrel, then use `peers`."
@@ -114,7 +114,15 @@ class Stuck(Resumable):
         return await super().deliver(delivery)
 
 
+class OnAPlan(ScriptedDriver):
+    """A harness signed in on a plan, as its status command would say."""
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"login": "plan"})
+
+
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
+LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 
 HARNESSES = {
     "lead": lambda: Lead([FIX_THE_TEST]),
@@ -125,6 +133,9 @@ HARNESSES = {
     "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),
     "saying": lambda: ScriptedDriver(itertools.repeat([Say("done")])),
     "asks_more": lambda: ScriptedDriver(FOLLOWING_UP),
+    "exiting": lambda: ScriptedDriver([[Exit()]]),
+    "listening": lambda: ScriptedDriver(LISTENING),
+    "planned": lambda: OnAPlan(itertools.repeat([Say("done")])),
 }
 
 

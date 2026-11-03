@@ -1,0 +1,121 @@
+"""The command line made from the op registry and its schemas: a command for each op a person may run, by the name and
+with the arguments an agent's `ph` uses, and none for any other."""
+
+import inspect
+import json
+import shlex
+from pathlib import Path
+from typing import Any, get_args
+
+import pytest
+from cyclopts import CycloptsError
+
+from platoon_harness.kernel import Event, registry
+from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.session import Reason
+from platoon_harness.tools.surface import body_fields
+from platoon_harness_cli.exits import ENDINGS
+from platoon_harness_cli.main import build
+from platoon_harness_cli.ops import command_line, person_ops
+from platoon_harness_cli.output import event_line, safe
+from platoon_harness_cli.reference import reference
+
+APP = build()
+OPS = registry(PRIMITIVES)
+
+
+def parsed(words: list[str]) -> tuple[Any, dict[str, Any]]:
+    command, bound, _ = APP.parse_args(words, exit_on_error=False, print_error=False)
+    return command, bound.arguments
+
+
+def needed(name: str) -> list[str]:
+    """The flags an op cannot go without, each with a value its schema takes."""
+    schema = OPS[name].input.model_json_schema()
+    samples = {"integer": "1", "boolean": None, "string": "x"}
+    words = []
+    for field in schema.get("required", ()):
+        kind = schema["properties"][field].get("type", "string")
+        flag = f"--{field.replace('_', '-')}"
+        sample = schema["properties"][field].get("enum", [samples.get(kind, "x")])[0]
+        words += [flag] if kind == "boolean" else [flag, sample]
+    return words
+
+
+@pytest.mark.parametrize("name", sorted(person_ops()))
+def test_every_op_a_person_may_run_has_a_command_of_its_name(name: str):
+    command, arguments = parsed([*name.split("."), "fix-auth", *needed(name)])
+
+    assert arguments["session"] == "fix-auth"
+    assert (command.__doc__ or "").startswith(" ".join((OPS[name].fn.__doc__ or "").split()).partition(". ")[0])
+
+
+@pytest.mark.parametrize("name", sorted(name for name, op in OPS.items() if op.runtime or op.agent))
+def test_no_op_kept_to_the_runtime_or_to_agents_has_a_command(name: str):
+    words = [*name.split("."), "fix-auth"]
+    try:
+        command, _ = parsed(words)
+    except CycloptsError:
+        return
+    assert command.__module__ != "platoon_harness_cli.ops", f"{name} has a command"
+
+
+@pytest.mark.parametrize("name", sorted(person_ops()))
+def test_a_command_takes_exactly_its_op_s_arguments_as_flags(name: str):
+    command, _ = parsed([*name.split("."), "fix-auth", *needed(name)])
+    operation = OPS[name]
+    schema = operation.input.model_json_schema()
+    fields = {*schema.get("properties", {})}
+    bodies = set(body_fields(schema))
+
+    flags = {parameter.name.rstrip("_") for parameter in inspect.signature(command).parameters.values()}
+
+    reads = operation.query or operation.exposes
+    assert flags == {"session", *fields, *(f"{body}_file" for body in bodies), *(() if reads else ("key",))}
+
+
+def test_a_repeated_flag_is_a_list_and_a_keyword_takes_its_own_name():
+    _, arguments = parsed(["wait", "s", "--from", "@a", "--from", "@b", "--mode", "any"])
+
+    assert arguments == {"session": "s", "from_": ("@a", "@b"), "mode": "any"}
+
+
+def test_an_action_is_shown_as_the_command_that_runs_it():
+    action = {"op": "approval.resolve", "args": {"id": "a7", "verdict": "allow", "expected_version": 3}}
+
+    line = command_line("fix-auth", action["op"], action["args"])
+    _, arguments = parsed(shlex.split(line)[1:])
+
+    assert line == "platoon-harness approval resolve fix-auth --id a7 --verdict allow --expected-version 3"
+    assert arguments == {"session": "fix-auth", **action["args"]}
+    assert parsed(shlex.split(command_line("s", "effect.settle", {"id": 4, "happened": False}))[1:])[1] == {
+        "session": "s",
+        "id": 4,
+        "happened": False,
+    }
+
+
+def test_every_way_a_session_ends_has_an_exit_code():
+    assert set(ENDINGS) == set(get_args(Reason))
+    assert ENDINGS["settled"] == 0 and ENDINGS["cancelled"] == 130
+
+
+def test_a_jsonl_line_is_an_event_s_envelope_with_its_format():
+    fields = {"v": 2, "seq": 7, "stream": "inbox/lead", "version": 1, "type": "message.sent", "actor": "human:you"}
+    stamps = {"agent": None, "turn": None, "context_version": None, "episode": None, "topology_rev": 0}
+    more = {"correlation": None, "cause": (), "based_on": (), "native": {}, "model": None, "outcome": None}
+    event = Event(**fields, **stamps, **more, wall_time=1.0, gist="é \x1b[2J", data={"sender": "@you"})
+
+    line = event_line(event)
+
+    assert line.isascii()
+    assert json.loads(line) == {"format": 1, **event.model_dump(mode="json")}
+
+
+def test_text_a_terminal_shows_escapes_what_could_take_it_over():
+    assert safe("ok\x1b]0;owned\x07 and‮back\nnext") == "ok\\x1b]0;owned\\x07 and\\u202eback\nnext"
+
+
+def test_the_reference_is_made_from_the_definitions():
+    """On a failure, run `uv run python -m platoon_harness_cli.reference > docs/cli.md`."""
+    assert (Path(__file__).parents[3] / "docs" / "cli.md").read_text() == reference()

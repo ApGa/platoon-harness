@@ -39,6 +39,9 @@ src = ["packages/sdk/src", "packages/cli/src"]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S110"]
 ignore = ["RUF012"]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["platoon_harness_cli.teams.Source"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
