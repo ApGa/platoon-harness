@@ -63,7 +63,7 @@ wall = "10m"
 """
 JOB = (
     "Spawn one worker named w with this task: run `echo hello > out.txt`, asking for approval, as its sandbox is "
-    "read-only, then reply with a 300-word story about a lighthouse keeper. Then wait for w's answer, and finish."
+    "read-only, then reply with a 1,500-word story about a lighthouse keeper. Then wait for w's answer, and finish."
 )
 
 
