@@ -12,11 +12,16 @@ SDK = ROOT / "packages" / "sdk" / "src" / "platoon_harness"
 ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_harness"}
 PUBLIC = (
     *SDK.rglob("*.py"),
-    *(ROOT / "docs").glob("*.md"),
-    *(ROOT / "docs" / "adr").glob("*.md"),
+    *ROOT.glob("*.md"),
+    *ROOT.glob("packages/*/README.md"),
+    *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
     *(ROOT / "tests" / "conformance").glob("*.py"),
 )
-LOCAL = re.compile(r"/(home|groups|Users)/[a-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|ANTHROPIC_API_KEY=sk-|sk-ant-")
+LOCAL = re.compile(
+    r"(?<![\w.-])/(home|groups|Users)/[a-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|ANTHROPIC_API_KEY=sk-|sk-ant-"
+    r"|[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"
+)
+"""An absolute path under a home or a group, this cluster's names, a key, or an email address."""
 
 
 def roots_of(path: Path) -> set[str]:
@@ -34,6 +39,20 @@ def test_the_sdk_imports_nothing_but_the_standard_library_and_pydantic(path):
     assert roots_of(path) <= ALLOWED
 
 
-@pytest.mark.parametrize("path", PUBLIC, ids=lambda path: path.name)
+@pytest.mark.parametrize("path", PUBLIC, ids=lambda path: str(path.relative_to(ROOT)))
 def test_nothing_public_holds_a_local_path_or_an_account(path):
     assert [line for line in path.read_text().splitlines() if LOCAL.search(line)] == []
+
+
+@pytest.mark.parametrize(
+    ("line", "caught"),
+    [
+        ("see /home/someone/notes", True),
+        ("(/groups/somegroup/scratch)", True),
+        ("write to someone@example.com", True),
+        ("opencode@ff90ed91607c:packages/protocol/src/groups/event.ts:69", False),
+        ("`claude-agent-acp@0.99.1`", False),
+    ],
+)
+def test_the_scan_tells_a_local_path_from_a_path_in_a_repository(line, caught):
+    assert bool(LOCAL.search(line)) == caught

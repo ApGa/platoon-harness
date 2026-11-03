@@ -94,6 +94,8 @@
 
 ### Fixed
 
+- The scan for local paths and account details skipped `docs/research`, its fixtures, the top-level pages and the package
+  READMEs. It reads them now, and an email address too, and a path inside a repository no longer reads as a local one.
 - A wait that closed with no notice of its own posted "A report came in during your wait." as a wake, which stayed queued after its
   reader had read the report itself, as the lead of run 22 did with `sender`. Each report the wait named or counted now wakes its
   reader itself, within `max_hops`, as `wake.restored` records, so a report read first wakes nobody. Section 7 also says what held all
