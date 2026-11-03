@@ -13,7 +13,9 @@ from platoon_harness.topology import (
     tree,
 )
 
-MEASURING = Capabilities(persistent=True, measures={"tokens", "usd"}, sandboxes={"read-only", "workspace-write"})
+MEASURING = Capabilities(
+    persistent=True, tool_paths={"mcp-http"}, measures={"tokens", "usd"}, sandboxes={"read-only", "workspace-write"}
+)
 CAPABILITIES = {name: MEASURING for name in ("claude", "codex", "pi", "openhands", "opencode", "exec")}
 
 MANAGER_WORKER = """

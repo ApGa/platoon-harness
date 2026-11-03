@@ -198,14 +198,59 @@ def test_a_template_that_leaves_out_how_to_reach_tools_or_how_to_end_is_told_wha
     assert warnings(team) == [f"preamble: {tools}", f"preamble: {ending}", f"roles.lead.preamble: {ending}"]
 
 
+def test_an_empty_template_is_checked_as_the_one_its_agents_are_told():
+    team = Team(preamble="Team words.\n{tools}\n{ending}", roles={"lead": Role(harness="claude", preamble="")})
+
+    assert warnings(team) == [
+        "roles.lead.preamble: leaves out `{tools}`: a harness can keep a server's tools from a model that knows none "
+        "of their names",
+        "roles.lead.preamble: leaves out `{ending}`: an agent never told how to end can leave its parent waiting for "
+        "ever",
+    ]
+
+
 def test_words_that_name_a_tool_a_role_does_not_hold_are_warned_of():
     lead = Role(harness="claude", instructions="Post with `board.post`, then `agent.finish`.")
     team = Team(preamble=f"{PREAMBLE}\nClaim with `task.claim`.", roles={"lead": lead})
 
     assert warnings(team) == [
-        "preamble: names `task.claim`, which `lead` does not hold: its agents are told of a tool they cannot call",
-        "roles.lead.instructions: names `board.post`, which `lead` does not hold: its agents are told of a tool they "
+        "preamble: names `task.claim`, which `lead` cannot hold: its agents are told of a tool they cannot call",
+        "roles.lead.instructions: names `board.post`, which `lead` cannot hold: its agents are told of a tool they "
         "cannot call",
+    ]
+
+
+def test_a_tool_held_through_a_grant_to_a_named_agent_is_no_tool_a_role_cannot_hold():
+    """A group's members, and so a channel's writers, can name an agent, whose name a session chooses as it runs."""
+    topology = {
+        "groups": {"g": {"members": ["agent:lead"]}},
+        "channels": {"notes": {"kind": "board", "writers": "group:g", "readers": "all"}},
+    }
+    team = Team(
+        preamble=f"{PREAMBLE}\nPost notes with `board.post`.", roles={"lead": Role(harness="claude")}, topology=topology
+    )
+
+    assert warnings(team) == []
+
+
+def test_a_template_a_harness_that_reaches_none_of_our_tools_is_never_told_is_said():
+    """Its agents are told `instructions` alone, so a role's own template there is refused, and its team's is a
+    warning, with nothing said of what either leaves out or names."""
+    capabilities = {**CAPABILITIES, "pi": BLIND}
+    own = Team(roles={"bob": Role(harness="pi", preamble="Say OK. You are @{name}.")})
+    inherited = Team(
+        preamble="Say OK.\n{tools}\n{ending}", roles={"bob": Role(harness="pi", instructions="Use `wait`.")}
+    )
+
+    assert check(own, capabilities=capabilities) == (
+        Problem(
+            "roles.bob.preamble",
+            "`pi` reaches none of our tools, so its agents are told `instructions` alone: say it there",
+        ),
+    )
+    assert warnings(inherited, capabilities=capabilities) == [
+        "preamble: `bob` is told none of this: `pi` reaches none of our tools, so its agents are told `instructions` "
+        "alone"
     ]
 
 

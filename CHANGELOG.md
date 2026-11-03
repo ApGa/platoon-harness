@@ -52,10 +52,13 @@
   and the result of a spawn that stays says how to end it. See ADR 0023.
 - `preamble` on `Team` and `Role`: the generated part of what an agent is told is a template, a role's in place of its team's, with
   eight slots the runtime fills per agent and per surface, and `PREAMBLE`, the default, renders what it said before byte for byte.
-  A slot nobody fills is refused when the team loads, an op in backticks in a template's words or a role's `instructions` is named
-  as the surface names it, and `team_check` warns of a template that leaves out `tools` or `ending` and of words that name a tool
-  a role lacks. `agent.instructed` journals the exact text added to each harness, at launch and at every resume, and `told(team)`
-  renders what each role would be told, starting no harness.
+  `name` and `tools` are values and the rest sentences of ours, a line that holds a slot and comes out blank is left out, so no word
+  of a template's is, and an empty template tells nothing. A slot nobody fills is refused when the team loads, an op in backticks in
+  a template's words or a role's `instructions` is named as the surface names it, and `team_check` warns of a template that leaves
+  out `tools` or `ending` and of words that name a tool a role cannot hold, refuses a role's own template on a harness that reaches
+  none of our tools, and warns of its team's. `agent.instructed` journals the exact text added to each harness, at launch and at
+  every resume, which hands a harness that reopens its own session what it was told when that began. `told(team)` renders what each
+  role would be told, starting no harness.
 - `allow_native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
   reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's token. Claude Code's
   `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by
@@ -124,6 +127,9 @@
   that began.
 - `wait.cancel` let a report from a turn an interrupt or the owner's stop cut wake its reader, which such a report never does. Only a
   report that answers is restored.
+- A template's own words on a line whose slots came out empty were left out with the line, and nothing said so. `preamble = ""` was
+  checked as written and run as the default, a template on a harness that reaches none of our tools went untold without a word, and
+  `team_check` warned of a tool held through a grant to a named agent as one the role lacked.
 - The scan for local paths reads the CLI's sources too, a home folder whose name begins with a capital, and this cluster's name.
 - The plan-login refusal was checked only at the start, so a human spawning more agents later, and a resume after a harness was signed
   in on a plan, escaped it. The manifest keeps `plan_login`, and without it a launch beside a live agent on a plan login fails, and a

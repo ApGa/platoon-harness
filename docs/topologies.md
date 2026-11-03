@@ -434,10 +434,12 @@ problems = team_check(team, capabilities=known)
 ```
 
 It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
-harness lacks, a role that stays on a harness that cannot, and any preset, harness, extension, role, group or auth profile it cannot
-find. It warns about a role that can never start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that
-can wake more than 8 agents, a program it cannot resolve, a setting nothing enforces yet, and a wake cycle that runs through a child
-that can stay.
+harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, and
+any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never start, a role with no
+path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot resolve, a
+setting nothing enforces yet, a wake cycle that runs through a child that can stay, a role that lets its harness start agents of its
+own, saying what that gives up, a preamble that leaves out `{tools}` or `{ending}`, words that name a tool a role cannot hold, and a
+team's `preamble` that a role on a harness that reaches none of our tools is never told.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the

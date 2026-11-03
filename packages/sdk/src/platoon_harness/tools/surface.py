@@ -16,19 +16,19 @@ _NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
 SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "ending")
-"""What a preamble template's slots hold for one agent, on its harness's surface: its name, its tools by their exact
-names, how to ask `ph` for help, who it can message, which roles it can start, its channels, and our sentences on how to
-wait and how to end. A slot is a word in braces, `{{` and `}}` write a brace, and a line whose slots are all empty is
-left out."""
+"""What a preamble template's slots hold for one agent, on its harness's surface. `name` and `tools`, by their exact
+names, are values. The rest are sentences of ours, empty where they would say nothing: how to ask `ph` for help, who it
+can message, which roles it can start, its channels, how to wait and how to end."""
 PREAMBLE = """\
 You are @{name}. You coordinate with this session through these tools, by exactly these names: {tools}.
 {help}
-You can message: {peers}.
-You can start agents in these roles: {roles}.
-Channels: {channels}.
+{peers}
+{roles}
+{channels}
 {waiting}
 {ending}"""
-"""The template every agent's preamble fills unless its team or its role gives another."""
+"""The template every agent's preamble fills unless its team or its role gives another. A slot is a word in braces, and
+`{{` and `}}` write a brace. A line that holds a slot and comes out blank is left out, so no word of a template's is."""
 _NO_NEXT_STEP = "Carry on without it, and say so."
 _PARKING = (
     "To wait for something before you go on, call `wait` naming it and end your turn: the runtime starts the next when "
@@ -243,13 +243,13 @@ def slots(template: str) -> tuple[str, ...]:
 
 
 def _line(line: str, values: Mapping[str, str], surface: Surface, ops: Collection[str]) -> str | None:
-    """One line of a template, its own words in the words of `surface`, or None when it holds slots and all are
-    empty."""
+    """One line of a template, its own words in the words of `surface`, or None when it holds a slot and comes out
+    blank, which only a line with no words of its own can."""
     parsed = list(Formatter().parse(line))
-    filled = [values[slot] for _, slot, _, _ in parsed if slot is not None]
-    if filled and not any(filled):
+    text = "".join(worded(words, surface, ops) + (values[slot] if slot else "") for words, slot, _, _ in parsed)
+    if any(slot is not None for _, slot, _, _ in parsed) and not text.strip():
         return None
-    return "".join(worded(text, surface, ops) + (values[slot] if slot else "") for text, slot, _, _ in parsed)
+    return text
 
 
 def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, template: str = PREAMBLE) -> str:
@@ -264,13 +264,15 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, tem
     if surface is shell_name:
         values["help"] = "Run `ph --help`, or `ph <tool> --help` for one tool's arguments."
     if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
-        values["peers"] = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers")) or "nobody yet"
-        values["roles"] = ", ".join(peers.result["roles"])
+        reach = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
+        values["peers"] = f"You can message: {reach or 'nobody yet'}."
+        if peers.result["roles"]:
+            values["roles"] = f"You can start agents in these roles: {', '.join(peers.result['roles'])}."
     if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
         shown = _listed(
             channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
         )
-        values["channels"] = shown or "none yet"
+        values["channels"] = f"Channels: {shown or 'none yet'}."
     teach = _teacher(surface, kernel.ops, held)
     values["waiting"] = teach(_PARKING)
     values["ending"] = teach(_ending(kernel, agent))
@@ -284,12 +286,12 @@ def _tools(kernel: Kernel) -> set[str]:
 
 def instructions(
     kernel: Kernel, agent: Principal, surface: Surface, template: str = PREAMBLE, words: str | None = None
-) -> str:
-    """What the runtime adds to an agent's harness: its preamble, then `words`, its role's own, last, so that a role
-    has the last word. A tool either names in backticks is named as `surface` names it, and no word of a role's is
-    dropped."""
+) -> str | None:
+    """What the runtime adds to an agent's harness: its preamble filled into `template`, then `words`, its role's own,
+    last, so that a role has the last word. A tool either names in backticks is named as `surface` names it. None is
+    nothing to add."""
     told = preamble(kernel, agent, surface, template)
-    return "\n\n".join(filter(None, (told, words and worded(words, surface, _tools(kernel)))))
+    return "\n\n".join(filter(None, (told, words and worded(words, surface, _tools(kernel))))) or None
 
 
 def taught(text: str, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:

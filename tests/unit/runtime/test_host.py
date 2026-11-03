@@ -258,6 +258,23 @@ async def test_a_harness_that_reopens_its_session_is_handed_what_it_was_told_whe
     assert told == [launched.instructions, resumed.instructions] == [told[0]] * 2
 
 
+async def test_an_empty_template_tells_a_harness_only_its_role_s_words(tmp_path, recording):
+    roles = {"bob": {"harness": harness(recording), "preamble": ""}, "ann": {"harness": harness(recording)}}
+    team = Team.model_validate(
+        {"preamble": "Team: @{name}.", "roles": {**roles, "eve": {**roles["bob"], "instructions": "Mine."}}}
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        for agent in ("ann", "bob", "eve"):
+            await in_state(session, agent, "idle")
+
+    assert {spec.agent: spec.instructions for spec in recording.specs} == {
+        "ann": "Team: @ann.",
+        "bob": None,
+        "eve": "Mine.",
+    }
+
+
 async def test_nothing_told_is_journaled_as_nothing(tmp_path, recording):
     def none() -> ScriptedDriver:
         return recording(capabilities=Capabilities(persistent=True, boundaries={"turn"}))

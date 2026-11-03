@@ -448,8 +448,10 @@ async def test_the_default_template_says_byte_for_byte_what_the_preamble_said(na
                 assert preamble(kernel, agent, surface) == before_templates(kernel, agent, surface)
 
 
-async def test_a_template_fills_its_slots_and_leaves_out_a_line_whose_slots_are_all_empty(kernel, server, lead, worker):
-    template = "{{{name}}} holds {tools}\n\nStarts: {roles}\nReaches: {peers}; {channels}\n{help}\nEnd: {ending}"
+async def test_a_template_fills_its_slots_and_leaves_out_a_line_of_slots_that_comes_out_blank(
+    kernel, server, lead, worker
+):
+    template = "{{{name}}} holds {tools}\n\n{roles}\n{peers} {channels}\n {help} \nEnd: {ending}"
 
     text = preamble(kernel, worker[0], harness_name("coord"), template)
 
@@ -457,18 +459,28 @@ async def test_a_template_fills_its_slots_and_leaves_out_a_line_whose_slots_are_
     assert lines[0].startswith("{w1} holds `mcp__coord__agent_finish`")
     assert lines[1:] == [
         "",
-        "Reaches: @lead; notes (board), tasks (queue)",
+        "You can message: @lead. Channels: notes (board), tasks (queue).",
         "End: When your goal is done, make `mcp__coord__agent_finish` your last call, with your report: a turn that "
         "only ends leaves you idle, and whoever waits on you still waiting.",
     ]
 
 
 async def test_a_template_s_own_words_name_a_tool_as_its_surface_does_and_are_never_dropped(kernel, server, lead):
+    """A line with words of its own is kept whatever its slots come to, so a template's words all reach the agent."""
     narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
 
-    text = preamble(kernel, narrow, harness_name("coord"), "Call `task.claim`, then `wait`.\n{ending}")
+    text = preamble(
+        kernel, narrow, harness_name("coord"), "Call `task.claim`, then `wait`.\nIn French. {peers}\n{ending}"
+    )
 
-    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`."
+    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nIn French. "
+
+
+async def test_an_empty_template_tells_nothing_but_a_role_s_words(kernel, server, lead):
+    narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+
+    assert instructions(kernel, narrow, harness_name("coord"), "", None) is None
+    assert instructions(kernel, narrow, harness_name("coord"), "", "Use `wait`.") == "Use `mcp__coord__wait`."
 
 
 def test_a_slot_nobody_fills_is_refused_with_the_nearest():

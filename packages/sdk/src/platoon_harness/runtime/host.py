@@ -43,7 +43,6 @@ from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Team
 from platoon_harness.tools import (
     PH,
-    PREAMBLE,
     Surface,
     ToolServer,
     delivery_text,
@@ -87,7 +86,7 @@ def _told(kernel: Kernel, agent: Principal, team: Team, role: str, surface: Surf
     asked = team.roles[role]
     if surface is None:
         return asked.instructions or None
-    return instructions(kernel, agent, surface, asked.preamble or team.preamble or PREAMBLE, asked.instructions)
+    return instructions(kernel, agent, surface, team.preamble_of(role), asked.instructions)
 
 
 async def told(team: Team) -> dict[str, str | None]:

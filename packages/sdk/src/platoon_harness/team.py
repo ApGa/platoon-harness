@@ -33,7 +33,7 @@ from platoon_harness.schema import (
     nearest,
     problems_in,
 )
-from platoon_harness.tools import slots
+from platoon_harness.tools import PREAMBLE, slots
 from platoon_harness.tools.surface import OP_NAMED
 from platoon_harness.topology.compile import arcs, compile, reach, scopes, structure
 from platoon_harness.topology.presets import PRESETS, Preset, expand, finish, preset_name
@@ -133,10 +133,10 @@ class Role(Model):
 
 class Team(Model):
     """Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
-    agent is told before its role's words, unless its role gives its own: left out, `PREAMBLE`."""
+    agent is told before its role's words, unless its role gives its own."""
 
     extensions: tuple[str, ...] = ()
-    preamble: Template | None = None
+    preamble: Template = PREAMBLE
     roles: Annotated[Mapping[Name, Role], Field(min_length=1), Sorted]
     auth: Annotated[Mapping[Name, AuthProfile], Sorted] = {}
     budget: Budget = Budget()
@@ -174,6 +174,11 @@ class Team(Model):
         if count is not None:
             return count
         return 0 if self.spawners(role) - {role} else 1
+
+    def preamble_of(self, role: str) -> str:
+        """The template of what `role`'s agents are told before its words: its own, else the team's."""
+        own = self.roles[role].preamble
+        return self.preamble if own is None else own
 
     def resolved(self, extensions: Mapping[str, Extension] | None = None) -> Self:
         """This team with every preset expanded, using the extensions it names from `extensions`."""
@@ -283,27 +288,38 @@ def _native(role: Role, known: Capabilities) -> str:
     )
 
 
-def _told(team: Team, tools: set[str]) -> Iterable[Problem]:
-    """What a template leaves out, and the tools a user's words name that a role does not hold. Words a user wrote are
-    never dropped, so these are said here."""
+def _template_problems(team: Team, tools: set[str], capabilities: Mapping[str, Capabilities]) -> Iterable[Problem]:
+    """What a template leaves out, a template a role's harness is never told, and the tools a user's words name that a
+    role cannot hold. Words a user wrote are never dropped, so these are said here. A grant to a named agent may be this
+    role's, since agents' names are chosen as a session runs, so it counts as held."""
     grants = compile(team)
-    if team.preamble is not None:
-        yield from _left_out(team.preamble, "preamble")
+    yield from _left_out(team.preamble, "preamble")
     for name, role in team.roles.items():
+        known = capabilities.get(name) or capabilities.get(role.driver)
+        where = "preamble" if role.preamble is None else f"roles.{name}.preamble"
+        if known is not None and not known.tool_paths:
+            unreached = f"`{role.driver}` reaches none of our tools, so its agents are told `instructions` alone"
+            if role.preamble is not None:
+                yield Problem(where, f"{unreached}: say it there")
+            elif team.preamble != PREAMBLE:
+                yield Problem(where, f"`{name}` is told none of this: {unreached}", "warning")
+            continue
         if role.preamble is not None:
-            yield from _left_out(role.preamble, f"roles.{name}.preamble")
+            yield from _left_out(role.preamble, where)
         whos = ("agent", "all", f"role:{name}")
         held = {
             tool
             for tool in tools
             if any(fnmatchcase(tool, scope) for scope in scopes(role))
-            and any(grant.who in whos and fnmatchcase(tool, grant.ops) for grant in grants)
+            and any(
+                (grant.who in whos or grant.who.startswith("agent:")) and fnmatchcase(tool, grant.ops)
+                for grant in grants
+            )
         }
-        template = ("preamble", team.preamble) if role.preamble is None else (f"roles.{name}.preamble", role.preamble)
-        for where, words in (template, (f"roles.{name}.instructions", role.instructions)):
+        for at, words in ((where, team.preamble_of(name)), (f"roles.{name}.instructions", role.instructions)):
             for tool in sorted(set(OP_NAMED.findall(words or "")) & tools - held):
-                what = f"names `{tool}`, which `{name}` does not hold: its agents are told of a tool they cannot call"
-                yield Problem(where, what, "warning")
+                what = f"names `{tool}`, which `{name}` cannot hold: its agents are told of a tool they cannot call"
+                yield Problem(at, what, "warning")
 
 
 def _left_out(template: str, where: str) -> Iterable[Problem]:
@@ -423,5 +439,5 @@ def team_check(
     problems += _warnings(team)
     if not unsound:
         ops = (operation for extension in (*PRIMITIVES, *loaded) for operation in extension.ops)
-        problems += _told(team, {operation.name for operation in ops if operation.tool})
+        problems += _template_problems(team, {operation.name for operation in ops if operation.tool}, capabilities)
     return tuple(problems)
