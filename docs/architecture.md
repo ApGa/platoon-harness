@@ -1094,18 +1094,19 @@ instructions, skills, slash commands, hooks and compaction interact with coordin
 [compatibility.md](compatibility.md).
 
 **The preamble is a template.** `Team.preamble` is every role's and `Role.preamble` one role's in its place, and left out it is
-`PREAMBLE`, which renders what the preamble said before it was a template byte for byte, as a test holds for every preset's roles on
-each surface. A slot is a word in braces, and `{{` and `}}` write a brace. Per agent and per surface the runtime fills five values:
-`name`, `tools` by their exact names, `peers` it can message, as `@a, @b`, `roles` it can start and `channels`. It fills three
-sentences of ours, `help` on how to ask `ph` for a tool's arguments, on that surface alone, `waiting` and `ending`, taught as above, so
-one that names a tool the agent lacks is left out. Each is empty where it would say nothing, and the default template carries our
-words around the values, as `You can message: {peers}.`, so a template words those lines as it likes. A line whose slots all come out
-empty is left out, words and all. A line with no slot is never dropped, and nor is any word of `Role.instructions`, and a slot nobody
-fills is refused when the team loads. An op named in backticks, in the template's own words or in `Role.instructions`, becomes the
-surface's name for the tool: `team check` warns of one that names a tool its role cannot hold. It warns of a template that leaves
-out `tools`, as a harness can keep a server's tools from a model that knows none of their names, or `ending`, as an agent never told
-how to end can leave its parent waiting for ever, and an empty template is one that leaves out both. A harness that reaches none of our
-tools is told `instructions` alone, so `team check` refuses a role's own template there and warns of its team's. The role's own
+`PREAMBLE`, which renders what the preamble said before it was a template byte for byte, but for a line that would name no peer or no
+channel, which goes as any line whose slots all come out empty does, as a test holds for every preset's roles on each surface. A slot
+is a word in braces, and `{{` and `}}` write a brace. Per agent and per surface the runtime fills five values: `name`, `tools` by
+their exact names, `peers` it can message, as `@a, @b`, `roles` it can start and `channels`. It fills three sentences of ours, `help`
+on how to ask `ph` for a tool's arguments, on that surface alone, `waiting` and `ending`, taught as above, so one that names a tool
+the agent lacks is left out. Each is empty where it would say nothing, `peers` with nobody in it among them, and the default template
+carries our words around the values, as `You can message: {peers}.`, so a template words those lines as it likes. A line whose slots
+all come out empty is left out, words and all. A line with no slot is never dropped, and nor is any word of `Role.instructions`, and a
+slot nobody fills is refused when the team loads. An op named in backticks, in the template's own words or in `Role.instructions`,
+becomes the surface's name for the tool: `team check` warns of one that names a tool its role cannot hold. It warns of a template that
+leaves out `tools`, as a harness can keep a server's tools from a model that knows none of their names, or `ending`, as an agent never
+told how to end can leave its parent waiting for ever, and an empty template is one that leaves out both. A harness that reaches none
+of our tools is told `instructions` alone, so `team check` refuses a role's own template there and warns of its team's. The role's own
 `instructions` come last, so a role has the last word.
 
 `agent.instructed` journals the exact text the runtime adds to each harness, at a launch and at every resume, so a session's record

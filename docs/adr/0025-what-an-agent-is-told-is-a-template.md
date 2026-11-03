@@ -1,6 +1,8 @@
 # 0025. What an agent is told is a template
 
-**Status:** Accepted, 2026-11-03. Amended the same day: `peers`, `roles` and `channels` are values, as the owner was told.
+**Status:** Accepted, 2026-11-03. Amended the same day: `peers`, `roles` and `channels` are values, as the owner was told. Amended
+again: an empty `peers` or `channels` is an empty value, where the code before said `nobody yet` and `none yet`, so that the slot
+rule is one rule.
 
 ## Context
 
@@ -12,7 +14,8 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 ## Decision
 
 - **A template on the team, and one on a role in its place.** `preamble`, as the code already called it. Left out it is `PREAMBLE`,
-  which renders what the code said before byte for byte, for every preset's roles on each surface, as a test holds.
+  which renders what the code said before byte for byte, but for a line that would name no peer or no channel, which goes, for every
+  preset's roles on each surface, as a test holds.
 - **Slots are words in braces**, `{{` and `}}` write a brace, and the runtime fills them per agent and per surface: `name`, `tools`,
   `peers`, `roles` and `channels` are values, as `@a, @b` for `peers`, and `help`, `waiting` and `ending` are sentences of ours, taught
   as before, so one naming a tool the agent lacks is left out. Each is empty where it would say nothing. The default carries our words

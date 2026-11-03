@@ -276,7 +276,7 @@ async def test_the_preamble_points_a_shell_at_help(kernel, lead):
 
 
 @pytest.mark.parametrize("query", ["peers", "channel.list"])
-async def test_a_refused_query_leaves_its_line_out_of_the_preamble(kernel, lead, query, monkeypatch):
+async def test_a_refused_query_leaves_its_line_out_of_the_preamble(kernel, lead, worker, query, monkeypatch):
     real = kernel.query
 
     def refusing(principal, op, args):
@@ -407,7 +407,8 @@ def test_a_refusal_keeps_a_next_step_a_model_can_take():
 
 
 def before_templates(kernel: Kernel, agent: Principal, surface: Surface) -> str:
-    """The preamble as the code said it before it was a template, kept to hold the default template to it."""
+    """The preamble as the code said it before it was a template, kept to hold the default template to it, but for a
+    line that would name no peer or no channel, which goes as any line whose slots all come out empty does."""
     held = sorted(op["name"] for op in _held(kernel, agent))
     names = ", ".join(f"`{surface(op)}`" for op in held)
     lines = [
@@ -417,14 +418,16 @@ def before_templates(kernel: Kernel, agent: Principal, surface: Surface) -> str:
         lines.append("Run `ph --help`, or `ph <tool> --help` for one tool's arguments.")
     if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
         reach = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
-        lines.append(f"You can message: {reach or 'nobody yet'}.")
+        if reach:
+            lines.append(f"You can message: {reach}.")
         if peers.result["roles"]:
             lines.append(f"You can start agents in these roles: {', '.join(peers.result['roles'])}.")
     if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
         kept = _listed(
             channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
         )
-        lines.append(f"Channels: {kept or 'none yet'}.")
+        if kept:
+            lines.append(f"Channels: {kept}.")
     teach = _teacher(surface, kernel.ops, held)
     return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_ending(kernel, agent)))))
 
@@ -433,8 +436,8 @@ TEAMS = {**PRESET_TEAMS, "built": BUILT}
 
 
 @pytest.mark.parametrize("name", TEAMS)
-async def test_the_default_template_says_byte_for_byte_what_the_preamble_said(name):
-    """For every preset's roles, and a team with a narrow role and a child that stays, on each surface."""
+async def test_the_default_template_says_what_the_preamble_said(name):
+    """Byte for byte, for every preset's roles and a team with a narrow role and a child that stays, on each surface."""
     team = TEAMS[name].resolved()
     capabilities = dict.fromkeys(team.roles, Capabilities(persistent=True))
     async with _rehearsed(team, capabilities) as kernel:
@@ -472,6 +475,19 @@ async def test_a_line_whose_slots_all_come_out_empty_is_left_out_words_and_all(k
     text = preamble(kernel, narrow, harness_name("coord"), template)
 
     assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nYou are n1. "
+
+
+async def test_a_value_with_nothing_to_name_is_empty_so_a_line_around_it_goes(kernel, lead, monkeypatch):
+    """`channels` with no channel in it holds no word of ours, so a template's own words around it go with it."""
+    real = kernel.query
+
+    def none(principal, op, args):
+        empty = {"channels": [], "total": 0, "cursor": None}
+        return Outcome(op=op, args_hash="", result=empty) if op == "channel.list" else real(principal, op, args)
+
+    monkeypatch.setattr(kernel, "query", none)
+
+    assert preamble(kernel, lead[0], tool_name, "You are {name}.\nPost to {channels}.") == "You are lead."
 
 
 async def test_an_empty_template_tells_nothing_but_a_role_s_words(kernel, server, lead):

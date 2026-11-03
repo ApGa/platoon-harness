@@ -277,13 +277,12 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, tem
     if surface is shell_name:
         values["help"] = "Run `ph --help`, or `ph <tool> --help` for one tool's arguments."
     if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
-        values["peers"] = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers")) or "nobody yet"
+        values["peers"] = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
         values["roles"] = ", ".join(peers.result["roles"])
     if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
-        shown = _listed(
+        values["channels"] = _listed(
             channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
         )
-        values["channels"] = shown or "none yet"
     teach = _teacher(surface, kernel.ops, held)
     values["waiting"] = teach(_PARKING)
     values["ending"] = teach(_ending(kernel, agent))
