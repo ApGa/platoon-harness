@@ -1,7 +1,6 @@
 """What the terminal UI's tests share: the screen as text, and waiting for what it shows, change by change."""
 
 import asyncio
-import contextlib
 from collections.abc import Callable
 
 from textual.pilot import Pilot
@@ -32,9 +31,10 @@ def _frames(app: Harness) -> int | None:
 
 async def _change(app: Harness, seen: int | None) -> None:
     """Return once something that could change the screen has: a frame past `seen` drawn, a worker done, or a screen
-    pushed."""
+    pushed. A worker is watched and never awaited, since a task that awaits one and is cancelled cancels it too."""
     live = app.screen.live if isinstance(app.screen, Workspace) else None
-    rivals = [worker.wait() for worker in app.workers if not worker.is_finished]
+    running = {worker._task for worker in app.workers if not worker.is_finished and worker._task is not None}
+    rivals = [asyncio.wait(running)] if running else []
     if live is not None:
         rivals.append(live.next_frame(live.frames if seen is None else seen))
     pushed = asyncio.Event()
@@ -46,8 +46,7 @@ async def _change(app: Harness, seen: int | None) -> None:
 
     app.push_screen = pushing
     try:
-        with contextlib.suppress(Exception):  # A worker that failed or was cancelled has changed what shows too.
-            await first(pushed.wait(), *rivals)
+        await first(pushed.wait(), *rivals)
     finally:
         del app.push_screen
 
