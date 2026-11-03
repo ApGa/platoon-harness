@@ -255,6 +255,23 @@ async def test_a_board_post_with_a_file_from_a_second_process(cli: Cli):
     assert (await finished(serving)).code == 0
 
 
+async def test_a_command_run_again_under_its_key_is_one_operation(cli: Cli):
+    team = cli.write("solo.toml", solo("saying"))
+    serving = await cli.start("serve", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    send = ("message", "send", "s", "--to", "@bob", "--gist", "once", "--key", "retry-1")
+
+    first = await cli.run(*send)
+    again = await cli.run(*send)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert (first.code, again.code) == (0, 0), again.stderr
+    assert json.loads(first.stdout) == json.loads(again.stdout)
+    sent = sqlite3.connect(journal(cli, "s")).execute("SELECT count(*) FROM events WHERE type = 'message.sent'")
+    assert sent.fetchone() == (1,)
+
+
 async def test_approvals_answered_by_a_flag_are_kept_in_the_manifest(cli: Cli):
     team = cli.write("solo.toml", solo("asking"))
 

@@ -305,7 +305,7 @@ made from the command definitions, and `docs/headless.md` the quickstart.
 | No command prompts with no terminal | tested | `test_cli.py`, command by command on a closed stdin. No command prompts at all |
 | Several agents on a plan login exit 78 naming `--plan-login`, and run with it | tested | `test_cli.py`, on a scripted harness that says it is on a plan |
 | `events`: from `--after`, `--follow`, `--json` with each line's `seq`, as a guest on a view credential, live or closed, writing nothing, and going on exactly across a stop and a resume | tested | `test_cli.py`, with the journal's bytes compared |
-| A person's message, an approval with its expected version, a board post with a file, from a second process as a guest | tested | `test_cli.py`. A second answer to an approval is refused `conflict` |
+| A person's message, an agent interrupted, retired or cancelled, an approval with its expected version, a board post with a file, from a second process as a guest, and a command run again under its `--key` as one operation | tested | `test_cli.py`. A second answer to an approval is refused `conflict` |
 | `session list`, `show` with the command that settles each place you must act, `stop` as the owner's, `resume` as an owner in the foreground | tested | `test_cli.py` |
 | `serve`: a runtime in the foreground with no client, stopped by `SIGTERM` | tested | `test_cli.py` |
 | `team check`, `team show`, `team show --resolved` loading back to the same team, `team told` | tested | `test_cli.py` |
