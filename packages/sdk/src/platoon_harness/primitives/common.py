@@ -2,7 +2,7 @@
 
 import json
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from hashlib import sha256
 from typing import Annotated, Any, Literal, NamedTuple
 
@@ -170,9 +170,10 @@ def expose(
     boundary: str,
     positions: dict[str, int] | None = None,
     hops: int = 0,
-    monitored: Sequence[str] = (),
+    asked: bool = False,
 ) -> int:
-    """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input."""
+    """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input.
+    `asked` says a message from its parent is among what was offered."""
     event = txn.emit(
         "context.offered",
         f"context/{agent}",
@@ -185,7 +186,7 @@ def expose(
             "how": how,
             "positions": positions or {},
             "hops": hops,
-            "monitored": monitored,
+            "asked": asked,
         },
     )
     return event.seq

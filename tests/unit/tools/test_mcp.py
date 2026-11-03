@@ -1048,6 +1048,16 @@ async def test_a_refusal_names_tools_as_its_surface_does(lead, worker):
     assert "`mcp__coord__wait`" in text_of(await prefixed.call("task_claim", {"queue": "tasks"}))
 
 
+async def test_a_result_s_next_step_names_tools_as_its_surface_does(lead):
+    shell = Client(f"{lead[1].url}?surface=ph", lead[1].token)
+    prefixed = Client(f"{lead[1].url}?surface=mcp__coord", lead[1].token)
+
+    said = value_of(await shell.call("agent_spawn", {"name": "kid", "child_role": "worker", "stays": True}))["next"]
+    also = value_of(await prefixed.call("agent_spawn", {"name": "kin", "child_role": "worker", "stays": True}))["next"]
+
+    assert "`ph agent.retire`" in said and "`mcp__coord__agent_retire`" in also
+
+
 async def test_a_refusal_with_structure_shows_it(lead, worker):
     await lead[1].call("board_post", {"board": "notes", "name": "spec", "gist": "v1"})
 

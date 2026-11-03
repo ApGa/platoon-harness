@@ -432,12 +432,16 @@ problems = team_check(team, capabilities=known)
 ```
 
 It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
-harness lacks, and any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never
-start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it
-cannot resolve, and a setting nothing enforces yet.
+harness lacks, a role that stays on a harness that cannot, and any preset, harness, extension, role, group or auth profile it cannot
+find. It warns about a role that can never start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that
+can wake more than 8 agents, a program it cannot resolve, a setting nothing enforces yet, and a wake cycle that runs through a child
+that can stay.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
-count, and neither does a channel that wakes no one.
+count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the
+parent wakes the child and its answer wakes the parent, for as long as they go on. Any child on a persistent harness can stay, since a
+spawn may ask it to, so `team check` warns of every role that may spawn one and can message it, unless `max_hops` bounds them. A
+manager-worker team without `max_hops` gets that warning.
 
 ## Your own preset
 

@@ -229,11 +229,19 @@ async def test_the_preamble_teaches_parking(kernel, lead):
     assert "call `ph wait` and end your turn" in preamble(kernel, lead[0], shell_name)
 
 
-async def test_the_preamble_tells_a_spawned_agent_to_finish_and_a_root_to_stay(kernel, lead, worker):
-    assert "make `agent_finish` your last call" in preamble(kernel, worker[0])
+async def test_the_preamble_tells_an_agent_how_to_end_by_whether_it_stays(kernel, server, lead, worker):
+    keeper, _ = await enrolled(kernel, server, "keeper", by=lead[0], stays=True)
+    leaver, _ = await enrolled(kernel, server, "leaver", stays=False)
+
+    assert "make `agent_finish` your last call, with your report" in preamble(kernel, worker[0])
     assert "make `ph agent.finish` your last call" in preamble(kernel, worker[0], shell_name)
     assert "When told to finish, make `agent_finish` your last call" in preamble(kernel, lead[0])
     assert "When your goal is done" not in preamble(kernel, lead[0])
+    assert "When your goal is done" in preamble(kernel, leaver)
+    staying = preamble(kernel, keeper)
+    assert "What you say last in each turn goes to @lead, and you stay for the next message." in staying
+    assert "Make `agent_finish` your last call only when told to finish" in staying
+    assert "When your goal is done" not in staying
 
 
 async def test_the_preamble_points_a_shell_at_help(kernel, lead):

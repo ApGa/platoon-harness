@@ -29,6 +29,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0020](0020-finish-and-handover-wait-for-the-turn.md) | Finish and handover wait for the turn | `agent.finish` takes effect at turn end and a wake's `deliver` stays open until its turn begins, each with a live bound |
 | [0021](0021-what-a-harness-leaves-behind.md) | What a harness leaves behind | A harness's own `TMPDIR` marks what it started, so `stop` and `reap` end it whichever group it left for |
 | [0022](0022-what-a-harness-took-is-the-runtime-s-again.md) | What a harness took is the runtime's again | An offer taken and never landed is queued again when its turn stops short or its harness comes back, and no driver sends it again |
+| [0023](0023-agents-that-stay.md) | Agents that stay | `stays` keeps an agent for follow-ups, a report wakes its parent once for each thing the parent asked, and an idle child ends `retired` |
 
 ## Adding or changing one
 

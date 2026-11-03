@@ -11,7 +11,8 @@ from .common import BodyRef, Injection, Name, Policy
 
 
 class Role(Args):
-    """What a spawn reads from a role. `approvals` is the policy for this role's requests."""
+    """What a spawn reads from a role. `approvals` is the policy for this role's requests. `stays` is the role's own
+    word on whether its agents stay, and `persistent` whether its harness can, as its driver said at open."""
 
     harness: JsonValue = None
     model: str | None = None
@@ -21,6 +22,8 @@ class Role(Args):
     approvals: Policy = "ask"
     delivery: Injection = "wake"
     inbox_depth: Annotated[int, Field(ge=1)] = 1024
+    stays: bool | None = None
+    persistent: bool | None = None
 
 
 class Limits(Args):

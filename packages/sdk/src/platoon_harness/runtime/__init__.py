@@ -79,7 +79,7 @@ class Runtime:
                 )
                 raise ConfigError([Problem("roles", what)])
             incarnation = (await self.kernel.recover(*manifest.drift())).result
-            await open_session(self.kernel, team, manifest, authority, text)
+            await open_session(self.kernel, team, manifest, authority, text, await self.host.capabilities())
             await self.tools.start()
             await self._issue_credentials()
             await first(recover_agents(self.kernel, self.host, self.folder, cwd), self._stop_asked.wait())

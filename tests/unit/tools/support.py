@@ -148,10 +148,17 @@ def value_of(result: dict[str, Any]) -> Any:
 
 
 async def enrolled(
-    kernel: Kernel, server: ToolServer, name: str, *, role: str = "worker", by: Principal | None = None, **ready: Any
+    kernel: Kernel,
+    server: ToolServer,
+    name: str,
+    *,
+    role: str = "worker",
+    by: Principal | None = None,
+    stays: bool | None = None,
+    **ready: Any,
 ) -> tuple[Principal, Client]:
     """Spawn an agent through to started, issue its token as the host does, and connect a client."""
-    agent = await spawn(kernel, name, role=role, by=by, ready=ready)
+    agent = await spawn(kernel, name, role=role, by=by, ready=ready, stays=stays)
     token = f"token-of-{name}"
     args = {"id": agent.id, "token_hash": hash_token(token)}
     result_of(await kernel.submit(kernel.runtime, "principal.issue", args))

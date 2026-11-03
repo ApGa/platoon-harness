@@ -15,7 +15,7 @@ from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.rpc import strict_loads
 from platoon_harness.version import __version__
 
-from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text
+from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text, taught
 
 log = logging.getLogger("platoon_harness.tools")
 
@@ -405,13 +405,17 @@ class ToolServer:
         return stored
 
     async def _finish(self, request: _Request, tool: _Tool, arguments: dict[str, Any], result: Any) -> Any:
-        """Do what only this layer can do with a result: hold a wait open, and read what no op may."""
+        """Do what only this layer can do with a result: hold a wait open, read what no op may, and say what to do
+        `next` in the words of its surface, as a refusal says it."""
         if tool.op.name == "wait" and result["state"] == "pending":
             held = await hold_open(self._kernel, result)
             if held["state"] == "released":
                 request.told.append(held["id"])
             return held
         await self._fill(request.principal, result, arguments)
+        if isinstance(result, dict) and isinstance(step := result.get("next"), str):
+            kernel = self._kernel
+            result["next"] = taught(step, request.surface, kernel.ops, held_tools(kernel, request.principal))
         return result
 
     async def _fill(self, principal: Principal, result: Any, arguments: dict[str, Any]) -> None:

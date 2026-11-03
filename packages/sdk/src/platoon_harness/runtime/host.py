@@ -15,6 +15,7 @@ from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
     ApprovalRequested,
+    Capabilities,
     Compacted,
     Delivery,
     Delta,
@@ -296,6 +297,14 @@ class Host:
             make = partial(make_driver, self._team.roles[role])
             self._described[role] = await asyncio.to_thread(lambda: make().describe())
         return self._described[role]
+
+    async def capabilities(self) -> dict[str, Capabilities]:
+        """What each role's driver says it can do, by role. One that cannot say is left out, as unknown."""
+        found = {}
+        for role in self._team.roles:
+            with contextlib.suppress(ConfigError, DriverError):
+                found[role] = (await self.describe(role)).capabilities
+        return found
 
     async def _on_a_plan_login(self, role: str) -> bool:
         """Whether a role's agents run on a plan login: its harness says so now, and the role names no auth profile. A

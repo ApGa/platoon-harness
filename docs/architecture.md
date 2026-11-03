@@ -572,20 +572,23 @@ make expensive.
 **The monitor.** `spawn` installs a monitor. When an agent ends, however it ends, or a turn ends with no `finish` and no open
 wait, the runtime posts the turn's final text, or `<name> <status>: <reason>` for an agent that did not finish, to the
 spawning parent's inbox, as a runtime-authored event naming the child as
-subject. It wakes at most once per causal chain for each child, so a reply to the same child cannot loop while a second worker
-still reports back, and it stops at `max_hops`; past either, its message waits for the next turn.
-So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in.
+subject. It wakes the parent only for what the parent asked: the spawn asks, and so does each message of the parent's own to the
+child's inbox that the child is handed, and a report that wakes the parent answers. So a parent is woken once for the spawn and once
+more for each message it sent that child, and a turn a peer or a human started, or a parent's broadcast, asks nothing. A turn that
+parks, or that an interrupt or the owner's stop cut, answers nothing yet. It stops at `max_hops`; past either, its message waits for
+the next turn. So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in. See
+[ADR 0023](adr/0023-agents-that-stay.md).
 
 A report also waits for the next turn when waking would tell the parent nothing. A parent that ended the child itself did it. A
 report the parent is counting does not wake it: the wait wakes it when it holds, so a join of N costs one turn. A parent counts a
 child when a wait of its stands on the child's end or on a message from it. It also counts one whose doing it has already counted,
 such as a task it settled, but only while someone else below it is at work, or it would sleep on what nobody is left to do. A turn
-end is no end, so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it, once per chain
-like any report.
+end is no end, so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it, when its parent
+asked, like any report.
 
 A turn that did not stop on its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. One that an
 interrupt or its owner's stop ended was someone's own doing, so it wakes nobody. Any other, and a child that ended badly, breaks in on
-a parent with a wait open, whatever that wait counts and whatever the chain has spent, since that wait may now never hold. This is
+a parent with a wait open, whatever that wait counts and whatever the parent asked, since that wait may now never hold. This is
 fail-fast with no new wait grammar, and `max_hops` is what bounds it.
 
 A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, wakes its reader if a report is queued for
@@ -661,8 +664,15 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   never from arguments. A child never holds more than `may_spawn` allows. Membership changes only on success. `may_spawn`
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
-  journal, and an agent that has ended cannot be given one.
-- **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
+  journal, and an agent that has ended cannot be given one. A spawn past `max_children` is refused, saying that ending a child makes room.
+- **Agents that stay.** `stays` keeps an agent after its task for the next message. It is resolved once, at the spawn: what
+  `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness that is
+  not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it `unsupported`, from
+  what each role's driver said when the session opened. The result of a spawn that stays says so, that its answers come back at the end
+  of each of its turns, and how to end it. An agent's `wait` for the end of one that stays is refused `invalid`, naming `from` for its
+  answers, since that end comes only when someone ends it. See [ADR 0023](adr/0023-agents-that-stay.md).
+- **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
+  agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
   that exits ends its agent `lost`, or `failed` if it never started, and one that exits in a turn leaves the gap `crash_window`, since a
   tool of its own can run on. A one-shot agent ends with its turn: `finished` if that turn
@@ -693,7 +703,9 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   which tells the two apart and leaves a crash part of the way through a stop nothing to lose. Only the runtime gives those two
   reasons: a driver that says one has sent an unknown frame, and its turn ended `unknown`. The wake reserves a turn like any other, so
   a budget that an unmeasured turn left unable to hold refuses it, and the session ends `needs_human`.
-- **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session.
+- **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session. A child that ends
+  with its parent ends `cancelled` if it was at work, in a turn or on its way to one, and `retired` otherwise, since it was cut off
+  from nothing and Platoon drops a cancelled child's tokens. `session.cancel` ends every agent `cancelled`, deepest first.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
   refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
 - **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it, to its
@@ -706,7 +718,8 @@ no due timer. A wait the runtime could close counts as a deliverable delivery, a
 message can un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so
 a message that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would
 reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
-A team with no root uses `"settled"`.
+A team with no root uses `"settled"`. A close ends no agent: one left idle keeps no end in the journal, which is unknown and not
+`cancelled`, until M3 closes idle children before a rollout returns.
 
 A session has **stalled** when it is open and settled short of `until` with nothing scheduled: no timer, no wait deadline to come and
 no lease held. So a wall limit, a lease or a wait's `timeout` is waited for, and a lease's timer counts only while its claim does.
@@ -854,11 +867,14 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a budget unit a role cannot measure, and an unknown
   preset, harness, extension, role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
   preset is refused at load. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`,
-  `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A chain through a program
+  `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A parent and a child that can
+  stay are the exception: a message from the parent wakes the child, and its answer wakes the parent, so `team check` warns of a cycle
+  that closes only through them. Any child on a persistent harness can stay, as a spawn may ask, so the warning names each role that may
+  spawn one, can message it, and wakes with it, with no `max_hops`: a warning and not a refusal, because that is how follow-ups work. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
   resolve, a setting no primitive enforces yet, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
-and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
+and one that says it stays, and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
 
 ## 9. Drivers
 
@@ -1022,14 +1038,15 @@ against the official client and against each real harness.
 
 **Everyday instruction surface.** The preamble and the tool descriptions teach the tools, by exact name, because no harness's
 tool discovery can be relied on. A description names ops as `task.claim`, and each surface renders that as its own name for the tool.
-A sentence that names a tool its reader does not hold is left out, in a refusal's reason too, so what a model is told it can do, and
+A sentence that names a tool its reader does not hold is left out, in a refusal's reason and a result's `next` too, so what a model is told it can do, and
 a fact goes in a sentence apart from the tool that serves it. A test holds every argument to a description, every description to what
 a refusal means, and every op it names to one that exists, for a reader who holds only that tool. Tool schemas leave out what is
 for programs and team files, such as `on` and a queue's lease. The tool list and the preamble are fixed at launch, and go once to each
 harness, so the preamble is a snapshot of who could be reached then, and `peers` is what stays current. Besides the tools and who can
 be reached, the preamble names the roles an agent may start, since a model guessed a harness's name there and gave up. It says how
-to end too: an agent somebody spawned is told to make `agent.finish` its last call, or a join on it never holds, and one the session
-started is told to stay, since a human talks to it over many turns. That text is in every request
+to end too, by whether the agent stays: one that does not is told to make `agent.finish` its last call, or a join on it never holds;
+one the session started is told to stay unless told to finish, since a human talks to it over many turns; and a child that stays is
+told that what it says last in each turn goes to its parent, and to finish only when told to. That text is in every request
 of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in

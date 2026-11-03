@@ -40,8 +40,12 @@ def text(problems):
     return "\n".join(problems)
 
 
+def bounded(team: Team, max_hops: int = 8) -> Team:
+    return team.model_copy(update={"topology": team.topology | Topology(limits=Limits(max_hops=max_hops))})
+
+
 def test_a_sound_team_has_no_problems():
-    assert check(PRESET_TEAMS["manager-worker"]) == ()
+    assert check(bounded(PRESET_TEAMS["manager-worker"])) == ()
 
 
 def test_recursive_may_spawn_with_no_max_depth_is_refused():
@@ -119,6 +123,43 @@ def test_max_hops_answers_a_cycle():
         topology=pipeline(["a", "b"], back=True, max_hops=4),
     )
     assert errors(team) == []
+
+
+def test_a_parent_and_a_child_that_can_stay_are_a_wake_cycle_to_warn_of():
+    team = PRESET_TEAMS["manager-worker"]
+
+    assert errors(team) == []
+    found = text(warnings(team))
+    assert "a wake cycle with no limit, through a child that can stay:" in found
+    assert "lead -> worker -> lead" in found or "worker -> lead -> worker" in found
+    assert "set `max_hops`" in found
+
+
+def test_max_hops_bounds_a_parent_and_a_child_that_can_stay():
+    assert warnings(bounded(PRESET_TEAMS["manager-worker"])) == []
+
+
+@pytest.mark.parametrize("why", ["one-shot", "quiet", "out of reach"])
+def test_a_child_that_cannot_stay_or_be_woken_by_its_parent_closes_no_such_cycle(why):
+    worker = Role(harness="exec" if why == "one-shot" else "codex", delivery="pull" if why == "quiet" else "wake")
+    edges = {"lead": ["human"]} if why == "out of reach" else {"lead": ["children", "human"]}
+    team = Team(
+        roles={"lead": Role(harness="claude", may_spawn=["worker"]), "worker": worker}, topology={"edges": edges}
+    )
+    capabilities = {**CAPABILITIES, "exec": Capabilities(persistent=False)}
+
+    assert "through a child that can stay" not in text(warnings(team, capabilities=capabilities))
+
+
+def test_a_role_that_stays_on_a_harness_that_cannot_is_refused():
+    team = Team(
+        roles={"lead": Role(harness="claude", may_spawn=["worker"]), "worker": Role(harness="exec", stays=True)},
+        topology={"limits": {"max_hops": 4}},
+    )
+
+    found = errors(team, capabilities={**CAPABILITIES, "exec": Capabilities(persistent=False)})
+
+    assert found == ["roles.worker.stays: a one-shot harness ends with its turn, so it cannot stay"]
 
 
 def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():

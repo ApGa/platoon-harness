@@ -732,13 +732,15 @@ async def test_a_quiet_session_past_its_wall_limit_ends_and_does_not_hang(tmp_pa
 
 
 async def test_a_join_of_three_workers_costs_its_lead_one_turn_after_the_first(tmp_path):
+    """The workers start idle and are told to go once the wait is placed, as a scripted worker is quicker than any."""
     names = ["a", "b", "c"]
-    spawned = [Call("agent_spawn", {"name": name, "child_role": "worker", "goal": "go"}) for name in names]
+    spawned = [Call("agent_spawn", {"name": name, "child_role": "worker"}) for name in names]
+    told = [Call("message_send", {"to": f"@{name}", "gist": "go"}) for name in names]
     team = Team.model_validate(
         {
             "roles": {
                 "lead": {
-                    "harness": scripted([*spawned, Call("wait", {"agents": names})], [Say("all three are in")]),
+                    "harness": scripted([*spawned, Call("wait", {"agents": names}), *told], [Say("all three are in")]),
                     "may_spawn": ["worker"],
                 },
                 "worker": {"harness": scripted([Call("agent_finish", {"gist": "done"})])},
@@ -756,6 +758,41 @@ async def test_a_join_of_three_workers_costs_its_lead_one_turn_after_the_first(t
     assert ending.reason == "settled"
     assert len(turns) == 2
     assert "all three are in" in said
+
+
+async def test_a_child_that_stays_answers_a_task_a_follow_up_and_a_question_on_one_harness(tmp_path):
+    """The owner's flow: each answer wakes the lead, nothing else does, and the lead retires the helper at the end."""
+    spawned = Call("agent_spawn", {"name": "helper", "child_role": "helper", "goal": "first task", "stays": True})
+    lead = [
+        [spawned],
+        [Call("message_send", {"to": "@helper", "gist": "a follow-up task"})],
+        [Call("message_send", {"to": "@helper", "gist": "what did you mean?"})],
+        [Call("agent_retire", {"agent": "@helper"}), Call("agent_finish", {"gist": "all done"})],
+    ]
+    helper = [[Say("first answer")], [Say("second answer")], [Say("it meant this")]]
+    team = Team.model_validate(
+        {
+            "roles": {
+                "lead": {"harness": scripted(*lead), "may_spawn": ["helper"]},
+                "helper": {"harness": scripted(*helper)},
+            },
+            "topology": {"edges": {"lead": ["children"]}, "limits": {"max_hops": 8}},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@lead", "go")
+        ending = await session.settled(timeout="10s")
+        events = [event async for event in session.events()]
+
+    turns = [event.agent for event in events if event.type == "turn.started"]
+    reports = [event.data["delivery"] for event in events if event.type == "message.sent" and event.data["subject"]]
+    statuses = {row["agent"]: row["status"] for row in ending.agents}
+    assert ending.reason == "settled"
+    assert (turns.count("lead"), turns.count("helper")) == (4, 3)
+    assert [event.agent for event in events if event.type in ("agent.started", "agent.resumed")] == ["lead", "helper"]
+    assert reports == ["wake", "wake", "wake", "next-turn"]
+    assert statuses == {"lead": "finished", "helper": "retired"}
 
 
 async def test_timing_out_is_exit_3_and_leaves_the_session_as_it_is(tmp_path):

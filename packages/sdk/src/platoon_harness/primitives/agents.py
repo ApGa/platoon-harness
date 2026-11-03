@@ -7,20 +7,26 @@ from pydantic import BaseModel
 
 from platoon_harness.kernel import Event, View, fold
 
+from .common import WAKING
+
 AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held", "ended"]
 
 
 class Agent(BaseModel, frozen=True):
-    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `native` is the id
-    its harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it.
-    `finishing` says it called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not
-    stop on its own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts
-    handovers failed in a row, and the next waits until `retry_at`."""
+    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `stays` says it stays
+    after its task for the next message. `asked` says its parent is owed an answer: the spawn asks, and so does each
+    message from the parent that it is handed, until a report of its wakes the parent. `native` is the id its harness
+    resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing` says it
+    called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its own, until
+    the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers failed in a
+    row, and the next waits until `retry_at`."""
 
     name: str
     role: str
     parent: str | None
     depth: int
+    stays: bool
+    asked: bool
     state: AgentState
     status: str | None
     reason: str | None
@@ -65,13 +71,15 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
         role TEXT NOT NULL,
         parent TEXT,
         depth INTEGER NOT NULL,
+        stays INTEGER NOT NULL,
+        asked INTEGER NOT NULL DEFAULT 1,
         state TEXT NOT NULL,
         status TEXT,
         reason TEXT,
@@ -109,10 +117,11 @@ class Agents(View):
         self.db.execute(
             """
             INSERT INTO v_agents(
-                name, role, parent, depth, state, harness, model, on_parent_exit, boundaries, goal, goal_body, unbegun
+                name, role, parent, depth, stays, state, harness, model, on_parent_exit, boundaries, goal, goal_body,
+                unbegun
             ) VALUES (
-                :name, :role, :parent, :depth, 'spawning', :harness, :model, :on_parent_exit, '[]', :goal, :body,
-                :unbegun
+                :name, :role, :parent, :depth, :stays, 'spawning', :harness, :model, :on_parent_exit, '[]', :goal,
+                :body, :unbegun
             )
             """,
             {**data, "harness": json.dumps(data["harness"]), "unbegun": bool(data["goal"] or data["body"])},
@@ -170,6 +179,17 @@ class Agents(View):
     @fold("agent.woken")
     def woken(self, event: Event) -> None:
         self._move(event, "waking", "idle", "waiting")
+
+    @fold("context.offered")
+    def handed(self, event: Event) -> None:
+        if event.data["asked"]:
+            self.db.execute("UPDATE v_agents SET asked = 1 WHERE name = ?", (event.agent,))
+
+    @fold("message.sent")
+    def answered(self, event: Event) -> None:
+        """A report that wakes the parent answers what it asked."""
+        if event.data["subject"] is not None and event.data["delivery"] in WAKING:
+            self.db.execute("UPDATE v_agents SET asked = 0 WHERE name = ?", (event.data["subject"],))
 
     @fold("effect.failed")
     def failed(self, event: Event) -> None:

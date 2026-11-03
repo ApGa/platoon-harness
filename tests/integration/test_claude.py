@@ -37,6 +37,7 @@ from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 
 from ..unit.drivers.support import Heard
 from ..unit.runtime.support import in_state, of_type, until
+from .scripts import following_up
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
@@ -130,6 +131,31 @@ def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key")
     bob = Role(harness="claude", model=MODEL, auth="fake", **role)
     return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"))})
+
+
+async def test_a_real_harness_that_stays_answers_a_task_a_follow_up_and_a_question_on_one_process(
+    tmp_path, monkeypatch
+):
+    """The owner's flow, with a scripted lead: each answer wakes the lead and nothing else does, and the helper keeps
+    one process until the lead retires it."""
+    async with FakeModel("first answer", "second answer", "it meant this") as model:
+        team = following_up(keyed(tmp_path / "home", model, monkeypatch))
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await session.send("@lead", "go")
+            ending = await session.settled(timeout=TIMEOUT)
+            events = [event async for event in session.events()]
+
+    turns = [event.agent for event in events if event.type == "turn.started"]
+    reports = [event.data["delivery"] for event in events if event.type == "message.sent" and event.data["subject"]]
+    assert ending.reason == "settled", ending
+    assert (turns.count("lead"), turns.count("bob")) == (4, 3)
+    assert [event.agent for event in events if event.type in ("agent.started", "agent.resumed")] == ["lead", "bob"]
+    assert reports == ["wake", "wake", "wake", "next-turn"]
+    assert {row["agent"]: row["status"] for row in ending.agents} == {"lead": "finished", "bob": "retired"}
+    assert len(model.calls) == 3
+    assert all(call.says("goes to @lead, and you stay for the next message") for call in model.calls)
+    assert model.calls[1].says("A follow-up task") and model.calls[2].says("A question about it")
 
 
 async def test_a_real_harness_calls_our_tools_parks_wakes_and_resumes_in_a_session(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness.config import Manifest
-from platoon_harness.drivers import Driver, DriverError, DriverInfo
+from platoon_harness.drivers import Capabilities, Driver, DriverError, DriverInfo
 from platoon_harness.extensions import DRIVERS, Installed, load
 from platoon_harness.kernel import NAME, Kernel, Refused
 from platoon_harness.primitives import Policy
@@ -94,7 +94,7 @@ def prepare(
     return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 
 
-def _settings(team: Team, manifest: Manifest, body: str) -> dict[str, Any]:
+def _settings(team: Team, manifest: Manifest, body: str, capabilities: Mapping[str, Capabilities]) -> dict[str, Any]:
     roles = {
         name: {
             "harness": role.harness if isinstance(role.harness, str) else role.harness.model_dump(mode="json"),
@@ -105,6 +105,8 @@ def _settings(team: Team, manifest: Manifest, body: str) -> dict[str, Any]:
             "approvals": manifest.approvals or role.approvals,
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
+            "stays": role.stays,
+            "persistent": capabilities[name].persistent if name in capabilities else None,
         }
         for name, role in team.roles.items()
     }
@@ -154,11 +156,19 @@ async def _steps(kernel: Kernel, op: str, *steps: tuple[str, Mapping[str, Any]])
             raise Refused.of(outcome.refusal)
 
 
-async def open_session(kernel: Kernel, team: Team, manifest: Manifest, authority: Authority, text: str) -> None:
+async def open_session(
+    kernel: Kernel,
+    team: Team,
+    manifest: Manifest,
+    authority: Authority,
+    text: str,
+    capabilities: Mapping[str, Capabilities],
+) -> None:
     """Journal a session through ops. Each step has a fixed key, so a crash part of the way is finished by the next
-    runtime, which runs this again, and a session that opened long ago is not disturbed."""
+    runtime, which runs this again, and a session that opened long ago is not disturbed. `capabilities` is what each
+    role's driver says, by role, and a role missing from it is unknown."""
     body = await kernel.put_body(text.encode())
-    await _steps(kernel, "session.open", ("session", _settings(team, manifest, body)))
+    await _steps(kernel, "session.open", ("session", _settings(team, manifest, body, capabilities)))
     await _steps(kernel, "principal.add", ("human", {"id": manifest.human}))
     grants = compile(team)
     await _steps(kernel, "grant.add", *((f"grant/{index}", grant.model_dump()) for index, grant in enumerate(grants)))

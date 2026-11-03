@@ -23,6 +23,10 @@ _STAYING = (
     "When told to finish, make `agent.finish` your last call, or your session never closes. Told nothing of the kind, "
     "stay: it ends you for good, and a turn that only ends leaves you here for the next message."
 )
+_ANSWERING = (
+    "What you say last in each turn goes to @{parent}, and you stay for the next message. Make `agent.finish` your "
+    "last call only when told to finish: it ends you for good."
+)
 _REFUSALS = {
     "not_permitted": (
         "You may not do this.",
@@ -184,6 +188,17 @@ def _listed(page: dict[str, Any], rows: str, show: Callable[[dict[str, Any]], st
     return ", ".join((*map(show, page[rows]), *(() if page["cursor"] is None else (f"and more: call `{tool}`",))))
 
 
+def _ending(kernel: Kernel, agent: Principal) -> str:
+    """How this agent is told to end, by whether it stays, which was settled at its spawn."""
+    outcome = kernel.query(kernel.runtime, "agent.status", {"agent": agent.name})
+    if outcome.refusal is not None:
+        raise Refused(outcome.refusal.code, outcome.refusal.detail)
+    status = outcome.result
+    if not status["stays"]:
+        return _FINISHING
+    return _STAYING if status["parent"] is None else _ANSWERING.format(parent=status["parent"])
+
+
 def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> str:
     """This agent's exact tools, and who it can reach, because no harness's tool discovery can be relied on and tool
     schemas never enumerate targets. A harness has it once, at launch, so it is a snapshot: `peers` is what stays
@@ -206,7 +221,12 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> 
         )
         lines.append(f"Channels: {kept or 'none yet'}.")
     teach = _teacher(surface, kernel.ops, held)
-    return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_STAYING if agent.parent is None else _FINISHING))))
+    return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_ending(kernel, agent)))))
+
+
+def taught(text: str, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
+    """What an op says to do next, in the words of a surface, with no sentence that names a tool outside `held`."""
+    return _teacher(surface, ops, held)(text)
 
 
 def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:

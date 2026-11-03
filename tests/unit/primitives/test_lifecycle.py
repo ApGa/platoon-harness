@@ -615,7 +615,7 @@ async def test_a_child_out_of_a_turn_does_not_hold_up_a_finish(kernel, parked):
     result_of(await kernel.submit(lead, "agent.finish", {}))
 
     assert (state_of(kernel, "bob")["status"], of_type(kernel, "agent.ended")[-1].data["reason"]) == (
-        "cancelled",
+        "retired",
         "parent lead ended",
     )
 
@@ -871,8 +871,114 @@ async def test_on_parent_exit_adopt_gives_orphans_to_the_session(kernel, ada):
     assert of_type(kernel, "agent.adopted")[0].agent == "child"
 
 
+async def test_an_idle_child_that_ends_with_its_parent_is_retired_and_one_at_work_cancelled(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "idle", role="linked", by=lead, goal="")
+    await spawn(kernel, "busy", role="linked", by=lead, goal="")
+    await start_turn(kernel, "busy")
+
+    result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
+
+    assert (state_of(kernel, "idle")["status"], state_of(kernel, "busy")["status"]) == ("retired", "cancelled")
+    assert {event.data["reason"] for event in of_type(kernel, "agent.ended")[1:]} == {"parent lead ended"}
+
+
+async def test_cancelling_the_session_cancels_every_agent_however_idle(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "zed", role="linked", by=lead, goal="")
+
+    result_of(await kernel.submit(ada, "session.cancel", {}))
+
+    assert {event.agent: event.data["reason"] for event in of_type(kernel, "agent.ended")} == {
+        "lead": "session cancelled",
+        "zed": "session cancelled",
+    }
+    assert state_of(kernel, "zed")["status"] == "cancelled"
+
+
+async def test_a_closing_session_cancels_no_agent_left_idle(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead, goal="", stays=True)
+
+    result_of(await kernel.submit(ada, "session.close", {}))
+
+    assert of_type(kernel, "agent.ended") == []
+    assert (state_of(kernel, "bob")["state"], state_of(kernel, "bob")["status"]) == ("idle", None)
+
+
 async def test_finish_is_only_for_agents(kernel, ada):
     assert refusal(await kernel.submit(ada, "agent.finish", {})).code == "invalid"
+
+
+# Agents that stay.
+
+
+@pytest.mark.parametrize(
+    ("role", "stays", "spawned", "resolved"),
+    [
+        ("worker", None, False, True),
+        ("worker", None, True, False),
+        ("keeper", None, True, True),
+        ("leaver", None, False, False),
+        ("keeper", False, True, False),
+        ("leaver", True, False, True),
+    ],
+)
+async def test_stays_is_resolved_once_at_spawn_from_the_spawn_then_the_role_then_who_started_it(
+    kernel, role, stays, spawned, resolved
+):
+    lead = await spawn(kernel, "lead", role="lead")
+
+    await spawn(kernel, "bob", role=role, by=lead if spawned else None, stays=stays)
+
+    assert of_type(kernel, "agent.spawned")[-1].data["stays"] is resolved
+    assert state_of(kernel, "bob")["stays"] is resolved
+
+
+async def test_a_harness_that_cannot_stay_is_refused_stays_saying_why(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+
+    refused = refusal(await kernel.submit(lead, "agent.spawn", {**spawning("bob", "oneshot"), "stays": True}))
+
+    assert refused.code == "unsupported" and "cannot stay" in refused.detail
+    assert result_of(await kernel.submit(lead, "agent.spawn", spawning("bob", "oneshot")))["stays"] is False
+
+
+async def test_spawning_a_child_that_stays_says_so_and_how_to_end_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+
+    stays = result_of(await kernel.submit(lead, "agent.spawn", {**spawning("bob"), "stays": True}))
+    goes = result_of(await kernel.submit(lead, "agent.spawn", spawning("cat")))
+
+    assert stays["stays"] is True and "end of each of its turns" in stays["next"]
+    assert "`agent.retire`" in stays["next"] and "`agent.cancel`" in stays["next"] and "finish" in stays["next"]
+    assert goes == {"agent": "@cat", "state": "spawning", "stays": False}
+
+
+@pytest.mark.parametrize("limits", [{"max_children": 1}])
+async def test_max_children_names_ending_an_idle_child_as_the_way_to_make_room(kernel, limits):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead, stays=True)
+
+    refused = refusal(await kernel.submit(lead, "agent.spawn", spawning("cat")))
+
+    assert "max_children, and ending one makes room" in refused.detail
+    assert "`agent.retire` ends one that is idle" in refused.detail
+
+
+async def test_a_child_that_stays_takes_task_after_task_and_retires(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
+    delivered = [await answers(kernel, bob, "t1", reads=False)]
+    for turn, question in (("t2", "a follow-up"), ("t3", "what did you mean?")):
+        await send(kernel, lead, "@bob", question)
+        delivered.append(await answers(kernel, bob, turn))
+
+    result_of(await kernel.submit(lead, "agent.retire", {"agent": "bob"}))
+
+    assert delivered == ["wake", "wake", "wake"]
+    assert state_of(kernel, "bob")["status"] == "retired"
+    assert last_report(kernel) == "next-turn"
 
 
 # Interrupt and takeover.
@@ -1019,21 +1125,133 @@ async def test_an_agent_with_no_spawning_parent_has_no_monitor(kernel):
     assert of_type(kernel, "message.sent") == []
 
 
-async def test_the_monitor_wakes_at_most_once_per_causal_chain(kernel):
+def last_report(kernel: Kernel) -> str:
+    """How the latest report reached its parent: `wake`, or `next-turn`."""
+    return [event for event in of_type(kernel, "message.sent") if event.data["subject"]][-1].data["delivery"]
+
+
+async def answers(kernel: Kernel, child: Principal, turn: str, *, reads: bool = True) -> str:
+    """One turn of a child: it reads its inbox and ends, and its report reaches its parent so."""
+    await start_turn(kernel, child.name, turn)
+    if reads:
+        await read(kernel, child, f"@{child.name}")
+    await end_turn(kernel, child.name)
+    return last_report(kernel)
+
+
+async def test_a_parent_s_message_to_its_own_child_re_arms_its_report(kernel):
     lead = await spawn(kernel, "lead", role="lead")
     bob = await spawn(kernel, "bob", by=lead)
-    await start_turn(kernel, "bob")
-    await end_turn(kernel, "bob")
-    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "wake"
+    assert await answers(kernel, bob, "t1", reads=False) == "wake"
 
-    await read(kernel, lead, "@lead")
-    reply = await send(kernel, lead, "@bob", "and then?")
+    await send(kernel, lead, "@bob", "and then?")
+
+    assert await answers(kernel, bob, "t2") == "wake"
+    assert await answers(kernel, bob, "t3") == "next-turn"
+
+
+@pytest.mark.parametrize("sender", ["ada", "sibling"])
+async def test_a_message_from_a_peer_or_a_human_does_not_re_arm(kernel, ada, sender):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    sibling = await spawn(kernel, "sibling", by=lead)
+    assert await answers(kernel, bob, "t1", reads=False) == "wake"
+
+    await send(kernel, ada if sender == "ada" else sibling, "@bob", "a word")
+
+    assert await answers(kernel, bob, "t2") == "next-turn"
+
+
+async def test_a_broadcast_from_the_parent_does_not_re_arm(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await channel(kernel, "all-hands", "topic", delivery="wake")
+    assert await answers(kernel, bob, "t1", reads=False) == "wake"
+
+    await send(kernel, lead, "#all-hands", "everyone, a word")
+    await start_turn(kernel, "bob", "t2")
+    await read(kernel, bob, "#all-hands")
+    await end_turn(kernel, "bob")
+
+    assert last_report(kernel) == "next-turn"
+
+
+async def test_two_messages_one_turn_heard_are_one_question(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+
+    await send(kernel, lead, "@bob", "first")
+    await send(kernel, lead, "@bob", "second")
+
+    assert await answers(kernel, bob, "t2") == "wake"
+    assert await answers(kernel, bob, "t3") == "next-turn"
+
+
+async def test_a_message_sent_while_its_child_works_is_answered_by_the_turn_that_hears_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+    await send(kernel, lead, "@bob", "first")
     await start_turn(kernel, "bob", "t2")
     await read(kernel, bob, "@bob")
+
+    await send(kernel, lead, "@bob", "and while you are at it")
     await end_turn(kernel, "bob")
 
-    second = of_type(kernel, "message.sent")[-1]
-    assert second.seq > reply["seq"] and second.data["delivery"] == "next-turn"
+    assert last_report(kernel) == "wake"
+    assert await answers(kernel, bob, "t3") == "wake"
+
+
+async def test_a_turn_that_parks_leaves_its_parent_s_question_open(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await channel(kernel, "news")
+    await answers(kernel, bob, "t1", reads=False)
+    await send(kernel, lead, "@bob", "find out, then tell me")
+    await start_turn(kernel, "bob", "t2")
+    await read(kernel, bob, "@bob")
+    placed = result_of(await kernel.submit(bob, "wait", {"channels": ["#news"]}))
+    await end_turn(kernel, "bob")
+    assert state_of(kernel, "bob")["state"] == "waiting"
+
+    await send(kernel, ada, "#news", "here it is")
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+
+    assert await answers(kernel, bob, "t3") == "wake"
+
+
+@pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP])
+async def test_a_turn_stopped_on_purpose_leaves_its_parent_s_question_open(kernel, ada, reason):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+    await send(kernel, lead, "@bob", "a long job")
+    await start_turn(kernel, "bob", "t2")
+    await read(kernel, bob, "@bob")
+    await end_turn(kernel, "bob", reason)
+    assert last_report(kernel) == "next-turn"
+
+    await send(kernel, ada, "@bob", "go on")
+
+    assert await answers(kernel, bob, "t3") == "wake"
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 3}])
+async def test_max_hops_bounds_a_parent_and_a_child_that_ask_and_answer(kernel, limits):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
+    await answers(kernel, bob, "t1", reads=False)
+    delivered = []
+    for round in range(3):
+        await start_turn(kernel, "lead", f"l{round}")
+        await read(kernel, lead, "@lead")
+        await send(kernel, lead, "@bob", "and then?")
+        await end_turn(kernel, "lead")
+        delivered.append(await answers(kernel, bob, f"b{round}"))
+
+    assert delivered == ["wake", "next-turn", "next-turn"]
+    assert of_type(kernel, "wake.refused")[-1].data["why"] == "hops"
 
 
 async def test_a_second_child_still_reports_back_with_a_wake(kernel):
@@ -1055,16 +1273,13 @@ async def test_a_second_child_still_reports_back_with_a_wake(kernel):
     assert of_type(kernel, "message.sent")[-1].data["delivery"] == "wake"
 
 
-async def test_a_new_human_message_starts_a_new_chain(kernel, ada):
+async def test_a_child_s_first_report_wakes_its_parent_whoever_woke_it(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, goal="")
+
     await send(kernel, ada, "@bob", "fresh start")
-    await start_turn(kernel, "bob")
-    await read(kernel, bob, "@bob")
 
-    await end_turn(kernel, "bob")
-
-    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "wake"
+    assert await answers(kernel, bob, "t1") == "wake"
 
 
 def ready(kernel: Kernel) -> dict:
@@ -1335,8 +1550,8 @@ async def test_a_wait_cancelled_with_nothing_held_back_wakes_nobody(kernel):
     assert ready(kernel)["agents"] == []
 
 
-async def spent_chain(kernel: Kernel) -> None:
-    """A child that reported, spending its chain's wake, and a lead that replied and parked on its end."""
+async def asked_nothing(kernel: Kernel, human: Principal) -> None:
+    """A child whose report answered its spawn, at work again for a human, and a lead parked on its end."""
     lead = await spawn(kernel, "lead", role="lead", goal="")
     await spawn(kernel, "a", by=lead, goal="")
     await start_turn(kernel, "a")
@@ -1344,32 +1559,32 @@ async def spent_chain(kernel: Kernel) -> None:
     await end_turn(kernel, "a")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
     await start_turn(kernel, "lead")
-    await send(kernel, lead, "@a", "again")
     result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
     await end_turn(kernel, "lead")
+    await send(kernel, human, "@a", "one more thing")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "a"}))
     await start_turn(kernel, "a", "t2")
 
 
-async def test_a_failed_turn_breaks_in_on_a_parked_parent_past_a_spent_chain(kernel):
-    await spent_chain(kernel)
+async def test_a_failed_turn_breaks_in_on_a_parked_parent_that_asked_nothing(kernel, ada):
+    await asked_nothing(kernel, ada)
 
     await end_turn(kernel, "a", "rate limited")
 
     assert ready(kernel)["agents"] == ["lead"]
 
 
-async def test_a_spent_chain_still_stops_a_turn_that_went_well(kernel):
-    await spent_chain(kernel)
+async def test_a_turn_that_went_well_and_answers_nothing_waits_for_the_parent_s_next_turn(kernel, ada):
+    await asked_nothing(kernel, ada)
 
     await end_turn(kernel, "a")
 
     assert ready(kernel)["agents"] == []
 
 
-@pytest.mark.parametrize("limits", [{"max_hops": 1}])
-async def test_max_hops_stops_a_failed_turn_breaking_in(kernel, limits):
-    await spent_chain(kernel)
+@pytest.mark.parametrize("limits", [{"max_hops": 0}])
+async def test_max_hops_stops_a_failed_turn_breaking_in(kernel, ada, limits):
+    await asked_nothing(kernel, ada)
 
     await end_turn(kernel, "a", "rate limited")
 
@@ -2266,7 +2481,7 @@ def stalled(kernel: Kernel) -> bool:
 @pytest.mark.parametrize("wait", [{"from": ["b"]}, {"agents": ["b"]}])
 async def test_a_wait_on_someone_still_here_keeps_a_settled_session_from_done(kernel, wait):
     a = await spawn(kernel, "a", goal="")
-    await spawn(kernel, "b", goal="")
+    await spawn(kernel, "b", goal="", stays=False)
     await start_turn(kernel, "a")
     result_of(await kernel.submit(a, "wait", wait))
     await end_turn(kernel, "a")

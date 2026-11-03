@@ -316,9 +316,14 @@ class Session:
 
     # Lifecycle.
 
-    async def spawn(self, name: str, role: str, goal: str = "", *, body: str | bytes | None = None) -> dict[str, Any]:
-        """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it."""
-        return await self._do("agent.spawn", name=name, child_role=role, goal=goal, body=await self._stored(body))
+    async def spawn(
+        self, name: str, role: str, goal: str = "", *, body: str | bytes | None = None, stays: bool | None = None
+    ) -> dict[str, Any]:
+        """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it. `stays` keeps
+        it after its task for more, and left out, its role decides."""
+        return await self._do(
+            "agent.spawn", name=name, child_role=role, goal=goal, body=await self._stored(body), stays=stays
+        )
 
     async def status(self, agent: str | None = None) -> dict[str, Any]:
         """How this session stands, or one agent."""

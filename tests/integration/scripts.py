@@ -36,6 +36,12 @@ WORK = [
     Call("agent_finish", {"gist": "{agent} finished"}),
 ]
 ASK_FIRST = [Ask("Ship the fix?"), *WORK]
+FOLLOWING_UP = [
+    [Call("agent_spawn", {"name": "bob", "child_role": "bob", "goal": "Say: first answer", "stays": True})],
+    [Call("message_send", {"to": "@bob", "gist": "A follow-up task. Say: second answer"})],
+    [Call("message_send", {"to": "@bob", "gist": "A question about it. Say: it meant this"})],
+    [Call("agent_retire", {"agent": "@bob"}), Call("agent_finish", {"gist": "all done"})],
+]
 HANG_IN_A_TURN = [Call("task_claim", {"queue": "tasks"}), Hang()]
 AFTER_A_RESUME = [Call("task_complete", {"queue": "tasks", "gist": "done after the crash"}), Call("agent_finish", {})]
 
@@ -116,6 +122,7 @@ HARNESSES = {
     "stuck": lambda: Stuck([], [[Say("heard it, the second time")]]),
     "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),
     "saying": lambda: ScriptedDriver(itertools.repeat([Say("done")])),
+    "asks_more": lambda: ScriptedDriver(FOLLOWING_UP),
 }
 
 
@@ -134,6 +141,15 @@ def wire(name: str) -> dict[str, Any]:
 def inside(name: str) -> str:
     """A role's `harness`, inside the runtime, which is quicker to start than a process of its own."""
     return f"{__name__}:{name}"
+
+
+def following_up(team: Team) -> Team:
+    """`team`, whose one role is `bob`, under a scripted lead that spawns `bob` to stay, gives it a follow-up task and
+    a question, each once the last is answered, and retires it."""
+    given = team.canonical()
+    lead = {"harness": inside("asks_more"), "may_spawn": ["bob"]}
+    topology = {"edges": {"lead": ["children"]}, "limits": {"max_hops": 8}}
+    return Team.model_validate({**given, "roles": {**given["roles"], "lead": lead}, "topology": topology})
 
 
 def manager_worker(lead: Any, worker: Any, **roles: Any) -> Team:

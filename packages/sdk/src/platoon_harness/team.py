@@ -7,7 +7,16 @@ from collections.abc import Iterable, Mapping
 from fnmatch import fnmatchcase
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictFloat, StrictInt, StringConstraints, ValidationError, field_validator, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StringConstraints,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from platoon_harness.kernel import Extension
 from platoon_harness.primitives import WAKING, Capabilities, Injection, Policy
@@ -74,7 +83,9 @@ class Role(Model):
 
     `count` is how many start with the session: left out, one, or none if another role spawns this one. `delivery` is
     how a message reaches this role's inboxes, and `inbox_depth` how many entries one holds before refusing more.
-    `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn.
+    `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn. `stays` keeps an
+    agent after its task for the next message: left out, one the session started stays and one spawned does not, and a
+    spawn may say otherwise either way.
     """
 
     harness: str | Command
@@ -89,6 +100,7 @@ class Role(Model):
     inbox_depth: Positive = 1024
     may_spawn: tuple[str, ...] = ()
     count: Annotated[StrictInt, Field(ge=0)] | None = None
+    stays: StrictBool | None = None
     on_parent_exit: Literal["cancel-subtree", "adopt"] = "cancel-subtree"
     approvals: Policy = "ask"
     budget: Budget = Budget()
@@ -219,6 +231,22 @@ def _spawning(team: Team) -> dict[str, set[str]]:
     return found
 
 
+def _staying(team: Team, capabilities: Mapping[str, Capabilities]) -> dict[str, list[str]]:
+    """The wake arcs, and a parent and a child that can stay waking each other: a message from the parent wakes the
+    child, and the child's answer wakes the parent. Any child on a persistent harness can stay, as a spawn may ask."""
+    found = {name: set(targets) for name, targets in arcs(team, wakes=True).items()}
+    for parent, children in _spawning(team).items():
+        edges = (*team.topology.edges.get(parent, ()), *team.topology.edges.get("all", ()))
+        reached = {role for selector in edges for role in reach(team, parent, selector)}
+        for child in sorted(children & reached & team.roles.keys()):
+            known = capabilities.get(child) or capabilities.get(team.roles[child].driver)
+            woken = {team.roles[parent].delivery, team.roles[child].delivery} <= set(WAKING)
+            if known is not None and known.persistent and woken:
+                found[parent].add(child)
+                found[child].add(parent)
+    return {name: sorted(targets) for name, targets in found.items()}
+
+
 def _taken_down(team: Team, name: str) -> Iterable[Problem]:
     """A one-shot role's turn is its end, and no refusal can stand in the way of that."""
     for child in sorted(_spawning(team)[name] & team.roles.keys()):
@@ -298,6 +326,9 @@ def team_check(
                 problems.append(Problem(f"roles.{name}.count", what))
             if not known.persistent:
                 problems += _taken_down(team, name)
+            if role.stays and not known.persistent:
+                what = "a one-shot harness ends with its turn, so it cannot stay"
+                problems.append(Problem(f"roles.{name}.stays", what))
             problems += _budget_problems(team.budget, "budget", role, known)
             problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:
@@ -306,8 +337,15 @@ def team_check(
     if limits.max_depth is None and (cycle := _cycle(_spawning(team))):
         what = f"recursive may_spawn with no limit: {' -> '.join(cycle)}"
         problems.append(Problem("topology.limits.max_depth", what))
-    if limits.max_hops is None and (cycle := _cycle(arcs(team, wakes=True))):
-        problems.append(Problem("topology.limits.max_hops", f"a wake cycle with no limit: {' -> '.join(cycle)}"))
+    if limits.max_hops is None:
+        if cycle := _cycle(arcs(team, wakes=True)):
+            problems.append(Problem("topology.limits.max_hops", f"a wake cycle with no limit: {' -> '.join(cycle)}"))
+        elif cycle := _cycle(_staying(team, capabilities)):
+            what = (
+                f"a wake cycle with no limit, through a child that can stay: {' -> '.join(cycle)}. Each message from a "
+                "parent wakes its child, and each answer wakes the parent: set `max_hops` to bound them"
+            )
+            problems.append(Problem("topology.limits.max_hops", what, "warning"))
 
     problems += _warnings(team)
     return tuple(problems)

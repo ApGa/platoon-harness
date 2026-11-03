@@ -46,11 +46,27 @@
 - `peers` lists the `roles` you may start an agent in, and the preamble names them.
 - The preamble says how to end: an agent somebody spawned makes `agent.finish` its last call, and one the session started stays unless
   told to finish.
+- `stays` on `Role`, on `agent.spawn` and on `Session.spawn`: an agent that stays takes a follow-up task or a question by message
+  after its first, on the same harness, until it is told to finish, retired or cancelled. It is resolved once, at the spawn, from the
+  spawn, then the role, then whether the session started it, and refused for a harness that is not persistent. `agent.status` shows it,
+  and the result of a spawn that stays says how to end it. See ADR 0023.
 
 ### Changed
 
+- The monitor wakes a parent once for the spawn and once for each message of its own that its child is handed, in place of once per
+  causal chain, so the answer to a follow-up reaches the parent as the first did. A message from a peer or a human asks nothing.
+- What the preamble says of ending follows whether an agent stays, and a child that stays is told that its last words in each turn go
+  to its parent.
 - An agent's instructions are the preamble and then the role's words, so a role has the last word. A role that told a Codex agent
   never to finish lost to the preamble in run 21.
+- A child that ends with its parent ends `retired` unless it was at work, which still ends it `cancelled`, as Platoon drops a
+  cancelled child's tokens. `session.cancel` still cancels every agent.
+- An agent's `wait` for the end of one that stays is refused, naming `from`, and a `max_children` refusal says that ending a child
+  makes room.
+- `team_check` warns of a wake cycle that closes through a parent and a child that can stay, with no `max_hops`, which every
+  manager-worker team without one now gets, and refuses a role that stays on a one-shot harness.
+- A tool result's `next` is in the words of its surface, with no sentence naming a tool its reader does not hold, as a refusal's is.
+- `open_session` takes what each role's driver said, and the runtime asks each driver when it opens a session.
 - `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
   argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`

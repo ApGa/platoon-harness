@@ -300,9 +300,17 @@ def _work_on(txn: Txn, queue: str) -> Condition:
 
 def _ending_of(txn: Txn, name: str) -> Condition:
     """An agent's end, whoever brought it about, so `distinct` counts the waiter's own cancel too. A spawn adds its
-    principal in its own transaction, so a name nobody holds is a typo."""
+    principal in its own transaction, so a name nobody holds is a typo. One that stays ends only when someone ends it,
+    which an agent waiting on its end would have to do itself."""
     if txn.view(Principals).named(name) is None:
         raise Refused("not_found", f"no agent {name}")
+    agent = txn.view(Agents).get(name)
+    if txn.me.kind == "agent" and agent is not None and agent.stays:
+        raise Refused(
+            "invalid",
+            f"{name} stays after each task, so it ends only when it is ended. `wait` with `from` hears its answers. "
+            "`agent.retire` ends it once it is idle",
+        )
     return Condition(stream=f"agent/{name}", types=("agent.ended",), distinct="agent")
 
 
@@ -384,7 +392,7 @@ def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
     again or end your turn. A child of yours that ends badly starts your next turn early, and the wait stays open.
     Refused `not_permitted` for what you may not watch, `not_found` for an agent nobody spawned. `unsupported` when this
     harness cannot park: pass `timeout` and a `hold` at least as long. `invalid` for an `after` past every event: leave
-    it out."""
+    it out. `invalid` too when `agents` names one that stays: use `from` for its answers."""
     _check_call(txn, a)
     after = checked_after(txn, a.after)
     asked = _conditions(txn, a)
@@ -406,7 +414,7 @@ def wait_for(txn: Txn, a: Wait) -> dict[str, Any]:
 
     left = (len(conditions) if a.mode == "all" else 1) - sum(progress.done for progress in conditions)
     deadline = None if a.timeout is None else txn.now + a.timeout
-    hops, _ = txn.view(Deliveries).heard(reader) or (-1, ())
+    hops = txn.view(Deliveries).heard(reader)
     record = {"mode": a.mode, "left": left, "after": after, "deadline": deadline, "hops": hops}
     data = {**record, "conditions": conditions}
     event = txn.emit(

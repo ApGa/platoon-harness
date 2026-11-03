@@ -21,6 +21,7 @@ from .common import (
     Exposed,
     Gist,
     Seq,
+    address,
     checked_after,
     decoded,
     expose_read,
@@ -41,8 +42,7 @@ _QUEUED = """
 
 
 class Entry(BaseModel, frozen=True):
-    """One message as readers get it. `sender` is an address to reply to, or `runtime`. `monitored` names the children
-    whose monitor has spent this chain's wake."""
+    """One message as readers get it. `sender` is an address to reply to, or `runtime`."""
 
     seq: int
     ref: str
@@ -53,10 +53,6 @@ class Entry(BaseModel, frozen=True):
     reply_to: str | None = None
     hops: int = 0
     subject: str | None = None
-    monitored: tuple[str, ...] = ()
-
-    def shown(self) -> dict[str, Any]:
-        return self.model_dump(exclude={"monitored"})
 
 
 class Cursor(NamedTuple):
@@ -83,7 +79,7 @@ class Cursor(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -121,11 +117,7 @@ class Deliveries(View):
         taken INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
-    CREATE TABLE v_deliveries_heard(
-        agent TEXT PRIMARY KEY,
-        hops INTEGER NOT NULL,
-        monitored TEXT NOT NULL
-    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
     """
 
@@ -136,9 +128,7 @@ class Deliveries(View):
             seq=event.seq,
             ref=f"{event.stream}@{event.version}",
             gist=event.gist,
-            **{
-                field: data[field] for field in ("sender", "body", "thread", "reply_to", "hops", "subject", "monitored")
-            },
+            **{field: data[field] for field in ("sender", "body", "thread", "reply_to", "hops", "subject")},
         )
         self.db.execute(
             "INSERT INTO v_deliveries VALUES (?, ?, ?, ?, ?, ?)",
@@ -174,11 +164,9 @@ class Deliveries(View):
             "INSERT INTO v_deliveries_offers VALUES (?, ?, ?, ?, NULL, 0, 0)",
             (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before)),
         )
-        _, spent = self.heard(event.agent) or (0, ())
         self.db.execute(
-            "INSERT INTO v_deliveries_heard VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET "
-            "hops = max(hops, excluded.hops), monitored = excluded.monitored",
-            (event.agent, data["hops"], json.dumps(sorted({*spent, *data["monitored"]}))),
+            "INSERT INTO v_deliveries_heard VALUES (?, ?) ON CONFLICT DO UPDATE SET hops = max(hops, excluded.hops)",
+            (event.agent, data["hops"]),
         )
 
     @fold("effect.requested")
@@ -377,10 +365,10 @@ class Deliveries(View):
                 positions[stream] = entry.seq
         return positions
 
-    def heard(self, agent: str | None) -> tuple[int, tuple[str, ...]] | None:
-        """The largest hops offered to this agent's turn, and the children whose monitor has spent that chain's wake."""
-        row = self.db.execute("SELECT * FROM v_deliveries_heard WHERE agent = ?", (agent,)).fetchone()
-        return None if row is None else (row["hops"], tuple(json.loads(row["monitored"])))
+    def heard(self, agent: str | None) -> int:
+        """The largest hops offered to this agent's turn, or -1 when nothing has been."""
+        row = self.db.execute("SELECT hops FROM v_deliveries_heard WHERE agent = ?", (agent,)).fetchone()
+        return -1 if row is None else row["hops"]
 
     def blocked(self, agent: str) -> str | None:
         row = self.db.execute("SELECT why FROM v_deliveries_blocked WHERE agent = ?", (agent,)).fetchone()
@@ -431,23 +419,25 @@ def _audience(txn: Txn, stream: str) -> _Reach:
     return _Reach(channel, tuple(readers))
 
 
-def chain_of(entries: Sequence[Entry]) -> dict[str, Any]:
-    """What an offer of these entries carries into the turn that hears them."""
+def chain_of(txn: Txn, reader: str, entries: Sequence[Entry]) -> dict[str, Any]:
+    """What an offer of these entries carries into the turn that hears them: the largest hops, and whether the
+    reader's parent asked it something, by a message of its own to the reader's inbox."""
+    agent = txn.view(Agents).get(reader)
+    parent = None if agent is None or agent.parent is None else address(agent.parent)
+    inbox = f"inbox/{reader}@"
     return {
         "hops": max((entry.hops for entry in entries), default=0),
-        "monitored": sorted({name for entry in entries for name in entry.monitored}),
+        "asked": any(entry.sender == parent and entry.ref.startswith(inbox) for entry in entries),
     }
 
 
-def _chain(txn: Txn, cause: Sequence[int], subject: str | None, follows: int) -> tuple[int, tuple[str, ...]]:
-    """One hop more than anything this followed from, and the children whose monitor has spent that chain's wake."""
+def _hops(txn: Txn, cause: Sequence[int], subject: str | None, follows: int) -> int:
+    """One hop more than anything this followed from."""
     if txn.me.kind == "human":
-        return 0, ()
+        return 0
     deliveries = txn.view(Deliveries)
-    heard, spent = deliveries.heard(subject or (txn.me.name if txn.me.kind == "agent" else None)) or (-1, ())
-    behind = deliveries.entries_at(cause)
-    hops = max(follows, heard, *(entry.hops for entry in behind))
-    return hops + 1, tuple(sorted({*spent, *(name for entry in behind for name in entry.monitored)}))
+    heard = deliveries.heard(subject or (txn.me.name if txn.me.kind == "agent" else None))
+    return max(follows, heard, *(entry.hops for entry in deliveries.entries_at(cause))) + 1
 
 
 def post(
@@ -464,9 +454,10 @@ def post(
     wake: bool | None = None,
     follows: int = -1,
 ) -> Event:
-    """Journal one entry for its audience. The runtime posts here too, about a `subject`, or to `wake` the reader,
-    whatever a chain has spent, or with False to leave it for the reader's next turn. `follows` is the hops of what a
-    post follows when no `cause` can say so, as for a wait's notice."""
+    """Journal one entry for its audience. The runtime posts here too: a report about a `subject`, which wakes its
+    reader only while that agent was asked something, or to `wake` the reader regardless, or with False to leave it
+    for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can say so, as for a
+    wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake is not None
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
@@ -475,12 +466,13 @@ def post(
         if depth >= channel.depth:
             raise Refused("queue_full", {"receipt": "full", "depth": depth, "cap": channel.depth})
 
-    hops, spent = _chain(txn, cause, subject, follows)
+    hops = _hops(txn, cause, subject, follows)
     max_hops = txn.view(SessionRecord).settings().limits.max_hops
     past_hops = max_hops is not None and hops > max_hops
     setting = "wake" if wake else channel.delivery
     wants = setting in WAKING and wake is not False
-    wakes = wants and not past_hops and (wake or subject not in spent)
+    about = None if subject is None else txn.view(Agents).get(subject)
+    wakes = wants and not past_hops and (wake or about is None or about.asked)
     event = txn.emit(
         "message.sent",
         stream,
@@ -498,7 +490,6 @@ def post(
             "reply_to": reply_to,
             "hops": hops,
             "subject": subject,
-            "monitored": sorted({*spent, subject}) if subject else spent,
             "audience": audience,
             "generation": generation,
             "delivery": "next-turn" if setting in WAKING and not wakes else setting,
@@ -606,7 +597,7 @@ class _Shown(NamedTuple):
 
 
 def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
-    row = entry.shown()
+    row = entry.model_dump()
     exposed = [Exposed.of(entry.ref, "gist", entry.gist)]
     if bodies and entry.body is not None:
         row["text"] = None  # A surface fetches what an op may not read.
@@ -650,7 +641,7 @@ def read(txn: Txn, a: Read) -> dict[str, Any]:
         txn,
         [exposed for item in shown for exposed in item.exposed],
         positions=None if reader is None else deliveries.stops(reader, entries, whole=whole),
-        **chain_of(entries),
+        **chain_of(txn, txn.me.name, entries),
     )
     cursor = entries[-1].seq if entries else start
     left = list(window(cursor))

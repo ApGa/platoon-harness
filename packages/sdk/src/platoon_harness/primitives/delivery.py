@@ -89,7 +89,7 @@ class Offer(Args):
 def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how: str) -> dict[str, Any] | None:
     deliveries = txn.view(Deliveries)
     queued, total = deliveries.queued(agent, modes)
-    shown: list[Entry] = fitted(queued, show=lambda entry: entry.shown())
+    shown: list[Entry] = fitted(queued, show=Entry.model_dump)
     if not shown:
         return None
     input = expose(
@@ -99,7 +99,7 @@ def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how:
         how=how,
         boundary=boundary,
         positions=deliveries.stops(agent, shown),
-        **chain_of(shown),
+        **chain_of(txn, agent, shown),
     )
     return {
         "input": input,

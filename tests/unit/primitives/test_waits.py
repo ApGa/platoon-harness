@@ -154,12 +154,23 @@ async def test_a_version_watch_is_a_wait_on_a_board_object(kernel):
 
 async def test_tool_arguments_are_friendly_for_agents(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    w1 = await spawn(kernel, "w1")
+    w1 = await spawn(kernel, "w1", by=lead)
     placed = result_of(await kernel.submit(lead, "wait", {"agents": ["w1"]}))
 
     result_of(await kernel.submit(w1, "agent.finish", {}))
 
     assert released(kernel) == [placed["id"]]
+
+
+async def test_an_agent_s_wait_for_the_end_of_one_that_stays_is_refused_naming_from(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead, stays=True)
+
+    refused = refusal(await kernel.submit(lead, "wait", {"agents": ["bob"]}))
+
+    assert refused.code == "invalid" and "`from`" in refused.detail and "`agent.retire`" in refused.detail
+    assert result_of(await kernel.submit(lead, "wait", {"from": ["bob"]}))["state"] == "parked"
+    assert result_of(await kernel.submit(ada, "wait", {"agents": ["bob"]}))
 
 
 async def test_tool_arguments_are_friendly_for_senders(kernel):
@@ -300,7 +311,7 @@ async def test_friendly_channels_name_no_stream(kernel):
 
 async def test_a_wait_names_what_is_missing_as_a_model_would(kernel):
     bob = await spawn(kernel, "bob")
-    await spawn(kernel, "w1")
+    await spawn(kernel, "w1", stays=False)
     await channel(kernel, "notes", kind="board")
     await channel(kernel, "q", kind="queue")
     result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "x"}))
@@ -738,7 +749,7 @@ async def test_hold_says_how_a_wait_closed(kernel, clock, close, state):
 
 async def test_hold_keeps_a_live_wait_for_a_caller_whose_scopes_hide_its_progress(kernel, clock):
     lead = await spawn(kernel, "lead", role="narrow")
-    await spawn(kernel, "w1")
+    await spawn(kernel, "w1", stays=False)
     placed = result_of(await kernel.submit(lead, "wait", {"agents": ["w1"], "hold": 5.0}))
 
     held = asyncio.create_task(hold_open(kernel, placed))

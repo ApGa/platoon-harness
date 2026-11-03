@@ -62,6 +62,11 @@ _NOTICE = (
     "Your last turn was cut off by {cause}. Any tool call in it may have run, in part or in full, whatever your "
     "history shows, and none was repeated. Check before you repeat anything, then carry on."
 )
+_STAYS = (
+    "It stays when its task is done, and what it says at the end of each of its turns comes back to you. Message it "
+    "for more. To end it, tell it to finish. `agent.retire` ends it when it is idle. `agent.cancel` ends it at any "
+    "time."
+)
 
 
 def _inbox_of(principal: str) -> str:
@@ -191,11 +196,12 @@ def end(
     for task in owned:
         bury_if_spent(txn, task, txn.view(Channels).require(f"queue/{task.queue}"))
     regroup(txn, name, agent.role, joined=False)
+    at_work = _at_work(txn)
     for child in txn.view(Agents).children(agent.id):
         if child.on_parent_exit == "adopt":
             txn.emit("agent.adopted", f"agent/{child.name}", gist=f"{child.name} adopted", agent=child.name)
-        else:
-            end(txn, child, "cancelled", reason=f"parent {name} ended")
+        else:  # One cut off from no work is no failure, and is not dropped from training as a cancelled one is.
+            end(txn, child, "cancelled" if child.name in at_work else "retired", reason=f"parent {name} ended")
 
 
 class Spawn(Args):
@@ -203,6 +209,9 @@ class Spawn(Args):
     child_role: Annotated[Name, Field(description="The role to start it in.")]
     goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")] = ""
     body: Body = None
+    stays: Annotated[
+        bool | None, Field(description="Whether it stays after its task for more. Left out, its role decides.")
+    ] = None
 
 
 def _admit(txn: Txn, depth: int, parent: str | None) -> None:
@@ -214,16 +223,21 @@ def _admit(txn: Txn, depth: int, parent: str | None) -> None:
     if limits.max_live is not None and agents.count_live() >= limits.max_live:
         raise Refused("not_permitted", f"{limits.max_live} agents are live, which is max_live")
     if limits.max_children is not None and parent and len(agents.children(parent)) >= limits.max_children:
-        raise Refused("not_permitted", f"{parent} has {limits.max_children} children, which is max_children")
+        raise Refused(
+            "not_permitted",
+            f"{parent} has {limits.max_children} children, which is max_children, and ending one makes room. "
+            "`agent.retire` ends one that is idle",
+        )
 
 
 @op("agent.spawn", on=lambda a: f"role/{a.child_role}", tool=True)
 def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. With neither it starts idle
-    and takes no turn until a message wakes it. It reports back to you when it ends, however it ends, so a parent can
-    simply wait. Refused `not_permitted` for a role or limit outside your
+    and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it
+    ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your
     reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the
-    session is closing or you have finished: use another name, or stop. `not_found` when no such role exists."""
+    session is closing or you have finished: use another name, or stop. `not_found` when no such role exists.
+    `unsupported` for `stays` on a harness that cannot stay."""
     session = txn.view(SessionRecord)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
@@ -238,6 +252,11 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         raise Refused("conflict", f"{spawner.name} has finished: end your turn")
     depth = 0 if spawner is None else spawner.depth + 1
     parent = None if txn.me.kind == "runtime" else txn.me.id
+    stays = next(said for said in (a.stays, role.stays, parent is None) if said is not None)
+    if stays and role.persistent is False:
+        raise Refused(
+            "unsupported", f"{a.child_role} runs a one-shot harness, which ends with its turn: it cannot stay"
+        )
     _admit(txn, depth, parent)
     reserve(txn, a.name, a.child_role, turn=bool(a.goal or a.body), agents=1.0)
     txn.emit(
@@ -251,6 +270,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "role": a.child_role,
             "parent": parent,
             "depth": depth,
+            "stays": stays,
             "goal": a.goal,
             "body": a.body,
             "harness": role.harness,
@@ -275,7 +295,8 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         "workspace", {**spec, "workspace": role.workspace}, on_uncertain="reconcile", agent=a.name, after=admit
     )
     txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name, after=workspace)
-    return {"agent": f"@{a.name}", "state": "spawning"}
+    spawned = {"agent": f"@{a.name}", "state": "spawning", "stays": stays}
+    return {**spawned, "next": _STAYS} if stays else spawned
 
 
 class Finish(Args):
@@ -554,7 +575,8 @@ def report(txn: Txn, a: AgentReport) -> None:
 def _public(agent: Agent) -> dict[str, Any]:
     """An agent as any peer may see it: its goal and activity are content, and reading content is evidence."""
     parent = agent.parent and name_of(agent.parent)
-    return {**agent.model_dump(include={"role", "depth", "state", "status"}), "agent": agent.name, "parent": parent}
+    shown = agent.model_dump(include={"role", "depth", "stays", "state", "status"})
+    return {**shown, "agent": agent.name, "parent": parent}
 
 
 @op("agent.list", query=True)
@@ -737,11 +759,8 @@ def cancel_session(txn: Txn, a: Args) -> None:
     if session.state() in ("cancelled", "stopped"):
         raise Refused("conflict", f"the session is {session.state()}")
     txn.emit("session.cancelled", "session", gist="session cancelled")
-    agents = txn.view(Agents)
-    for name in [agent.name for agent in agents.live()]:
-        agent = agents.get(name)
-        if agent is not None and not agent.ended:  # An earlier one may have taken it down with its subtree.
-            end(txn, agent, "cancelled", reason="session cancelled")
+    for agent in sorted(txn.view(Agents).live(), key=lambda agent: -agent.depth):
+        end(txn, agent, "cancelled", reason="session cancelled")  # Deepest first, so none ends as its parent's child.
 
 
 @op("session.stop", runtime=True)

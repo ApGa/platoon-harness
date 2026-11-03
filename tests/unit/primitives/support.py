@@ -16,6 +16,9 @@ ROLES = {
     "steerer": {"harness": "codex", "delivery": "steer"},
     "quiet": {"harness": "codex", "delivery": "pull"},
     "narrow": {"harness": "codex", "tools": ["wait", "ops.list"]},
+    "keeper": {"harness": "codex", "stays": True, "persistent": True},
+    "leaver": {"harness": "codex", "stays": False, "persistent": True},
+    "oneshot": {"harness": "exec", "persistent": False},
 }
 
 
@@ -31,9 +34,10 @@ async def spawn(
     by: Principal | None = None,
     ready: dict[str, Any] | None = None,
     goal: str | None = None,
+    stays: bool | None = None,
 ) -> Principal:
     """Spawn an agent through to started, doing what the host does between the two."""
-    args = {"name": name, "child_role": role, "goal": f"be {name}" if goal is None else goal}
+    args = {"name": name, "child_role": role, "goal": f"be {name}" if goal is None else goal, "stays": stays}
     result_of(await kernel.submit(by or kernel.runtime, "agent.spawn", args))
     await settle_effects(kernel, name)
     await start(kernel, name, **(ready or {}))
