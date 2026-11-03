@@ -53,6 +53,8 @@ Backspace.
 - ADR 0015's "approvals never take focus" now reads: never on their own.
 - `/` begins a typed command from every part of a session, and search in a transcript has no key until it is built.
 - A resize moves focus only by hiding the part that has it.
+- The dock reads its own letters, as the composer does, so a word typed at once is read in the order it came. As bindings, the
+  App ran them as they arrived, before the dock had read the keys ahead of them.
 - A typed command is kept in the composer's history beside what was sent.
 - A new line in the composer still takes Shift+Enter, Alt+Enter, Ctrl+J or a paste. It edits a message and runs no act.
 - Nothing was measured on a Mac or in Cursor. The tests drive the whole flow with plain keys through Pilot, and quit through a real

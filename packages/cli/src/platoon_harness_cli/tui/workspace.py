@@ -23,7 +23,7 @@ from platoon_harness.runtime.paths import MANIFEST
 from ..ops import Flag, described, flags, person_ops
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
-from .keymap import KEYMAP, bindings, command, keys, reach
+from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
 from .rows import Row, Rows
 from .safe import SafeText, note
@@ -53,11 +53,11 @@ CHOOSE = f"{next(key.shown for key in keys('list') if key.action == 'cursor_down
 class Dock(Rows):
     """Where a person must act, a row each. Only the person moves its cursor: a row that goes takes the cursor with it,
     so an act never lands on a row they did not choose. Only Tab or Shift+Tab gives it focus, since a click chooses a
-    place and gives none, and its letters act only on a place chosen there with the arrows: it takes focus with none
-    chosen, and a character it does not take lets go of the one chosen, so what is typed for the composer answers
-    nothing."""
+    place and gives none. It reads its own letters, in the order they come, and they act only on a place chosen there
+    with the arrows: it takes focus with none chosen, and a character it does not take lets go of the one chosen, so
+    what is typed for the composer answers nothing."""
 
-    BINDINGS = [*bindings("dock"), *bindings("panel")]
+    BINDINGS = bindings("panel")
     FOCUS_ON_CLICK = False
 
     class Moved(Message):
@@ -66,8 +66,12 @@ class Dock(Rows):
     def on_focus(self) -> None:
         self._let_go()
 
-    def on_key(self, event: events.Key) -> None:
-        if event.is_printable:
+    async def on_key(self, event: events.Key) -> None:
+        if (action := action_of("dock", event.key)) is not None:
+            event.stop()
+            event.prevent_default()
+            await self.run_action(action)
+        elif event.is_printable:
             self._let_go()
 
     def _let_go(self) -> None:
@@ -811,21 +815,20 @@ class Workspace(Screen[None]):
         dock.move_to(place)
         await self._go_to(place)
 
-    @work(group="act")
-    async def action_first_action(self) -> None:
-        await self._act(0)
+    def action_first_action(self) -> None:
+        self._act(0, self.query_one(Dock).cursor)
+
+    def action_second_action(self) -> None:
+        self._act(1, self.query_one(Dock).cursor)
 
     @work(group="act")
-    async def action_second_action(self) -> None:
-        await self._act(1)
-
-    async def _act(self, index: int) -> None:
-        """Take an action of the place you are at, as its row offers it, with the version it was drawn from."""
+    async def _act(self, index: int, chosen: str | None) -> None:
+        """Take an action of the place you were at when you asked, as its row offers it, with the version it was drawn
+        from."""
         live = self.live
-        dock = self.query_one(Dock)
-        place = live.attention.get(dock.cursor or "") if live else None
+        place = live.attention.get(chosen or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
-            how = CHOOSE if dock.has_focus else f"{reach('next_place')} goes to where you must act"
+            how = CHOOSE if self.query_one(Dock).has_focus else f"{reach('next_place')} goes to where you must act"
             note(self, f"Nothing here takes that action: {how}.", severity="warning")
             return
         action = place["actions"][index]

@@ -33,8 +33,8 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 - Tab and Shift+Tab go round the parts in the order they are on screen: the navigator, the transcript, the dock and the
   composer.
 - Only Tab or Shift+Tab moves focus to the dock, and its `y` and `n` act only on a place chosen there with the arrows: it
-  takes focus with no place chosen, and a character it does not take lets go of the one chosen, so a stray Tab from a
-  draft, then the draft going on, answers nothing. A click chooses a place and gives no focus.
+  takes focus with no place chosen, and a character it does not take lets go of the one chosen, in the order the keys
+  come, so a stray Tab from a draft, then the draft going on, answers nothing. A click chooses a place and gives no focus.
 - A part hidden while it has focus, by a resize, `/navigator` or a dock left empty, gives focus back to the composer.
 - Esc in the composer interrupts the agent in view, and from any other part goes back to the composer, interrupting
   nothing. The footer names Esc by what it does from the part with focus, and that part is marked: the navigator by its

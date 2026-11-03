@@ -30,7 +30,7 @@ PLACES = {
     Workspace: ("workspace", "parts"),
     Transcript: ("transcript", "panel"),
     Navigator: ("panel",),
-    Dock: ("dock", "panel"),
+    Dock: ("panel",),
     Rows: ("list",),
     Confirm: ("question",),
     Form: ("dialog",),
@@ -50,9 +50,13 @@ def acts() -> list:
 
 
 def test_every_binding_comes_from_the_table_and_runs_an_action_of_its_place():
-    """The composer reads its keys from the table itself, and every other place binds them, but an act with no keys. An
-    action names `app` or `screen` when it runs on one, and otherwise runs on the place that binds it."""
-    assert {where for wheres in PLACES.values() for where in wheres} | {"composer"} == {key.where for key in KEYMAP}
+    """The composer and the dock read their keys from the table themselves, in the order they come, and every other
+    place binds them, but an act with no keys. An action names `app` or `screen` when it runs on one, and otherwise runs
+    on the place that binds it."""
+    assert {where for wheres in PLACES.values() for where in wheres} | {"composer", "dock"} == {
+        key.where for key in KEYMAP
+    }
+    assert all(hasattr(Workspace, f"action_{parse(key.runs)[1]}") for key in keys("dock"))
     assert not [key for key in KEYMAP if not key.keys and not key.typed]
     for place, wheres in PLACES.items():
         bound = [(binding.key, binding.action) for binding in place.BINDINGS if isinstance(binding, Binding)]

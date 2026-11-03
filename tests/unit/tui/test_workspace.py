@@ -101,9 +101,18 @@ def at_once(app: TerminalUI, sent: str) -> None:
         app._driver.send_message(key)
 
 
-async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root):
-    """A terminal sends Alt and a letter as Esc then that letter, so no chord decides or stops anything, and in the dock
-    the letter lets go of the place chosen there, so a `y` or `n` later in the word answers nothing."""
+async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root, monkeypatch):
+    """A terminal sends Alt and a letter as Esc then that letter, so no chord decides or stops anything. In the dock the
+    letter lets go of the place chosen there, and the dock reads its keys in the order they came, however late, so a
+    `y` or `n` later in the word answers nothing."""
+    reading, read = Dock.on_key, asyncio.Event()
+    read.set()
+
+    async def late(self, event):
+        await read.wait()
+        await reading(self, event)
+
+    monkeypatch.setattr(Dock, "on_key", late)
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -118,7 +127,10 @@ async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root):
 
         await pilot.press("shift+tab", "down")
         await drawn(pilot, lambda text: "y Allow  n Deny" in text)
+        read.clear()
         at_once(app, "\x1bplease continue")
+        await pilot.pause()
+        read.set()
         await drawn(pilot, lambda _: any(CHOOSE in notice.message for notice in app._notifications))
         assert await of_type(owner, "approval.resolved") == [] and await of_type(owner, "turn.ended") == []
 
