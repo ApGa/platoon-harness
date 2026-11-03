@@ -418,11 +418,13 @@ class FakeModel:
         return False
 
     async def _held(self, reader: asyncio.StreamReader) -> bool:
-        """Wait for a release, and say whether the client stayed to hear it."""
+        """Wait for a release, and say whether the client stayed to hear it. The look for its leaving is over before the
+        connection reads its next request."""
         gone = asyncio.ensure_future(reader.read(1))
         released = asyncio.ensure_future(self._released.wait())
         await asyncio.wait({gone, released}, return_when=asyncio.FIRST_COMPLETED)
         stayed = not gone.done()
         gone.cancel()
         released.cancel()
+        await asyncio.gather(gone, released, return_exceptions=True)
         return stayed

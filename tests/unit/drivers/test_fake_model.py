@@ -200,6 +200,33 @@ async def test_a_stall_holds_the_reply_until_released():
         assert (await reply)["choices"][0]["message"]["content"] == "released"
 
 
+async def test_a_released_stall_leaves_its_connection_to_the_next_request():
+    async with FakeModel([Stall(), Text("released")], "next") as model:
+        reader, writer = await asyncio.open_connection(*model.url.removeprefix("http://").split(":"))
+        try:
+            writer.write(request(CHAT))
+            await model.call(0)
+            model.release()
+            first = await response(reader)
+            writer.write(request(CHAT))
+            second = await response(reader)
+        finally:
+            writer.close()
+
+    assert [said["choices"][0]["message"]["content"] for said in (first, second)] == ["released", "next"]
+
+
+def request(path: str) -> bytes:
+    body = json.dumps({"model": "m"}).encode()
+    return f"POST {path} HTTP/1.1\r\nhost: x\r\ncontent-length: {len(body)}\r\n\r\n".encode() + body
+
+
+async def response(reader: asyncio.StreamReader) -> dict:
+    head = (await reader.readuntil(b"\r\n\r\n")).decode()
+    length = next(int(line.split(":")[1]) for line in head.split("\r\n") if line.lower().startswith("content-length"))
+    return json.loads(await reader.readexactly(length))
+
+
 async def test_a_client_that_gives_up_on_a_stall_goes_unanswered():
     async with FakeModel(Stall(), "next") as model:
         reply = asyncio.create_task(ask(model, CHAT))
