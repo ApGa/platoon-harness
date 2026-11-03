@@ -560,6 +560,17 @@ async def test_a_delivery_the_harness_refuses_fails_and_is_not_sent_again(tmp_pa
         await driver.interrupt()
 
 
+async def test_a_delivery_that_landed_and_then_was_refused_is_a_driver_error(tmp_path, stand):
+    stand.install(refused={"turn/start": "the thread is busy"}, before_refusal=[landed("41")])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        with pytest.raises(DriverError, match="the thread is busy"):
+            await driver.deliver(delivery())
+
+    assert heard.of(InputDelivered)[0].input == "41"
+
+
 async def test_a_harness_that_stopped_reading_holds_a_delivery_up(tmp_path, stand):
     stand.install(deaf_after="turn/start")
 
