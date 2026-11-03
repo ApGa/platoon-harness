@@ -1,5 +1,5 @@
-"""The transcript: one agent's or one channel's journal, a line per event and a line opens on demand, paged back from
-the journal and drawn a line at a time, with what an agent is saying now below it."""
+"""The transcript: one agent's or one channel's journal, a line per event and a line opens on demand, read from the
+journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
 
 import time
 from collections.abc import Iterable
@@ -65,12 +65,6 @@ class Focus:
         children = tuple(f"agent/{child}" for child in children)
         return cls(f"@{name}", streams=(*streams, *children), marks=streams, agent=name, to=f"@{name}")
 
-    def spawned(self, event: Event) -> "Focus | None":
-        """This agent's focus with a child it just spawned, or None if `event` is no spawn of its."""
-        if event.type != "agent.spawned" or self.agent is None or event.data.get("parent") != f"agent:{self.agent}":
-            return None
-        return replace(self, streams=(*self.streams, event.stream))
-
     @classmethod
     def of_channel(cls, address: str, kind: str) -> "Focus":
         """A channel as `channel.list` names it: `#topic`, `+group`, or a queue's or board's bare name."""
@@ -90,6 +84,12 @@ class Focus:
     @property
     def key(self) -> str:
         return self.title
+
+    def spawned(self, event: Event) -> "Focus | None":
+        """This agent's focus with a child it just spawned, or None if `event` is no spawn of its."""
+        if event.type != "agent.spawned" or self.agent is None or event.data.get("parent") != f"agent:{self.agent}":
+            return None
+        return replace(self, streams=(*self.streams, event.stream))
 
     def holds(self, event: Event) -> bool:
         return event.stream in self.streams if self.match is None else fnmatchcase(event.stream, self.match)
@@ -216,7 +216,7 @@ class Transcript(ScrollView, can_focus=True):
     DEFAULT_CSS = "Transcript { overflow-x: hidden; }"
 
     class Moved(Message):
-        """Following started or stopped, or a line came while it was stopped."""
+        """Following started or stopped."""
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)

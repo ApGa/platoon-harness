@@ -2,8 +2,10 @@
 
 import asyncio
 import contextlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, Literal
+
+from textual.worker import Worker
 
 from platoon_harness import Ending, Refused, Session
 from platoon_harness.kernel import Delta, Event, is_held
@@ -22,9 +24,16 @@ class Live:
     """A session as the TUI follows it: one reader of its journal, one of the live text of the agent in view, and what
     the views say, each frame. Frames come at most 15 a second, and one that would come sooner is dropped; an event
     never is: a reader with too many waiting waits for the next frame, so a slow screen holds up only its own reading.
-    It decides nothing: what it shows comes from the views, and its one timer looks for a runtime to attach to."""
+    It decides nothing: what it shows comes from the views. Its two timers decide nothing either: one paces frames, and
+    one looks for a runtime to attach to. Each loop runs as a worker of the screen, so one that fails ends the app
+    loudly, rather than leaving a screen that no longer moves."""
 
-    def __init__(self, session: Session, draw: Callable[[list[Event], list[Delta]], Awaitable[None]]) -> None:
+    def __init__(
+        self,
+        session: Session,
+        draw: Callable[[list[Event], list[Delta]], Awaitable[None]],
+        run: Callable[[Coroutine[Any, Any, None]], Worker[None]],
+    ) -> None:
         self.session = session
         self.roster: list[dict[str, Any]] = []
         self.attention: dict[str, dict[str, Any]] = {}
@@ -36,6 +45,7 @@ class Live:
         self.runtime: Runtime = "live"
         self.frames = 0
         self._draw = draw
+        self._run = run
         self._read_through = 0
         self._stopped = False
         self._pending: list[Event] = []
@@ -45,32 +55,31 @@ class Live:
         self._drawn = asyncio.Condition()
         self._cursors: dict[str, int | None] = {"roster": None, "attention": None, "changes": None}
         self._channels_moved = True
-        self._tasks: list[asyncio.Task[None]] = []
-        self._tail: asyncio.Task[None] | None = None
+        self._workers: list[Worker[None]] = []
+        self._tail: Worker[None] | None = None
         self._tail_of: str | None = None
 
-    async def start(self, through: int) -> None:
+    def start(self, through: int) -> None:
         """Follow from `through`, which the screen has drawn already."""
         self._read_through = through
         self.runtime = "live" if is_held(self.session.folder) else "history"
-        self._tasks = [asyncio.create_task(self._read()), asyncio.create_task(self._frames())]
+        self._workers = [self._run(self._read()), self._run(self._frames())]
         self._dirty.set()
 
-    async def stop(self) -> None:
-        for task in [*self._tasks, *([self._tail] if self._tail else [])]:
-            task.cancel()
-        await asyncio.gather(*self._tasks, *([self._tail] if self._tail else []), return_exceptions=True)
+    def stop(self) -> None:
+        for worker in [*self._workers, *([self._tail] if self._tail else [])]:
+            worker.cancel()
 
     def follow_tail(self, agent: str | None) -> None:
         """Read the live text of `agent` alone, the one in view, or of nobody."""
-        if agent == self._tail_of and self._tail is not None and not self._tail.done():
+        if agent == self._tail_of and self._tail is not None and not self._tail.is_finished:
             return
         if self._tail is not None:
             self._tail.cancel()
         self._tail_of, self._tail = agent, None
         self._deltas = []
         if agent is not None and self.runtime == "live":
-            self._tail = asyncio.create_task(self._read_tail(agent))
+            self._tail = self._run(self._read_tail(agent))
 
     async def next_frame(self, after: int) -> None:
         """Wait until a frame past the `after`th has been drawn."""

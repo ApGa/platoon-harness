@@ -148,13 +148,13 @@ class Workspace(Screen[None]):
             self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))
             return
         self.query_one(Transcript).through = through
-        self.live = Live(session, self._draw)
-        await self.live.start(through)
+        self.live = Live(session, self._draw, partial(self.run_worker, group="live"))
+        self.live.start(through)
 
     async def on_unmount(self) -> None:
         """Leave as a guest leaves: the session, and its runtime, run on."""
         if self.live is not None:
-            await self.live.stop()
+            self.live.stop()
             await self.live.session.leave()
 
     # Drawing, once a frame.
