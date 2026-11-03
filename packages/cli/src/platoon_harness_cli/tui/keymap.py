@@ -63,10 +63,8 @@ class Key:
 
     @property
     def shown(self) -> str:
-        """The first key, as a person reads it: `^D`, `Alt+A`, `Esc`, `PgUp`, and a letter alone as it is typed, `n`."""
-        *held, key = self.keys.split(",")[0].split("+")
-        said = _NAMES.get(key, (key.upper() if held else key) if len(key) == 1 else key.capitalize())
-        return "".join(_HELD[name] for name in held) + said
+        """The first key, as a person reads it."""
+        return _shown(self.keys.split(",")[0])
 
     @property
     def typed(self) -> str:
@@ -89,6 +87,14 @@ _NAMES = {
     "slash": "/",
     "question_mark": "?",
 }
+
+
+def _shown(pressed: str) -> str:
+    """A key as a person reads it: `^D`, `Alt+A`, `Esc`, `PgUp`, and a character alone as it is typed, `n` or `/`."""
+    *held, key = pressed.split("+")
+    said = _NAMES.get(key, (key.upper() if held else key) if len(key) == 1 else key.capitalize())
+    return "".join(_HELD[name] for name in held) + said
+
 
 KEYMAP: tuple[Key, ...] = (
     Key("f1", "app.help", "help", "Show every key and typed command", "everywhere"),
@@ -133,22 +139,13 @@ KEYMAP: tuple[Key, ...] = (
     Key("alt+up", "previous_row", "previous", "Show the previous agent or channel", "workspace"),
     Key("ctrl+b", "navigator", "navigator", "Show or hide the agents and channels", "workspace"),
     Key("f2", "inspector", "inspector", "Show or hide why the agent in view waits, and what it runs on", "workspace"),
-    Key("ctrl+o", "open_line", "open", "Open or close the chosen line of the transcript", "workspace"),
+    Key("ctrl+o", "open_line", "open-line", "Open or close the chosen line of the transcript", "workspace"),
     Key("pageup", "page_up", "page-up", "Scroll the transcript up", "workspace"),
     Key("pagedown", "page_down", "page-down", "Scroll the transcript down", "workspace"),
     Key("ctrl+home", "oldest", "oldest", "Go to the start of the transcript, read back from the journal", "workspace"),
     Key("ctrl+end", "follow", "follow", "Go to the newest line and follow what comes", "workspace"),
-    Key("alt+f", "attach_file", "attach", "Attach a file to the message, as its body", "workspace"),
+    Key("alt+f", "attach_file", "file", "Attach a file to the message, as its body", "workspace"),
     Key("alt+r", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
-    Key(
-        "slash",
-        "search",
-        "search",
-        "Search the transcript",
-        "workspace",
-        priority=False,
-        planned="search in a transcript is planned",
-    ),
     Key(
         "ctrl+t",
         "tasks",
@@ -199,9 +196,10 @@ KEYMAP: tuple[Key, ...] = (
     ),
     Key("shift+tab", "app.focus_previous", "part before", "Go to the part before", "parts"),
     Key("escape", "screen.back", "back", "Go back to the composer, interrupting nothing", "panel", priority=False),
+    Key("slash", "screen.command", "command", "Go back to the composer and begin a typed command there", "panel"),
     Key("up", "cursor_up", "line above", "Choose the line above", "transcript"),
     Key("down", "cursor_down", "line below", "Choose the line below", "transcript"),
-    Key("enter", "open_line", "open line", "Open or close the chosen line", "transcript"),
+    Key("enter", "open_line", "open-line", "Open or close the chosen line", "transcript"),
     Key("end", "follow", "follow", "Go to the newest line and follow what comes", "transcript"),
     Key("y", "screen.first_action", "yes", "Take the first action of the chosen place, such as Allow", "dock"),
     Key("n", "screen.second_action", "no", "Take the second action of the chosen place, such as Deny", "dock"),
@@ -254,13 +252,14 @@ def reach(action: str) -> str:
 
 
 def reference() -> str:
-    """The keymap as Markdown, for the guide: each act of a session with its typed command beside any key."""
+    """The keymap as Markdown, for the guide: each key as the screen shows it, and each act of a session with its typed
+    command beside any key."""
     sections = []
     for where, title in WHERE.items():
         typed = where in TYPED
         lines = ["| Keys | Typed | Does |\n|---|---|---|" if typed else "| Keys | Does |\n|---|---|"]
         for key in keys(where):
-            pressed = " or ".join(f"`{one}`" for one in key.keys.split(",") if one)
+            pressed = " or ".join(f"`{_shown(one)}`" for one in key.keys.split(",") if one)
             cells = [pressed, f"`{key.typed}`", key.said] if typed else [pressed, key.said]
             lines.append(f"| {' | '.join(cells)} |")
         sections.append(f"### {title}\n\n" + "\n".join(lines))

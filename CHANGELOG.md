@@ -110,10 +110,11 @@
   `failed`, derived in the view so every client says the same.
 - Every act of the terminal UI takes only keys every terminal delivers, so an editor's terminal that keeps Ctrl, Alt or F keys,
   as Cursor's on a Mac does, leaves none out of reach. In the composer a line that is exactly `/` and an act's name runs it and
-  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. Tab and Shift+Tab go round the parts in
-  the order they are on screen. The dock takes focus with no place chosen, so its `y` and `n` answer only a place chosen there
-  with the arrows. The sessions screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them.
-  `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep keys. ADR 0026.
+  goes to no agent, `/` alone lists them, `/` from any other part begins one there, and the footer always begins `/ commands`.
+  Tab and Shift+Tab go round the parts in the order they are on screen. The dock takes focus with no place chosen, so its `y`
+  and `n` answer only a place chosen there with the arrows. The sessions screen has a plain key for each act, `?` the help, `p`
+  the palette and `q` quitting among them. `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep
+  keys. ADR 0026.
 
 ### Changed
 
@@ -123,9 +124,10 @@
   once answered a place or stopped turns. `/yes`, `/no` and `/stop-below` reach them. The dock takes focus from Tab or Shift+Tab,
   never on its own or from a click, and a part hidden while it has focus gives it back to the composer. Under 80 columns Esc or a
   row chosen in the navigator closes it. Acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`,
-  `next-place` for `next for you`, `yes` and `no` for `first action` and `second action`, `open` for `open line`, and
-  `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words. The sessions screen looks again on `l`,
-  where it was Ctrl+R, and `/` is search, not built yet, from any part but the composer.
+  `next-place` for `next for you`, `yes` and `no` for `first action` and `second action`, `open-line` for `open line`, `file`
+  for `attach`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words. The sessions screen
+  looks again on `l`, where it was Ctrl+R. Search in a transcript, not built yet, has no key until it is, as `/` begins a typed
+  command from every part of a session. The guide's keymap shows each key as the screen does.
 - The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,
   and nothing else, where it escaped every format character, which broke emoji joined by a zero-width joiner.
 - The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.

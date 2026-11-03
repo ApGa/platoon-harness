@@ -16,8 +16,8 @@ Backspace.
 - **A chord is a shortcut and never the only way.** Every act also takes only keys every terminal delivers.
 - **Typed commands.** In the composer, a line that is exactly `/` and an act's name runs that act and goes to no agent. Each act of a
   session has one name, kept in the keymap table beside any key, so the table makes the typed commands as it makes the bindings, the
-  help, the footer, the palette and the guide's keymap. `/` alone lists them, and the footer always begins `/ commands`. Anything else
-  that begins with `/` is still asked about before it goes as a message.
+  help, the footer, the palette and the guide's keymap. `/` alone lists them, `/` from any other part begins one in the composer, and
+  the footer always begins `/ commands`. Anything else that begins with `/` is still asked about before it goes as a message.
 - **No chord decides or stops.** A terminal sends Alt and a letter as Esc then that letter, and Textual reads the two as the chord when
   they come within its escape delay, so Esc then a word typed at once ran Alt+Y, Alt+N or Alt+S. `/yes`, `/no` and `/stop-below` have
   no key.
@@ -46,11 +46,12 @@ Backspace.
 | A click focusing the dock | The next message typed would answer the place clicked to look at |
 | Enter taking the dock's first action | A confirmation takes only `y`, so a key pressed for something else never says yes, and Enter in a list opens the row |
 | Esc interrupting from every part | A person pressing Esc to leave a panel would interrupt an agent by surprise |
+| `/` as search from the parts | The footer offers `/` for commands from every part, so it would do something else where focus is not on the composer |
 
 ## Consequences
 
 - ADR 0015's "approvals never take focus" now reads: never on their own.
-- `/` begins a typed command in the composer and is search, not built yet, from the other parts.
+- `/` begins a typed command from every part of a session, and search in a transcript has no key until it is built.
 - A resize moves focus only by hiding the part that has it.
 - A typed command is kept in the composer's history beside what was sent.
 - A new line in the composer still takes Shift+Enter, Alt+Enter, Ctrl+J or a paste. It edits a message and runs no act.

@@ -857,6 +857,11 @@ class Workspace(Screen[None]):
         self.remove_class("navigator-shown")
         self.query_one(Composer).focus()
 
+    def action_command(self) -> None:
+        composer = self.query_one(Composer)
+        composer.focus()
+        composer.insert("/")
+
     def action_navigator(self) -> None:
         self.toggle_class("navigator-shown" if self.size.width < 80 else "navigator-hidden")
 

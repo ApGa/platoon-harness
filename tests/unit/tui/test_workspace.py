@@ -770,7 +770,8 @@ def drawing(app: TerminalUI, part) -> list:
 
 
 async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_composer_interrupting_nothing(root):
-    """Each part shows that it has focus, and the footer names Esc by what it does from there."""
+    """Each part shows that it has focus, the footer names Esc by what it does from there, and `/` from a part begins a
+    typed command in the composer."""
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -796,6 +797,11 @@ async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_compos
         await pilot.press("escape")
         assert app.focused is composer
         assert await of_type(owner, "turn.ended") == [], "Esc from a part interrupted the agent"
+
+        transcript.focus()
+        await pilot.press("slash", *"inspector", "enter")
+        await drawn(pilot, lambda _: screen.has_class("inspector-shown"))
+        assert app.focused is composer and composer.text == ""
 
 
 async def test_the_dock_takes_focus_with_no_place_chosen_so_its_letters_answer_only_a_place_chosen_in_it(root):

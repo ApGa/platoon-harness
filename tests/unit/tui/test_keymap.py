@@ -10,6 +10,7 @@ from textual.binding import Binding
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import ScriptedDriver
+from platoon_harness_cli.main import build
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
@@ -89,13 +90,22 @@ def test_every_act_is_reached_with_keys_every_terminal_delivers():
         assert any(other.action == key.action for other in keys("sessions")), key
 
 
+def test_no_typed_command_is_named_as_a_command_of_the_command_line():
+    """A reader takes a typed command for the command line's of that name: there `attach` opens a session, so beside
+    `/detach` a typed `/attach` could not read as attaching a file."""
+    commands = {name for name in build() if not name.startswith("-")}
+
+    assert not commands & {key.name for key in acts()}
+
+
 def test_the_guide_s_keymap_is_the_table_s_with_each_typed_command_beside_its_key():
     guide = GUIDE.read_text()
 
     assert guide == regenerate(guide), "run `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md`"
     for key in acts():
-        pressed = f"`{re.escape(key.keys.split(',')[0])}`[^|]*" if key.keys else ""
+        pressed = f"`{re.escape(key.shown)}`[^|]*" if key.keys else ""
         assert re.search(rf"\| {pressed} \| `{re.escape(key.typed)}` \|", reference()), key
+    assert "question_mark" not in reference() and "slash" not in reference(), "a key shown as Textual names it"
 
 
 def test_the_palette_offers_every_act_of_a_session_by_its_typed_command():

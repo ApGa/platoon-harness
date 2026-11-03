@@ -23,7 +23,8 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 - In the composer, a line that is exactly `/` and an act's name runs that act and goes to no agent: `/next-place`, `/yes`,
   `/interrupt`, `/detach`, `/quit`. Each act has one name, kept in the keymap table beside any key, and the help, the
   palette and the keymap below show it there.
-- `/` alone, or `/help`, lists them, and the footer always begins `/ commands`.
+- `/` alone, or `/help`, lists them, and the footer always begins `/ commands`. `/` from any other part goes back to the
+  composer and begins one there.
 - Anything else that begins with `/` is asked about before it goes as a message, since a harness's own commands are not
   built yet.
 - A typed command not built yet says why, as its key does.
@@ -69,7 +70,7 @@ read or written loses only badges, which is said once.
 
 ### The transcript
 
-Each event is one line, and a line opens on demand, with Enter on the chosen line, `/open` from anywhere, or a click: its
+Each event is one line, and a line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click: its
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
@@ -84,7 +85,7 @@ Enter sends to the target shown above it, and a person's message steers: it land
 has, unless the line is a typed command, which runs. `@agent` or `#channel` and a space at the start retargets it, and the
 target follows the focus pane while the draft is empty. Something that would go elsewhere than the target shown, such as a
 message that still begins with another address, is asked about first, and so is one that begins with `/` and is none of
-ours. `/attach` attaches a file as the message's body. Up and Down on the first and last lines recall what you sent or
+ours. `/file` attaches a file as the message's body. Up and Down on the first and last lines recall what you sent or
 ran, over an empty draft and never over one being written, which a recalled message is once you edit it. Ctrl+D on an
 empty composer detaches, and with a draft it says why it does not.
 
@@ -142,8 +143,9 @@ on a Mac. None of these settings is needed, since every act has a typed command 
 
 ## Keys
 
-The keymap is one table, from which the bindings, the typed commands, the help (`/`, `?` or F1), the footer, the palette
-and this keymap are made. A part that has focus takes its own keys before the session's.
+The keymap is one table, from which the bindings, the typed commands, the help (`/` typed in a session, `?` on the
+sessions screen, or F1), the footer, the palette and this keymap are made. A part that has focus takes its own keys
+before the session's. `^` is Ctrl.
 
 <!-- keymap: made from the keymap table by `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md` -->
 
@@ -151,20 +153,20 @@ and this keymap are made. A part that has focus takes its own keys before the se
 
 | Keys | Typed | Does |
 |---|---|---|
-| `f1` | `/help` | Show every key and typed command |
-| `ctrl+p` | `/palette` | Find a command, an op among them |
-| `ctrl+q` | `/quit` | Quit: a session you are in runs on |
+| `F1` | `/help` | Show every key and typed command |
+| `^P` | `/palette` | Find a command, an op among them |
+| `^Q` | `/quit` | Quit: a session you are in runs on |
 
 ### The sessions screen
 
 | Keys | Does |
 |---|---|
-| `enter` | Open the session, live or as its history |
+| `Enter` | Open the session, live or as its history |
 | `n` | Start a session from the project's team or a team file |
 | `r` | Resume a session whose runtime has gone, which can spend money |
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
 | `l` | Look again for sessions and how each stands |
-| `question_mark` | Show every key and typed command |
+| `?` | Show every key and typed command |
 | `p` | Find a command, an op among them |
 | `q` | Quit: a session you are in runs on |
 
@@ -172,50 +174,50 @@ and this keymap are made. A part that has focus takes its own keys before the se
 
 | Keys | Typed | Does |
 |---|---|---|
-| `escape` | `/interrupt` | Interrupt the agent in view: its turn stops, and it lives on |
+| `Esc` | `/interrupt` | Interrupt the agent in view: its turn stops, and it lives on |
 |  | `/stop-below` | Stop the turns of the agent in view and of every agent below it |
-| `alt+a` | `/next-place` | Go to the next place you must act |
+| `Alt+A` | `/next-place` | Go to the next place you must act |
 |  | `/yes` | Take the first action of where you are, such as Allow |
 |  | `/no` | Take the second action of where you are, such as Deny |
-| `alt+down` | `/next` | Show the next agent or channel |
-| `alt+up` | `/previous` | Show the previous agent or channel |
-| `ctrl+b` | `/navigator` | Show or hide the agents and channels |
-| `f2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
-| `ctrl+o` | `/open` | Open or close the chosen line of the transcript |
-| `pageup` | `/page-up` | Scroll the transcript up |
-| `pagedown` | `/page-down` | Scroll the transcript down |
-| `ctrl+home` | `/oldest` | Go to the start of the transcript, read back from the journal |
-| `ctrl+end` | `/follow` | Go to the newest line and follow what comes |
-| `alt+f` | `/attach` | Attach a file to the message, as its body |
-| `alt+r` | `/resume` | Resume this session when it is history, which can spend money |
-| `slash` | `/search` | Search the transcript. Not built yet: search in a transcript is planned |
-| `ctrl+t` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
-| `alt+d` | `/review` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
-| `alt+m` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
-| `alt+t` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
-| `ctrl+d` | `/detach` | Detach on an empty composer: the session runs on |
+| `Alt+↓` | `/next` | Show the next agent or channel |
+| `Alt+↑` | `/previous` | Show the previous agent or channel |
+| `^B` | `/navigator` | Show or hide the agents and channels |
+| `F2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
+| `^O` | `/open-line` | Open or close the chosen line of the transcript |
+| `PgUp` | `/page-up` | Scroll the transcript up |
+| `PgDn` | `/page-down` | Scroll the transcript down |
+| `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |
+| `^End` | `/follow` | Go to the newest line and follow what comes |
+| `Alt+F` | `/file` | Attach a file to the message, as its body |
+| `Alt+R` | `/resume` | Resume this session when it is history, which can spend money |
+| `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
+| `Alt+D` | `/review` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
+| `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
+| `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
+| `^D` | `/detach` | Detach on an empty composer: the session runs on |
 
 ### Between a session's parts
 
 | Keys | Does |
 |---|---|
-| `tab` | Go to the next part: the navigator, the transcript, the dock, the composer, and round |
-| `shift+tab` | Go to the part before |
+| `Tab` | Go to the next part: the navigator, the transcript, the dock, the composer, and round |
+| `Shift+Tab` | Go to the part before |
 
 ### The transcript, the dock or the navigator, once one has focus
 
 | Keys | Does |
 |---|---|
-| `escape` | Go back to the composer, interrupting nothing |
+| `Esc` | Go back to the composer, interrupting nothing |
+| `/` | Go back to the composer and begin a typed command there |
 
 ### The transcript, once it has focus
 
 | Keys | Does |
 |---|---|
-| `up` | Choose the line above |
-| `down` | Choose the line below |
-| `enter` | Open or close the chosen line |
-| `end` | Go to the newest line and follow what comes |
+| `↑` | Choose the line above |
+| `↓` | Choose the line below |
+| `Enter` | Open or close the chosen line |
+| `End` | Go to the newest line and follow what comes |
 
 ### The dock, once it has focus
 
@@ -228,31 +230,31 @@ and this keymap are made. A part that has focus takes its own keys before the se
 
 | Keys | Does |
 |---|---|
-| `enter` | Send to the target shown above it, which steers an agent at its next boundary, or run a typed command |
-| `shift+enter` or `alt+enter` or `ctrl+j` | Start a new line |
-| `up` | On the first line, what you sent or ran before |
-| `down` | On the last line, what you sent or ran after |
+| `Enter` | Send to the target shown above it, which steers an agent at its next boundary, or run a typed command |
+| `Shift+Enter` or `Alt+Enter` or `^J` | Start a new line |
+| `↑` | On the first line, what you sent or ran before |
+| `↓` | On the last line, what you sent or ran after |
 
 ### A list: the sessions, the navigator, the dock, the help
 
 | Keys | Does |
 |---|---|
-| `up` | Choose the row above, or scroll up the help |
-| `down` | Choose the row below, or scroll down the help |
-| `enter` | Open the chosen row, or show the chosen place |
+| `↑` | Choose the row above, or scroll up the help |
+| `↓` | Choose the row below, or scroll down the help |
+| `Enter` | Open the chosen row, or show the chosen place |
 
 ### A question
 
 | Keys | Does |
 |---|---|
 | `y` | Say yes |
-| `n` or `escape` | Say no |
+| `n` or `Esc` | Say no |
 
 ### A form or the help
 
 | Keys | Does |
 |---|---|
-| `escape` | Leave it, and a form sends nothing |
+| `Esc` | Leave it, and a form sends nothing |
 
 <!-- end of keymap -->
 
