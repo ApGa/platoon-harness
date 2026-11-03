@@ -68,6 +68,11 @@ log = logging.getLogger("platoon_harness.runtime")
 __all__ = ["GRACE", "DriverLink", "Host"]
 
 
+def _ends_live_text(report: Report) -> bool:
+    """Whether what a harness said live is now in the journal, as an item, or gone with its turn."""
+    return isinstance(report, TurnEnded) or (isinstance(report, Item) and report.kind in ("message", "thought"))
+
+
 class DriverLink:
     """One harness as the host holds it. Links live on the `Host` and not in the daemon, so a restarted daemon loses
     none. `leaving` means its end is our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or
@@ -491,7 +496,8 @@ class Host:
             await self._drop(link, report, "its reports could not be taken")
 
     def _live(self, link: DriverLink, text: bytes) -> None:
-        if text:
+        """Live text is the agent's until its harness is on its way out, after which it would follow the agent's end."""
+        if text and not link.leaving:
             self._kernel.push_delta(link.agent, text.decode(errors="surrogatepass"))
 
     async def _commit(self, link: DriverLink, report: Report) -> None:
@@ -515,7 +521,10 @@ class Host:
                 listed = None if forgotten is None else json.dumps(forgotten)
                 stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}
                 report = report.model_copy(update=stored)
-        await self._taken(link, report, await self.insist("agent.report", {"agent": link.agent, "report": report}))
+        outcome = await self.insist("agent.report", {"agent": link.agent, "report": report})
+        if outcome.refusal is None and outcome.seq is not None and _ends_live_text(report):
+            self._kernel.end_delta(link.agent, outcome.seq)
+        await self._taken(link, report, outcome)
 
     async def _unknown(self, link: DriverLink, kind: str, why: str) -> None:
         for frame in unknown_frame(kind, why):

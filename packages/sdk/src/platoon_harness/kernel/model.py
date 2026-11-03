@@ -141,12 +141,15 @@ class Page(BaseModel, frozen=True):
 
 
 class Delta(BaseModel, frozen=True):
-    """One frame of lossy live text. `lag` counts the frames lost just before it."""
+    """Live text an agent said past a reader's frame, joined, through `frame`. `ended` is the seq of the event that
+    replaced what it said before this text, an item or an end, which the journal holds through that seq, so a reader
+    drops its own copy. `lag` counts frames of this text that are no longer held."""
 
     agent: str
     frame: int
     text: str
     lag: int = 0
+    ended: int | None = None
 
 
 class Principal(BaseModel, frozen=True):

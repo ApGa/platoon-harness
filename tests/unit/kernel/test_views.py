@@ -70,7 +70,7 @@ async def test_rebuild_all_produces_identical_contents_after_every_kind_of_event
     await kernel.rebuild_all()
 
     assert dump(folder) == before
-    assert all(mark == (1, kernel.head) for mark in fold_marks(kernel).values())
+    assert fold_marks(kernel) == {view.name: (view.version, kernel.head) for view in kernel._views}
 
 
 async def test_a_version_bump_drops_and_refolds(folder, clock):

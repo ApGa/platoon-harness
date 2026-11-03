@@ -162,6 +162,14 @@
 - Op descriptions hold for every reader who may run the op, so a person's surface shows no sentence written to an agent, such as
   "Your own open turn is always among `blockers` while you ask".
 
+- Live text is a tail bound to its item: one per agent of what it is saying now, ended by the host at a message or thought item and a
+  turn's end, and by the kernel when its agent's principal is revoked. `deltas` joins what came past a reader's frame into one
+  `Delta`, whose new `ended` names the seq through which the journal holds what the text before it became, so a client that joins
+  late is shown only text not yet committed, with its true `lag`, and a reader of an ended agent is told so once and then nothing
+  more. `Kernel.end_delta(agent, seq)` ends it. A tail holds 256 KiB, where a ring held 256 frames. bug-clients-2, -4 and -5.
+- The writer resolves a batch's acks before it wakes followers, so what a caller does on its ack comes before a follower on its loop
+  looks.
+
 ### Fixed
 
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt

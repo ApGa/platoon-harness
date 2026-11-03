@@ -54,7 +54,7 @@ from .model import (
     jsonable,
 )
 from .op import Args, Op
-from .pulse import Pulse, Ring, Tail
+from .pulse import Pulse, Ring, Tail, first
 from .txn import Txn
 from .view import View, refold
 from .writer import Writer
@@ -523,12 +523,32 @@ class Kernel:
         return ring
 
     def push_delta(self, agent: str, text: str) -> None:
-        """Offer a frame of live text. It may be lost and is never journaled."""
+        """Offer a frame of an agent's live text. It may be lost and is never journaled."""
         self._ring(agent).push(text)
 
-    def deltas(self, agent: str, *, after: int | None = None) -> AsyncGenerator[Delta]:
-        """Follow an agent's live text until the kernel closes, past frame `after` or from the oldest still held."""
-        return self._ring(agent).frames(after)
+    def end_delta(self, agent: str, seq: int) -> None:
+        """Say that the event at `seq` replaced an agent's live text so far: an item it said, or an end of its turn or
+        of itself."""
+        self._ring(agent).end(seq)
+
+    async def deltas(self, agent: str, *, after: int | None = None) -> AsyncGenerator[Delta]:
+        """Follow an agent's live text past frame `after`, or from what it is saying now, each delta joining what came
+        since the last. An agent's text ends when its principal is revoked, at that seq, so a reader is told so once.
+        It ends when the kernel closes, or once an agent that has ended has had all it said told."""
+        ring = self._ring(agent)
+        while not self.closed:
+            if (delta := ring.since(after)) is not None:
+                yield delta
+                after = delta.frame
+                continue
+            with self._reading() as db:
+                revoked = Principals(db).revoked_at(f"agent:{agent}")
+            if revoked is not None:
+                if not ring.end(revoked):
+                    return
+            else:
+                place = ring.head if after is None or after > ring.head else after
+                await first(ring.wait(place), self._pulse.wait(self.head))
 
     # Lifetime.
 

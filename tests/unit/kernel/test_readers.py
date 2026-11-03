@@ -2,12 +2,18 @@
 
 import asyncio
 import sqlite3
+from itertools import zip_longest
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from platoon_harness.kernel import Args, Extension, Kernel, Principal, Refused, Txn, first, op
+from platoon_harness.kernel.pulse import Ring
 
 from .support import ALICE, HUMAN, enroll, events_of, notes, refusal_of, refused_code, result_of
+
+FRAME = 64 * 1024
 
 
 async def add(kernel, count: int, stream: str = "note/a") -> None:
@@ -297,36 +303,74 @@ async def test_deltas_are_live_and_never_journaled(kernel):
     frame = await pending
     kernel.push_delta("bob", "other")
 
-    assert (frame.agent, frame.frame, frame.text, frame.lag) == ("alice", 1, "hel", 0)
+    assert (frame.agent, frame.frame, frame.text, frame.lag, frame.ended) == ("alice", 1, "hel", 0, None)
     assert events_of(kernel) == []
     await frames.aclose()
 
 
-async def test_a_slow_reader_of_deltas_gets_a_lag_marker(kernel):
+async def test_a_slow_reader_of_deltas_is_given_what_came_joined_with_its_true_lag(kernel):
     frames = kernel.deltas("alice")
     pending = asyncio.ensure_future(anext(frames))
     await asyncio.sleep(0)
     kernel.push_delta("alice", "first")
     assert (await pending).text == "first"
 
-    for n in range(300):
-        kernel.push_delta("alice", str(n))
+    for letter in "abcde":
+        kernel.push_delta("alice", letter * FRAME)
 
     frame = await anext(frames)
-    assert (frame.text, frame.lag) == ("44", 44)
-    assert (await anext(frames)).lag == 0
+    assert (frame.frame, frame.text, frame.lag) == (6, "".join(letter * FRAME for letter in "bcde"), 1)
     await frames.aclose()
 
 
-async def test_a_late_reader_of_deltas_starts_with_what_is_held(kernel):
-    for n in range(300):
-        kernel.push_delta("alice", str(n))
+async def test_a_late_joiner_is_shown_only_text_not_yet_committed_after_what_was(kernel):
+    kernel.push_delta("alice", "said, ")
+    kernel.push_delta("alice", "and committed")
+    kernel.end_delta("alice", 7)
+    kernel.push_delta("alice", "still ")
+    kernel.push_delta("alice", "saying")
 
-    frames = kernel.deltas("alice")
-    frame = await anext(frames)
+    frame = await anext(kernel.deltas("alice"))
 
-    assert (frame.text, frame.lag) == ("44", 0)
+    assert (frame.frame, frame.text, frame.lag, frame.ended) == (5, "still saying", 0, 7)
+
+
+async def test_a_late_joiner_is_told_its_true_lag(kernel):
+    for letter in "abcde":
+        kernel.push_delta("alice", letter * FRAME)
+
+    frame = await anext(kernel.deltas("alice"))
+
+    assert (frame.text, frame.lag) == ("".join(letter * FRAME for letter in "bcde"), 1)
+
+
+async def test_a_reader_part_way_through_is_told_what_replaced_its_text(kernel):
+    kernel.push_delta("alice", "half")
+    frames = kernel.deltas("alice", after=1)
+    pending = asyncio.ensure_future(anext(frames))
+    await asyncio.sleep(0)
+
+    kernel.end_delta("alice", 9)
+    kernel.push_delta("alice", "next")
+
+    frame = await pending
+    assert (frame.frame, frame.text, frame.ended) == (3, "next", 9)
     await frames.aclose()
+
+
+async def test_live_text_of_an_agent_that_ended_says_so_once_and_ends(kernel):
+    await enroll(kernel, ALICE)
+    kernel.push_delta("alice", "last words")
+    frames = kernel.deltas("alice", after=1)
+    pending = asyncio.ensure_future(anext(frames))
+    await asyncio.sleep(0)
+
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": ALICE.id}))
+    kernel.end_delta("alice", kernel.head)
+
+    assert (await pending).ended == kernel.head
+    assert [delta async for delta in frames] == []
+    assert [delta async for delta in kernel.deltas("alice")] == []
 
 
 async def test_deltas_asked_for_after_close_end_at_once(kernel):
@@ -353,15 +397,11 @@ async def test_a_reader_of_deltas_can_go_on_from_a_frame(kernel):
     await frames.aclose()
 
 
-async def test_a_place_past_the_head_of_deltas_is_from_an_earlier_incarnation(kernel):
+async def test_a_place_past_the_head_of_deltas_is_an_earlier_incarnation_s_and_joins(kernel):
     kernel.push_delta("alice", "held")
     frames = kernel.deltas("alice", after=500)
-    next_frame = asyncio.ensure_future(anext(frames))
-    await asyncio.sleep(0)
 
-    kernel.push_delta("alice", "new")
-
-    assert (await next_frame).text == "new"
+    assert (await anext(frames)).text == "held"
     await frames.aclose()
 
 
@@ -406,3 +446,39 @@ async def test_first_raises_what_the_work_raised():
 
     with pytest.raises(ValueError, match="no"):
         await first(fails(), asyncio.Event().wait())
+
+
+@settings(max_examples=200, deadline=None)
+@given(steps=st.lists(st.text(max_size=6) | st.none(), max_size=40), reads=st.lists(st.booleans(), max_size=40))
+def test_a_tail_joined_to_what_was_committed_is_the_text(steps, reads):
+    """A `None` step ends what was said, as an item does: the journal holds it through that seq. A reader who follows,
+    now and then, and one who joins at any point each see all that was said, and nothing twice."""
+    ring = Ring("alice")
+    committed: list[tuple[int, str]] = []
+    saying = ""
+    place, through, shown = 0, 0, ""
+
+    def journal(upto: int) -> str:
+        return "".join(text for seq, text in committed if seq <= upto)
+
+    for step, read in zip_longest(steps, reads, fillvalue=False):
+        if step is None:
+            committed.append((len(committed) + 1, saying))
+            saying = ""
+            ring.end(len(committed))
+        elif step:
+            saying += step
+            ring.push(step)
+        if read and (delta := ring.since(place)) is not None:
+            if delta.ended is not None:
+                through, shown = delta.ended, ""
+            place, shown = delta.frame, shown + delta.text
+        joined = ring.since(None)
+        assert (joined.text if joined else "") == saying
+        assert joined is None or joined.ended == (len(committed) or None)
+
+    if (delta := ring.since(place)) is not None:
+        if delta.ended is not None:
+            through, shown = delta.ended, ""
+        shown += delta.text
+    assert journal(through) + shown == journal(len(committed)) + saying

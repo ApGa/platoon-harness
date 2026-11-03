@@ -202,7 +202,7 @@ answers only a command its journal answered under the same key, as any retry is 
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
-`push_delta(agent, text)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 `is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, `first(work, *rivals)`
 races awaitables and drops what lost, which is how anything here sleeps on two things, and `registry(extensions)` is the op table a
 kernel holding them has, its own ops among them, which a surface derives from before any session exists.
@@ -236,8 +236,8 @@ through `submit` too, so no second path exists.
    failure fails its command even if the op catches it. If `op.refused` itself cannot be written, the command gets
    `unavailable`, journals nothing, and may retry. A refusal's `object` is cut to 256 characters and its `detail` to 512, so
    caller text cannot grow the journal.
-4. **Commit.** One fsync per batch. Only then does the head pulse and are futures resolved, so whoever is acked finds their
-   write under `head`. If the commit fails, the batch's outcome is unknown, since its bytes may have landed all the same: each command
+4. **Commit.** One fsync per batch. Only then does the head move and are futures resolved, and only then are followers woken,
+   so whoever is acked finds their write under `head`, and what it does on its ack is done before a follower on its loop looks. If the commit fails, the batch's outcome is unknown, since its bytes may have landed all the same: each command
    gets `unavailable` and should retry under its key, which answers from the journal if they did.
 
 ### 5.2 Tables
@@ -404,6 +404,12 @@ says false. The checkpoint thread alarms when unbackfilled frames pass 16,000.
 Clients may rely on per-stream order only. Agents never get `read`: their reads are ops, checked per page against
 grants. Runtime-only ops are excluded by principal kind, so no grant glob can reach them.
 
+**Live text** is apart from the journal: one tail per agent of what it is saying now. The host ends it at the event that replaced
+it, an item the agent said or the end of its turn, and the kernel at its agent's revocation. `deltas` gives a reader what came past
+its frame as one `Delta`. One that reads from before an end is told `ended`, the seq through which the journal holds what that text
+became, and given only what came after it, so a reader that joins late is shown only text not yet committed, after the items that
+were, and `lag` counts frames of it no longer held. A reader of an agent that has ended is told so once, and then nothing more comes.
+
 `read` and `follow` are not ops, so they take no grant: the runtime and any live principal that is not an agent may read the
 whole journal. A page holding a `principal.revoked` goes by SQL, so a follower is refused at its own revocation. `limit` is 1 to
 4,096.
@@ -415,7 +421,7 @@ whole journal. A page holding a `principal.revoked` goes by SQL, so a follower i
 | Writers | 32 inflight per principal, 1,024 per session, then `busy{retry_after}`, which is not journaled. `runtime` has no per-principal limit and 256 more |
 | Payloads | Op names and keys 256 chars, stream names 512, `gist` 280, `data` 16 KiB, bodies 64 KiB inline, larger in `blobs/`, every list a command returns paged |
 | Readers | They pull, so a slow client costs only its own lag |
-| Live text | One 256-frame ring per agent, each frame cut at 64 KiB; overflow drops frames with a `lag` marker. The final `item` is authoritative |
+| Live text | One tail per agent of what it is saying now, at most 256 KiB, each frame cut at 64 KiB; overflow drops the oldest frames, which `lag` counts. The item that replaces it is authoritative |
 | Harness output | Pipes always drain. A driver that stalls its harness's stdout stalls the harness. Reports buffer in a bounded queue; a quota breach stops that agent with a gap |
 | Inbox | A depth cap refuses `queue_full` with a `full` receipt, journaled, never a silent drop |
 | Topic | Writers never block. A lagging reader gets a capped digest and a gap notice |
@@ -1198,7 +1204,7 @@ it is dropped. A view credential reads and can never write, and a try writes not
 an agent, so each of its reads is a query, which `submit` answers as one and a view credential may ask. An agent's
 token is refused: its reads are ops, and the tool plane is its way in. A refusal crosses as data. Law 8 holds because a client only
 ever pulls, so the runtime has no queue or subscription to fill: a page leaves when asked for, a long-poll comes back within 25 s, a
-client that stops reading is dropped by its `Peer`, and live text is refused for a name nobody holds, so no client can grow the rings.
+client that stops reading is dropped by its `Peer`, and live text is refused for a name nobody holds, so no client can grow the tails.
 A stop aborts every connection, so no client can hold up shutdown either.
 
 `settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the

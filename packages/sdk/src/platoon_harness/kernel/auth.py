@@ -36,8 +36,10 @@ def _values(me: Principal, relation: str) -> dict[str, str | None]:
 
 class Principals(View):
     """The graph of principals: `authorize` reads it inside the transaction, and `path` makes `descendants` a prefix
-    test. A name is unique across kinds, so an inbox or a relation can go by the bare name."""
+    test. A name is unique across kinds, so an inbox or a relation can go by the bare name. `revoked` is the seq that
+    revoked one."""
 
+    version = 2
     schema = """
     CREATE TABLE v_principals(
         id TEXT PRIMARY KEY,
@@ -47,7 +49,8 @@ class Principals(View):
         path TEXT NOT NULL,
         state TEXT NOT NULL,
         token_hash TEXT,
-        scopes TEXT NOT NULL
+        scopes TEXT NOT NULL,
+        revoked INTEGER
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_principals_parent ON v_principals(parent);
     CREATE UNIQUE INDEX v_principals_token ON v_principals(token_hash);
@@ -59,7 +62,7 @@ class Principals(View):
         principal = Principal(id=data["id"], role=data["role"], parent=data["parent"], scopes=data["scopes"])
         parent = self.get(principal.parent) if principal.parent else None
         self.db.execute(
-            "INSERT INTO v_principals VALUES (?, ?, ?, ?, ?, 'live', ?, ?)",
+            "INSERT INTO v_principals VALUES (?, ?, ?, ?, ?, 'live', ?, ?, NULL)",
             (
                 principal.id,
                 principal.kind,
@@ -79,11 +82,11 @@ class Principals(View):
 
     @fold("principal.revoked")
     def revoked(self, event: Event) -> None:
-        self._revoke(event.data["id"])
+        self._revoke(event.data["id"], event.seq)
 
     @fold("agent.ended")
     def agent_ended(self, event: Event) -> None:
-        self._revoke(f"agent:{event.agent}")
+        self._revoke(f"agent:{event.agent}", event.seq)
 
     @fold("agent.adopted")
     def agent_adopted(self, event: Event) -> None:
@@ -97,8 +100,11 @@ class Principals(View):
             (f"/{orphan.id}/", orphan.path, orphan.path, orphan.path),
         )
 
-    def _revoke(self, id: str) -> None:
-        self.db.execute("UPDATE v_principals SET state = 'revoked', token_hash = NULL WHERE id = ?", (id,))
+    def _revoke(self, id: str, seq: int) -> None:
+        self.db.execute(
+            "UPDATE v_principals SET state = 'revoked', token_hash = NULL, revoked = coalesce(revoked, ?) WHERE id = ?",
+            (seq, id),
+        )
 
     def _load(self, row: sqlite3.Row | None) -> Principal | None:
         if row is None:
@@ -126,6 +132,11 @@ class Principals(View):
         if principal is None or principal.state != "live":
             raise Refused("not_permitted", "unknown or revoked principal")
         return principal
+
+    def revoked_at(self, id: str) -> int | None:
+        """The seq that revoked a principal, or None while it is live or unknown."""
+        row = self.db.execute("SELECT revoked FROM v_principals WHERE id = ?", (id,)).fetchone()
+        return None if row is None else row["revoked"]
 
     def by_token(self, token_hash: str) -> Principal | None:
         row = self.db.execute("SELECT * FROM v_principals WHERE token_hash = ?", (token_hash,)).fetchone()

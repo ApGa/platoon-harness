@@ -145,9 +145,11 @@ class Writer:
             log.exception("batch of %d failed", len(jobs))
             self._roll_back()
             results = [Refused("unavailable", f"journal: {error}")] * len(jobs)
-        if head is not None:
-            self._pulse.publish(head)
-        settle((job.future, result) for job, result in zip(jobs, results, strict=True))
+        # Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending
+        # live text an item replaced, is done before a follower on its loop looks.
+        woken = () if head is None else self._pulse.advance(head)
+        acks = zip((job.future for job in jobs), results, strict=True)
+        settle([*acks, *((waiter, None) for waiter in woken)])
         for job in jobs:
             self._done(job)
         self._batch_seconds = time.perf_counter() - started

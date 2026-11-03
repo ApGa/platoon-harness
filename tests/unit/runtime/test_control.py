@@ -363,6 +363,22 @@ async def test_live_text_crosses_the_socket(guest, owner):
     await frames.aclose()
 
 
+async def test_live_text_of_an_agent_that_ended_says_so_once_across_the_socket(guest, owner):
+    owner._runtime.kernel.push_delta("bob", "last words")
+    frames = guest.deltas("@bob")
+    assert (await asyncio.wait_for(anext(frames), SECONDS)).text == "last words"
+
+    await owner.cancel_agent("@bob")
+
+    rest = await asyncio.wait_for(alist(frames), SECONDS)
+    ended = [event for event in await journal(owner) if event.type == "agent.ended"]
+    assert [(frame.text, frame.ended) for frame in rest] == [("", ended[0].seq)]
+
+
+async def alist[T](items: AsyncIterator[T]) -> list[T]:
+    return [item async for item in items]
+
+
 async def test_a_body_crosses_both_ways(guest):
     body = bytes(range(256)) * 16
 

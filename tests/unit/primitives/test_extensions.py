@@ -13,7 +13,7 @@ ARCHITECTURE = Path(__file__).parents[3] / "docs" / "architecture.md"
 OUT_OF_SCOPE = {"topology.patch", "topology.show", "lineage", "exposure"}
 VIEWS = {
     "stamps": (1, "7caa58b4f618"),
-    "principals": (1, "4ee2a56cedb6"),
+    "principals": (2, "8efbf0bd0ad6"),
     "grants": (1, "c042b6064492"),
     "effects": (1, "d490ea98cdf6"),
     "timers": (1, "8b7ee8f23867"),

@@ -6,7 +6,7 @@ import os
 import signal
 import stat
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import pytest
@@ -737,7 +737,7 @@ async def test_a_delta_reaches_a_follower_and_never_the_journal(tmp_path):
             await super().start(spec, report)
             await release.wait()
             await report(Delta(text="live words"))
-            await report(Item(kind="thought", gist="that was all"))
+            await report(Item(kind="tool", phase="started", gist="looking"))
 
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Talking)}}})
 
@@ -751,6 +751,53 @@ async def test_a_delta_reaches_a_follower_and_never_the_journal(tmp_path):
         assert frame.text == "live words"
         assert "live words" not in json.dumps([event.gist for event in await journal(session)])
         await frames.aclose()
+
+
+def still_saying() -> Team:
+    """An agent that says `first` and records it, then says `more` and goes on, as a tool starts. Live text is held back
+    until the next report, as a secret could straddle two deltas."""
+    said = (
+        TurnStarted(turn="t1"),
+        Delta(text="first"),
+        Item(kind="message", gist="first"),
+        Delta(text="more"),
+        Item(kind="tool", phase="started", gist="looking"),
+    )
+    return Team.model_validate({"roles": {"bob": {"harness": harness(saying(*said))}}})
+
+
+async def test_live_text_is_a_tail_bound_to_the_item_that_replaces_it(tmp_path):
+    team = still_saying()
+
+    async with Session.start(team, root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        frames = session.deltas("bob")
+        frame = await asyncio.wait_for(anext(frames), SECONDS)
+        await frames.aclose()
+        item = (await of_type(session, "item.recorded"))[0]
+
+    assert (frame.text, frame.lag, frame.ended) == ("more", 0, item.seq)
+
+
+async def test_live_text_of_an_agent_that_ends_says_so_once_and_then_ends(tmp_path):
+    team = still_saying()
+
+    async with Session.start(team, root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        frames = session.deltas("bob")
+        said = await asyncio.wait_for(anext(frames), SECONDS)
+
+        await session.cancel_agent("@bob")
+
+        rest = await asyncio.wait_for(alist(frames), SECONDS)
+        ended = (await of_type(session, "agent.ended"))[0]
+
+    assert said.text == "more"
+    assert [(frame.text, frame.ended) for frame in rest] == [("", ended.seq)]
+
+
+async def alist[T](items: AsyncIterator[T]) -> list[T]:
+    return [item async for item in items]
 
 
 async def test_every_word_of_the_vocabulary_has_somewhere_to_go(tmp_path):
@@ -1269,7 +1316,9 @@ async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_p
 
 
 async def test_live_text_is_masked_too(tmp_path):
-    team = solo_with(saying(Delta(text=f"the key is {SECRET}"), Item(kind="message", gist="said")), model="m")
+    team = solo_with(
+        saying(Delta(text=f"the key is {SECRET}"), Item(kind="tool", phase="started", gist="ran")), model="m"
+    )
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         frame = await asyncio.wait_for(anext(session.deltas("@bob")), SECONDS)
@@ -1279,7 +1328,8 @@ async def test_live_text_is_masked_too(tmp_path):
 
 async def test_a_secret_split_across_two_deltas_is_masked(tmp_path):
     split = len(SECRET) // 2
-    said = (Delta(text=f"the key is {SECRET[:split]}"), Delta(text=f"{SECRET[split:]} and more"), TurnEnded())
+    tool = Item(kind="tool", gist="ran")
+    said = (Delta(text=f"the key is {SECRET[:split]}"), Delta(text=f"{SECRET[split:]} and more"), tool)
     team = solo_with(saying(*said), model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
@@ -1291,8 +1341,9 @@ async def test_a_secret_split_across_two_deltas_is_masked(tmp_path):
     assert heard == "the key is *** and more"
 
 
-async def test_live_text_does_not_wait_past_the_report_that_ends_it(tmp_path):
-    team = solo_with(saying(Delta(text="short"), Item(kind="message", gist="short")), model="m")
+async def test_live_text_does_not_wait_past_the_next_report(tmp_path):
+    """Text an item has replaced is no longer live, so the next report here is a tool's."""
+    team = solo_with(saying(Delta(text="short"), Item(kind="tool", phase="started", gist="ran")), model="m")
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         frame = await asyncio.wait_for(anext(session.deltas("@bob")), SECONDS)
@@ -1302,7 +1353,9 @@ async def test_live_text_does_not_wait_past_the_report_that_ends_it(tmp_path):
 
 async def test_live_text_cut_for_a_secret_keeps_its_characters_whole(tmp_path):
     text = "é" * 2000
-    team = solo_with(saying(Delta(text=text), Delta(text=text), Item(kind="message", gist="done")), model="m")
+    team = solo_with(
+        saying(Delta(text=text), Delta(text=text), Item(kind="tool", phase="started", gist="ran")), model="m"
+    )
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         frames = session.deltas("@bob")

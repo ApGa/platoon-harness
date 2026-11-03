@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import threading
 from collections import deque
-from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from fnmatch import fnmatchcase
 from itertools import takewhile
 from typing import Any
@@ -12,7 +12,7 @@ from typing import Any
 from .model import Delta, Event, Page
 
 _TAIL_SIZE = 1024
-_RING_SIZE = 256
+_TAIL_LIMIT = 256 * 1024
 _FRAME_LIMIT = 64 * 1024
 
 
@@ -62,10 +62,14 @@ class Pulse:
         self._waiters: set[asyncio.Future[None]] = set()
 
     def publish(self, head: int) -> None:
+        settle((waiter, None) for waiter in self.advance(head))
+
+    def advance(self, head: int) -> set[asyncio.Future[None]]:
+        """Move the head, and hand back whoever sleeps on it, to wake once what must come first has."""
         with self._lock:
             self.head = head
             waiters, self._waiters = self._waiters, set()
-        settle((waiter, None) for waiter in waiters)
+        return waiters
 
     def close(self) -> None:
         self.closed = True
@@ -124,28 +128,64 @@ class Tail:
 
 
 class Ring:
-    """A bounded lossy buffer of one agent's live text, separate from the journal. A frame is cut at 64 KiB, so a ring
-    holds at most 16 MiB, and the `item` that follows is the truth anyway."""
+    """One agent's live text: what it is saying now, since the last event that replaced what it said before. It is
+    bounded, lossy and apart from the journal, as the item that follows is the truth. A frame is cut at 64 KiB, and the
+    oldest go past 256 KiB."""
 
     def __init__(self, agent: str) -> None:
         self._agent = agent
-        self._held: deque[Delta] = deque(maxlen=_RING_SIZE)
+        self._held: deque[tuple[int, str]] = deque()
+        self._size = 0
+        self._begins = 1
+        self._ended: int | None = None
         self._pulse = Pulse()
 
     def push(self, text: str) -> None:
         frame = self._pulse.head + 1
-        self._held.append(Delta(agent=self._agent, frame=frame, text=text[:_FRAME_LIMIT]))
+        self._held.append((frame, text[:_FRAME_LIMIT]))
+        self._size += len(self._held[-1][1])
+        while self._size > _TAIL_LIMIT:
+            self._size -= len(self._held.popleft()[1])
         self._pulse.publish(frame)
+
+    def end(self, seq: int) -> bool:
+        """The event at `seq` replaced what was said so far: it is an item now, or gone with its turn or its agent.
+        False for an end it has heard of, or an older one, which is no news."""
+        if self._ended is not None and seq <= self._ended:
+            return False
+        frame = self._pulse.head + 1
+        self._held.clear()
+        self._size = 0
+        self._begins, self._ended = frame + 1, seq
+        self._pulse.publish(frame)
+        return True
+
+    def since(self, after: int | None) -> Delta | None:
+        """What was said past frame `after`, joined, or None if nothing was. One that reads from before an end is told
+        `ended` and given only what came after it, as is one that joins with no `after`, so nobody is shown text twice.
+        A place past the head is an earlier incarnation's, so it joins too."""
+        head = self._pulse.head
+        if after is not None and after > head:
+            after = None
+        if after == head:
+            return None
+        within = after is not None and after >= self._begins - 1
+        start = after + 1 if after is not None and within else self._begins
+        shown = [(frame, text) for frame, text in self._held if frame >= start]
+        if after is None and not shown:
+            return None
+        first = shown[0][0] if shown else head + 1
+        text = "".join(text for _, text in shown)
+        return Delta(agent=self._agent, frame=head, text=text, lag=first - start, ended=None if within else self._ended)
+
+    @property
+    def head(self) -> int:
+        """The newest frame."""
+        return self._pulse.head
+
+    async def wait(self, after: int) -> bool:
+        """Sleep until a frame past `after` comes. False means closed."""
+        return await self._pulse.wait(after)
 
     def close(self) -> None:
         self._pulse.close()
-
-    async def frames(self, after: int | None = None) -> AsyncGenerator[Delta]:
-        """Yield frames past `after`, or from the oldest still held. Overflow shows up as `lag`, and a place past the
-        head belongs to an earlier incarnation, so it counts as the head."""
-        seen = self._pulse.head - len(self._held) if after is None else min(after, self._pulse.head)
-        while await self._pulse.wait(seen):
-            for delta in tuple(self._held):
-                if delta.frame > seen:
-                    yield delta.model_copy(update={"lag": delta.frame - seen - 1})
-                    seen = delta.frame
