@@ -358,7 +358,8 @@ def taken_twice(finished: list[Any]) -> bool:
 
 
 async def test_an_interrupt_as_a_handover_begins_a_turn_never_reads_as_a_failure(tmp_path, monkeypatch):
-    """The interrupt lands before the turn has begun, as it begins, or once it runs, and each must read as itself."""
+    """The interrupt lands before the turn has begun, as it begins, or once it runs, and each must read as itself. What
+    was waiting for the agent then wakes nothing, and a message sent after it wakes the agent as usual."""
     async with FakeModel([Stall(), Text("first")], "after") as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
 
@@ -368,6 +369,8 @@ async def test_an_interrupt_as_a_handover_begins_a_turn_never_reads_as_a_failure
             await until(lambda: of_type(session, "effect.started"), session, handing_over)
             await session.interrupt("@bob")
             model.release()
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "again")
             ended = await until(lambda: of_type(session, "turn.ended"), session, stopped_at_last)
 
     assert {event.data["reason"] for event in ended} <= {"interrupted", "stopped"}
@@ -398,7 +401,9 @@ async def test_an_agent_that_took_no_turn_comes_back_anew_on_a_resume(tmp_path, 
     assert model.calls[-1].says("are you there?")
 
 
-async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
+async def test_a_steer_an_interrupt_cut_off_comes_with_the_next_message_and_reaches_the_model(tmp_path, monkeypatch):
+    """What the harness took and never landed wakes nothing once its turn is interrupted, and is offered again, once,
+    with the next message."""
     async with FakeModel([Stall()], "the next turn") as model:
         team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")
 
@@ -409,6 +414,8 @@ async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_mod
             await session.send("@bob", "the word is cinnabar")
             await until(lambda: of_type(session, "effect.finished"), session, taken_twice)
             await session.interrupt("@bob")
+            await until(lambda: of_type(session, "turn.ended"), session)
+            await session.send("@bob", "carry on")
             ended = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
 
     assert [event.data["reason"] for event in ended] == ["interrupted", "stopped"]
