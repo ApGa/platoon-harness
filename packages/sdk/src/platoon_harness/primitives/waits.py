@@ -368,13 +368,14 @@ def _close(txn: Txn, waiter: str, id: int, kind: str) -> None:
 
 
 def _wake_for_reports(txn: Txn, wait: WaitRecord) -> None:
-    """A report of an agent this wait named or counted relied on it to wake its reader. One closed with no notice
-    cannot, so each such report wakes its reader itself, or it waits on a turn nothing will start."""
+    """A report that answers, of an agent this wait named or counted, relied on it to wake its reader. One closed with
+    no notice cannot, so each such report wakes its reader itself, or it waits on a turn nothing will start. One from a
+    turn an interrupt or the owner's stop cut relied on nothing, as it wakes nobody."""
     reader = _reader(wait.waiter)
     if reader is not None:
         held = [
             entry
-            for entry in txn.view(Deliveries).reports_queued(reader)
+            for entry in txn.view(Deliveries).answers_queued(reader)
             if entry.subject is not None and (wait.awaits(entry.subject, ended=True) or wait.counted(entry.subject))
         ]
         restore_wakes(txn, reader, held)

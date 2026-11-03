@@ -91,7 +91,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 5
+    version = 6
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -99,7 +99,8 @@ class Deliveries(View):
         version INTEGER NOT NULL,
         delivery TEXT NOT NULL,
         due REAL NOT NULL,
-        entry TEXT NOT NULL
+        entry TEXT NOT NULL,
+        answers INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX v_deliveries_stream ON v_deliveries(stream, seq);
     CREATE UNIQUE INDEX v_deliveries_ref ON v_deliveries(stream, version);
@@ -137,6 +138,8 @@ class Deliveries(View):
 
     @fold("message.sent")
     def sent(self, event: Event) -> None:
+        """A report answers unless an interrupt or the owner's stop cut its turn. A v1 report answered whatever it
+        said."""
         data = event.data
         entry = Entry(
             seq=event.seq,
@@ -145,7 +148,7 @@ class Deliveries(View):
             **{field: data[field] for field in ("sender", "body", "thread", "reply_to", "hops", "subject")},
         )
         self.db.execute(
-            "INSERT INTO v_deliveries VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO v_deliveries VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 event.seq,
                 event.stream,
@@ -153,6 +156,7 @@ class Deliveries(View):
                 data["delivery"],
                 event.wall_time + data["coalesce"],
                 entry.model_dump_json(),
+                data.get("answers", True),
             ),
         )
         for reader in data["audience"]:
@@ -371,12 +375,12 @@ class Deliveries(View):
         )
         return [(row["reader"], row["due"], bool(row["steer"])) for row in rows]
 
-    def reports_queued(self, reader: str) -> list[Entry]:
-        """The reports of children that wait for this reader's next turn."""
+    def answers_queued(self, reader: str) -> list[Entry]:
+        """The reports of children that answer and wait for this reader's next turn."""
         rows = self.db.execute(
             f"""
             SELECT e.entry {_QUEUED}
-            WHERE c.reader = ? AND c.closed = 0 AND e.delivery = 'next-turn'
+            WHERE c.reader = ? AND c.closed = 0 AND e.delivery = 'next-turn' AND e.answers
                 AND json_extract(e.entry, '$.subject') IS NOT NULL
             ORDER BY a.seq
             """,

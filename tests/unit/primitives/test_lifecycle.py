@@ -1755,6 +1755,45 @@ async def test_a_report_a_wait_held_back_wakes_its_reader_only_within_max_hops(k
     assert [event.data["why"] for event in of_type(kernel, "wake.refused")] == ["hops"]
 
 
+@pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP])
+async def test_a_report_of_a_turn_stopped_on_purpose_wakes_nobody_after_wait_cancel(kernel, reason):
+    """It relied on no wait to wake its reader, since it wakes nobody, so a wait that closes with no notice leaves it
+    for the next turn though that wait named its agent."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "a", by=lead, goal="")
+    await start_turn(kernel, "a")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
+    await end_turn(kernel, "a", reason)
+
+    result_of(await kernel.submit(lead, "wait.cancel", {}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == [] and of_type(kernel, "wake.restored") == []
+
+
+async def test_a_report_of_a_child_the_wait_did_not_name_waits_for_the_next_turn_after_wait_cancel(kernel, ada):
+    """`b` answered its spawn, and a human set it to work again, so its report asks to wake nobody."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "a", by=lead, goal="")
+    await spawn(kernel, "b", by=lead, goal="")
+    await start_turn(kernel, "b")
+    await end_turn(kernel, "b")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
+    await send(kernel, ada, "@b", "one more thing")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "b"}))
+    await start_turn(kernel, "b", "t2")
+    await end_turn(kernel, "b")
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "next-turn"
+
+    result_of(await kernel.submit(lead, "wait.cancel", {}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == [] and of_type(kernel, "wake.restored") == []
+
+
 async def test_a_wait_cancelled_with_nothing_held_back_wakes_nobody(kernel):
     lead = await spawn(kernel, "lead", role="lead", goal="")
     await spawn(kernel, "a", by=lead, goal="")

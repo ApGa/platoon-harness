@@ -596,9 +596,10 @@ wait with `from` that agent holds on that report as on any. Any other, and a chi
 a parent with a wait open, whatever that wait counts and whatever the parent asked, since that wait may now never hold. This is
 fail-fast with no new wait grammar, and `max_hops` is what bounds it.
 
-A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, lets each report queued for its reader's
-next turn from an agent it named or counted wake that reader, since the report relied on the wait to wake it and no other turn may
-come. The wake is the report's own, within `max_hops`, so a report its reader has read by then wakes nobody.
+A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, lets each report that answers, queued for
+its reader's next turn from an agent it named or counted, wake that reader, since the report relied on the wait to wake it and no
+other turn may come. One from a turn an interrupt or the owner's stop cut relied on nothing, as it wakes nobody. The wake is the
+report's own, within `max_hops`, so a report its reader has read by then wakes nobody.
 
 ### Boards
 
