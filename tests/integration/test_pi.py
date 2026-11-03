@@ -589,7 +589,7 @@ async def test_a_session_that_took_no_turn_cannot_resume_and_says_so(tmp_path):
 
 async def test_a_tool_a_kill_cut_off_reads_as_no_result_on_resume_and_never_ran_again(tmp_path):
     """What a resumed harness shows of a dangling tool call, which the cut-off notice must not contradict. The tool
-    leads a group of its own, so it outlives the kill, as `crash_window` says."""
+    leads a group of its own, so it outlives the kill, as `crash_window` says, until a stop ends it by its `TMPDIR`."""
     delivery = Delivery(input="41", boundary="turn", text="carry on", items=())
     command = ToolCall(BASH, {"command": "echo ran >> ran; echo $$ > pipe; exec sleep 600"}, id="call_dangling")
 
@@ -605,11 +605,9 @@ async def test_a_tool_a_kill_cut_off_reads_as_no_result_on_resume_and_never_ran_
         assert record is not None
         os.killpg(record.pid, signal.SIGKILL)
         await heard.until(Exited)
+        outlived = running(tool_pid)
         await first.stop(2.0)
-        try:
-            assert running(tool_pid)
-        finally:
-            os.kill(tool_pid, signal.SIGKILL)
+        assert (outlived, running(tool_pid)) == (True, False)
 
         second, heard = PiDriver(), Heard()
         await second.start(spec.model_copy(update={"resume": native}), heard)
