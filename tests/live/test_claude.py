@@ -61,7 +61,7 @@ async def test_one_agent_takes_a_goal_a_delivery_an_interrupt_an_approval_and_a_
     """Budget: at most 30 model calls, counted from the journal. The agent takes a goal, calls one of our tools, ends
     its turn, takes a delivery, is interrupted, has an approval answered through the runtime, and is resumed by a new
     process."""
-    instructions = f"{MARK}. Be brief, and do exactly what you are asked and nothing else."
+    instructions = f"{MARK}. Be brief, and do exactly what you are asked and nothing else. Never call agent_finish."
     role = Role(harness="claude", model=MODEL, effort="low", count=0, instructions=instructions)
     channels = {"notes": {"kind": "board", "writers": "all", "readers": "all"}}
     team = Team(roles={"worker": role}, topology={"channels": channels})
