@@ -26,7 +26,9 @@ pytestmark = [
 ]
 
 WITHIN = 300.0
-LIMITS = ("budget.turns = 16", 'budget.wall = "4m"', "budget.tokens = 6000000")
+LIMITS = ("budget.turns = 12", 'budget.wall = "4m"')
+"""No `tokens` limit: a turn a stop cuts off can go unmeasured, as Codex says of the call it was in, and then no limit
+in tokens can let the next turn begin, by design, which ended run 42 with exit 2."""
 HARNESSES = {
     "claude": (f'model = "{CLAUDE}"', f'effort = "{EFFORT}"'),
     "codex": (f'model = "{CODEX}"', f'effort = "{EFFORT}"', 'sandbox = "workspace-write"'),

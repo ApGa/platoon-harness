@@ -22,6 +22,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
   journal, of a limit of 30. Their transcripts and journals are kept outside the repository.
 - **What an agent is launched with,** section 16, is runs 34 to 39, on a harness's own agents off by default and the preamble as a
   template: 88 model calls from 10 journals, of a limit of 100, with their transcripts and journals kept outside the repository too.
+- **The command line,** section 17, is runs 40 to 43, through the installed `platoon-harness`: 31 model calls from 4 journals, of a
+  limit of 50, with their transcripts and journals kept outside the repository too.
 
 ## Results
 
@@ -278,6 +280,21 @@ starting the child, saying it could not run a shell, and so ended `finished` wit
 No agent of any of these runs opened a turn with a `wait` that named nothing: 0 of 14 agents, on the preamble that teaches `wait` for
 something named. A woken turn that opened with a `message_read` showing nothing new came 0 times in 17 woken turns on Claude Code, and
 4 times in 14 on Codex, each a helper that stays, 2 of 3 in runs 36 and 38.
+
+### 17. The command line
+
+`tests/live/test_cli.py`, on the installed `platoon-harness`, each command a process of its own.
+
+| Run | Test | Calls | What happened |
+|---|---|---|---|
+| 40 | A team of one, `--harness claude`, stopped by `session stop` during `sleep 20`, then `session resume` | 6 | Passed. The run exited 130, the resume journaled the text told at launch again, whole, and the model read the cut-off notice, looked, found the file unwritten, and ran the command once more. Settled, exit 0 |
+| 41 | `init`, then `run --json --plan-login` with the job on stdin, a person's message from a second process once a task was claimed, and `events --follow` in a third | 20 | Passed in 45 s: the lead 9 calls in 3 turns, the Codex worker 11 in 1, both tasks done, the tests passing, a summary on the board, and every event the run printed seen by the follower. Settled, exit 0 |
+| 42 | As 40, `--harness codex` | 1 | Failed, exit 2. Codex said the call the stop cut off was `unavailable`, so the test's `tokens` limit refused the resume's wake `unavailable`, as section 7 of the architecture says it must, and the session waited out its 4 minute wall limit |
+| 43 | As 42, with no `tokens` limit | 4 | Passed. The model looked for the file, found it missing, and ran the command once. Settled, exit 0 |
+
+Run 42 is the cost section 5 of this note foresaw: a limit in tokens leaves a resume after a stop to a person whenever the cut turn
+went unmeasured, which on Codex is always, as an interrupted call reports nothing. No agent opened a turn with a `wait` that named
+nothing, and no unknown frame came.
 
 ## What a real model did that scripted harnesses could not show
 
