@@ -309,7 +309,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
 | `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
-| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again |
+| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing (§7) |
 | `erase` | None | Repeat: erasing twice is harmless |
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
@@ -560,8 +560,10 @@ Each statement here is a promise with a test.
 - **Entries** are a capped `gist` plus an optional body. A digest shows gists. Exposure of a gist is recorded separately
   from exposure of a body.
 
-**Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so a sender cannot buy a wake,
-and an agent creating a channel stops at `next-turn`.
+**Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so an agent cannot buy a wake,
+and an agent creating a channel stops at `next-turn`. A person's message to an agent steers, whatever its reader's setting, so a
+correction lands at the earliest boundary its harness has, and a script's `Session.send` is a person's message, as its principal is
+the human. Nothing withdraws a sent message: a person sends a correction instead.
 `wake` starts a turn if the agent is idle or parked. `steer` asks for the earliest boundary the harness has and degrades visibly:
 `tool`, then `model_call`, then `turn`. Tool results of coordination ops also carry pending `steer` notices, which gives
 a tool boundary on any harness whose tools are visible. `coalesce` merges wakes into one turn.
@@ -680,6 +682,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   that its answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has
   not ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
   [ADR 0023](adr/0023-agents-that-stay.md).
+- **Interrupt.** `agent.interrupt` stops an agent's turn, or the turn it is on its way to, by a wake that is due or a handover under
+  way, and quiets what was waiting for it: what arrived before the interrupt wakes nothing and stays unread for its next turn, and a
+  wait that already holds closes with no notice, while what comes after wakes it as usual. It is the same whoever interrupts, a
+  person or a parent. With nothing under way or on its way it is refused `conflict`, as there is nothing to stop.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness

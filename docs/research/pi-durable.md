@@ -280,7 +280,9 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - Whether presets narrow `Role.tools` waits for the tool list ceiling's numbers.
 - Whether a failed commit ends a training rollout is decided with change 18. How a trainable pi treats compaction is decided at the Platoon
   bridge, with `purpose` on `ModelCall` available either way.
-- The Esc mechanism, how a human steers and whether withdraw exists are decided when the clients stage starts.
+- The Esc mechanism, how a human steers and whether withdraw exists were decided at the clients stage: an interrupt quiets what was
+  waiting for its agent, whoever interrupts, and is accepted for an agent on its way to a turn; a person's message to an agent steers,
+  with no flag; and no op withdraws a sent message, as a person sends a correction instead. See architecture section 7.
 - Whether a harness that exits alone is resumed waits for what the real drivers show. They showed that a native resume cured every `kill -9`, and the recommendation is to build it at M2 with the crash count, in [the spike](spikes/real-harness.md). Not built.
 - bug-coordination-12 is closed on Claude Code, by the same spike: with background tasks off a child lives inside the tool call that started it, and an interrupt of that turn ends it, so an open turn covers it.
 

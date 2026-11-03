@@ -7,6 +7,7 @@ from platoon_harness.kernel import Principal
 from ..kernel.support import supervised, until
 from .support import (
     channel,
+    cursor,
     end_turn,
     enroll,
     gists,
@@ -556,3 +557,125 @@ async def test_a_refused_wake_is_tried_again_when_a_reservation_comes_back(kerne
     await end_turn(kernel, "alice")
 
     assert ready(kernel) == ["bob"]
+
+
+# A person's message, and an interrupt.
+
+
+async def test_a_person_s_message_to_an_agent_steers_whatever_the_reader_s_setting(kernel, ada):
+    await spawn(kernel, "bob", role="quiet", ready={"boundaries": ["turn", "tool"]})
+    await start_turn(kernel, "bob")
+
+    await send(kernel, ada, "@bob", "use the new API")
+
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "steer"
+    assert ready(kernel) == ["bob"]
+    handed = await offer(kernel, "bob")
+    assert (handed["boundary"], [item["gist"] for item in handed["items"]]) == ("tool", ["use the new API"])
+
+
+async def test_an_agent_s_message_follows_the_reader_s_delivery_setting(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", role="quiet")
+
+    await send(kernel, alice, "@bob", "read me if you like")
+
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "pull"
+    assert ready(kernel) == []
+
+
+@pytest.fixture(params=["a person", "a parent"])
+async def interrupter(request, kernel, ada) -> Principal:
+    """Whoever interrupts: the session's human, or `bob`'s parent."""
+    alice = await spawn(kernel, "alice", role="lead")
+    await spawn(kernel, "bob", by=alice, goal="")
+    return ada if request.param == "a person" else alice
+
+
+async def test_an_interrupt_quiets_what_was_waiting_for_its_agent(kernel, interrupter):
+    """What arrived before it stays unread and wakes nothing once the turn has stopped, whoever interrupts."""
+    carol = await spawn(kernel, "carol")
+    await start_turn(kernel, "bob")
+    await send(kernel, carol, "@bob", "while you work")
+
+    result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert ready(kernel) == []
+    assert cursor(kernel, "bob", "inbox/bob").acked == 0
+    assert "deliverable_delivery" not in result_of(kernel.query(kernel.runtime, "session.status", {}))["blockers"]
+
+
+async def test_what_is_sent_after_an_interrupt_wakes_as_usual_and_brings_what_was_quieted(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+    await start_turn(kernel, "bob")
+    await send(kernel, carol, "@bob", "while you work")
+    result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    await end_turn(kernel, "bob", "interrupted")
+
+    await send(kernel, carol, "@bob", "after the interrupt")
+
+    assert ready(kernel) == ["bob"]
+    handed = await offer(kernel, "bob")
+    assert [item["gist"] for item in handed["items"]] == ["while you work", "after the interrupt"]
+
+
+async def test_an_interrupt_of_an_agent_on_its_way_to_a_turn_cancels_that_wake(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+    await send(kernel, carol, "@bob", "wake up")
+    assert ready(kernel) == ["bob"]
+
+    interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+
+    assert interrupted == {"effect": None}
+    assert ready(kernel) == []
+
+
+async def test_an_interrupt_during_a_handover_fails_it_and_nothing_wakes_again(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+    await send(kernel, carol, "@bob", "wake up")
+    await offer(kernel, "bob")
+    assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["state"] == "waking"
+
+    interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    deliver = next(
+        row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["kind"] == "deliver"
+    )
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": deliver["id"]}))
+    failed = {"id": deliver["id"], "attempt": attempt, "error": "it was interrupted"}
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", failed))
+
+    assert interrupted["effect"] is not None
+    assert ready(kernel) == []
+    assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["state"] == "idle"
+
+
+async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+    await start_turn(kernel, "bob")
+    placed = result_of(await kernel.submit(Principal(id="agent:bob"), "wait", {"from": ["carol"]}))
+    await send(kernel, carol, "@bob", "here it is")
+
+    result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    await end_turn(kernel, "bob", "interrupted")
+
+    progress = result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))
+    assert progress["state"] == "cancelled"
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {})) == {
+        "agents": [],
+        "waits": [],
+        "stranded": [],
+        "due": None,
+    }
+
+
+async def test_a_wait_that_holds_only_after_an_interrupt_wakes_as_usual(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+    await start_turn(kernel, "bob")
+    placed = result_of(await kernel.submit(Principal(id="agent:bob"), "wait", {"from": ["carol"]}))
+    result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    await end_turn(kernel, "bob", "interrupted")
+
+    await send(kernel, carol, "@bob", "here it is")
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]

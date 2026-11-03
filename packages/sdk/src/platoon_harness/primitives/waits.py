@@ -367,6 +367,14 @@ def _close(txn: Txn, waiter: str, id: int, kind: str) -> None:
     txn.emit(kind, stream, gist=f"wait {id} {kind.removeprefix('wait.')}", data={"id": id})
 
 
+def close_holding(txn: Txn, waiter: str) -> None:
+    """Close a wait of `waiter`'s that holds, with no notice and nothing acked, as an interrupt does: what makes it hold
+    came before the interrupt, so it wakes nobody."""
+    for wait in txn.view(Waits).open_for(waiter):
+        if wait.left <= 0:
+            _close(txn, waiter, wait.id, "wait.cancelled")
+
+
 def _wake_for_reports(txn: Txn, wait: WaitRecord) -> None:
     """A report that answers, of an agent this wait named or counted, relied on it to wake its reader. One closed with
     no notice cannot, so each such report wakes its reader itself, or it waits on a turn nothing will start. One from a

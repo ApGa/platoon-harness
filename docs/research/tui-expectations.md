@@ -86,7 +86,6 @@ Proposal, all rebindable, with help generated from the effective keymap as in Pi
 | Composer | Enter | Send to target; a busy agent queues with a visible chip |
 | Composer | Shift+Enter, Alt+Enter, Ctrl+J | Newline |
 | Composer | Ctrl+R / Ctrl+G / Ctrl+S | History search / external editor / stash draft |
-| Composer | Alt+Up | Pull back last queued message |
 | Composer | `/`, `@`, `#`, `!` | Commands, agents and files, channels, shell |
 | Global | Ctrl+P; F1 or `?` on empty | Palette; help |
 | Global | Esc | Dismiss overlay, else interrupt the **focused** agent only |

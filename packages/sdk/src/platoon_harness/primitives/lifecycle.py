@@ -51,7 +51,7 @@ from .reports import (
 )
 from .sessions import SessionRecord
 from .tasks import Tasks, bury_if_spent
-from .waits import Waits
+from .waits import Waits, close_holding
 
 Status = Literal["finished", "cancelled", "retired", "lost", "failed"]
 
@@ -366,12 +366,19 @@ def conclude(txn: Txn, a: Named) -> None:
 
 @op("agent.interrupt", on=lambda a: f"agent/{a.agent}", tool=True)
 def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
-    """Stop an agent's turn at the boundary its harness can, or a handover that has begun none, which goes back on its
-    queue. The agent lives on. Refused `conflict` when neither is under way: there is nothing to stop. `not_permitted`
+    """Stop an agent's turn at the boundary its harness can, or the turn it is on its way to. What was waiting for it
+    then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on.
+    Refused `conflict` when it is neither in a turn nor on its way to one: there is nothing to stop. `not_permitted`
     when it is not below you."""
     agent = _live(txn, a.agent)
-    if txn.view(Stamps).turn(agent.name) is None and agent.state != "waking":
-        raise Refused("conflict", f"{agent.name} has no open turn")
+    pending = work(txn)
+    under_way = txn.view(Stamps).turn(agent.name) is not None or agent.state == "waking"
+    if not under_way and agent.name not in (*pending.agents, *pending.later):
+        raise Refused("conflict", f"{agent.name} is neither in a turn nor on its way to one")
+    txn.emit("wake.quieted", f"wake/{agent.name}", gist=f"wake of {agent.name} quieted", agent=agent.name)
+    close_holding(txn, agent.id)
+    if not under_way:
+        return {"effect": None}
     return {
         "effect": txn.effect("interrupt", {"agent": agent.name}, on_uncertain="retry", priority=1, agent=agent.name)
     }

@@ -40,6 +40,15 @@ _QUEUED = """
     JOIN v_deliveries_audience AS a ON a.reader = c.reader AND a.stream = c.stream AND a.seq > c.offered
     JOIN v_deliveries AS e ON e.seq = a.seq
 """
+_QUIET = "coalesce((SELECT upto FROM v_deliveries_quiet WHERE agent = {reader}), 0)"
+
+
+def _delivery(entry: str, audience: str, reader: str) -> str:
+    """An entry's delivery for one reader: one that would wake it is `next-turn` once an interrupt has quieted what
+    came before."""
+    quiet = _QUIET.format(reader=reader)
+    waking = f"{entry}.delivery IN ('wake', 'steer')"
+    return f"CASE WHEN {audience}.seq <= {quiet} AND {waking} THEN 'next-turn' ELSE {entry}.delivery END"
 
 
 class Entry(BaseModel, frozen=True):
@@ -91,7 +100,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 6
+    version = 7
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -134,6 +143,7 @@ class Deliveries(View):
     CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
     CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_quiet(agent TEXT PRIMARY KEY, upto INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     """
 
     @fold("message.sent")
@@ -280,6 +290,11 @@ class Deliveries(View):
                 "UPDATE v_deliveries SET delivery = 'wake' WHERE stream = ? AND version = ?", (stream, int(version))
             )
 
+    @fold("wake.quieted")
+    def quieted(self, event: Event) -> None:
+        """An interrupt: what came before it wakes its reader no more, and waits for the next turn."""
+        self.db.execute("INSERT OR REPLACE INTO v_deliveries_quiet VALUES (?, ?)", (event.agent, event.seq))
+
     @fold("wake.refused")
     def refused(self, event: Event) -> None:
         if event.data["why"] != "hops":
@@ -354,7 +369,7 @@ class Deliveries(View):
         where = f"""
             WHERE c.reader = ? AND c.closed = 0 AND a.seq <= (
                 SELECT max(o.seq) FROM v_deliveries_audience AS o JOIN v_deliveries AS n ON n.seq = o.seq
-                WHERE o.reader = c.reader AND o.stream = c.stream AND n.delivery IN ({marks})
+                WHERE o.reader = c.reader AND o.stream = c.stream AND {_delivery("n", "o", "c.reader")} IN ({marks})
             )
         """
         rows = self.db.execute(
@@ -368,7 +383,7 @@ class Deliveries(View):
         rows = self.db.execute(
             f"""
             SELECT c.reader, min(e.due) AS due, max(e.delivery = 'steer') AS steer {_QUEUED}
-            WHERE c.closed = 0 AND e.delivery IN ('wake', 'steer')
+            WHERE c.closed = 0 AND {_delivery("e", "a", "c.reader")} IN ('wake', 'steer')
                 AND c.reader NOT IN (SELECT agent FROM v_deliveries_blocked)
             GROUP BY c.reader ORDER BY c.reader
             """
@@ -500,12 +515,14 @@ def post(
     answers: bool = False,
     follows: int = -1,
 ) -> Event:
-    """Journal one entry for its audience. The runtime posts here too: a report about a `subject`, which wakes its
-    reader only while that agent was asked something, and `answers` it, or to `wake` the reader regardless, or with
-    False to leave it for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can say
-    so, as for a wait's notice."""
+    """Journal one entry for its audience. A person's message to an agent steers, whatever the reader's setting. The
+    runtime posts here too: a report about a `subject`, which wakes its reader only while that agent was asked
+    something, and `answers` it, or to `wake` the reader regardless, or with False to leave it for the reader's next
+    turn. `follows` is the hops of what a post follows when no `cause` can say so, as for a wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake is not None
+    if txn.me.kind == "human" and channel.kind == "inbox" and not by_runtime:
+        channel = channel.model_copy(update={"delivery": "steer"})
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
     if channel.depth is not None and not by_runtime:
         depth = txn.view(Deliveries).depth(readers[0], stream)

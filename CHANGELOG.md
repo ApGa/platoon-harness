@@ -68,9 +68,14 @@
   the model, on Claude Code and Codex. Live tests count the agents that open a turn with a `wait` naming nothing.
 - `tests/live/test_stays.py`: the owner's flow on Claude Code and on Codex, and a Codex child's half alone. `tests/live/test_codex.py`
   runs a Codex agent's own sub-agent.
+- An interrupt quiets what was waiting for its agent, whoever interrupts: what came before it wakes nothing and stays unread for the
+  next turn, and a wait that already holds closes with no notice, while what comes after wakes as usual. `wake.quieted` records it.
 
 ### Changed
 
+- A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
+  agent's message follows the reader's setting as before. Nothing withdraws a sent message.
+- An interrupt of an agent on its way to a turn, by a wake that is due, is accepted and cancels that wake, where it was refused.
 - The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
   them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's
   `instructions`, is never dropped. The default renders byte for byte as before. ADR 0025 is amended.
@@ -115,6 +120,8 @@
 
 ### Fixed
 
+- Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
+  was refused between a wake and its turn: bug-coordination-7 and -8.
 - The scan for local paths and account details skipped `docs/research`, its fixtures, the top-level pages and the package
   READMEs. It reads them now, and an email address too, and a path inside a repository no longer reads as a local one.
 - A wait that closed with no notice of its own posted "A report came in during your wait." as a wake, which stayed queued after its
