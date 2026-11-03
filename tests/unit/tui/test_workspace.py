@@ -607,20 +607,25 @@ async def test_a_channel_made_and_posted_to_in_one_frame_counts_each_line_once(r
         Call("message_send", {"to": "#late", "gist": "two"}),
     ]
     async with attached(team(making), root) as (owner, app, pilot):
-        live = workspace(app).live
-        draw, gate = live._draw, asyncio.Event()
+        screen = workspace(app)
+        live = screen.live
+        draw, holding, gate = live._draw, asyncio.Event(), asyncio.Event()
 
         async def held(events, said):
+            holding.set()
             await gate.wait()
             await draw(events, said)
 
         live._draw = held
+        live._dirty.set()
+        await holding.wait()  # A frame held before the lead acts, so all it does is read into the next one.
         await owner.send("@lead", "make a channel")
         await until(lambda: of_type(owner, "message.sent"), owner, lambda sent: len(sent) == 3)
+        head = await owner.head()
         gate.set()
-        await drawn(pilot, lambda text: "#late" in text)
+        await drawn(pilot, lambda text: screen.query_one(Transcript).through >= head)
 
-        assert workspace(app).unread["#late"] == 2
+        assert screen.unread["#late"] == 2
 
 
 async def test_a_spoiled_marks_file_loses_only_badges(root):
