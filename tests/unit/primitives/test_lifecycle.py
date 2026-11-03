@@ -862,6 +862,17 @@ async def test_a_turn_stopped_on_purpose_wakes_no_parent(kernel, reason):
     assert sent.data["delivery"] == "next-turn"
 
 
+@pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP])
+async def test_a_wait_counts_what_it_names_though_a_turn_stopped_on_purpose_wakes_nobody(kernel, reason):
+    await parked_on(kernel, "bob", **{"from": ["bob"]})
+    await start_turn(kernel, "bob")
+
+    await end_turn(kernel, "bob", reason)
+
+    assert of_type(kernel, "message.sent")[-1].data["delivery"] == "next-turn"
+    assert ready(kernel)["agents"] == [] and len(ready(kernel)["waits"]) == 1
+
+
 async def test_retiring_removes_an_agent_from_relations_never_from_history(kernel):
     lead = await spawn(kernel, "lead", role="lead")
     await spawn(kernel, "w1", by=lead, goal="")
@@ -1711,6 +1722,37 @@ async def test_a_report_a_held_wait_held_back_reaches_a_turn_after_its_answer(ke
     assert ready(kernel)["agents"] == ["lead"]
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
     assert "a is done" in [item["gist"] for item in handed["items"]]
+
+
+async def test_a_report_a_held_wait_held_back_wakes_nobody_once_its_reader_has_read_it(kernel):
+    """As in run 22: the answer came through a held wait, and the parent read the report itself in that turn."""
+    lead, placed = await report_held_back(kernel, hold=30.0)
+    await hold_open(kernel, placed)
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"], "told": True}))
+
+    result_of(await kernel.submit(lead, "message.read", {"sender": "a"}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == []
+
+
+@pytest.mark.parametrize("limits", [{"max_hops": 0}])
+async def test_a_report_a_wait_held_back_wakes_its_reader_only_within_max_hops(kernel, limits):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    child = await spawn(kernel, "a", by=lead, goal="")
+    await send(kernel, lead, "@a", "do it")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "a"}))
+    await start_turn(kernel, "a")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
+    await finished(kernel, child)
+    await end_turn(kernel, "a")
+
+    result_of(await kernel.submit(lead, "wait.cancel", {}))
+    await end_turn(kernel, "lead")
+
+    assert ready(kernel)["agents"] == []
+    assert [event.data["why"] for event in of_type(kernel, "wake.refused")] == ["hops"]
 
 
 async def test_a_wait_cancelled_with_nothing_held_back_wakes_nobody(kernel):

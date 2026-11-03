@@ -591,12 +591,14 @@ end is no end, so a child that ends a turn with no `finish` still wakes a join o
 asked, like any report.
 
 A turn that did not stop on its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. One that an
-interrupt or its owner's stop ended was someone's own doing, so it wakes nobody. Any other, and a child that ended badly, breaks in on
+interrupt or its owner's stop ended was someone's own doing, so the monitor wakes nobody for it, and a wait counts what it names, so a
+wait with `from` that agent holds on that report as on any. Any other, and a child that ended badly, breaks in on
 a parent with a wait open, whatever that wait counts and whatever the parent asked, since that wait may now never hold. This is
 fail-fast with no new wait grammar, and `max_hops` is what bounds it.
 
-A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, wakes its reader if a report is queued for
-its next turn: that report may have counted on the wait to wake it, and no other turn may come.
+A wait that closes with no notice of its own, by `wait.cancel` or by a held call's answer, lets each report queued for its reader's
+next turn from an agent it named or counted wake that reader, since the report relied on the wait to wake it and no other turn may
+come. The wake is the report's own, within `max_hops`, so a report its reader has read by then wakes nobody.
 
 ### Boards
 

@@ -26,11 +26,10 @@ from platoon_harness.kernel import (
 from .agents import Agents
 from .channels import Channels
 from .common import AgentName, Seq, checked_after, stream_of
-from .messages import Deliveries, ack, post
+from .messages import Deliveries, ack, post, restore_wakes
 from .tasks import Tasks
 
 _END_TURN = "The wait is registered. End your turn: the runtime starts your next turn when it holds."
-_HELD_BACK = "A report came in during your wait."
 _TASK_SETTLED = ("task.completed", "task.died")
 _BOARD_VERSIONED = ("board.posted", "board.revised")
 _OUT_OF_TURN = ("idle", "waiting")
@@ -369,11 +368,16 @@ def _close(txn: Txn, waiter: str, id: int, kind: str) -> None:
 
 
 def _wake_for_reports(txn: Txn, wait: WaitRecord) -> None:
-    """A report a wait held back counted on that wait to wake its reader. One closed with no notice cannot, so this
-    does, or the report waits on a turn nothing will start."""
+    """A report of an agent this wait named or counted relied on it to wake its reader. One closed with no notice
+    cannot, so each such report wakes its reader itself, or it waits on a turn nothing will start."""
     reader = _reader(wait.waiter)
-    if reader is not None and txn.view(Deliveries).report_queued(reader):
-        post(txn, f"inbox/{reader}", _HELD_BACK, wake=True, follows=wait.hops)
+    if reader is not None:
+        held = [
+            entry
+            for entry in txn.view(Deliveries).reports_queued(reader)
+            if entry.subject is not None and (wait.awaits(entry.subject, ended=True) or wait.counted(entry.subject))
+        ]
+        restore_wakes(txn, reader, held)
 
 
 def _ack_all(txn: Txn, reader: str | None, streams: Iterable[str], after: int | None) -> None:

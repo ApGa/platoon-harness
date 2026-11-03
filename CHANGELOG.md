@@ -94,6 +94,10 @@
 
 ### Fixed
 
+- A wait that closed with no notice of its own posted "A report came in during your wait." as a wake, which stayed queued after its
+  reader had read the report itself, as the lead of run 22 did with `sender`. Each report the wait named or counted now wakes its
+  reader itself, within `max_hops`, as `wake.restored` records, so a report read first wakes nobody. Section 7 also says what held all
+  along: a report from a turn stopped on purpose wakes nobody by the monitor, and a wait counts it as it counts anything it names.
 - A stop under heavy load could fail with a group that "outlived SIGKILL", or `reap` name a group that outlived its leader, when nothing
   in it ran: a member that has exited counts for `killpg(group, 0)` until its parent reaps it, and an orphan waits on pid 1. A group is
   judged by whether anything in it still runs, on Linux.

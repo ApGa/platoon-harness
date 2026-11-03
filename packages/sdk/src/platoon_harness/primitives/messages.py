@@ -91,7 +91,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 4
+    version = 5
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -268,6 +268,14 @@ class Deliveries(View):
         self.db.execute("UPDATE v_deliveries_cursors SET closed = 1 WHERE reader = ?", (event.agent,))
         self.db.execute("DELETE FROM v_deliveries_heard WHERE agent = ?", (event.agent,))
 
+    @fold("wake.restored")
+    def restored(self, event: Event) -> None:
+        for ref in event.data["entries"]:
+            stream, _, version = ref.partition("@")
+            self.db.execute(
+                "UPDATE v_deliveries SET delivery = 'wake' WHERE stream = ? AND version = ?", (stream, int(version))
+            )
+
     @fold("wake.refused")
     def refused(self, event: Event) -> None:
         if event.data["why"] != "hops":
@@ -363,20 +371,18 @@ class Deliveries(View):
         )
         return [(row["reader"], row["due"], bool(row["steer"])) for row in rows]
 
-    def report_queued(self, reader: str) -> bool:
-        """Whether a report of a child waits for this reader's next turn."""
-        return (
-            self.db.execute(
-                f"""
-                SELECT 1 {_QUEUED}
-                WHERE c.reader = ? AND c.closed = 0 AND e.delivery = 'next-turn'
-                    AND json_extract(e.entry, '$.subject') IS NOT NULL
-                LIMIT 1
-                """,
-                (reader,),
-            ).fetchone()
-            is not None
+    def reports_queued(self, reader: str) -> list[Entry]:
+        """The reports of children that wait for this reader's next turn."""
+        rows = self.db.execute(
+            f"""
+            SELECT e.entry {_QUEUED}
+            WHERE c.reader = ? AND c.closed = 0 AND e.delivery = 'next-turn'
+                AND json_extract(e.entry, '$.subject') IS NOT NULL
+            ORDER BY a.seq
+            """,
+            (reader,),
         )
+        return [Entry.model_validate_json(row["entry"]) for row in rows]
 
     def unread(self, reader: str) -> int:
         return self.db.execute(
@@ -536,11 +542,29 @@ def post(
         v=2,
     )
     if wants and past_hops:
-        ref = f"{event.stream}@{event.version}"
         for reader in audience:
-            data = {"why": "hops", "hops": hops, "limit": max_hops, "ref": ref}
-            txn.emit("wake.refused", f"wake/{reader}", gist=f"wake of {reader} past max_hops", agent=reader, data=data)
+            _past_hops(txn, reader, hops, f"{event.stream}@{event.version}")
     return event
+
+
+def _past_hops(txn: Txn, reader: str, hops: int, ref: str) -> None:
+    """A wake past `max_hops` is refused, shown in attention, and its entry waits for the next turn."""
+    data = {"why": "hops", "hops": hops, "limit": txn.view(SessionRecord).settings().limits.max_hops, "ref": ref}
+    txn.emit("wake.refused", f"wake/{reader}", gist=f"wake of {reader} past max_hops", agent=reader, data=data)
+
+
+def restore_wakes(txn: Txn, reader: str, entries: Sequence[Entry]) -> None:
+    """Let entries a wait held back from waking their reader wake it now, as any wake does, within `max_hops`. Each is
+    a wake of its own, so one the reader reads first wakes nobody."""
+    max_hops = txn.view(SessionRecord).settings().limits.max_hops
+    within = [entry.ref for entry in entries if max_hops is None or entry.hops <= max_hops]
+    for entry in entries:
+        if entry.ref not in within:
+            _past_hops(txn, reader, entry.hops, entry.ref)
+    if within:
+        data = {"entries": within}
+        gist = f"wake of {reader} restored"
+        txn.emit("wake.restored", f"wake/{reader}", gist=gist, agent=reader, refs=within, data=data, runtime=True)
 
 
 def announce(txn: Txn, channel: Channel, gist: str, cause: int) -> None:
