@@ -2,12 +2,13 @@
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import queue
 import sqlite3
 from collections import defaultdict
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Generator, Iterable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Collection, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -65,6 +66,8 @@ _DETAIL_LIMIT = 512
 _SCAN_LIMIT = 4096
 _SEQ_LIMIT = 2**63
 _IDLE_READERS = 4
+_STREAMS_LIMIT = 256
+_STREAM_LENGTH = 512
 
 
 @dataclass(frozen=True)
@@ -454,8 +457,19 @@ class Kernel:
             raise Refused("not_permitted", "unknown credential")
         return principal
 
-    def read(self, principal: Principal, *, after: int, match: str | None = None, limit: int = 512) -> Page:
-        """Read a page past `after` in one short transaction. `match` globs stream names.
+    def read(
+        self,
+        principal: Principal,
+        *,
+        after: int = 0,
+        before: int | None = None,
+        match: str | None = None,
+        streams: Collection[str] | None = None,
+        limit: int = 512,
+    ) -> Page:
+        """Read a page past `after` in one short transaction, oldest first, or with `before` the newest below it, still
+        in order. `match` globs stream names and `streams` names them. `cursor` is where to go on: the next `after`, or
+        going back the next `before`, which is `after` once nothing is left between.
 
         This is for the runtime and live principals other than agents, whose reads are ops, checked against grants.
         """
@@ -463,21 +477,29 @@ class Kernel:
             raise Refused("not_permitted", "an agent's reads are ops")
         if not 0 < limit <= _SCAN_LIMIT:
             raise Refused("invalid", f"limit is 1 to {_SCAN_LIMIT}")
-        if not 0 <= after < _SEQ_LIMIT:
-            raise Refused("invalid", "after is a seq")
+        if not 0 <= after < (_SEQ_LIMIT if before is None else before) <= _SEQ_LIMIT:
+            raise Refused("invalid", "after and before are seqs, after below before")
         if match is not None and not match.isprintable():
             raise Refused("invalid", "match is a glob over stream names")
+        named = None if streams is None else _named(streams)
+        span = limit if match is None and named is None else _SCAN_LIMIT
         with self._reading() as db:
             if principal.kind != "runtime":
                 Principals(db).live(principal.id)
             last = last_seq(db)
-            end = min(last, after + (limit if match is None else _SCAN_LIMIT))
+            high = min(last, after + span) if before is None else min(last, before - 1)
+            low = after if before is None else max(after, high - span)
             rows = db.execute(
                 "SELECT * FROM events WHERE seq > ? AND seq <= ? AND (? IS NULL OR matches(stream, ?)) "
-                "ORDER BY seq LIMIT ?",
-                (after, end, match, match, limit),
+                "AND (? IS NULL OR stream IN (SELECT value FROM json_each(?))) "
+                f"ORDER BY seq {'DESC' if before is not None else 'ASC'} LIMIT ?",
+                (low, high, match, match, named, named, limit),
             ).fetchall()
-        cursor = rows[-1]["seq"] if len(rows) == limit else max(after, end)
+        if before is None:
+            cursor = rows[-1]["seq"] if len(rows) == limit else max(after, high)
+        else:
+            rows.reverse()
+            cursor = rows[0]["seq"] if len(rows) == limit else low + 1 if low > after else after
         return Page(events=tuple(decode(row) for row in rows), cursor=cursor, head=last)
 
     async def follow(self, principal: Principal, *, after: int, match: str | None = None) -> AsyncIterator[Page]:
@@ -576,6 +598,16 @@ class Kernel:
             self._idle.get_nowait().close()
         if self._writer is not None:
             self._writer.stop()
+
+
+def _named(streams: Collection[str]) -> str:
+    """Stream names as the JSON array a read matches against, or refuse them."""
+    names = list(streams)
+    if len(names) > _STREAMS_LIMIT or not all(
+        isinstance(name, str) and name.isprintable() and len(name) <= _STREAM_LENGTH for name in names
+    ):
+        raise Refused("invalid", f"streams are at most {_STREAMS_LIMIT} stream names")
+    return json.dumps(names)
 
 
 def _loaded(extensions: Iterable[Extension]) -> Loaded:

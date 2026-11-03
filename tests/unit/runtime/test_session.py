@@ -76,6 +76,7 @@ DERIVED = {
     "get_body": "the link",
     "head": "the link",
     "leave": "the runtime",
+    "page": "the link",
     "put_body": "the link",
     "reply": "message.send",
     "resume": "a verb of its own",
@@ -353,6 +354,21 @@ async def test_with_no_runtime_a_write_is_refused_naming_what_restarts_it(tmp_pa
     assert 'Session.resume("s")' in str(outcome.refusal.detail)
     assert refused.value.refusal.code == "unavailable"
     assert stored.value.refusal.code == "unavailable"
+
+
+async def test_history_pages_back_as_a_runtime_does(tmp_path):
+    async with Session.start(solo([Say("said")]), name="s", root=tmp_path) as session:
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        live = [event async for event in session.events()]
+
+    async with Session.attach("s", root=tmp_path) as history:
+        before, back = (await history.head()) + 1, []
+        while before:
+            page = await history.page(before=before, limit=3)
+            back, before = [*page.events, *back], page.cursor
+
+    assert [event.seq for event in back[: len(live)]] == [event.seq for event in live]
 
 
 async def test_history_ends_where_the_journal_does(tmp_path):

@@ -187,7 +187,7 @@ class Kernel:
     def open(path, *, clock=None, extensions=(), read_only=False) -> Kernel: ...
     async def submit(self, principal, op, args, *, key=None, expected_version=None, native=None) -> Outcome: ...
     def query(self, principal, op, args) -> Outcome: ...      # a read-only op on a read connection
-    def read(self, principal, *, after, match=None, limit=512) -> Page: ...  # never for agent principals
+    def read(self, principal, *, after=0, before=None, match=None, streams=None, limit=512) -> Page: ...  # never for agents
     async def follow(self, principal, *, after, match=None) -> AsyncIterator[Page]: ...
     def deltas(self, agent, *, after=None) -> AsyncIterator[Delta]: ...  # lossy live text; never journaled
     def close(self) -> None: ...
@@ -393,8 +393,11 @@ for what a harness took and never landed, in `Deliveries` alone.
 
 A subscription is repeated `read(after, match, limit)` plus a shared head pulse. One writer means `seq` order is commit
 order, so a cursor cannot skip a late commit. Each page is its own short read transaction, so a slow client cannot pin
-the WAL. Catch-up and live are one loop. `match` is a glob over stream names, a filtered page scans at most 4,096 events,
-and `Page.cursor` is where to continue, so a page can be empty with more to come.
+the WAL. Catch-up and live are one loop. `match` is a glob over stream names and `streams` names them, a filtered page scans at most 4,096
+events, and `Page.cursor` is where to continue, so a page can be empty with more to come. With `before` a page is the newest below
+it, still in order, and its cursor is the next `before`, or `after` once nothing is left between, so a transcript pages back from
+the journal without reading it all. A client names a row for what it could not read `missed`, as a gap is the journal's own record
+of what went unseen.
 
 Followers at the tail share one read per pulse into a bounded tail and take a slice; a lagging follower pages by SQL through
 a small pool of idle connections. A private read per follower does not keep up at 100 followers, and slows the writer. A reader

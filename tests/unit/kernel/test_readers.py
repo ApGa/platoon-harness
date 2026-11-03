@@ -71,6 +71,11 @@ async def test_reading_past_the_head_is_empty(kernel):
         {"after": -1},
         {"after": 2**70},
         {"after": 0, "match": "\ud800"},
+        {"after": 3, "before": 3},
+        {"after": 0, "before": 2**70},
+        {"after": 0, "streams": ["\ud800"]},
+        {"after": 0, "streams": ["s" * 513]},
+        {"after": 0, "streams": [f"s/{n}" for n in range(257)]},
     ],
 )
 async def test_a_bad_page_is_refused_and_harms_no_reader(kernel, args):
@@ -81,6 +86,46 @@ async def test_a_bad_page_is_refused_and_harms_no_reader(kernel, args):
 
     assert refused_code(error) == "invalid"
     assert len(kernel.read(kernel.runtime, after=0).events) == 1
+
+
+async def test_a_read_back_pages_from_before_to_after_in_order(kernel):
+    await add(kernel, 5)
+
+    first = kernel.read(kernel.runtime, before=6, limit=2)
+    second = kernel.read(kernel.runtime, before=first.cursor, limit=2)
+    third = kernel.read(kernel.runtime, before=second.cursor, limit=2)
+
+    assert [[e.seq for e in page.events] for page in (first, second, third)] == [[4, 5], [2, 3], [1]]
+    assert [page.cursor for page in (first, second, third)] == [4, 2, 0]
+
+
+async def test_a_read_back_stops_at_after(kernel):
+    await add(kernel, 5)
+
+    page = kernel.read(kernel.runtime, after=2, before=5)
+
+    assert ([e.seq for e in page.events], page.cursor) == ([3, 4], 2)
+
+
+async def test_streams_name_what_a_read_holds(kernel):
+    for stream in ("note/a", "other/b", "note/c", "other/b"):
+        await add(kernel, 1, stream)
+
+    forward = kernel.read(kernel.runtime, streams=["note/c", "other/b"])
+    back = kernel.read(kernel.runtime, before=5, streams=["note/c", "other/b"])
+
+    assert [e.seq for e in forward.events] == [e.seq for e in back.events] == [2, 3, 4]
+    assert (forward.cursor, back.cursor) == (4, 0)
+
+
+async def test_a_filtered_read_back_is_bounded_by_what_it_scans(kernel):
+    await add(kernel, 3, "note/a")
+    await add(kernel, 3, "other/b")
+
+    page = kernel.read(kernel.runtime, before=7, match="note/*", limit=2)
+
+    assert ([e.seq for e in page.events], page.cursor) == ([2, 3], 2)
+    assert [e.seq for e in kernel.read(kernel.runtime, before=page.cursor, match="note/*", limit=2).events] == [1]
 
 
 async def test_a_failure_inside_a_read_leaves_no_transaction_behind(kernel):
@@ -482,3 +527,38 @@ def test_a_tail_joined_to_what_was_committed_is_the_text(steps, reads):
             through, shown = delta.ended, ""
         shown += delta.text
     assert journal(through) + shown == journal(len(committed)) + saying
+
+
+@settings(max_examples=40, deadline=None)
+@given(
+    streams=st.lists(st.sampled_from(["note/a", "note/b", "other/c"]), min_size=1, max_size=30),
+    split=st.integers(0, 31),
+    limit=st.integers(1, 7),
+    named=st.sets(st.sampled_from(["note/a", "note/b", "other/c"])) | st.none(),
+)
+def test_a_paged_read_back_joined_to_a_read_forward_is_the_journal(tmp_path_factory, streams, split, limit, named):
+    """Page back from `split` to the start, then forward from there to the head: together they are the journal, or what
+    of it `streams` names, each event once and in order."""
+    folder = tmp_path_factory.mktemp("read") / "session"
+
+    async def body() -> None:
+        kernel = Kernel.open(folder, extensions=[notes])
+        for stream in streams:
+            result_of(await kernel.submit(kernel.runtime, "note.add", {"stream": stream}))
+        whole = [event.seq for event in kernel.read(kernel.runtime, streams=named, limit=4096).events]
+        back: list[int] = []
+        before = min(split, kernel.head) + 1
+        while before > 0:
+            page = kernel.read(kernel.runtime, before=before, streams=named, limit=limit)
+            back = [event.seq for event in page.events] + back
+            before = page.cursor
+        forward: list[int] = []
+        after = min(split, kernel.head)
+        while after < kernel.head:
+            page = kernel.read(kernel.runtime, after=after, streams=named, limit=limit)
+            forward += [event.seq for event in page.events]
+            after = page.cursor
+        assert back + forward == whole
+        kernel.close()
+
+    asyncio.run(body())

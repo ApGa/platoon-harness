@@ -87,6 +87,10 @@
 - `tests/live/test_cli.py`: milestone 1's flow from a terminal, and a stop and a resume of a live session.
   `tests/integration/test_cli_harnesses.py` runs, stops and resumes from the command line on each real binary against FakeModel.
 
+- `before` and `streams` on `Kernel.read`, and through every link form, as `Session.page`: a page back from `before`, still in
+  order, whose cursor is the next `before`, and a set of stream names a page holds, so a transcript pages back without reading the
+  journal whole. `Session.events` takes `streams` too. bug-clients-3.
+
 ### Changed
 
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An

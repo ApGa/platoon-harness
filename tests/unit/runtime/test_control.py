@@ -379,6 +379,19 @@ async def alist[T](items: AsyncIterator[T]) -> list[T]:
     return [item async for item in items]
 
 
+async def test_a_page_back_through_named_streams_crosses_the_socket(guest, owner):
+    for gist in ("one", "two"):
+        await owner.send("@bob", gist)
+    before = await owner.head() + 1
+
+    here = await owner.page(before=before, streams=["inbox/bob"], limit=1)
+    there = await guest.page(before=before, streams=["inbox/bob"], limit=1)
+    earlier = await guest.page(before=there.cursor, streams=["inbox/bob"], limit=1)
+
+    assert (here.events, here.cursor) == (there.events, there.cursor)
+    assert [event.gist for page in (earlier, there) for event in page.events] == ["one", "two"]
+
+
 async def test_a_body_crosses_both_ways(guest):
     body = bytes(range(256)) * 16
 

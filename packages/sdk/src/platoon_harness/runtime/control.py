@@ -10,7 +10,7 @@ import base64
 import contextlib
 import hmac
 import secrets
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol, Self
 
@@ -52,7 +52,15 @@ class Link(Protocol):
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome: ...
 
-    async def read(self, after: int, match: str | None = None, limit: int = _PAGE_LIMIT) -> Page: ...
+    async def read(
+        self,
+        after: int = 0,
+        *,
+        before: int | None = None,
+        match: str | None = None,
+        streams: Sequence[str] | None = None,
+        limit: int = _PAGE_LIMIT,
+    ) -> Page: ...
 
     async def put_body(self, body: bytes) -> str: ...
 
@@ -111,8 +119,17 @@ class Local:
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
         return self._kernel.query(self._principal, op, args)
 
-    async def read(self, after: int, match: str | None = None, limit: int = _PAGE_LIMIT) -> Page:
-        return self._kernel.read(self._principal, after=after, match=match, limit=limit)
+    async def read(
+        self,
+        after: int = 0,
+        *,
+        before: int | None = None,
+        match: str | None = None,
+        streams: Sequence[str] | None = None,
+        limit: int = _PAGE_LIMIT,
+    ) -> Page:
+        principal = self._principal
+        return self._kernel.read(principal, after=after, before=before, match=match, streams=streams, limit=limit)
 
     async def put_body(self, body: bytes) -> str:
         self._refuse_writes()
@@ -234,8 +251,17 @@ class Remote:
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
         return Outcome.model_validate(await self._call("query", {"op": op, "args": args}))
 
-    async def read(self, after: int, match: str | None = None, limit: int = _PAGE_LIMIT) -> Page:
-        return Page.model_validate(await self._call("read", {"after": after, "match": match, "limit": limit}))
+    async def read(
+        self,
+        after: int = 0,
+        *,
+        before: int | None = None,
+        match: str | None = None,
+        streams: Sequence[str] | None = None,
+        limit: int = _PAGE_LIMIT,
+    ) -> Page:
+        asked = {"after": after, "before": before, "match": match, "streams": streams, "limit": limit}
+        return Page.model_validate(await self._call("read", asked))
 
     async def put_body(self, body: bytes) -> str:
         if len(body) > _BODY_LIMIT:
@@ -305,7 +331,8 @@ class _Connection:
                 return (await link.query(params["op"], params["args"])).model_dump()
             case "read":
                 limit = min(params.get("limit", _PAGE_LIMIT), _PAGE_LIMIT)
-                return (await link.read(params["after"], params.get("match"), limit)).model_dump(mode="json")
+                asked = {name: params.get(name) for name in ("before", "match", "streams")}
+                return (await link.read(params["after"], **asked, limit=limit)).model_dump(mode="json")
             case "put_body":
                 return await link.put_body(base64.b64decode(params["body"]))
             case "get_body":

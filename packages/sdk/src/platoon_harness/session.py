@@ -650,12 +650,20 @@ class Session:
 
     # Reading.
 
-    async def events(self, after: int = 0, match: str | None = None, *, follow: bool = False) -> AsyncIterator[Event]:
-        """Each event past `after` whose stream `match` globs. Resume from any event's `seq`. With `follow` this goes on
-        as the journal grows, until nothing more can come. It is a read plus a long-poll, in-process or not."""
+    async def events(
+        self,
+        after: int = 0,
+        match: str | None = None,
+        *,
+        streams: Sequence[str] | None = None,
+        follow: bool = False,
+    ) -> AsyncIterator[Event]:
+        """Each event past `after` whose stream `match` globs, or `streams` names. Resume from any event's `seq`. With
+        `follow` this goes on as the journal grows, until nothing more can come. It is a read plus a long-poll,
+        in-process or not."""
         async for _ in self._moves():
             while True:
-                page = await self._page(after, match)
+                page = await self.page(after=after, match=match, streams=streams)
                 for event in page.events:
                     yield event
                 after = page.cursor
@@ -664,12 +672,25 @@ class Session:
             if not follow:
                 return
 
+    async def page(
+        self,
+        *,
+        after: int = 0,
+        before: int | None = None,
+        match: str | None = None,
+        streams: Sequence[str] | None = None,
+        limit: int = 256,
+    ) -> Page:
+        """A page of events past `after`, or with `before` the newest below it, in order, so a transcript pages back
+        without reading the journal whole. A filtered page scans at most 4,096 events, so it can be empty with more to
+        come: pass `cursor` as the next `after`, or as the next `before`, which is `after` once nothing is left."""
+        return await self._over_link(
+            lambda link: link.read(after, before=before, match=match, streams=streams, limit=limit)
+        )
+
     async def head(self) -> int:
         """The `seq` of the newest event now, after which a follower of only what comes next starts."""
         return await self._changed(-1) or 0
-
-    async def _page(self, after: int, match: str | None) -> Page:
-        return await self._over_link(lambda link: link.read(after, match))
 
     async def deltas(self, agent: str) -> AsyncIterator[Delta]:
         """An agent's live text as it comes. It is lossy: `lag` counts what was lost, and the item that follows is the
