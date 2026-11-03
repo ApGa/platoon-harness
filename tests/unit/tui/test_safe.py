@@ -1,6 +1,7 @@
 """SafeText is the one boundary for untrusted text, and no label-like widget is ever handed a bare str."""
 
 import ast
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -36,18 +37,44 @@ def test_safe_text_keeps_tabs_new_lines_and_every_script():
     assert SafeText(kept).plain == kept
 
 
-def _bare(node: ast.expr) -> bool:
-    """Whether an expression is a str of no Content: a literal, an f-string, a joined or formatted one, or `.plain`."""
-    if isinstance(node, ast.Constant):
-        return isinstance(node.value, str)
-    if isinstance(node, ast.JoinedStr | ast.BinOp):
-        return True
-    if isinstance(node, ast.Attribute):
-        return node.attr == "plain"
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name | ast.Attribute):
-        name = node.func.id if isinstance(node.func, ast.Name) else node.func.attr
-        return name in ("str", "format", "join", "repr", "safe")
-    return False
+def _name(node: ast.AST) -> str | None:
+    return node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
+
+
+def _content(node: ast.expr, known: set[str]) -> bool:
+    """Whether an expression is visibly Content: made by `SafeText` or `Content`, a method of Content, a name the file
+    says holds it, or a choice between two of these."""
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name):
+            return func.id in ("SafeText", "Content")
+        return isinstance(func, ast.Attribute) and (_name(func.value) == "Content" or _content(func.value, known))
+    if isinstance(node, ast.IfExp):
+        return _content(node.body, known) and _content(node.orelse, known)
+    return _name(node) in known
+
+
+def _annotated(tree: ast.AST) -> Iterator[tuple[str, ast.expr]]:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            yield node.arg, node.annotation
+        elif isinstance(node, ast.AnnAssign) and (name := _name(node.target)):
+            yield name, node.annotation
+
+
+def _contents(tree: ast.AST) -> set[str]:
+    """The names a file says hold Content: annotated so, assigned what is visibly Content, or taken from what is."""
+    known = {name for name, annotation in _annotated(tree) if "Content" in ast.unparse(annotation)}
+    while True:
+        found = set(known)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and _content(node.value, known):
+                found |= {name for target in node.targets if (name := _name(target))}
+            if isinstance(node, ast.For) and _content(node.iter, known):
+                found |= {name for target in ast.walk(node.target) if (name := _name(target))}
+        if found == known:
+            return known
+        known = found
 
 
 def _named(call: ast.Call) -> str | None:
@@ -57,18 +84,21 @@ def _named(call: ast.Call) -> str | None:
 
 
 def violations(source: str, *, notes: bool = False) -> list[str]:
-    """Each place in `source` that hands a label-like widget a bare str, or toasts by `notify` and not `note`."""
+    """Each place in `source` that hands a label-like widget anything not visibly Content, or toasts by `notify` and
+    not `note`."""
+    tree = ast.parse(source)
+    known = _contents(tree)
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(tree):
         if isinstance(node, ast.Call) and (name := _named(node)) in LABELS | METHODS:
             if name == "notify" and not notes:
                 found.append(f"{node.lineno}: notify, where `note` is the way")
             text = node.args[0] if node.args else None
-            if text is not None and name != "notify" and _bare(text):
+            if text is not None and name != "notify" and not _content(text, known):
                 found.append(f"{node.lineno}: {name} given {ast.unparse(text)}")
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Attribute) and target.attr in ATTRIBUTES and _bare(node.value):
+                if isinstance(target, ast.Attribute) and target.attr in ATTRIBUTES and not _content(node.value, known):
                     found.append(f"{node.lineno}: {target.attr} = {ast.unparse(node.value)}")
     return found
 
@@ -87,10 +117,29 @@ def test_a_label_like_widget_is_never_given_a_bare_str(path):
         "self.notify(said)",
         "widget.border_title = 'x' + name",
         "Static(SafeText(gist).plain)",
+        "Static(gist)",
+        "label.update(event.gist)",
+        "Row(name)",
+        'Static(row["gist"])',
+        "Static(SafeText(gist) if ok else gist)",
     ],
 )
 def test_the_lint_finds_a_bare_str(planted):
     assert violations(planted) != []
+
+
+@pytest.mark.parametrize(
+    "kept",
+    [
+        "Static(SafeText(gist))",
+        "line = Content.assemble(SafeText(gist))\nRow(line)",
+        "def f(said: Content):\n    label.update(said)",
+        'Static(Content("\\n").join(lines))',
+        "for name, about in fields:\n    Static(about)\ndef g(fields: list[tuple[str, Content]]): ...",
+    ],
+)
+def test_the_lint_takes_what_is_visibly_content(kept):
+    assert violations(kept) == []
 
 
 def test_a_link_is_followed_only_to_http_and_https():

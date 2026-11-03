@@ -17,8 +17,8 @@ ADDRESS = re.compile(rf"([@#+]{NAME})\s")
 
 class Composer(TextArea):
     """A multiline composer. Enter sends, and the keys the table names start a new line or recall what was sent, over
-    an empty draft and never over one being written. An address that `known` takes, typed or pasted at the start, is
-    taken out and retargets it."""
+    an empty draft and never over one being written, which a recalled message is once edited. An address that `known`
+    takes, typed or pasted at the start, is taken out and retargets it."""
 
     class Send(Message):
         """The person asked to send what the composer holds."""
@@ -78,6 +78,8 @@ class Composer(TextArea):
             self.post_message(self.Empty())
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if self._recalled is not None and self.text != self.sent[self._recalled]:
+            self._recalled = None
         found = ADDRESS.match(self.text)
         if found is not None and self._recalled is None and self.known(found[1]):
             self.load_text(self.text[found.end() :])

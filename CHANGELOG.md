@@ -197,6 +197,30 @@
 
 ### Fixed
 
+- The terminal UI, from its review:
+  - Showing another agent or channel left the last one's lines under it, and each showing stacked them again.
+  - The dock had two markers of where you were: Alt+A stuck on the second place, and Alt+Y could answer a place you had not
+    chosen, or one that took the top when another client answered yours. Only you move the dock's cursor now, and a place
+    that goes takes it with it.
+  - An unread count read one page, so lines past 4,096 other events read as none, a channel first seen in a frame counted
+    that frame twice, and your own lines counted. Counts read on to the newest line drawn, and leave out what you wrote.
+  - A marks file that could not be read stopped the workspace, and one that could not be written ended the app. Either
+    loses only badges, said once.
+  - A window's edge on a tool's line read back lines twice, showed a finished call as running or lost lines, a child
+    spawned while the first page was read lost the history, and a page read for a focus shown before another was put in.
+  - A lead with more than 253 children could not show its transcript. It reads every `agent/*` by a glob.
+  - Live text a runtime was saying when it went stayed on screen and was joined to the next runtime's. It goes with the
+    runtime, and showing the agent in view again keeps it.
+  - An edited recall was thrown away by Up or Down, Ctrl+D away from the composer dropped a draft, Ctrl+D from a session
+    opened on the sessions screen quit the app, leaving history said the session ran on, and a UI that failed exited 0.
+  - Esc, refused, sent again on every press. Ctrl+Home went to the oldest line held, not the start. Under 16 rows the dock
+    and the banner stayed. The header ran off the edge, said nothing of what changed and no limit but tokens and usd.
+  - The palette cut a read's answer to 280 characters of JSON, erased a body without asking, and held an agent's
+    deliveries for a terminal not built. It offers commands, asks before an erase, and says a takeover is not built.
+  - A typo in a yes-or-no field went as no, Enter in a form's first field sent the form, Shift+N was shown for `n`, F1 in
+    the help opened another, a slash command went with no word, and keys outside the one table were bound by hand.
+  - `tests/integration/test_tui.py` stopped reading its PTY once the agent's words showed, so the UI's next repaint
+    filled it and Textual's exit waited on its writer for ever: it failed twice on a loaded host.
 - A handover under way when the owner stopped counted, once the next runtime failed it, as a failure of its harness's, so six stops
   and resumes during a wake lost the agent.
 - A turn measured only as a lower bound was charged as if measured whole, and a Claude Code result with no tree usage left its

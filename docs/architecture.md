@@ -154,8 +154,9 @@ Each law is a sentence, and each has a test of the same name.
 `Session.attach(name)` gives the same class as a guest in every mode, so a script's session and a training rollout
 can both be watched. Leaving only disconnects.
 
-- **Attach never has side effects.** With no live runtime, `attach` gives read-only history, whose writes are refused naming
-  `platoon-harness session resume`. Only `resume` restarts anything, because restarting can spend money.
+- **Attach never has side effects** on the session. With no live runtime, `attach` gives read-only history, whose writes are refused
+  naming `platoon-harness session resume`. Only `resume` restarts anything, because restarting can spend money. Reading moves only
+  the person's own marks, in `marks.sqlite` (§12).
 - **One path up.** `Session.start` checks the team and writes the manifest before any cost, and that folder is all a runtime
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
@@ -498,7 +499,7 @@ One definition reaches every surface.
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, but `wait` and the ops on a wait, as a wait parks a turn and a person has none. Its name is split at the dot, a flag per argument comes from its schema, a read runs on a view credential, and its help is the op's description, each op named as the command that runs it and each argument as its flag. An extension's op has no command yet |
 | Web | `POST /x/command {op, args, key, expected_version}` |
-| TUI | Palette entries from the command line's definitions, worded as its help, with generated forms; the dock's actions come from `actions[]`; an act the runtime refused shows disabled with its reason until its agent's row moves |
+| TUI | Palette entries for the commands a person may run, from the command line's definitions, worded as its help, with generated forms, as a read is what the views draw; the dock's actions come from `actions[]`, on the row the person chose; an interrupt the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
 one (`claudecode/toolUseId`, Codex `callId`) and the turn otherwise. The op and args stay in the key because one Codex script can
@@ -1263,8 +1264,9 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
 
 **Marks.** A person's mark is how far they have read a stream, a `seq` per stream, kept per principal in `marks.sqlite`, which
-`Session.marks` reads and `Session.mark` moves, on a live session or a closed one, with no runtime. It is neither evidence nor a
-view, and no agent's cursor, so moving one writes no event and acknowledges no delivery, and losing the file loses only badges.
+`Session.marks` reads and `Session.mark` moves, only forward, on a live session or a closed one, with no runtime, and a view
+credential moves none. It is neither evidence nor a view, and no agent's cursor, so moving one writes no event and acknowledges no
+delivery, and losing the file, or failing to read or write it, loses only badges. It is the one file reading a session writes.
 
 `activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
 turn did not stop on its own, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
@@ -1279,9 +1281,11 @@ op references, each with whatever keeps a stale button from deciding anything, s
   dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a slow screen is handled.
   Its two timers decide nothing: one paces frames, and one looks for a runtime to attach to while it shows history. The transcript is
   on the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and
-  drawn through an LRU of strips keyed by width; live text follows below it, one tail for the agent in view. Unread counts and read
-  mentions come from the person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans bare `str` in label-like
-  widgets. Approvals never take focus. [tui.md](tui.md) is its guide.
+  drawn through an LRU of strips keyed by width. An agent's reads its own streams and every `agent/*`, so a child of its needs no
+  name to be drawn. Live text follows below it, one tail for the agent in view, which goes with the runtime that said it. Unread
+  counts, of lines the person did not write, and read mentions come from the person's marks. Untrusted text crosses one `SafeText`
+  boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus, and only the
+  person moves the dock's cursor. [tui.md](tui.md) is its guide.
 - **SwarmChat.** A follower folds the journal into its own rebuildable `swarmchat.sqlite` and serves the pinned, hash-checked
   frontend assets, the `view_*` replies, an overlay, and one `/x/command` route into the same ops. Upstream's server never runs,
   and nothing re-ingests the projection, so two authorities and echo loops have no path. Direct chats key on the unordered

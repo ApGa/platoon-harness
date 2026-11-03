@@ -123,7 +123,7 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
         for seq in range(100_001, 100_201):
             began = time.perf_counter()
             transcript.take([note(seq)])
-            transcript.draw()
+            transcript.draw(transcript.tail)
             for y in range(transcript.size.height):
                 transcript.render_line(y)
             appends.append(time.perf_counter() - began)

@@ -15,7 +15,7 @@ from textual.widgets import Static
 
 from platoon_harness import Refused, Session
 from platoon_harness.config import Manifest
-from platoon_harness.kernel import GIST_LIMIT, Delta, Event, is_held
+from platoon_harness.kernel import GIST_LIMIT, Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
 from ..ops import Flag, described, flags, person_ops
@@ -25,7 +25,7 @@ from .keymap import KEYMAP, bindings, keys
 from .live import Live
 from .rows import Row, Rows
 from .safe import SafeText, note
-from .transcript import Focus, Transcript
+from .transcript import PAGE, Focus, Transcript
 
 GROUPS = (
     ("needs_you", "Needs you", "⚠", "yellow"),
@@ -36,14 +36,25 @@ GROUPS = (
     ("failed", "Failed", "✗", "red"),
 )
 GLYPHS = {group: (glyph, style) for group, _, glyph, style in GROUPS}
-ATTACHED_LIMIT = 12 * 1024 * 1024
-"""The largest file a message carries as its body, which is what the control socket takes."""
-CONFIRMED = frozenset({"agent.cancel", "agent.retire", "session.cancel", "session.close"})
-"""The ops a palette asks once about, as nothing takes them back."""
+UNREAD = 100
+"""The most unread lines a badge counts: past it, it says `99+`."""
+CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"})
+"""The commands the palette asks once about: each ends an agent or the session, or erases a body, which nothing takes
+back."""
+UNBUILT = {"agent.takeover": "take_over"}
+"""Commands whose purpose the TUI cannot carry out yet, by the key that says why: a takeover holds an agent's deliveries
+for a person to drive its own terminal, which is not built, so the palette says so rather than hold them."""
 
 
 class Dock(Rows, can_focus=False):
-    """Where a person must act, a row each. It never takes focus, so a key meant for the composer never answers it."""
+    """Where a person must act, a row each. It never takes focus, so a key meant for the composer never answers it, and
+    only the person moves its cursor, with Alt+A or a click: a row that goes takes the cursor with it, so an act never
+    lands on a row they did not choose."""
+
+    def show(self, rows: list[Row]) -> None:
+        chosen = self.cursor
+        super().show(rows)
+        self.cursor = chosen if chosen in self.keys else None
 
 
 def _why(why: dict[str, Any] | None) -> str:
@@ -82,14 +93,25 @@ def _harness(row: dict[str, Any]) -> str:
     return harness.rpartition(":")[2] if isinstance(harness, str) else harness.get("mode", "program")
 
 
-def _amount(unit: str, usage: dict[str, Any], limit: float | None) -> Content:
-    """A spend with its label: unknown is no zero, and an amount nobody measured whole says so."""
-    amount = usage.get("amount")
-    said = "unknown" if amount is None else f"{amount:,.0f}" if unit != "usd" else f"${amount:,.2f}"
-    if limit is not None:
-        said += f"/{limit:,.0f}" if unit != "usd" else f"/${limit:,.2f}"
-    unmeasured = f", {usage['unmeasured']} turns unmeasured" if usage.get("unmeasured") else ""
-    return Content.assemble(f"{unit} {said} ", (f"({usage.get('label', 'unavailable')}{unmeasured})", "dim"))
+def _quantity(unit: str, amount: float) -> str:
+    if unit == "usd":
+        return f"${amount:,.2f}"
+    if unit == "wall":
+        minutes = int(amount // 60)
+        if minutes < 60:
+            return f"{minutes}m" if minutes else f"{int(amount)}s"
+        return f"{minutes // 60}h{minutes % 60:02}m"
+    return f"{amount:,.0f}"
+
+
+def _spend(unit: str, amount: float | None, label: str, limit: float | None) -> str:
+    """A unit's spend in a few characters: `?` for an amount nobody could state, `≥` for a bound, then any limit."""
+    said = "?" if amount is None else ("≥" if label == "lower_bound" else "") + _quantity(unit, amount)
+    return f"{unit} {said}" + ("" if limit is None else f"/{_quantity(unit, limit)}")
+
+
+def _unmeasured(count: int) -> str:
+    return f"{count} turn{'' if count == 1 else 's'} unmeasured"
 
 
 class Workspace(Screen[None]):
@@ -106,12 +128,12 @@ class Workspace(Screen[None]):
         self.attached: tuple[str, bytes] | None = None
         self.marks: dict[str, int] = {}
         self.unread: dict[str, int] = {}
-        self.place: str | None = None
         self.human = "human:you"
         self._given = session
         self._refused: dict[tuple[str, str], tuple[str, str]] = {}
         self._shown: dict[str, Content] = {}
         self._queued: dict[str, Any] | None = None
+        self._unmarked = False
 
     def compose(self) -> ComposeResult:
         yield Static(id="header")
@@ -142,11 +164,14 @@ class Workspace(Screen[None]):
         try:
             session = self._given or await Session.attach(self.session_name)
             self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).human
-            self.marks = await session.marks()
             through = await session.head()
         except Refused as refused:
             self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))
             return
+        try:
+            self.marks = await session.marks()
+        except Refused as refused:
+            self._lose_marks(refused)
         self.query_one(Transcript).through = through
         self.live = Live(session, self._draw, partial(self.run_worker, group="live"))
         self.live.start(through)
@@ -157,21 +182,22 @@ class Workspace(Screen[None]):
             self.live.stop()
             await self.live.session.leave()
 
+    def left(self) -> str | None:
+        """The session that runs on once you leave it, or None when no runtime holds it."""
+        return self.session_name if self.live is not None and self.live.runtime == "live" else None
+
     # Drawing, once a frame.
 
-    async def _draw(self, events: list[Event], deltas: list[Delta]) -> None:
+    async def _draw(self, events: list[Event], said: bool) -> None:
         live = self.live
         assert live is not None
         transcript = self.query_one(Transcript)
         focus = self.focus_on
         added = transcript.take(events)
-        for delta in deltas:
-            if focus is not None and delta.agent == focus.agent:
-                transcript.take_delta(delta)
-        transcript.draw()
-        if deltas and not events:  # Live text alone moves nothing but the transcript.
+        transcript.draw(live.tail)
+        if said and not events:  # Live text alone moves nothing but the transcript.
             return
-        await self._count(events, live)
+        await self._count(events, live, transcript.through)
         if focus is None and (live.roster or live.frames == 0):
             await self.show(self._first_focus(live))
         elif focus is not None and (added or transcript.following):
@@ -193,19 +219,30 @@ class Workspace(Screen[None]):
         """Every channel, as a focus, and what was sent to you."""
         return [Focus.of_person(self.human), *(Focus.of_channel(row["name"], row["kind"]) for row in live.channels)]
 
-    async def _count(self, events: list[Event], live: Live) -> None:
-        """How many lines past your mark each channel holds, counted from the journal once and then from what comes."""
-        for focus in self._foci(live):
-            if focus.key not in self.unread:
-                self.unread[focus.key] = await self._past_mark(live.session, focus)
-            mark = self.marks.get(focus.marks[0], 0)
-            self.unread[focus.key] += sum(1 for event in events if event.seq > mark and focus.holds(event))
+    def _unread(self, focus: Focus, event: Event, mark: int) -> bool:
+        return event.seq > mark and event.actor != self.human and focus.holds(event)
 
-    async def _past_mark(self, session: Session, focus: Focus) -> int:
-        page = await session.page(
-            after=self.marks.get(focus.marks[0], 0), streams=focus.streams or None, match=focus.match, limit=100
-        )
-        return len(page.events)
+    async def _count(self, events: list[Event], live: Live, through: int) -> None:
+        """How many lines past your mark each channel holds that you did not write: from the journal through `through`,
+        the newest line drawn, when a channel is first seen, and from what comes after."""
+        for focus in self._foci(live):
+            mark = self.marks.get(focus.marks[0], 0)
+            if focus.key not in self.unread:
+                self.unread[focus.key] = await self._past_mark(live.session, focus, mark, through)
+            else:
+                self.unread[focus.key] += sum(self._unread(focus, event, mark) for event in events)
+
+    async def _past_mark(self, session: Session, focus: Focus, mark: int, through: int) -> int:
+        """The lines past `mark` through `through`, up to what a badge counts, read back a page at a time, since a page
+        that scanned its most can hold none with more to come."""
+        count, before = 0, through + 1
+        while count < UNREAD and before > mark + 1:
+            page = await session.page(
+                after=mark, before=before, streams=focus.streams or None, match=focus.match, limit=PAGE
+            )
+            count += sum(self._unread(focus, event, mark) for event in page.events)
+            before = page.cursor
+        return count
 
     def _mark(self, transcript: Transcript) -> None:
         """Mark what you have read: the focus in view, through the newest line it shows, while it follows."""
@@ -215,12 +252,21 @@ class Workspace(Screen[None]):
             return
         for stream in focus.marks:
             if self.marks.get(stream, 0) < transcript.through:
-                self._mark_one(live.session, stream, transcript.through)
+                self.marks[stream] = transcript.through
+                self.run_worker(self._mark_one(live.session, stream, transcript.through), group="marks")
         self.unread[focus.key] = 0
 
-    def _mark_one(self, session: Session, stream: str, seq: int) -> None:
-        self.marks[stream] = seq
-        self.run_worker(session.mark(stream, seq), group="marks")
+    async def _mark_one(self, session: Session, stream: str, seq: int) -> None:
+        try:
+            await session.mark(stream, seq)
+        except Refused as refused:
+            self._lose_marks(refused)
+
+    def _lose_marks(self, refused: Refused) -> None:
+        """Say once that your marks cannot be kept, which loses only badges."""
+        if not self._unmarked:
+            self._unmarked = True
+            note(self, f"Your read marks cannot be kept, which loses only badges: {refused}", severity="warning")
 
     async def _read_queue(self, live: Live) -> None:
         """What waits for the target's next handover, read when the roster says something does."""
@@ -247,16 +293,16 @@ class Workspace(Screen[None]):
                 del self._refused[found]
         self._set("#header", self._header(live))
         self._set("#banner", self._banner(live))
-        self.query_one("#banner").display = live.runtime != "live"
+        self.query_one("#banner").set_class(live.runtime != "live", "-shown")
         self.query_one("#navigator", Rows).show(self._navigator(live))
         self._set("#strip", self._strip(live))
         self._set("#title", self._title())
         self._set("#behind", self._behind())
-        self.query_one("#behind").display = not self.query_one(Transcript).following
+        self.query_one("#behind").set_class(not self.query_one(Transcript).following, "-shown")
         self._set("#inspector", self._inspector(live))
         dock = self.query_one(Dock)
         dock.show(self._dock(live))
-        dock.display = bool(dock.rows)
+        dock.set_class(bool(dock.rows), "-shown")
         self._set("#chip", self._chip(live))
         self._set("#footer", self._footer(live))
 
@@ -271,45 +317,64 @@ class Workspace(Screen[None]):
         for row in live.roster:
             counts[row["group"]] += 1
         acting = len(self._places(live))
-        state = live.status.get("state", "")
         if self.size.width < 60:
             return Content.assemble(
                 SafeText(self.session_name, "bold"),
                 f" {counts['working']}● ",
                 (f"{acting}⚠", "yellow" if acting else "dim"),
             )
-        runtime = {"live": ("live", "green")}.get(live.runtime, ("history", "yellow"))
-        standing = "stalled" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
-        parts: list[Any] = [SafeText(self.session_name, "bold"), "  ", runtime, (f" {state}", "dim")]
-        parts += [(f", {standing}" if standing else "", "yellow" if standing == "stalled" else "dim"), "   "]
+        runtime = ("live", "green") if live.runtime == "live" else ("history", "yellow")
+        standing = "waiting for you" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
+        state = live.status.get("state", "") + (f", {standing}" if standing else "")
+        parts: list[Any] = [SafeText(self.session_name, "bold"), "  ", runtime, (f" {state}   ", "dim")]
         parts += [(f"● {counts['working']} working  ", "green")]
         parts += [(f"⚠ {acting} need you  ", "yellow" if acting else "dim")]
         if counts["blocked"]:
             parts += [(f"◌ {counts['blocked']} blocked  ", "yellow")]
         if counts["failed"]:
             parts += [(f"✗ {counts['failed']} failed  ", "red")]
-        limits = {row["unit"]: row["limit"] for row in live.budgets if row["scope"] == "shared"}
-        for unit, usage in (live.ending.usage if live.ending else {}).items():
-            if unit in ("tokens", "usd"):
-                parts += [_amount(unit, usage, limits.get(unit)), "  "]
-        if live.changes:
-            added = sum(row["added"] or 0 for row in live.changes.values())
-            removed = sum(row["removed"] or 0 for row in live.changes.values())
-            parts += [f"changed {len(live.changes)} files +{added} -{removed}"]
-        return Content.assemble(*parts)
+        return Content.assemble(*parts, self._changed(live), "  ", *self._spent(live))
+
+    def _changed(self, live: Live) -> Content:
+        """What changed, as the turn-end probe says it. Nothing measures it before workspaces land, and that is said."""
+        if not live.changes:
+            return Content.styled("changes not measured", "dim")
+        added = sum(row["added"] or 0 for row in live.changes.values())
+        removed = sum(row["removed"] or 0 for row in live.changes.values())
+        return Content(f"changed {len(live.changes)} files +{added} -{removed}")
+
+    def _spent(self, live: Live) -> list[Any]:
+        """Each shared limit and what is spent against it, any metered amount with no limit, and once how many turns
+        nobody measured whole, after `spent ?` when nothing else would show."""
+        limits = {row["unit"]: row for row in live.budgets if row["scope"] == "shared"}
+        usage = live.ending.usage if live.ending else {}
+        said = [
+            _spend(unit, None if row["label"] == "unavailable" else row["spent"], row["label"], row["limit"])
+            for unit, row in limits.items()
+        ]
+        said += [
+            _spend(unit, used["amount"], used["label"], None)
+            for unit, used in usage.items()
+            if unit in ("tokens", "usd") and unit not in limits and used["amount"] is not None
+        ]
+        unmeasured = max((used["unmeasured"] for used in usage.values()), default=0)
+        if not unmeasured:
+            return ["  ".join(said)]
+        return ["  ".join(said or ["spent ?"]), (f" ({_unmeasured(unmeasured)})", "dim")]
 
     def _banner(self, live: Live) -> Content:
+        """Why this is history, from the session's state: its runtime stopped as its owner asked, went without its
+        shutdown, or the session has ended."""
+        state = live.status.get("state")
         resume = " Alt+R resumes it, which can spend money."
-        return {
-            "history": Content.styled(f"No runtime holds this session, so this is its history.{resume}", "yellow"),
-            "stopped": Content.styled(
-                f"Its runtime stopped, as its owner asked: this is its history now.{resume}", "yellow"
-            ),
-            "gone": Content.styled(
-                f"Its runtime went without its shutdown, killed or crashed: this is its history now.{resume}", "red"
-            ),
-            "closed": Content.styled("The session has closed: this is its history.", "yellow"),
-        }.get(live.runtime, Content(""))
+        if state in ("closed", "cancelled"):
+            return Content.styled(f"The session is {state}: this is its history.", "yellow")
+        if state == "stopped":
+            return Content.styled(f"Its runtime stopped, as its owner asked: this is its history.{resume}", "yellow")
+        if state in ("open", "closing"):
+            went = f"Its runtime went without its shutdown, killed or crashed: this is its history.{resume}"
+            return Content.styled(went, "red")
+        return Content.styled(f"No runtime holds this session, so this is its history.{resume}", "yellow")
 
     def _places(self, live: Live) -> list[dict[str, Any]]:
         """Where you must act, oldest first: every row of `attention` but a mention you have read past."""
@@ -349,7 +414,7 @@ class Workspace(Screen[None]):
         rows.append(Row(Content.styled("Channels", "bold dim")))
         for focus in self._foci(live):
             unread = self.unread.get(focus.key, 0)
-            count = ("99+" if unread >= 100 else str(unread)) if unread else ""
+            count = (f"{UNREAD - 1}+" if unread >= UNREAD else str(unread)) if unread else ""
             mark = ("@", "yellow") if focus.key in mentioned else ""
             rows.append(Row(Content.assemble(SafeText(focus.title), (f" {count}", "bold"), " ", mark), focus.key))
         return rows
@@ -434,7 +499,9 @@ class Workspace(Screen[None]):
             reasons = "; ".join(said.get("reasons", ()))
             lines.append(SafeText(f"{level} {said.get('state')}" + (f": {reasons}" if reasons else "")))
         for unit, usage in row["usage"].items():
-            lines.append(_amount(unit, usage, None))
+            unmeasured = f", {_unmeasured(usage['unmeasured'])}" if usage.get("unmeasured") else ""
+            label = f" ({usage.get('label', 'unavailable')}{unmeasured})"
+            lines.append(Content.assemble(_spend(unit, usage.get("amount"), "", None), (label, "dim")))
         gaps = [gap for gap in (live.ending.gaps if live.ending else ()) if gap["agent"] == row["agent"]]
         lines += [SafeText(f"gap {gap['what']}, {gap['count']} on the {gap['plane']} plane", "yellow") for gap in gaps]
         lines += [
@@ -445,18 +512,17 @@ class Workspace(Screen[None]):
         return Content("\n").join(lines)
 
     def _dock(self, live: Live) -> list[Row]:
-        places = self._places(live)
-        if self.place not in [row["id"] for row in places]:
-            self.place = places[0]["id"] if places else None
+        """A row per place you must act, and on the one you are at, the keys that take its actions."""
+        chosen = self.query_one(Dock).cursor
         rows = []
         first, second = (
             next(key.shown for key in keys("workspace") if key.action == act)
             for act in ("first_action", "second_action")
         )
-        for place in places:
+        for place in self._places(live):
             actions = place["actions"]
             hints: list[Any] = []
-            if place["id"] == self.place:
+            if place["id"] == chosen:
                 hints = [
                     (f"  {hint} {action['label']}", "bold")
                     for hint, action in zip((first, second), actions, strict=False)
@@ -489,16 +555,7 @@ class Workspace(Screen[None]):
             parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "cyan")]
         if self.attached is not None:
             parts += [SafeText(f"  + {self.attached[0]} ({len(self.attached[1]):,} bytes)", "magenta")]
-        refused = self._refusal_of_focus()
-        if refused:
-            parts += [SafeText(f"  {refused}", "dim")]
         return Content.assemble(*parts)
-
-    def _refusal_of_focus(self) -> str:
-        agent = self.focus_on.agent if self.focus_on else None
-        return "; ".join(
-            f"{_named(action)}: {reason}" for (action, of), (reason, _) in self._refused.items() if of == agent
-        )
 
     def _footer(self, live: Live) -> Content:
         """The footer's keys, each dim while the runtime refuses it for the agent in view, then how many places need
@@ -530,9 +587,10 @@ class Workspace(Screen[None]):
         if live is None:
             return
         self.focus_on = focus
-        transcript = self.query_one(Transcript)
-        await transcript.show(focus, live.session, transcript.through)
         live.follow_tail(focus.agent)
+        transcript = self.query_one(Transcript)
+        transcript.tail = live.tail
+        await transcript.show(focus, live.session, transcript.through)
         if not self.query_one(Composer).text.strip():
             self.target = focus.to
         navigator = self.query_one("#navigator", Rows)
@@ -554,7 +612,6 @@ class Workspace(Screen[None]):
         if chosen.rows.id == "navigator":
             await self.show(self._focus_of(chosen.key))
         elif isinstance(chosen.rows, Dock):
-            self.place = chosen.key
             await self._go_to(chosen.key)
 
     async def _go_to(self, place: str) -> None:
@@ -609,6 +666,13 @@ class Workspace(Screen[None]):
             return
         target = self.target
         assert target is not None
+        if text.startswith("/"):
+            question = SafeText(
+                f"This begins with /, as a harness's own command would. Those are not built yet, so it goes to "
+                f"{target} as a message, which its harness may still read as a command. Send it?"
+            )
+            if not await self.app.push_screen_wait(Confirm(question)):
+                return
         if (found := ADDRESS.match(composer.text)) is not None and found[1] != target:
             question = SafeText(f"This begins with {found[1]}, and goes to {target}, as shown. Send it to {target}?")
             if not await self.app.push_screen_wait(Confirm(question)):
@@ -656,6 +720,9 @@ class Workspace(Screen[None]):
         if live is None or focus is None or focus.agent is None:
             note(self, f"{_named(action)} needs an agent in view", severity="warning")
             return
+        if (kept := self._refused.get((action, focus.agent))) is not None:
+            note(self, f"{_named(action)} @{focus.agent}: {kept[0]}", severity="warning")
+            return
         try:
             stopped = await live.session.interrupt(focus.agent, below=below)
         except Refused as refused:
@@ -669,7 +736,7 @@ class Workspace(Screen[None]):
         if (place := dock.step(1)) is None:
             note(self, "Nothing needs you now.")
             return
-        self.place = place
+        dock.move_to(place)
         await self._go_to(place)
 
     @work(group="act")
@@ -683,9 +750,9 @@ class Workspace(Screen[None]):
     async def _act(self, index: int) -> None:
         """Take an action of the place you are at, as its row offers it, with the version it was drawn from."""
         live = self.live
-        place = live.attention.get(self.place or "") if live else None
+        place = live.attention.get(self.query_one(Dock).cursor or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
-            note(self, "Nothing here takes that action.", severity="warning")
+            note(self, "Nothing here takes that action: Alt+A goes to where you must act.", severity="warning")
             return
         action = place["actions"][index]
         args = {**action["args"], **({"via": "tui"} if action["op"] == "approval.resolve" else {})}
@@ -726,8 +793,8 @@ class Workspace(Screen[None]):
     def action_page_down(self) -> None:
         self.query_one(Transcript).scroll_page_down(animate=False)
 
-    def action_oldest(self) -> None:
-        self.query_one(Transcript).action_oldest()
+    async def action_oldest(self) -> None:
+        await self.query_one(Transcript).action_oldest()
 
     async def action_follow(self) -> None:
         await self.query_one(Transcript).action_follow()
@@ -740,14 +807,10 @@ class Workspace(Screen[None]):
             return
         path = Path(given["path"]).expanduser()
         try:
-            found = path.read_bytes()
+            self.attached = (path.name, path.read_bytes())
         except OSError as error:
             note(self, f"{path}: {error}", severity="error")
             return
-        if len(found) > ATTACHED_LIMIT:
-            note(self, f"{path.name} is past the {ATTACHED_LIMIT:,} bytes a message carries", severity="error")
-            return
-        self.attached = (path.name, found)
         self._redraw()
 
     @work(group="act")
@@ -756,8 +819,8 @@ class Workspace(Screen[None]):
         if live is None or live.runtime == "live" or is_held(live.session.folder):
             note(self, "A runtime holds this session already.")
             return
-        if live.runtime == "closed":
-            note(self, "The session has closed, so nothing would come back.")
+        if live.status.get("state") in ("closed", "cancelled"):
+            note(self, "The session has ended, so nothing would come back.")
             return
         question = SafeText(f"Resume {self.session_name}? Its harnesses come back, which can spend money.")
         if not await self.app.push_screen_wait(Confirm(question)):
@@ -774,9 +837,18 @@ class Workspace(Screen[None]):
         note(self, f"{key.does}: not built yet, as {key.planned}", severity="warning")
 
     def action_detach(self) -> None:
-        self.app.exit(self.session_name)
+        """Leave the session to run on: back to the sessions screen when it is under this one, or out."""
+        if self.query_one(Composer).text:
+            note(self, "Ctrl+D detaches on an empty composer, and this one holds a draft.", severity="warning")
+            return
+        if len(self.app.screen_stack) > 2:
+            if (left := self.left()) is not None:
+                note(self, f"Detached from {left}, which runs on.")
+            self.app.pop_screen()
+        else:
+            self.app.exit(self.left())
 
-    # The palette: these keys, then the ops a person may run, worded as the command line words them.
+    # The palette: these keys, then the commands a person may run, worded as the command line words them.
 
     def commands(self) -> list[tuple[str, str, Any]]:
         found: list[tuple[str, str, Any]] = []
@@ -788,8 +860,15 @@ class Workspace(Screen[None]):
             elif key.where == "workspace":
                 found.append((key.name.capitalize(), key.does, getattr(self, f"action_{key.action}")))
         for name, operation in sorted(person_ops().items()):
-            first = described(operation).partition(". ")[0].rstrip(".")
-            found.append((name.replace(".", " "), f"{first}.", partial(self._run_op, name)))
+            if operation.query or operation.exposes:  # A read is what the screen draws, and the command line prints.
+                continue
+            title = name.replace(".", " ")
+            if (planned := UNBUILT.get(name)) is not None:
+                key = next(key for key in KEYMAP if key.action == planned)
+                found.append((title, f"Not built yet: {key.planned}", partial(self.action_planned, planned)))
+            else:
+                first = described(operation).partition(". ")[0].rstrip(".")
+                found.append((title, f"{first}.", partial(self._run_op, name)))
         return found
 
     @work(group="act")
@@ -833,18 +912,21 @@ class Workspace(Screen[None]):
         if outcome.refusal is not None:
             note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
         else:
-            note(self, json.dumps(outcome.result)[:GIST_LIMIT] if outcome.result is not None else "done")
+            note(self, f"{name.replace('.', ' ')}: done")
 
 
 def _value(field: Flag, text: str) -> Any:
-    """A form's text as the value an op's field takes."""
+    """A form's text as the value an op's field takes, or a `ValueError` saying what it takes."""
     if field.json:
         return json.loads(text)
     kinds = [
         kind for kind in (*getattr(field.annotation, "__args__", ()), field.annotation) if kind in (int, float, bool)
     ]
     if bool in kinds:
-        return text.lower() in ("y", "yes", "true", "1")
+        said = text.lower()
+        if said not in ("y", "yes", "true", "1", "n", "no", "false", "0"):
+            raise ValueError(f"{field.name} is yes or no")
+        return said in ("y", "yes", "true", "1")
     if kinds:
         return kinds[0](text)
     if "tuple" in str(field.annotation):

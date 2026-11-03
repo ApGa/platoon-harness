@@ -8,7 +8,9 @@ from typing import Any, Literal
 from textual.worker import Worker
 
 from platoon_harness import Ending, Refused, Session
-from platoon_harness.kernel import Delta, Event, is_held
+from platoon_harness.kernel import Event, is_held
+
+from .transcript import Tail
 
 FRAME = 1 / 15
 """The shortest time between two frames: at most 15 a second."""
@@ -17,21 +19,20 @@ PENDING = 1024
 LOOK = 1.0
 """How often a session that is history is looked at for a runtime that took it up again."""
 
-Runtime = Literal["live", "history", "stopped", "gone", "closed"]
-
 
 class Live:
-    """A session as the TUI follows it: one reader of its journal, one of the live text of the agent in view, and what
-    the views say, each frame. Frames come at most 15 a second, and one that would come sooner is dropped; an event
-    never is: a reader with too many waiting waits for the next frame, so a slow screen holds up only its own reading.
-    It decides nothing: what it shows comes from the views. Its two timers decide nothing either: one paces frames, and
-    one looks for a runtime to attach to. Each loop runs as a worker of the screen, so one that fails ends the app
-    loudly, rather than leaving a screen that no longer moves."""
+    """A session as the TUI follows it: one reader of its journal, one of the live text of the agent in view, kept in
+    `tail`, and what the views say, each frame. Frames come at most 15 a second, and one that would come sooner is
+    dropped; an event never is: a reader with too many waiting waits for the next frame, so a slow screen holds up only
+    its own reading. It decides nothing: what it shows comes from the views, and `runtime` says only whether a runtime
+    holds the session, which is the kernel's own check. Its two timers decide nothing either: one paces frames, and one
+    looks for a runtime to attach to. Each loop runs as a worker of the screen, so one that fails ends the app loudly,
+    rather than leaving a screen that no longer moves."""
 
     def __init__(
         self,
         session: Session,
-        draw: Callable[[list[Event], list[Delta]], Awaitable[None]],
+        draw: Callable[[list[Event], bool], Awaitable[None]],
         run: Callable[[Coroutine[Any, Any, None]], Worker[None]],
     ) -> None:
         self.session = session
@@ -42,14 +43,14 @@ class Live:
         self.changes: dict[tuple[str, str], dict[str, Any]] = {}
         self.ending: Ending | None = None
         self.channels: list[dict[str, Any]] = []
-        self.runtime: Runtime = "live"
+        self.runtime: Literal["live", "history"] = "live"
+        self.tail = Tail()
         self.frames = 0
         self._draw = draw
         self._run = run
         self._read_through = 0
-        self._stopped = False
+        self._said = False
         self._pending: list[Event] = []
-        self._deltas: list[Delta] = []
         self._dirty = asyncio.Event()
         self._room = asyncio.Event()
         self._drawn = asyncio.Condition()
@@ -71,15 +72,15 @@ class Live:
             worker.cancel()
 
     def follow_tail(self, agent: str | None) -> None:
-        """Read the live text of `agent` alone, the one in view, or of nobody."""
+        """Read the live text of `agent` alone, the one in view, or of nobody. A new reader starts a new `tail`, as it
+        is told all that is said now and not yet committed."""
         if agent == self._tail_of and self._tail is not None and not self._tail.is_finished:
             return
         if self._tail is not None:
             self._tail.cancel()
-        self._tail_of, self._tail = agent, None
-        self._deltas = []
+        self._tail_of, self._tail, self.tail = agent, None, Tail()
         if agent is not None and self.runtime == "live":
-            self._tail = self._run(self._read_tail(agent))
+            self._tail = self._run(self._read_tail(agent, self.tail))
 
     async def next_frame(self, after: int) -> None:
         """Wait until a frame past the `after`th has been drawn."""
@@ -91,32 +92,32 @@ class Live:
             with contextlib.suppress(Refused):
                 async for event in self.session.events(self._read_through, follow=True):
                     self._read_through = event.seq
-                    self._stopped = event.type == "session.stopped" or (
-                        self._stopped and event.type != "runtime.started"
-                    )
                     self._pending.append(event)
                     self._dirty.set()
                     if len(self._pending) >= PENDING:
                         self._room.clear()
                         await self._room.wait()
-            self.runtime = self._gone_as()
-            self._dirty.set()
+            if not is_held(self.session.folder):
+                await self._gone()
             while not is_held(self.session.folder):  # noqa: ASYNC110  Nothing says when a runtime takes it up.
                 await asyncio.sleep(LOOK)
             self.runtime = "live"
             self.follow_tail(self._tail_of)
 
-    def _gone_as(self) -> Runtime:
-        if is_held(self.session.folder):
-            return "live"
-        if self.status.get("state") in ("closed", "cancelled"):
-            return "closed"
-        return "stopped" if self._stopped else "gone" if self.runtime == "live" else "history"
+    async def _gone(self) -> None:
+        """No runtime holds the session now: what one was saying is said no more, and its state says how it ended."""
+        if self._tail is not None:
+            self._tail.cancel()
+        self.runtime, self._tail, self.tail = "history", None, Tail()
+        with contextlib.suppress(Refused):
+            self.status = await self.session.status()
+        self._dirty.set()
 
-    async def _read_tail(self, agent: str) -> None:
+    async def _read_tail(self, agent: str, tail: Tail) -> None:
         with contextlib.suppress(Refused):
             async for delta in self.session.deltas(agent):
-                self._deltas.append(delta)
+                tail.take(delta)
+                self._said = True
                 self._dirty.set()
 
     async def _frames(self) -> None:
@@ -124,12 +125,12 @@ class Live:
             await self._dirty.wait()
             self._dirty.clear()
             events, self._pending = self._pending, []
-            deltas, self._deltas = self._deltas, []
+            said, self._said = self._said, False
             self._room.set()
             self._channels_moved = self._channels_moved or any(event.type == "channel.created" for event in events)
             with contextlib.suppress(Refused):
                 await self._look(bool(events) or self.frames == 0)
-            await self._draw(events, deltas)
+            await self._draw(events, said)
             async with self._drawn:
                 self.frames += 1
                 self._drawn.notify_all()

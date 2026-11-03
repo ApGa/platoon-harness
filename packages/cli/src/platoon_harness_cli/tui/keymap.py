@@ -7,7 +7,7 @@ from typing import Literal
 
 from textual.binding import Binding, BindingType
 
-Where = Literal["everywhere", "sessions", "workspace", "transcript", "composer"]
+Where = Literal["everywhere", "sessions", "workspace", "transcript", "composer", "list", "question", "dialog"]
 
 WHERE: dict[Where, str] = {
     "everywhere": "Everywhere",
@@ -15,6 +15,9 @@ WHERE: dict[Where, str] = {
     "workspace": "A session, whatever has focus",
     "transcript": "The transcript, once it has focus",
     "composer": "The composer",
+    "list": "A list: the sessions, the agents and channels, the help",
+    "question": "A question",
+    "dialog": "A form or the help",
 }
 
 
@@ -40,9 +43,9 @@ class Key:
 
     @property
     def shown(self) -> str:
-        """The first key, as a person reads it: `^D`, `Alt+A`, `Esc`, `PgUp`."""
+        """The first key, as a person reads it: `^D`, `Alt+A`, `Esc`, `PgUp`, and a letter alone as it is typed, `n`."""
         *held, key = self.keys.split(",")[0].split("+")
-        said = _NAMES.get(key, key.upper() if len(key) == 1 else key.capitalize())
+        said = _NAMES.get(key, (key.upper() if held else key) if len(key) == 1 else key.capitalize())
         return "".join(_HELD[name] for name in held) + said
 
 
@@ -161,6 +164,12 @@ KEYMAP: tuple[Key, ...] = (
     Key("shift+enter,alt+enter,ctrl+j", "newline", "new line", "Start a new line", "composer"),
     Key("up", "older", "older", "On the first line, the message you sent before", "composer"),
     Key("down", "newer", "newer", "On the last line, the message you sent after", "composer"),
+    Key("up", "cursor_up", "row above", "Choose the row above, or scroll up the help", "list", priority=False),
+    Key("down", "cursor_down", "row below", "Choose the row below, or scroll down the help", "list", priority=False),
+    Key("enter", "choose", "open", "Open the chosen row", "list", priority=False),
+    Key("y", "yes", "yes", "Say yes", "question", priority=False),
+    Key("n,escape", "no", "no", "Say no", "question", priority=False),
+    Key("escape", "leave", "leave", "Leave it, and a form sends nothing", "dialog", priority=False),
 )
 
 

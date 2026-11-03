@@ -25,6 +25,7 @@ from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
+from platoon_harness_cli.tui.workspace import Workspace
 
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn, workspace
@@ -50,6 +51,8 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
         await owner.send("@lead", "before it stopped")
         await in_state(owner, "lead", "idle")
     head = (tmp_path / "sessions" / "s" / "journal.sqlite").stat().st_size
+    folder = tmp_path / "sessions" / "s"
+    before = sorted(path.name for path in folder.iterdir())
 
     app = TerminalUI("s")
     async with app.run_test(size=(120, 30)) as pilot:
@@ -59,8 +62,11 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
 
         await pilot.press(*"hello", "enter")
         await drawn(pilot, lambda text: "Alt+R resumes the session to send" in text)
+        await pilot.press("ctrl+q")
 
+    assert app.return_value is None, "leaving history said it runs on"
     assert (tmp_path / "sessions" / "s" / "journal.sqlite").stat().st_size == head
+    assert sorted(path.name for path in folder.iterdir()) == sorted([*before, "marks.sqlite"]), "it wrote but marks"
     assert not is_held(tmp_path / "sessions" / "s")
 
 
@@ -87,7 +93,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
         os.killpg(running.pid, signal.SIGKILL)
         await drawn(pilot, lambda text: "went without its shutdown" in text)
 
-        seqs = [block.event.seq for block in workspace(app).query_one(Transcript).blocks]
+        seqs = [block.first for block in workspace(app).query_one(Transcript).blocks]
         assert seqs == sorted(set(seqs))
         sent = [event.gist for event in await of_type(guest, "message.sent") if event.actor == "human:you"]
         assert sent == ["first", "second"]
@@ -118,9 +124,20 @@ def _shown(screen: pyte.Screen) -> str:
     return "\n".join(screen.display)
 
 
+def _read(master: int, within: float) -> bytes | None:
+    """What a terminal is sent within `within` seconds, or None once its program has gone."""
+    if not select.select([master], [], [], within)[0]:
+        return b""
+    try:
+        return os.read(master, 65536)
+    except OSError:
+        return None
+
+
 def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
     """`platoon-harness attach` on a real terminal, read through an emulator until it shows the agent's words, then
-    left with Ctrl+Q: the screen, and every byte it wrote."""
+    left with Ctrl+Q: the screen as it was then, and every byte it wrote. The terminal reads until the program has gone,
+    as a real one does: one that stops reading blocks the program's writes, and Textual's exit waits for them."""
     environ = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "30"}
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
@@ -135,23 +152,22 @@ def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
     try:
         deadline = time.monotonic() + 30
         while "kestrel" not in _shown(screen) and time.monotonic() < deadline:
-            if select.select([master], [], [], 1.0)[0]:
-                try:
-                    chunk = os.read(master, 65536)
-                except OSError:
-                    break
-                written += chunk
-                stream.feed(chunk)
+            if (chunk := _read(master, 1.0)) is None:
+                break
+            written += chunk
+            stream.feed(chunk)
     finally:
         os.write(master, b"\x11")
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and attached.poll() is None and (chunk := _read(master, 0.1)) is not None:
+            written += chunk
+        os.close(master)
         try:
-            attached.wait(timeout=30)
+            attached.wait(timeout=max(deadline - time.monotonic(), 0.1))
         except subprocess.TimeoutExpired:
             attached.kill()
             attached.wait()
             raise AssertionError(f"Ctrl+Q left it running, on this screen:\n{_shown(screen)}") from None
-        finally:
-            os.close(master)
     return screen, bytes(written)
 
 
@@ -189,22 +205,30 @@ def sessions_of(app: TerminalUI) -> Sessions:
 
 
 async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_detached_runtime(tmp_path):
+    """Enter in the form goes to its next field, and from the last starts the session. Ctrl+D comes back to the
+    sessions screen, and the session runs on."""
     team = tmp_path / "crew.toml"
     team.write_text(f'[roles.lead]\nharness = "{inside("saying")}"\n')
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
-        await drawn(pilot, lambda text: "No sessions yet" in text)
+        footer = (await drawn(pilot, lambda text: "No sessions yet" in text)).splitlines()[-1]
+        assert "n new" in footer and "F1 help" in footer
 
         await pilot.press("n")
         await pilot.pause()
-        await pilot.press(*str(team), "tab", *"crew", "tab", *"yes", "enter")
+        await pilot.press(*str(team), "enter", *"crew", "enter")
+        assert not isinstance(app.screen, Workspace)
+        await pilot.press(*"yes", "enter")
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
 
         folder = tmp_path / "sessions" / "crew"
         running = read_running(folder)
         assert running is not None and running.pid != os.getpid()
+        await pilot.press("ctrl+d")
+        await drawn(pilot, lambda text: "crew" in text and "Sessions" in text)
+        assert isinstance(app.screen, Sessions) and is_held(folder)
         await pilot.press("ctrl+q")
-    assert app.return_value == "crew" and is_held(folder)
+    assert app.return_value is None and is_held(folder)
 
 
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(tmp_path):
@@ -254,3 +278,15 @@ async def test_stopping_a_session_takes_one_confirmation_and_resuming_says_it_ca
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         assert is_held(folder)
         await pilot.press("ctrl+q")
+
+
+def test_a_terminal_ui_that_fails_exits_1(monkeypatch):
+    """Textual shows what went wrong, and the command says it failed, as any refused command does."""
+    from platoon_harness_cli import tui
+
+    def failing(app, **_):
+        app._return_code = 1
+
+    monkeypatch.setattr(TerminalUI, "run", failing)
+
+    assert tui.run("s") == 1

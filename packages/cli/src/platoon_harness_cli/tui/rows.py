@@ -5,12 +5,13 @@ from dataclasses import dataclass
 from rich.segment import Segment
 from rich.style import Style
 from textual import events
-from textual.binding import Binding
 from textual.content import Content
 from textual.geometry import Region, Size
 from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
+
+from .keymap import bindings
 
 CHOSEN = Style(reverse=True)
 
@@ -32,11 +33,7 @@ def strip_of(line: Content, width: int, style: Style) -> Strip:
 class Rows(ScrollView, can_focus=True):
     """Rows, of which one may be chosen by the keys, a click or the program. Choosing posts `Chosen`."""
 
-    BINDINGS = [
-        Binding("up", "move(-1)", show=False),
-        Binding("down", "move(1)", show=False),
-        Binding("enter", "choose", show=False),
-    ]
+    BINDINGS = bindings("list")
     DEFAULT_CSS = "Rows { overflow-x: hidden; }"
 
     class Chosen(Message):
@@ -79,9 +76,18 @@ class Rows(ScrollView, can_focus=True):
         at = keys.index(self.cursor) if self.cursor in keys else -by
         return keys[(at + by) % len(keys)]
 
-    def action_move(self, by: int) -> None:
+    def action_cursor_up(self) -> None:
+        self._move(-1)
+
+    def action_cursor_down(self) -> None:
+        self._move(1)
+
+    def _move(self, by: int) -> None:
+        """Choose the row `by` rows on, or scroll rows with none to choose, as the help's are."""
         if (key := self.step(by)) is not None:
             self.move_to(key)
+        else:
+            self.scroll_relative(y=by, animate=False, immediate=True)
 
     def action_choose(self) -> None:
         if self.cursor is not None:

@@ -21,14 +21,15 @@ Every session under the root, whether a runtime holds it and its state, and it w
 project's `platoon-harness.toml` or a team file. When several agents would run on your own plan login it asks once whether
 this is your own work, which is the SDK's `plan_login`. `r` resumes a session whose runtime has gone, after saying that it
 can spend money. `s` stops one as its owner would, after one confirmation, and it stays resumable. Enter opens one: live
-as a guest, or as read-only history when no runtime holds it, with Alt+R offered to resume it.
+as a guest, or as read-only history when no runtime holds it, with Alt+R offered to resume it. Ctrl+D comes back here from
+a session opened here, which runs on. In a form, Enter goes to the next field, and from the last sends it.
 
 ## The workspace
 
 | Part | What it answers |
 |---|---|
-| Header | Who is working, how many places need you, what is blocked or failed, the budget spent with its labels, what changed |
-| Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with your unread count and a mark for a mention you have not read |
+| Header | Who is working, how many places need you, what is blocked or failed, what changed, which it says is not measured until the turn-end probe lands, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
+| Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
 | Inspector, F2 | Why an agent waits, its harness, model and levels, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions |
@@ -36,34 +37,42 @@ as a guest, or as read-only history when no runtime holds it, with Alt+R offered
 
 The groups come from the roster's `group`, so every client says the same. Your unread counts and the mentions you have
 read come from your marks in `marks.sqlite`: reading a channel to its newest line moves them, and moving them is no event
-and acknowledges nothing an agent was handed.
+and acknowledges nothing an agent was handed. It is the one file reading a session writes, history too. One that cannot be
+read or written loses only badges, which is said once.
 
 ### The transcript
 
 Each event is one line, and a line opens on demand, with Enter on the chosen line, Ctrl+O from anywhere, or a click: its
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
-was on screen stays where it was. Below them is what the agent in view is saying now, live, until the journal holds it as an
-item. Reading up stops following, and
-the line under the transcript counts what came since; Ctrl+End, or End with the transcript focused, follows again.
+was on screen stays where it was. Ctrl+Home reads it from the journal's first line. An agent's transcript shows how each
+child it spawned began and ended, where the journal has it, inside the turn that spawned it. Below the lines is what the
+agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
+stops following, and the line under the transcript counts what came since; Ctrl+End, or End with the transcript focused,
+follows again. A page the journal would not give is named as lines missed.
 
 ### The composer
 
 Enter sends to the target shown above it, and a person's message steers: it lands at the earliest boundary the harness
 has. `@agent` or `#channel` and a space at the start retargets it, and the target follows the focus pane while the draft is
 empty. Something that would go elsewhere than the target shown, such as a message that still begins with another address,
-is asked about first. Alt+F attaches a file as the message's body. Up and Down on the first and last lines recall what you
-sent.
+is asked about first, and so is one that begins with `/`, as a harness's own command would, since those are not built yet.
+Alt+F attaches a file as the message's body. Up and Down on the first and last lines recall what you sent, over an empty
+draft and never over one being written, which a recalled message is once you edit it. Ctrl+D on an empty composer detaches,
+and with a draft it says why it does not.
 
 ### Acting
 
 Approvals never take focus, so a key meant for the composer never answers one. Alt+A goes to the next place you must act,
 and Alt+Y and Alt+N take its first and second action, Allow and Deny for an approval, each carrying the version it was
-drawn from. An answer another client gave first shows as theirs. Esc interrupts the agent in view, and Alt+S stops the turns
-of it and of every agent below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept, the act
-shows disabled with the runtime's reason, and it comes back once that agent's row moves. Retiring or cancelling an agent,
-closing or cancelling the session, and every other op a person may run are in the palette, Ctrl+P, worded as the command
-line words them, and the ones nothing takes back ask once.
+drawn from. Only you move where you are: a place that goes, answered here or by another client, takes it with it, so a key
+never acts on a place you did not choose. An answer another client gave as you pressed shows as theirs. Esc interrupts the
+agent in view, and Alt+S stops the turns of it and of every agent below it: both stop turns, not waits. When the runtime
+refuses one, the refusal is kept: the key shows disabled, pressing it again says the runtime's reason and sends nothing,
+and it comes back once that agent's row moves. Retiring or cancelling an agent, closing or cancelling the session, and every other
+command a person may run are in the palette, Ctrl+P, worded as the command line words them, and the ones that end an agent
+or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the command line
+prints any. A takeover says it is not built yet, as Alt+T does.
 
 ### Size
 
@@ -72,14 +81,16 @@ line words them, and the ones nothing takes back ask once.
 | 120 columns or more | Navigator, focus pane, and the inspector beside them |
 | 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
 | 60 to 79 | The focus pane, a line of the team above the composer, and the navigator on Ctrl+B |
-| under 60 | The header shortens to counts, and the footer to keys |
+| under 60 | As 60 to 79, with the header shortened to counts and the footer to keys |
 | under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
 
 A resize changes which parts show, and never the scroll position, focus or the composer's target.
 
 ### Reconnecting
 
-A runtime that stops, is resumed or is killed while you are attached shows as what it is, as a banner over its history.
+A runtime that stops, is resumed or is killed while you are attached shows as what it is, as a banner over its history,
+from the session's state: stopped as its owner asked, or gone without its shutdown, which a session that crashed before you
+opened it says too. Leaving a session no runtime holds says nothing of one running on.
 When a runtime takes the session up again, from here or from another shell, the UI attaches again and goes on from the last
 event it drew, so nothing is shown twice or lost.
 
@@ -158,10 +169,33 @@ The keymap is one table, from which the bindings, the help (F1), the footer and 
 | `up` | On the first line, the message you sent before |
 | `down` | On the last line, the message you sent after |
 
+### A list: the sessions, the agents and channels, the help
+
+| Keys | Does |
+|---|---|
+| `up` | Choose the row above, or scroll up the help |
+| `down` | Choose the row below, or scroll down the help |
+| `enter` | Open the chosen row |
+
+### A question
+
+| Keys | Does |
+|---|---|
+| `y` | Say yes |
+| `n` or `escape` | Say no |
+
+### A form or the help
+
+| Keys | Does |
+|---|---|
+| `escape` | Leave it, and a form sends nothing |
+
 <!-- end of keymap -->
 
 ## Not built yet
 
 Disabled where a control for it would be, or absent from the palette: a review screen of diffs, search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
-switching, taking over an agent's native terminal, themes and notifications. [STATUS.md](STATUS.md) says what each is.
+switching, taking over an agent's native terminal, following a line into its provenance, an approval and who answered it in
+the transcript, forking a session, copying a selection from the transcript, themes and notifications.
+[STATUS.md](STATUS.md) says what each is.

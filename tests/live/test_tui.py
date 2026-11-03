@@ -17,6 +17,7 @@ from platoon_harness import Session
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import Transcript
+from platoon_harness_cli.tui.workspace import Dock
 
 from ..unit.runtime.support import journal
 from ..unit.tui.support import drawn, workspace
@@ -68,7 +69,7 @@ JOB = (
 def chosen(app: TerminalUI) -> dict:
     screen = workspace(app)
     assert screen.live is not None
-    return screen.live.attention.get(screen.place or "", {})
+    return screen.live.attention.get(screen.query_one(Dock).cursor or "", {})
 
 
 async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, monkeypatch):
@@ -86,7 +87,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
         await drawn(pilot, lambda text: "No sessions yet" in text)
         await pilot.press("n")
         await pilot.pause()
-        await pilot.press(*"crew.toml", "tab", *"live-tui", "enter")
+        await pilot.press(*"crew.toml", "enter", *"live-tui", "enter", "enter")
         await drawn(pilot, lambda text: "your own work?" in text, within=60)
         await pilot.press("y")
         await drawn(pilot, lambda text: "@lead" in text and " live " in text, within=WITHIN)
@@ -99,8 +100,10 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
         await screen.show(screen._agent("w"))
 
         await drawn(pilot, lambda text: "⚠ approval" in text, within=WITHIN)
-        while chosen(app).get("kind") != "approval":
+        for _ in range(len(live_places(app))):
             await pilot.press("alt+a")
+            if chosen(app).get("kind") == "approval":
+                break
         await pilot.press("alt+y")
         live = screen.live
         assert live is not None
@@ -149,6 +152,12 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
     assert quieted == ["w"] and len(interrupted) == 1
     assert not woken or woken[0].seq > next(event.seq for event in events if event.gist.startswith("Finish the story"))
     assert used["total"] <= 30
+
+
+def live_places(app: TerminalUI) -> list[dict]:
+    screen = workspace(app)
+    assert screen.live is not None
+    return screen._places(screen.live)
 
 
 async def _quiet(pilot, app: TerminalUI) -> dict:
