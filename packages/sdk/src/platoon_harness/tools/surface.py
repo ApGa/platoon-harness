@@ -14,6 +14,12 @@ _NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
 _NO_NEXT_STEP = "Carry on without it, and say so."
+_PARKING = "With nothing to do until something changes, call `wait` and end your turn: the runtime starts the next."
+_FINISHING = (
+    "When your goal is done, make `agent.finish` your last call, with your report: a turn that only ends leaves you "
+    "idle, and whoever waits on you still waiting."
+)
+_STAYING = "You stay here between turns, so call `agent.finish` only when told your work is over: it ends you for good."
 _REFUSALS = {
     "not_permitted": (
         "You may not do this.",
@@ -189,17 +195,15 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name) -> 
     if "peers" in held and (peers := kernel.query(agent, "peers", {})).refusal is None:
         reach = _listed(peers.result, "peers", lambda peer: peer["address"], surface("peers"))
         lines.append(f"You can message: {reach or 'nobody yet'}.")
+        if peers.result["roles"]:
+            lines.append(f"You can start agents in these roles: {', '.join(peers.result['roles'])}.")
     if "channel.list" in held and (channels := kernel.query(agent, "channel.list", {})).refusal is None:
         kept = _listed(
             channels.result, "channels", lambda found: f"{found['name']} ({found['kind']})", surface("channel.list")
         )
         lines.append(f"Channels: {kept or 'none yet'}.")
-    if "wait" in held:
-        parking = (
-            "With nothing to do until something changes, call `wait` and end your turn: the runtime starts the next."
-        )
-        lines.append(describe(parking, surface, kernel.ops))
-    return "\n".join(lines)
+    teach = _teacher(surface, kernel.ops, held)
+    return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_STAYING if agent.parent is None else _FINISHING))))
 
 
 def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:

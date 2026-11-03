@@ -219,9 +219,21 @@ async def test_the_preamble_says_who_can_be_reached_now(kernel, server, lead, wo
     assert "Channels: notes (board), tasks (queue)." in preamble(kernel, lead[0])
 
 
+async def test_the_preamble_names_the_roles_an_agent_may_start(kernel, server, lead, worker):
+    assert "You can start agents in these roles: narrow, steered, worker." in preamble(kernel, lead[0])
+    assert "start agents" not in preamble(kernel, worker[0])
+
+
 async def test_the_preamble_teaches_parking(kernel, lead):
     assert "call `wait` and end your turn" in preamble(kernel, lead[0])
     assert "call `ph wait` and end your turn" in preamble(kernel, lead[0], shell_name)
+
+
+async def test_the_preamble_tells_a_spawned_agent_to_finish_and_a_root_to_stay(kernel, lead, worker):
+    assert "make `agent_finish` your last call" in preamble(kernel, worker[0])
+    assert "make `ph agent.finish` your last call" in preamble(kernel, worker[0], shell_name)
+    assert "only when told your work is over" in preamble(kernel, lead[0])
+    assert "your last call" not in preamble(kernel, lead[0])
 
 
 async def test_the_preamble_points_a_shell_at_help(kernel, lead):

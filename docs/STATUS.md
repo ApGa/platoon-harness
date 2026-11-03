@@ -146,7 +146,7 @@ socket on port 0. Real Claude Code and real Codex have run against this server, 
 | Capability | State | Evidence |
 |---|---|---|
 | One derivation from `ops.list`, per token: names per surface, closed schemas showing only what a model should see, an honest `readOnlyHint` | tested | `test_surface.py` |
-| The preamble: exact tools, who can be reached, how to park | tested | `test_surface.py`. It reaches a harness once, at launch, in `AgentSpec.instructions`: `tests/unit/runtime/test_host.py`. It is fixed there, so who can be reached goes stale until `peers` is asked |
+| The preamble: exact tools, who can be reached, which roles can be started, how to park and how to end | tested | `test_surface.py`. It reaches a harness once, at launch, in `AgentSpec.instructions`: `tests/unit/runtime/test_host.py`. It is fixed there, so who can be reached goes stale until `peers` is asked. What it does to a real model is in `docs/research/spikes/real-harness.md` |
 | A sentence naming a tool its reader does not hold left out, in descriptions, handovers and a refusal's reason, and no fact lost with it. No agent holds `agent.list` or `task.renew` | tested | `test_surface.py`, for a reader holding one tool at a time |
 | `peers` and `channel.list` a page at a time, a generic refusal of a query past 32 KiB | tested | `test_mcp.py`, with a 600 agent team |
 | With no client id, identical calls in one turn are one call, labelled a repeat: a stated trade-off | tested | `test_mcp.py`. A key that told them apart would run a retry twice after a lost ack, which is worse. It costs pi over HTTP MCP a second identical claim, so the `pi` driver takes the shim, which sends a fresh id per call: two identical claims in one turn were two, in `tests/integration/test_pi.py` |

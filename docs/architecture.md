@@ -1018,7 +1018,10 @@ A sentence that names a tool its reader does not hold is left out, in a refusal'
 a fact goes in a sentence apart from the tool that serves it. A test holds every argument to a description, every description to what
 a refusal means, and every op it names to one that exists, for a reader who holds only that tool. Tool schemas leave out what is
 for programs and team files, such as `on` and a queue's lease. The tool list and the preamble are fixed at launch, and go once to each
-harness, so the preamble is a snapshot of who could be reached then, and `peers` is what stays current. That text is in every request
+harness, so the preamble is a snapshot of who could be reached then, and `peers` is what stays current. Besides the tools and who can
+be reached, the preamble names the roles an agent may start, since a model guessed a harness's name there and gave up. It says how
+to end too: an agent somebody spawned is told to make `agent.finish` its last call, or a join on it never holds, and one the session
+started is told to stay, since a human talks to it over many turns. That text is in every request
 of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in

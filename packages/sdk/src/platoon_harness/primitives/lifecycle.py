@@ -587,15 +587,18 @@ def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
 @op("peers", query=True, tool=True)
 def peers(txn: Txn, a: Paging) -> dict[str, Any]:
     """List whom you may message directly now, in `peers`, with the true `total` and a `cursor` to pass as `after`, or
-    none at the end. Targets change as agents come and go, so ask rather than remember."""
+    none at the end. Targets change as agents come and go, so ask rather than remember. `roles` lists the roles you may
+    start an agent in."""
     grants = txn.view(Grants)
+    roles = txn.view(SessionRecord).settings().roles
     live = txn.view(Principals).select(txn.me, "all")
     rows = [
         {"address": f"@{principal.name}", "kind": principal.kind, "role": principal.role}
         for principal in live
         if principal.id != txn.me.id and grants.permits(txn.me, "message.send", f"inbox/{principal.name}")
     ]
-    return paged(rows, "peers", "address", a.after)
+    startable = sorted(role for role in roles if grants.permits(txn.me, "agent.spawn", f"role/{role}"))
+    return {**paged(rows, "peers", "address", a.after), "roles": startable}
 
 
 def _blockers(txn: Txn) -> list[str]:
