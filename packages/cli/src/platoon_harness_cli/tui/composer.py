@@ -16,8 +16,9 @@ ADDRESS = re.compile(rf"([@#+]{NAME})\s")
 
 
 class Composer(TextArea):
-    """A multiline composer. Enter sends, and the keys the table names start a new line or recall what was sent. An
-    address that `known` takes, typed or pasted at the start, is taken out and retargets it."""
+    """A multiline composer. Enter sends, and the keys the table names start a new line or recall what was sent, over
+    an empty draft and never over one being written. An address that `known` takes, typed or pasted at the start, is
+    taken out and retargets it."""
 
     class Send(Message):
         """The person asked to send what the composer holds."""
@@ -51,7 +52,7 @@ class Composer(TextArea):
             self.post_message(self.Send())
         elif action == "newline":
             self.insert("\n")
-        elif action == "older" and row == 0 and self.sent:
+        elif action == "older" and row == 0 and self.sent and (not self.text or self._recalled is not None):
             self._recall(-1)
         elif action == "newer" and row == self.document.line_count - 1 and self._recalled is not None:
             self._recall(1)

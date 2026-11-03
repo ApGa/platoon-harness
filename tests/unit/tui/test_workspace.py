@@ -389,6 +389,9 @@ async def test_the_composer_retargets_recalls_attaches_a_file_and_asks_before_se
         assert screen.query_one(Composer).text == "for the channel"
         await pilot.press("down")
         assert screen.query_one(Composer).text == ""
+        await pilot.press(*"a draft", "up")
+        assert screen.query_one(Composer).text == "a draft"
+        await pilot.press("end", *["backspace"] * 7)
 
         await pilot.press("alt+f")
         await pilot.press(*str(attachment), "enter")
