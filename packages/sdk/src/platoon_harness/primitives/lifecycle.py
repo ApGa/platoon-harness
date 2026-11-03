@@ -500,6 +500,8 @@ def report(txn: Txn, a: AgentReport) -> None:
             if agent.finishing:
                 _conclude(txn, agent)
             elif not agent.ended:
+                if txn.view(Stamps).turn(name) is not None:  # What it was doing is unknown, and a tool may run on.
+                    _gap(txn, name, "control", "crash_window")
                 end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)

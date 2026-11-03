@@ -2215,6 +2215,17 @@ async def test_gaps_are_counted_by_agent_and_kind_and_a_lost_turn_is_one(kernel)
     ]
 
 
+async def test_a_harness_that_exits_in_a_turn_leaves_a_gap_and_one_between_turns_does_not(kernel):
+    await spawn(kernel, "bob")
+    await spawn(kernel, "ann")
+    await start_turn(kernel, "bob")
+
+    await report(kernel, "bob", "exited", reason="killed by signal 9")
+    await report(kernel, "ann", "exited", reason="killed by signal 9")
+
+    assert (await ending(kernel))["gaps"] == [{"agent": "bob", "what": "crash_window", "plane": "control", "count": 1}]
+
+
 async def test_status_counts_what_is_left_to_a_human(kernel):
     await spawn(kernel, "bob")
     await report(kernel, "bob", "approval.requested", id="a1", gist="may I")
