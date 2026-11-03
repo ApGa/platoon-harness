@@ -172,7 +172,8 @@ can both be watched. Leaving only disconnects.
   still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started fails,
   which queues its entries again. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
-  while open; one that was closing or cancelled stays so, and its harnesses are not resumed, because nothing new may start. A journal
+  while open; one that was closing, which reads `closed` once stopped, or cancelled stays so, and its harnesses are not resumed,
+  because nothing new may start. A journal
   that stops committing holds this up by at most `grace` and a second, a driver that breaks in `stop` holds up nothing, and the process
   trees end whether or not anything commits.
 

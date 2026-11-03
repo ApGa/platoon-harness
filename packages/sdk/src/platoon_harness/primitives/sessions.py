@@ -46,9 +46,11 @@ class Settings(Args):
 
 
 class SessionRecord(View):
-    """One row, once the session is open."""
+    """One row, once the session is open. A session that was closing is `closed` once its owner has stopped, as nothing
+    more of it will run."""
 
     name = "session"
+    version = 2
     schema = """
     CREATE TABLE v_session(id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL, settings TEXT NOT NULL) STRICT;
     """
@@ -64,7 +66,10 @@ class SessionRecord(View):
 
     @fold("session.stopped")
     def stopped(self, event: Event) -> None:
-        self.db.execute("UPDATE v_session SET state = 'stopped' WHERE state = 'open'")
+        self.db.execute(
+            "UPDATE v_session SET state = CASE state WHEN 'open' THEN 'stopped' WHEN 'closing' THEN 'closed' "
+            "ELSE state END"
+        )
 
     @fold("runtime.started")
     def resumed(self, event: Event) -> None:

@@ -2159,13 +2159,14 @@ async def test_a_stopped_session_resumes(tmp_path, clock):
     kernel.close()
 
 
-async def test_a_session_closing_when_it_stopped_still_closes(kernel, ada):
+async def test_a_session_closing_when_it_stopped_is_closed_and_stays_so(kernel, ada):
     result_of(await kernel.submit(ada, "session.close", {}))
     result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+    assert status(kernel)["state"] == "closed"
 
     await kernel.recover()
 
-    assert status(kernel)["state"] == "closing"
+    assert status(kernel)["state"] == "closed"
 
 
 async def test_session_stop_is_the_owners_to_write(kernel, ada):

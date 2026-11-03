@@ -18,7 +18,7 @@ VIEWS = {
     "effects": (1, "d490ea98cdf6"),
     "timers": (1, "8b7ee8f23867"),
     "tombstones": (1, "4aad641385d8"),
-    "session": (1, "47824e611e3a"),
+    "session": (2, "47824e611e3a"),
     "budgets": (1, "90243faf21f4"),
     "agents": (7, "04d54b82f4bb"),
     "channels": (1, "385abe8c30d1"),

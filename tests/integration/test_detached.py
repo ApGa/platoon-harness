@@ -67,7 +67,7 @@ async def test_a_detached_runtime_runs_the_whole_flow_for_a_guest(tmp_path: Path
     await guest.send("@lead", "Fix the flaky test")
     ending = await guest.settled(timeout="30s")
 
-    assert (ending.state, ending.reason) == ("closing", "settled")
+    assert (ending.state, ending.reason) in {("closing", "settled"), ("closed", "settled")}  # It stops once drained.
     assert {row["status"] for row in ending.agents} == {"finished"}
     assert (await guest.read())["entries"][0]["gist"] == "The test is fixed."
     await gone(guest)
@@ -158,7 +158,7 @@ async def test_attach_to_a_closed_session_reads_history_and_writes_nothing(tmp_p
     before = journal.read_bytes(), journal.stat().st_mtime_ns
 
     async with Session.attach("s", root=tmp_path) as history:
-        assert (await history.status())["state"] == "closing"
+        assert (await history.status())["state"] == "closed"
         assert [row["status"] for row in await history.agents()] == ["finished"] * 3
         assert (await history.board_query("notes"))["total"] == 2
         outcome = await history.submit("message.send", to="@you", gist="too late")
