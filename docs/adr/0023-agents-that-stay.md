@@ -25,10 +25,11 @@ choose, several notify a parent for the first task only, and almost none bounds 
   says last goes to its parent, that a turn that only ends leaves it there for the next message, and to call `agent.finish` only when
   told to. The role's own words come after the preamble, so a role has the last word.
 - **A report wakes its parent only for what the parent asked.** The spawn asks, and so does each message of the parent's own, to the
-  child's inbox, that the child is handed. A report that wakes the parent answers. So a parent is woken once for the spawn and once
-  more for each message it sent that child, within `max_hops` and budgets. A turn that parks, or that an interrupt or the owner's stop
-  cut, answers nothing yet. A message from a peer or a human, and a parent's broadcast, asks nothing, so ADR 0012's reason for
-  rejecting a return rule holds. This is every child's rule, and it replaces once per causal chain.
+  child's inbox, the first time it lands in a turn of the child's. Every report answers, one a wait of the parent's counts too, except
+  one from a turn that an interrupt or the owner's stop cut. So a parent is woken once for the spawn and once more for each message it
+  sent that child, within `max_hops` and budgets. A turn that parks posts no report, so it answers nothing yet. A message from a peer
+  or a human, a parent's broadcast, and a message read again ask nothing, so ADR 0012's reason for rejecting a return rule holds. This
+  is every child's rule, and it replaces once per causal chain.
 - **The result of a spawn that stays says so**, that its answers come back at the end of each of its turns, and how to end it:
   `agent.retire` when it is idle, `agent.cancel` at any time, or telling it to finish. A result's `next` is taught in the words of its
   surface, as a refusal's next step is. A `max_children` refusal says that ending a child makes room.
@@ -48,7 +49,9 @@ choose, several notify a parent for the first task only, and almost none bounds 
 |---|---|
 | Tell a child to message its answer | It leans on the model, it says what the monitor already posts, and a child's message wakes a parent its report would have left to a join: a turn per worker, in the spike |
 | Keep once per causal chain, with a parent's message starting its child's chain afresh | A turn hears several entries, and one from a peer's chain spends the wake the parent's message asked for. A human's message would start one too, which brings back the return rule's loop |
-| Ask at a message sent, not one handed | A second message sent while the child answers the first is answered by that first report, and the second answer wakes nobody |
+| Ask at a message sent, not one that lands | A second message sent while the child answers the first is answered by that first report, and the second answer wakes nobody |
+| Ask at a message handed over, not one that lands | A steer a harness takes during one turn can land in the next, and the first turn's report would spend the ask |
+| Answer only at a report that wakes the parent | A report a wait counts wakes nobody, so the ask would stay open, and a turn a human started later would wake the parent |
 | Count asks, and spend one per report | Two messages handed in one turn leave an ask over for a later turn that nobody asked for |
 | Answer at any turn's end | A turn that parks, or one cut short, has answered nothing yet, and the turn after it would wake nobody |
 | Flag only roles that say `stays = true` | `agent.spawn` can ask any persistent child to stay, and the owner's flow does just that, so nothing it does would be flagged |
@@ -59,8 +62,7 @@ choose, several notify a parent for the first task only, and almost none bounds 
 
 ## Consequences
 
-- A child that a peer or a human set to work reports into its parent's next turn. One whose parent counts it on a wait leaves that
-  ask open, so a later report of its may wake the parent once more.
+- A child that a peer or a human set to work, once it has answered its spawn, reports into its parent's next turn.
 - A parent and a child that stays can wake each other until `max_hops` or a budget stops them, and `team check` says so.
 - `stays` adds a field to `agent.spawn` and a sentence to the preamble of a child that stays. Each default role's tool list stays under
   its ceiling.

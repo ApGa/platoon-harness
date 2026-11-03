@@ -563,8 +563,8 @@ and an agent creating a channel stops at `next-turn`.
 `tool`, then `model_call`, then `turn`. Tool results of coordination ops also carry pending `steer` notices, which gives
 a tool boundary on any harness whose tools are visible. `coalesce` merges wakes into one turn.
 
-**Hop limit.** Every message carries `hops`, one more than the largest of what it replies to or what was offered to its turn, so a
-model need not say. A human message resets it. A program has no turn, so its message starts a chain unless it names `reply_to`. A
+**Hop limit.** Every message carries `hops`, one more than the largest of what it replies to or what reached its turn, offered to it or
+landed in it, so a model need not say. A human message resets it. A program has no turn, so its message starts a chain unless it names `reply_to`. A
 wait's notice is one more than what its waiter had heard when it placed the wait, so a loop through a board counts too. A wake past
 `max_hops` is refused and shown in attention, and the message waits for the next turn. This bounds reply loops that budgets only
 make expensive.
@@ -573,10 +573,11 @@ make expensive.
 wait, the runtime posts the turn's final text, or `<name> <status>: <reason>` for an agent that did not finish, to the
 spawning parent's inbox, as a runtime-authored event naming the child as
 subject. It wakes the parent only for what the parent asked: the spawn asks, and so does each message of the parent's own to the
-child's inbox that the child is handed, and a report that wakes the parent answers. So a parent is woken once for the spawn and once
-more for each message it sent that child, and a turn a peer or a human started, or a parent's broadcast, asks nothing. A turn that
-parks, or that an interrupt or the owner's stop cut, answers nothing yet. It stops at `max_hops`; past either, its message waits for
-the next turn. So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in. See
+child's inbox the first time it lands in a turn of the child's, and every report answers, one a wait of the parent's counts too, except
+one from a turn an interrupt or the owner's stop cut. A message lands at once in a tool's result, and by a handover when its harness says so, which for a steer can be in
+the turn after the one it was offered in. So a parent is woken once for the spawn and once more for each message it sent that child,
+and a turn a peer or a human started, or a parent's broadcast, asks nothing. A turn that parks posts no report, so it answers nothing
+yet. It stops at `max_hops`; past either, its message waits for the next turn. So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in. See
 [ADR 0023](adr/0023-agents-that-stay.md).
 
 A report also waits for the next turn when waking would tell the parent nothing. A parent that ended the child itself did it. A

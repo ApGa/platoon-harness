@@ -119,7 +119,13 @@ def _refuse_over_working(txn: Txn, agent: Agent) -> None:
 
 
 def _monitor(
-    txn: Txn, agent: Agent, gist: str | None = None, body: str | None = None, *, wake: bool | None = None
+    txn: Txn,
+    agent: Agent,
+    gist: str | None = None,
+    body: str | None = None,
+    *,
+    wake: bool | None = None,
+    answers: bool = True,
 ) -> bool:
     """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden.
     Returns whether a parent was there to hear it."""
@@ -127,7 +133,8 @@ def _monitor(
     if parent is None or parent.state != "live":
         return False
     text = gist or agent.final_gist or f"{agent.name} ended its turn with no final text."
-    post(txn, _inbox_of(parent.id), text, body=body or agent.final_body, subject=agent.name, wake=wake)
+    body = body or agent.final_body
+    post(txn, _inbox_of(parent.id), text, body=body, subject=agent.name, wake=wake, answers=answers)
     return True
 
 
@@ -473,13 +480,15 @@ class AgentReport(Args):
 
 def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
     """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and one
-    stopped on purpose wakes nobody."""
+    stopped on purpose wakes nobody and answers nothing yet."""
     if reason == "stopped":
         _monitor(txn, agent, wake=_wakes(txn, agent))
     else:
         said = f": {agent.final_gist}" if agent.final_gist else ""
         gist = f"{agent.name} turn {reason}{said}"[:GIST_LIMIT]
-        _monitor(txn, agent, gist, wake=False if reason in _ON_PURPOSE else _wakes(txn, agent, badly=True))
+        on_purpose = reason in _ON_PURPOSE
+        wake = False if on_purpose else _wakes(txn, agent, badly=True)
+        _monitor(txn, agent, gist, wake=wake, answers=not on_purpose)
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:

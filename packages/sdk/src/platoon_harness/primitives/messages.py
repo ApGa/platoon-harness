@@ -13,6 +13,7 @@ from .agents import Agents
 from .channels import Channel, Channels, Groups
 from .common import (
     DIGEST_ITEMS,
+    IN_A_RESULT,
     RESULT_LIMIT,
     WAKING,
     AgentName,
@@ -76,10 +77,21 @@ class Cursor(NamedTuple):
         return "undeliverable" if self.closed else "queued"
 
 
+class Offered(NamedTuple):
+    """One offer: whose, how far it moves each cursor, whether a driver confirmed it landed, and what it carries into
+    the turn that hears it."""
+
+    reader: str
+    positions: dict[str, int]
+    delivered: bool
+    hops: int
+    asked: bool
+
+
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -114,7 +126,9 @@ class Deliveries(View):
         before TEXT NOT NULL,
         effect INTEGER,
         delivered INTEGER NOT NULL,
-        taken INTEGER NOT NULL DEFAULT 0
+        taken INTEGER NOT NULL DEFAULT 0,
+        hops INTEGER NOT NULL,
+        asked INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
     CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
@@ -152,7 +166,7 @@ class Deliveries(View):
     def offered(self, event: Event) -> None:
         data = event.data
         before = {stream: self.cursor(event.agent, stream).offered for stream in data["positions"]}
-        in_a_result = data["how"] in ("read", "notice")
+        in_a_result = data["how"] in IN_A_RESULT
         for stream, seq in data["positions"].items():
             self._touch(event.agent, stream)
             self.db.execute(
@@ -161,12 +175,18 @@ class Deliveries(View):
                 (seq, seq if in_a_result else 0, event.agent, stream),
             )
         self.db.execute(
-            "INSERT INTO v_deliveries_offers VALUES (?, ?, ?, ?, NULL, 0, 0)",
-            (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before)),
+            """
+            INSERT INTO v_deliveries_offers(input, reader, positions, before, delivered, hops, asked)
+            VALUES (?, ?, ?, ?, 0, ?, ?)
+            """,
+            (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before), data["hops"], data["asked"]),
         )
+        self._heard(event.agent, data["hops"])
+
+    def _heard(self, agent: str | None, hops: int) -> None:
         self.db.execute(
             "INSERT INTO v_deliveries_heard VALUES (?, ?) ON CONFLICT DO UPDATE SET hops = max(hops, excluded.hops)",
-            (event.agent, data["hops"]),
+            (agent, hops),
         )
 
     @fold("effect.requested")
@@ -215,12 +235,14 @@ class Deliveries(View):
 
     @fold("context.delivered")
     def delivered(self, event: Event) -> None:
+        """Its offer's hops count in the turn it landed in too, which for a steer can be the one after the offer's."""
         for stream, seq in event.data["positions"].items():
             self.db.execute(
                 "UPDATE v_deliveries_cursors SET delivered = max(delivered, ?) WHERE reader = ? AND stream = ?",
                 (seq, event.agent, stream),
             )
         self.db.execute("UPDATE v_deliveries_offers SET delivered = 1 WHERE input = ?", (event.data["input"],))
+        self._heard(event.agent, event.data["hops"])
 
     @fold("message.acked")
     def acked(self, event: Event) -> None:
@@ -366,7 +388,7 @@ class Deliveries(View):
         return positions
 
     def heard(self, agent: str | None) -> int:
-        """The largest hops offered to this agent's turn, or -1 when nothing has been."""
+        """The largest hops offered to this agent's turn or landed in it, or -1 when nothing has been."""
         row = self.db.execute("SELECT hops FROM v_deliveries_heard WHERE agent = ?", (agent,)).fetchone()
         return -1 if row is None else row["hops"]
 
@@ -378,9 +400,12 @@ class Deliveries(View):
         """Whether a budget has refused a wake that nothing has given another try."""
         return self.db.execute("SELECT 1 FROM v_deliveries_blocked LIMIT 1").fetchone() is not None
 
-    def offer(self, input: int) -> tuple[str, dict[str, int], bool] | None:
+    def offer(self, input: int) -> Offered | None:
         row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE input = ?", (input,)).fetchone()
-        return None if row is None else (row["reader"], json.loads(row["positions"]), bool(row["delivered"]))
+        if row is None:
+            return None
+        positions = json.loads(row["positions"])
+        return Offered(row["reader"], positions, bool(row["delivered"]), row["hops"], bool(row["asked"]))
 
 
 class _Reach(NamedTuple):
@@ -421,13 +446,15 @@ def _audience(txn: Txn, stream: str) -> _Reach:
 
 def chain_of(txn: Txn, reader: str, entries: Sequence[Entry]) -> dict[str, Any]:
     """What an offer of these entries carries into the turn that hears them: the largest hops, and whether the
-    reader's parent asked it something, by a message of its own to the reader's inbox."""
+    reader's parent asked it something, by a message of its own to the reader's inbox that it was never offered."""
     agent = txn.view(Agents).get(reader)
     parent = None if agent is None or agent.parent is None else address(agent.parent)
-    inbox = f"inbox/{reader}@"
+    inbox = f"inbox/{reader}"
+    offered = txn.view(Deliveries).cursor(reader, inbox).offered
+    new = [entry for entry in entries if entry.seq > offered and entry.ref.startswith(f"{inbox}@")]
     return {
         "hops": max((entry.hops for entry in entries), default=0),
-        "asked": any(entry.sender == parent and entry.ref.startswith(inbox) for entry in entries),
+        "asked": any(entry.sender == parent for entry in new),
     }
 
 
@@ -452,12 +479,13 @@ def post(
     based_on: Sequence[str] = (),
     subject: str | None = None,
     wake: bool | None = None,
+    answers: bool = False,
     follows: int = -1,
 ) -> Event:
     """Journal one entry for its audience. The runtime posts here too: a report about a `subject`, which wakes its
-    reader only while that agent was asked something, or to `wake` the reader regardless, or with False to leave it
-    for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can say so, as for a
-    wait's notice."""
+    reader only while that agent was asked something, and `answers` it, or to `wake` the reader regardless, or with
+    False to leave it for the reader's next turn. `follows` is the hops of what a post follows when no `cause` can say
+    so, as for a wait's notice."""
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake is not None
     audience = readers if channel.kind == "inbox" else tuple(reader for reader in readers if reader != txn.me.name)
@@ -490,6 +518,7 @@ def post(
             "reply_to": reply_to,
             "hops": hops,
             "subject": subject,
+            "answers": answers,
             "audience": audience,
             "generation": generation,
             "delivery": "next-turn" if setting in WAKING and not wakes else setting,

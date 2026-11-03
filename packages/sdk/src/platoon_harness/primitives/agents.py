@@ -7,19 +7,19 @@ from pydantic import BaseModel
 
 from platoon_harness.kernel import Event, View, fold
 
-from .common import WAKING
+from .common import IN_A_RESULT
 
 AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held", "ended"]
 
 
 class Agent(BaseModel, frozen=True):
-    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `stays` says it stays
-    after its task for the next message. `asked` says its parent is owed an answer: the spawn asks, and so does each
-    message from the parent that it is handed, until a report of its wakes the parent. `native` is the id its harness
-    resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing` says it
-    called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its own, until
-    the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers failed in a
-    row, and the next waits until `retry_at`."""
+    """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `stays` says it is
+    told to stay after its task for the next message. `asked` says its parent is owed an answer: the spawn asks, and so
+    does each new message from the parent once it lands in a turn, until a report answers. `native` is the id its
+    harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing`
+    says it called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its
+    own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers
+    failed in a row, and the next waits until `retry_at`."""
 
     name: str
     role: str
@@ -71,7 +71,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 4
+    version = 5
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -79,7 +79,7 @@ class Agents(View):
         parent TEXT,
         depth INTEGER NOT NULL,
         stays INTEGER NOT NULL,
-        asked INTEGER NOT NULL DEFAULT 1,
+        asked INTEGER NOT NULL,
         state TEXT NOT NULL,
         status TEXT,
         reason TEXT,
@@ -113,18 +113,24 @@ class Agents(View):
 
     @fold("agent.spawned")
     def spawned(self, event: Event) -> None:
+        """The spawn asks, so a child's first report answers it. One the session started has no parent to ask."""
         data = event.data
         self.db.execute(
             """
             INSERT INTO v_agents(
-                name, role, parent, depth, stays, state, harness, model, on_parent_exit, boundaries, goal, goal_body,
-                unbegun
+                name, role, parent, depth, stays, asked, state, harness, model, on_parent_exit, boundaries, goal,
+                goal_body, unbegun
             ) VALUES (
-                :name, :role, :parent, :depth, :stays, 'spawning', :harness, :model, :on_parent_exit, '[]', :goal,
-                :body, :unbegun
+                :name, :role, :parent, :depth, :stays, :asked, 'spawning', :harness, :model, :on_parent_exit, '[]',
+                :goal, :body, :unbegun
             )
             """,
-            {**data, "harness": json.dumps(data["harness"]), "unbegun": bool(data["goal"] or data["body"])},
+            {
+                **data,
+                "asked": data["parent"] is not None,
+                "harness": json.dumps(data["harness"]),
+                "unbegun": bool(data["goal"] or data["body"]),
+            },
         )
 
     @fold("agent.started", "agent.resumed")
@@ -180,15 +186,18 @@ class Agents(View):
     def woken(self, event: Event) -> None:
         self._move(event, "waking", "idle", "waiting")
 
-    @fold("context.offered")
+    @fold("context.offered", "context.delivered")
     def handed(self, event: Event) -> None:
-        if event.data["asked"]:
+        """A parent's message asks once it lands in a turn: at once in a tool's result, and by a handover once the
+        harness says it landed, which for a steer can be in the turn after the one it was offered in."""
+        lands = event.type == "context.delivered" or event.data["how"] in IN_A_RESULT
+        if lands and event.data["asked"]:
             self.db.execute("UPDATE v_agents SET asked = 1 WHERE name = ?", (event.agent,))
 
     @fold("message.sent")
     def answered(self, event: Event) -> None:
-        """A report that wakes the parent answers what it asked."""
-        if event.data["subject"] is not None and event.data["delivery"] in WAKING:
+        """A report answers what its parent asked, unless an interrupt or the owner's stop cut its turn."""
+        if event.data["subject"] is not None and event.data["answers"]:
             self.db.execute("UPDATE v_agents SET asked = 0 WHERE name = ?", (event.data["subject"],))
 
     @fold("effect.failed")

@@ -55,8 +55,10 @@
 
 ### Changed
 
-- The monitor wakes a parent once for the spawn and once for each message of its own that its child is handed, in place of once per
-  causal chain, so the answer to a follow-up reaches the parent as the first did. A message from a peer or a human asks nothing.
+- The monitor wakes a parent once for the spawn and once for each message of its own the first time it lands in its child's turn, in
+  place of once per causal chain, so the answer to a follow-up reaches the parent as the first did. Every report answers, one a wait
+  counts too, but one from a turn an interrupt or the owner's stop cut. A message from a peer or a human asks nothing, and nor does one
+  read again. A steer that lands in the turn after its offer counts there, its hops too.
 - What the preamble says of ending follows whether an agent stays, and a child that stays is told to answer by ending its turn, which
   sends its last words to its parent and leaves it there for the next message. Told it stayed for the next message, a Codex child held a
   `wait` for it instead of answering.

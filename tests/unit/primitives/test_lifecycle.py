@@ -1237,6 +1237,90 @@ async def test_a_turn_stopped_on_purpose_leaves_its_parent_s_question_open(kerne
     assert await answers(kernel, bob, "t3") == "wake"
 
 
+async def test_a_report_answers_its_parent_s_question_though_a_wait_counts_it(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+    await start_turn(kernel, "lead", "l1")
+    await read(kernel, lead, "@lead")
+    await send(kernel, lead, "@bob", "and then?")
+    placed = result_of(await kernel.submit(lead, "wait", {"from": ["bob"]}))
+    await end_turn(kernel, "lead")
+    assert await answers(kernel, bob, "t2") == "next-turn"
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
+    await start_turn(kernel, "lead", "l2")
+    await read(kernel, lead, "@lead")
+    await end_turn(kernel, "lead")
+
+    await send(kernel, ada, "@bob", "a word of my own")
+
+    assert await answers(kernel, bob, "t3") == "next-turn"
+
+
+async def test_re_reading_a_parent_s_message_asks_nothing_new(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead, goal="")
+    await send(kernel, lead, "@bob", "the question")
+    assert await answers(kernel, bob, "t1") == "wake"
+    await send(kernel, ada, "@bob", "a word of my own")
+    await start_turn(kernel, "bob", "t2")
+
+    assert gists(await read(kernel, bob, "@bob", after=0)) == ["the question", "a word of my own"]
+    await end_turn(kernel, "bob")
+
+    assert last_report(kernel) == "next-turn"
+
+
+async def test_a_parent_s_message_handed_over_again_after_a_failed_handover_still_asks(kernel, clock):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+    await send(kernel, lead, "@bob", "and then?")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    effect = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[0]
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+    failing = {"id": effect["id"], "attempt": attempt, "error": "the pipe broke"}
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", failing))
+    clock.advance(1)
+
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await start_turn(kernel, "bob", "t2")
+    await report(kernel, "bob", "input.delivered", input=str(handed["input"]), boundary="turn")
+    await end_turn(kernel, "bob")
+
+    assert last_report(kernel) == "wake"
+
+
+async def steered_past_its_turn(kernel: Kernel) -> dict:
+    """A parent's message steered into its child's turn, which then stops on its own before it lands, so it lands in
+    the next. Returns what the parent sent."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", role="steerer", by=lead, ready={"boundaries": ["model_call", "turn"]})
+    await start_turn(kernel, "bob", "t1")
+    sent = await send(kernel, lead, "@bob", "and also this")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    assert handed["boundary"] == "model_call"
+    await settle_effects(kernel, "bob")
+    await end_turn(kernel, "bob")
+    assert last_report(kernel) == "wake"
+    await start_turn(kernel, "bob", "t2")
+    await report(kernel, "bob", "input.delivered", input=str(handed["input"]), boundary="turn")
+    await end_turn(kernel, "bob")
+    return sent
+
+
+async def test_a_parent_s_message_is_answered_by_the_turn_it_lands_in(kernel):
+    await steered_past_its_turn(kernel)
+
+    assert last_report(kernel) == "wake"
+
+
+async def test_a_message_s_hops_count_in_the_turn_it_lands_in(kernel):
+    sent = await steered_past_its_turn(kernel)
+
+    assert of_type(kernel, "message.sent")[-1].data["hops"] == sent["hops"] + 1
+
+
 @pytest.mark.parametrize("limits", [{"max_hops": 3}])
 async def test_max_hops_bounds_a_parent_and_a_child_that_ask_and_answer(kernel, limits):
     lead = await spawn(kernel, "lead", role="lead")

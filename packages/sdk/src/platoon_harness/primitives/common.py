@@ -27,6 +27,7 @@ Injection = Literal["pull", "next-turn", "wake", "steer"]
 Policy = Literal["ask", "deny", "allow"]
 
 WAKING: tuple[Injection, ...] = ("wake", "steer")
+IN_A_RESULT = ("read", "notice")  # How an offer reaches a tool's result, which shows it at once.
 
 DIGEST_ITEMS = 32
 RESULT_LIMIT = (
@@ -173,7 +174,7 @@ def expose(
     asked: bool = False,
 ) -> int:
     """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input.
-    `asked` says a message from its parent is among what was offered."""
+    `asked` says a message from its parent, never offered to it before, is among what was offered."""
     event = txn.emit(
         "context.offered",
         f"context/{agent}",
