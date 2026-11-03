@@ -19,6 +19,9 @@ from .waits import Waits
 WATCH_SPAN = 4096
 _MOOT_WITH_ITS_AGENT = ("approval", "uncertain", "failed", "hops", "budget")
 
+Group = Literal["needs_you", "working", "blocked", "idle", "done", "failed"]
+"""The navigator's groups: what a person must do about an agent, derived in the view so every client says the same."""
+
 
 def _resolve_actions(event: Event) -> list[dict[str, Any]]:
     """Buttons as op references, each with the version it was drawn from."""
@@ -237,29 +240,46 @@ def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]
     return None
 
 
+def _group(agent: Agent, said: why.Why | None, needing: set[str]) -> Group:
+    """Needs you while an attention row other than a mention names it, then done or failed once it has ended, working in
+    a turn, on its way to one or held, blocked while `why` names what it waits on, and idle otherwise."""
+    if agent.name in needing:
+        return "needs_you"
+    if agent.ended:
+        return "failed" if agent.status in ("failed", "lost") else "done"
+    if agent.starting or agent.state in ("running", "held"):
+        return "working"
+    return "blocked" if said is not None else "idle"
+
+
 def _roster(txn: Txn) -> list[dict[str, Any]]:
     uncertain = txn.view(Effects).in_state("uncertain")
     dues = {reader: due for reader, due, _ in txn.view(Deliveries).waking() if due > txn.now}
     deliveries = txn.view(Deliveries)
     budget = txn.view(Budgets)
-    return [
-        {
-            "agent": agent.name,
-            "role": agent.role,
-            "harness": agent.harness,
-            "model": agent.model,
-            "parent": agent.parent and name_of(agent.parent),
-            "state": agent.state,
-            "activity": agent.activity,
-            "stopped": agent.stopped,
-            "held_by": agent.held_by and name_of(agent.held_by),
-            "why": _why(txn, agent, uncertain, dues),
-            "unread": deliveries.unread(agent.name),
-            "levels": agent.levels,
-            "usage": budget.usage_of(f"agent:{agent.name}"),
-        }
-        for agent in txn.view(Agents).listed()
-    ]
+    needing = {row["agent"] for row in txn.view(Attention).rows() if row["kind"] != "mention"}
+    rows = []
+    for agent in txn.view(Agents).listed():
+        said = _why(txn, agent, uncertain, dues)
+        rows.append(
+            {
+                "agent": agent.name,
+                "role": agent.role,
+                "harness": agent.harness,
+                "model": agent.model,
+                "parent": agent.parent and name_of(agent.parent),
+                "state": agent.state,
+                "group": _group(agent, said, needing),
+                "activity": agent.activity,
+                "stopped": agent.stopped,
+                "held_by": agent.held_by and name_of(agent.held_by),
+                "why": said,
+                "unread": deliveries.unread(agent.name),
+                "levels": agent.levels,
+                "usage": budget.usage_of(f"agent:{agent.name}"),
+            }
+        )
+    return rows
 
 
 @op("attention.list", query=True)

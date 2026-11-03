@@ -327,7 +327,7 @@ class Host:
         started saying so, as a harness can be signed in on a plan between runs."""
         if not self._plan_login and len(crowded := await self._live_on_plans()) > 1:
             what = f"{', '.join(crowded)} would run headless on one plan login: {PLAN_LOGIN_FIX}"
-            raise ConfigError([Problem("roles", what)])
+            raise ConfigError([Problem("plan_login", what)])
 
     async def _on_plan(self, role: str) -> bool:
         """Whether a role's agents run on a plan login: its harness says so now, and the role names no auth profile. A

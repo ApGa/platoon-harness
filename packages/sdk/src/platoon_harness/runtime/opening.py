@@ -59,7 +59,7 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     if sum(len(team.starts(role)) for role in roles) < 2 and not any(map(team.spawners, roles)):
         return []
     names = ", ".join(roles)
-    return [Problem("roles", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
+    return [Problem("plan_login", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
 
 
 def check(team: Team, *, plan_login: bool = False) -> tuple[Problem, ...]:

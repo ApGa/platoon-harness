@@ -164,6 +164,42 @@ async def test_why_is_lost_with_the_reason(kernel):
     assert why(kernel, "bob") == {"kind": "lost", "reason": "the harness crashed"}
 
 
+def group(kernel, name: str) -> str:
+    return roster(kernel, name)["group"]
+
+
+async def test_a_roster_row_is_grouped_by_what_a_person_must_do_about_it(kernel, ada):
+    """Needs you while an attention row other than a mention names it, done or failed once ended, working in a turn or
+    on its way to one, blocked while `why` names what it waits on, and idle otherwise."""
+    await spawn(kernel, "idle", goal="")
+    await spawn(kernel, "busy")
+    await start_turn(kernel, "busy")
+    await spawn(kernel, "asking")
+    await kernel.submit(kernel.runtime, "approval.request", {"id": "a1", "agent": "asking", "gist": "may I"})
+    holding = await spawn(kernel, "holding", goal="")
+    await channel(kernel, "work", kind="queue")
+    await kernel.submit(kernel.runtime, "task.add", {"queue": "work", "gist": "x"})
+    result_of(await kernel.submit(holding, "task.claim", {"queue": "work"}))
+    talking = await spawn(kernel, "talking", goal="")
+    await send(kernel, talking, "@ada", "got a minute?")
+    done = await spawn(kernel, "done")
+    result_of(await kernel.submit(done, "agent.finish", {"gist": "all of it"}))
+    await spawn(kernel, "lost")
+    await report(kernel, "lost", "exited", reason="the harness crashed")
+
+    groups = {name: group(kernel, name) for name in ("idle", "busy", "asking", "holding", "talking", "done", "lost")}
+
+    assert groups == {
+        "idle": "idle",
+        "busy": "working",
+        "asking": "needs_you",
+        "holding": "blocked",
+        "talking": "idle",
+        "done": "done",
+        "lost": "failed",
+    }
+
+
 async def test_attention_holds_a_mention_until_it_is_answered(kernel, ada):
     alice = await spawn(kernel, "alice")
     sent = await send(kernel, alice, "@ada", "got a minute?")

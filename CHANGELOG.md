@@ -101,9 +101,12 @@
 - `tests/integration/clients.py`: the live tail, stop below, an interrupt under a `tokens` limit and a child's anchor, run on the
   real Claude Code, Codex and pi binaries against FakeModel. `tests/live/test_interrupts.py`: an interrupt during a call under a
   `tokens` limit on real models, after which the session goes on.
+- `group` on each roster row: what a person must do about the agent, `needs_you`, `working`, `blocked`, `idle`, `done` or
+  `failed`, derived in the view so every client says the same.
 
 ### Changed
 
+- The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
   agent's message follows the reader's setting as before. Nothing withdraws a sent message.
 - An interrupt of an agent on its way to a turn, by a wake that is due or a wait that holds, is accepted and cancels that wake or
