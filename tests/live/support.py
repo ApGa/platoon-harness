@@ -219,3 +219,24 @@ async def spent(session: Session) -> dict[str, Any]:
     turns = Counter(event.agent for event in events if event.type == "turn.started")
     unknown = [event.gist for event in events if event.type == "native.recorded"]
     return {"calls": dict(calls), "total": calls.total(), "turns": dict(turns), "unknown": unknown}
+
+
+_NAMED = ('"agents"', '"from"', '"tasks"', '"board"', '"channels"', '"queue"', '"on"')
+
+
+def empty_waits(events: list[Any]) -> dict[str, tuple[int, int]]:
+    """Per agent, the turns it took, and how many it opened by calling `wait` with nothing named to wait on, read from
+    the first tool its harness reported in each turn."""
+    turns: Counter[str] = Counter()
+    first: dict[tuple[str, str], str] = {}
+    for event in events:
+        if event.type == "turn.started":
+            turns[event.agent] += 1
+        elif event.type == "item.recorded" and event.data["kind"] == "tool" and event.data["phase"] == "started":
+            first.setdefault((event.agent, event.turn), event.gist)
+    empty = Counter(
+        agent
+        for (agent, _), gist in first.items()
+        if gist.partition(" ")[0].endswith("__wait") and not any(name in gist for name in _NAMED)
+    )
+    return {agent: (count, empty[agent]) for agent, count in turns.items()}

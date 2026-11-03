@@ -1,7 +1,7 @@
 """Agents that stay, on real models and native logins, through the public `Session`. Set `PLATOON_HARNESS_LIVE=1` to run
 these, and say what ran.
 
-Budget: at most 67 model calls in all, each test stating its own, `claude-haiku-5-5` or `gpt-6-luna` at low effort.
+Budget: at most 57 model calls in all, each test stating its own, `claude-haiku-5-5` or `gpt-6-luna` at low effort.
 Every session has a `Budget`, so that a runaway stops itself.
 """
 
@@ -15,7 +15,7 @@ from platoon_harness import Role, Session, Team
 from platoon_harness.team import Budget
 
 from ..unit.runtime.support import journal
-from .support import CLAUDE, CODEX, EFFORT, rereads, seeded, seen, spent, tools_called
+from .support import CLAUDE, CODEX, EFFORT, empty_waits, rereads, seeded, seen, spent, tools_called
 
 pytestmark = [
     pytest.mark.live,
@@ -26,9 +26,9 @@ pytestmark = [
 LIMIT = Budget(turns=24, wall="4m")
 SETTLE = "180s"
 STEPS = (
-    "Start one agent in the role `helper`, with `stays` true and the goal: reply alpha. Each time it answers, take the "
-    "next step and nothing else, then end your turn. First send it the task: reply beta. Then ask it what it meant by "
-    "beta. Then {end}"
+    "Start one agent in the role `helper`, with `stays` true and the goal: reply alpha, then end your turn. Each time "
+    "it answers, take the next step and nothing else, then end your turn: send it the task: reply beta; ask what it "
+    "meant by beta; {end}"
 )
 
 
@@ -55,6 +55,7 @@ async def flow(session: Session, end: str) -> tuple[list, dict]:
     used = await spent(session)
     print(ending.reason, used, sorted((await tools_called(session)).items()))
     print("woken turns, and reads of what a wake had handed:", rereads(events))
+    print("turns, and those opened by a wait that named nothing:", empty_waits(events))
     print("statuses:", {row["agent"]: (row["status"], row["reason"]) for row in ending.agents})
     return events, used
 
@@ -89,7 +90,7 @@ def checked(events: list, helper_turns: int) -> str:
 
 
 async def test_a_claude_lead_asks_a_helper_that_stays_twice_more_and_retires_it(tmp_path):
-    """Budget: at most 30 model calls, counted from the journal. Three tasks for one helper process, then a retire."""
+    """Budget: at most 20 model calls, counted from the journal. Three tasks for one helper process, then a retire."""
     work = seeded(tmp_path / "work")
 
     async with Session.start(team_of(claude()), root=tmp_path / "root", cwd=work, plan_login=True) as session:
@@ -98,7 +99,7 @@ async def test_a_claude_lead_asks_a_helper_that_stays_twice_more_and_retires_it(
     helper = checked(events, helper_turns=3)
     statuses = {event.agent: event.data["status"] for event in events if event.type == "agent.ended"}
     assert statuses == {helper: "retired", "lead": "finished"}
-    assert used["total"] <= 30
+    assert used["total"] <= 20
 
 
 @pytest.mark.skipif(shutil.which("codex") is None, reason="codex is not installed")

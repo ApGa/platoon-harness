@@ -31,9 +31,11 @@ from .support import (
     CODEX,
     EFFORT,
     alive,
+    empty_waits,
     end_what_is_left,
     gone,
     leaks,
+    rereads,
     running_in,
     seeded,
     seen,
@@ -140,6 +142,7 @@ async def test_a_killed_runtime_during_a_shell_tool_is_resumed_and_told(harness,
             print(f"{harness}:", used, sorted(tools.items()))
             print(f"{harness}: words", words_of(events))
             print(f"{harness}: log", log_of(work))
+            print(f"{harness}: empty waits", empty_waits(events), "rereads", rereads(events))
     finally:
         await guest.leave()
         print(f"{harness}: left behind", end_what_is_left(work))

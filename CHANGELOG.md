@@ -61,11 +61,15 @@
   `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by
   `agents.enabled = false`, both generations. `team_check` says what a role that allows them gives up, `check_driver` has the row
   `native_children_off_by_default`, and `Request.tools` names the tools a model is shown, exactly.
+- `tests/live/test_launch.py`: a job an agent would hand to a sub-agent of its own starts none, and a team's template reaches
+  the model, on Claude Code and Codex. Live tests count the agents that open a turn with a `wait` naming nothing.
 - `tests/live/test_stays.py`: the owner's flow on Claude Code and on Codex, and a Codex child's half alone. `tests/live/test_codex.py`
   runs a Codex agent's own sub-agent.
 
 ### Changed
 
+- The owner's flow in `tests/live/test_stays.py` words its steps in an order no reading can mistake: on the old words a Codex
+  lead sent the follow-up at once, in run 36, and it landed in the helper's first turn.
 - The monitor wakes a parent once for the spawn and once for each message of its own the first time it lands in its child's turn, in
   place of once per causal chain, so the answer to a follow-up reaches the parent as the first did. Every report answers, one a wait
   counts too, but one from a turn an interrupt or the owner's stop cut. A message from a peer or a human asks nothing, and nor does one

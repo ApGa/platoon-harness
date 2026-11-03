@@ -20,6 +20,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **Agents that stay,** sections 13 to 15, are runs 22 to 32, on the preamble with `stays` and the role's words last: 135 model calls
   from 14 journals, of a limit of 160. Run 33 is one more, on the preamble that teaches `wait` for something named: 6 calls from one
   journal, of a limit of 30. Their transcripts and journals are kept outside the repository.
+- **What an agent is launched with,** section 16, is runs 34 to 39, on a harness's own agents off by default and the preamble as a
+  template: 88 model calls from 10 journals, of a limit of 100, with their transcripts and journals kept outside the repository too.
 
 ## Results
 
@@ -230,7 +232,7 @@ the next message", after both wordings that told a child it stays drew a held `w
 answered and stayed, in run 28, which is `test_codex.py`'s test. The Codex child of `test_stays.py` did not run on it: it had failed in
 run 24 on the wording before. Every preamble then still said to call `wait` "with nothing to do until something changes", which beside
 "answer by ending your turn" tells a child that has answered to park, so that sentence now teaches `wait` for something named, and on it
-that child passed in run 33. The owner's flow on Codex has not been rerun on either. A child that waits on its parent keeps its answer
+that child passed in run 33. The owner's flow on Codex passed on it in run 38, section 16. A child that waits on its parent keeps its answer
 from it either way: a turn that parks posts no report, and one that holds a `wait` has not ended.
 
 In every Codex agent that began a turn on a task this stage, runs 23, 24 and 26, the first call was our `wait` with a `hold` or a
@@ -260,6 +262,22 @@ starting the child, saying it could not run a shell, and so ended `finished` wit
 | `test_teams.py`, the refused finish | 31 | 8 | Passed: refused, understood, finished on its worker's report |
 | `test_teams.py`, a Claude Code lead and a Codex worker | 32 | 23 | Passed: settled, tests passing |
 
+### 16. What an agent is launched with
+
+| Run | Test | Calls | What happened |
+|---|---|---|---|
+| 34 | `test_launch.py`, a job an agent would hand to a sub-agent of its own, Claude Code and Codex | 2, 2 | Passed. Asked to use one if it had one, neither started a native child, with none offered: each searched with one shell command and answered `ranges.py` |
+| 34 | The same, a team's template with one sentence more, "Begin every reply with the word Kestrel." | 1, 1 | Passed. The journal held the sentence as told, and the replies were "Kestrel: Two plus two is four." and "Kestrel. Two plus two is four." |
+| 35 | `test_stays.py`, the owner's flow, Claude Code | 15 | Passed, on the old wording of the steps: one helper process, the lead woken by each answer and by nothing else |
+| 36 | The same, Codex | 20 | Settled, with no deadlock, and failed its own check. The lead sent the follow-up at once, as the steps said "First send it the task" right after the spawn, so it landed in the helper's first turn, which answered alpha alone. The lead's held `wait` took that answer, its wake was restored to the report, and the lead's read with `sender` dropped it, where run 22 kept a stale notice |
+| 37 | `test_crashes.py`, a killed runtime, after the harness went, Claude Code and Codex | 5, 4 | Passed, on the check that holds the log to no more runs than the journal saw begin. Each model looked, found nothing, and ran the command once |
+| 38 | `test_stays.py`, Codex, the steps in an order no reading can mistake | 24 | Passed: four helper turns, alpha, beta, what it meant and the finish, the lead taking each answer in its one turn by a held `wait` with `from`. A first try was refused before any call, as the new wording passed 280 characters |
+| 39 | The same, Claude Code | 14 | Passed |
+
+No agent of any of these runs opened a turn with a `wait` that named nothing: 0 of 14 agents, on the preamble that teaches `wait` for
+something named. A woken turn that opened with a `message_read` showing nothing new came 0 times in 17 woken turns on Claude Code, and
+4 times in 14 on Codex, each a helper that stays, 2 of 3 in runs 36 and 38.
+
 ## What a real model did that scripted harnesses could not show
 
 - It did not finish. A goal done, it said so and stopped, and a turn that only ends leaves an idle agent. Everything that counts on an
@@ -279,6 +297,6 @@ starting the child, saying it could not run a shell, and so ended `finished` wit
 ## Unknowns
 
 - Stronger models, long tasks, long parks and a large team: nothing here passed three agents or a minute of work.
-- pi on any real model, a Codex child past one trial, and the owner's flow on Codex on the final wording.
+- pi on any real model, and a Codex child past one trial.
 - A tool of Claude Code's that outlives its harness leads a group of its own, so only a cgroup would hold it. `crash_window` says so.
 - A harness killed outright on a real model, as a power cut would: on real runs the harness outlived the runtime, or a `SIGTERM` reached it.

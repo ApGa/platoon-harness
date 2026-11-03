@@ -77,7 +77,8 @@ choose, several notify a parent for the first task only, and almost none bounds 
   ended. Twice on Codex a child told it stays for the next message did that, so the words for a child that stays say what a root's
   have said since run 17, and nothing of waiting, and every agent is taught `wait` as how to wait for something named, never as what
   to do with nothing to do. On those words the Codex child a human spawned answered twice by ending its turn, called no `wait`, and
-  finished when told, once, in run 33. A Codex lead and helper have not run on them.
+  finished when told, once, in run 33. A Codex lead and helper settled on them in run 36, and passed in run 38 once the steps
+  could not be read as sending the follow-up at once.
 - Deferred, at M2: an idle child's process is released, and resumed natively at its next message, by the path a harness that dies
   while idle will take.
 - Deferred, at M3: Platoon gives one trajectory one reward, so a child's several tasks share one reward unless each becomes its own

@@ -134,7 +134,7 @@ by a driver landing; only the row below changes.
 - Its own agents, off unless a role allows them: `Agent` and `Workflow` start them, and `ListAgents` and `SendMessage` reach them,
   and other Claude sessions on the machine too. The four are disallowed, and the first request offers none, `SendMessage` among
   the deferred tools included, and lists no agent types. Agent teams, on in a user's settings or the environment, added no tool to
-  the first request in `-p` [L].
+  the first request in `-p` [L]. Asked to hand a search to a sub-agent of its own, a live model started none, and did the search [R].
 - A launch with `--permission-prompt-tool` adds `AskUserQuestion` to what `-p` shows, 13 tools to 12. Allowed, the model reads `The user did not answer the questions.`, so a person would have approved a question and never seen it. It is disallowed, and a request shows the same 12 [L].
 - `permissions.defaultMode` of `acceptEdits` or `bypassPermissions` in a user's settings ran a `Bash` with no approval asked, so a role's `deny` did not hold. `--permission-mode default` took both back to asking, 1 trial each [L].
 - Inline `--mcp-config` JSON expands `${PLATOON_HARNESS_TOKEN}` from the harness's environment, so the token is in no file and not in argv [L] [R].
@@ -144,7 +144,8 @@ by a driver landing; only the row below changes.
 - A child that stays: a lead spawned one with `stays`, gave it a follow-up task and a question, each once the last was answered, and
   retired it, on one helper process, in 13 calls, twice, runs 22 and 25. Each answer reached the lead at the end of the helper's turn,
   which it took as a wake or through a held `wait` with `from`. No woken turn, of 20 this stage, opened with a `message_read` that
-  showed nothing new [R].
+  showed nothing new [R]. It passed again in runs 35 and 39, in 15 and 14 calls, the second on steps worded in an order no reading
+  can mistake, and none of 17 woken turns in runs 34 to 39 opened with such a read [R].
 
 **codex, CLI 0.164.0.** [Report](research/adapter-codex.md), [spike](research/spikes/tools-and-parking.md),
 [fixture](research/fixtures/codex-appserver-sample.jsonl).
@@ -180,12 +181,16 @@ by a driver landing; only the row below changes.
   model outside the catalog gets and the V2 `collaboration` tools a catalog model such as `gpt-6-luna` gets, with the
   `<multi_agent_role>` text that says it is `/root`. `features.multi_agent = false` takes away V1 alone, and
   `features.multi_agent_v2 = false` nothing. A catalog model's tools come as an `additional_tools` item of the input, not as
-  `tools` [L].
+  `tools` [L]. Asked to hand a search to a sub-agent of its own, `gpt-6-luna` started none, and did the search [R].
 - One MCP tool call is cut at 300 s, `timed out awaiting tools/call after 300s`, and the model is told it failed (1 trial) [L]. So `tool_timeout_s` is 300, which `wait` refuses a `hold` at or above, and `declared_but_unproven` names it, as no check proves it.
 - Several app-servers started at once on a `CODEX_HOME` never used before failed to open their state database, 3 of 4 in one probe, and
   once one had run all 4 came up. The failure is loud, and only a home of its own meets it, such as a test's: start one first [L].
 - A login's kind is read from `codex login status`, on stderr. `account/*` frames name the account, so the driver drops them unread.
-- A model on a native login treats the delivery as a pointer: it called `message_read` before answering, and called `agent_finish` when a goal seemed done, even at `Reply with the single word beta` [R]. In run 21 it did so with a role that said never to, as the preamble, which came after the role's words, tells an agent somebody spawned to make `agent.finish` its last call, so the first test of `tests/live/test_codex.py` failed, at 4 calls. In run 27, with the role's words after the preamble, it did so again, at 4 calls, and spawned with `stays` it answered and stayed, in run 28 at 7 [R]. The child of `tests/live/test_stays.py`, spawned with `stays` by a human, answered twice by ending its turn, called no `wait`, and finished when told, on the preamble that teaches `wait` for something named, in run 33 at 6 [R]. A woken turn opened with a `message_read` that showed nothing new in 2 of 14 woken turns this stage [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
+- A model on a native login treats the delivery as a pointer: it called `message_read` before answering, and called `agent_finish` when a goal seemed done, even at `Reply with the single word beta` [R]. In run 21 it did so with a role that said never to, as the preamble, which came after the role's words, tells an agent somebody spawned to make `agent.finish` its last call, so the first test of `tests/live/test_codex.py` failed, at 4 calls. In run 27, with the role's words after the preamble, it did so again, at 4 calls, and spawned with `stays` it answered and stayed, in run 28 at 7 [R]. The child of `tests/live/test_stays.py`, spawned with `stays` by a human, answered twice by ending its turn, called no `wait`, and finished when told, on the preamble that teaches `wait` for something named, in run 33 at 6 [R]. A woken turn opened with a `message_read` that showed nothing new in 2 of 14 woken turns this stage [R]. The owner's flow, a
+  Codex lead and helper, settled in run 36 with no deadlock, and failed its check as the lead sent the follow-up at once, which
+  landed in the helper's first turn; with the steps in an order no reading can mistake it passed in run 38, in 24 calls, the lead
+  taking each answer in its one turn by a held `wait` with `from`. In runs 34 to 39 no agent opened a turn with a `wait` that named
+  nothing, and a helper's woken turn opened with a `message_read` that showed nothing new in 4 of 6 [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
 - The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
 
 **pi 1.4.0, and the driver on 1.5.0.** [Report](research/adapter-others.md), [fixture](research/fixtures/pi-sample.jsonl).
@@ -473,9 +478,9 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Fallback, cold resume, token exclusion, slow init and shell socket are 1 trial each.
 - Several agents in one `codex app-server`, with distinct tokens.
 - Codex child agents on a real model past one trial, and v1 on a real model: v2 ran once through the driver, in run 26.
-- What a Codex child that stays does under a Codex lead on the words it is told now: on them a child a human spawned answered twice
-  and finished when told, once, in run 33. Told it stayed for the next message, a child held a `wait` for its parent instead of answering, in runs 23 and 24, and
-  three Codex agents opened a turn with a `wait` that named nothing to wait on.
+- A Codex child that stays under a Codex lead past one trial: on the words it is told now the owner's flow passed once, in run 38,
+  after a lead in run 36 sent its follow-up before the first answer. Told it stayed for the next message, a child held a `wait` for
+  its parent instead of answering, in runs 23 and 24.
 - Teams past three agents, and work past a minute: everything in [the spike](research/spikes/real-harness.md) was small and quick.
 - Auto compaction, a turn that fails and a child's approval on a real Codex model, and `fileChange` items anywhere: FakeModel offered no patch tool, so a stand-in is all that has shown one.
 - Whether a steer that ended a model call on FakeModel does so on a real model.
