@@ -133,7 +133,8 @@ class ScriptedDriver:
     delivery. A turn with no steps left ends, and turns run out into empty ones.
 
     Its capabilities are data, and it holds to them: one that is not `persistent` exits after its first turn, one with
-    no `resume` refuses to resume, and a boundary it does not declare is refused.
+    no `resume` refuses to resume, and a boundary it does not declare is refused. A turn's name counts within one
+    instance and carries that instance's own mark, so that no two of an agent's turns share one across a resume.
     """
 
     def __init__(
@@ -157,6 +158,7 @@ class ScriptedDriver:
         self._approvals: dict[str, asyncio.Future[Verdict]] = {}
         self._tools: list[dict[str, Any]] = []
         self._turn_count = 0
+        self._incarnation = uuid.uuid4().hex[:8]
         self._steps: asyncio.Task[str] | None = None
         self._interrupted = False
         self._work: asyncio.Task[None] | None = None
@@ -224,7 +226,7 @@ class ScriptedDriver:
             self._messages.append({"role": "user", "content": prompt})
         self._turn_count += 1
         self._heard_this_turn = False
-        await self._report(TurnStarted(turn=f"t{self._turn_count}"))
+        await self._report(TurnStarted(turn=f"t{self._turn_count}-{self._incarnation}"))
         self._interrupted = False
         self._steps = asyncio.create_task(self._walk(next(self._turns, ())))
         try:

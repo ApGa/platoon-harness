@@ -76,6 +76,7 @@
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
   agent's message follows the reader's setting as before. Nothing withdraws a sent message.
 - An interrupt of an agent on its way to a turn, by a wake that is due, is accepted and cancels that wake, where it was refused.
+- `ScriptedDriver` names its turns after the instance too, so no resume repeats a turn's name.
 - The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
   them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's
   `instructions`, is never dropped. The default renders byte for byte as before. ADR 0025 is amended.
@@ -122,6 +123,8 @@
 
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
   was refused between a wake and its turn: bug-coordination-7 and -8.
+- A resumed `ScriptedDriver` named its first turn as the first instance had, so a call identical to one of that turn, with no id of
+  its own, was answered from the journal as a repeat and nothing ran.
 - A test that failed part way could leave a detached runtime running. A fixture every test has ends each one its `tmp_path` holds,
   by its pid and its group.
 - The scan for local paths and account details skipped `docs/research`, its fixtures, the top-level pages and the package

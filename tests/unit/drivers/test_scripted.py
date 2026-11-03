@@ -127,10 +127,11 @@ async def test_turns_run_one_per_delivery_and_then_run_out(tmp_path):
     await heard.until(Item, lambda item: item.gist == "two")
     await driver.deliver(delivery("d2"))
     await heard.until(InputDelivered, lambda delivered: delivered.input == "d2")
-    await heard.until(TurnStarted, lambda turn: turn.turn == "t3")
+    await heard.until(TurnStarted, lambda turn: turn.turn.startswith("t3-"))
     await driver.stop(1)
 
-    assert [turn.turn for turn in heard.of(TurnStarted)] == ["t1", "t2", "t3"]
+    assert [turn.turn.partition("-")[0] for turn in heard.of(TurnStarted)] == ["t1", "t2", "t3"]
+    assert len({turn.turn.partition("-")[2] for turn in heard.of(TurnStarted)}) == 1
 
 
 async def test_a_delivery_at_a_turn_boundary_waits_for_the_turn_to_end(tmp_path):
