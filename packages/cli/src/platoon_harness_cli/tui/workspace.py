@@ -106,7 +106,7 @@ class Workspace(Screen[None]):
         self.attached: tuple[str, bytes] | None = None
         self.marks: dict[str, int] = {}
         self.unread: dict[str, int] = {}
-        self.chosen: str | None = None
+        self.place: str | None = None
         self.human = "human:you"
         self._given = session
         self._refused: dict[tuple[str, str], tuple[str, str]] = {}
@@ -446,8 +446,8 @@ class Workspace(Screen[None]):
 
     def _dock(self, live: Live) -> list[Row]:
         places = self._places(live)
-        if self.chosen not in [row["id"] for row in places]:
-            self.chosen = places[0]["id"] if places else None
+        if self.place not in [row["id"] for row in places]:
+            self.place = places[0]["id"] if places else None
         rows = []
         first, second = (
             next(key.shown for key in keys("workspace") if key.action == act)
@@ -456,7 +456,7 @@ class Workspace(Screen[None]):
         for place in places:
             actions = place["actions"]
             hints: list[Any] = []
-            if place["id"] == self.chosen:
+            if place["id"] == self.place:
                 hints = [
                     (f"  {hint} {action['label']}", "bold")
                     for hint, action in zip((first, second), actions, strict=False)
@@ -554,7 +554,7 @@ class Workspace(Screen[None]):
         if chosen.rows.id == "navigator":
             await self.show(self._focus_of(chosen.key))
         elif isinstance(chosen.rows, Dock):
-            self.chosen = chosen.key
+            self.place = chosen.key
             await self._go_to(chosen.key)
 
     async def _go_to(self, place: str) -> None:
@@ -669,7 +669,7 @@ class Workspace(Screen[None]):
         if (place := dock.step(1)) is None:
             note(self, "Nothing needs you now.")
             return
-        self.chosen = place
+        self.place = place
         await self._go_to(place)
 
     @work(group="act")
@@ -683,7 +683,7 @@ class Workspace(Screen[None]):
     async def _act(self, index: int) -> None:
         """Take an action of the place you are at, as its row offers it, with the version it was drawn from."""
         live = self.live
-        place = live.attention.get(self.chosen or "") if live else None
+        place = live.attention.get(self.place or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
             note(self, "Nothing here takes that action.", severity="warning")
             return

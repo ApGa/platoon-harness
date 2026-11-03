@@ -12,7 +12,7 @@ from textual.app import App, ComposeResult
 
 from platoon_harness import Session, Team
 from platoon_harness.kernel import Event
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import WINDOW, Focus, Transcript
 
 from ..unit.runtime.support import in_state, of_type, until
@@ -54,7 +54,7 @@ async def test_the_event_loop_keeps_up_at_100_agents_with_one_live_stream(tmp_pa
     )
     guest = await Session.start(team, name="s", root=tmp_path, detach=True)
     await in_state(guest, "streamer", "idle")
-    app = Harness("s")
+    app = TerminalUI("s")
     async with app.run_test(size=(120, 40)) as pilot:
         await drawn(pilot, lambda text: "Idle (100)" in text)
         screen = workspace(app)

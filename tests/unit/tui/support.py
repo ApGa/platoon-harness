@@ -6,30 +6,30 @@ from collections.abc import Callable
 from textual.pilot import Pilot
 
 from platoon_harness.kernel import first
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.workspace import Workspace
 
 SECONDS = 20.0
 
 
-def screen_text(app: Harness) -> str:
+def screen_text(app: TerminalUI) -> str:
     """What the screen shows, a line per row, as a person would read it."""
     update = app.screen._compositor.render_full_update()
     return "\n".join("".join(strip.text for strip in line) for line in update.strips)
 
 
-def workspace(app: Harness) -> Workspace:
+def workspace(app: TerminalUI) -> Workspace:
     screen = app.screen
     assert isinstance(screen, Workspace), type(screen)
     return screen
 
 
-def _frames(app: Harness) -> int | None:
+def _frames(app: TerminalUI) -> int | None:
     live = app.screen.live if isinstance(app.screen, Workspace) else None
     return None if live is None else live.frames
 
 
-async def _change(app: Harness, seen: int | None) -> None:
+async def _change(app: TerminalUI, seen: int | None) -> None:
     """Return once something that could change the screen has: a frame past `seen` drawn, a worker done, or a screen
     pushed. A worker is watched and never awaited, since a task that awaits one and is cancelled cancels it too."""
     live = app.screen.live if isinstance(app.screen, Workspace) else None

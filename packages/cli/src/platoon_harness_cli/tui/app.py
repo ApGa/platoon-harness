@@ -46,7 +46,7 @@ ModalScreen { align: center middle; }
 """
 
 
-class Harness(App[str | None], inherit_bindings=False):
+class TerminalUI(App[str | None], inherit_bindings=False):
     """`platoon-harness` on a terminal. It returns the name of the session it detached from, if any."""
 
     CSS = CSS

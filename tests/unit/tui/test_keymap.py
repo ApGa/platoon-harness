@@ -4,7 +4,7 @@ from pathlib import Path
 
 from textual.binding import Binding
 
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.dialogs import Help
 from platoon_harness_cli.tui.keymap import KEYMAP, keys, regenerate
 from platoon_harness_cli.tui.rows import Rows
@@ -13,7 +13,7 @@ from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
 
 GUIDE = Path(__file__).parents[3] / "docs" / "tui.md"
-PLACES = {"everywhere": Harness, "sessions": Sessions, "workspace": Workspace, "transcript": Transcript}
+PLACES = {"everywhere": TerminalUI, "sessions": Sessions, "workspace": Workspace, "transcript": Transcript}
 
 
 def test_every_binding_comes_from_the_table_and_runs_an_action_of_its_place():
@@ -36,7 +36,7 @@ async def test_a_key_not_built_yet_says_why_and_does_nothing_else(tmp_path, monk
 
 async def test_the_help_shows_every_key_of_the_table(tmp_path, monkeypatch):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
-    app = Harness()
+    app = TerminalUI()
     async with app.run_test(size=(120, 60)) as pilot:
         await pilot.press("f1")
         await pilot.pause()

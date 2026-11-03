@@ -9,7 +9,7 @@ from platoon_harness import Session, Team
 from platoon_harness.kernel import Delta, Event
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import Transcript
 
 from ..unit.runtime.support import in_state, of_type, until
@@ -105,7 +105,7 @@ async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, r
     is drawn once, as a line of the transcript. Its caller points `PLATOON_HARNESS_HOME` at `root`."""
     async with Session.start(team, name="s", root=root, cwd=root) as session:
         await in_state(session, "bob", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=(120, 30)) as pilot:
             await drawn(pilot, lambda text: "@bob" in text, within=TIMEOUT)
             await pilot.press(*"go", "enter")

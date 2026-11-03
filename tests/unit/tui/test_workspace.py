@@ -15,7 +15,7 @@ from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
@@ -44,11 +44,11 @@ def team(*turns, **roles) -> Team:
 
 
 @contextlib.asynccontextmanager
-async def attached(team: Team, root: Path, *, size=(120, 32)) -> AsyncIterator[tuple[Session, Harness, object]]:
+async def attached(team: Team, root: Path, *, size=(120, 32)) -> AsyncIterator[tuple[Session, TerminalUI, object]]:
     """A session the test owns, with `lead` up, and the TUI attached to it."""
     async with Session.start(team, name="s", root=root, cwd=root) as owner:
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=size) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             yield owner, app, pilot
@@ -174,7 +174,7 @@ async def test_a_history_far_larger_than_the_screen_is_read_back_a_page_at_a_tim
     async with Session.start(with_notes(team()), name="s", root=root, cwd=root) as owner:
         await post(owner, 1500)
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             transcript = await show_notes(pilot)
@@ -196,7 +196,7 @@ async def test_scroll_is_kept_while_reading_and_what_comes_is_counted_until_the_
     async with Session.start(with_notes(team()), name="s", root=root, cwd=root) as owner:
         await post(owner, 300)
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             transcript = await show_notes(pilot)
@@ -224,7 +224,7 @@ async def test_a_resize_never_changes_scroll_position_focus_or_the_composer_s_ta
     async with Session.start(with_notes(team()), name="s", root=root, cwd=root) as owner:
         await post(owner, 200)
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=SIZES[0]) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             transcript = await show_notes(pilot)
@@ -345,7 +345,7 @@ async def test_a_transcript_holds_a_window_of_lines_read_from_the_journal_either
     async with Session.start(with_notes(team()), name="s", root=root, cwd=root) as owner:
         await post(owner, 1500)
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             transcript = await show_notes(pilot)
@@ -414,7 +414,7 @@ async def test_a_channel_s_unread_count_and_a_mention_come_from_the_person_s_mar
     async with Session.start(with_notes(mentioning), name="s", root=root, cwd=root) as owner:
         await post(owner, 3)
         await in_state(owner, "lead", "idle")
-        app = Harness("s")
+        app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
             await drawn(pilot, lambda text: "#notes 3" in text)
             await pilot.press(*"go", "enter")

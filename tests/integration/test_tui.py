@@ -22,7 +22,7 @@ from platoon_harness.config import Manifest
 from platoon_harness.kernel import is_held
 from platoon_harness.runtime.paths import read_running
 from platoon_harness_cli.sessions import ask_to_stop
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 
@@ -51,7 +51,7 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
         await in_state(owner, "lead", "idle")
     head = (tmp_path / "sessions" / "s" / "journal.sqlite").stat().st_size
 
-    app = Harness("s")
+    app = TerminalUI("s")
     async with app.run_test(size=(120, 30)) as pilot:
         text = await drawn(pilot, lambda text: "before it stopped" in text and "history" in text)
         assert "Alt+R resumes it, which can spend money" in text
@@ -67,7 +67,7 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
 async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_it_is_and_nothing_twice(tmp_path):
     guest = await Session.start(saying(), name="s", root=tmp_path, detach=True)
     await in_state(guest, "lead", "idle")
-    app = Harness("s")
+    app = TerminalUI("s")
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         await pilot.press(*"first", "enter")
@@ -97,7 +97,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
 async def test_ctrl_d_detaches_and_the_runtime_runs_on(tmp_path):
     guest = await Session.start(saying(), name="s", root=tmp_path, detach=True)
     await in_state(guest, "lead", "idle")
-    app = Harness("s")
+    app = TerminalUI("s")
     async with app.run_test(size=(100, 30)) as pilot:
         await drawn(pilot, lambda text: "@lead" in text)
         await pilot.press(*"x", "backspace", "ctrl+d")
@@ -183,7 +183,7 @@ def test_a_headless_run_never_imports_textual(tmp_path):
     assert done.stdout.strip().splitlines()[-1] == "not imported 0", done.stderr
 
 
-def sessions_of(app: Harness) -> Sessions:
+def sessions_of(app: TerminalUI) -> Sessions:
     assert isinstance(app.screen, Sessions), type(app.screen)
     return app.screen
 
@@ -191,7 +191,7 @@ def sessions_of(app: Harness) -> Sessions:
 async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_detached_runtime(tmp_path):
     team = tmp_path / "crew.toml"
     team.write_text(f'[roles.lead]\nharness = "{inside("saying")}"\n')
-    app = Harness()
+    app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "No sessions yet" in text)
 
@@ -210,7 +210,7 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(tmp_path):
     team = tmp_path / "crew.toml"
     team.write_text(f'[roles.lead]\nharness = "{inside("planned")}"\ncount = 2\n')
-    app = Harness()
+    app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "No sessions yet" in text)
         await pilot.press("n")
@@ -232,7 +232,7 @@ async def test_stopping_a_session_takes_one_confirmation_and_resuming_says_it_ca
     await in_state(guest, "lead", "idle")
     await guest.leave()
     folder = tmp_path / "sessions" / "s"
-    app = Harness()
+    app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "live" in text)
 

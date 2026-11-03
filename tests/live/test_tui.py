@@ -15,7 +15,7 @@ import pytest
 
 from platoon_harness import Session
 from platoon_harness_cli.sessions import ask_to_stop
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import Transcript
 
 from ..unit.runtime.support import journal
@@ -65,10 +65,10 @@ JOB = (
 )
 
 
-def chosen(app: Harness) -> dict:
+def chosen(app: TerminalUI) -> dict:
     screen = workspace(app)
     assert screen.live is not None
-    return screen.live.attention.get(screen.chosen or "", {})
+    return screen.live.attention.get(screen.place or "", {})
 
 
 async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, monkeypatch):
@@ -81,7 +81,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
     (work / "crew.toml").write_text(TEAM)
     monkeypatch.chdir(work)
 
-    app = Harness()
+    app = TerminalUI()
     async with app.run_test(size=(140, 40)) as pilot:
         await drawn(pilot, lambda text: "No sessions yet" in text)
         await pilot.press("n")
@@ -120,7 +120,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
         await pilot.press("ctrl+d")
     assert app.return_value == name
 
-    again = Harness(name)
+    again = TerminalUI(name)
     async with again.run_test(size=(140, 40)) as pilot:
         header = await drawn(pilot, lambda text: "settled" in text.splitlines()[0], within=WITHIN)
         print("attached again:", header.splitlines()[0].strip(), flush=True)
@@ -151,7 +151,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
     assert used["total"] <= 30
 
 
-async def _quiet(pilot, app: Harness) -> dict:
+async def _quiet(pilot, app: TerminalUI) -> dict:
     """The worker's row once its interrupted turn has ended: idle, with the memo still waiting for it."""
     screen = workspace(app)
     assert screen.live is not None

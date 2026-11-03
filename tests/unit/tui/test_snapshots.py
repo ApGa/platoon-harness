@@ -7,7 +7,7 @@ import pytest
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import Call, Say, ScriptedDriver
-from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.app import TerminalUI
 
 from ..runtime.support import in_state, of_type, until
 from .support import drawn
@@ -54,4 +54,4 @@ def test_the_workspace_s_layout_at_each_size(snap_compare, history, size):
     async def ready(pilot) -> None:
         await drawn(pilot, lambda text: "kestrel" in text and "Done" in text)
 
-    assert snap_compare(Harness("s"), terminal_size=SIZES[size], run_before=ready)
+    assert snap_compare(TerminalUI("s"), terminal_size=SIZES[size], run_before=ready)

@@ -7,9 +7,9 @@ from ..output import note
 def run(session: str | None = None) -> int:
     """Run the terminal UI on the sessions screen, or on one session, and say how to come back to a session left
     running."""
-    from .app import Harness
+    from .app import TerminalUI
 
-    left = Harness(session).run()
+    left = TerminalUI(session).run()
     if left:
         note(f"detached from session {left}, which runs on: `platoon-harness attach {left}` comes back to it")
     return 0
