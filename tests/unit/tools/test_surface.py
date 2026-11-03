@@ -8,7 +8,7 @@ import pytest
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Principal, Refusal, Txn, op
 from platoon_harness.kernel.model import RefusalCode
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.runtime.host import _one_of_each, _rehearsed
+from platoon_harness.runtime.opening import _one_of_each, _rehearsed
 from platoon_harness.team import Capabilities
 from platoon_harness.tools import (
     PREAMBLE,

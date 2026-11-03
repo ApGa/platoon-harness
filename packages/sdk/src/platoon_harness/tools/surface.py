@@ -12,10 +12,13 @@ from platoon_harness.schema import nearest
 
 type Surface = Callable[[str], str]
 
-_NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
+NAMESPACE = "ph"
+"""What our tools go by on a harness that shows a server's tools by MCP, as `mcp__ph__task_claim`, and as a command."""
+_MCP = frozenset({"mcp-http", "mcp-stdio"})
+_NAMESPACE_SHAPE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
-SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "ending")
+_SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "ending")
 """What a preamble template's slots hold for one agent, on its harness's surface. `name` and `tools`, by their exact
 names, are values. The rest are sentences of ours, empty where they would say nothing: how to ask `ph` for help, who it
 can message, which roles it can start, its channels, how to wait and how to end."""
@@ -112,6 +115,14 @@ def shell_name(op: str) -> str:
     return f"ph {op}"
 
 
+def surface_of(paths: Collection[str]) -> Surface | None:
+    """How a harness that reaches our tools by `paths` names them to its model: by MCP under `NAMESPACE`, by `ph`, or
+    not at all."""
+    if not paths:
+        return None
+    return shell_name if _MCP.isdisjoint(paths) else harness_name(NAMESPACE)
+
+
 def named_surface(name: str) -> Surface:
     """The surface a client asks for: `mcp`, `ph` or `mcp__<namespace>`. It decides words, never what a token may do."""
     if name == "mcp":
@@ -119,7 +130,7 @@ def named_surface(name: str) -> Surface:
     if name == "ph":
         return shell_name
     namespace = name.removeprefix("mcp__")
-    if namespace == name or _NAMESPACE.fullmatch(namespace) is None:
+    if namespace == name or _NAMESPACE_SHAPE.fullmatch(namespace) is None:
         raise ValueError(f"no surface {name[:64]!r}")
     return harness_name(namespace)
 
@@ -236,8 +247,8 @@ def slots(template: str) -> tuple[str, ...]:
             continue
         if spec or conversion:
             raise ValueError(f"`{{{slot}}}` takes no `!` or `:`, as it is filled with text")
-        if slot not in SLOTS:
-            raise ValueError(f"no slot `{{{slot}}}`.{nearest(slot, SLOTS)}")
+        if slot not in _SLOTS:
+            raise ValueError(f"no slot `{{{slot}}}`.{nearest(slot, _SLOTS)}")
         found.append(slot)
     return tuple(found)
 
@@ -258,7 +269,7 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, tem
     `peers` is what stays current."""
     slots(template)  # A slot nobody fills is refused here as it is when a team loads.
     held = sorted(op["name"] for op in _held(kernel, agent))
-    values = dict.fromkeys(SLOTS, "")
+    values = dict.fromkeys(_SLOTS, "")
     values["name"] = agent.name
     values["tools"] = ", ".join(f"`{surface(op)}`" for op in held)
     if surface is shell_name:
@@ -285,11 +296,13 @@ def _tools(kernel: Kernel) -> set[str]:
 
 
 def instructions(
-    kernel: Kernel, agent: Principal, surface: Surface, template: str = PREAMBLE, words: str | None = None
+    kernel: Kernel, agent: Principal, surface: Surface | None, template: str, words: str | None
 ) -> str | None:
     """What the runtime adds to an agent's harness: its preamble filled into `template`, then `words`, its role's own,
-    last, so that a role has the last word. A tool either names in backticks is named as `surface` names it. None is
-    nothing to add."""
+    last, so that a role has the last word, or `words` alone on a harness that reaches none of our tools. A tool either
+    names in backticks is named as `surface` names it. None is nothing to add."""
+    if surface is None:
+        return words or None
     told = preamble(kernel, agent, surface, template)
     return "\n\n".join(filter(None, (told, words and worded(words, surface, _tools(kernel))))) or None
 

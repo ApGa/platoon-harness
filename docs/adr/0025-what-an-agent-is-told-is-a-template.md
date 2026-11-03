@@ -25,7 +25,8 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 - **`agent.instructed` journals the exact text** at a launch and at every resume. A harness that reopens its own session is handed
   the text it was told when that began, since Claude Code and Codex keep that whatever a resume passes. The harness's own prompt and
   the user's own configuration are theirs, and neither is recorded nor changed.
-- **`told(team)`** renders what an agent of each role would be told, on a session thrown away after, which starts no harness.
+- **`told(team)`** renders what an agent of each role would be told, on a session thrown away after, which starts no harness and has
+  no limit or budget, as no text says one.
 
 ## Alternatives considered
 

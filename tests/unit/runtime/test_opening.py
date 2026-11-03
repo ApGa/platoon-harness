@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Session, Team, told
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
 from platoon_harness.kernel import Event, Kernel, Refused, is_held
@@ -83,6 +83,44 @@ def test_a_driver_that_cannot_describe_itself_is_a_problem_at_its_role(tmp_path)
         prepare(team_of(roles={"lead": {"harness": harness(Mute)}}), root=tmp_path)
 
     assert str(error.value) == "roles.lead.harness: it will not say"
+
+
+async def test_what_a_role_would_be_told_is_said_of_a_driver_that_cannot_describe_itself_at_its_role():
+    class Mute(ScriptedDriver):
+        def describe(self) -> DriverInfo:
+            raise DriverError("it will not say")
+
+    with pytest.raises(ConfigError) as error:
+        await told(team_of(roles={"lead": {"harness": harness(Mute)}}))
+
+    assert str(error.value) == "roles.lead.harness: it will not say"
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        {"topology": {"limits": {"max_live": 1}}},
+        {"topology": {"limits": {"max_children": 1}}},
+        {"budget": {"agents": 1}},
+    ],
+)
+async def test_what_each_role_would_be_told_is_said_whatever_limits_one_agent_of_each(bounds):
+    """No limit and no budget is in what an agent is told, and a team that runs within them is shown whole."""
+    roles = {"lead": {"harness": scripted(), "may_spawn": ["critic", "worker"]}, "critic": {"harness": scripted()}}
+    team = team_of(roles={**roles, "worker": {"harness": scripted()}}, **bounds)
+
+    assert sorted(await told(team)) == ["critic", "lead", "worker"]
+
+
+async def test_a_role_only_a_role_nothing_starts_may_spawn_is_shown_as_its_child():
+    roles = {"lead": {"harness": scripted(), "may_spawn": ["critic"], "count": 0}, "critic": {"harness": scripted()}}
+
+    edges = {"lead": ["children"], "critic": ["parent"]}
+
+    shown = await told(team_of(roles=roles, topology={"edges": edges}))
+
+    assert "You can message: @lead." in shown["critic"] and "When your goal is done" in shown["critic"]
+    assert "You can start agents in these roles: critic." in shown["lead"]
 
 
 def test_a_warning_stops_nothing(tmp_path, caplog):

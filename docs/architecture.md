@@ -1097,11 +1097,10 @@ has the last word.
 
 `agent.instructed` journals the exact text the runtime adds to each harness, at a launch and at every resume, so a session's record
 shows what every agent was told, and on each real binary a test finds that text whole, once, in the first request, and in the first
-after a resume. The harness's own
-system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude Code's settings and `CLAUDE.md`
-files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role would be told, on a session of
-its own in a folder thrown away after, which starts no harness. Tool descriptions, refusals and handovers stay fixed. See
-[ADR 0025](adr/0025-what-an-agent-is-told-is-a-template.md).
+after a resume. The harness's own system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude
+Code's settings and `CLAUDE.md` files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role
+would be told, on a session of its own in a folder thrown away after, which starts no harness and has no limit or budget, as no text
+says one. Tool descriptions, refusals and handovers stay fixed. See [ADR 0025](adr/0025-what-an-agent-is-told-is-a-template.md).
 
 ## 11. Provenance
 

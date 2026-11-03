@@ -1,27 +1,30 @@
 """From a team to a live session: checked before any cost, then journaled through ops, safe to repeat after a crash."""
 
 import asyncio
+import contextlib
 import logging
 import re
-from collections.abc import Mapping
+import tempfile
+from collections.abc import AsyncGenerator, Mapping
 from pathlib import Path
 from typing import Any
 
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, Driver, DriverError, DriverInfo
 from platoon_harness.extensions import DRIVERS, Installed, load
-from platoon_harness.kernel import NAME, Kernel, Refused
-from platoon_harness.primitives import Policy
+from platoon_harness.kernel import NAME, Kernel, Principal, Refused
+from platoon_harness.primitives import PRIMITIVES, Policy
 from platoon_harness.schema import ConfigError, Problem, seconds
 from platoon_harness.team import Budget, Command, Role, Team, team_check
-from platoon_harness.topology import Queue, Topic, compile, scopes
+from platoon_harness.tools import instructions, surface_of
+from platoon_harness.topology import Limits, Queue, Topic, compile, scopes
 
-from .authority import Authority
+from .authority import Authority, LocalAuthority
 from .paths import find_root, new_folder
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["PLAN_LOGIN_FIX", "make_driver", "open_session", "prepare"]
+__all__ = ["PLAN_LOGIN_FIX", "make_driver", "open_session", "prepare", "told"]
 
 PLAN_LOGIN_FIX = (
     "start the session with `plan_login=True` to say this is your own work, or give each role an auth profile"
@@ -189,3 +192,64 @@ async def open_session(
     limits = {scope: found for scope, budget in budgets if (found := _budget(scope, budget, authority))}
     await _steps(kernel, "budget.set", *((f"budget/{scope}", args) for scope, args in limits.items()))
     await _steps(kernel, "agent.spawn", *((f"spawn/{args['name']}", args) for args in _starting(team)))
+
+
+async def told(team: Team) -> dict[str, str | None]:
+    """What an agent of each role would be told at launch, which is all the runtime adds to its harness. It is rendered
+    on a session of its own, in a folder thrown away after, and no harness starts. A role nothing starts is shown as an
+    agent of its own name, started by an agent of a role that may start it, as an agent's name is its spawner's."""
+    resolved = team.resolved(Installed())
+    known, problems = await asyncio.to_thread(_described, resolved)
+    if problems:
+        raise ConfigError(problems)
+    capabilities = {name: info.capabilities for name, info in known.items()}
+    async with _rehearsed(resolved, capabilities) as kernel:
+        return {
+            name: instructions(
+                kernel,
+                agent,
+                surface_of(capabilities[name].tool_paths),
+                resolved.preamble_of(name),
+                resolved.roles[name].instructions,
+            )
+            async for name, agent in _one_of_each(kernel, resolved)
+        }
+
+
+@contextlib.asynccontextmanager
+async def _rehearsed(team: Team, capabilities: Mapping[str, Capabilities]) -> AsyncGenerator[Kernel]:
+    """A resolved team's session, opened as a runtime opens one, in a folder thrown away after, with no harness. Its
+    limits and budgets are left out, as nothing an agent is told says them, so that an agent of every role can start."""
+    roles = {name: role.model_copy(update={"budget": Budget()}) for name, role in team.roles.items()}
+    topology = team.topology.model_copy(update={"limits": Limits()})
+    team = team.model_copy(update={"roles": roles, "budget": Budget(), "topology": topology})
+    loaded = [*PRIMITIVES, *(Installed()[name] for name in team.extensions)]
+    with tempfile.TemporaryDirectory() as folder:
+        kernel = Kernel.open(Path(folder), extensions=loaded)
+        try:
+            manifest = Manifest(team=team.show(resolved=True), topology_hash=team.topology.hash, components=())
+            await open_session(kernel, team, manifest, LocalAuthority(team), manifest.model_dump_json(), capabilities)
+            yield kernel
+        finally:
+            kernel.close()
+
+
+async def _one_of_each(kernel: Kernel, team: Team) -> AsyncGenerator[tuple[str, Principal]]:
+    """An agent of each role, as each comes to be: one the session started, or else one of the role's name, spawned by
+    an agent of the first role that may spawn it. Where no role with an agent may, the session spawns one, of a role
+    that no role left may spawn where there is one, so that a child is shown as one."""
+    found: dict[str, Principal] = {}
+    for record in kernel.query(kernel.runtime, "agent.records", {}).result:
+        if record["role"] not in found:
+            found[record["role"]] = Principal(id=f"agent:{record['name']}")
+            yield record["role"], found[record["role"]]
+    while missing := [name for name in team.roles if name not in found]:
+        spawners = {name: [found[role] for role in sorted(team.spawners(name)) if role in found] for name in missing}
+        roots = [name for name in missing if not team.spawners(name) & {*missing}] or missing[:1]
+        for name in [name for name in missing if spawners[name]] or roots[:1]:
+            by = next(iter(spawners[name]), kernel.runtime)
+            spawned = await kernel.submit(by, "agent.spawn", {"name": name, "child_role": name})
+            if spawned.refusal is not None:
+                raise Refused.of(spawned.refusal)
+            found[name] = Principal(id=f"agent:{name}")
+            yield name, found[name]

@@ -233,12 +233,11 @@ platoon_harness.runtime.control.Remote
 platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
-platoon_harness.runtime.host.NAMESPACE
-platoon_harness.runtime.host.told
 platoon_harness.runtime.opening.PLAN_LOGIN_FIX
 platoon_harness.runtime.opening.make_driver
 platoon_harness.runtime.opening.open_session
 platoon_harness.runtime.opening.prepare
+platoon_harness.runtime.opening.told
 platoon_harness.runtime.paths.HOME_VARIABLE
 platoon_harness.runtime.paths.LOG
 platoon_harness.runtime.paths.Listed
@@ -304,10 +303,10 @@ platoon_harness.testing.check_driver
 platoon_harness.testing.check_extension
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.told
+platoon_harness.tools.NAMESPACE
 platoon_harness.tools.PH
 platoon_harness.tools.PREAMBLE
 platoon_harness.tools.SHIM
-platoon_harness.tools.SLOTS
 platoon_harness.tools.Surface
 platoon_harness.tools.ToolServer
 platoon_harness.tools.delivery_heading
@@ -319,6 +318,7 @@ platoon_harness.tools.list_tools
 platoon_harness.tools.preamble
 platoon_harness.tools.shell_name
 platoon_harness.tools.slots
+platoon_harness.tools.surface_of
 platoon_harness.tools.tool_name
 platoon_harness.topology.Board
 platoon_harness.topology.Channel

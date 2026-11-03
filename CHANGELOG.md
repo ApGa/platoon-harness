@@ -58,7 +58,7 @@
   out `tools` or `ending` and of words that name a tool a role cannot hold, refuses a role's own template on a harness that reaches
   none of our tools, and warns of its team's. `agent.instructed` journals the exact text added to each harness, at launch and at
   every resume, which hands a harness that reopens its own session what it was told when that began. `told(team)` renders what each
-  role would be told, starting no harness.
+  role would be told, starting no harness, and `tools.NAMESPACE` and `tools.surface_of` say how a harness names our tools.
 - `allow_native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
   reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's token. Claude Code's
   `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by
@@ -130,6 +130,8 @@
 - A template's own words on a line whose slots came out empty were left out with the line, and nothing said so. `preamble = ""` was
   checked as written and run as the default, a template on a harness that reaches none of our tools went untold without a word, and
   `team_check` warned of a tool held through a grant to a named agent as one the role lacked.
+- `told(team)` refused a team whose limits or budget stopped one agent of each role, said a driver that could not describe itself
+  with no role named, and showed a child whose spawner starts with nothing as a session's own agent.
 - The scan for local paths reads the CLI's sources too, a home folder whose name begins with a capital, and this cluster's name.
 - The plan-login refusal was checked only at the start, so a human spawning more agents later, and a resume after a harness was signed
   in on a plan, escaped it. The manifest keeps `plan_login`, and without it a launch beside a live agent on a plan login fails, and a
