@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 from rich.cells import cell_len
+from textual import events
+from textual._xterm_parser import XTermParser
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
@@ -75,17 +77,44 @@ async def test_an_approval_never_takes_focus_so_a_key_meant_for_the_composer_nev
         await drawn(pilot, lambda text: "Ship the fix?" in text)
         composer = app.screen.query_one(Composer)
 
-        await pilot.press(*"yes", "y", "n", "alt+y")
+        await pilot.press(*"yes", "y", "n")
 
         assert app.focused is composer and composer.text == "yesyn"
         assert await of_type(owner, "approval.resolved") == [], "a place nobody chose answered a key"
 
-        await pilot.press("alt+a", "alt+y")
+        await pilot.press(*["backspace"] * 5, "alt+a", *"/yes", "enter")
         await drawn(pilot, lambda text: "shipped" in text)
 
         resolved = await of_type(owner, "approval.resolved")
         assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", "tui")]
         assert app.focused is composer
+
+
+def at_once(app: TerminalUI, sent: str) -> None:
+    """What a terminal sends at once, within Textual's escape delay, as a quick typist or a remote link does, read as
+    Textual reads it: Esc then a letter comes as Alt and that letter."""
+    parser = XTermParser()
+    for key in (*parser.feed(sent), *parser.feed("")):
+        assert isinstance(key, events.Key)
+        key.set_sender(app)
+        app._driver.send_message(key)
+
+
+async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root):
+    """A terminal sends Alt and a letter as Esc then that letter, so no chord decides or stops anything, and the word
+    reaches the composer."""
+    async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "Ship the fix?" in text)
+        await pilot.press(*"/next-place", "enter")
+        await drawn(pilot, lambda _: dock_of(app).cursor is not None)
+        composer = app.screen.query_one(Composer)
+
+        for word in ("no wait", "yes", "stop"):
+            at_once(app, f"\x1b{word}")
+            await drawn(pilot, lambda _, word=word: composer.text.endswith(word))
+        assert composer.text == "no waityesstop"
+        assert await of_type(owner, "approval.resolved") == [] and await of_type(owner, "turn.ended") == []
 
 
 async def test_a_second_client_s_answer_shows_as_theirs_and_its_message_shows_once(root):
@@ -100,7 +129,7 @@ async def test_a_second_client_s_answer_shows_as_theirs_and_its_message_shows_on
             second.resolve(asked["id"], "deny", expected_version=asked["version"], via="web"),
             second.send("@lead", "from the browser"),
         )
-        await pilot.press("alt+y")
+        await pilot.press(*"/yes", "enter")
         await drawn(pilot, lambda text: "from the browser" in text)
 
         resolved = await of_type(owner, "approval.resolved")
@@ -146,7 +175,7 @@ async def test_stop_below_stops_the_turns_below_the_agent_in_view_and_says_it_st
         await pilot.press(*"go", "enter")
         await in_state(owner, "w", "running")
 
-        await pilot.press("alt+s")
+        await pilot.press(*"/stop-below", "enter")
         ended = await until(lambda: of_type(owner, "turn.ended"), owner, lambda found: len(found) == 2)
 
         assert {event.agent: event.data["reason"] for event in ended} == {"lead": "interrupted", "w": "interrupted"}
@@ -526,7 +555,7 @@ def dock_of(app) -> Dock:
     return app.screen.query_one(Dock)
 
 
-async def test_alt_a_goes_round_every_place_and_alt_y_answers_the_one_it_is_at(root):
+async def test_alt_a_goes_round_every_place_and_yes_answers_the_one_it_is_at(root):
     async with attached(asking(), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: len(workspace(app)._places(workspace(app).live)) == 3)
@@ -541,15 +570,27 @@ async def test_alt_a_goes_round_every_place_and_alt_y_answers_the_one_it_is_at(r
         await pilot.press("alt+a")
         at = dock_of(app).cursor
         row = dock_of(app).rows.index(next(row for row in dock_of(app).rows if row.key == at))
-        assert "Alt+Y or /yes Allow" in row_text(dock_of(app), row)
+        gist = workspace(app).live.attention[at]["gist"]
+        assert row_text(dock_of(app), row).endswith(f"/yes Allow  /no Deny  {gist}")
         assert next(iter(dock_of(app).render_line(row))).style.reverse
-        await pilot.press("alt+y")
+        await pilot.press(*"/yes", "enter")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
         assert [event.stream for event in resolved] == [at]
 
 
 def row_text(dock: Dock, index: int) -> str:
     return dock.rows[index].line.plain
+
+
+async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_screen_cuts_only_the_gist(root):
+    gist = "Run the migration against the staging database, then the one in production?"
+    async with attached(team([Ask(gist), Hang()]), root, size=(80, 32)) as (_, _, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "Run the migration" in text)
+        await pilot.press(*"/next-place", "enter")
+        text = await drawn(pilot, lambda text: "/yes Allow  /no Deny  Run the migration" in text)
+
+        assert gist not in text
 
 
 async def test_a_place_another_client_answered_takes_the_cursor_with_it(root):
@@ -565,7 +606,7 @@ async def test_a_place_another_client_answered_takes_the_cursor_with_it(root):
 
         await drawn(pilot, lambda text: at["id"] not in dock_of(app).keys)
         assert dock_of(app).cursor is None
-        await pilot.press("alt+y")
+        await pilot.press(*"/yes", "enter")
         await drawn(pilot, lambda _: any("Nothing here" in notice.message for notice in app._notifications))
 
         resolved = await of_type(owner, "approval.resolved")

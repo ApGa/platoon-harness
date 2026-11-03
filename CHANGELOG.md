@@ -118,10 +118,13 @@
 ### Changed
 
 - In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
-  goes back to the composer and interrupts nothing. The dock takes focus from Tab or a click, never on its own, two keys from the
-  composer either way. Acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for
-  `next for you`, `open` for `open line`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words.
-  The sessions screen looks again on `l`, where it was Ctrl+R, and `/` is search, not built yet, from any part but the composer.
+  goes back to the composer and interrupts nothing. Alt+Y, Alt+N and Alt+S are gone: a terminal sends Alt and a letter as Esc
+  then that letter, so Esc then a word typed at once answered a place or stopped turns. `/yes`, `/no` and `/stop-below` reach
+  them. The dock takes focus from Tab or a click, never on its own, two keys from the composer either way. Acts are named as they
+  are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for `next for you`, `yes` and `no` for `first
+  action` and `second action`, `open` for `open line`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they
+  were two words. The sessions screen looks again on `l`, where it was Ctrl+R, and `/` is search, not built yet, from any part but
+  the composer.
 - The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,
   and nothing else, where it escaped every format character, which broke emoji joined by a zero-width joiner.
 - The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.

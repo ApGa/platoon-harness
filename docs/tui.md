@@ -21,12 +21,14 @@ A chord is a shortcut and never the only way: every act also takes only keys eve
 printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 
 - In the composer, a line that is exactly `/` and an act's name runs that act and goes to no agent: `/next-place`, `/yes`,
-  `/interrupt`, `/detach`, `/quit`. Each act has one name, kept in the keymap table beside its key, and the help, the
+  `/interrupt`, `/detach`, `/quit`. Each act has one name, kept in the keymap table beside any key, and the help, the
   palette and the keymap below show it there.
 - `/` alone, or `/help`, lists them, and the footer always begins `/ commands`.
 - Anything else that begins with `/` is asked about before it goes as a message, since a harness's own commands are not
   built yet.
 - A typed command not built yet says why, as its key does.
+- No chord decides or stops anything: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word typed
+  at once would run one. `/yes`, `/no` and `/stop-below` have no key.
 - Tab goes from the composer to the transcript, the dock and the navigator, and round, and Shift+Tab the other way, so the
   dock is two keys from the composer either way and a stray Tab from a draft never lands where a letter answers.
 - Only Tab, Shift+Tab or a click moves focus to the dock, so an approval never takes it, and a dock with nothing left to
@@ -86,16 +88,16 @@ empty composer detaches, and with a draft it says why it does not.
 ### Acting
 
 Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
-place you must act, and `/yes` and `/no`, or Alt+Y and Alt+N, take its first and second action, Allow and Deny for an
-approval, each carrying the version it was drawn from. With the dock reached by Tab, the arrows choose a place, Enter goes
-to it, and `y` and `n` take the same two actions. Only you move where you are: a place that goes, answered here or by
-another client, takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you
-pressed shows as theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of
-every agent below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows
-disabled, pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves.
-Retiring or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the
-palette, `/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end
-an agent or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the
+place you must act, and `/yes` and `/no` take its first and second action, Allow and Deny for an approval, each carrying
+the version it was drawn from. With the dock reached by Tab, the arrows choose a place, Enter goes to it, and `y` and
+`n` take the same two actions. Only you move where you are: a place that goes, answered here or by another client, takes
+it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows as
+theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
+below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows disabled,
+pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves. Retiring
+or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the palette,
+`/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end an
+agent or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the
 command line prints any. A takeover says it is not built yet, as `/takeover` does.
 
 ### Size
@@ -167,10 +169,10 @@ and this keymap are made. A part that has focus takes its own keys before the se
 | Keys | Typed | Does |
 |---|---|---|
 | `escape` | `/interrupt` | Interrupt the agent in view: its turn stops, and it lives on |
-| `alt+s` | `/stop-below` | Stop the turns of the agent in view and of every agent below it |
+|  | `/stop-below` | Stop the turns of the agent in view and of every agent below it |
 | `alt+a` | `/next-place` | Go to the next place you must act |
-| `alt+y` | `/yes` | Take the first action of where you are, such as Allow |
-| `alt+n` | `/no` | Take the second action of where you are, such as Deny |
+|  | `/yes` | Take the first action of where you are, such as Allow |
+|  | `/no` | Take the second action of where you are, such as Deny |
 | `alt+down` | `/next` | Show the next agent or channel |
 | `alt+up` | `/previous` | Show the previous agent or channel |
 | `ctrl+b` | `/navigator` | Show or hide the agents and channels |

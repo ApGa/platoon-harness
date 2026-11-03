@@ -107,7 +107,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
             await pilot.press("alt+a")
             if chosen(app).get("kind") == "approval":
                 break
-        await pilot.press("alt+y")
+        await pilot.press(*"/yes", "enter")
         live = screen.live
         assert live is not None
         await drawn(pilot, lambda text: all(row["kind"] != "approval" for row in live.attention.values()), within=60)

@@ -42,9 +42,10 @@ TYPED: tuple[Where, ...] = ("everywhere", "workspace")
 
 @dataclass(frozen=True)
 class Key:
-    """One action: the keys that run it, where, its name and what it does, in a person's words. `footer` keeps it on
-    the footer, and `priority` runs it before the focused part's own keys. `planned` says why it is not built yet,
-    which is what pressing it says. An action with no namespace runs on the place that binds it."""
+    """One action: the keys that run it, where, its name and what it does, in a person's words. An act with no keys is
+    reached by its typed command alone. `footer` keeps it on the footer, and `priority` runs it before the focused
+    part's own keys. `planned` says why it is not built yet, which is what pressing it says. An action with no namespace
+    runs on the place that binds it."""
 
     keys: str
     action: str
@@ -124,16 +125,10 @@ KEYMAP: tuple[Key, ...] = (
         footer=True,
         priority=False,
     ),
-    Key(
-        "alt+s",
-        "stop_below",
-        "stop-below",
-        "Stop the turns of the agent in view and of every agent below it",
-        "workspace",
-    ),
+    Key("", "stop_below", "stop-below", "Stop the turns of the agent in view and of every agent below it", "workspace"),
     Key("alt+a", "next_place", "next-place", "Go to the next place you must act", "workspace", footer=True),
-    Key("alt+y", "first_action", "yes", "Take the first action of where you are, such as Allow", "workspace"),
-    Key("alt+n", "second_action", "no", "Take the second action of where you are, such as Deny", "workspace"),
+    Key("", "first_action", "yes", "Take the first action of where you are, such as Allow", "workspace"),
+    Key("", "second_action", "no", "Take the second action of where you are, such as Deny", "workspace"),
     Key("alt+down", "next_row", "next", "Show the next agent or channel", "workspace"),
     Key("alt+up", "previous_row", "previous", "Show the previous agent or channel", "workspace"),
     Key("ctrl+b", "navigator", "navigator", "Show or hide the agents and channels", "workspace"),
@@ -235,7 +230,7 @@ def keys(where: Where) -> tuple[Key, ...]:
 
 def bindings(where: Where) -> list[BindingType]:
     """The bindings of one place, from the table."""
-    return [Binding(key.keys, key.runs, key.name, show=False, priority=key.priority) for key in keys(where)]
+    return [Binding(key.keys, key.runs, key.name, show=False, priority=key.priority) for key in keys(where) if key.keys]
 
 
 def action_of(where: Where, pressed: str) -> str | None:
@@ -252,20 +247,20 @@ def command(line: str) -> Key | None:
 
 
 def reach(action: str) -> str:
-    """How a person reaches an act of a session, in words: its key, then its typed command, which every terminal
+    """How a person reaches an act of a session, in words: any key, then its typed command, which every terminal
     delivers."""
     key = next(key for key in KEYMAP if key.action == action and key.typed)
-    return f"{key.shown} or {key.typed}"
+    return f"{key.shown} or {key.typed}" if key.keys else key.typed
 
 
 def reference() -> str:
-    """The keymap as Markdown, for the guide: each act of a session with its typed command beside its key."""
+    """The keymap as Markdown, for the guide: each act of a session with its typed command beside any key."""
     sections = []
     for where, title in WHERE.items():
         typed = where in TYPED
         lines = ["| Keys | Typed | Does |\n|---|---|---|" if typed else "| Keys | Does |\n|---|---|"]
         for key in keys(where):
-            pressed = " or ".join(f"`{one}`" for one in key.keys.split(","))
+            pressed = " or ".join(f"`{one}`" for one in key.keys.split(",") if one)
             cells = [pressed, f"`{key.typed}`", key.said] if typed else [pressed, key.said]
             lines.append(f"| {' | '.join(cells)} |")
         sections.append(f"### {title}\n\n" + "\n".join(lines))

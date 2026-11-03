@@ -49,13 +49,14 @@ def acts() -> list:
 
 
 def test_every_binding_comes_from_the_table_and_runs_an_action_of_its_place():
-    """The composer reads its keys from the table itself, and every other place binds them. An action names `app` or
-    `screen` when it runs on one, and otherwise runs on the place that binds it."""
+    """The composer reads its keys from the table itself, and every other place binds them, but an act with no keys. An
+    action names `app` or `screen` when it runs on one, and otherwise runs on the place that binds it."""
     assert {where for wheres in PLACES.values() for where in wheres} | {"composer"} == {key.where for key in KEYMAP}
+    assert not [key for key in KEYMAP if not key.keys and not key.typed]
     for place, wheres in PLACES.items():
         bound = [(binding.key, binding.action) for binding in place.BINDINGS if isinstance(binding, Binding)]
 
-        assert bound == [(key.keys, key.runs) for where in wheres for key in keys(where)], place
+        assert bound == [(key.keys, key.runs) for where in wheres for key in keys(where) if key.keys], place
         for where in wheres:
             for key in keys(where):
                 namespace, action, _ = parse(key.runs)
@@ -93,8 +94,8 @@ def test_the_guide_s_keymap_is_the_table_s_with_each_typed_command_beside_its_ke
 
     assert guide == regenerate(guide), "run `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md`"
     for key in acts():
-        first = key.keys.split(",")[0]
-        assert re.search(rf"\| `{re.escape(first)}`[^|]* \| `{re.escape(key.typed)}` \|", reference()), key
+        pressed = f"`{re.escape(key.keys.split(',')[0])}`[^|]*" if key.keys else ""
+        assert re.search(rf"\| {pressed} \| `{re.escape(key.typed)}` \|", reference()), key
 
 
 def test_the_palette_offers_every_act_of_a_session_by_its_typed_command():
@@ -148,7 +149,8 @@ async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_o
             assert key.shown in said and " ".join(key.does.split()) in said, key
             assert not key.planned or " ".join(f"Not built yet: {key.planned}".split()) in said, key
         for key in acts():
-            assert any(line.split()[:2] == [key.shown, key.typed] for line in lines if line.strip()), key
+            begins = [said for said in (key.shown, key.typed) if said]
+            assert any(line.split()[: len(begins)] == begins for line in lines if line.strip()), key
         assert all(cell_len(line) <= help.scrollable_content_region.width for line in lines)
         await pilot.press("down", "down")
         assert help.scroll_y == 2

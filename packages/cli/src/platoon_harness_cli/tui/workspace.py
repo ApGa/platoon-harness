@@ -555,7 +555,8 @@ class Workspace(Screen[None]):
 
     def _dock(self, live: Live) -> list[Row]:
         """A row per place you must act, and on the one you are at, the keys that take its actions from where the focus
-        is: the dock's own letters, or a session's keys and typed commands."""
+        is: the dock's own letters, or a session's typed commands. Hints come before the gist, so a narrow screen cuts
+        the gist and never a hint."""
         dock = self.query_one(Dock)
         chosen = dock.cursor
         rows = []
@@ -566,15 +567,15 @@ class Workspace(Screen[None]):
             hints: list[Any] = []
             if place["id"] == chosen:
                 hints = [
-                    (f"  {hint} {action['label']}", "bold")
+                    (f"{hint} {action['label']}  ", "bold")
                     for hint, action in zip((first, second), actions, strict=False)
                 ]
             line = Content.assemble(
                 ("⚠ ", "yellow"),
                 (f"{place['kind']} ", "bold"),
                 SafeText(f"@{place['agent']} " if place["agent"] else ""),
-                SafeText(" ".join(place["gist"].split())),
                 *hints,
+                SafeText(" ".join(place["gist"].split())),
             )
             rows.append(Row(line, place["id"]))
         return rows

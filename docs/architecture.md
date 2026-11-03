@@ -1287,7 +1287,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus: the dock gets
   it only from the person's Tab or click, and only the person moves its cursor. Every act also takes only keys every terminal
   delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the only
-  way. [tui.md](tui.md) is its guide.
+  way, and no chord decides or stops anything, since a terminal sends Alt and a letter as Esc then that letter.
+  [tui.md](tui.md) is its guide.
 - **SwarmChat.** A follower folds the journal into its own rebuildable `swarmchat.sqlite` and serves the pinned, hash-checked
   frontend assets, the `view_*` replies, an overlay, and one `/x/command` route into the same ops. Upstream's server never runs,
   and nothing re-ingests the projection, so two authorities and echo loops have no path. Direct chats key on the unordered
