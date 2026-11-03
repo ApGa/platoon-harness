@@ -28,8 +28,8 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 - Anything else that begins with `/` is asked about before it goes as a message, since a harness's own commands are not
   built yet.
 - A typed command not built yet says why, as its key does.
-- No chord decides or stops anything: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word typed
-  at once would run one. `/yes`, `/no` and `/stop-below` have no key.
+- No chord decides, stops or spends anything: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word
+  typed at once would run one. `/yes`, `/no`, `/stop-below` and `/resume` have no key.
 - Tab and Shift+Tab go round the parts in the order they are on screen: the navigator, the transcript, the dock and the
   composer.
 - Only Tab or Shift+Tab moves focus to the dock, and its `y` and `n` act only on a place chosen there with the arrows: it
@@ -189,7 +189,7 @@ before the session's. `^` is Ctrl.
 | `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |
 | `^End` | `/follow` | Go to the newest line and follow what comes |
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
-| `Alt+R` | `/resume` | Resume this session when it is history, which can spend money |
+|  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
 | `Alt+D` | `/review` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |

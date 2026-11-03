@@ -18,9 +18,10 @@ Backspace.
   session has one name, kept in the keymap table beside any key, so the table makes the typed commands as it makes the bindings, the
   help, the footer, the palette and the guide's keymap. `/` alone lists them, `/` from any other part begins one in the composer, and
   the footer always begins `/ commands`. Anything else that begins with `/` is still asked about before it goes as a message.
-- **No chord decides or stops.** A terminal sends Alt and a letter as Esc then that letter, and Textual reads the two as the chord when
-  they come within its escape delay, so Esc then a word typed at once ran Alt+Y, Alt+N or Alt+S. `/yes`, `/no` and `/stop-below` have
-  no key.
+- **No chord decides, stops or spends.** A terminal sends Alt and a letter as Esc then that letter, and Textual reads the two as the
+  chord when they come within its escape delay, so Esc then a word typed at once ran Alt+Y, Alt+N or Alt+S, and Esc then "ry" on
+  history opened the question that resumes, which can spend money, for the y to answer. `/yes`, `/no`, `/stop-below` and `/resume`
+  have no key.
 - **Plain-key focus.** Tab and Shift+Tab go round the parts in the order they are on screen. In the dock the arrows choose a place,
   Enter goes to it, and `y` and `n` take its two actions with the version they were drawn from.
 - **The dock takes focus only from Tab or Shift+Tab, with no place chosen**, and a character it does not take lets go of the place
@@ -41,7 +42,7 @@ Backspace.
 | Documenting terminal settings alone | A person on the defaults stays stuck. The guide names the settings as well |
 | Bare letters in the workspace while the composer is empty | A letter would act or type depending on a state the person may not see |
 | Aliases, such as `/allow` beside `/yes` | One name per act. The first and second actions are Allow and Deny for an approval but other words for other places |
-| Keeping Alt+Y, Alt+N and Alt+S as shortcuts | A terminal cannot tell them from Esc then a letter, so leaving a part and typing at once would answer a place or stop turns |
+| Keeping Alt+Y, Alt+N, Alt+S and Alt+R as shortcuts | A terminal cannot tell them from Esc then a letter, so leaving a part and typing at once would answer a place, stop turns or ask to resume |
 | A Tab order that keeps the dock two keys from the composer | It held only while the navigator showed, and a second stray Tab still reached the dock. A dock that takes focus with no place chosen is safe from any order |
 | A click focusing the dock | The next message typed would answer the place clicked to look at |
 | Enter taking the dock's first action | A confirmation takes only `y`, so a key pressed for something else never says yes, and Enter in a list opens the row |

@@ -29,7 +29,7 @@ from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
 
 from ..unit.runtime.support import in_state, of_type, until
-from ..unit.tui.support import drawn, workspace
+from ..unit.tui.support import at_once, drawn, workspace
 from .scripts import inside
 
 pytestmark = pytest.mark.timeout(90)
@@ -58,16 +58,34 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
     app = TerminalUI("s")
     async with app.run_test(size=(120, 30)) as pilot:
         text = await drawn(pilot, lambda text: "before it stopped" in text and "history" in text)
-        assert "Alt+R or /resume resumes it, which can spend money" in text
-        assert "history: Alt+R or /resume resumes it to send" in text
+        assert "/resume resumes it, which can spend money" in text
+        assert "history: /resume resumes it to send" in text
 
         await pilot.press(*"hello", "enter")
-        await drawn(pilot, lambda text: "history: Alt+R or /resume resumes it to send" in text)
+        await drawn(pilot, lambda text: "history: /resume resumes it to send" in text)
         await pilot.press("ctrl+q")
 
     assert app.return_value is None, "leaving history said it runs on"
     assert (tmp_path / "sessions" / "s" / "journal.sqlite").stat().st_size == head
     assert sorted(path.name for path in folder.iterdir()) == sorted([*before, "marks.sqlite"]), "it wrote but marks"
+    assert not is_held(tmp_path / "sessions" / "s")
+
+
+async def test_esc_then_ry_typed_at_once_resumes_nothing_as_no_chord_spends(tmp_path):
+    """Resuming can spend money, so no chord does it: a terminal sends Alt and R as Esc then r, and the question that
+    follows takes the y after it."""
+    async with Session.start(saying(), name="s", root=tmp_path, cwd=tmp_path) as owner:
+        await in_state(owner, "lead", "idle")
+
+    app = TerminalUI("s")
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "history" in text)
+        composer = app.screen.query_one(Composer)
+        at_once(app, "\x1bry")
+        await drawn(pilot, lambda _: composer.text.endswith("y"))
+        assert isinstance(app.screen, Workspace)
+        await pilot.press("ctrl+q")
+
     assert not is_held(tmp_path / "sessions" / "s")
 
 

@@ -120,8 +120,9 @@
 
 - In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
   goes back to the composer and interrupts nothing. The footer names Esc by what it does from the part with focus, which is
-  marked. Alt+Y, Alt+N and Alt+S are gone: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word typed at
-  once answered a place or stopped turns. `/yes`, `/no` and `/stop-below` reach them. The dock takes focus from Tab or Shift+Tab,
+  marked. Alt+Y, Alt+N, Alt+S and Alt+R are gone: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word
+  typed at once answered a place, stopped turns, or asked to resume, which can spend money. `/yes`, `/no`, `/stop-below` and
+  `/resume` reach them. The dock takes focus from Tab or Shift+Tab,
   never on its own or from a click, and a part hidden while it has focus gives it back to the composer. Under 80 columns Esc or a
   row chosen in the navigator closes it. Acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`,
   `next-place` for `next for you`, `yes` and `no` for `first action` and `second action`, `open-line` for `open line`, `file`

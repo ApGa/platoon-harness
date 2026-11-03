@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 from rich.cells import cell_len
-from textual import events
-from textual._xterm_parser import XTermParser
 from textual.strip import Strip
 
 from platoon_harness import Session, Team
@@ -25,7 +23,7 @@ from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock
 
 from ..runtime.support import harness, in_state, of_type, until
-from .support import drawn, workspace
+from .support import at_once, drawn, workspace
 
 pytestmark = pytest.mark.timeout(60)
 
@@ -89,16 +87,6 @@ async def test_an_approval_never_takes_focus_so_a_key_meant_for_the_composer_nev
         resolved = await of_type(owner, "approval.resolved")
         assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", "tui")]
         assert app.focused is composer
-
-
-def at_once(app: TerminalUI, sent: str) -> None:
-    """What a terminal sends at once, within Textual's escape delay, as a quick typist or a remote link does, read as
-    Textual reads it: Esc then a letter comes as Alt and that letter."""
-    parser = XTermParser()
-    for key in (*parser.feed(sent), *parser.feed("")):
-        assert isinstance(key, events.Key)
-        key.set_sender(app)
-        app._driver.send_message(key)
 
 
 async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root, monkeypatch):

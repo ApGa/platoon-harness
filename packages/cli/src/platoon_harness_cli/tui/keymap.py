@@ -145,7 +145,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("ctrl+home", "oldest", "oldest", "Go to the start of the transcript, read back from the journal", "workspace"),
     Key("ctrl+end", "follow", "follow", "Go to the newest line and follow what comes", "workspace"),
     Key("alt+f", "attach_file", "file", "Attach a file to the message, as its body", "workspace"),
-    Key("alt+r", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
+    Key("", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
     Key(
         "ctrl+t",
         "tasks",

@@ -3,6 +3,8 @@
 import asyncio
 from collections.abc import Callable
 
+from textual import events
+from textual._xterm_parser import XTermParser
 from textual.pilot import Pilot
 
 from platoon_harness.kernel import first
@@ -10,6 +12,16 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.workspace import Workspace
 
 SECONDS = 20.0
+
+
+def at_once(app: TerminalUI, sent: str) -> None:
+    """What a terminal sends at once, within Textual's escape delay, as a quick typist or a remote link does, read as
+    Textual reads it: Esc then a letter comes as Alt and that letter."""
+    parser = XTermParser()
+    for key in (*parser.feed(sent), *parser.feed("")):
+        assert isinstance(key, events.Key)
+        key.set_sender(app)
+        app._driver.send_message(key)
 
 
 def screen_text(app: TerminalUI) -> str:
