@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import signal
@@ -274,6 +275,47 @@ def test_a_group_left_with_only_an_exited_member_is_gone():
         assert record.state() == "gone"
     finally:
         os.kill(parent, signal.SIGKILL)
+
+
+MAIN_THREAD_EXITS = textwrap.dedent(
+    """
+    import ctypes, signal, threading
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    libc = ctypes.CDLL(None)
+    libc.pthread_self.restype = ctypes.c_ulong
+    libc.pthread_join.argtypes = (ctypes.c_ulong, ctypes.c_void_p)
+    main = libc.pthread_self()
+
+    def outlive():
+        libc.pthread_join(main, None)
+        print("main exited", flush=True)
+        libc.pause()
+
+    threading.Thread(target=outlive).start()
+    libc.pthread_exit(None)
+    """
+)
+"""A harness that ignores TERM, whose main thread exits while another runs on."""
+
+
+async def test_a_harness_whose_main_thread_exited_runs_until_sigkill(tmp_path):
+    """Its main thread reads as exited in `/proc` while another runs, so a stop that took that for its end would leave
+    it running and say nothing."""
+    ready, heard = asyncio.Event(), Heard()
+    spec = make_spec(tmp_path)
+    command = (sys.executable, "-c", MAIN_THREAD_EXITS)
+    process = await launch(tmp_path, *command, read=lines_into([], then=ready), report=heard, spec=spec)
+    leader = Record.read(spec.folder).pid
+    try:
+        await ready.wait()
+
+        await process.stop(0.05)
+
+        assert GapReport(plane="control", what="crash_window") in heard.reports
+        assert group_of(leader) is None
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(leader, signal.SIGKILL)
 
 
 async def test_stop_ends_what_left_the_group_by_the_tmpdir_it_inherited(tmp_path):

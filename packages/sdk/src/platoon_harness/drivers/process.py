@@ -73,7 +73,7 @@ def _started(pid: int) -> str | None:
     return found.stdout.strip() or None
 
 
-def _members(group: int) -> bool:
+def _occupied(group: int) -> bool:
     """Whether a group has a member, counting one that has exited and that its parent has not reaped yet."""
     try:
         os.killpg(group, 0)
@@ -84,8 +84,9 @@ def _members(group: int) -> bool:
 
 def _running(group: int) -> bool:
     """Whether anything in a group still runs. A member that has exited stays in its group until its parent reaps it,
-    which a busy reaper can make take seconds, so on Linux it is not counted. Elsewhere every member is."""
-    if not _members(group):
+    which a busy reaper can make take seconds, so on Linux it is not counted. A process whose main thread has exited
+    reads as exited too while its other threads run, so one with a thread left counts. Elsewhere every member does."""
+    if not _occupied(group):
         return False
     if sys.platform != "linux":
         return True
@@ -96,10 +97,10 @@ def _running(group: int) -> bool:
                 if not entry.name.isdecimal() or entry.stat(follow_symlinks=False).st_uid != me:
                     continue
                 state, _, pgrp = Path(entry.path, "stat").read_bytes().rpartition(b")")[2].split()[:3]
+                if int(pgrp) == group and (state not in (b"Z", b"X") or len(os.listdir(Path(entry.path, "task"))) > 1):
+                    return True
             except (OSError, ValueError):
                 continue
-            if int(pgrp) == group and state not in (b"Z", b"X"):
-                return True
     return False
 
 
@@ -148,7 +149,7 @@ async def _gone(group: int, within: float) -> bool:
     while the group has members, and looks once at the end."""
     loop = asyncio.get_running_loop()
     deadline, delay = loop.time() + within, 0.001
-    while _members(group):
+    while _occupied(group):
         if loop.time() >= deadline:
             return not _running(group)
         await asyncio.sleep(delay)
