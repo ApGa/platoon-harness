@@ -26,5 +26,6 @@ packages = ["src/platoon_harness"]
 [project.entry-points."platoon_harness.drivers"]
 claude = "platoon_harness.drivers.claude:ClaudeDriver"
 codex = "platoon_harness.drivers.codex:CodexDriver"
+pi = "platoon_harness.drivers.pi:PiDriver"
 exec = "platoon_harness.drivers.exec:ExecDriver"
 wire = "platoon_harness.drivers.wire:WireDriver"

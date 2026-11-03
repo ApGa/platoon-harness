@@ -301,7 +301,7 @@ architecture asks for and is easy to get wrong:
 - pipes that always drain, and reports in a bounded queue whose breach stops the agent with a gap;
 - stderr in a bounded log, never journaled, with credentials masked;
 - `stop(grace)`: `SIGTERM`, wait, `SIGKILL`, then verify;
-- the allowlisted environment from `harness_env(spec)`.
+- the allowlisted environment from `harness_env(spec)`, with what a login needs from the shell added by name through `signed_in`.
 
 The host masks every report on its way in, whichever driver said it, and holds back the end of live text until the next delta or any
 other report, as a secret can straddle two deltas. So if you cut text to fit a field, mask it first with `process.redact`, because a
@@ -379,7 +379,7 @@ nothing of this one.
 ```python
 from platoon_harness.drivers.levels import Profile, levels
 
-earned = levels(capabilities, Profile(driver="pi", version="1.4.0", login="key", tools="unverified"), result)
+earned = levels(capabilities, Profile(driver="pi", version="1.5.0", login="key", tools="unverified"), result)
 ```
 
 `levels` gives `operational`, `observable` and `trainable`, each `met`, `unmet` or `unverified`, with reasons. It is a pure function,

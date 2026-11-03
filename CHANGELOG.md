@@ -34,6 +34,9 @@
   approval through the runtime. `check_driver` passes on the real binary against FakeModel, at 2.1.316.
 - The `codex` driver: `codex app-server` on stdio, in the user's own setup, with every approval through the runtime. `check_driver`
   passes on the real binary against FakeModel, at 0.164.0.
+- The `pi` driver: `pi --mode rpc` in the user's own agent directory, with our tools through the stdio shim from one extension
+  loaded with `-e`, and `gated` approvals through the runtime. `check_driver` passes on the real binary against FakeModel, at 1.5.0.
+  No live model has run.
 - `sandbox` on `AgentSpec`, from the role.
 - `check_driver` row `interrupt_keeps_a_steer`: a delivery handed over inside a turn outlives an interrupt, whatever the harness does
   with it.

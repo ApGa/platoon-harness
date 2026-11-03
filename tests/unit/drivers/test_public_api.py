@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import drivers, primitives, rpc, testing
-from platoon_harness.drivers import claude, env, exec, levels, process, wire
+from platoon_harness.drivers import claude, env, exec, levels, pi, process, wire
 
 MODULES = {
     "rpc": rpc,
@@ -14,6 +14,7 @@ MODULES = {
     "drivers.env": env,
     "drivers.exec": exec,
     "drivers.levels": levels,
+    "drivers.pi": pi,
     "drivers.process": process,
     "drivers.wire": wire,
     "testing": testing,
