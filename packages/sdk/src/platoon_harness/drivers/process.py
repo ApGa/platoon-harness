@@ -73,12 +73,34 @@ def _started(pid: int) -> str | None:
     return found.stdout.strip() or None
 
 
-def _alive(group: int) -> bool:
+def _members(group: int) -> bool:
+    """Whether a group has a member, counting one that has exited and that its parent has not reaped yet."""
     try:
         os.killpg(group, 0)
     except (ProcessLookupError, PermissionError):
         return False
     return True
+
+
+def _running(group: int) -> bool:
+    """Whether anything in a group still runs. A member that has exited stays in its group until its parent reaps it,
+    which a busy reaper can make take seconds, so on Linux it is not counted. Elsewhere every member is."""
+    if not _members(group):
+        return False
+    if sys.platform != "linux":
+        return True
+    me = os.getuid()
+    with os.scandir("/proc") as entries:
+        for entry in entries:
+            try:
+                if not entry.name.isdecimal() or entry.stat(follow_symlinks=False).st_uid != me:
+                    continue
+                state, _, pgrp = Path(entry.path, "stat").read_bytes().rpartition(b")")[2].split()[:3]
+            except (OSError, ValueError):
+                continue
+            if int(pgrp) == group and state not in (b"Z", b"X"):
+                return True
+    return False
 
 
 def _signal(group: int, signum: signal.Signals) -> None:
@@ -118,15 +140,17 @@ class Record(Model):
         started = _started(self.pid)
         if started is not None:
             return "ours" if started == self.started else "gone"
-        return "unproven" if _alive(self.pid) else "gone"
+        return "unproven" if _running(self.pid) else "gone"
 
 
 async def _gone(group: int, within: float) -> bool:
+    """Whether nothing in a group runs by `within`. Looking at what runs costs a scan of every process, so it waits
+    while the group has members, and looks once at the end."""
     loop = asyncio.get_running_loop()
     deadline, delay = loop.time() + within, 0.001
-    while _alive(group):
+    while _members(group):
         if loop.time() >= deadline:
-            return False
+            return not _running(group)
         await asyncio.sleep(delay)
         delay = min(delay * 2, 0.05)
     return True

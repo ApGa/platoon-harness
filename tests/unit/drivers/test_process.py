@@ -225,6 +225,57 @@ async def test_stop_ends_a_forked_child_that_outlives_its_leader(tmp_path):
     assert not running(child)
 
 
+EXITED_MEMBER = textwrap.dedent(
+    """
+    import os, sys, time
+    if os.fork() == 0:
+        member = os.fork()
+        if member == 0:
+            os._exit(0)
+        os.waitid(os.P_PID, member, os.WEXITED | os.WNOWAIT)
+        os.setpgid(0, 0)
+        print(member, os.getpid(), flush=True)
+        time.sleep(100)
+        os._exit(0)
+    os.execvp(sys.argv[1], sys.argv[1:])
+    """
+)
+"""A group whose member has exited, and whose parent of that member has left the group and never reaps it."""
+
+
+async def test_a_member_that_has_exited_holds_up_no_stop(tmp_path):
+    """A member that has exited stays in its group until its parent reaps it, which a busy reaper can make take seconds,
+    and it runs nothing, so a stop neither waits for it nor takes it for something that outlived a signal."""
+    ready, heard = asyncio.Event(), Heard()
+    found: list[bytes] = []
+    command = (sys.executable, "-c", EXITED_MEMBER, "sleep", "100")
+    process = await launch(tmp_path, *command, read=lines_into(found, then=ready), report=heard)
+    await ready.wait()
+    member, parent = map(int, found[0].split())
+    assert not running(member) and group_of(member) is not None
+
+    await process.stop(0.05)
+
+    assert process.returncode == -signal.SIGTERM
+    assert not [report for report in heard.reports if isinstance(report, GapReport)]
+    assert not running(parent)
+
+
+def test_a_group_left_with_only_an_exited_member_is_gone():
+    command = [sys.executable, "-c", EXITED_MEMBER, "true"]
+    leader = subprocess.Popen(command, start_new_session=True, stdout=subprocess.PIPE)
+    member, parent = map(int, leader.stdout.readline().split())
+    leader.wait()
+    leader.stdout.close()
+    record = Record(pid=leader.pid, started="whatever it was")
+    try:
+        assert not running(member) and group_of(member) == leader.pid
+
+        assert record.state() == "gone"
+    finally:
+        os.kill(parent, signal.SIGKILL)
+
+
 async def test_stop_ends_what_left_the_group_by_the_tmpdir_it_inherited(tmp_path):
     found = []
     ready = asyncio.Event()

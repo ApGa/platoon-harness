@@ -94,6 +94,9 @@
 
 ### Fixed
 
+- A stop under heavy load could fail with a group that "outlived SIGKILL", or `reap` name a group that outlived its leader, when nothing
+  in it ran: a member that has exited counts for `killpg(group, 0)` until its parent reaps it, and an orphan waits on pid 1. A group is
+  judged by whether anything in it still runs, on Linux.
 - The plan-login refusal was checked only at the start, so a human spawning more agents later, and a resume after a harness was signed
   in on a plan, escaped it. The manifest keeps `plan_login`, and without it a launch beside a live agent on a plan login fails, and a
   resume that would bring back several is refused, each naming the fix in the same words, `PLAN_LOGIN_FIX`.

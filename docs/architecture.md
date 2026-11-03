@@ -955,7 +955,8 @@ leader with the recorded start time proves a group is ours, so a reused pid cann
 leader is gone is left alone and named. `reap` reads the driver's record and a wire program's and no others, because a harness can
 write under its folder, and one it cannot read is named too. Pipes always drain, and stderr goes to a bounded log with credentials
 masked. A driver that cuts text masks it first, since a cut can split a secret. `stop(grace)` is end of stdin, wait, `SIGTERM`, wait,
-`SIGKILL`, then verify, and then what carries the harness's own `TMPDIR`, which everything it starts inherits, whichever group it left for:
+`SIGKILL`, then verify that nothing in the group runs, since a member that has exited stays in it until its parent reaps it, and then
+what carries the harness's own `TMPDIR`, which everything it starts inherits, whichever group it left for:
 on Linux, `stop` and `reap` find those in `/proc` and end them too. What clears its environment escapes, as does anything on macOS, and a
 stop that came to `SIGKILL` reports `crash_window`, because a harness gets no chance to end what it started. See
 [ADR 0018](adr/0018-who-owns-a-process.md) and [ADR 0021](adr/0021-what-a-harness-leaves-behind.md).
