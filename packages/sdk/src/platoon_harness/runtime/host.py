@@ -37,12 +37,12 @@ from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP
-from platoon_harness.schema import ConfigError
+from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Team
 from platoon_harness.tools import PH, ToolServer, delivery_text, harness_name, held_tools, preamble, shell_name
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
-from .opening import make_driver
+from .opening import PLAN_LOGIN_FIX, make_driver
 from .paths import agent_folder
 
 NAMESPACE = "ph"
@@ -236,11 +236,8 @@ class Host:
     async def _launch(self, effect: Effect) -> None:
         data = effect.data
         agent, role = data["agent"], data["role"]
-        if not self._plan_login and await self._on_a_plan_login(role) and (others := await self.on_plan_logins(agent)):
-            raise DriverError(
-                f"{agent} would join {', '.join(others)} headless on one plan login: start the session with "
-                "`plan_login=True` to say this is your own work, or give its role an auth profile"
-            )
+        if not self._plan_login and await self._on_plan(role) and (others := await self._live_on_plans(agent)):
+            raise DriverError(f"{agent} would join {', '.join(others)} headless on one plan login: {PLAN_LOGIN_FIX}")
         admission = self._admitted.pop(agent, None)
         if admission is None:  # It finished in a runtime that has gone, and what it gave went too.
             admission = await self.admit(SpawnRequest(agent=agent, role=role, resumed=True))
@@ -306,7 +303,14 @@ class Host:
                 found[role] = (await self.describe(role)).capabilities
         return found
 
-    async def _on_a_plan_login(self, role: str) -> bool:
+    async def check_plan_login(self) -> None:
+        """Refuse to bring back several agents headless on one plan login, before anything runs, unless the session was
+        started saying so, as a harness can be signed in on a plan between runs."""
+        if not self._plan_login and len(crowded := await self._live_on_plans()) > 1:
+            what = f"{', '.join(crowded)} would run headless on one plan login: {PLAN_LOGIN_FIX}"
+            raise ConfigError([Problem("roles", what)])
+
+    async def _on_plan(self, role: str) -> bool:
         """Whether a role's agents run on a plan login: its harness says so now, and the role names no auth profile. A
         driver that cannot say runs nothing."""
         if self._team.roles[role].auth is not None:
@@ -316,7 +320,7 @@ class Host:
         except (ConfigError, DriverError):
             return False
 
-    async def on_plan_logins(self, besides: str | None = None) -> list[str]:
+    async def _live_on_plans(self, besides: str | None = None) -> list[str]:
         """The live agents but `besides` whose harness runs on a plan login."""
         kernel = self._kernel
         records = kernel.query(kernel.runtime, "agent.records", {})
@@ -325,7 +329,7 @@ class Host:
         return [
             record["name"]
             for record in records.result
-            if record["state"] != "ended" and record["name"] != besides and await self._on_a_plan_login(record["role"])
+            if record["state"] != "ended" and record["name"] != besides and await self._on_plan(record["role"])
         ]
 
     def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None) -> AgentSpec:

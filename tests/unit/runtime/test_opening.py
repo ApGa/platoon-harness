@@ -13,7 +13,7 @@ from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
 from platoon_harness.kernel import Event, Kernel, Refused, is_held
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime import LocalAuthority, opening
-from platoon_harness.runtime.opening import open_session, prepare
+from platoon_harness.runtime.opening import PLAN_LOGIN_FIX, open_session, prepare
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError
 from platoon_harness.testing import Say, ScriptedDriver
@@ -105,7 +105,7 @@ def test_several_agents_on_a_plan_login_are_refused_naming_the_fix(tmp_path):
     with pytest.raises(ConfigError, match="plan_login=True") as error:
         prepare(team_of(roles={"worker": planned(count=2)}), root=tmp_path)
 
-    assert "worker would run several agents headless on one plan login" in str(error.value)
+    assert f"worker would run several agents headless on one plan login: {PLAN_LOGIN_FIX}" in str(error.value)
     assert not (tmp_path / "sessions").exists()
 
 
@@ -157,8 +157,7 @@ async def test_a_spawn_that_would_put_a_second_agent_on_a_plan_login_fails_namin
         extra = next(agent for agent in (await session.ending()).agents if agent["agent"] == "extra")
 
     assert extra["status"] == "failed"
-    assert "extra would join lead headless on one plan login" in extra["reason"]
-    assert "plan_login=True" in extra["reason"]
+    assert extra["reason"].endswith(f"extra would join lead headless on one plan login: {PLAN_LOGIN_FIX}")
 
 
 async def test_an_owner_who_said_so_spawns_more_on_a_plan_login(tmp_path):
@@ -189,8 +188,10 @@ async def test_a_resume_that_would_bring_back_several_agents_on_a_plan_login_nee
         async with Session.resume("s", root=tmp_path) as session:
             await in_state(session, "worker-2", "idle")
         return
-    with pytest.raises(ConfigError, match="worker-1, worker-2 would run headless on one plan login"):
+    with pytest.raises(ConfigError, match="worker-1, worker-2 would run headless on one plan login") as error:
         await Session.resume("s", root=tmp_path)
+
+    assert PLAN_LOGIN_FIX in str(error.value)
 
     assert not is_held(tmp_path / "sessions" / "s")
     assert len(await journal(await Session.attach("s", root=tmp_path))) == head

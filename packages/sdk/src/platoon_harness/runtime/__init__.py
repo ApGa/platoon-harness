@@ -13,7 +13,6 @@ from platoon_harness.drivers import TurnEnded
 from platoon_harness.extensions import Installed
 from platoon_harness.kernel import Clock, Daemon, Extension, Kernel, Principal, Refused, first, hash_token
 from platoon_harness.primitives import OWNER_STOP, PRIMITIVES
-from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
 
@@ -72,12 +71,7 @@ class Runtime:
         self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd, plan_login=manifest.plan_login)
         self.control = Control(self.kernel, self.human, self.folder)
         try:
-            if not manifest.plan_login and len(crowded := await self.host.on_plan_logins()) > 1:
-                what = (
-                    f"{', '.join(crowded)} would run headless on one plan login, and the session was not started with "
-                    "`plan_login=True`: sign their harness in with a key, or start a session that says so"
-                )
-                raise ConfigError([Problem("roles", what)])
+            await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
             await open_session(self.kernel, team, manifest, authority, text, await self.host.capabilities())
             await self.tools.start()

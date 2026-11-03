@@ -96,7 +96,7 @@
 
 - The plan-login refusal was checked only at the start, so a human spawning more agents later, and a resume after a harness was signed
   in on a plan, escaped it. The manifest keeps `plan_login`, and without it a launch beside a live agent on a plan login fails, and a
-  resume that would bring back several is refused, each naming the fix.
+  resume that would bring back several is refused, each naming the fix in the same words, `PLAN_LOGIN_FIX`.
 - A budget that an unmeasured turn left unable to hold said so and no more. Its `unavailable` refusal names the two ways on, a
   `fallback = "turns"` with a `turns` limit or no limit in that unit, and says no higher limit helps.
 - A Codex interrupt that came while a `turn/start` was on its way, which the harness then refused, stayed set and cut the next turn.

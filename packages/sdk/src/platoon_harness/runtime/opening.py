@@ -21,7 +21,11 @@ from .paths import find_root, new_folder
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["make_driver", "open_session", "prepare"]
+__all__ = ["PLAN_LOGIN_FIX", "make_driver", "open_session", "prepare"]
+
+PLAN_LOGIN_FIX = (
+    "start the session with `plan_login=True` to say this is your own work, or give each role an auth profile"
+)
 
 
 def make_driver(role: Role) -> Driver:
@@ -51,8 +55,7 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     if sum(map(team.starts, roles)) < 2 and not any(map(team.spawners, roles)):
         return []
     names = ", ".join(roles)
-    fix = "pass `plan_login=True` to say this is your own work, or give them an auth profile"
-    return [Problem("roles", f"{names} would run several agents headless on one plan login: {fix}")]
+    return [Problem("roles", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
 
 
 def prepare(

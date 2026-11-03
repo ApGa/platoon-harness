@@ -234,6 +234,7 @@ platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
 platoon_harness.runtime.host.NAMESPACE
+platoon_harness.runtime.opening.PLAN_LOGIN_FIX
 platoon_harness.runtime.opening.make_driver
 platoon_harness.runtime.opening.open_session
 platoon_harness.runtime.opening.prepare
