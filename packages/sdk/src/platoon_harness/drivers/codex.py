@@ -324,6 +324,7 @@ class CodexDriver:
             await self._hand_over(delivery.text, delivery.input)
         except DriverError:
             self._unlanded.discard(delivery.input)
+            self._interrupted &= bool(self._turns or self._unlanded)  # No turn is on its way for it to cut.
             raise
 
     async def interrupt(self) -> None:

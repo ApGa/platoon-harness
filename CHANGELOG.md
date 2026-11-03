@@ -61,6 +61,8 @@
 
 ### Fixed
 
+- A Codex interrupt that came while a `turn/start` was on its way, which the harness then refused, stayed set and cut the next turn.
+  A refused handover with no other turn on its way clears it.
 - A role a written grant lets another spawn was not counted as spawnable, so a plan login with one such role was not refused, and the
   role started an agent of its own. `Team.spawners` reads written grants of `agent.spawn` as `team_check` does, as the same thing as
   `may_spawn`.

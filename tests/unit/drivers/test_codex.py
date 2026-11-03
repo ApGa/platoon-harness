@@ -632,6 +632,23 @@ async def test_an_interrupt_as_a_handover_begins_a_turn_cuts_that_turn_once_it_h
     assert turn.reason == "interrupted"
 
 
+async def test_an_interrupt_of_a_handover_the_harness_then_refused_cuts_no_later_turn(tmp_path, stand):
+    stand.install(turns=[[began(), ended()]], refused_once={"turn/start": "the thread is busy"})
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        handing = asyncio.create_task(driver.deliver(delivery("41")))
+        await asyncio.sleep(0)  # It has sent `turn/start` and heard nothing back.
+        await driver.interrupt()
+        with pytest.raises(DriverError, match="the thread is busy"):
+            await handing
+        await driver.deliver(delivery("42"))
+        turn = await heard.until(TurnEnded)
+
+    assert turn.reason == "stopped"
+    assert "turn/interrupt" not in [frame.get("method") for frame in stand.heard]
+
+
 async def test_an_interrupt_refused_labels_no_turn_that_then_runs_to_its_end(tmp_path, stand):
     stand.install(turns=[[began()]], refused={"turn/interrupt": "not now"})
 

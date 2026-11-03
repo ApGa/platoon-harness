@@ -26,9 +26,10 @@ def play(frames: list, turn: str = "") -> None:
 def answer(id: int, method: str, params: dict) -> None:
     if method == script.get("deaf_after"):
         time.sleep(600)
-    if method in script.get("refused", {}):
+    refusal = script.get("refused", {}).get(method) or script.get("refused_once", {}).pop(method, None)
+    if refusal is not None:
         play(script.get("before_refusal", ()), params.get("turnId", ""))
-        say({"id": id, "error": {"code": -32600, "message": script["refused"][method]}})
+        say({"id": id, "error": {"code": -32600, "message": refusal}})
         return
     match method:
         case "initialize":
