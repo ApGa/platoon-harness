@@ -19,7 +19,10 @@ _FINISHING = (
     "When your goal is done, make `agent.finish` your last call, with your report: a turn that only ends leaves you "
     "idle, and whoever waits on you still waiting."
 )
-_STAYING = "You stay here between turns, so call `agent.finish` only when told your work is over: it ends you for good."
+_STAYING = (
+    "When told to finish, make `agent.finish` your last call, or your session never closes. Told nothing of the kind, "
+    "stay: it ends you for good, and a turn that only ends leaves you here for the next message."
+)
 _REFUSALS = {
     "not_permitted": (
         "You may not do this.",

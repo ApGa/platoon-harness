@@ -232,8 +232,8 @@ async def test_the_preamble_teaches_parking(kernel, lead):
 async def test_the_preamble_tells_a_spawned_agent_to_finish_and_a_root_to_stay(kernel, lead, worker):
     assert "make `agent_finish` your last call" in preamble(kernel, worker[0])
     assert "make `ph agent.finish` your last call" in preamble(kernel, worker[0], shell_name)
-    assert "only when told your work is over" in preamble(kernel, lead[0])
-    assert "your last call" not in preamble(kernel, lead[0])
+    assert "When told to finish, make `agent_finish` your last call" in preamble(kernel, lead[0])
+    assert "When your goal is done" not in preamble(kernel, lead[0])
 
 
 async def test_the_preamble_points_a_shell_at_help(kernel, lead):
