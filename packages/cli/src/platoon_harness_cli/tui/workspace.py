@@ -10,6 +10,7 @@ from textual import events, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
 
@@ -189,6 +190,15 @@ class Workspace(Screen[None]):
     # Drawing, once a frame.
 
     async def _draw(self, events: list[Event], said: bool) -> None:
+        """Draw a frame. Taking this screen down removes its widgets before it cancels its workers, so a frame cut short
+        by that, and only by that, is dropped."""
+        try:
+            await self._frame(events, said)
+        except NoMatches:
+            if self.is_running:
+                raise
+
+    async def _frame(self, events: list[Event], said: bool) -> None:
         live = self.live
         assert live is not None
         transcript = self.query_one(Transcript)

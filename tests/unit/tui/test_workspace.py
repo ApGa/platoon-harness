@@ -328,6 +328,31 @@ async def test_a_slow_screen_drops_frames_and_never_events(root, monkeypatch):
         assert live.frames - frames < len(seen) / 10
 
 
+async def test_a_frame_cut_short_by_its_screen_going_is_dropped(root, monkeypatch):
+    """Taking a screen down removes its widgets before it cancels its workers, so a frame drawn in between finds them
+    gone, and that alone fails nothing."""
+    gone = asyncio.Event()
+    monkeypatch.setattr(Transcript, "on_unmount", lambda self: gone.set(), raising=False)
+    async with attached(team(), root) as (_, app, _):
+        screen = workspace(app)
+        live = screen.live
+        assert live is not None
+        draw, waiting, running = live._draw, asyncio.Event(), []
+
+        async def late(events, said):
+            waiting.set()
+            await gone.wait()
+            running.append(screen.is_running)
+            await draw(events, said)
+
+        live._draw = late
+        live._dirty.set()
+        await waiting.wait()
+        await app.pop_screen()
+
+        assert running == [False] and app.is_running
+
+
 async def test_the_palette_s_session_commands_are_the_command_line_s_worded_for_a_person(root):
     """Each command a person may run, as the command line words it, but a takeover, whose terminal is not built. A read
     is what the screen draws, so the palette offers none."""
