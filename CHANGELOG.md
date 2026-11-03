@@ -73,8 +73,9 @@
 - An agent's `wait` for the end of one that stays is refused while it has not ended, naming `from`, a refusal over working children
   names `from` for one that stays, and a `max_children` refusal says that ending a child makes room.
 - `agent.retire` is refused for an agent on its way to a turn, as for one in a turn: `agent.cancel` is what stops one.
-- `team_check` warns of a wake cycle that closes through a parent and a child that can stay, with no `max_hops`, which every
-  manager-worker team without one now gets, and refuses a role that stays on a one-shot harness.
+- `team_check` warns of a wake cycle that closes through a parent and a child that can stay, with no `max_hops`, and refuses a role
+  that stays on a one-shot harness. The `manager-worker` and `tree` presets take `max_hops`, 8 unless given, as `mesh` and `star` do,
+  so no shipped preset sets the warning off.
 - `agent.spawned`, `context.offered`, `context.delivered` and `message.sent` are at payload v2, and the folds that read what v1 lacked
   fill it with what held when it was written, so a journal from before agents could stay still opens.
 - A tool result's `next` is in the words of its surface, with no sentence naming a tool its reader does not hold, as a refusal's is.

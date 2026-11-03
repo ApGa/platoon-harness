@@ -42,8 +42,10 @@ choose, several notify a parent for the first task only, and almost none bounds 
   report goes to a parent ending with it.
 - **`team check` warns of a wake cycle that closes through a child that can stay.** It flags a team in which a role may spawn a role
   whose harness is persistent, can message it by an edge, and both their inboxes wake, with no `max_hops`. Any persistent child can
-  stay, since a spawn may ask, so every such team is flagged, a manager-worker team among them. It warns rather than refuses, because
-  that cycle is how follow-ups work and a budget bounds it too. A cycle that does not need such a pair is still refused.
+  stay, since a spawn may ask, so every such team is flagged, a hand-written manager and worker among them. It warns rather than
+  refuses, because that cycle is how follow-ups work and a budget bounds it too. A cycle that does not need such a pair is still
+  refused. The `manager-worker` and `tree` presets carry `max_hops`, 8 unless given, as `mesh` and `star` do, so a shipped preset never
+  sets off a warning a user would learn to ignore.
 - **An ended agent stays ended.** `agent.interrupt` is the stop that keeps an agent. No new verb was added.
 
 ## Alternatives considered

@@ -53,6 +53,9 @@ kind = "queue"
 writers = "role:lead"
 readers = "role:worker"
 lease = "30m"
+
+[topology.limits]
+max_hops = 8
 """
 
 PRESET_TEAMS = {

@@ -29,7 +29,13 @@ def _selectors(roles: Roles) -> list[str]:
 
 
 def manager_worker(
-    manager: str, workers: Roles, *, queue: str = "tasks", board: str = "notes", lease: str = "30m"
+    manager: str,
+    workers: Roles,
+    *,
+    queue: str = "tasks",
+    board: str = "notes",
+    lease: str = "30m",
+    max_hops: int = 8,
 ) -> Topology:
     """A manager fills a queue that workers claim from. Workers answer to their parent and share a board."""
     return Topology(
@@ -39,15 +45,18 @@ def manager_worker(
             queue: Queue(writers=f"role:{manager}", readers=_selectors(workers), lease=lease),
             board: Board(writers="all", readers="all"),
         },
+        limits=Limits(max_hops=max_hops),
     )
 
 
-def tree(role: str, *, max_depth: int, max_children: int | None = None, until: str | None = None) -> Topology:
+def tree(
+    role: str, *, max_depth: int, max_children: int | None = None, until: str | None = None, max_hops: int = 8
+) -> Topology:
     """Agents delegate downward and report upward. It closes when its root finishes, unless `until` says otherwise."""
     return Topology(
         until=until or f"role:{role}",
         edges={role: ["children", "parent", "human"]},
-        limits=Limits(max_depth=max_depth, max_children=max_children),
+        limits=Limits(max_depth=max_depth, max_children=max_children, max_hops=max_hops),
     )
 
 

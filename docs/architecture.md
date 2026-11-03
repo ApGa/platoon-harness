@@ -788,7 +788,7 @@ workers = "worker"
 ```console
 $ platoon-harness team show
 lead (claude) may message its workers and you. Workers (codex, own worktrees) may message lead.
-lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Closes when lead finishes.
+lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.
 ```
 
 `team show --resolved` prints the expansion, which is valid input and is what the manifest stores and hashes. Defaults stay out of
@@ -817,6 +817,9 @@ kind = "queue"
 writers = "role:lead"
 readers = "role:worker"
 lease = "30m"
+
+[topology.limits]
+max_hops = 8
 ```
 
 [topologies.md](topologies.md) is the guide, with a worked example per preset.
@@ -878,7 +881,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A parent and a child that can
   stay are the exception: a message from the parent wakes the child, and its answer wakes the parent, so `team check` warns of a cycle
   that closes only through them. Any child on a persistent harness can stay, as a spawn may ask, so the warning names each role that may
-  spawn one, can message it, and wakes with it, with no `max_hops`: a warning and not a refusal, because that is how follow-ups work. A chain through a program
+  spawn one, can message it, and wakes with it, with no `max_hops`: a warning and not a refusal, because that is how follow-ups work.
+  The `manager-worker` and `tree` presets carry `max_hops`, 8 unless given, as `mesh` and `star` do, so no shipped preset sets it off. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
   resolve, a setting no primitive enforces yet, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,

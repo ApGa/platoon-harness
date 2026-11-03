@@ -106,13 +106,13 @@ def test_manager_worker_with_a_shared_board():
         "notes": Board(writers="all", readers="all"),
     }
     assert topology.until == "role:lead"
-    assert topology.limits == Limits(max_children=8)
+    assert topology.limits == Limits(max_children=8, max_hops=8)
 
 
 def test_recursive_tree():
     topology = tree("agent", max_depth=6, max_children=4)
     assert topology.edges == {"agent": ("children", "human", "parent")}
-    assert topology.limits == Limits(max_depth=6, max_children=4)
+    assert topology.limits == Limits(max_depth=6, max_children=4, max_hops=8)
     assert topology.until == "role:agent"
     assert topology.channels == {}
 
@@ -149,7 +149,7 @@ def test_a_person_can_reach_a_star_and_a_tree_and_be_answered():
 
 
 def test_a_tree_needs_only_a_depth():
-    assert tree("agent", max_depth=6).limits == Limits(max_depth=6)
+    assert tree("agent", max_depth=6).limits == Limits(max_depth=6, max_hops=8)
 
 
 def test_a_stage_named_twice_keeps_every_writer():

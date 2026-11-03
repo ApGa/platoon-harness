@@ -14,7 +14,8 @@ from .support import MANAGER_WORKER, PRESET_TEAMS, SECTION_8_RESOLVED
 def test_show_prints_what_the_architecture_shows():
     assert Team.loads(MANAGER_WORKER).show() == (
         "lead (claude) may message its workers and you. Workers (codex, own worktrees) may message lead.\n"
-        "lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Closes when lead finishes."
+        "lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. "
+        "Closes when lead finishes."
     )
 
 
@@ -37,7 +38,7 @@ def test_every_preset_reads_as_sentences(name):
 def test_show_describes_a_tree():
     assert PRESET_TEAMS["tree"].show() == (
         "Agents (openhands) may message their children, their parent and you.\n"
-        "Limits: depth 6, children 4. Closes when every agent has finished."
+        "Limits: depth 6, children 4, hops 8. Closes when every agent has finished."
     )
 
 
@@ -172,4 +173,4 @@ def test_limits_read_in_order():
         roles={"a": Role(harness="pi")},
         topology=tree("a", max_depth=2, max_children=3) | Topology(limits=Limits(max_live=4)),
     )
-    assert "Limits: depth 2, children 3, live 4." in team.show()
+    assert "Limits: depth 2, children 3, live 4, hops 8." in team.show()

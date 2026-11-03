@@ -30,7 +30,8 @@ from platoon_harness.topology import (
 ### manager-worker
 
 A lead fills a queue, workers claim from it, and everyone shares a board. Claiming is competitive, so the lead never has to assign.
-Workers cannot talk to each other.
+Workers cannot talk to each other. A lead and a worker that stays can wake each other with follow-ups and answers, so it bounds hops:
+8 unless you say otherwise.
 
 ```toml
 [roles.lead]
@@ -58,13 +59,14 @@ team = Team(
 
 ```text
 lead (claude) may message its workers and you. Workers (codex, own worktrees) may message lead.
-lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Closes when lead finishes.
+lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.
 ```
 
 ### tree
 
 Agents delegate downward and report upward. A finished child's result reaches its parent through the monitor, so a parent can
-simply wait for its children. A recursive role must say how deep it may go.
+simply wait for its children. A recursive role must say how deep it may go, and a parent and a child that stays bound their hops, 8
+unless you say otherwise.
 
 ```toml
 [roles.agent]
@@ -86,7 +88,7 @@ team = Team(
 
 ```text
 Agents (pi) may message their children, their parent and you.
-Limits: depth 6, children 4. Closes when every agent has finished.
+Limits: depth 6, children 4, hops 8. Closes when every agent has finished.
 ```
 
 ### mesh
@@ -349,7 +351,7 @@ team = Team(
 
 ```text
 lead (claude) may message its workers and you. Workers (codex) may message their children, their parent and you.
-lead adds to queue `tasks`; workers claim from it. You post to topic `alerts`; everyone reads it. Each entry steers its readers. Everyone shares board `notes`. Limits: depth 3, children 4. Closes when lead finishes.
+lead adds to queue `tasks`; workers claim from it. You post to topic `alerts`; everyone reads it. Each entry steers its readers. Everyone shares board `notes`. Limits: depth 3, children 4, hops 8. Closes when lead finishes.
 ```
 
 Three rules keep this safe:
@@ -440,8 +442,8 @@ that can stay.
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the
 parent wakes the child and its answer wakes the parent, for as long as they go on. Any child on a persistent harness can stay, since a
-spawn may ask it to, so `team check` warns of every role that may spawn one and can message it, unless `max_hops` bounds them. A
-manager-worker team without `max_hops` gets that warning.
+spawn may ask it to, so `team check` warns of every role that may spawn one and can message it, unless `max_hops` bounds them. The
+`manager-worker` and `tree` presets bound them, at 8 unless you say otherwise.
 
 ## Your own preset
 

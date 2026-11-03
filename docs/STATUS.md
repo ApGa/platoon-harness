@@ -286,7 +286,7 @@ stand-in ops. A session runs a team through `tests/unit/runtime/test_opening.py`
 | Union: commutative, associative, a stable hash, conflicts naming both sources, no `deny` | tested | `test_union.py`, properties |
 | `compile`: edges, channels, groups, `may_spawn`, lifecycle, `wait` and scopes, enforced by the real `authorize` | tested | `test_compile.py` against stand-in ops, `test_compiled_grants.py` against the real ones. Channel verbs come from one table in `primitives` |
 | `next`, `prev` and groups expanded over roles | tested | `test_compile.py` |
-| `team_check`: refusals, warnings, did-you-mean, every problem at once, recursion through a written grant, relations no `may_spawn` makes true, a role that stays on a one-shot harness, and a wake cycle through a child that can stay, warned of with no `max_hops` | tested | `test_check.py` |
+| `team_check`: refusals, warnings, did-you-mean, every problem at once, recursion through a written grant, relations no `may_spawn` makes true, a role that stays on a one-shot harness, and a wake cycle through a child that can stay, warned of with no `max_hops`, which no shipped preset sets off | tested | `test_check.py` |
 | A preset nobody knows, refused at load unless the team names an extension | tested | `test_check.py` |
 | `team.show()` in English, and the resolved form as valid input | tested | `test_show.py`, `test_docs.py` |
 | `docs/topologies.md`: every snippet runs, and both forms agree | tested | `test_docs.py` |

@@ -40,12 +40,20 @@ def text(problems):
     return "\n".join(problems)
 
 
-def bounded(team: Team, max_hops: int = 8) -> Team:
-    return team.model_copy(update={"topology": team.topology | Topology(limits=Limits(max_hops=max_hops))})
+def lead_and_worker(**limits: int) -> Team:
+    """A lead that may spawn a worker on a persistent harness and message it, written out by hand."""
+    roles = {"lead": Role(harness="claude", may_spawn=["worker"]), "worker": Role(harness="codex")}
+    edges = {"lead": ["children", "human"], "worker": ["parent"]}
+    return Team(roles=roles, topology={"edges": edges, "limits": limits})
 
 
 def test_a_sound_team_has_no_problems():
-    assert check(bounded(PRESET_TEAMS["manager-worker"])) == ()
+    assert check(PRESET_TEAMS["manager-worker"]) == ()
+
+
+@pytest.mark.parametrize("preset", PRESET_TEAMS)
+def test_no_shipped_preset_sets_off_a_warning_of_a_wake_cycle(preset):
+    assert "wake cycle" not in text(warnings(PRESET_TEAMS[preset]))
 
 
 def test_recursive_may_spawn_with_no_max_depth_is_refused():
@@ -126,7 +134,7 @@ def test_max_hops_answers_a_cycle():
 
 
 def test_a_parent_and_a_child_that_can_stay_are_a_wake_cycle_to_warn_of():
-    team = PRESET_TEAMS["manager-worker"]
+    team = lead_and_worker()
 
     assert errors(team) == []
     found = text(warnings(team))
@@ -136,7 +144,7 @@ def test_a_parent_and_a_child_that_can_stay_are_a_wake_cycle_to_warn_of():
 
 
 def test_max_hops_bounds_a_parent_and_a_child_that_can_stay():
-    assert warnings(bounded(PRESET_TEAMS["manager-worker"])) == []
+    assert warnings(lead_and_worker(max_hops=8)) == []
 
 
 @pytest.mark.parametrize("why", ["one-shot", "quiet", "out of reach"])
