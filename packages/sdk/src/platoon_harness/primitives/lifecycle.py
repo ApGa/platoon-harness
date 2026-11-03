@@ -785,7 +785,7 @@ def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
 
 
 class Close(Args):
-    if_done: bool = False
+    if_done: Annotated[bool, Field(description="Close only if `session.status` still says done.")] = False
 
 
 @op("session.close")

@@ -4,7 +4,7 @@ import json
 import sqlite3
 from typing import Any, Literal
 
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 
 from .model import GIST_LIMIT, Event, Refused
 from .op import Args, op
@@ -174,8 +174,8 @@ class EffectAttempt(Args):
 
 
 class EffectVerdict(Args):
-    id: int
-    happened: bool
+    id: int = Field(description="The effect, as its row in `attention.list` names it.")
+    happened: bool = Field(description="Whether it happened.")
 
 
 class Incarnation(Args):
@@ -235,8 +235,8 @@ def fail_effect(txn: Txn, a: EffectError) -> None:
 
 @op("effect.settle", on=lambda a: f"effect/{a.id}")
 def settle_effect(txn: Txn, a: EffectVerdict) -> None:
-    """Say whether an uncertain effect happened, which is what `surface` leaves to a person. Refused `conflict` once it
-    is no longer uncertain, as when recovery got there first."""
+    """Say whether an uncertain effect happened, which is left to a person when nothing else can tell. Refused
+    `conflict` once it is no longer uncertain, as when recovery got there first."""
     if txn.me.kind == "agent":
         raise Refused("not_permitted", "an agent cannot vouch for an effect")
     effect = _require(txn, a.id, "uncertain")

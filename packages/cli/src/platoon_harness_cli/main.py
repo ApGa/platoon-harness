@@ -18,8 +18,7 @@ from .output import note, refused
 HELP = """Bring the agent harnesses you already use together as a team, from a terminal or from CI.
 
 A session is a folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for
-clients to attach to. Every other command acts on a session by its name, as a guest, and runs one op there, as an
-agent's `ph` does.
+clients to attach to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
 
 For example:
 
@@ -39,6 +38,16 @@ For example:
     platoon-harness session resume fix-auth"""
 
 _OPS = Group("Ops on a session", sort_key=1)
+_FLAGS = Parameter(negative=(), show_default=False)
+"""A flag as a person types it: no `--no-` form, and no default shown, as each command's help says what it is."""
+
+
+def _flags(app: App) -> None:
+    """Give every command under `app` the same flags, which the reference is made from as `--help` is."""
+    for name in app:
+        if not name.startswith("-"):
+            app[name].default_parameter = _FLAGS
+            _flags(app[name])
 
 
 def build() -> App:
@@ -47,7 +56,7 @@ def build() -> App:
         name="platoon-harness",
         help=HELP,
         version=f"platoon-harness {__version__}, SDK {sdk_version}",
-        default_parameter=Parameter(negative=(), show_default=False),
+        default_parameter=_FLAGS,
         console=Console(),
         error_console=Console(stderr=True),
     )
@@ -68,6 +77,7 @@ def build() -> App:
         if name != "session":
             group.group = (_OPS,)
             app.command(group)
+    _flags(app)
     return app
 
 

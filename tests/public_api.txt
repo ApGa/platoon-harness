@@ -306,6 +306,7 @@ platoon_harness.testing.check_extension
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.told
 platoon_harness.tools.NAMESPACE
+platoon_harness.tools.OP_NAMED
 platoon_harness.tools.PH
 platoon_harness.tools.PREAMBLE
 platoon_harness.tools.SHIM
@@ -321,6 +322,7 @@ platoon_harness.tools.preamble
 platoon_harness.tools.shell_name
 platoon_harness.tools.slots
 platoon_harness.tools.surface_of
+platoon_harness.tools.taught
 platoon_harness.tools.tool_name
 platoon_harness.topology.Board
 platoon_harness.topology.Channel

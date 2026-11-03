@@ -3,10 +3,11 @@
 <!-- Made from the command definitions by `uv run python -m platoon_harness_cli.reference > docs/cli.md`. Do not edit:
 change the definitions, and make it again. A test holds it to them. -->
 
-Every command that acts on a session takes the session's name first, and runs one op there as a guest, by the name and
+Each command under Ops on a session takes the session's name first, and runs one op there as a guest, by the name and
 with the arguments an agent's `ph` uses: `ph task.claim --queue tasks` is `platoon-harness task claim SESSION --queue
-tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. The
-[headless quickstart](headless.md) shows them together.
+tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. `wait` and
+the ops on a wait have no command, as a wait parks a turn and a person has none: `events --follow` watches a session,
+and a script has `Session.wait`. The [headless quickstart](headless.md) shows them together.
 
 ## Exit codes
 
@@ -21,20 +22,21 @@ tasks`. A read runs on a view credential, which writes nothing, and anything els
 | `needs_human` | 4 |
 | `cancelled` | 130 |
 
-Every command shares these, with what went wrong on stderr:
+Every command shares these:
 
 | Code | When |
 |---|---|
 | 1 | A command other than `run` and `session resume` was refused, and nothing it asked for happened |
-| 64 | A command line that cannot run as it was given |
-| 78 | A team, a root or a machine that cannot be used as it is. `team check` and `doctor` say so too |
+| 64 | A command line that cannot run as it was given. `run` and `session resume` exit this for a refusal before the session is theirs, such as a name that is taken or no session of that name, so they never exit 1 for one |
+| 78 | A team, a root or a machine that cannot be used as it is. `team check` and `doctor` print each problem on stdout, as what they say, and every other command on stderr |
 | 130 | Ctrl+C, where no session's ending says more |
 
 ## JSONL
 
 With `--json`, `run`, `session resume` and `events` print one JSON object per line on stdout, and nothing else reaches
 it: logs, notes and refusals go to stderr. Each line has `format`, which is 1, and holds ASCII alone, anything
-else escaped.
+else escaped. `run` and `session resume` print each event the runtime they own journals, from its `runtime.started`,
+and `events` each event past `--after`.
 
 An event's line is its envelope as the journal holds it, as architecture section 5.3 says, with these keys:
 
@@ -42,11 +44,13 @@ An event's line is its envelope as the journal holds it, as architecture section
 
 Its `v` is its payload's version. Its `seq` is a cursor: pass the last one as `--after` to go on exactly where you
 stopped. The last line of `run` and `session resume` is the ending, with these keys, where `type` is `ending` and
-`code` is what the command exits with:
+`code` is what the command exits with. One stopped while its runtime starts prints its ending alone:
 
 `type`, `state`, `reason`, `agents`, `usage`, `gaps`, `code`
 
-Without `--json` each event is one readable line, which is no contract.
+Without `--json` each event is one readable line, which is no contract. JSONL is the one versioned shape here: what
+another command prints with `--json`, and what an op's command prints, is that op's result or that command's report,
+whose shape follows it, with no `format`.
 
 ## platoon-harness
 
@@ -57,8 +61,7 @@ platoon-harness COMMAND
 Bring the agent harnesses you already use together as a team, from a terminal or from CI.
 
 A session is a folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for
-clients to attach to. Every other command acts on a session by its name, as a guest, and runs one op there, as an
-agent's `ph` does.
+clients to attach to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
 
 For example:
 
@@ -140,9 +143,6 @@ For example:
     - [`renew`](#platoon-harness-task-renew)
 - [`view`](#platoon-harness-view)
     - [`watch`](#platoon-harness-view-watch)
-- [`wait`](#platoon-harness-wait)
-    - [`cancel`](#platoon-harness-wait-cancel)
-    - [`progress`](#platoon-harness-wait-progress)
 
 **Commands**:
 
@@ -157,22 +157,21 @@ For example:
 
 **Ops on a session**:
 
-* [`agent`](#platoon-harness-agent): Cancel, interrupt, list, release, retire, spawn, status, takeover: the `agent` ops, each on one session.
-* [`approval`](#platoon-harness-approval): Resolve: the `approval` ops, each on one session.
-* [`attention`](#platoon-harness-attention): List: the `attention` ops, each on one session.
-* [`blob`](#platoon-harness-blob): Get: the `blob` ops, each on one session.
-* [`board`](#platoon-harness-board): Get, post, query, revise: the `board` ops, each on one session.
-* [`body`](#platoon-harness-body): Tombstone: the `body` ops, each on one session.
-* [`budget`](#platoon-harness-budget): Set, status: the `budget` ops, each on one session.
-* [`channel`](#platoon-harness-channel): Create, list: the `channel` ops, each on one session.
-* [`effect`](#platoon-harness-effect): Settle: the `effect` ops, each on one session.
-* [`episode`](#platoon-harness-episode): Close, open: the `episode` ops, each on one session.
-* [`message`](#platoon-harness-message): Read, send: the `message` ops, each on one session.
-* [`ops`](#platoon-harness-ops): List: the `ops` ops, each on one session.
-* [`peers`](#platoon-harness-peers): List whom you may message directly now, in `peers`, with the true `total` and a `cursor` to pass as `after`, or none at the end.
-* [`task`](#platoon-harness-task): Add, claim, complete, fail, list, release, renew: the `task` ops, each on one session.
-* [`view`](#platoon-harness-view): Watch: the `view` ops, each on one session.
-* [`wait`](#platoon-harness-wait): Wait, spending no turn until it holds: for `agents` to end, a message `from` each named agent, `tasks` to settle, a version of `board` newer than you read, a new entry on `channels`, or work on `queue`.
+* [`agent`](#platoon-harness-agent): The `agent` ops, each on one session, with the arguments an agent's `ph agent.<op>` takes as flags.
+* [`approval`](#platoon-harness-approval): The `approval` ops, each on one session, with the arguments an agent's `ph approval.<op>` takes as flags.
+* [`attention`](#platoon-harness-attention): The `attention` ops, each on one session, with the arguments an agent's `ph attention.<op>` takes as flags.
+* [`blob`](#platoon-harness-blob): The `blob` ops, each on one session, with the arguments an agent's `ph blob.<op>` takes as flags.
+* [`board`](#platoon-harness-board): The `board` ops, each on one session, with the arguments an agent's `ph board.<op>` takes as flags.
+* [`body`](#platoon-harness-body): The `body` ops, each on one session, with the arguments an agent's `ph body.<op>` takes as flags.
+* [`budget`](#platoon-harness-budget): The `budget` ops, each on one session, with the arguments an agent's `ph budget.<op>` takes as flags.
+* [`channel`](#platoon-harness-channel): The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
+* [`effect`](#platoon-harness-effect): The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
+* [`episode`](#platoon-harness-episode): The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
+* [`message`](#platoon-harness-message): The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
+* [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
+* [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
+* [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
+* [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
 
 ### platoon-harness run
 
@@ -184,11 +183,12 @@ Start a session, give it a prompt, and own it in the foreground until it settles
 
 It exits with how the session ended: 0 settled, 1 an agent failed, 2 the budget ran out, 3 timed out, 4 it needs a
 person, and 130 cancelled, by Ctrl+C or `session stop` too. Ctrl+C runs the owner's shutdown first, which keeps the
-session resumable.
+session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost.
 
-The team is the project file, `platoon-harness.toml`, or the file --team names over it, or a team of one on
---harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it lands at
-the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can reach it.
+The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
+on that harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it
+lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can
+reach it.
 
 With --json, stdout holds one JSON line per event of the session's journal, then one for its ending, and nothing
 else. An approval left to ask, with nobody attached to answer, ends the run at once with exit 4, and never prompts:
@@ -197,7 +197,7 @@ else. An approval left to ask, with nobody attached to answer, ends the run at o
 For example:
 
     platoon-harness run "Fix the flaky test in tests/test_cart.py"
-    git diff | platoon-harness run --json --harness codex --approvals deny > events.jsonl
+    git diff | platoon-harness run - --json --harness codex --approvals deny > events.jsonl
     platoon-harness run --team crew.toml --to @lead --prompt-file task.md --plan-login --timeout 30m
 
 **Arguments**:
@@ -207,7 +207,8 @@ For example:
 **Parameters**:
 
 * `--team`: A team file, over the project file.
-* `--harness`: A team of one on this harness, whose role and agent take its name.
+* `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+        of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
 * `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
         profile.
@@ -222,7 +223,7 @@ For example:
 ### platoon-harness serve
 
 ```console
-platoon-harness serve [OPTIONS] [ARGS]
+platoon-harness serve [OPTIONS]
 ```
 
 Start a session and keep its runtime in the foreground, with no client attached, for a supervisor.
@@ -233,16 +234,14 @@ cannot run.
 
 For example:
 
-    platoon-harness serve crew.toml --name nightly
+    platoon-harness serve --team crew.toml --name nightly
     platoon-harness message send nightly --to @lead --gist "Start on the backlog"
-
-**Arguments**:
-
-* `TEAM`: A team file, over the project file.
 
 **Parameters**:
 
-* `--harness`: A team of one on this harness, whose role and agent take its name.
+* `--team`: A team file, over the project file.
+* `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+        of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
 * `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
         profile.
@@ -259,7 +258,8 @@ platoon-harness events [OPTIONS] SESSION
 Print a session's events past a cursor, live or closed, writing nothing.
 
 With --json each line is one event's JSON, carrying its `seq`: pass the last one as --after to go on exactly where
-you stopped, across a runtime that stopped and resumed. Ctrl+C ends it with exit 130.
+you stopped, across a runtime that stopped and resumed. It ends once nobody reads what it prints, and Ctrl+C ends it
+with exit 130.
 
 For example:
 
@@ -296,7 +296,8 @@ platoon-harness session list [OPTIONS]
 
 List the sessions under the state root, from their folders.
 
-Each has its name, whether a runtime holds it now, and its state.
+Each has its name, whether a runtime holds it now, and its state, which is unknown for one whose journal cannot be
+read, and stderr says why.
 
 For example:
 
@@ -305,17 +306,18 @@ For example:
 
 **Parameters**:
 
-* `--json, --no-json`: Say it as JSON. *[default: False]*
+* `--json`: Say it as JSON.
 
 #### platoon-harness session show
 
 ```console
-platoon-harness session show [OPTIONS] SESSION
+platoon-harness session show SESSION
 ```
 
 Say how a session stands: who is working, on what, what is blocked, and where you must act.
 
-Each place you must act comes with the command that would settle it.
+Each place you must act comes with the command that would settle it. `session status`, `view watch` and `attention
+list` say the same as JSON.
 
 For example:
 
@@ -324,10 +326,6 @@ For example:
 **Arguments**:
 
 * `SESSION`: A session, by name. **[required]**
-
-**Parameters**:
-
-* `--json, --no-json`: Say it as JSON: `session.status`, the `roster` and `attention` rows. *[default: False]*
 
 #### platoon-harness session stop
 
@@ -338,7 +336,7 @@ platoon-harness session stop SESSION
 Stop a session's runtime as its owner would, keeping the session resumable.
 
 Turns are interrupted and harnesses end. It sends SIGTERM to the runtime, which `run`, `serve`, `session resume` and
-a detached runtime take as the owner's stop, and waits until it has let go.
+a detached runtime take as the owner's stop, and follows the session until the runtime has let go.
 
 For example:
 
@@ -358,7 +356,7 @@ platoon-harness session resume [OPTIONS] SESSION
 Restart a session whose runtime has gone, and own it in the foreground until it settles.
 
 Its harnesses come back, and a turn they were cut off in is told and woken, which can spend money. It prints what
-happens from now, and exits as `run` does.
+its runtime does, from its start, and exits as `run` does.
 
 For example:
 
@@ -372,7 +370,7 @@ For example:
 **Parameters**:
 
 * `--timeout`: How long to wait for it to settle, such as 90s, 30m or 2h.
-* `--json, --no-json`: Print JSONL on stdout. *[default: False]*
+* `--json`: Print JSONL on stdout.
 
 #### platoon-harness session cancel
 
@@ -404,7 +402,7 @@ platoon-harness session close [OPTIONS] SESSION
 
 Drain: nothing new starts, and what is in flight finishes.
 
-Refused `conflict` when the session is not open, and with `if_done` when `session.status` would no longer say done, as a message that got in first makes it.
+Refused `conflict` when the session is not open, and with `--if-done` when `platoon-harness session status` would no longer say done, as a message that got in first makes it.
 
 For example:
 
@@ -416,7 +414,7 @@ For example:
 
 **Parameters**:
 
-* `--if-done, --no-if-done`:
+* `--if-done, --no-if-done`: Close only if `platoon-harness session status` still says done.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness session ending
@@ -497,11 +495,12 @@ It exits 78 when one is an error.
 
 **Parameters**:
 
-* `--harness`: A team of one on this harness, whose role and agent take its name.
-* `--set, --empty-set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more. *[default: ()]*
-* `--trust, --no-trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile. *[default: False]*
-* `--plan-login, --no-plan-login`: Several agents may run headless on one plan login, as `run --plan-login` says. *[default: False]*
+* `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+        of one.
+* `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
+        profile.
+* `--plan-login`: Several agents may run headless on one plan login, as `run --plan-login` says.
 
 #### platoon-harness team show
 
@@ -517,11 +516,12 @@ Say what a team allows, in plain words or as TOML that loads back to the same te
 
 **Parameters**:
 
-* `--harness`: A team of one on this harness, whose role and agent take its name.
-* `--set, --empty-set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more. *[default: ()]*
-* `--trust, --no-trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile. *[default: False]*
-* `--resolved, --no-resolved`: The expansion, which is what a session's manifest keeps, with no secret in it. *[default: False]*
+* `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+        of one.
+* `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
+        profile.
+* `--resolved`: The expansion, which is what a session's manifest keeps, with no secret in it.
 
 #### platoon-harness team told
 
@@ -539,10 +539,11 @@ That is all the runtime adds to its harness. No harness starts.
 
 **Parameters**:
 
-* `--harness`: A team of one on this harness, whose role and agent take its name.
-* `--set, --empty-set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more. *[default: ()]*
-* `--trust, --no-trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile. *[default: False]*
+* `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+        of one.
+* `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
+        profile.
 
 ### platoon-harness init
 
@@ -601,13 +602,11 @@ List every installed driver and extension, with its distribution, and any proble
 
 **Parameters**:
 
-* `--json, --no-json`: Say it as one JSON object. *[default: False]*
+* `--json`: Say it as one JSON object.
 
 ### platoon-harness agent
 
-Cancel, interrupt, list, release, retire, spawn, status, takeover: the `agent` ops, each on one session.
-
-Each takes the arguments an agent's `ph agent.<op>` takes, as flags.
+The `agent` ops, each on one session, with the arguments an agent's `ph agent.<op>` takes as flags.
 
 #### platoon-harness agent cancel
 
@@ -629,7 +628,7 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent interrupt
@@ -640,7 +639,7 @@ platoon-harness agent interrupt --agent STR [OPTIONS] SESSION
 
 Stop an agent's turn at the boundary its harness can, or the turn it is on its way to.
 
-What was waiting for it then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on. Refused `conflict` when it is neither in a turn nor on its way to one: there is nothing to stop. `not_permitted` when it is not below you.
+What was waiting for it then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on. Refused `conflict` when it is neither in a turn nor on its way to one, as there is nothing to stop, and before its first turn begins, which no harness can stop. `not_permitted` when it is not below you.
 
 For example:
 
@@ -652,7 +651,7 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent list
@@ -691,7 +690,7 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent retire
@@ -702,7 +701,7 @@ platoon-harness agent retire --agent STR [OPTIONS] SESSION
 
 Retire an agent that has stopped working: it leaves the team, and its history stays.
 
-Refused `conflict` while it is at work, in a turn or on its way to one, or while children that would end with it are, and when it has ended already. Call `wait` with `agents` for them, or with `from` for one that stays. `agent.cancel` stops one now.
+Refused `conflict` while it is at work, in a turn or on its way to one, or while children that would end with it are, and when it has ended already. `platoon-harness agent cancel` stops one now.
 
 For example:
 
@@ -714,7 +713,7 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent spawn
@@ -725,7 +724,7 @@ platoon-harness agent spawn --name STR --child-role STR [OPTIONS] SESSION
 
 Start a new agent in a role you may spawn.
 
-Put anything longer than `goal` in `body`. With neither it starts idle and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the session is closing or you have finished: use another name, or stop. `not_found` when no such role exists. `unsupported` for `stays` on a harness that cannot stay.
+Put anything longer than `--goal` in `--body`. With neither it starts idle and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the session is closing or you have finished: use another name, or stop. `not_found` when no such role exists. `unsupported` for `--stays` on a harness that cannot stay.
 
 For example:
 
@@ -765,7 +764,7 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 
 #### platoon-harness agent takeover
 
@@ -787,14 +786,12 @@ For example:
 
 **Parameters**:
 
-* `--agent`: An agent, as `@agent`. `peers` shows who is here. **[required]**
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness approval
 
-Resolve: the `approval` ops, each on one session.
-
-Each takes the arguments an agent's `ph approval.<op>` takes, as flags.
+The `approval` ops, each on one session, with the arguments an agent's `ph approval.<op>` takes as flags.
 
 #### platoon-harness approval resolve
 
@@ -816,17 +813,15 @@ For example:
 
 **Parameters**:
 
-* `--id`: **[required]**
-* `--verdict`: **[required]** *[choices: allow, deny]*
-* `--expected-version`: **[required]**
-* `--via`:
+* `--id`: The approval, as its row in `platoon-harness attention list` names it. **[required]**
+* `--verdict`: `allow` or `deny`. **[required]** *[choices: allow, deny]*
+* `--expected-version`: Its version as you saw it, so that a decision someone made since stands. **[required]**
+* `--via`: What it was decided through, which a loser is told.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness attention
 
-List: the `attention` ops, each on one session.
-
-Each takes the arguments an agent's `ph attention.<op>` takes, as flags.
+The `attention` ops, each on one session, with the arguments an agent's `ph attention.<op>` takes as flags.
 
 #### platoon-harness attention list
 
@@ -846,9 +841,7 @@ For example:
 
 ### platoon-harness blob
 
-Get: the `blob` ops, each on one session.
-
-Each takes the arguments an agent's `ph blob.<op>` takes, as flags.
+The `blob` ops, each on one session, with the arguments an agent's `ph blob.<op>` takes as flags.
 
 #### platoon-harness blob get
 
@@ -856,7 +849,7 @@ Each takes the arguments an agent's `ph blob.<op>` takes, as flags.
 platoon-harness blob get --ref STR SESSION
 ```
 
-Read a stored body's text: pass a `body` or `rest` from any result as `ref`.
+Read a stored body's text: pass a `body` or `rest` from any result as `--ref`.
 
 A long body comes back cut: `lines` says how many exist and `rest` is the ref to read on with. `text` is null for a binary body. Refused `not_found` when it does not exist or was redacted. `invalid`, with `lines`, for a range past the end.
 
@@ -874,9 +867,7 @@ For example:
 
 ### platoon-harness board
 
-Get, post, query, revise: the `board` ops, each on one session.
-
-Each takes the arguments an agent's `ph board.<op>` takes, as flags.
+The `board` ops, each on one session, with the arguments an agent's `ph board.<op>` takes as flags.
 
 #### platoon-harness board get
 
@@ -884,9 +875,9 @@ Each takes the arguments an agent's `ph board.<op>` takes, as flags.
 platoon-harness board get --board STR --name STR [OPTIONS] SESSION
 ```
 
-Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`.
+Read one object, its latest version or `--version`, and of a text body the lines of `--range`, written `L10-40`.
 
-A long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `blob.get` to read on. Cite `ref`. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the board, object or version does not exist.
+A long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `platoon-harness blob get` to read on. Cite `ref`. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the board, object or version does not exist.
 
 For example:
 
@@ -898,7 +889,7 @@ For example:
 
 **Parameters**:
 
-* `--board`: The board. `channel.list` names them. **[required]**
+* `--board`: The board. `platoon-harness channel list` names them. **[required]**
 * `--name`: The object's name. **[required]**
 * `--version`: A version; the latest if left out.
 * `--range`: Lines of the body, as `L10-40`.
@@ -911,7 +902,7 @@ platoon-harness board post --board STR --name STR --gist STR [OPTIONS] SESSION
 
 Create an object on a board, at version 1.
 
-Put anything longer than `gist` in `body`. Refused `conflict`, with the current version, when the name exists. Read it, then `board.revise`. `not_found` when no such board exists.
+Put anything longer than `--gist` in `--body`. Refused `conflict`, with the current version, when the name exists. Read it, then `platoon-harness board revise`. `not_found` when no such board exists.
 
 For example:
 
@@ -923,12 +914,12 @@ For example:
 
 **Parameters**:
 
-* `--board`: The board. `channel.list` names them. **[required]**
+* `--board`: The board. `platoon-harness channel list` names them. **[required]**
 * `--name`: The object's name. **[required]**
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--fields`: Short JSON values. `board.query` can match them with `where`. As JSON.
+* `--fields`: Short JSON values. `platoon-harness board query` can match them with `where`. As JSON.
 * `--based-on`: Refs this rests on, such as a `ref` you read.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
@@ -938,9 +929,9 @@ For example:
 platoon-harness board query --board STR [OPTIONS] SESSION
 ```
 
-Find objects by `prefix` of name, `author`, exact `where` on fields, or `text` over names, gists and fields, never bodies.
+Find objects by `--prefix` of name, `--author`, exact `--where` on fields, or `--text` over names, gists and fields, never bodies.
 
-Results are gists with exact refs, the true `total`, and a `cursor` to pass as `after`. `history` includes old versions. Refused `unsupported` for `text` when this SQLite has no FTS5: use structured filters. `not_found` when no such board exists.
+Results are gists with exact refs, the true `total`, and a `cursor` to pass as `--after`. `--history` includes old versions. Refused `unsupported` for `--text` when this SQLite has no FTS5: use structured filters. `not_found` when no such board exists.
 
 For example:
 
@@ -952,7 +943,7 @@ For example:
 
 **Parameters**:
 
-* `--board`: The board. `channel.list` names them. **[required]**
+* `--board`: The board. `platoon-harness channel list` names them. **[required]**
 * `--prefix`: Only names starting with this.
 * `--author`: Only what this author wrote.
 * `--where`: Exact matches on `fields`. As JSON.
@@ -969,7 +960,7 @@ platoon-harness board revise --board STR --name STR --gist STR --expected-versio
 
 Add a version to an object.
 
-`expected_version` is the version you read. Refused `conflict`, with the current version, when someone got there first and nothing was overwritten: read it, then revise again. `not_found` when no such object exists.
+`--expected-version` is the version you read. Refused `conflict`, with the current version, when someone got there first and nothing was overwritten: read it, then revise again. `not_found` when no such object exists.
 
 For example:
 
@@ -981,21 +972,19 @@ For example:
 
 **Parameters**:
 
-* `--board`: The board. `channel.list` names them. **[required]**
+* `--board`: The board. `platoon-harness channel list` names them. **[required]**
 * `--name`: The object's name. **[required]**
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--fields`: Short JSON values. `board.query` can match them with `where`. As JSON.
+* `--fields`: Short JSON values. `platoon-harness board query` can match them with `where`. As JSON.
 * `--based-on`: Refs this rests on, such as a `ref` you read.
 * `--expected-version`: The version you read. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness body
 
-Tombstone: the `body` ops, each on one session.
-
-Each takes the arguments an agent's `ph body.<op>` takes, as flags.
+The `body` ops, each on one session, with the arguments an agent's `ph body.<op>` takes as flags.
 
 #### platoon-harness body tombstone
 
@@ -1017,14 +1006,12 @@ For example:
 
 **Parameters**:
 
-* `--sha256`: **[required]**
+* `--sha256`: The body's hash, its ref without `sha256:`. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness budget
 
-Set, status: the `budget` ops, each on one session.
-
-Each takes the arguments an agent's `ph budget.<op>` takes, as flags.
+The `budget` ops, each on one session, with the arguments an agent's `ph budget.<op>` takes as flags.
 
 #### platoon-harness budget set
 
@@ -1034,7 +1021,7 @@ platoon-harness budget set [OPTIONS] SESSION
 
 Set a scope's limits and turn estimate.
 
-`fallback` lets `turns` stand in for what a role cannot measure.
+`--fallback` lets `turns` stand in for what a role cannot measure.
 
 For example:
 
@@ -1046,10 +1033,10 @@ For example:
 
 **Parameters**:
 
-* `--scope`: *[default: shared]*
-* `--limits`: As JSON.
-* `--estimate`: As JSON.
-* `--fallback`: *[choices: turns]*
+* `--scope`: `shared`, or `role:<name>` for one role's. *[default: shared]*
+* `--limits`: A limit per unit, such as `{"usd": 5, "wall": 1800}`, with `wall` in seconds. As JSON.
+* `--estimate`: What a turn is reserved before it is measured, per unit. As JSON.
+* `--fallback`: `turns`, to count turns for a unit a role cannot measure. *[choices: turns]*
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness budget status
@@ -1070,9 +1057,7 @@ For example:
 
 ### platoon-harness channel
 
-Create, list: the `channel` ops, each on one session.
-
-Each takes the arguments an agent's `ph channel.<op>` takes, as flags.
+The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
 
 #### platoon-harness channel create
 
@@ -1082,7 +1067,7 @@ platoon-harness channel create --name STR --kind LITERAL[TOPIC, QUEUE, BOARD] [O
 
 Create a topic, queue or board that you can read and write.
 
-`readers` and `writers` add others: each selector means those it covers now, so a later arrival is not among them. Refused `not_permitted` when one reaches beyond you, or for `wake` or `steer`, which belong to the reader: use `next-turn`. `invalid` when one covers nobody yet. `conflict` when the name is taken: choose another.
+`--readers` and `--writers` add others: each selector means those it covers now, so a later arrival is not among them. Refused `not_permitted` when one reaches beyond you, or for `wake` or `steer`, which belong to the reader: use `next-turn`. `invalid` when one covers nobody yet. `conflict` when the name is taken: choose another.
 
 For example:
 
@@ -1107,7 +1092,7 @@ For example:
 platoon-harness channel list [OPTIONS] SESSION
 ```
 
-List the channels you may use, in `channels`, with the true `total` and a `cursor` to pass as `after`, or none at the end.
+List the channels you may use, in `channels`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 
 Pass `name` as `to` or `channel` for a topic, `queue` for a queue, `board` for a board.
 
@@ -1125,9 +1110,7 @@ For example:
 
 ### platoon-harness effect
 
-Settle: the `effect` ops, each on one session.
-
-Each takes the arguments an agent's `ph effect.<op>` takes, as flags.
+The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
 
 #### platoon-harness effect settle
 
@@ -1135,7 +1118,7 @@ Each takes the arguments an agent's `ph effect.<op>` takes, as flags.
 platoon-harness effect settle --id INT --happened BOOL [OPTIONS] SESSION
 ```
 
-Say whether an uncertain effect happened, which is what `surface` leaves to a person.
+Say whether an uncertain effect happened, which is left to a person when nothing else can tell.
 
 Refused `conflict` once it is no longer uncertain, as when recovery got there first.
 
@@ -1149,15 +1132,13 @@ For example:
 
 **Parameters**:
 
-* `--id`: **[required]**
-* `--happened, --no-happened`: **[required]**
+* `--id`: The effect, as its row in `platoon-harness attention list` names it. **[required]**
+* `--happened, --no-happened`: Whether it happened. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness episode
 
-Close, open: the `episode` ops, each on one session.
-
-Each takes the arguments an agent's `ph episode.<op>` takes, as flags.
+The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
 
 #### platoon-harness episode close
 
@@ -1177,7 +1158,7 @@ For example:
 
 **Parameters**:
 
-* `--outcome`: As JSON.
+* `--outcome`: What the span came to. As JSON.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness episode open
@@ -1200,14 +1181,12 @@ For example:
 
 **Parameters**:
 
-* `--episode`: **[required]**
+* `--episode`: A name for the span. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness message
 
-Read, send: the `message` ops, each on one session.
-
-Each takes the arguments an agent's `ph message.<op>` takes, as flags.
+The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
 
 #### platoon-harness message read
 
@@ -1217,7 +1196,7 @@ platoon-harness message read [OPTIONS] SESSION
 
 Read your inbox, or `#channel` or `+group`, from where you left off.
 
-Passing `after`, a `cursor` from an earlier read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `blob.get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to see yours. `invalid` for an `after` past every event: leave it out.
+Passing `--after`, a `cursor` from an earlier read, acks up to it and reads past it. `--sender` and `--thread` filter, and a filtered read leaves unread what it skipped. `--bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `platoon-harness blob get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `platoon-harness channel list` to see yours. `invalid` for an `--after` past every event: leave it out.
 
 For example:
 
@@ -1244,7 +1223,7 @@ platoon-harness message send --to STR --gist STR [OPTIONS] SESSION
 
 Send to `@agent`, `#channel` or `+group`.
 
-`gist`, at most 280 characters, is what readers see first; put anything longer in `body`. To reply, set `to` to the entry's `sender` and `reply_to` to its `ref`. Refused `not_permitted` when you cannot reach the target. Call `peers` for agents, `channel.list` for channels. `undeliverable` when the agent has ended: tell someone else. `queue_full` when its inbox is full: try later. `not_found` when `reply_to` names nothing you can read. `conflict` once the session is closing, when it would reach nobody.
+`--gist`, at most 280 characters, is what readers see first; put anything longer in `--body`. To reply, set `--to` to the entry's `sender` and `--reply-to` to its `ref`. Refused `not_permitted` when you cannot reach the target. Call `platoon-harness peers` for agents, `platoon-harness channel list` for channels. `undeliverable` when the agent has ended: tell someone else. `queue_full` when its inbox is full: try later. `not_found` when `--reply-to` names nothing you can read. `conflict` once the session is closing, when it would reach nobody.
 
 For example:
 
@@ -1260,16 +1239,14 @@ For example:
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--thread`: A thread id. `reply_to` sets it for you.
+* `--thread`: A thread id. `--reply-to` sets it for you.
 * `--reply-to`: The `ref` of the entry you answer.
 * `--based-on`: Refs this rests on, such as a `ref` you read.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness ops
 
-List: the `ops` ops, each on one session.
-
-Each takes the arguments an agent's `ph ops.<op>` takes, as flags.
+The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
 
 #### platoon-harness ops list
 
@@ -1293,7 +1270,7 @@ For example:
 platoon-harness peers [OPTIONS] SESSION
 ```
 
-List whom you may message directly now, in `peers`, with the true `total` and a `cursor` to pass as `after`, or none at the end.
+List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 
 Targets change as agents come and go, so ask rather than remember. `roles` lists the roles you may start an agent in.
 
@@ -1311,9 +1288,7 @@ For example:
 
 ### platoon-harness task
 
-Add, claim, complete, fail, list, release, renew: the `task` ops, each on one session.
-
-Each takes the arguments an agent's `ph task.<op>` takes, as flags.
+The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
 
 #### platoon-harness task add
 
@@ -1323,7 +1298,7 @@ platoon-harness task add --queue STR --gist STR [OPTIONS] SESSION
 
 Add a task to a queue.
 
-`gist` says what to do; put anything longer in `body`. Refused `not_permitted` when you may not write this queue, and `not_found` when no such queue exists. Call `channel.list` to see yours.
+`--gist` says what to do; put anything longer in `--body`. Refused `not_permitted` when you may not write this queue, and `not_found` when no such queue exists. Call `platoon-harness channel list` to see yours.
 
 For example:
 
@@ -1335,7 +1310,7 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
@@ -1348,9 +1323,9 @@ For example:
 platoon-harness task claim --queue STR [OPTIONS] SESSION
 ```
 
-Claim the next open task, or `task` by id.
+Claim the next open task, or `--task` by id.
 
-`text` is its body; a long one comes back cut, with `rest` a ref. Pass it to `blob.get`. Keep working: the runtime renews your lease while you are active. `task.complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks: claim another, or finish one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open. Call `wait` with `queue` then, and end your turn.
+`text` is its body; a long one comes back cut, with `rest` a ref. Pass it to `platoon-harness blob get`. Keep working: the runtime renews your lease while you are active. `platoon-harness task complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused `conflict`, naming the owner, when `--task` is taken, and when you hold `max_inflight` tasks: claim another, or finish one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open.
 
 For example:
 
@@ -1362,7 +1337,7 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--task`: A task's id; the next open task if left out.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
@@ -1372,9 +1347,9 @@ For example:
 platoon-harness task complete --queue STR [OPTIONS] SESSION
 ```
 
-Finish your task, with `gist` and `body` as its result.
+Finish your task, with `--gist` and `--body` as its result.
 
-`task.list` shows it. Refused `stale_fence` once the lease has expired, even if nobody else took the task: your work may be lost, so check the task and claim it again if it is open. `invalid` when you hold several: name `task`.
+`platoon-harness task list` shows it. Refused `stale_fence` once the lease has expired, even if nobody else took the task: your work may be lost, so check the task and claim it again if it is open. `invalid` when you hold several: name `--task`.
 
 For example:
 
@@ -1386,10 +1361,10 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--task`: A task's id; your live lease if left out.
-* `--fence`: The `fence` from your claim; your live lease if left out.
-* `--gist`: The result, at most 280 characters. `task.list` shows it.
+* `--fence`: The `--fence` from your claim; your live lease if left out.
+* `--gist`: The result, at most 280 characters. `platoon-harness task list` shows it.
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--based-on`: Refs this rests on, such as a `ref` you read.
@@ -1415,10 +1390,10 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--task`: A task's id; your live lease if left out.
-* `--fence`: The `fence` from your claim; your live lease if left out.
-* `--gist`: The result, at most 280 characters. `task.list` shows it.
+* `--fence`: The `--fence` from your claim; your live lease if left out.
+* `--gist`: The result, at most 280 characters. `platoon-harness task list` shows it.
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--based-on`: Refs this rests on, such as a `ref` you read.
@@ -1430,9 +1405,9 @@ For example:
 platoon-harness task list --queue STR [OPTIONS] SESSION
 ```
 
-List a queue's tasks, oldest first, each with its `result` once it has one, with the true `total` and a `cursor` to pass as `after`, or none at the end.
+List a queue's tasks, oldest first, each with its `result` once it has one, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 
-Refused `not_permitted` when you may not read this queue, and `not_found` when no such queue exists. Call `channel.list` to see yours.
+Refused `not_permitted` when you may not read this queue, and `not_found` when no such queue exists. Call `platoon-harness channel list` to see yours.
 
 For example:
 
@@ -1444,7 +1419,7 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--state`: Only tasks in this state. *[choices: open, claimed, done, failed, dead]*
 * `--after`: A `cursor` from an earlier list.
 * `--limit`: The most tasks to return. *[default: 32]*
@@ -1469,9 +1444,9 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--task`: A task's id; your live lease if left out.
-* `--fence`: The `fence` from your claim; your live lease if left out.
+* `--fence`: The `--fence` from your claim; your live lease if left out.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness task renew
@@ -1494,16 +1469,14 @@ For example:
 
 **Parameters**:
 
-* `--queue`: The queue. `channel.list` names them. **[required]**
+* `--queue`: The queue. `platoon-harness channel list` names them. **[required]**
 * `--task`: A task's id; your live lease if left out.
-* `--fence`: The `fence` from your claim; your live lease if left out.
+* `--fence`: The `--fence` from your claim; your live lease if left out.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness view
 
-Watch: the `view` ops, each on one session.
-
-Each takes the arguments an agent's `ph view.<op>` takes, as flags.
+The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
 
 #### platoon-harness view watch
 
@@ -1513,7 +1486,7 @@ platoon-harness view watch --name LITERAL[ROSTER, ATTENTION, CHANGES] [OPTIONS] 
 
 A snapshot, then keyed changes.
 
-Pass `cursor` as the next `after`; a reader too far behind gets a new snapshot. Snapshot and cursor come from one read, so nothing commits between them.
+Pass `cursor` as the next `--after`; a reader too far behind gets a new snapshot. Snapshot and cursor come from one read, so nothing commits between them.
 
 For example:
 
@@ -1525,87 +1498,5 @@ For example:
 
 **Parameters**:
 
-* `--name`: **[required]** *[choices: roster, attention, changes]*
-* `--after`:
-
-### platoon-harness wait
-
-```console
-platoon-harness wait COMMAND [OPTIONS] SESSION
-```
-
-Wait, spending no turn until it holds: for `agents` to end, a message `from` each named agent, `tasks` to settle, a version of `board` newer than you read, a new entry on `channels`, or work on `queue`.
-
-`mode` is `all` or `any`. One wait at a time: a new one replaces the old. `state` says what to do: `parked`, end your turn and the runtime starts your next when it holds or `timeout` passes; `released`, it holds, carry on; `pending`, `hold` ran out, call again or end your turn. A child of yours that ends badly starts your next turn early, and the wait stays open. Refused `not_permitted` for what you may not watch, `not_found` for an agent nobody spawned. `unsupported` when this harness cannot park: pass `timeout` and a `hold` at least as long. `invalid` for an `after` past every event: leave it out. `invalid` too when `agents` names one that stays: use `from` for its answers.
-
-For example:
-
-    platoon-harness wait SESSION
-
-**Commands**:
-
-* [`cancel`](#platoon-harness-wait-cancel): Cancel your open wait.
-* [`progress`](#platoon-harness-wait-progress): Show your wait's `have`, `need` and `missing` while it is `open`, or how it closed: `released`, `expired` or `cancelled`.
-
-**Arguments**:
-
-* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
-
-**Parameters**:
-
-* `--agents`: Agents to end.
-* `--from`: Agents to hear a message from.
-* `--tasks`: Tasks to settle, each `queue/id`.
-* `--board`: Objects to change, each `board/name`.
-* `--channels`: `#channel` or `+group`, for a new entry.
-* `--queue`: Queues with open work now, or to get a new task.
-* `--mode`: Whether everything must hold, or one thing. *[choices: all, any]* *[default: all]*
-* `--after`: A `cursor` to count from, instead of what you have read.
-* `--timeout`: Seconds until the wait gives up.
-* `--hold`: Seconds to keep this call open before `pending`.
-* `--key`: Name this command, so that running it again with the same key is one operation.
-
-#### platoon-harness wait cancel
-
-```console
-platoon-harness wait cancel [OPTIONS] SESSION
-```
-
-Cancel your open wait.
-
-Refused `not_found` when it has closed already: nothing is waiting.
-
-For example:
-
-    platoon-harness wait cancel SESSION
-
-**Arguments**:
-
-* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
-
-**Parameters**:
-
-* `--id`: A wait's id; your open wait if left out.
-* `--key`: Name this command, so that running it again with the same key is one operation.
-
-#### platoon-harness wait progress
-
-```console
-platoon-harness wait progress [OPTIONS] SESSION
-```
-
-Show your wait's `have`, `need` and `missing` while it is `open`, or how it closed: `released`, `expired` or `cancelled`.
-
-Nothing comes back when you have no such wait.
-
-For example:
-
-    platoon-harness wait progress SESSION
-
-**Arguments**:
-
-* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
-
-**Parameters**:
-
-* `--id`: A wait's id; your open wait if left out.
+* `--name`: The view. **[required]** *[choices: roster, attention, changes]*
+* `--after`: The `cursor` of an earlier answer, for what changed since it.

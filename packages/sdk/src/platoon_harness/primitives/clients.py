@@ -269,8 +269,10 @@ def attention_list(txn: Txn, a: Args) -> list[dict[str, Any]]:
 
 
 class Watch(Args):
-    name: Literal["roster", "attention", "changes"]
-    after: Annotated[int, Field(ge=0)] | None = None
+    name: Annotated[Literal["roster", "attention", "changes"], Field(description="The view.")]
+    after: Annotated[
+        int | None, Field(ge=0, description="The `cursor` of an earlier answer, for what changed since it.")
+    ] = None
 
 
 def _snapshot(txn: Txn, name: str) -> list[dict[str, Any]]:

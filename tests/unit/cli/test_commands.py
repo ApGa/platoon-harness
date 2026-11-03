@@ -2,19 +2,22 @@
 with the arguments an agent's `ph` uses, and none for any other."""
 
 import inspect
+import io
 import json
+import re
 import shlex
 from pathlib import Path
 from typing import Any, get_args
 
 import pytest
 from cyclopts import CycloptsError
+from rich.console import Console
 
 from platoon_harness.kernel import Event, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.session import Reason
 from platoon_harness.tools.surface import body_fields
-from platoon_harness_cli.exits import ENDINGS
+from platoon_harness_cli.exits import ENDINGS, SHARED
 from platoon_harness_cli.main import build
 from platoon_harness_cli.ops import command_line, person_ops
 from platoon_harness_cli.output import event_line, safe
@@ -22,6 +25,7 @@ from platoon_harness_cli.reference import reference
 
 APP = build()
 OPS = registry(PRIMITIVES)
+REFERENCE = Path(__file__).parents[3] / "docs" / "cli.md"
 
 
 def parsed(words: list[str]) -> tuple[Any, dict[str, Any]]:
@@ -42,16 +46,24 @@ def needed(name: str) -> list[str]:
     return words
 
 
+def helped(words: list[str]) -> str:
+    """What `--help` says for a command, as a wide terminal shows it."""
+    shown = io.StringIO()
+    APP([*words, "--help"], console=Console(file=shown, width=200), exit_on_error=False, result_action="return_value")
+    return shown.getvalue()
+
+
 @pytest.mark.parametrize("name", sorted(person_ops()))
 def test_every_op_a_person_may_run_has_a_command_of_its_name(name: str):
     command, arguments = parsed([*name.split("."), "fix-auth", *needed(name)])
 
     assert arguments["session"] == "fix-auth"
-    assert (command.__doc__ or "").startswith(" ".join((OPS[name].fn.__doc__ or "").split()).partition(". ")[0])
+    assert (command.__doc__ or "").split()[0] == (OPS[name].fn.__doc__ or "").split()[0]
 
 
-@pytest.mark.parametrize("name", sorted(name for name, op in OPS.items() if op.runtime or op.agent))
-def test_no_op_kept_to_the_runtime_or_to_agents_has_a_command(name: str):
+@pytest.mark.parametrize("name", sorted(name for name, op in OPS.items() if op.runtime or op.agent or "wait" in name))
+def test_no_op_kept_to_the_runtime_or_to_agents_and_no_wait_has_a_command(name: str):
+    """A wait parks a turn, and a person has none."""
     words = [*name.split("."), "fix-auth"]
     try:
         command, _ = parsed(words)
@@ -74,10 +86,41 @@ def test_a_command_takes_exactly_its_op_s_arguments_as_flags(name: str):
     assert flags == {"session", *fields, *(f"{body}_file" for body in bodies), *(() if reads else ("key",))}
 
 
-def test_a_repeated_flag_is_a_list_and_a_keyword_takes_its_own_name():
-    _, arguments = parsed(["wait", "s", "--from", "@a", "--from", "@b", "--mode", "any"])
+def test_a_repeated_flag_is_a_list():
+    _, arguments = parsed(
+        ["message", "send", "s", "--to", "@a", "--gist", "g", "--based-on", "x@1", "--based-on", "y@2"]
+    )
 
-    assert arguments == {"session": "s", "from_": ("@a", "@b"), "mode": "any"}
+    assert arguments == {"session": "s", "to": "@a", "gist": "g", "based_on": ("x@1", "y@2")}
+
+
+@pytest.mark.parametrize("name", sorted(person_ops()))
+def test_every_flag_of_every_command_has_help(name: str):
+    command, _ = parsed([*name.split("."), "fix-auth", *needed(name)])
+
+    for parameter in inspect.signature(command).parameters.values():
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY:
+            assert parameter.annotation.__metadata__[0].help, f"{name} --{parameter.name}"
+
+
+def test_a_command_s_help_names_commands_and_flags_where_its_op_names_ops_and_arguments():
+    """As each surface names a tool as its own, and a sentence naming one with no command goes, as an agent's would."""
+    send = " ".join(helped(["message", "send"]).split())
+    claim = " ".join(helped(["task", "claim"]).split())
+
+    assert "set --to to the entry's sender and --reply-to to its ref" in send
+    assert "platoon-harness channel list for channels" in send and "channel.list" not in send
+    assert "end your turn" not in claim and "wait" not in claim
+
+
+def test_the_reference_names_only_flags_the_command_line_takes():
+    """Command by command, the flags the reference lists are the ones `--help` shows, which the parser takes."""
+    sections = re.split(r"^#{2,4} platoon-harness", REFERENCE.read_text(), flags=re.MULTILINE)[2:]
+    for section in sections:
+        words = section.partition("\n")[0].split()
+        listed = set(re.findall(r"^\* `(--[a-z-]+(?:, --[a-z-]+)*)`", section, flags=re.MULTILINE))
+        flags = {flag for names in listed for flag in names.split(", ")}
+        assert flags <= set(re.findall(r"--[a-z][a-z-]*", helped(words))), words
 
 
 def test_an_action_is_shown_as_the_command_that_runs_it():
@@ -98,6 +141,11 @@ def test_an_action_is_shown_as_the_command_that_runs_it():
 def test_every_way_a_session_ends_has_an_exit_code():
     assert set(ENDINGS) == set(get_args(Reason))
     assert ENDINGS["settled"] == 0 and ENDINGS["cancelled"] == 130
+
+
+def test_a_code_every_command_shares_means_one_thing_and_no_ending_s_but_an_interrupt():
+    assert set(SHARED) & set(ENDINGS.values()) == {1, 130}
+    assert "other than `run` and `session resume`" in SHARED[1]
 
 
 def test_a_jsonl_line_is_an_event_s_envelope_with_its_format():

@@ -302,10 +302,20 @@ def reconcile(txn: Txn, agent: str, role: str) -> None:
 
 
 class SetBudget(Args):
-    scope: Annotated[str, Field(pattern=rf"^(shared|role:{NAME})$")] = "shared"
-    limits: dict[Unit, Annotated[float, Field(gt=0, strict=False)]] = {}
-    estimate: dict[Literal["tokens", "usd"], Annotated[float, Field(ge=0, strict=False)]] = {}
-    fallback: Literal["turns"] | None = None
+    scope: Annotated[
+        str, Field(pattern=rf"^(shared|role:{NAME})$", description="`shared`, or `role:<name>` for one role's.")
+    ] = "shared"
+    limits: Annotated[
+        dict[Unit, Annotated[float, Field(gt=0, strict=False)]],
+        Field(description='A limit per unit, such as `{"usd": 5, "wall": 1800}`, with `wall` in seconds.'),
+    ] = {}
+    estimate: Annotated[
+        dict[Literal["tokens", "usd"], Annotated[float, Field(ge=0, strict=False)]],
+        Field(description="What a turn is reserved before it is measured, per unit."),
+    ] = {}
+    fallback: Annotated[
+        Literal["turns"] | None, Field(description="`turns`, to count turns for a unit a role cannot measure.")
+    ] = None
 
 
 @op("budget.set", on=lambda a: f"budget/{a.scope}")

@@ -104,11 +104,11 @@ def show_manifest(txn: Txn, a: Args) -> dict[str, Any]:
 
 
 class OpenEpisode(Args):
-    episode: Name
+    episode: Annotated[Name, Field(description="A name for the span.")]
 
 
 class CloseEpisode(Args):
-    outcome: dict[str, JsonValue] = {}
+    outcome: Annotated[dict[str, JsonValue], Field(description="What the span came to.")] = {}
 
 
 @op("episode.open", on=lambda a: f"episode/{a.episode}")

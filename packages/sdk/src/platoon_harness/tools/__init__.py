@@ -7,6 +7,7 @@ from platoon_harness.kernel import tool_name
 from .mcp import ToolServer
 from .surface import (
     NAMESPACE,
+    OP_NAMED,
     PREAMBLE,
     Surface,
     delivery_heading,
@@ -19,6 +20,7 @@ from .surface import (
     shell_name,
     slots,
     surface_of,
+    taught,
 )
 
 PH = Path(__file__).with_name("ph.py")
@@ -26,6 +28,7 @@ SHIM = Path(__file__).with_name("shim.py")
 
 __all__ = [
     "NAMESPACE",
+    "OP_NAMED",
     "PH",
     "PREAMBLE",
     "SHIM",
@@ -41,5 +44,6 @@ __all__ = [
     "shell_name",
     "slots",
     "surface_of",
+    "taught",
     "tool_name",
 ]

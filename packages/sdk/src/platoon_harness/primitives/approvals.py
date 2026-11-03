@@ -1,8 +1,8 @@
 """Approvals: durable decisions a harness waits on, resolved once by a human or a stated policy."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from platoon_harness.kernel import GIST_LIMIT, Args, Event, Refused, Stamps, Txn, View, fold, op
 
@@ -129,10 +129,12 @@ def request(txn: Txn, a: Request) -> None:
 
 
 class Resolve(Args):
-    id: Name
-    verdict: Verdict
-    expected_version: int
-    via: str | None = None
+    id: Annotated[Name, Field(description="The approval, as its row in `attention.list` names it.")]
+    verdict: Annotated[Verdict, Field(description="`allow` or `deny`.")]
+    expected_version: Annotated[
+        int, Field(description="Its version as you saw it, so that a decision someone made since stands.")
+    ]
+    via: Annotated[str | None, Field(description="What it was decided through, which a loser is told.")] = None
 
 
 @op("approval.resolve", on=lambda a: f"approval/{a.id}")

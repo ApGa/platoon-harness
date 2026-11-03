@@ -109,7 +109,7 @@ def lookup(db: sqlite3.Connection, sha256: str) -> sqlite3.Row:
 
 
 class Tombstone(Args):
-    sha256: str = Field(pattern="^[0-9a-f]{64}$")
+    sha256: str = Field(pattern="^[0-9a-f]{64}$", description="The body's hash, its ref without `sha256:`.")
 
 
 @op("body.tombstone", on=lambda a: f"body/{a.sha256}")

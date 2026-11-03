@@ -18,6 +18,7 @@ _MCP = frozenset({"mcp-http", "mcp-stdio"})
 _NAMESPACE_SHAPE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
+"""A name in backticks, as words name an op or an argument, with the name as its one group."""
 _SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "ending")
 """What a preamble template's slots hold for one agent, on its harness's surface. `name`, `tools`, `peers`, `roles` and
 `channels` are values: its name, its tools by their exact names, who it can message, which roles it can start and its
@@ -307,7 +308,8 @@ def instructions(
 
 
 def taught(text: str, surface: Surface, ops: Collection[str], held: Collection[str]) -> str:
-    """What an op says to do next, in the words of a surface, with no sentence that names a tool outside `held`."""
+    """Text in the words of a surface, on one line, with no sentence that names a tool outside `held`, as anything a
+    reader is told is."""
     return _teacher(surface, ops, held)(text)
 
 

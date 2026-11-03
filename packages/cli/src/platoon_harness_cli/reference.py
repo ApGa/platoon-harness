@@ -5,22 +5,15 @@ import sys
 from platoon_harness import Ending
 from platoon_harness.kernel import Event
 
-from .exits import CONFIGURATION, ENDINGS, INTERRUPTED, REFUSED, USAGE
+from .exits import ENDINGS, SHARED
 from .main import build
 from .output import FORMAT
-
-_SHARED = (
-    (REFUSED, "A command other than `run` and `session resume` was refused, and nothing it asked for happened"),
-    (USAGE, "A command line that cannot run as it was given"),
-    (CONFIGURATION, "A team, a root or a machine that cannot be used as it is. `team check` and `doctor` say so too"),
-    (INTERRUPTED, "Ctrl+C, where no session's ending says more"),
-)
 
 
 def reference() -> str:
     """The reference: exit codes, the JSONL shape and every command, from what defines them."""
     endings = "\n".join(f"| `{reason}` | {code} |" for reason, code in ENDINGS.items())
-    shared = "\n".join(f"| {code} | {when} |" for code, when in _SHARED)
+    shared = "\n".join(f"| {code} | {when} |" for code, when in SHARED.items())
     envelope = ", ".join(f"`{name}`" for name in Event.model_fields)
     ending = ", ".join(f"`{name}`" for name in ("type", *Ending.model_fields, "code"))
     return f"""# Command line reference
@@ -28,10 +21,11 @@ def reference() -> str:
 <!-- Made from the command definitions by `uv run python -m platoon_harness_cli.reference > docs/cli.md`. Do not edit:
 change the definitions, and make it again. A test holds it to them. -->
 
-Every command that acts on a session takes the session's name first, and runs one op there as a guest, by the name and
+Each command under Ops on a session takes the session's name first, and runs one op there as a guest, by the name and
 with the arguments an agent's `ph` uses: `ph task.claim --queue tasks` is `platoon-harness task claim SESSION --queue
-tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. The
-[headless quickstart](headless.md) shows them together.
+tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. `wait` and
+the ops on a wait have no command, as a wait parks a turn and a person has none: `events --follow` watches a session,
+and a script has `Session.wait`. The [headless quickstart](headless.md) shows them together.
 
 ## Exit codes
 
@@ -41,7 +35,7 @@ tasks`. A read runs on a view credential, which writes nothing, and anything els
 |---|---|
 {endings}
 
-Every command shares these, with what went wrong on stderr:
+Every command shares these:
 
 | Code | When |
 |---|---|
@@ -51,7 +45,8 @@ Every command shares these, with what went wrong on stderr:
 
 With `--json`, `run`, `session resume` and `events` print one JSON object per line on stdout, and nothing else reaches
 it: logs, notes and refusals go to stderr. Each line has `format`, which is {FORMAT}, and holds ASCII alone, anything
-else escaped.
+else escaped. `run` and `session resume` print each event the runtime they own journals, from its `runtime.started`,
+and `events` each event past `--after`.
 
 An event's line is its envelope as the journal holds it, as architecture section 5.3 says, with these keys:
 
@@ -59,11 +54,13 @@ An event's line is its envelope as the journal holds it, as architecture section
 
 Its `v` is its payload's version. Its `seq` is a cursor: pass the last one as `--after` to go on exactly where you
 stopped. The last line of `run` and `session resume` is the ending, with these keys, where `type` is `ending` and
-`code` is what the command exits with:
+`code` is what the command exits with. One stopped while its runtime starts prints its ending alone:
 
 {ending}
 
-Without `--json` each event is one readable line, which is no contract.
+Without `--json` each event is one readable line, which is no contract. JSONL is the one versioned shape here: what
+another command prints with `--json`, and what an op's command prints, is that op's result or that command's report,
+whose shape follows it, with no `format`.
 
 {build().generate_docs(heading_level=2)}"""
 
