@@ -996,8 +996,8 @@ against the official client and against each real harness.
 - Coordination state uses explicit handles (`cursor`, `lease`, `version`). No session semantics.
 - A body argument is offered as a string of text. Ingress stores it and puts the hash in its place before `submit`, as ingress
   already stores bodies first, so a model never handles a hash it has to make.
-- JSON replies, no SSE, no sessions; `GET` and `DELETE` return 405, and `server/discover` returns -32601. Both real clients connect
-  through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
+- JSON replies, no SSE, no sessions; `GET` and `DELETE` return 405, and `server/discover` returns -32601. Claude Code and Codex, the
+  HTTP clients that have met it, connect through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
   only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.
 - One request per connection, answered with `Connection: close`, so an idle client holds no task, socket or state here. A client
   that goes during a call drops the call, not what it asked for: a wait stays registered.
@@ -1005,7 +1005,7 @@ against the official client and against each real harness.
   1 MiB, with a length and no chunking. It has 10 s on the kernel's clock to arrive and its answer 10 s to leave. Past 1,024
   connections the server answers 503.
 - `?surface=` on the URL names how tools read to a model: `ph`, or `mcp__<ns>` for a harness that shows them that way. It changes
-  descriptions and refusals, never what a token may do. No real harness has been run through a URL with a query yet.
+  descriptions and refusals, never what a token may do.
 - `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
   which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
 - A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A list as long as a team, `peers` or

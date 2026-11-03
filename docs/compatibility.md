@@ -59,7 +59,7 @@ Consequences:
 - **Dependencies.** The core SDK depends on neither `mcp` nor `agent-client-protocol`. `openhands-sdk` 1.59.0 is unsatisfiable
   with `mcp==2.3.0` or `agent-client-protocol==1.0.0rc3`, and unpinned it resolves silently to 1.49.1 and 1.44.1. Pin it with a
   floor and keep it in its own environment.
-- **Harness versions.** Exact, user-installed, shown by `doctor` and recorded in the manifest. Adapters seen:
+- **Harness versions.** Exact, user-installed, shown by `doctor`, and recorded from `ready` on `agent.started` and `agent.resumed`. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
 ## 3. Capability matrix

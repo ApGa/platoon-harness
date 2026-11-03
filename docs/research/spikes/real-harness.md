@@ -15,6 +15,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **Reruns:** what can be rerun is in `tests/live/test_teams.py` and `tests/live/test_crashes.py`. Tool block figures are from
   `tests/integration/test_request_shape.py`, on FakeModel, at no cost.
 - **Samples are small.** A row with one trial says so. These are cheap models, low effort and tasks that take seconds.
+- **Runs.** A run is one invocation of the live tests, which may hold several, so one number can head rows in more than one table. Only
+  runs 17 and 18 had the final preamble. The join, the mixed team and the refused finish last ran on the one before it.
 
 ## Results
 
@@ -25,8 +27,9 @@ named, and a second message arrives once a task is claimed.
 
 | Run | Preamble | Calls | Seconds | What happened |
 |---|---|---|---|---|
-| 1 | As it was | 17 | 24 of work, then idle | Fixed. The lead was not asked to use the queue and did not. Neither worker nor the lead finished, and the lead sat parked on a wait for a worker that would never end, until its own 600 s `timeout` |
+| 1 | As it was | 17 | 24 of work, then idle | Fixed. The lead was not asked to use the queue and did not. Neither worker nor the lead finished, and the lead sat parked on a wait for a worker that would never end, until the test gave up at 420 s with the wait still open. The test failed |
 | 2 | Says to finish | 34 | 43 | Settled, tests pass. 2 claims, 2 completions, a board entry. A worker hit a refused `message_send`, shortened the gist and sent it again. It finished only when the lead told it to stop |
+| 16 | Final words for a worker | 23 | 114, the test giving up | Did not settle. One worker finished and the other did not, and the lead never finished. The test failed |
 | 18 | Final | 25 | 28.5 | Settled, tests pass. 2 claims, 2 completions, a board entry, 5 messages. The lead took 3 turns, each worker 1, and all three called `agent_finish` |
 
 In run 18 the model called `agent_spawn`, `task_add`, `task_claim`, `task_complete`, `task_list`, `wait`, `channel_list`, `blob_get`,
@@ -52,14 +55,14 @@ A lead starts three workers and waits on their end.
 
 | Run | Preamble | Lead's turns | Workers that finished | Calls |
 |---|---|---|---|---|
-| 5 | Says to finish, mildly | 3, and never closed | 0 of 3 | 13 |
+| 5 | Says to finish, mildly | 3, and never closed | 1 of 3 | 13 |
 | 6 | Final words for a worker | **2** | 3 of 3 | 15 |
-| 16 | Final words for a worker | **2** | 3 of 3 | 15 |
+| 16 | Final words for a worker | **2**, and never finished, so the test failed | 3 of 3 | 15 |
 
 Two turns is one to spawn and one wake, which is what `a join of N costs one turn` means. In run 5 each worker's turn end woke the lead,
 as the design says it must, and the lead placed the same wait again. So the promise needs workers to finish, and that took one sentence.
-"When your goal is done for good, call `agent_finish`" got 1 worker of 6, and that one only when told. "Make `agent_finish` your last
-call, with your report" got 11 of 12 across every run since.
+"When your goal is done for good, call `agent_finish`" got 2 workers of 6, one of them only when told. "Make `agent_finish` your last
+call, with your report" got 11 of 12 across every run since, the refused finish's worker among them.
 
 A direct `message_send` from a child to a parent with a wait open still wakes it, because a message is no report. Workers that sent one
 cost a turn each in runs 1 and 2. That is the reader's own `delivery`, and it stays.
@@ -88,7 +91,9 @@ woke it, and it finished. `slow.txt` existed both times. So what a refusal says 
 Nothing contradicts the notice, which says a call may have run "whatever your history shows". Codex's words are wrong as a story, since
 no user aborted anything and the tool had been running for seconds, and that is what the clause is for.
 
-After the notice, 6 trials, 2 of them on each harness at once and 1 each after it went:
+After the notice, 6 trials, 2 of them on each harness at once and 1 each after it went. They come from runs 11 to 13, read from
+their journals: the test itself passed only for Claude Code at once, as its own count was wrong for Codex and its waits ran out after
+the harness went.
 
 | Harness | Looked first | Did next |
 |---|---|---|
@@ -206,7 +211,7 @@ one `exec` tool with our declarations inside, which FakeModel does not show, and
 
 - It did not finish. A goal done, it said so and stopped, and a turn that only ends leaves an idle agent. Everything that counts on an
   end, a join above all, depends on one sentence of the preamble.
-- Its wording mattered more than any mechanism here. 1 worker of 6 became 11 of 12 on a change of about ten words.
+- Its wording mattered more than any mechanism here. 2 workers of 6 became 11 of 12 on a change of about ten words.
 - Telling every agent to finish is wrong too: two given one small job by a human called `agent_finish` and could take no more. So an
   agent somebody spawned is told to finish, and an agent the session started is told to stay unless told to finish.
 - It guessed a harness's name for a role, and gave up after one refusal rather than ask. Nothing in `peers` could have helped it.
