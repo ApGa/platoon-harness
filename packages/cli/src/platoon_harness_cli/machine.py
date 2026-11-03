@@ -8,7 +8,7 @@ from typing import Any
 
 from cyclopts import App
 
-from platoon_harness import ConfigError, Refused
+from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
 from platoon_harness.drivers.process import status
@@ -69,19 +69,18 @@ def _node() -> dict[str, Any]:
 
 
 def _root() -> dict[str, Any]:
-    """Where sessions live, what holds it, and why it is there when that is not where it was asked to be."""
-    chosen = os.environ.get(HOME_VARIABLE)
+    """Where sessions live, what holds it, why it is there when that is not where it was asked to be, and what a
+    session written there would meet."""
     root = find_root()
     held = filesystem(root)
     found: dict[str, Any] = {"path": str(root), "filesystem": held.name, "kind": held.kind, "problem": None}
-    if chosen and held.kind == "network":
-        found["problem"] = f"{HOME_VARIABLE} is on a network filesystem, where no live session may run"
-    elif not chosen and root == Path(f"/var/tmp/platoon-harness-{os.getuid()}"):
+    if not os.environ.get(HOME_VARIABLE) and root == Path(f"/var/tmp/platoon-harness-{os.getuid()}"):
         found["notice"] = "the default root is on a network filesystem, so sessions live here instead"
     try:
+        find_root(writing=True)
         found["sockets"] = str(socket_path(root / "sessions" / "doctor").parent)
-    except Refused as refused:
-        found["problem"] = found["problem"] or str(refused)
+    except ConfigError as error:
+        found["problem"] = str(error)
     return found
 
 
@@ -171,10 +170,6 @@ def init() -> int:
         platoon-harness team show
         platoon-harness run "Fix the flaky test"
     """
-    path = Path(PROJECT_FILE)
-    if path.exists():
-        note(f"{PROJECT_FILE} exists, and init writes over nothing: edit it, or move it away first")
-        return REFUSED
     found = [(name, driver) for name, driver in harnesses() if shutil.which(name)]
     if not found:
         names = ", ".join(name for name, _ in harnesses())
@@ -185,9 +180,13 @@ def init() -> int:
         "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}},
     }
     said = f"a lead on {lead[0]}, which starts workers on {worker[0]}"
-    path.write_text(
-        f"# A team for this project: {said}.\n# `platoon-harness team show` says what it allows.\n\n{dumps(team)}"
-    )
+    try:
+        with open(PROJECT_FILE, "x") as file:
+            file.write(f"# A team for this project: {said}.\n# `platoon-harness team show` says what it allows.\n\n")
+            file.write(dumps(team))
+    except FileExistsError:
+        note(f"{PROJECT_FILE} exists, and init writes over nothing: edit it, or move it away first")
+        return REFUSED
     plan = any(_login(driver) == "plan" for _, driver in {lead, worker})
     note(f"wrote {PROJECT_FILE}: {said}")
     note('run it with `platoon-harness run "..."`' + (", adding --plan-login on your own plan login" if plan else ""))

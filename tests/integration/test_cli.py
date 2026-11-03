@@ -15,7 +15,7 @@ import pytest
 from platoon_harness import Team
 from platoon_harness.config import Manifest
 
-from .cli import Cli, checked, crew, finished, line_where, said, solo
+from .cli import EXECUTABLE, SECONDS, Cli, checked, crew, finished, line_where, said, solo
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -45,7 +45,7 @@ async def test_a_run_that_settles_exits_0_and_prints_the_journal_then_its_ending
 
     events = checked(done)
     assert done.code == 0, done.stderr
-    assert done.lines()[-1]["reason"] == "settled"
+    assert (done.lines()[-1]["reason"], done.lines()[-1]["state"]) == ("settled", "closed")
     assert "session s1" in done.stderr and "platoon-harness events s1 --follow" in done.stderr
     sent = [event for event in events if event["type"] == "message.sent" and event["actor"] == "human:you"]
     assert [event["gist"] for event in sent] == ["Fix the flaky test"]
@@ -106,6 +106,56 @@ async def test_ctrl_c_runs_the_owner_s_shutdown_and_exits_130(cli: Cli):
     assert list((cli.folder / "home" / "sessions" / "s").rglob("proc.json")) == []
 
 
+async def test_a_signal_during_the_owner_s_shutdown_lets_it_finish(cli: Cli):
+    """A second Ctrl+C, or `session stop`'s SIGTERM, comes while the shutdown waits out its grace for a harness that
+    does not hear the interrupt."""
+    team = cli.write("solo.toml", solo("deaf"))
+    run = await cli.start("run", "go", "--team", team, "--trust", "--name", "s", "--json")
+    seen: list[dict] = []
+    await line_where(run, seen, "type", "turn.started")
+
+    os.killpg(run.pid, signal.SIGINT)
+    await line_where(run, seen, "type", "wake.quieted")
+    os.killpg(run.pid, signal.SIGTERM)
+    done = await finished(run)
+
+    assert (done.code, done.lines()[-1]["reason"]) == (130, "cancelled"), done.stderr
+    assert types_of([*seen, *done.lines()[:-1]])[-1] == "session.stopped"
+
+
+async def test_a_signal_while_a_resume_brings_its_harnesses_back_still_runs_the_owner_s_shutdown(cli: Cli):
+    team = cli.write("solo.toml", solo("returning"))
+    run = await cli.start("run", "go", "--team", team, "--trust", "--name", "s", "--json")
+    await line_where(run, [], "type", "turn.started")
+    await cli.run("session", "stop", "s")
+    await finished(run)
+    resuming = await cli.start("session", "resume", "s", "--json")
+    await said(resuming, "bob is on its way back")
+
+    os.killpg(resuming.pid, signal.SIGTERM)
+    done = await finished(resuming)
+
+    assert (done.code, done.lines(), done.lines()[-1]["type"]) == (130, done.lines()[-1:], "ending"), done.stderr
+    assert done.lines()[-1]["reason"] == "cancelled"
+    last = sqlite3.connect(journal(cli, "s")).execute("SELECT type FROM events ORDER BY seq DESC LIMIT 1")
+    assert last.fetchone() == ("session.stopped",)
+
+
+async def test_a_refused_run_or_resume_exits_64_and_never_the_code_of_a_failed_agent(cli: Cli):
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+
+    taken = await cli.run("run", "go", "--team", team, "--trust", "--name", "s", "--json")
+    unnamed = await cli.run("run", "go", "--team", team, "--trust", "--name", "no/name", "--json")
+    live = await cli.run("session", "resume", "s", "--json")
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert [taken.code, unnamed.code, live.code] == [64, 64, 64], live.stderr
+    assert "refused conflict: session s exists" in taken.stderr and [taken.stdout, live.stdout] == ["", ""]
+
+
 async def test_a_reader_of_stdout_that_falls_behind_holds_up_nothing(cli: Cli):
     """A run prints its events as a guest of its own runtime, so its session goes on while nobody reads them, here
     through a pipe of one page, and every line is there once someone does."""
@@ -141,6 +191,57 @@ async def test_a_prompt_on_stdin_reaches_the_agent(cli: Cli):
     assert any(event["type"] == "context.delivered" and event["agent"] == "bob" for event in events)
 
 
+async def test_a_prompt_piped_to_run_dash_reaches_the_agent(cli: Cli):
+    team = cli.write("solo.toml", solo("saying"))
+
+    done = await cli.run("run", "-", "--team", team, "--trust", "--json", input=b"Fix it, after a dash\n")
+
+    sent = next(event for event in checked(done) if event["type"] == "message.sent")
+    assert (done.code, sent["gist"]) == (0, "Fix it, after a dash"), done.stderr
+
+
+@pytest.mark.parametrize(
+    ("args", "said"),
+    [
+        (("--no-such-option",), "no option --no-such-option"),
+        (("-",), "stdin: 'utf-8' codec can't decode"),
+    ],
+)
+async def test_a_prompt_that_cannot_be_read_exits_64_saying_why(cli: Cli, args: tuple[str, ...], said: str):
+    team = cli.write("solo.toml", solo("saying"))
+
+    done = await cli.run("run", *args, "--team", team, "--trust", input=b"\xff\xfe go")
+
+    assert (done.code, done.stdout) == (64, ""), done.stderr
+    assert said in done.stderr and "Traceback" not in done.stderr
+
+
+async def test_a_run_with_stdin_closed_exits_64_saying_so(cli: Cli):
+    team = cli.write("solo.toml", solo("saying"))
+    closed = 'exec "$0" "$@" <&-'
+
+    process = await asyncio.create_subprocess_exec(
+        "sh",
+        "-c",
+        closed,
+        EXECUTABLE,
+        "run",
+        "-",
+        "--team",
+        team,
+        "--trust",
+        cwd=cli.folder,
+        env=cli.env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    cli.started.append(process)
+    done = await finished(process)
+
+    assert (done.code, done.stdout) == (64, ""), done.stderr
+    assert "stdin is closed" in done.stderr
+
+
 async def test_a_long_prompt_from_a_file_goes_whole_as_the_body(cli: Cli):
     team = cli.write("solo.toml", solo("saying"))
     prompt = cli.write("task.md", "Fix the flaky test. " * 40)
@@ -157,19 +258,41 @@ async def test_a_long_prompt_from_a_file_goes_whole_as_the_body(cli: Cli):
 async def test_the_prompt_goes_to_the_agent_named_when_a_session_starts_several(cli: Cli):
     team = cli.write("pair.toml", solo("saying", count="2"))
 
-    unnamed = await cli.run("run", "go", "--team", team, "--trust")
     named = await cli.run("run", "go", "--team", team, "--trust", "--to", "@bob-2", "--json")
 
-    assert unnamed.code == 64 and "@bob-1, @bob-2" in unnamed.stderr
     sent = next(event for event in checked(named) if event["type"] == "message.sent")
     assert sent["stream"] == "inbox/bob-2"
+
+
+@pytest.mark.parametrize(
+    ("team", "to", "said"),
+    [
+        (
+            solo("saying", count="2"),
+            (),
+            "say which agent the prompt is for, with --to: this session starts @bob-1, @bob-2",
+        ),
+        (solo("saying"), ("--to", "@nobody"), "--to @nobody is no agent this session starts: it starts @bob"),
+        (solo("saying"), ("--to", "bob"), "--to bob is no agent this session starts: it starts @bob"),
+    ],
+)
+async def test_who_a_prompt_is_for_is_decided_before_any_cost(cli: Cli, team: str, to: tuple[str, ...], said: str):
+    written = cli.write("team.toml", team)
+
+    done = await cli.run("run", "go", "--team", written, "--trust", "--json", *to)
+
+    assert (done.code, done.stdout) == (64, ""), done.stderr
+    assert said in done.stderr
+    assert not (cli.folder / "home" / "sessions").exists()
 
 
 # Other processes.
 
 
-async def test_a_person_s_message_from_a_second_process_reaches_an_agent_mid_run(cli: Cli):
-    team = cli.write("solo.toml", solo("listening"))
+async def test_a_person_s_message_from_a_second_process_steers_an_agent_whose_role_says_pull(cli: Cli):
+    """A person's message steers whatever its reader's setting, so a role that pulls is woken by it: the run's prompt,
+    which `Session.send` sends, and a message from a second process."""
+    team = cli.write("solo.toml", solo("listening", delivery='"pull"'))
     run = await cli.start("run", "wait for me", "--team", team, "--trust", "--name", "s", "--json")
     seen: list[dict] = []
     await line_where(run, seen, "type", "agent.parked")
@@ -181,6 +304,11 @@ async def test_a_person_s_message_from_a_second_process_reaches_an_agent_mid_run
     ref = json.loads(sent.stdout)["ref"]
     events = [*seen, *done.lines()[:-1]]
     assert done.code == 0, done.stderr
+    sent_by_you = [event for event in events if event["type"] == "message.sent" and event["actor"] == "human:you"]
+    assert [(event["gist"], event["data"]["delivery"]) for event in sent_by_you] == [
+        ("wait for me", "steer"),
+        ("here you are", "steer"),
+    ]
     offered = [event for event in events if event["type"] == "context.offered" and event["agent"] == "bob"]
     assert any(item["ref"] == ref for event in offered for item in event["data"]["items"])
     assert done.lines()[-1]["agents"][0]["report"]["gist"] == "heard you"
@@ -188,7 +316,7 @@ async def test_a_person_s_message_from_a_second_process_reaches_an_agent_mid_run
 
 async def test_an_approval_is_answered_from_a_second_process_once(cli: Cli):
     team = cli.write("solo.toml", solo("asking"))
-    serving = await cli.start("serve", team, "--trust", "--name", "s")
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
     await said(serving, "serving session s")
     watching = await cli.start("events", "s", "--follow", "--json")
     asked = await cli.run("message", "send", "s", "--to", "@bob", "--gist", "ship it?")
@@ -239,7 +367,7 @@ async def test_interrupting_retiring_and_cancelling_from_a_second_process(cli: C
 
 async def test_a_board_post_with_a_file_from_a_second_process(cli: Cli):
     team = cli.write("solo.toml", solo("saying"))
-    serving = await cli.start("serve", team, "--trust", "--name", "s")
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
     await said(serving, "serving session s")
     spec = cli.write("spec.md", "# The spec\n\nKeep the public API stable.\n")
 
@@ -257,7 +385,7 @@ async def test_a_board_post_with_a_file_from_a_second_process(cli: Cli):
 
 async def test_a_command_run_again_under_its_key_is_one_operation(cli: Cli):
     team = cli.write("solo.toml", solo("saying"))
-    serving = await cli.start("serve", team, "--trust", "--name", "s")
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
     await said(serving, "serving session s")
     send = ("message", "send", "s", "--to", "@bob", "--gist", "once", "--key", "retry-1")
 
@@ -307,6 +435,41 @@ async def test_events_follow_resumes_from_its_cursor_across_a_stop_and_a_resume(
     assert types_of(after)[0] == "runtime.started" and resumed.lines()[-1]["reason"] == "settled"
 
 
+async def test_events_follow_ends_once_nobody_reads_it(cli: Cli):
+    team = cli.write("solo.toml", solo("saying"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    reading, writing = os.pipe()
+    following = await cli.start("events", "s", "--follow", "--json", stdout=writing)
+    os.close(writing)
+    with os.fdopen(reading, "rb") as pipe:
+        await asyncio.to_thread(pipe.readline)
+
+    await cli.run("message", "send", "s", "--to", "@bob", "--gist", "one more line for nobody")
+    code = await asyncio.wait_for(following.wait(), SECONDS)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert code == 0
+
+
+async def test_session_list_lists_a_session_that_never_opened_beside_the_rest(cli: Cli):
+    team = cli.write("solo.toml", solo("saying"))
+    await cli.run("run", "go", "--team", team, "--trust", "--name", "done")
+    sessions = cli.folder / "home" / "sessions"
+    (sessions / "unopened").mkdir()
+    (sessions / "unopened" / "manifest.json").write_text((sessions / "done" / "manifest.json").read_text())
+
+    listed = await cli.run("session", "list", "--json")
+
+    assert listed.code == 0, listed.stderr
+    assert json.loads(listed.stdout) == [
+        {"name": "done", "live": False, "state": "closed"},
+        {"name": "unopened", "live": False, "state": None},
+    ]
+    assert "session unopened: refused unavailable" in listed.stderr
+
+
 async def test_events_on_a_closed_session_reads_history_and_writes_nothing(cli: Cli):
     team = cli.write("crew.toml", crew())
     await cli.run("run", "go", "--team", team, "--trust", "--name", "s")
@@ -335,14 +498,16 @@ async def test_events_on_a_closed_session_reads_history_and_writes_nothing(cli: 
         (("run", "-"), 64),
         (("run", "go", "--team", "nowhere.toml"), 78),
         (("init",), 1),
-        (("session", "resume", "nowhere"), 1),
+        (("session", "resume", "nowhere"), 64),
         (("session", "stop", "nowhere"), 1),
         (("team", "check"), 78),
         (("attach", "s"), 64),
     ],
 )
 async def test_no_command_prompts_with_no_terminal(cli: Cli, args: tuple[str, ...], code: int):
+    """Stdin is empty: `run -` reads it, and finds no prompt there."""
     cli.write("platoon-harness.toml", "this is no team")
+    fake_harnesses(cli, "claude")
 
     done = await cli.run(*args)
 
@@ -430,6 +595,16 @@ async def test_init_writes_a_starter_from_the_harnesses_found_and_never_overwrit
     assert checked.code == 0, checked.stdout
 
 
+async def test_init_writes_through_no_link_to_a_file_that_is_not_there(cli: Cli):
+    fake_harnesses(cli, "claude")
+    (cli.folder / "platoon-harness.toml").symlink_to(cli.folder / "elsewhere.toml")
+
+    done = await cli.run("init")
+
+    assert done.code == 1 and "exists" in done.stderr
+    assert not (cli.folder / "elsewhere.toml").exists()
+
+
 async def test_init_with_no_harness_on_path_exits_78_naming_them(cli: Cli):
     fake_harnesses(cli)
 
@@ -459,6 +634,20 @@ async def test_doctor_with_no_harness_on_path_exits_78(cli: Cli):
     done = await cli.run("doctor")
 
     assert done.code == 78 and "problem    no harness is on PATH" in done.stdout
+
+
+async def test_a_root_others_can_write_is_a_machine_that_cannot_be_used_as_it_is(cli: Cli):
+    fake_harnesses(cli, "claude")
+    root = cli.folder / "home"
+    root.mkdir()
+    root.chmod(0o777)
+    team = cli.write("solo.toml", solo("saying"))
+
+    ran = await cli.run("run", "go", "--team", team, "--trust")
+    doctor = await cli.run("doctor", "--json")
+
+    assert ran.code == 78 and "nobody else can write" in ran.stderr
+    assert doctor.code == 78 and "nobody else can write" in json.loads(doctor.stdout)["root"]["problem"]
 
 
 async def test_extension_list_reads_what_is_installed_from_metadata(cli: Cli):

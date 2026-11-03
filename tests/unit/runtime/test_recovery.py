@@ -1202,6 +1202,34 @@ async def test_a_stop_asked_during_recovery_ends_it(tmp_path, monkeypatch):
     assert not is_held(runtime.folder)
 
 
+async def test_a_start_cancelled_during_recovery_stops_as_its_owner_would(tmp_path, monkeypatch):
+    """Ctrl+C on a script or a command line resuming a session lands here: what came back ends, and the journal says
+    the owner stopped, so the next resume reopens it as a stopped session."""
+    monkeypatch.setattr(host, "_RECONCILE_SECONDS", 3600.0)
+    asked = asyncio.Event()
+
+    class Telling(NeverSays):
+        async def reconcile(self, input_id: str) -> Reconciled:
+            asked.set()
+            return await super().reconcile(input_id)
+
+    await a_handover_nobody_will_explain(tmp_path, Telling)
+    resuming = asyncio.ensure_future(Session.resume("s", root=tmp_path))
+    await asyncio.wait_for(asked.wait(), SECONDS)
+
+    resuming.cancel()
+    await asyncio.gather(resuming, return_exceptions=True)
+
+    assert resuming.cancelled() and not is_held(tmp_path / "sessions" / "s")
+    async with Session.attach("s", root=tmp_path) as history:
+        events = [event async for event in history.events()]
+    assert [event.type for event in events if event.type in ("runtime.started", "session.stopped")][-2:] == [
+        "runtime.started",
+        "session.stopped",
+    ]
+    assert list((tmp_path / "sessions" / "s").rglob("proc.json")) == []
+
+
 class BrokenOnResume(ScriptedDriver):
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if ran_before(spec):

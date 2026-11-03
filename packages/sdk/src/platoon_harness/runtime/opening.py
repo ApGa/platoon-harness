@@ -56,7 +56,7 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     """Refuse many agents on one plan login. A role with an auth profile is on no login, and one agent alone is
     ordinary use, unless another role can spawn more."""
     roles = [name for name, info in known.items() if info.login == "plan" and team.roles[name].auth is None]
-    if sum(map(team.starts, roles)) < 2 and not any(map(team.spawners, roles)):
+    if sum(len(team.starts(role)) for role in roles) < 2 and not any(map(team.spawners, roles)):
         return []
     names = ", ".join(roles)
     return [Problem("roles", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
@@ -154,12 +154,7 @@ def _budget(scope: str, budget: Budget, authority: Authority) -> dict[str, Any] 
 
 def _starting(team: Team) -> list[dict[str, str]]:
     """The agents that start with the session. They have no goal, so each waits for a message."""
-    spawns = []
-    for role in team.roles:
-        count = team.starts(role)
-        names = [role] if count == 1 else [f"{role}-{number}" for number in range(1, count + 1)]
-        spawns += [{"name": name, "child_role": role} for name in names]
-    return spawns
+    return [{"name": name, "child_role": role} for role in team.roles for name in team.starts(role)]
 
 
 async def _steps(kernel: Kernel, op: str, *steps: tuple[str, Mapping[str, Any]]) -> None:

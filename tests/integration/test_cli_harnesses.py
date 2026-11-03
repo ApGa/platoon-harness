@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness.testing import FakeModel
+from platoon_harness.testing import FakeModel, Stall, Text
 
-from .cli import Cli, checked
+from .cli import SECONDS, Cli, checked, finished
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(180)]
 
@@ -59,3 +59,25 @@ async def test_a_run_on_a_real_harness_settles_and_says_so_in_jsonl(cli: Cli, ha
     assert {"agent.instructed", "model.called", "turn.ended"} <= set(types)
     assert any(event["gist"] == "Hello from the model." for event in events if event["type"] == "item.recorded")
     assert model.calls[0].says("Say hello")
+
+
+@pytest.mark.parametrize("harness", sorted(KEYS))
+async def test_a_run_stopped_mid_turn_resumes_on_a_real_harness(cli: Cli, harness: str):
+    """`session stop` ends the run as its owner's stop, and `session resume` prints what its runtime does, from its
+    start, until the harness has been told its turn was cut off and the session settles."""
+    if shutil.which(harness) is None:
+        pytest.skip(f"{harness} is not installed, so the command line met no real {harness} here")
+    async with FakeModel([Stall(), Text("never heard")], "understood") as model:
+        team = keyed(cli, harness, model)
+        run = await cli.start("run", "think for a long time", "--team", team, "--trust", "--name", "s", "--json")
+        await asyncio.wait_for(model.call(0), SECONDS)
+
+        stopped = await cli.run("session", "stop", "s")
+        ran = await finished(run)
+        resumed = await cli.run("session", "resume", "s", "--json")
+
+    events = checked(resumed, first=resumed.lines()[0]["seq"])
+    assert (stopped.code, ran.code, resumed.code) == (0, 130, 0), resumed.stderr
+    assert (ran.lines()[-1]["reason"], resumed.lines()[-1]["reason"]) == ("cancelled", "settled")
+    assert events[0]["type"] == "runtime.started" and events[0]["seq"] == ran.lines()[-2]["seq"] + 1
+    assert model.calls[-1].says("the owner stopping the session")

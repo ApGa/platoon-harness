@@ -23,7 +23,8 @@ class Source:
     """What a team is made of besides its file, which layers over it as architecture section 17 says."""
 
     harness: str | None = None
-    """A team of one on this harness, whose role and agent take its name."""
+    """A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
+    of one."""
 
     set: tuple[str, ...] = ()
     """A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more."""

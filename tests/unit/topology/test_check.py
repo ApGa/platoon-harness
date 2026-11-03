@@ -401,7 +401,7 @@ def test_a_written_grant_of_spawning_makes_a_spawner_as_may_spawn_does():
     written = Grant(who="role:a", ops="agent.spawn", on="role/b")
     team = Team(roles={"a": Role(harness="pi"), "b": Role(harness="pi")}, topology=Topology(grants=[written]))
 
-    assert (team.spawners("b"), team.starts("b")) == ({"a"}, 0)
+    assert (team.spawners("b"), team.starts("b")) == ({"a"}, [])
 
 
 def test_a_grant_of_another_op_is_no_spawning():

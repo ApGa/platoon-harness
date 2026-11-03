@@ -195,7 +195,7 @@ def test_a_socket_directory_of_ours_is_tightened(short):
 def test_a_socket_directory_of_someone_else_s_is_refused(short, monkeypatch):
     monkeypatch.setattr(paths.os, "getuid", lambda: 1)
 
-    with pytest.raises(Refused, match="of this user's"):
+    with pytest.raises(ConfigError, match="of this user's"):
         socket_path(SESSION, {"XDG_RUNTIME_DIR": str(short)})
 
 
@@ -203,7 +203,7 @@ def test_a_link_is_no_socket_directory(short):
     (short / "elsewhere").mkdir()
     (short / "platoon-harness").symlink_to(short / "elsewhere")
 
-    with pytest.raises(Refused, match="of this user's"):
+    with pytest.raises(ConfigError, match="of this user's"):
         socket_path(SESSION, {"XDG_RUNTIME_DIR": str(short)})
 
 
@@ -234,7 +234,7 @@ def test_a_root_another_user_can_write_is_refused(tmp_path):
     root.mkdir()
     root.chmod(0o777)
 
-    with pytest.raises(Refused, match="nobody else can write"):
+    with pytest.raises(ConfigError, match="nobody else can write"):
         find_root(root, environ={}, writing=True)
 
     assert find_root(root, environ={}) == root
@@ -243,7 +243,7 @@ def test_a_root_another_user_can_write_is_refused(tmp_path):
 def test_a_root_of_someone_else_s_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(paths.os, "getuid", lambda: 1)
 
-    with pytest.raises(Refused, match="of this user's"):
+    with pytest.raises(ConfigError, match="of this user's"):
         find_root(tmp_path, environ={}, writing=True)
 
 

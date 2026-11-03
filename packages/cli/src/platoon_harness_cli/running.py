@@ -5,18 +5,24 @@ import asyncio
 import contextlib
 import signal
 import sys
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
+from typing import Annotated
 
-from platoon_harness import Session
+from cyclopts import Parameter
+
+from platoon_harness import Refused, Session, Team
+from platoon_harness.extensions import Installed
 from platoon_harness.kernel import GIST_LIMIT, first
 from platoon_harness.primitives import Policy
 from platoon_harness.runtime import Runtime
 from platoon_harness.runtime.opening import prepare
+from platoon_harness.runtime.paths import find_root, session_folder
 from platoon_harness.schema import seconds
+from platoon_harness.session import Reason
 
 from .exits import ENDINGS, INTERRUPTED, Usage
-from .output import ending_line, event_line, note, readable, readable_ending, say
+from .output import ending_line, event_line, note, readable, readable_ending, refused, say
 from .teams import Source
 
 
@@ -33,9 +39,28 @@ def stopping(stop: Callable[[], None]) -> Generator[None]:
             loop.remove_signal_handler(signum)
 
 
+@contextlib.contextmanager
+def as_given() -> Generator[None]:
+    """A refusal before a session is owned names what the command line asked for and cannot be, such as a name that is
+    taken or no session of that name, so it is a command line that cannot run as it was given."""
+    try:
+        yield
+    except Refused as error:
+        raise Usage(refused(error.refusal)) from None
+
+
+def _stdin() -> str:
+    if sys.stdin is None:
+        raise Usage("stdin is closed, so there is no prompt to read")
+    try:
+        return sys.stdin.read()
+    except UnicodeDecodeError as error:
+        raise Usage(f"stdin: {error}") from None
+
+
 def _prompt(prompt: str | None, prompt_file: Path | None) -> str:
     """The prompt, with no space at its ends: the argument, a file's text, or stdin read to its end, for `-` or when it
-    is no terminal."""
+    is no terminal. One word that starts with `-` is an option nobody knows."""
     if prompt is not None and prompt_file is not None:
         raise Usage("give a prompt or --prompt-file, not both")
     if prompt_file is not None:
@@ -43,10 +68,12 @@ def _prompt(prompt: str | None, prompt_file: Path | None) -> str:
             text = prompt_file.read_text()
         except (OSError, UnicodeDecodeError) as error:
             raise Usage(f"--prompt-file: {error}") from None
-    elif prompt == "-" or (prompt is None and not sys.stdin.isatty()):
-        text = sys.stdin.read()
+    elif prompt == "-" or (prompt is None and sys.stdin is not None and not sys.stdin.isatty()):
+        text = _stdin()
     elif prompt is None:
         raise Usage('give a prompt: `platoon-harness run "..."`, `-` for stdin, or --prompt-file')
+    elif prompt.startswith("-") and len(prompt.split()) == 1:
+        raise Usage(f"no option {prompt}: a prompt that starts with `-` goes on stdin or in --prompt-file")
     else:
         text = prompt
     if not text.strip():
@@ -61,56 +88,93 @@ def _span(timeout: str | None) -> float | None:
         raise Usage(f"--timeout: {error}") from None
 
 
-async def _only_agent(session: Session) -> str:
-    """The one agent the session started, which is who a prompt goes to when nobody is named."""
-    names = [f"@{row['agent']}" for row in await session.agents()]
-    if len(names) != 1:
-        raise Usage(f"say which agent the prompt is for, with --to: this session started {', '.join(names) or 'none'}")
-    return names[0]
+def _target(team: Team, to: str | None) -> str:
+    """Who a prompt is for, decided before any cost: `to`, which must name an agent the session starts, or that one
+    agent alone."""
+    resolved = team.resolved(Installed())
+    started = [f"@{agent}" for role in resolved.roles for agent in resolved.starts(role)]
+    if to is None and len(started) == 1:
+        return started[0]
+    if to in started:
+        return to
+    said = ", ".join(started) or "none"
+    if to is None:
+        raise Usage(f"say which agent the prompt is for, with --to: this session starts {said}")
+    raise Usage(f"--to {to} is no agent this session starts: it starts {said}")
 
 
 async def printing(name: str, after: int, *, json: bool, follow: bool = True) -> None:
     """Print a session's events past `after`, and with `follow` until nothing more can come, as a guest with a view
-    credential, which writes nothing and is nobody who could act."""
+    credential, which writes nothing and is nobody who could act. It stops once nobody reads them."""
     async with Session.attach(name, view=True) as watching:
         async for event in watching.events(after, follow=follow):
-            say(event_line(event) if json else readable(event))
+            if not say(event_line(event) if json else readable(event)):
+                break
 
 
-async def own(
-    session: Session, *, after: int, span: float | None, json: bool, begin: Callable[[], Awaitable[None]]
-) -> int:
-    """Own a session in the foreground: print its events past `after`, `begin`, wait for it to settle, then run the
-    owner's shutdown and print how it ended, last. Ctrl+C or SIGTERM cancels the wait, and the shutdown still runs.
+async def _incarnation(session: Session) -> int:
+    """Where what this runtime did begins: just before its `runtime.started`, the last, as nobody else's can follow."""
+    started = [event.seq async for event in session.events(match="runtime") if event.type == "runtime.started"]
+    return started[-1] - 1
 
-    The events print from a thread of their own, as a guest of this runtime, so a reader of stdout that falls behind
-    holds up nothing here: the runtime drops a guest that stops reading, and it comes back where it was."""
-    stop = asyncio.Event()
-    printed = asyncio.ensure_future(asyncio.to_thread(asyncio.run, printing(session.name, after, json=json)))
-    try:
-        with stopping(stop.set):
-            await begin()
-            settling = asyncio.ensure_future(session.settled(span))
-            reason = settling.result().reason if await first(settling, stop.wait()) else "cancelled"
-    finally:
-        await session.leave()
-        await printed
-    async with Session.attach(session.name, view=True) as history:
+
+async def _ending(name: str, reason: Reason, json: bool) -> int:
+    async with Session.attach(name, view=True) as history:
         ending = (await history.ending()).model_copy(update={"reason": reason})
     code = ENDINGS[reason]
     say(ending_line(ending, code) if json else readable_ending(ending, code))
     return code
 
 
-def _gist(text: str) -> tuple[str, str | None]:
-    """A prompt as a message: the whole of it when it fits a gist, else its start and the whole as the body."""
-    if len(text) <= GIST_LIMIT:
-        return text, None
-    return f"{text[: GIST_LIMIT - 1]}…", text
+async def own(session: Session, *, span: float | None, json: bool, message: tuple[str, str] | None = None) -> int:
+    """Own a session in the foreground: enter it, print what its runtime does, send `message`, a person's, as `(to,
+    text)`, wait for it to settle, then run the owner's shutdown and print how it ended, last. Ctrl+C or SIGTERM at any
+    point cancels what is under way, and the shutdown still runs, so it ends `cancelled` and stays resumable. One
+    stopped while its runtime starts has printed nothing yet, so it prints its ending alone.
+
+    The events print from a thread of their own, as a guest of this runtime, so a reader of stdout that falls behind
+    holds up nothing here: the runtime drops a guest that stops reading, and it comes back where it was."""
+    stop = asyncio.Event()
+    reason: Reason = "cancelled"
+    with stopping(stop.set):
+        with as_given():
+            entered = await first(session, stop.wait())
+        if not session.name:
+            note("stopped before a session was made")
+            return INTERRUPTED
+        note(f"session {session.name}: follow it with `platoon-harness events {session.name} --follow`")
+        if entered:
+            printed = None
+            try:
+                follow = printing(session.name, await _incarnation(session), json=json)
+                printed = asyncio.ensure_future(asyncio.to_thread(asyncio.run, follow))
+                if message is None or await first(_send(session, *message), stop.wait()):
+                    settling = asyncio.ensure_future(session.settled(span))
+                    if await first(settling, stop.wait()):
+                        reason = settling.result().reason
+            finally:
+                await session.leave()
+                if printed is not None:
+                    await printed
+        try:
+            return await _ending(session.name, reason, json)
+        except Refused as error:
+            note(refused(error.refusal))
+            return INTERRUPTED
+
+
+async def _send(session: Session, to: str, text: str) -> None:
+    """A prompt as a person's message: the whole of it when it fits a gist, else its start and the whole as the body. A
+    refusal is said, and the session's ending says what came of it."""
+    gist, body = (text, None) if len(text) <= GIST_LIMIT else (f"{text[: GIST_LIMIT - 1]}…", text)
+    try:
+        await session.send(to, gist, body=body)
+    except Refused as error:
+        note(refused(error.refusal))
 
 
 async def run(
-    prompt: str | None = None,
+    prompt: Annotated[str | None, Parameter(allow_leading_hyphen=True)] = None,
     /,
     *,
     team: Path | None = None,
@@ -127,11 +191,12 @@ async def run(
 
     It exits with how the session ended: 0 settled, 1 an agent failed, 2 the budget ran out, 3 timed out, 4 it needs a
     person, and 130 cancelled, by Ctrl+C or `session stop` too. Ctrl+C runs the owner's shutdown first, which keeps the
-    session resumable.
+    session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost.
 
-    The team is the project file, `platoon-harness.toml`, or the file --team names over it, or a team of one on
-    --harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it lands at
-    the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can reach it.
+    The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
+    on that harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it
+    lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can
+    reach it.
 
     With --json, stdout holds one JSON line per event of the session's journal, then one for its ending, and nothing
     else. An approval left to ask, with nobody attached to answer, ends the run at once with exit 4, and never prompts:
@@ -140,7 +205,7 @@ async def run(
     For example:
 
         platoon-harness run "Fix the flaky test in tests/test_cart.py"
-        git diff | platoon-harness run --json --harness codex --approvals deny > events.jsonl
+        git diff | platoon-harness run - --json --harness codex --approvals deny > events.jsonl
         platoon-harness run --team crew.toml --to @lead --prompt-file task.md --plan-login --timeout 30m
 
     Parameters
@@ -166,19 +231,9 @@ async def run(
     """
     text, span = _prompt(prompt, prompt_file), _span(timeout)
     loaded = source.load(team)
-    session = await Session.start(loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd())
-    note(f"session {session.name}: follow it with `platoon-harness events {session.name} --follow`")
-    try:
-        target = to or await _only_agent(session)
-    except BaseException:
-        await session.leave()
-        raise
-
-    async def begin() -> None:
-        gist, body = _gist(text)
-        await session.send(target, gist, body=body)
-
-    return await own(session, after=0, span=span, json=json, begin=begin)
+    target = _target(loaded, to)
+    session = Session.start(loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd())
+    return await own(session, span=span, json=json, message=(target, text))
 
 
 async def resume(
@@ -191,7 +246,7 @@ async def resume(
     """Restart a session whose runtime has gone, and own it in the foreground until it settles.
 
     Its harnesses come back, and a turn they were cut off in is told and woken, which can spend money. It prints what
-    happens from now, and exits as `run` does.
+    its runtime does, from its start, and exits as `run` does.
 
     For example:
 
@@ -208,21 +263,15 @@ async def resume(
         Print JSONL on stdout.
     """
     span = _span(timeout)
-    async with Session.attach(session, view=True) as history:
-        after = await history.head()
+    with as_given():
+        session_folder(find_root(), session)
     note(f"resuming session {session}: its harnesses come back, and can spend money")
-    owner = await Session.resume(session)
-
-    async def begin() -> None:
-        return None
-
-    return await own(owner, after=after, span=span, json=json, begin=begin)
+    return await own(Session.resume(session), span=span, json=json)
 
 
 async def serve(
-    team: Path | None = None,
-    /,
     *,
+    team: Path | None = None,
     source: Source = Source(),
     name: str | None = None,
     approvals: Policy | None = None,
@@ -236,7 +285,7 @@ async def serve(
 
     For example:
 
-        platoon-harness serve crew.toml --name nightly
+        platoon-harness serve --team crew.toml --name nightly
         platoon-harness message send nightly --to @lead --gist "Start on the backlog"
 
     Parameters
@@ -251,13 +300,18 @@ async def serve(
         Several agents may run headless on one plan login: say so to say this is your own work.
     """
     loaded = source.load(team)
-    folder = await asyncio.to_thread(
-        prepare, loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd()
-    )
+    with as_given():
+        folder = await asyncio.to_thread(
+            prepare, loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd()
+        )
     runtime = Runtime(folder)
     with stopping(runtime.ask_to_stop):
         await runtime.start()
-        note(f"serving session {folder.name}: SIGTERM stops it, and `platoon-harness session resume` restarts it")
+        name = folder.name
+        note(
+            f"serving session {name}: `platoon-harness session stop {name}` stops it, and "
+            f"`platoon-harness session resume {name}` restarts it"
+        )
         await runtime.run()
         await runtime.stop()
     return 0
@@ -267,7 +321,8 @@ async def events(session: str, /, *, after: int = 0, follow: bool = False, json:
     """Print a session's events past a cursor, live or closed, writing nothing.
 
     With --json each line is one event's JSON, carrying its `seq`: pass the last one as --after to go on exactly where
-    you stopped, across a runtime that stopped and resumed. Ctrl+C ends it with exit 130.
+    you stopped, across a runtime that stopped and resumed. It ends once nobody reads what it prints, and Ctrl+C ends it
+    with exit 130.
 
     For example:
 

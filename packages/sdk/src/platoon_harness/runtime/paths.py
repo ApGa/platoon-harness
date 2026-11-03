@@ -80,7 +80,7 @@ def _writable(root: Path) -> Path:
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     found = root.stat()
     if found.st_uid != os.getuid() or found.st_mode & stat.S_IWOTH:
-        raise Refused("unsupported", f"{root} must be a directory of this user's that nobody else can write")
+        raise ConfigError([Problem(str(root), "must be a directory of this user's that nobody else can write")])
     return root
 
 
@@ -142,7 +142,7 @@ def _make_private(folder: Path) -> None:
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     found = folder.lstat()
     if not stat.S_ISDIR(found.st_mode) or found.st_uid != os.getuid():
-        raise Refused("unsupported", f"{folder} must be a directory of this user's")
+        raise ConfigError([Problem(str(folder), "must be a directory of this user's")])
     folder.chmod(0o700)
 
 
@@ -160,7 +160,7 @@ def socket_path(session: Path, environ: Mapping[str, str] = os.environ) -> Path:
             except OSError:
                 continue
             return folder / name
-    raise Refused("unsupported", f"no private directory holds a socket path in {_SOCKET_LIMIT} bytes")
+    raise ConfigError([Problem("sockets", f"no private directory holds a socket path in {_SOCKET_LIMIT} bytes")])
 
 
 class Running(Model):

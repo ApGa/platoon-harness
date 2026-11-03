@@ -1,7 +1,7 @@
 """Milestone 1's flow from a terminal: the installed `platoon-harness` on real harnesses and native logins. Set
 `PLATOON_HARNESS_LIVE=1` to run these, and say what ran.
 
-Budget: at most 50 model calls in all, counted from the journals, each test stating its own: `claude-haiku-5-5` on
+Budget: at most 60 model calls in all, counted from the journals, each test stating its own: `claude-haiku-5-5` on
 Claude Code, and `gpt-6-luna` at low effort on Codex. Every session has a budget, so that a runaway stops itself.
 """
 

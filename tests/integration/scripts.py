@@ -121,6 +121,23 @@ class OnAPlan(ScriptedDriver):
         return super().describe().model_copy(update={"login": "plan"})
 
 
+class Returning(ScriptedDriver):
+    """Once back, it never comes up, and says on stderr that it is on its way, which is the runtime's own."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        if ran_before(spec):
+            print(f"{spec.agent} is on its way back", file=sys.stderr, flush=True)
+            await asyncio.Event().wait()
+        await super().start(spec, report)
+
+
+class Deaf(ScriptedDriver):
+    """It never hears an interrupt, so the owner's shutdown waits out its grace for the turn to end."""
+
+    async def interrupt(self) -> None:
+        return None
+
+
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 
@@ -135,6 +152,8 @@ HARNESSES = {
     "asks_more": lambda: ScriptedDriver(FOLLOWING_UP),
     "exiting": lambda: ScriptedDriver([[Exit()]]),
     "listening": lambda: ScriptedDriver(LISTENING),
+    "returning": lambda: Returning([[Hang()]]),
+    "deaf": lambda: Deaf([[Hang()]]),
     "planned": lambda: OnAPlan(itertools.repeat([Say("done")])),
 }
 

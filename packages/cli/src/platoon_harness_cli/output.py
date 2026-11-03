@@ -51,13 +51,16 @@ def safe(text: str) -> str:
     )
 
 
-def say(text: str) -> None:
-    """Write a line to stdout now. A reader that has gone takes nothing more, and the command goes on without it."""
+def say(text: str) -> bool:
+    """Write a line to stdout now, and say whether anyone still reads it. A reader that has gone takes nothing more,
+    and a command that is no use without one stops."""
     try:
         sys.stdout.write(text + "\n")
         sys.stdout.flush()
     except BrokenPipeError:
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return False
+    return True
 
 
 def note(text: str) -> None:

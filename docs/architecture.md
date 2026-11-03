@@ -164,11 +164,13 @@ can both be watched. Leaving only disconnects.
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
   on `SIGTERM`, which runs the shutdown below, and once a session that has stopped accepting work has drained. Signal handlers
-  live in the entry points, that one and the command line's `run`, `serve` and `session resume`, and nowhere else, so that several
-  runtimes can share a process. `platoon-harness session stop` is that `SIGTERM`, sent from another shell to a runtime whose lock is
-  held and whose `runtime.json` names the incarnation the journal last started; a script's own process does what its handler says.
+  live in the entry points, that one and the command line's `run`, `serve`, `session resume` and `events`, and nowhere else, so that
+  several runtimes can share a process. `platoon-harness session stop` is that `SIGTERM`, sent from another shell to a runtime whose
+  lock is held and whose `runtime.json` names the incarnation the journal last started; a script's own process does what its handler
+  says.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
-  reservations, append `session.stopped`, keep the folder resumable. To release is to hand back what will not happen now: a turn
+  reservations, append `session.stopped`, keep the folder resumable. A start cut short, cancelled or failed, once its incarnation is
+  in the journal ends with this shutdown too. To release is to hand back what will not happen now: a turn
   still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started fails,
   which queues its entries again. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
@@ -1212,16 +1214,19 @@ timeout. A harness that never ends its turn can hang it too, which is what a wal
 | `cancelled` | 130 |
 
 `platoon-harness run` and `session resume` exit with these. Every command exits 64 for a command line that cannot run as it was
-given, and 78 for a configuration error: a team, a root or a machine that cannot be used as it is, as `team check`, `doctor` and a
-plan login refused headless say. Any other command exits 1 when it is refused, as `ph` does.
+given, which for those two is any refusal before the session is theirs, such as a name that is taken or no session of that name, so
+neither exits 1 for one. Every command exits 78 for a configuration error: a team, a root or a machine that cannot be used as it is,
+as `team check`, `doctor` and a plan login refused headless say. Any other command exits 1 when it is refused, as `ph` does.
 
 **The command line** is a client like any other, a thin one: `run` is `Session.start`, a person's message and `settled()`, then the
-owner's shutdown, and says the session's name on stderr at once, so another shell can reach it. Ctrl+C or `SIGTERM` cancels the wait
-and the shutdown still runs, so a run ends `cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a
-supervisor. Every other command on a session runs one op as a guest, a read on a view credential, and is derived from the op registry.
-With `--json`, stdout holds one line per journal event, in a shape versioned by its `format`, then the Ending, and nothing else; logs go
-to stderr. Nothing prompts: an `ask` with nobody attached ends `needs_human` at once, and `--approvals` states a policy over every
-role's, which the manifest keeps. [cli.md](cli.md) is its reference, made from the command definitions.
+owner's shutdown, and says the session's name on stderr at once, so another shell can reach it. Whom the message is for it decides
+from the team before any cost. Ctrl+C or `SIGTERM`, at any point, cancels what is under way and the shutdown still runs, so a run ends
+`cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a supervisor. `events` follows a session and
+`session stop` sends it the owner's stop, and each command under Ops on a session runs one op there as a guest, a read on a view
+credential, derived from the op registry. With `--json`, stdout holds one line per event the runtime it owns journals, from its
+`runtime.started`, in a shape versioned by its `format`, then the Ending, and nothing else; logs go to stderr. One stopped while its
+runtime starts prints its Ending alone. Nothing prompts: an `ask` with nobody attached ends `needs_human` at once, and `--approvals`
+states a policy over every role's, which the manifest keeps. [cli.md](cli.md) is its reference, made from the command definitions.
 
 Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes. Almost any event can move a
 roster row, under a name that is not that agent's, so `roster` answers with every row whenever the journal has moved, which is about

@@ -71,6 +71,7 @@ class Runtime:
         cwd = Path(manifest.cwd)
         self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd, plan_login=manifest.plan_login)
         self.control = Control(self.kernel, self.human, self.folder)
+        incarnation = None
         try:
             await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
@@ -85,9 +86,12 @@ class Runtime:
             )
             write_private(self.folder / RUNNING, running.model_dump_json())
         except BaseException:
-            self.host.closing()
-            await self.host.close(GRACE)
-            await self._close()
+            if incarnation is None:
+                self.host.closing()
+                await self.host.close(GRACE)
+                await self._close()
+            else:  # This incarnation has begun in the journal, so it ends there as an owner's does.
+                await self.stop()
             raise
 
     async def _issue_credentials(self) -> None:

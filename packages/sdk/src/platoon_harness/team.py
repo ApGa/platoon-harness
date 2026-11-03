@@ -168,12 +168,13 @@ class Team(Model):
         """The roles that may spawn `role`, by `may_spawn` or by a written grant, which is the same thing."""
         return {name for name, children in _spawning(self).items() if role in children}
 
-    def starts(self, role: str) -> int:
-        """How many agents of `role` start with the session."""
+    def starts(self, role: str) -> list[str]:
+        """The agents of `role` that start with the session: one by the role's name, or a numbered one for each of
+        its `count`."""
         count = self.roles[role].count
-        if count is not None:
-            return count
-        return 0 if self.spawners(role) - {role} else 1
+        if count is None:
+            count = 0 if self.spawners(role) - {role} else 1
+        return [role] if count == 1 else [f"{role}-{number}" for number in range(1, count + 1)]
 
     def preamble_of(self, role: str) -> str:
         """The template of what `role`'s agents are told before its words: its own, else the team's."""
@@ -246,7 +247,7 @@ def _budget_problems(budget: Budget, where: str, role: Role, capabilities: Capab
 
 def _population(team: Team, role: str) -> float:
     """The most agents a role can have at once, which is infinite when nothing bounds it."""
-    return (team.topology.limits.max_live or math.inf) if team.spawners(role) else team.starts(role)
+    return (team.topology.limits.max_live or math.inf) if team.spawners(role) else len(team.starts(role))
 
 
 def _spawning(team: Team) -> dict[str, set[str]]:
