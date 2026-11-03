@@ -56,7 +56,7 @@
   as the surface names it, and `team_check` warns of a template that leaves out `tools` or `ending` and of words that name a tool
   a role lacks. `agent.instructed` journals the exact text added to each harness, at launch and at every resume, and `told(team)`
   renders what each role would be told, starting no harness.
-- `native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
+- `allow_native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
   reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's token. Claude Code's
   `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by
   `agents.enabled = false`, both generations. `team_check` says what a role that allows them gives up, `check_driver` has the row

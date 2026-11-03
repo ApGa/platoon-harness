@@ -199,7 +199,7 @@ class ClaudeDriver:
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches: one path, and its files are written first. The server's token stays in the
         environment, and argv, which any process can read, names only its variable."""
-        disallowed = (_UNANSWERABLE, *(() if spec.native_children else _NATIVE_CHILDREN))
+        disallowed = (_UNANSWERABLE, *(() if spec.allow_native_children else _NATIVE_CHILDREN))
         command = [*_LAUNCH, "--disallowedTools", ",".join(disallowed)]
         command += ["--resume" if spec.resume else "--session-id", self._native]
         if spec.model is not None:

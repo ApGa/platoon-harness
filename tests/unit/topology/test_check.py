@@ -172,20 +172,20 @@ def test_a_role_that_stays_on_a_harness_that_cannot_is_refused():
 
 
 def test_a_role_that_allows_its_harness_s_own_agents_is_told_what_is_lost():
-    team = Team(roles={"lead": Role(harness="claude", native_children=True)})
+    team = Team(roles={"lead": Role(harness="claude", allow_native_children=True)})
     capabilities = {"claude": Capabilities(persistent=True, native_children="observed")}
 
     assert warnings(team, capabilities=capabilities) == [
-        "roles.lead.native_children: its harness's own agents are none of ours: their calls reach us only in their "
-        "parent's total, no topology binds them, and their calls to our tools go out on their parent's token"
+        "roles.lead.allow_native_children: its harness's own agents are none of ours: their calls reach us only in "
+        "their parent's total, no topology binds them, and their calls to our tools go out on their parent's token"
     ]
 
 
 def test_a_role_that_allows_agents_its_harness_never_starts_is_told_so():
-    team = Team(roles={"lead": Role(harness="pi", native_children=True)})
+    team = Team(roles={"lead": Role(harness="pi", allow_native_children=True)})
 
     assert warnings(team, capabilities={"pi": BLIND}) == [
-        "roles.lead.native_children: `pi` starts no agents of its own, so this allows nothing"
+        "roles.lead.allow_native_children: `pi` starts no agents of its own, so this allows nothing"
     ]
 
 

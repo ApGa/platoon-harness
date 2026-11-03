@@ -99,9 +99,9 @@ class Role(Model):
     an agent is told to stay after its task for the next message, rather than to finish: left out, one the session
     started stays and one spawned does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
     of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
-    otherwise, and `adopt` gives it to the session. `native_children` lets its harness start agents of its own, beside
-    ours. `preamble` is the template of what its agents are told before `instructions`, its own words, in place of the
-    team's.
+    otherwise, and `adopt` gives it to the session. `allow_native_children` lets its harness start agents of its own,
+    beside ours. `preamble` is the template of what its agents are told before `instructions`, its own words, in place
+    of the team's.
     """
 
     harness: str | Command
@@ -112,7 +112,7 @@ class Role(Model):
     auth: str | None = None
     workspace: Literal["shared", "worktree", "snapshot", "isolated"] = "shared"
     sandbox: str | None = None
-    native_children: StrictBool = False
+    allow_native_children: StrictBool = False
     tools: tuple[str, ...] = ("*",)
     delivery: Injection = "wake"
     inbox_depth: Positive = 1024
@@ -400,8 +400,8 @@ def team_check(
             if role.stays and not known.persistent:
                 what = "a one-shot harness ends with its turn, so it cannot stay"
                 problems.append(Problem(f"roles.{name}.stays", what))
-            if role.native_children:
-                problems.append(Problem(f"roles.{name}.native_children", _native(role, known), "warning"))
+            if role.allow_native_children:
+                problems.append(Problem(f"roles.{name}.allow_native_children", _native(role, known), "warning"))
             problems += _budget_problems(team.budget, "budget", role, known)
             problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:

@@ -285,10 +285,10 @@ async def test_what_each_role_would_be_told_is_what_a_session_tells_it(tmp_path,
 
 @pytest.mark.parametrize("allowed", [False, True])
 async def test_a_harness_starts_agents_of_its_own_only_where_its_role_allows(tmp_path, recording, allowed):
-    async with Session.start(solo_with(recording, native_children=allowed), root=tmp_path) as session:
+    async with Session.start(solo_with(recording, allow_native_children=allowed), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
 
-    assert recording.specs[0].native_children is allowed
+    assert recording.specs[0].allow_native_children is allowed
 
 
 async def test_a_narrowed_role_keeps_ops_list_so_it_keeps_its_tools(tmp_path):

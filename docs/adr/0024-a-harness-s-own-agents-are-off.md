@@ -12,7 +12,7 @@ the role's policy. In 36 live sessions a native child had run only where a test 
 
 ## Decision
 
-- **`native_children` on a role, false unless said.** It reaches the driver on `AgentSpec`, which turns the harness's own agents off
+- **`allow_native_children` on a role, false unless said.** It reaches the driver on `AgentSpec`, which turns the harness's own agents off
   for that launch by the harness's own setting, and writes none of the user's configuration.
 - **Claude Code** disallows `Agent` and `Workflow`, which start its own agents, and `ListAgents` and `SendMessage`, which reach them,
   and other Claude sessions on the machine too. The names are those its first request showed on 2.1.316 against FakeModel. Agent
@@ -35,7 +35,7 @@ the role's policy. In 36 live sessions a native child had run only where a test 
 
 ## Consequences
 
-- A role that wants a harness's own agents says `native_children = true`, and `team check` says what that gives up.
+- A role that wants a harness's own agents says `allow_native_children = true`, and `team check` says what that gives up.
 - A child still seen, as a forked skill might be, is recorded as before, with the gap `native_child_unattributed`.
 - Live tests that start a native child opt in.
 

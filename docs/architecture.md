@@ -871,7 +871,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `sandbox`** (`read-only`, ...) is a harness-plane setting, not a grant, and an unsupported value fails at `team check`.
 - **Role `delivery`** sets the ladder for its agents' inboxes, `wake` unless stated.
 - **Role `count`** is how many agents start with the session. Left out, that is one, or none if another role spawns this one.
-- **Role `native_children`** lets its harness start agents of its own, beside ours. Left out, it is false: such an agent is no agent
+- **Role `allow_native_children`** lets its harness start agents of its own, beside ours. Left out, it is false: such an agent is no agent
   of ours, since its calls reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's
   token. A driver turns them off for one launch by the harness's own setting, and what a harness keeps out of reach of that is in
   [compatibility.md](compatibility.md). Its approvals still come to the runtime, under its parent's role. See

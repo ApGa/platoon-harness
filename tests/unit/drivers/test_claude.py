@@ -200,7 +200,7 @@ async def test_the_launch_is_the_one_path(tmp_path, stand):
 
 
 async def test_a_role_that_allows_its_harness_s_own_agents_keeps_them(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="", native_children=True)) as (_, heard):
+    async with running(make_spec(tmp_path, goal="", allow_native_children=True)) as (_, heard):
         await heard.until(Ready)
 
     argv = stand.launch["argv"]

@@ -435,7 +435,7 @@ class Host:
             model=role.model,
             effort=role.effort,
             sandbox=role.sandbox,
-            native_children=role.native_children,
+            allow_native_children=role.allow_native_children,
             tools=binding,
             access=admission.access,
             instructions=_told(self._kernel, principal, self._team, link.role, surface),

@@ -581,7 +581,7 @@ class Spawning(Parent):
 
     async def _list_tools(self) -> tuple[str, ...]:
         names = await super()._list_tools()
-        if self._always or self._spec.native_children:
+        if self._always or self._spec.allow_native_children:
             self._tools.append({"type": "function", "function": {"name": "spawn", "parameters": {}}})
         return names
 

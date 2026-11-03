@@ -214,7 +214,7 @@ async def test_what_the_user_set_stays_in_what_replaces_it(tmp_path, stand):
 
 
 async def test_nothing_is_set_that_the_role_left_to_the_user(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="", native_children=True)) as (_, heard):
+    async with running(make_spec(tmp_path, goal="", allow_native_children=True)) as (_, heard):
         await heard.until(Ready)
 
     thread = stand.asked("thread/start")

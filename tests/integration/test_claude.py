@@ -292,7 +292,7 @@ async def test_its_own_agents_are_off_unless_a_role_allows_them_and_agent_teams_
 
     off = await first_request(tmp_path / "off")
     teams = await first_request(tmp_path)
-    allowed = await first_request(tmp_path / "allowed", native_children=True)
+    allowed = await first_request(tmp_path / "allowed", allow_native_children=True)
 
     assert not {*off.tools, *teams.tools} & set(NATIVE_CHILDREN)
     assert not off.says("SendMessage") and not off.says("Available agent types")

@@ -184,7 +184,9 @@ async def test_a_codex_agent_s_own_sub_agent_runs_inside_the_turn_that_started_i
     """Budget: at most 10 model calls, counted from the journal, a child's own among them, which reach us as the tree's.
     Current models reach their sub-agents through the multi-agent V2 tools, which had run on FakeModel alone, at V1.
     This says what frames come, whether the turn ends only once the child has, and whether `settled` sees it live."""
-    ada = Role(harness="codex", model=MODEL, effort=EFFORT, approvals="allow", instructions=BRIEF, native_children=True)
+    ada = Role(
+        harness="codex", model=MODEL, effort=EFFORT, approvals="allow", instructions=BRIEF, allow_native_children=True
+    )
     team = Team(roles={"ada": ada})
     work = tmp_path / "work"
     work.mkdir()

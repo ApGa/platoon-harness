@@ -465,7 +465,7 @@ async def test_a_compaction_reports_its_call_and_a_gap_for_what_it_forgot(tmp_pa
 async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_path):
     async with FakeModel(CHILD, "the parent is done", "the child is done") as model:
         driver, heard = CodexDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", native_children=True), heard)
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", allow_native_children=True), heard)
         child = await heard.until(ChildSeen)
         await heard.until(TurnEnded)
         await driver.stop(2.0)
@@ -487,7 +487,7 @@ async def test_a_catalog_model_s_own_agents_are_off_unless_a_role_allows_them(tm
     `features.multi_agent` leaves on. FakeModel stands in for the model under that name."""
     async with FakeModel("ok") as model:
         driver, heard = CodexDriver(), Heard()
-        spec = on_fake_model(tmp_path, model, goal="go", model="gpt-6-luna", native_children=allowed)
+        spec = on_fake_model(tmp_path, model, goal="go", model="gpt-6-luna", allow_native_children=allowed)
         await driver.start(spec, heard)
         await heard.until(TurnEnded)
         await driver.stop(2.0)
@@ -500,7 +500,7 @@ async def test_a_catalog_model_s_own_agents_are_off_unless_a_role_allows_them(tm
 async def test_an_interrupt_reaches_a_child_as_well(tmp_path):
     async with FakeModel(CHILD, [Stall()], [Stall()]) as model:
         driver, heard = CodexDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", native_children=True), heard)
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", allow_native_children=True), heard)
         await heard.until(ChildSeen)
         await asyncio.wait_for(model.call(2), TIMEOUT)
         await driver.interrupt()

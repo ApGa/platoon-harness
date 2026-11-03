@@ -221,7 +221,7 @@ by a driver landing; only the row below changes.
 - `reconcile` looks for the delivery's heading in the user messages of `get_entries`, which is whole and on disk. A kill loses what was only queued, but recovery asks of an approval's id too, so a miss is `unknown` [L].
 - `agent_settled` with `aborted` and no interrupt of ours, from pi or a user's extension, reads `aborted`, which wakes a parent as a turn gone wrong does [S].
 - A login's kind is `authType` from `pi auth check --provider <default> --json --no-refresh`, for the provider `settings.json` names, and with none it is unknown. `api_key` ran; `oauth` is read as a plan login on a stand-in alone. `print-api-key`, `print-bearer-token` and `--credentials` are never used [L].
-- No tool for agents of its own is in pi's core, so a role's `native_children` changes nothing. An extension of the user's can add
+- No tool for agents of its own is in pi's core, so a role's `allow_native_children` changes nothing. An extension of the user's can add
   one, which nothing of ours turns off, and a child it starts goes unseen [S].
 - A warning from pi, such as a server of ours that failed, comes as `notify`, and is a `native` frame plus a gap. Pi connects a server after `ready`, so unlike on Claude Code and Codex this cannot fail the start, and the agent runs on with the gap [L].
 
