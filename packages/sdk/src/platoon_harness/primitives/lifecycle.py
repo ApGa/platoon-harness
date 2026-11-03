@@ -220,7 +220,10 @@ class Spawn(Args):
     body: Body = None
     stays: Annotated[
         bool | None,
-        Field(description="Whether it stays after its task for the next message. Left out, its role says, else not."),
+        Field(
+            description="Whether it stays after its task for the next message. Left out, its role decides, else it "
+            "does not."
+        ),
     ] = None
 
 

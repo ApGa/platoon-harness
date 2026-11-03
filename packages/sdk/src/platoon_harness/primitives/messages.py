@@ -164,7 +164,6 @@ class Deliveries(View):
 
     @fold("context.offered")
     def offered(self, event: Event) -> None:
-        """A v1 offer asked nothing of its reader."""
         data = event.data
         before = {stream: self.cursor(event.agent, stream).offered for stream in data["positions"]}
         in_a_result = data["how"] in IN_A_RESULT
@@ -186,7 +185,7 @@ class Deliveries(View):
                 json.dumps(data["positions"]),
                 json.dumps(before),
                 data["hops"],
-                data.get("asked", False),
+                data.get("asked", False),  # A v1 offer asked nothing.
             ),
         )
         self._heard(event.agent, data["hops"])
