@@ -25,7 +25,7 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **An interrupt under a `tokens` limit,** section 18, is runs 44 and 45: 3 model calls from 2 journals, of a limit of 20.
 - **The command line,** section 17, is runs 40 to 43, through the installed `platoon-harness`: 31 model calls from 4 journals, of a
   limit of 50, with their transcripts and journals kept outside the repository too.
-- **The terminal UI,** section 19, is runs 46 to 54, driven by Pilot: 75 model calls from 8 journals, each run under the test's
+- **The terminal UI,** section 19, is runs 46 to 55, driven by Pilot: 86 model calls from 9 journals, each run under the test's
   limit of 30. Run 46 made no session and spent nothing.
 
 ## Results
@@ -327,7 +327,8 @@ detached runtime: a Claude Code lead and a Codex worker in a read-only sandbox w
 | 51 | 13 | Every act held, and the test failed on its own first check. The reworded job was 290 characters, so the composer sent a cut gist with the job as its body. The memo woke `w` after its first turn, as `wake` delivery does, and Esc interrupted that turn. The test now refuses a job longer than a gist before it starts a session |
 | 52 | 3 | Esc interrupted `w` mid-story and quieted its wake, and the journal had it idle within a millisecond. The test's own wait then missed the one frame that drew it, as it read the frame count after a pause, and timed out. It now waits through `drawn`, as every other wait does |
 | 53 | 8 | Failed with no approval. Without "your sandbox is read-only", `w` ran the command unescalated, the sandbox refused the write, and it reported the failure. The job now gives both cues |
-| 54 | 14 | Passed in 48 s, on the code of this stage's end. The approval was allowed from the dock once, `via` `tui`. Esc interrupted `w` mid-story with the memo still queued, unread 1, and `w` took no turn until a person's message. Ctrl+D came back to the sessions screen, and a new app attached and saw the session settled. The lead made 11 calls in 3 turns and `w` 3 in 2 |
+| 54 | 14 | Passed in 48 s, before the change that gave every act a typed command. The approval was allowed from the dock once, `via` `tui`. Esc interrupted `w` mid-story with the memo still queued, unread 1, and `w` took no turn until a person's message. Ctrl+D came back to the sessions screen, and a new app attached and saw the session settled. The lead made 11 calls in 3 turns and `w` 3 in 2 |
+| 55 | 11 | Passed in 54 s at 7f3b785, after every act took a typed command and no chord could decide, stop or spend: the approval was allowed by `/yes` once Alt+A had chosen it, and the rest went as in run 54. The lead made 7 calls and `w` 4 |
 
 ## What a real model did that scripted harnesses could not show
 
