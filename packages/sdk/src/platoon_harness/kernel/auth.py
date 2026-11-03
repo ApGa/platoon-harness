@@ -201,13 +201,15 @@ class Grants(View):
     def authorize(self, principal: Principal, operation: Op, target: str | None = None) -> Principal:
         """Return the live principal if it may run `operation` on `target`, or refuse.
 
-        With no target this asks about any object. The runtime is trusted and takes no grant; runtime-only ops are
-        excluded by principal kind, so no glob reaches them. Scopes only attenuate.
+        With no target this asks about any object. The runtime is trusted and takes no grant; runtime-only and
+        agent-only ops are kept to their kind, so no glob reaches them for anyone else. Scopes only attenuate.
         """
         if principal.kind == "runtime":
             return principal
         if operation.runtime:
             raise Refused("not_permitted", "a runtime-only op")
+        if operation.agent and principal.kind != "agent":
+            raise Refused("not_permitted", "an agent-only op")
         me = Principals(self.db).live(principal.id)
         if not any(fnmatchcase(operation.name, scope) for scope in me.scopes):
             raise Refused("not_permitted", "outside this credential's scopes")

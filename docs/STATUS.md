@@ -67,6 +67,8 @@ power loss. Nothing here has run on macOS.
 | Wildcard folds for a view that cannot name what it counts | tested | `tests/unit/kernel/test_views.py` |
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
 | `v`-based upcasting of old payloads | tested | `v` is recorded. `agent.spawned`, `context.offered`, `context.delivered` and `message.sent` are at v2, and each fold that reads a field v1 lacked fills it with what held when v1 was written: `tests/unit/primitives/test_lifecycle.py` folds a journal written at v1 and goes on with it, and a journal written by the SDK before agents could stay opened. A reader of the journal sees each payload as it was written |
+| Agent-only ops, kept to agents by kind as runtime-only ones are to the runtime, so that `ops.list` lists a person none | tested | `test_authorize.py`. `agent.finish` is the one |
+| `registry(extensions)`: the op table a kernel holding them has, before any session exists | tested | `tests/unit/runtime/test_session.py` and `tests/unit/cli/test_commands.py` derive from it |
 | `next`, `prev` and `group:x` as kernel relations | deferred | `grant.add` still refuses them. Compilation expands them over roles, so a team never needs them |
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |
@@ -281,6 +283,7 @@ points, which are marked `slow`.
 | Live text masked as one stream, so a secret split across two deltas is masked, and a cut never falls inside a character | tested | `test_host.py`, `tests/unit/drivers/test_env.py`. Its tail waits for the next delta or any other report |
 | A harness that stops reading: a handover cut off at a minute, and `interrupt` and `answer` too | tested | `test_host.py` for all three on a manual clock, `tests/unit/drivers/test_claude.py` for a real pipe. A handover was bounded before this. `interrupt` and `answer` had no bound, and what they leave is a failed effect beside a turn still open, which only a wall limit ends |
 | Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from. The CLI does not exist yet, so history names `Session.resume` |
+| A read submitted by a client answered as a query, which writes nothing, on a view credential too | tested | `test_control.py` |
 | No detached runtime outlives the test that started it: a fixture ends each by its pid and its group, however the test ended | tested | `tests/integration/test_detached.py` holds the fixture's ending to the owner's shutdown |
 | The turn-end probe behind `changes` | planned | Arrives with workspaces |
 

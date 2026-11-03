@@ -68,6 +68,10 @@
   the model, on Claude Code and Codex. Live tests count the agents that open a turn with a `wait` naming nothing.
 - `tests/live/test_stays.py`: the owner's flow on Claude Code and on Codex, and a Codex child's half alone. `tests/live/test_codex.py`
   runs a Codex agent's own sub-agent.
+- `kernel.registry(extensions)`, the op table before any session exists, and `Op.agent`, which keeps `agent.finish` to agents by
+  kind as `runtime` keeps an op to the runtime.
+- `runtime.opening.check(team, plan_login=)`, every problem `Session.start` would meet, which `team check` prints, and
+  `Session.head()`.
 - An interrupt quiets what was waiting for its agent, whoever interrupts: what came before it wakes nothing and stays unread for the
   next turn, and a wait that already holds closes with no notice, while what comes after wakes as usual. `wake.quieted` records it.
 
@@ -76,6 +80,9 @@
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
   agent's message follows the reader's setting as before. Nothing withdraws a sent message.
 - An interrupt of an agent on its way to a turn, by a wake that is due, is accepted and cancels that wake, where it was refused.
+- `agent.finish` from anyone but an agent is refused `not_permitted` by kind, where its body refused `invalid`.
+- `Session.submit` of a read answers it as a query, which writes nothing, so a view credential may ask it.
+- The plan-login refusal names `--plan-login` beside `plan_login=True`, and history names `platoon-harness session resume`.
 - `ScriptedDriver` names its turns after the instance too, so no resume repeats a turn's name.
 - The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
   them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's

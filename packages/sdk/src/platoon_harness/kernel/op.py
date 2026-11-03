@@ -63,7 +63,7 @@ class Op:
     """An op definition. `on` names the object of one invocation, or None for an op that checks its objects itself.
 
     `query` keeps an op out of history. `exposes` marks a read that is a command for agents and a query for everyone
-    else. An op is at most one of the two.
+    else. An op is at most one of the two. `runtime` and `agent` keep an op to principals of that kind.
     """
 
     name: str
@@ -74,6 +74,7 @@ class Op:
     exposes: bool = False
     tool: bool = False
     runtime: bool = False
+    agent: bool = False
 
 
 def op(
@@ -84,8 +85,10 @@ def op(
     exposes: bool = False,
     tool: bool = False,
     runtime: bool = False,
+    agent: bool = False,
 ) -> Callable[[Callable[..., Any]], Op]:
-    """Define an op from `def fn(txn: Txn, a: SomeArgs)`. `runtime` puts it out of reach of every grant."""
+    """Define an op from `def fn(txn: Txn, a: SomeArgs)`. `runtime` puts it out of reach of every grant, and `agent`
+    out of reach of everyone but an agent."""
 
     def define(fn: Callable[..., Any]) -> Op:
         if inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn) or inspect.isgeneratorfunction(fn):
@@ -96,10 +99,12 @@ def op(
             raise TypeError(f"op {name} must take Args that refuse undeclared fields")
         if query and exposes:
             raise TypeError(f"op {name} cannot be both a query and an exposed read")
+        if runtime and agent:
+            raise TypeError(f"op {name} cannot be kept to both the runtime and agents")
         if tool and (claims := _claims(input)):
             raise TypeError(f"tool op {name} declares identity fields: {claims}")
         if tool and not fn.__doc__:
             raise TypeError(f"tool op {name} needs a description")
-        return Op(name, fn, input, on, query, exposes, tool, runtime)
+        return Op(name, fn, input, on, query, exposes, tool, runtime, agent)
 
     return define

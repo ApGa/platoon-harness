@@ -966,7 +966,7 @@ async def test_a_closing_session_cancels_no_agent_left_idle(kernel, ada):
 
 
 async def test_finish_is_only_for_agents(kernel, ada):
-    assert refusal(await kernel.submit(ada, "agent.finish", {})).code == "invalid"
+    assert refusal(await kernel.submit(ada, "agent.finish", {})).code == "not_permitted"
 
 
 # Agents that stay.

@@ -216,7 +216,7 @@ class Session:
     def _history(self) -> History:
         folder = self.folder
         if not (folder / "journal.sqlite").exists():
-            raise Refused("unavailable", f"session {self.name} never opened: `{_resume_command(folder)}` opens it")
+            raise Refused("unavailable", f"session {self.name} never opened: {_resume_command(folder)} opens it")
         manifest = Manifest.model_validate_json((folder / MANIFEST).read_bytes())
         kernel = Kernel.open(folder, read_only=True, extensions=PRIMITIVES)
         return History(kernel, Principal(id=manifest.human), _resume_command(folder))
@@ -659,6 +659,10 @@ class Session:
             if not follow:
                 return
 
+    async def head(self) -> int:
+        """The `seq` of the newest event now, after which a follower of only what comes next starts."""
+        return await self._changed(-1) or 0
+
     async def _page(self, after: int, match: str | None) -> Page:
         return await self._over_link(lambda link: link.read(after, match))
 
@@ -701,7 +705,7 @@ class Session:
 
 
 def _resume_command(folder: Path) -> str:
-    return f'Session.resume("{folder.name}")'
+    return f'`platoon-harness session resume {folder.name}`, or `Session.resume("{folder.name}")`,'
 
 
 def _refuse_across_processes(detach: bool, authority: Authority | None, clock: Clock | None) -> None:

@@ -12,8 +12,7 @@ from platoon_harness import Ending, Refused, Role, Session, Team, on
 from platoon_harness import session as session_module
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Usage
-from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op
-from platoon_harness.kernel.core import CORE, list_ops
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
 from platoon_harness.runtime.paths import MANIFEST
@@ -74,6 +73,7 @@ DERIVED = {
     "deltas": "the link",
     "events": "the link",
     "get_body": "the link",
+    "head": "the link",
     "leave": "the runtime",
     "put_body": "the link",
     "reply": "message.send",
@@ -83,10 +83,8 @@ DERIVED = {
     "attach": "a verb of its own",
     "submit": "the one way in",
 }
-AGENT_ONLY = {"agent.finish"}
-OPS = {operation.name: operation for extension in (*CORE, *PRIMITIVES) for operation in extension.ops}
-OPS["ops.list"] = list_ops({})
-CLIENT_OPS = {name: operation for name, operation in OPS.items() if not operation.runtime and name not in AGENT_ONLY}
+OPS = registry(PRIMITIVES)
+CLIENT_OPS = {name: operation for name, operation in OPS.items() if not (operation.runtime or operation.agent)}
 RENAMED = {"watch": {"view": "name"}, "spawn": {"role": "child_role"}, "tombstone": {"ref": "sha256"}}
 
 

@@ -10,7 +10,7 @@ from .daemon import Daemon
 from .effects import Effect, Effects
 from .extension import Extension
 from .journal import Filesystem, filesystem, is_held
-from .kernel import Kernel
+from .kernel import Kernel, registry
 from .model import GIST_LIMIT, NAME, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
 from .naming import tool_name
 from .op import Args, Op, op
@@ -56,5 +56,6 @@ __all__ = [
     "hash_token",
     "is_held",
     "op",
+    "registry",
     "tool_name",
 ]

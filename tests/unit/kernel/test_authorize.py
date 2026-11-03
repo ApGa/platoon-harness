@@ -193,6 +193,16 @@ async def test_runtime_only_ops_cannot_be_granted(kernel):
     assert result_of(await kernel.submit(kernel.runtime, "note.reset", {})) is None
 
 
+async def test_agent_only_ops_reach_agents_alone(kernel):
+    await enroll(kernel, HUMAN)
+    await enroll(kernel, ALICE)
+    await grant(kernel, "all", "*", "*")
+
+    assert refusal_of(await kernel.submit(HUMAN, "note.sign", {})) == "not_permitted"
+    assert "note.sign" not in {op["name"] for op in result_of(kernel.query(HUMAN, "ops.list", {}))}
+    assert result_of(await kernel.submit(ALICE, "note.sign", {})) == "agent:alice"
+
+
 async def test_the_runtime_takes_no_grant(kernel):
     assert result_of(await kernel.submit(kernel.runtime, "note.add", {}))
 

@@ -175,9 +175,7 @@ class Kernel:
         """
         folder = Path(path)
         clock = SystemClock() if clock is None else clock
-        ops: dict[str, Op] = {}
-        loaded = load([*CORE, Extension("ops", ops=[list_ops(ops)]), *extensions])
-        ops.update(loaded.ops)
+        loaded = _loaded(extensions)
         if read_only:
             live = is_live(folder)
             if live:
@@ -548,3 +546,16 @@ class Kernel:
             self._idle.get_nowait().close()
         if self._writer is not None:
             self._writer.stop()
+
+
+def _loaded(extensions: Iterable[Extension]) -> Loaded:
+    """The kernel's own extensions, `ops.list` over every op, and `extensions`, checked against each other."""
+    ops: dict[str, Op] = {}
+    loaded = load([*CORE, Extension("ops", ops=[list_ops(ops)]), *extensions])
+    ops.update(loaded.ops)
+    return loaded
+
+
+def registry(extensions: Iterable[Extension] = ()) -> dict[str, Op]:
+    """Every op a kernel holding `extensions` has, its own among them, by name: what every surface derives from."""
+    return dict(_loaded(extensions).ops)

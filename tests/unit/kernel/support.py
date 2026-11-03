@@ -108,6 +108,12 @@ def reset(txn: Txn, a: Args) -> None:
     txn.emit("note.cleared", "note/admin", gist="reset")
 
 
+@op("note.sign", agent=True)
+def sign(txn: Txn, a: Args) -> str:
+    """Agents only."""
+    return txn.me.id
+
+
 class Dispatch(Args):
     kind: str = "deliver"
     on_uncertain: Literal["retry", "reconcile", "surface"] = "surface"
@@ -170,7 +176,7 @@ def mark(txn: Txn, a: Span) -> dict[str, Any]:
 
 notes = Extension(
     "note",
-    ops=[add, silence, list_notes, read_notes, reset, dispatch, cancel, remind, mark],
+    ops=[add, silence, list_notes, read_notes, reset, sign, dispatch, cancel, remind, mark],
     views=[Notes],
 )
 

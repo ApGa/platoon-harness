@@ -24,10 +24,11 @@ from .paths import find_root, new_folder
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["PLAN_LOGIN_FIX", "make_driver", "open_session", "prepare", "told"]
+__all__ = ["PLAN_LOGIN_FIX", "check", "make_driver", "open_session", "prepare", "told"]
 
 PLAN_LOGIN_FIX = (
-    "start the session with `plan_login=True` to say this is your own work, or give each role an auth profile"
+    "say this is your own work with `plan_login=True`, or `--plan-login` on the command line, or give each role an "
+    "auth profile"
 )
 
 
@@ -61,6 +62,24 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     return [Problem("roles", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
 
 
+def check(team: Team, *, plan_login: bool = False) -> tuple[Problem, ...]:
+    """Every problem a session would meet in a team, errors and warnings, at once and before any cost, asking each
+    role's driver what it is. A team that cannot be resolved raises `ConfigError`.
+
+    This blocks, because a driver may describe itself by running something.
+    """
+    extensions = Installed()
+    resolved = team.resolved(extensions)
+    known, problems = _described(resolved)
+    named = {problem.where for problem in problems}
+    capabilities = {role: info.capabilities for role, info in known.items()}
+    checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
+    problems += [problem for problem in checked if problem.where not in named]
+    if not plan_login:
+        problems += _on_a_plan_login(resolved, known)
+    return tuple(problems)
+
+
 def prepare(
     team: Team,
     *,
@@ -77,21 +96,13 @@ def prepare(
     """
     if re.fullmatch(NAME, human) is None:
         raise ConfigError([Problem("human", f"{human!r} cannot name a principal")])
-    extensions = Installed()
-    resolved = team.resolved(extensions)
-    known, problems = _described(resolved)
-    named = {problem.where for problem in problems}
-    capabilities = {role: info.capabilities for role, info in known.items()}
-    checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
-    problems += [problem for problem in checked if problem.where not in named]
-    if not plan_login:
-        problems += _on_a_plan_login(resolved, known)
+    problems = check(team, plan_login=plan_login)
     if errors := [problem for problem in problems if problem.level == "error"]:
         raise ConfigError(errors)
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(
-        resolved,
+        team.resolved(Installed()),
         human=f"human:{human}",
         approvals=approvals,
         cwd=str(Path(cwd or ".").resolve()),

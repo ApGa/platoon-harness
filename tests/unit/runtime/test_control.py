@@ -173,6 +173,20 @@ async def test_a_view_token_can_never_submit_and_a_try_writes_nothing(viewer, ow
     assert kernel.head == head
 
 
+@pytest.mark.parametrize("op", ["session.status", "message.read", "task.list"])
+async def test_a_read_submitted_is_answered_as_a_query_and_writes_nothing(viewer, guest, owner, op):
+    """No client is an agent, so its reads are queries, which a view credential may ask too."""
+    kernel = owner._runtime.kernel
+    head = kernel.head
+    args = {"queue": "nowhere"} if op == "task.list" else {}
+
+    answers = [await client.submit(op, **args) for client in (viewer, guest)]
+
+    assert [outcome.refusal for outcome in answers] == [answers[0].refusal] * 2
+    assert all(outcome.seq is None for outcome in answers)
+    assert [event.type async for event in owner.events(after=head) if event.actor != "runtime"] == []
+
+
 async def test_a_control_credential_cannot_be_had_with_a_view_token(raw, owner):
     hello = await raw.hello(token(owner, VIEW_TOKEN))
 

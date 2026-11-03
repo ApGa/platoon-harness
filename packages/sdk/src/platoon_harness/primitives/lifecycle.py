@@ -326,15 +326,13 @@ def _conclude(txn: Txn, agent: Agent) -> None:
     end(txn, agent, "finished", gist=agent.finish_gist or None, body=agent.finish_body)
 
 
-@op("agent.finish", on=lambda a: None, tool=True)
+@op("agent.finish", on=lambda a: None, tool=True, agent=True)
 def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
     a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
     children that would end with you are working. Call `wait` with `agents` for them, or with `from` for one that
     stays. `agent.cancel` stops one now."""
-    if txn.me.kind != "agent":
-        raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
     if agent.finishing:
         raise Refused("conflict", f"{agent.name} has finished: end your turn")

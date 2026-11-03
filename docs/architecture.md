@@ -196,8 +196,9 @@ daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
-`is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, and `first(work, *rivals)`
-races awaitables and drops what lost, which is how anything here sleeps on two things.
+`is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, `first(work, *rivals)`
+races awaitables and drops what lost, which is how anything here sleeps on two things, and `registry(extensions)` is the op table a
+kernel holding them has, its own ops among them, which a surface derives from before any session exists.
 
 ### 5.1 One write
 
@@ -460,12 +461,12 @@ def claim(txn: Txn, a: Claim) -> Lease:
 and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`. `permits` asks the same question without
 refusing, and `Principals.select(me, relation)` lists who stands in a relation.
 
-`Op` holds `name`, `fn`, `input`, `on`, `query`, `exposes`, `tool` and `runtime`. `on` gives the object: the stream that
+`Op` holds `name`, `fn`, `input`, `on`, `query`, `exposes`, `tool`, `runtime` and `agent`. `on` gives the object: the stream that
 grants are matched against and `expected_version` is checked on, or `session` when an op has none, or `None` when the op checks
 its several objects itself, as `wait` does. `query` keeps an op out of
 history. `exposes` marks a read that is a command for agents and a query for everyone else; its body checks `txn.me.kind`,
-because a query cannot emit. An op is at most one of `query` and `exposes`. `runtime` is the runtime-only marker. The runtime
-principal takes no grant.
+because a query cannot emit. An op is at most one of `query` and `exposes`. `runtime` and `agent` keep an op to principals of that
+kind, so no grant reaches it for anyone else: `agent.finish` is the one agent-only op. The runtime principal takes no grant.
 
 `op()` refuses at definition an input that is not `Args` or lets undeclared fields through, a `tool` whose schema claims the
 caller's identity by name or alias, at any depth and in the usual spellings (law 6), and a `tool` with no description. That scan
@@ -1178,7 +1179,8 @@ speak, comes back at once.
 **The control socket** is line-delimited JSON-RPC 2.0 through `rpc.py`, on a Unix socket: `hello`, then `submit`, `query`, `read`,
 `put_body`, `get_body`, `others`, and the long-polls `changed` and `delta`. The server is one `Local` per connection, so the methods
 mirror by construction. `hello` checks the credential once and binds the principal to the connection. A connection that never says
-it is dropped. A view credential reads and can never write, and a try writes nothing either, so no event can come of it. An agent's
+it is dropped. A view credential reads and can never write, and a try writes nothing either, so no event can come of it. No client is
+an agent, so each of its reads is a query, which `submit` answers as one and a view credential may ask. An agent's
 token is refused: its reads are ops, and the tool plane is its way in. A refusal crosses as data. Law 8 holds because a client only
 ever pulls, so the runtime has no queue or subscription to fill: a page leaves when asked for, a long-poll comes back within 25 s, a
 client that stops reading is dropped by its `Peer`, and live text is refused for a name nobody holds, so no client can grow the rings.

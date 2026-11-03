@@ -99,12 +99,13 @@ class Local:
             raise Refused(self._denied.code, self._denied.detail)
 
     async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome:
+        """A read is answered as a query, since no client is an agent, so it writes nothing and a view may ask it."""
         kernel = self._kernel
+        operation = kernel.ops.get(op)
+        if operation is not None and (operation.query or operation.exposes):
+            return kernel.query(self._principal, op, args)
         if self._denied is not None:
             return Outcome(op=op, args_hash="", refusal=self._denied.model_copy(update={"op": op}))
-        operation = kernel.ops.get(op)
-        if operation is not None and operation.query:
-            return kernel.query(self._principal, op, args)
         return await kernel.submit(self._principal, op, args, key=key)
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
@@ -150,7 +151,7 @@ class History(Local):
     """The link with no runtime: a read-only kernel, closed along with the link."""
 
     def __init__(self, kernel: Kernel, principal: Principal, resume_with: str) -> None:
-        detail = f"no runtime holds this session, so this is history: `{resume_with}` restarts it"
+        detail = f"no runtime holds this session, so this is history: {resume_with} restarts it"
         super().__init__(kernel, principal, denied=Refusal(code="unavailable", detail=detail))
 
     def stale(self) -> bool:

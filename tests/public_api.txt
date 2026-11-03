@@ -134,6 +134,7 @@ platoon_harness.kernel.fold
 platoon_harness.kernel.hash_token
 platoon_harness.kernel.is_held
 platoon_harness.kernel.op
+platoon_harness.kernel.registry
 platoon_harness.kernel.tool_name
 platoon_harness.load_team
 platoon_harness.on
@@ -234,6 +235,7 @@ platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
 platoon_harness.runtime.opening.PLAN_LOGIN_FIX
+platoon_harness.runtime.opening.check
 platoon_harness.runtime.opening.make_driver
 platoon_harness.runtime.opening.open_session
 platoon_harness.runtime.opening.prepare
