@@ -1,7 +1,7 @@
 # Drivers
 
 A driver presents one harness session to the runtime through seven methods. One instance serves one agent. Drivers for
-`claude`, `codex` and `pi` ship with the SDK, as they land. This page is for everyone else: how to write a driver, in Python or
+`claude`, `codex` and `pi` ship with the SDK. This page is for everyone else: how to write a driver, in Python or
 any other language, and how to prove it works.
 
 There are three ways in, cheapest first.
@@ -340,6 +340,7 @@ async def test_my_driver_conforms(tmp_path):
 |---|---|
 | `describe_starts_nothing` | `describe` reaches nothing, and two answers agree |
 | `ready_with_pinned_model` | `ready` names the model asked for, and the first request asked for it |
+| `effort_honored_or_refused` | An effort reaches the first request as it was given, or `start` refuses it. Needs a dialect |
 | `unset_model_refused` | With access given and no model, `start` refuses. Needs a dialect |
 | `tool_in_first_request` | Our tool is in the first model request. Needs an MCP path |
 | `delivered_text_in_next_prompt` | A delivery's text is in the next prompt, and `input.delivered` came. Needs a persistent session and a `turn` boundary |
@@ -347,12 +348,14 @@ async def test_my_driver_conforms(tmp_path):
 | `no_goal_takes_no_turn` | With no goal it waits, and its first prompt is what it was sent. Needs a persistent session and a `turn` boundary |
 | `interrupt` | A stalled turn ends `interrupted`, and the agent lives on. Needs `interrupt` |
 | `resume` | A new instance resumes, takes a delivery and still knows what came before. Needs `resume` |
+| `reconcile_claims_nothing_unseen` | After a restart, an input that landed is no `not_landed`, and one never sent is no `landed`. Needs `resume` |
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |
+| `denial_holds` | A tool denied never runs: the file only its command makes is not there. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
 | `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, and so do the child it put in the background and the one it put in a session of its own. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
-| `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
+| `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one, and an MCP path, as a call of our tool is what makes the boundary |
 | `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |
@@ -369,7 +372,7 @@ own checks. What a driver leaves running, the suite reaps.
 |---|---|---|
 | `access` | `chat_access`, which sets `OPENAI_BASE_URL` and `OPENAI_API_KEY` | How your harness reaches the model, as a function of `FakeModel`. The key is a dummy |
 | `garble` | None | A coroutine function, given the driver, that makes the harness write a frame no parser knows |
-| `gated` | A `shell` tool call | A tool call your harness asks approval for |
+| `gated` | A `shell` tool call | A function from a command to a tool call your harness asks approval for |
 | `shell` | None | A function from a command to the tool call that runs it. An approval it asks for is allowed |
 | `tool` | A call of `conformance_ping` by that name | A function from a note to a call of our tool, by the name this harness's model knows it by, such as `mcp__conformance__conformance_ping` |
 | `child` | None | A tool call that starts a native child |

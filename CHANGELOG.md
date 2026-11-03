@@ -49,6 +49,8 @@
 
 ### Changed
 
+- `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
+  argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`
   says which.
 - A live test runs in `tests/live`, marked `live`, on `PLATOON_HARNESS_LIVE=1`.
@@ -171,6 +173,8 @@
 
 ### Changed
 
+- `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
+  argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
 - `Session`: boards and queues take their tool's name, `board_post`, `task_claim` and so on, and `agent.release` is plain `release`.
   `cancel()` stops the session and `cancel_agent(agent)` one agent. `finish`, `join`, `wait_any` and `broadcast` are gone, as `wait` and
   `send` state them. `spawn` says `role`. `put_body` returns a ref, and `get_body` and `tombstone` take one.

@@ -55,6 +55,7 @@ MODEL = "fake-model"
 TIMEOUT = 60.0
 ESCALATED = {"sandbox_permissions": "require_escalated", "justification": "needs an approval"}
 GATED = ToolCall("exec_command", {"cmd": "touch gated", **ESCALATED}, id="call_gated")
+PINNED = "0.164.0"
 CHILD = ToolCall("spawn_agent", {"message": "say so"}, id="call_child", namespace="multi_agent_v1")
 
 
@@ -78,6 +79,10 @@ def access(home: Path, settings: str = ""):
 
 def shell(command: str) -> ToolCall:
     return ToolCall("exec_command", {"cmd": command})
+
+
+def gated(command: str) -> ToolCall:
+    return ToolCall("exec_command", {"cmd": command, **ESCALATED}, id="call_gated")
 
 
 def ours(note: str) -> ToolCall:
@@ -107,7 +112,7 @@ async def conformance(folder: Path) -> Conformance:
         folder=folder,
         access=access(folder / "home"),
         garble=garbling(folder),
-        gated=GATED,
+        gated=gated,
         shell=shell,
         tool=ours,
         child=CHILD,
@@ -120,7 +125,7 @@ async def test_the_codex_driver_conforms(tmp_path):
 
     print(result)
     assert result.failed == (), str(result)
-    assert result.driver == "codex"
+    assert (result.driver, result.version) == ("codex", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven"}
     earned = levels(CodexDriver().describe().capabilities, Profile(driver="codex", version=result.version), result)

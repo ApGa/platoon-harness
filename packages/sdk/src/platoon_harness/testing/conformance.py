@@ -7,6 +7,7 @@ is a skip with a reason, and a skip is never a pass.
 import asyncio
 import contextlib
 import os
+import re
 import shlex
 import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
@@ -42,7 +43,7 @@ from platoon_harness.drivers.levels import Check, Conformance
 from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
 
-from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Reply, Request, Stall, ToolCall
+from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
 from .scripted import API_KEY, BASE_URL
 from .tools import TOOL, FakeTools
 
@@ -51,18 +52,24 @@ _MODEL = "fake-model"
 _GOAL = "conformance goal: the first word is heliotrope"
 _GIST = "conformance delivery: the second word is cinnabar"
 _PREAMBLE = "conformance preamble: the third word is viridian"
-_GATED = ToolCall("shell", {"command": "true"}, id="call_gated")
+_EFFORT = "low"
+_SAID_EFFORT = re.compile(rb'effort"\s*:\s*"' + _EFFORT.encode() + rb'"')
 
 Factory = Callable[[], Driver]
 Access = Callable[[FakeModel], Mapping[str, Secret]]
 Garble = Callable[[Any], Awaitable[Any]]
 Shell = Callable[[str], ToolCall]
+Gated = Callable[[str], ToolCall]
 Tool = Callable[[str], ToolCall]
 _Needs = Callable[[Capabilities], str | None]
 
 
 def _tool(note: str) -> ToolCall:
     return ToolCall(TOOL, {"note": note})
+
+
+def _gated(command: str) -> ToolCall:
+    return ToolCall("shell", {"command": command}, id="call_gated")
 
 
 class _Failed(Exception):
@@ -173,7 +180,7 @@ class _Rig:
 @dataclass(frozen=True)
 class _Options:
     garble: Garble | None
-    gated: ToolCall
+    gated: Gated
     shell: Shell | None
     tool: Tool
     child: ToolCall | None
@@ -240,6 +247,17 @@ async def ready_with_pinned_model(rig: _Rig) -> None:
 
 def _speaking(capabilities: Capabilities) -> str | None:
     return None if capabilities.dialects else "it declares no dialect"
+
+
+@_check(_speaking)
+async def effort_honored_or_refused(rig: _Rig) -> None:
+    """An effort reaches the model as it was given, or `start` refuses it, and is never dropped."""
+    try:
+        await rig.start(effort=_EFFORT)
+    except DriverError:
+        return
+
+    _expect(_SAID_EFFORT.search((await rig.call(0)).message.body), f"the first request carries no effort {_EFFORT}")
 
 
 @_check(_speaking)
@@ -336,20 +354,51 @@ async def resume(rig: _Rig) -> None:
     _expect(resumed.says("heliotrope"), "a resumed harness lost what came before")
 
 
+@_check(_resumable)
+async def reconcile_claims_nothing_unseen(rig: _Rig) -> None:
+    """After a restart, an input that landed is no `not_landed`, and one never sent is no `landed`."""
+    await rig.start(goal="")
+    native = (await rig.until(Ready)).native
+    await rig.deliver()
+    await rig.until(InputDelivered)
+    await rig.until(TurnEnded)
+    await rig.driver.stop(_GRACE)
+
+    await rig.restart(goal="", resume=native)
+    await rig.until(Ready)
+    landed, never = await rig.driver.reconcile("1"), await rig.driver.reconcile("2")
+
+    _expect(landed != "not_landed", "it says an input that landed did not")
+    _expect(never != "landed", "it says an input never sent landed")
+
+
 def _approving(capabilities: Capabilities) -> str | None:
     return "it declares no approvals" if capabilities.approvals == "none" else None
 
 
 @_check(_approving)
 async def approval_answered(rig: _Rig) -> None:
-    gated: Reply = rig.options.gated
+    gated = rig.options.gated("touch allowed")
     rig.model.script([gated])
     await rig.start()
 
     asked = await rig.until(ApprovalRequested)
     await rig.driver.answer(asked.id, "allow")
 
-    _expect((await rig.call(1)).says(rig.options.gated.id), "the tool's result never reached the model")
+    _expect((await rig.call(1)).says(gated.id), "the tool's result never reached the model")
+
+
+@_check(_approving)
+async def denial_holds(rig: _Rig) -> None:
+    """Ground truth is a file only the command makes."""
+    rig.model.script([rig.options.gated("touch denied")])
+    await rig.start()
+
+    asked = await rig.until(ApprovalRequested)
+    await rig.driver.answer(asked.id, "deny")
+    await rig.until(TurnEnded)
+
+    _expect(not (rig.folder / "work" / "denied").exists(), "the tool ran after it was denied")
 
 
 @_check()
@@ -598,7 +647,7 @@ async def check_driver(
     folder: Path,
     access: Access = chat_access,
     garble: Garble | None = None,
-    gated: ToolCall = _GATED,
+    gated: Gated = _gated,
     shell: Shell | None = None,
     tool: Tool = _tool,
     child: ToolCall | None = None,
@@ -608,8 +657,8 @@ async def check_driver(
     harness version it reported. `levels` reads the result.
 
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
-    write a frame no parser knows, and with none that check is skipped. `gated` is a tool call this harness asks
-    approval for. `shell` turns a command into the tool call that runs it, and with none the check of a stop during a
+    write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
+    harness asks approval for, and `shell` into one that runs it, with none of which the check of a stop during a
     running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
     `child` is a tool call that starts a native child, and with none that check is skipped. `timeout` bounds each check,
     so one wedged harness costs only its own checks.

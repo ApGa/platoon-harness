@@ -96,6 +96,10 @@ def shell(command: str) -> ToolCall:
     return ToolCall(BASH, {"command": command})
 
 
+def gated(command: str) -> ToolCall:
+    return ToolCall(BASH, {"command": command}, id="call_gated")
+
+
 def ours(note: str) -> ToolCall:
     return ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note})
 
@@ -119,7 +123,7 @@ async def conformance(folder: Path) -> Conformance:
         folder=folder,
         access=access(folder / "home"),
         garble=garbling(folder),
-        gated=ToolCall(BASH, {"command": "true"}, id="call_gated"),
+        gated=gated,
         shell=shell,
         tool=ours,
         timeout=TIMEOUT,

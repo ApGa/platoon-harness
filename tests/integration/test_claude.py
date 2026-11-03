@@ -42,8 +42,8 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
 BASH = "Bash"
 MODEL = "fake-model"
+PINNED = "2.1.316"
 TIMEOUT = 60.0
-GATED = ToolCall(BASH, {"command": "touch gated", "description": "needs an approval"}, id="call_gated")
 CHILD = ToolCall("Agent", {"description": "a child", "prompt": "say so", "subagent_type": "general-purpose"})
 
 
@@ -73,6 +73,10 @@ def shell(command: str) -> ToolCall:
     return ToolCall(BASH, {"command": command, "description": "conformance"})
 
 
+def gated(command: str) -> ToolCall:
+    return ToolCall(BASH, {"command": command, "description": "needs an approval"}, id="call_gated")
+
+
 def ours(note: str) -> ToolCall:
     return ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note})
 
@@ -96,7 +100,7 @@ async def conformance(folder: Path) -> Conformance:
         folder=folder,
         access=access(folder / "home"),
         garble=garbling(folder),
-        gated=GATED,
+        gated=gated,
         shell=shell,
         tool=ours,
         child=CHILD,
@@ -109,7 +113,7 @@ async def test_the_claude_driver_conforms(tmp_path):
 
     print(result)
     assert result.failed == (), str(result)
-    assert result.driver == "claude"
+    assert (result.driver, result.version) == ("claude", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == {"one_shot_exits", "declared_but_unproven"}
     earned = levels(ClaudeDriver().describe().capabilities, Profile(driver="claude", version=result.version), result)

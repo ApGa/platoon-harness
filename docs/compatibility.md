@@ -94,9 +94,9 @@ by a driver landing; only the row below changes.
 
 | Driver | Path | Depends on | Driver status | Conformance result |
 |---|---|---|---|---|
-| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 22 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
-| `codex` | `codex app-server` over stdio | User's binary | implemented | 0.164.0 on FakeModel: 21 passed, 0 failed, 3 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage` or `sandboxes`). Operational and observable met |
-| `pi` | `pi --mode rpc` | User's install | implemented | 1.5.0 on FakeModel: 20 passed, 0 failed, 4 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met. No live model has run: pi has no login on the machine that ran this |
+| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 24 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
+| `codex` | `codex app-server` over stdio | User's binary | implemented | 0.164.0 on FakeModel: 23 passed, 0 failed, 3 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s`, `coverage` or `sandboxes`). Operational and observable met |
+| `pi` | `pi --mode rpc` | User's install | implemented | 1.5.0 on FakeModel: 22 passed, 0 failed, 4 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met. No live model has run: pi has no login on the machine that ran this |
 | `openhands` | `WireDriver`, worker on SDK `arun()` | Own environment | planned | none |
 | ACP, covering `opencode` | Generic driver, protocol 1 | `[acp]` extra | planned | none |
 | `prime` | Decided after a live probe | User's install | planned | none |

@@ -32,6 +32,9 @@ ONE_SHOT_SKIPS = {
     "stop_ends_a_running_tool",
     "unset_model_refused",
     "native_child_seen",
+    "denial_holds",
+    "effort_honored_or_refused",
+    "reconcile_claims_nothing_unseen",
 }
 SCRIPTED_SKIPS = {
     "one_shot_exits",
