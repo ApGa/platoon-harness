@@ -14,6 +14,7 @@ from platoon_harness.runtime.opening import prepare
 from platoon_harness.runtime.paths import MANIFEST, read_running
 from platoon_harness.schema import ConfigError
 
+from ..conftest import end_runtimes
 from ..unit.drivers.support import running
 from ..unit.runtime.support import SECONDS, in_state, of_type, rebuilt_equals_live, until
 from .scripts import inside, manager_worker, wire
@@ -182,3 +183,21 @@ async def test_a_detached_runtime_that_cannot_start_says_why(tmp_path: Path):
         await Session.resume("s", root=tmp_path, detach=True)
 
     assert "did not start" in str(refused.value)
+
+
+async def test_no_runtime_outlives_the_test_that_started_it(tmp_path: Path):
+    """What the fixture every test has does for a test that ends with a detached runtime still up: by its pid and its
+    group, its owner's shutdown runs, and nothing is left holding the session."""
+    guest = await Session.start(team("hanging"), name="s", root=tmp_path, detach=True)
+    await guest.send("@lead", "Fix the flaky test")
+    await until(lambda: of_type(guest, "task.claimed"), guest)
+    await in_state(guest, "w1", "running")
+    found = read_running(guest.folder)
+    assert found is not None
+    await guest.leave()
+
+    await asyncio.to_thread(end_runtimes, tmp_path)
+
+    assert not running(found.pid)
+    assert not is_held(guest.folder)
+    assert list(guest.folder.rglob("proc.json")) == []

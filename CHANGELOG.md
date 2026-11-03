@@ -122,6 +122,8 @@
 
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
   was refused between a wake and its turn: bug-coordination-7 and -8.
+- A test that failed part way could leave a detached runtime running. A fixture every test has ends each one its `tmp_path` holds,
+  by its pid and its group.
 - The scan for local paths and account details skipped `docs/research`, its fixtures, the top-level pages and the package
   READMEs. It reads them now, and an email address too, and a path inside a repository no longer reads as a local one.
 - A wait that closed with no notice of its own posted "A report came in during your wait." as a wake, which stayed queued after its

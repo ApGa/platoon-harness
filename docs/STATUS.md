@@ -281,6 +281,7 @@ points, which are marked `slow`.
 | Live text masked as one stream, so a secret split across two deltas is masked, and a cut never falls inside a character | tested | `test_host.py`, `tests/unit/drivers/test_env.py`. Its tail waits for the next delta or any other report |
 | A harness that stops reading: a handover cut off at a minute, and `interrupt` and `answer` too | tested | `test_host.py` for all three on a manual clock, `tests/unit/drivers/test_claude.py` for a real pipe. A handover was bounded before this. `interrupt` and `answer` had no bound, and what they leave is a failed effect beside a turn still open, which only a wall limit ends |
 | Exit codes and `platoon-harness resume` | planned | `Ending.reason` is what they are made from. The CLI does not exist yet, so history names `Session.resume` |
+| No detached runtime outlives the test that started it: a fixture ends each by its pid and its group, however the test ended | tested | `tests/integration/test_detached.py` holds the fixture's ending to the owner's shutdown |
 | The turn-end probe behind `changes` | planned | Arrives with workspaces |
 
 ### Teams and topologies (`platoon_harness.team`, `platoon_harness.topology`)
