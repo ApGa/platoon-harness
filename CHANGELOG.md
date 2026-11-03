@@ -61,6 +61,9 @@
 
 ### Fixed
 
+- A role a written grant lets another spawn was not counted as spawnable, so a plan login with one such role was not refused, and the
+  role started an agent of its own. `Team.spawners` reads written grants of `agent.spawn` as `team_check` does, as the same thing as
+  `may_spawn`.
 - A turn with one call unmeasured was charged its estimate alone, so a million measured tokens counted as none. What was measured now
   stands as a floor. A Codex turn cut short reports a call `unavailable`, as Claude Code's and pi's do, rather than reading as whole.
 - An agent whose harness took no turn was lost at any resume, as Claude Code, Codex and pi write no session until a turn. The runtime

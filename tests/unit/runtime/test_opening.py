@@ -120,6 +120,14 @@ def test_a_role_that_can_be_spawned_counts_as_several(tmp_path):
         prepare(team_of(roles=roles), root=tmp_path)
 
 
+def test_a_role_a_written_grant_lets_spawn_counts_as_several_too(tmp_path):
+    grant = {"who": "role:lead", "ops": "agent.spawn", "on": "role/lead"}
+    team = team_of(roles={"lead": planned()}, topology={"grants": [grant], "limits": {"max_depth": 2}})
+
+    with pytest.raises(ConfigError, match="plan_login=True"):
+        prepare(team, root=tmp_path)
+
+
 def test_one_agent_alone_on_a_plan_login_is_ordinary_use(tmp_path):
     assert prepare(team_of(roles={"lead": planned()}), root=tmp_path).exists()
 

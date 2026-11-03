@@ -133,8 +133,8 @@ class Team(Model):
             raise ConfigError(problems_in(error, cls)) from None
 
     def spawners(self, role: str) -> set[str]:
-        """The roles that may spawn `role`."""
-        return {name for name, other in self.roles.items() if role in other.may_spawn}
+        """The roles that may spawn `role`, by `may_spawn` or by a written grant, which is the same thing."""
+        return {name for name, children in _spawning(self).items() if role in children}
 
     def starts(self, role: str) -> int:
         """How many agents of `role` start with the session."""
