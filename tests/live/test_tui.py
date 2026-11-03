@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import Session
+from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.sessions import Sessions
@@ -62,9 +63,9 @@ turns = 8
 wall = "10m"
 """
 JOB = (
-    "Spawn one worker named w with this task: run the shell command `echo hello > out.txt` yourself; your sandbox is "
-    "read-only, so the command waits for a person to approve it, which is expected. Then reply with a 1,500-word story "
-    "about a lighthouse keeper. Then wait for w's answer, and finish."
+    "Spawn one worker named w with this task: run `echo hello > out.txt` yourself, which waits for a person to "
+    "approve it, as expected, then reply with a 1,500-word story about a lighthouse keeper. Then wait for w's answer, "
+    "and finish."
 )
 
 
@@ -79,6 +80,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
     asked about once; the job sent from the composer; the worker's approval answered from the dock; its live text seen;
     a memo queued for it, then the worker interrupted mid-turn, the memo staying quiet; then a detach back to the
     sessions screen, an attach from a new app, and the session seen to settle. Each act is in the journal once."""
+    assert len(JOB) <= GIST_LIMIT, "the job must go as one gist, which the checks below compare, before any cost"
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "root"))
     work = seeded(tmp_path / "work")
     (work / "crew.toml").write_text(TEAM)
