@@ -1046,7 +1046,9 @@ harness, so the preamble is a snapshot of who could be reached then, and `peers`
 be reached, the preamble names the roles an agent may start, since a model guessed a harness's name there and gave up. It says how
 to end too, by whether the agent stays: one that does not is told to make `agent.finish` its last call, or a join on it never holds;
 one the session started is told to stay unless told to finish, since a human talks to it over many turns; and a child that stays is
-told that what it says last in each turn goes to its parent, and to finish only when told to. That text is in every request
+told to answer by ending its turn, which sends what it said last to its parent and leaves it there for the next message, and to
+finish only when told to. A child that waited on its parent instead would keep its answer from it, as a Codex model did when told it
+stayed for the next message. That text is in every request
 of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in

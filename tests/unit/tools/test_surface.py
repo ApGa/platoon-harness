@@ -239,7 +239,8 @@ async def test_the_preamble_tells_an_agent_how_to_end_by_whether_it_stays(kernel
     assert "When your goal is done" not in preamble(kernel, lead[0])
     assert "When your goal is done" in preamble(kernel, leaver)
     staying = preamble(kernel, keeper)
-    assert "What you say last in each turn goes to @lead, and you stay for the next message." in staying
+    assert "Answer by ending your turn: what you say last in it goes to @lead" in staying
+    assert "a turn that only ends leaves you here for the next message" in staying
     assert "Make `agent_finish` your last call only when told to finish" in staying
     assert "When your goal is done" not in staying
 

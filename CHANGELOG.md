@@ -55,8 +55,9 @@
 
 - The monitor wakes a parent once for the spawn and once for each message of its own that its child is handed, in place of once per
   causal chain, so the answer to a follow-up reaches the parent as the first did. A message from a peer or a human asks nothing.
-- What the preamble says of ending follows whether an agent stays, and a child that stays is told that its last words in each turn go
-  to its parent.
+- What the preamble says of ending follows whether an agent stays, and a child that stays is told to answer by ending its turn, which
+  sends its last words to its parent and leaves it there for the next message. Told it stayed for the next message, a Codex child held a
+  `wait` for it instead of answering.
 - An agent's instructions are the preamble and then the role's words, so a role has the last word. A role that told a Codex agent
   never to finish lost to the preamble in run 21.
 - A child that ends with its parent ends `retired` unless it was at work, which still ends it `cancelled`, as Platoon drops a

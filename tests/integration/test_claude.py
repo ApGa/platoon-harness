@@ -154,7 +154,7 @@ async def test_a_real_harness_that_stays_answers_a_task_a_follow_up_and_a_questi
     assert reports == ["wake", "wake", "wake", "next-turn"]
     assert {row["agent"]: row["status"] for row in ending.agents} == {"lead": "finished", "bob": "retired"}
     assert len(model.calls) == 3
-    assert all(call.says("goes to @lead, and you stay for the next message") for call in model.calls)
+    assert all(call.says("what you say last in it goes to @lead") for call in model.calls)
     assert model.calls[1].says("A follow-up task") and model.calls[2].says("A question about it")
 
 

@@ -21,9 +21,9 @@ choose, several notify a parent for the first task only, and almost none bounds 
 - **A harness that is not persistent cannot stay.** `team check` refuses a role that says it stays on one, and `agent.spawn` refuses
   `stays` for it `unsupported`, from what the role's driver said when the session opened.
 - **What an agent is told about ending follows `stays`.** One that does not stay makes `agent.finish` its last call. One that stays
-  with no parent stays unless told to finish, as before. One that stays with a parent is told that what it says last in each turn goes
-  to its parent, that it stays for the next message, and to call `agent.finish` only when told to. The role's own words come after the
-  preamble, so a role has the last word.
+  with no parent stays unless told to finish, as before. One that stays with a parent is told to answer by ending its turn, that what it
+  says last goes to its parent, that a turn that only ends leaves it there for the next message, and to call `agent.finish` only when
+  told to. The role's own words come after the preamble, so a role has the last word.
 - **A report wakes its parent only for what the parent asked.** The spawn asks, and so does each message of the parent's own, to the
   child's inbox, that the child is handed. A report that wakes the parent answers. So a parent is woken once for the spawn and once
   more for each message it sent that child, within `max_hops` and budgets. A turn that parks, or that an interrupt or the owner's stop
@@ -66,6 +66,9 @@ choose, several notify a parent for the first task only, and almost none bounds 
   its ceiling.
 - The runtime asks each role's driver to describe itself when it opens a session, to learn whether its harness can stay.
 - A session that closes ends no agent. One left idle has no end in the journal, which is unknown and not `cancelled`.
+- A child that waits on its parent keeps its answer from it: a turn that parks posts no report, and one that holds a `wait` has not
+  ended. Twice on Codex a child told it stays for the next message did that, so the words for a child that stays say what a root's
+  have said since run 17, and nothing of waiting. That they hold on Codex has not been shown.
 - Deferred, at M2: an idle child's process is released, and resumed natively at its next message, by the path a harness that dies
   while idle will take.
 - Deferred, at M3: Platoon gives one trajectory one reward, so a child's several tasks share one reward unless each becomes its own
@@ -77,4 +80,7 @@ choose, several notify a parent for the first task only, and almost none bounds 
 - `tests/unit/primitives/test_lifecycle.py`, `test_waits.py`, `tests/unit/tools/test_surface.py`, `tests/unit/topology/test_check.py`
   and `tests/unit/runtime/test_session.py` hold each promise. The owner's flow ran on the real Claude Code, Codex and pi binaries
   against FakeModel in `tests/integration`: one process, three turns, the lead woken by each answer and by nothing else.
+- On real models, [the spike](../research/spikes/real-harness.md), sections 13 to 15: the owner's flow passed on Claude Code in 13
+  calls, and failed on Codex, where a child held a `wait` for its parent instead of answering. A Codex agent spawned with `stays`
+  answered and stayed, where without it a role's words alone did not keep it from finishing.
 - [Architecture section 7](../architecture.md), the monitor and Lifecycle, and section 8, `team check`.

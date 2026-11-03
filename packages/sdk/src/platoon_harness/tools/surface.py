@@ -24,8 +24,8 @@ _STAYING = (
     "stay: it ends you for good, and a turn that only ends leaves you here for the next message."
 )
 _ANSWERING = (
-    "What you say last in each turn goes to @{parent}, and you stay for the next message. Make `agent.finish` your "
-    "last call only when told to finish: it ends you for good."
+    "Answer by ending your turn: what you say last in it goes to @{parent}, and a turn that only ends leaves you here "
+    "for the next message. Make `agent.finish` your last call only when told to finish: it ends you for good."
 )
 _REFUSALS = {
     "not_permitted": (
