@@ -35,11 +35,9 @@ from . import (
     Login,
     ModelCall,
     Ready,
-    Receipt,
     Reconciled,
     Report,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -105,7 +103,7 @@ _CAPABILITIES = Capabilities(
     boundaries={"turn", "model_call"},
     tool_paths={"mcp-stdio"},
     tool_timeout_s=_TOOL_TIMEOUT_S,
-    interrupt="turn",
+    interrupt=True,
     approvals="gated",
     call_ids="call",
     dialects={"chat"},
@@ -222,7 +220,7 @@ class PiDriver:
             self._info = DriverInfo(name=_PI, login=_login(), capabilities=_CAPABILITIES)
         return self._info
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
         if _BASE_URL in spec.access and _KEY not in spec.access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
@@ -234,8 +232,7 @@ class PiDriver:
         await Process.launch(self._command(spec), launched, report, read=self._read)
         await self._handshake(spec, await asyncio.to_thread(_version, harness_env(launched)))
         if spec.goal and spec.resume is None:
-            await self._hand_over(spec.goal, "turn")
-        return Started(native=self._native)
+            await self._hand_over(spec.goal)
 
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches. `--session-id` makes a session under an id we chose, so `native` is known before
@@ -292,32 +289,27 @@ class PiDriver:
         finally:
             del self._answers[id]
 
-    async def _hand_over(self, text: str, boundary: Boundary) -> None:
+    async def _hand_over(self, text: str) -> None:
         """`prompt` begins a turn, and with a `streamingBehavior` it queues in one under way, so no turn can end between
         a look and a send, as it could for `steer` and `follow_up`. A steer lands before the next model call."""
-        behavior = "followUp" if boundary == "turn" else "steer"
-        answer = await self._ask("prompt", message=text, streamingBehavior=behavior)
+        answer = await self._ask("prompt", message=text, streamingBehavior="steer")
         if answer.get("disposition") == "handled":
             raise DriverError("an extension took this input, so it reached no model")
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
-        if delivery.boundary not in _CAPABILITIES.boundaries:
-            raise DriverError(f"this harness has no {delivery.boundary} boundary")
+    async def deliver(self, delivery: Delivery) -> None:
         self._unlanded[delivery.input] = delivery.text
         try:
-            await self._hand_over(delivery.text, delivery.boundary)
+            await self._hand_over(delivery.text)
         except DriverError:
             del self._unlanded[delivery.input]
             raise
-        return Receipt(boundary=delivery.boundary, queued=(delivery.input,))
 
-    async def interrupt(self) -> Receipt:
+    async def interrupt(self) -> None:
         """Stop the turn. A dialog open on a gate of the user's would hold up `abort`, so it is cancelled first. What
         pi queued stays behind in its queue, where no run takes it, so `_ended` sends that again."""
         for id in tuple(self._asking):
             await self._send({"type": "extension_ui_response", "id": id, "cancelled": True})
         await self._ask("abort")
-        return Receipt(boundary="turn", queued=tuple(self._unlanded))
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._asking:
@@ -470,7 +462,7 @@ class PiDriver:
         for block in blocks:
             match block:
                 case {"type": "text", "text": text}:
-                    self._report(Item(kind="message", phase="final", gist=self._gist(text), body=text, call_id=call_id))
+                    self._report(Item(kind="message", gist=self._gist(text), body=text, call_id=call_id))
                 case {"type": "thinking", "thinking": text}:
                     if text:
                         self._report(Item(kind="thought", gist=self._gist(text), body=text, call_id=call_id))
@@ -503,7 +495,7 @@ class PiDriver:
         approval = self._deciding.pop(id, None)
         item = Item(
             kind="tool",
-            phase="decided" if approval else "completed",
+            phase="completed",
             gist=self._gist(f"{self._tools.pop(id, 'tool')} {outcome}"),
             native_id=id,
             body=_text(result.get("content") or ""),
@@ -544,7 +536,7 @@ class PiDriver:
         with contextlib.suppress(DriverError):
             await self._ask("clear_queue")
             for text in texts:
-                await self._hand_over(text, "model_call")
+                await self._hand_over(text)
 
     def _reason(self, said: Any) -> str:
         assert self._process is not None

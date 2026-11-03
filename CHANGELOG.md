@@ -54,6 +54,10 @@
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`
   says which.
 - A live test runs in `tests/live`, marked `live`, on `PLATOON_HARNESS_LIVE=1`.
+- The driver contract shrank to what the runtime reads. `start`, `deliver` and `interrupt` return nothing, on the wire too, so `Started`
+  and `Receipt` are gone, and `ready.native` is the one statement of a session's id. `interrupt` in `Capabilities` is a boolean, `Login`
+  has no `native`, `DriverInfo` has no `version`, and `Item.phase` is `started` or `completed`: a message or a thought has none, and
+  `approval` is what says an item answers one.
 
 ### Fixed
 

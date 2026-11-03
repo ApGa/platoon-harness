@@ -16,10 +16,10 @@ There are three ways in, cheapest first.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, version, login kind, capabilities. Starts nothing
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started: ...  # fresh, or resume from spec.resume
-    async def deliver(self, delivery: Delivery) -> Receipt: ...  # delivery.boundary is one the driver declared
-    async def interrupt(self) -> Receipt: ...                    # stops at the boundary it can, says what was queued
+    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities. Starts nothing
+    async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
+    async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
+    async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
     async def answer(self, approval: str, verdict: Verdict) -> None: ...
     async def reconcile(self, input_id: str) -> Reconciled: ...  # landed | not_landed | unknown
     async def stop(self, grace: float) -> None: ...              # ends the process tree it owns
@@ -57,7 +57,7 @@ method promises:
 | `TurnStarted` | `turn` | |
 | `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong. An `interrupted` turn was someone's own doing, so it wakes nobody. `lost` and `stopped by its owner` are the runtime's own, and a driver that says one has sent an unknown frame. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
-| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. `phase` is `started`, `completed`, `final` or `decided`. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item |
+| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item |
 | `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness. `evidence` names what showed it, and `native_id` is the harness's own id for what landed |
 | `ApprovalRequested` | `id`, `gist` | The harness is waiting on a decision |
 | `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
@@ -97,7 +97,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `boundaries` | Where a delivery can land: `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
 | `tool_timeout_s` | The harness's cap on one tool call |
-| `interrupt` | `none`, `turn`, `tool`, `call` |
+| `interrupt` | Whether a turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
 | `native_children` | `none`, `observed`, `opaque` |
 | `call_ids` | `none`, `agent`, `call` |
@@ -162,8 +162,6 @@ from platoon_harness.drivers import (
     InputDelivered,
     Item,
     Ready,
-    Receipt,
-    Started,
     TurnEnded,
     TurnStarted,
 )
@@ -179,7 +177,7 @@ class OneCall:
 
     def describe(self):
         capabilities = Capabilities(persistent=True, boundaries={"turn"}, dialects={"chat"})
-        return DriverInfo(name="one-call", version="1.0", capabilities=capabilities)
+        return DriverInfo(name="one-call", capabilities=capabilities)
 
     async def start(self, spec, report):
         if spec.model is None:
@@ -190,7 +188,6 @@ class OneCall:
         await report(Ready(version="1.0", effective_model=spec.model))
         if spec.goal:
             self.turn = asyncio.create_task(self.take_turn(spec.goal))
-        return Started()
 
     async def take_turn(self, prompt):
         self.turns += 1
@@ -213,7 +210,6 @@ class OneCall:
             await self.turn
         await self.report(InputDelivered(input=delivery.input, boundary="turn", evidence="prompt"))
         self.turn = asyncio.create_task(self.take_turn(delivery.text))
-        return Receipt(boundary="turn")
 
     async def interrupt(self):
         raise DriverError("one call cannot be cut short")
@@ -239,7 +235,7 @@ The verbs equal the Python methods. A session reads like this, with `>` for what
 
 ```jsonc
 > {"jsonrpc":"2.0","id":1,"method":"describe","params":{"protocol":1}}
-< {"jsonrpc":"2.0","id":1,"result":{"protocol":1,"name":"mine","version":"1.0","login":null,"capabilities":{"persistent":true,"boundaries":["turn"]}}}
+< {"jsonrpc":"2.0","id":1,"result":{"protocol":1,"name":"mine","login":null,"capabilities":{"persistent":true,"boundaries":["turn"]}}}
 ```
 
 That was one short process: `describe` runs your program, sends this one frame, closes stdin and expects you to exit, so no harness
@@ -247,11 +243,11 @@ may start for it. Starting an agent is a new process.
 
 ```jsonc
 > {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
-< {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
+< {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","text":"New messages (delivery 41):\n- inbox/ada@3 from @lead: Keep the API stable","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable","sender":"@lead","body":null}],"behind":0}}
-< {"jsonrpc":"2.0","id":2,"result":{"boundary":"turn","queued":["41"]}}
+< {"jsonrpc":"2.0","id":2,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"41","boundary":"turn","evidence":"message_start"}}
 > {"jsonrpc":"2.0","id":3,"method":"stop","params":{"grace":5.0}}
 < {"jsonrpc":"2.0","id":3,"result":null}
@@ -260,9 +256,9 @@ may start for it. Starting an agent is a new process.
 | Verb | Params | Result |
 |---|---|---|
 | `describe` | `protocol` | `protocol` plus the fields of `DriverInfo` |
-| `start` | `protocol`, `spec` | `{native}` |
-| `deliver` | `input`, `boundary`, `text`, `items`, `behind` | `{boundary, queued}` |
-| `interrupt` | none | `{boundary, queued}` |
+| `start` | `protocol`, `spec` | null |
+| `deliver` | `input`, `boundary`, `text`, `items`, `behind` | null |
+| `interrupt` | none | null |
 | `answer` | `approval`, `verdict` | null |
 | `reconcile` | `input` | `"landed"`, `"not_landed"` or `"unknown"` |
 | `stop` | `grace` | null |

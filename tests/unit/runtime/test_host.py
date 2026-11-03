@@ -26,10 +26,8 @@ from platoon_harness.drivers import (
     GapReport,
     Item,
     Ready,
-    Receipt,
     Report,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -77,11 +75,11 @@ class Recording(ScriptedDriver):
     specs: list[AgentSpec] = []
     deliveries: list[Delivery] = []
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         Recording.specs.append(spec)
         return await super().start(spec, report)
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
+    async def deliver(self, delivery: Delivery) -> None:
         Recording.deliveries.append(delivery)
         return await super().deliver(delivery)
 
@@ -112,7 +110,7 @@ def solo_with(make: Callable[[], Any], **role: Any) -> Team:
 class Stuck(ScriptedDriver):
     """A harness whose handover never comes back."""
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
+    async def deliver(self, delivery: Delivery) -> None:
         await asyncio.Event().wait()
         raise AssertionError
 
@@ -174,10 +172,9 @@ async def test_a_long_forgotten_does_not_lose_the_agent(tmp_path):
     forgotten = tuple(f"{index:036d}" for index in range(500))
 
     class Compacting(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-            started = await super().start(spec, report)
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            await super().start(spec, report)
             await report(Compacted(forgotten=forgotten, summary="what was kept"))
-            return started
 
     async with Session.start(solo_with(Compacting), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
@@ -254,7 +251,7 @@ async def test_a_harness_with_no_tool_path_gets_no_binding(tmp_path, recording):
 
 async def test_a_role_s_effort_reaches_its_harness(tmp_path, recording):
     class Taking(Recording):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             Recording.specs.append(spec)
             return await super().start(spec.model_copy(update={"effort": None}), report)
 
@@ -314,7 +311,7 @@ async def test_a_workspace_nobody_built_yet_fails_loudly(tmp_path):
 
 async def test_a_harness_that_will_not_start_fails_its_spawn_and_its_parent_hears(tmp_path):
     class Broken(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             raise DriverError("no such binary")
 
     team = Team.model_validate(
@@ -341,8 +338,8 @@ async def test_a_harness_that_will_not_start_fails_its_spawn_and_its_parent_hear
 
 async def test_a_harness_that_never_says_ready_is_a_failure_and_not_a_hang(tmp_path):
     class Silent(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-            return Started(native="silent")
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            pass
 
     clock = ManualClock(1000.0)
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Silent)}}})
@@ -359,7 +356,7 @@ async def test_a_harness_that_never_says_ready_is_a_failure_and_not_a_hang(tmp_p
 
 async def test_a_harness_that_never_returns_from_start_is_a_failure_and_not_a_hang(tmp_path):
     class Wedged(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await asyncio.Event().wait()
             raise AssertionError
 
@@ -388,7 +385,7 @@ async def test_a_missing_credential_fails_the_spawn_and_says_which(tmp_path):
 
 async def test_a_credential_in_what_a_driver_said_is_masked_in_the_journal(tmp_path):
     class Leaky(ScriptedDriver):
-        async def deliver(self, delivery: Delivery) -> Receipt:
+        async def deliver(self, delivery: Delivery) -> None:
             assert self._spec.tools is not None
             raise DriverError(f"it refused the token {self._spec.tools.token.reveal()}")
 
@@ -552,7 +549,7 @@ async def test_a_delivery_already_asked_for_waits_out_a_takeover(tmp_path):
     delivered = asyncio.Event()
 
     class Slow(ScriptedDriver):
-        async def deliver(self, delivery: Delivery) -> Receipt:
+        async def deliver(self, delivery: Delivery) -> None:
             delivered.set()
             return await super().deliver(delivery)
 
@@ -617,12 +614,11 @@ async def test_a_delta_reaches_a_follower_and_never_the_journal(tmp_path):
     release = asyncio.Event()
 
     class Talking(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-            started = await super().start(spec, report)
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            await super().start(spec, report)
             await release.wait()
             await report(Delta(text="live words"))
             await report(Item(kind="thought", gist="that was all"))
-            return started
 
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Talking)}}})
 
@@ -648,11 +644,10 @@ async def test_every_word_of_the_vocabulary_has_somewhere_to_go(tmp_path):
     ]
 
     class Reporting(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-            started = await super().start(spec, report)
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            await super().start(spec, report)
             for item in said:
                 await report(item)
-            return started
 
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Reporting)}}})
 
@@ -745,7 +740,7 @@ async def test_a_harness_that_exits_is_lost_and_its_parent_hears(tmp_path):
 
 async def test_a_driver_that_raises_something_unexpected_loses_its_harness_with_no_silent_hang(tmp_path):
     class Crashing(ScriptedDriver):
-        async def deliver(self, delivery: Delivery) -> Receipt:
+        async def deliver(self, delivery: Delivery) -> None:
             raise RuntimeError("a bug in the driver")
 
     team = Team.model_validate({"roles": {"bob": {"harness": harness(Crashing)}}})
@@ -906,7 +901,7 @@ async def test_a_delivery_that_hangs_is_cut_off_and_queued_again(tmp_path):
 
 async def test_an_interrupt_a_harness_never_takes_is_cut_off_and_leaves_the_turn_open(tmp_path):
     class Deaf(ScriptedDriver):
-        async def interrupt(self) -> Receipt:
+        async def interrupt(self) -> None:
             await asyncio.Event().wait()
             raise AssertionError
 
@@ -960,8 +955,8 @@ async def test_an_answer_a_harness_never_takes_is_cut_off_and_stays_unanswered(t
 
 async def test_a_harness_that_takes_a_delivery_and_begins_no_turn_is_cut_off(tmp_path):
     class TakesIt(ScriptedDriver):
-        async def deliver(self, delivery: Delivery) -> Receipt:
-            return Receipt(boundary=delivery.boundary)
+        async def deliver(self, delivery: Delivery) -> None:
+            pass
 
     clock = ManualClock(1000.0)
 
@@ -993,9 +988,8 @@ async def test_a_wake_finishes_when_its_turn_begins(tmp_path):
 
 async def test_a_harness_that_says_ready_and_never_begins_its_goal_is_lost(tmp_path):
     class Dawdling(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await report(Ready(native="n"))
-            return Started(native="n")
 
     clock = ManualClock(1000.0)
     team = Team.model_validate(
@@ -1019,9 +1013,8 @@ async def test_a_harness_that_says_ready_and_never_begins_its_goal_is_lost(tmp_p
 
 async def test_a_harness_that_exits_before_it_is_ready_fails_its_spawn_with_its_reason(tmp_path):
     class Gone(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await report(Exited(reason="no licence"))
-            return Started()
 
     async with Session.start(solo_with(Gone), root=tmp_path) as session:
         row = await ended(session, "bob")
@@ -1037,11 +1030,10 @@ class Saying(ScriptedDriver):
 
     said: tuple[Report, ...]
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-        started = await super().start(spec, report)
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        await super().start(spec, report)
         for said in self.said:
             await report(said)
-        return started
 
 
 def saying(*reports: Report) -> type[Saying]:
@@ -1050,9 +1042,8 @@ def saying(*reports: Report) -> type[Saying]:
 
 async def test_a_ready_the_journal_refuses_fails_the_spawn_and_says_why(tmp_path):
     class TooMuch(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await report(Ready(native="n", tools_visible=("x" * 40_000,)))
-            return Started(native="n")
 
     async with Session.start(solo_with(TooMuch), root=tmp_path) as session:
         row = await asyncio.wait_for(ended(session, "bob"), SECONDS)
@@ -1107,9 +1098,8 @@ async def test_a_late_word_from_an_ended_agent_is_no_loss(tmp_path):
 
 async def test_a_model_other_than_the_one_pinned_fails_the_spawn(tmp_path):
     class Hosted(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await report(Ready(native="n", effective_model="some-hosted-default"))
-            return Started(native="n")
 
     async with Session.start(solo_with(Hosted, model="asked"), root=tmp_path) as session:
         row = await ended(session, "bob")
@@ -1121,9 +1111,8 @@ async def test_a_model_other_than_the_one_pinned_fails_the_spawn(tmp_path):
 
 async def test_a_model_nobody_can_name_stays_unknown_and_refuses_nothing(tmp_path):
     class Unsaid(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await report(Ready(native="n"))
-            return Started(native="n")
 
     async with Session.start(solo_with(Unsaid, model="asked"), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
@@ -1223,7 +1212,7 @@ async def test_a_stop_that_fails_is_masked_in_the_journal_and_the_log(tmp_path, 
 
 async def test_a_driver_that_breaks_leaves_no_credential_in_the_log(tmp_path, caplog):
     class Breaks(ScriptedDriver):
-        async def deliver(self, delivery: Delivery) -> Receipt:
+        async def deliver(self, delivery: Delivery) -> None:
             raise RuntimeError(f"boom {SECRET}")
 
     team = solo_with(Breaks, model="m")

@@ -117,7 +117,7 @@ async def test_an_approval_goes_through_the_runtime_and_a_new_process_resumes_th
         await session.resolve(asked["id"], "allow", expected_version=asked["version"])
         await ended(session, 1)
         assert (work / "approved.txt").exists()
-        decided = [event for event in await of_type(session, "item.recorded") if event.data["phase"] == "decided"]
+        decided = [event for event in await of_type(session, "item.recorded") if event.data["approval"] is not None]
         assert (decided[0].data["approval"], decided[0].data["outcome"]) == (asked["id"], "completed")
 
     async with Session.resume("live", root=root) as session:

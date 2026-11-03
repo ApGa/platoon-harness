@@ -14,10 +14,8 @@ from . import (
     DriverInfo,
     Item,
     Ready,
-    Receipt,
     Reconciled,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
 )
@@ -29,7 +27,7 @@ GOAL = "{goal}"
 _CHUNK = 64 * 1024
 _KEPT = 1024 * 1024
 _INTERRUPT_GRACE = 2.0
-_CAPABILITIES = Capabilities(interrupt="turn", tool_paths={"shell"})
+_CAPABILITIES = Capabilities(interrupt=True, tool_paths={"shell"})
 
 __all__ = ["GOAL", "ExecDriver"]
 
@@ -46,7 +44,7 @@ class ExecDriver:
     def describe(self) -> DriverInfo:
         return DriverInfo(name="exec", capabilities=_CAPABILITIES)
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None:
             raise DriverError("a one-shot harness cannot resume")
         if not spec.goal:
@@ -57,7 +55,6 @@ class ExecDriver:
             raise DriverError("a goal that starts with `-` would reach this program as an option: reword it")
         command = [part.replace(GOAL, spec.goal) for part in self._command]
         self._process = await Process.launch(command, spec, report, read=self._read)
-        return Started()
 
     async def _read(self, process: Process) -> None:
         """Pass stdout on as it comes, and when the process ends, end its turn with the last of what it said. A forked
@@ -87,16 +84,15 @@ class ExecDriver:
             return "interrupted"
         return "stopped" if code == 0 else exit_reason(code)
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
+    async def deliver(self, delivery: Delivery) -> None:
         raise DriverError("a one-shot harness takes nothing after its goal")
 
-    async def interrupt(self) -> Receipt:
+    async def interrupt(self) -> None:
         """Its one turn is the process, so stopping the turn stops the process."""
         if self._process is None:
             raise DriverError("this driver has not started")
         self._interrupted = True
         await self._process.stop(_INTERRUPT_GRACE)
-        return Receipt(boundary="turn")
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         raise DriverError("a one-shot harness asks for no approvals")

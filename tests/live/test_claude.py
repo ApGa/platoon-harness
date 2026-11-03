@@ -101,7 +101,7 @@ async def test_one_agent_takes_a_goal_a_delivery_an_interrupt_an_approval_and_a_
         await session.resolve(asked["id"], "allow", expected_version=asked["version"])
         await ended(session, 4)
         assert (work / "approved.txt").exists()
-        decided = [event for event in await of_type(session, "item.recorded") if event.data["phase"] == "decided"]
+        decided = [event for event in await of_type(session, "item.recorded") if event.data["approval"] is not None]
         assert (decided[0].data["approval"], decided[0].data["outcome"]) == (asked["id"], "completed")
         native = started.data["native"]
 

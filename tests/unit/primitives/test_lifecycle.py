@@ -2136,19 +2136,6 @@ async def test_only_a_harness_that_started_can_resume(kernel):
     assert refusal(await kernel.submit(kernel.runtime, "agent.start", args)).code == "conflict"
 
 
-async def test_a_session_named_only_by_start_reaches_the_record_through_the_launch(kernel):
-    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker"}))
-    while effects := result_of(kernel.query(kernel.runtime, "effect.ready", {})):
-        for effect in effects:
-            attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
-            result = {"native": "s-9"} if effect["kind"] == "launch" else None
-            done = {"id": effect["id"], "attempt": attempt, "result": result}
-            result_of(await kernel.submit(kernel.runtime, "effect.finish", done))
-    await start(kernel, "bob")
-
-    assert result_of(kernel.query(kernel.runtime, "agent.records", {}))[0]["native"] == "s-9"
-
-
 # What a session came to.
 
 

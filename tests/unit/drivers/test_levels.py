@@ -55,7 +55,7 @@ def test_a_result_pinned_elsewhere_says_nothing_of_this_agent(driver, version):
 
 def test_a_declared_capability_counts_for_nothing_on_its_own():
     everything = Capabilities(
-        persistent=True, resume=True, interrupt="call", approvals="native", call_ids="call", tool_paths={"shell"}
+        persistent=True, resume=True, interrupt=True, approvals="native", call_ids="call", tool_paths={"shell"}
     )
 
     assert levels(everything, PROFILE, None).operational.state == "unverified"

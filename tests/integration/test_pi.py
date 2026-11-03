@@ -353,7 +353,7 @@ async def test_a_role_s_approval_policy_answers_the_gate(tmp_path, monkeypatch):
             await in_state(session, "bob", "idle")
             await session.send("@bob", "touch it")
             await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 1)
-            decided = [event for event in await of_type(session, "item.recorded") if event.data["phase"] == "decided"]
+            decided = [event for event in await of_type(session, "item.recorded") if event.data["approval"] is not None]
 
     assert not (tmp_path / "ran").exists()
     assert decided[0].data["outcome"] == "failed"
@@ -383,7 +383,7 @@ async def test_a_denied_command_never_runs_and_the_item_says_so(tmp_path):
         await driver.start(spec, heard)
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "deny")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -481,12 +481,11 @@ async def test_a_steer_an_interrupt_stranded_goes_again_and_only_once(tmp_path):
         await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
         await asyncio.wait_for(model.call(0), TIMEOUT)
         await driver.deliver(steer)
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         delivered = await heard.until(InputDelivered)
         await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
         await driver.stop(2.0)
 
-    assert receipt.queued == ("41",)
     assert delivered.boundary == "turn"
     assert [turn.reason for turn in heard.of(TurnEnded)] == ["interrupted", "stopped"]
     assert model.calls[1].message.body.decode().count("cinnabar") == 1
@@ -498,7 +497,8 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
     async with FakeModel() as model:
         spec = on_fake_model(tmp_path, model)
         first, heard = PiDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await first.deliver(landed)
         delivered = await heard.until(InputDelivered)
         await heard.until(TurnEnded)
@@ -545,7 +545,8 @@ async def test_a_tool_a_kill_cut_off_reads_as_no_result_on_resume_and_never_ran_
         spec = on_fake_model(tmp_path, model, goal="go")
         os.mkfifo(spec.cwd / "pipe")
         first, heard = PiDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await driver_allows(first, heard)
         tool_pid = int(await asyncio.to_thread((spec.cwd / "pipe").read_text))
         record = Record.read(spec.folder)
@@ -584,7 +585,8 @@ async def test_our_words_go_beside_the_user_s_own_and_come_once_on_a_resume_too(
         spec = on_fake_model(tmp_path, model, goal="go", instructions="our words, viridian")
         (tmp_path / "home" / ".pi" / "agent" / "APPEND_SYSTEM.md").write_text("their words, ochre")
         first, heard = PiDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await heard.until(TurnEnded)
         await first.stop(2.0)
 

@@ -861,10 +861,10 @@ One driver instance per agent.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, version, login kind, capabilities. Starts nothing
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started: ...  # fresh, or resume from spec.resume
-    async def deliver(self, delivery: Delivery) -> Receipt: ...  # delivery.boundary is one the driver declared
-    async def interrupt(self) -> Receipt: ...                    # stops at the boundary it can, says what was queued
+    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities. Starts nothing
+    async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
+    async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
+    async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
     async def answer(self, approval: str, verdict: Verdict) -> None: ...
     async def reconcile(self, input_id: str) -> Reconciled: ...  # landed | not_landed | unknown
     async def stop(self, grace: float) -> None: ...              # ends the process tree it owns
@@ -878,7 +878,7 @@ such setting refuses an effort.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
-`item{kind: message|thought|tool|patch, phase: started|completed|final|decided, native_id, call_id, gist, body, approval, outcome}`,
+`item{kind: message|thought|tool|patch, phase: started|completed, native_id, call_id, gist, body, approval, outcome}`,
 `input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist}`, `model.call{call_id, model, purpose}`,
 `usage{tokens, usd, label, scope: call|turn|tree, call_id}`, `compacted{forgotten, summary}`,
 `child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and
@@ -902,8 +902,8 @@ exercised.
 
 ```jsonc
 > {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
-< {"jsonrpc":"2.0","id":1,"result":{"native":"s-9"}}
-< {"jsonrpc":"2.0","method":"report","params":{"type":"ready","version":"1.4.0","effective_model":"m","tools_visible":null}}
+< {"jsonrpc":"2.0","id":1,"result":null}
+< {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.4.0","effective_model":"m","tools_visible":null}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"d41","boundary":"turn","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable"}]}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"d41","boundary":"turn","evidence":"message_start"}}
 ```
@@ -936,7 +936,7 @@ Absence means unsupported, as in ACP.
 | `boundaries` | Subset of `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
 | `tool_timeout_s` | The harness's cap on one tool call |
-| `interrupt` | `none`, `turn`, `tool`, `call` |
+| `interrupt` | A turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
 | `native_children` | `none`, `observed`, `opaque` |
 | `call_ids` | `none`, `agent`, `call` |

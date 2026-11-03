@@ -207,7 +207,8 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
     async with FakeModel() as model:
         spec = on_fake_model(tmp_path, model)
         first, heard = ClaudeDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await first.deliver(delivery)
         await heard.until(TurnEnded)
         record = Record.read(spec.folder)

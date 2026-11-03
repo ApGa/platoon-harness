@@ -130,7 +130,7 @@ def test_capabilities_cross_the_wire_and_absence_means_unsupported():
         boundaries={"turn", "tool", "model_call"},
         tool_paths={"mcp-http", "mcp-stdio", "shell"},
         tool_timeout_s=300.0,
-        interrupt="call",
+        interrupt=True,
         approvals="gated",
         native_children="observed",
         call_ids="agent",
@@ -142,7 +142,7 @@ def test_capabilities_cross_the_wire_and_absence_means_unsupported():
 
     assert Capabilities.model_validate_json(full.model_dump_json()) == full
     empty = Capabilities()
-    assert (empty.persistent, empty.interrupt, empty.approvals, empty.call_ids) == (False, "none", "none", "none")
+    assert (empty.persistent, empty.interrupt, empty.approvals, empty.call_ids) == (False, False, "none", "none")
     assert empty.coverage == {} and empty.boundaries == frozenset()
 
 
@@ -261,7 +261,7 @@ async def test_a_report_with_no_call_id_fabricates_no_link(kernel):
     assert of_type(kernel, "usage.reported")[-1].model is None
 
 
-@pytest.mark.parametrize("phase", ["started", "completed", "final", "decided", None])
+@pytest.mark.parametrize("phase", ["started", "completed", None])
 def test_a_phase_is_one_of_four(phase):
     assert Item(kind="tool", gist="x", phase=phase).phase == phase
 

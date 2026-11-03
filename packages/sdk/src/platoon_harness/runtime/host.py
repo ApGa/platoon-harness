@@ -25,10 +25,8 @@ from platoon_harness.drivers import (
     Item,
     Offered,
     Ready,
-    Receipt,
     Reconciled,
     Report,
-    Started,
     ToolBinding,
     TurnEnded,
     unknown_frame,
@@ -226,19 +224,18 @@ class Host:
         text = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT)
         return "\n\n".join(filter(None, (data["goal"], text.decode(errors="replace"))))
 
-    async def _launch(self, effect: Effect) -> dict[str, str | None]:
+    async def _launch(self, effect: Effect) -> None:
         data = effect.data
         agent, role = data["agent"], data["role"]
         admission = self._admitted.pop(agent, None)
         if admission is None:  # It finished in a runtime that has gone, and what it gave went too.
             admission = await self.admit(SpawnRequest(agent=agent, role=role, resumed=True))
-        return {"native": await self.connect(agent, role, admission, goal=self._goal(data))}
+        await self.connect(agent, role, admission, goal=self._goal(data))
 
     async def connect(
         self, agent: str, role: str, admission: Admission, *, goal: str = "", resume: str | None = None
-    ) -> str | None:
-        """Bring a harness up on its own binding, and return the native id `start` gave. A harness that never says it is
-        ready is a failure, not a hang."""
+    ) -> None:
+        """Bring a harness up on its own binding. A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role])
         link = DriverLink(agent, role, driver, info, resumed=resume is not None)
@@ -247,18 +244,17 @@ class Host:
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
 
-        async def up() -> Started:
-            started = await driver.start(spec, partial(self._heard, link))
+        async def up() -> None:
+            await driver.start(spec, partial(self._heard, link))
             await link.ready.wait()
             if link.refused is not None:
                 raise DriverError(link.refused)
-            return started
 
         coming = asyncio.ensure_future(up())
         try:
             if not await first(asyncio.shield(coming), self._kernel.clock.sleep(_READY_SECONDS)):
                 raise DriverError(f"{agent}'s harness never said it was ready")
-            return coming.result().native
+            coming.result()
         except BaseException as error:
             coming.cancel()
             await self._discard(link)
@@ -326,7 +322,7 @@ class Host:
             raise DriverError(f"{effect.agent} has no harness")
         return link
 
-    async def _deliver(self, effect: Effect) -> dict[str, Any]:
+    async def _deliver(self, effect: Effect) -> None:
         """Hand entries over, and for a wake stay open until its turn begins, so `waking` always has an effect behind it
         and a crash cannot strand one. Past a time, or at an interrupt, the handover fails, which queues it again."""
         link, data = self._required(effect), effect.data
@@ -341,25 +337,26 @@ class Host:
         link.handing = asyncio.Event()
         handed = asyncio.ensure_future(self._hand_over(link, delivery))
         try:
-            if await first(handed, link.handing.wait(), self._kernel.clock.sleep(_HANDOVER_SECONDS)):
-                return handed.result().model_dump(mode="json")
-            raise DriverError("it was interrupted" if link.handing.is_set() else "its harness did not take it in time")
+            if not await first(handed, link.handing.wait(), self._kernel.clock.sleep(_HANDOVER_SECONDS)):
+                raise DriverError(
+                    "it was interrupted" if link.handing.is_set() else "its harness did not take it in time"
+                )
+            handed.result()
         finally:
             link.handing = None
 
-    async def _hand_over(self, link: DriverLink, delivery: Delivery) -> Receipt:
-        receipt = await link.driver.deliver(delivery)
+    async def _hand_over(self, link: DriverLink, delivery: Delivery) -> None:
+        await link.driver.deliver(delivery)
         if delivery.boundary == "turn":
             await self._owed(link.agent, lambda agent: agent["state"] == "waking")
-        return receipt
 
-    async def _interrupt(self, effect: Effect) -> dict[str, Any] | None:
+    async def _interrupt(self, effect: Effect) -> None:
         link = self.link(effect.agent)
         if link is None:
-            return None
+            return
         if link.handing is not None:
             link.handing.set()
-        return (await self._within(link.driver.interrupt())).model_dump(mode="json")
+        await self._within(link.driver.interrupt())
 
     async def _answer(self, effect: Effect) -> None:
         await self._within(self._required(effect).driver.answer(effect.data["approval"], effect.data["verdict"]))
@@ -483,7 +480,7 @@ class Host:
         info = link.info
         profile = Profile(
             driver=info.name,
-            version=ready.version or info.version,
+            version=ready.version,
             login="key" if self._team.roles[link.role].auth else info.login,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
         )

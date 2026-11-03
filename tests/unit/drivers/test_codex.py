@@ -385,7 +385,7 @@ async def test_a_goal_goes_out_on_a_fresh_start_and_none_waits(tmp_path, stand):
     assert "turn/start" not in [frame.get("method") for frame in stand.heard]
 
 
-async def test_commentary_is_no_answer_and_an_unmarked_message_is(tmp_path, stand):
+async def test_every_message_is_a_message_whatever_phase_the_harness_gives_it(tmp_path, stand):
     reports = await played(
         stand,
         tmp_path,
@@ -398,9 +398,9 @@ async def test_commentary_is_no_answer_and_an_unmarked_message_is(tmp_path, stan
     assert Delta(text="on") in reports
     items = [item for item in reports if isinstance(item, Item)]
     assert [(item.kind, item.phase, item.native_id, item.body) for item in items] == [
-        ("message", "completed", "m1", "on it"),
-        ("message", "final", "m2", "done"),
-        ("message", "final", "m3", "legacy"),
+        ("message", None, "m1", "on it"),
+        ("message", None, "m2", "done"),
+        ("message", None, "m3", "legacy"),
     ]
 
 
@@ -522,7 +522,7 @@ async def test_a_delivery_goes_out_under_its_id_and_lands_with_its_item(tmp_path
 
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await heard.until(Ready)
-        receipt = await driver.deliver(delivery())
+        await driver.deliver(delivery())
         delivered = await heard.until(InputDelivered)
         await heard.until(TurnEnded)
 
@@ -531,7 +531,6 @@ async def test_a_delivery_goes_out_under_its_id_and_lands_with_its_item(tmp_path
         "input": [{"type": "text", "text": "text of 41"}],
         "clientUserMessageId": "41",
     }
-    assert (receipt.boundary, receipt.queued) == ("turn", ("41",))
     assert delivered == InputDelivered(input="41", boundary="turn", evidence="userMessage", native_id="user-1")
 
 
@@ -547,13 +546,6 @@ async def test_one_that_lands_inside_a_turn_is_at_a_model_call(tmp_path, stand):
     assert len(heard.of(TurnStarted)) == 1
 
 
-async def test_a_boundary_it_never_declared_is_refused(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
-        await heard.until(Ready)
-        with pytest.raises(DriverError, match="no tool boundary"):
-            await driver.deliver(delivery(boundary="tool"))
-
-
 async def test_a_delivery_the_harness_refuses_fails_and_is_not_sent_again(tmp_path, stand):
     stand.install(refused={"turn/start": "the thread is busy"})
 
@@ -561,9 +553,7 @@ async def test_a_delivery_the_harness_refuses_fails_and_is_not_sent_again(tmp_pa
         await heard.until(Ready)
         with pytest.raises(DriverError, match="the thread is busy"):
             await driver.deliver(delivery())
-        receipt = await driver.interrupt()
-
-    assert receipt.queued == ()
+        await driver.interrupt()
 
 
 async def test_a_harness_that_stopped_reading_holds_a_delivery_up(tmp_path, stand):
@@ -581,12 +571,11 @@ async def test_an_interrupt_ends_the_turn_and_lives_on(tmp_path, stand):
 
     async with running(make_spec(tmp_path)) as (driver, heard):
         await heard.until(TurnStarted)
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         turn = await heard.until(TurnEnded)
 
     assert stand.asked("turn/interrupt") == {"threadId": "thread-1", "turnId": "turn-1"}
     assert turn.reason == "interrupted"
-    assert receipt.boundary == "turn"
     assert GapReport(plane="model", what="usage_lower_bound") in heard.reports
 
 
@@ -599,11 +588,10 @@ async def test_what_an_interrupt_drops_is_sent_again_and_begins_the_next_turn(tm
     async with running(make_spec(tmp_path)) as (driver, heard):
         await heard.until(TurnStarted)
         await driver.deliver(delivery(boundary="model_call"))
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         await heard.until(InputDelivered)
         await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
 
-    assert receipt.queued == ("41",)
     sent = [frame["params"].get("clientUserMessageId") for frame in stand.heard if frame.get("method") == "turn/start"]
     assert sent == [None, "41", "41"]
 
@@ -720,7 +708,7 @@ async def test_what_comes_of_an_answer_is_read_from_the_item(tmp_path, stand):
     async with running(make_spec(tmp_path)) as (driver, heard):
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "allow")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
 
     assert (decided.approval, decided.outcome, decided.body) == (asked.id, "failed", "EROFS")
 

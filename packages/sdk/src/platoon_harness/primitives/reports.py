@@ -42,7 +42,7 @@ class Capabilities(Model):
     boundaries: frozenset[Boundary] = frozenset()
     tool_paths: frozenset[Literal["mcp-http", "mcp-stdio", "shell"]] = frozenset()
     tool_timeout_s: float | None = None
-    interrupt: Literal["none", "turn", "tool", "call"] = "none"
+    interrupt: bool = False
     approvals: Literal["none", "gated", "native"] = "none"
     native_children: Literal["none", "observed", "opaque"] = "none"
     call_ids: Literal["none", "agent", "call"] = "none"
@@ -83,14 +83,15 @@ class Delta(Args):
 
 
 class Item(Args):
-    """One thing a harness did or began. `phase` is `started` for a tool under way, so `activity` can say what is
-    running, then `completed`, `final` for an answer, and `decided` for an approval. `call_id` names the model call that
-    made it, when the harness says so. `body` is its whole text until the host stores it and journals the hash."""
+    """One thing a harness did or began. A tool or a patch is `started` while under way, so `activity` can say what is
+    running, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome
+    answers. `call_id` names the model call that made it, when the harness says so. `body` is its whole text until the
+    host stores it and journals the hash."""
 
     type: Literal["item"] = "item"
     kind: Literal["message", "thought", "tool", "patch"]
     gist: Gist
-    phase: Literal["started", "completed", "final", "decided"] | None = None
+    phase: Literal["started", "completed"] | None = None
     native_id: Short | None = None
     call_id: Short | None = None
     body: str | None = None

@@ -25,10 +25,8 @@ from . import (
     Driver,
     DriverError,
     DriverInfo,
-    Receipt,
     Reconciled,
     Reporter,
-    Started,
     ToolBinding,
     unknown_frame,
 )
@@ -137,16 +135,16 @@ class WireDriver:
         except Closed as error:
             raise DriverError(f"{self._command[0]} is gone: {error}: see {self._log}") from error
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         self._log = spec.folder / LOG
         await Process.launch(self._command, spec, report, read=self._read)
-        return Started.model_validate(await self._call("start", {"protocol": WIRE_PROTOCOL, "spec": _to_frame(spec)}))
+        await self._call("start", {"protocol": WIRE_PROTOCOL, "spec": _to_frame(spec)})
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
-        return Receipt.model_validate(await self._call("deliver", delivery.model_dump(mode="json")))
+    async def deliver(self, delivery: Delivery) -> None:
+        await self._call("deliver", delivery.model_dump(mode="json"))
 
-    async def interrupt(self) -> Receipt:
-        return Receipt.model_validate(await self._call("interrupt"))
+    async def interrupt(self) -> None:
+        await self._call("interrupt")
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         await self._call("answer", {"approval": approval, "verdict": verdict})
@@ -219,12 +217,14 @@ class _Server:
             case "start":
                 self._check_protocol(params)
                 self._running = True
-                started = await driver.start(_from_frame(params["spec"], os.environ), self._report)
-                return started.model_dump(mode="json")
+                await driver.start(_from_frame(params["spec"], os.environ), self._report)
+                return None
             case "deliver":
-                return (await driver.deliver(Delivery.model_validate(params))).model_dump(mode="json")
+                await driver.deliver(Delivery.model_validate(params))
+                return None
             case "interrupt":
-                return (await driver.interrupt()).model_dump(mode="json")
+                await driver.interrupt()
+                return None
             case "answer":
                 await driver.answer(params["approval"], params["verdict"])
                 return None

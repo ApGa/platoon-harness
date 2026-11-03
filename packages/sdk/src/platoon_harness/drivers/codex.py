@@ -36,11 +36,9 @@ from . import (
     Login,
     ModelCall,
     Ready,
-    Receipt,
     Reconciled,
     Report,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -124,7 +122,7 @@ _CAPABILITIES = Capabilities(
     resume=True,
     boundaries={"turn", "model_call"},
     tool_paths={"mcp-http"},
-    interrupt="turn",
+    interrupt=True,
     approvals="native",
     native_children="observed",
     call_ids="agent",
@@ -272,7 +270,7 @@ class CodexDriver:
             self._info = DriverInfo(name=_CODEX, login=_login(), capabilities=_CAPABILITIES)
         return self._info
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
         if _BASE_URL in spec.access and _KEY not in spec.access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
@@ -294,7 +292,6 @@ class CodexDriver:
         self._report(Ready(native=self._native, version=version, effective_model=opened.get("model")))
         if spec.goal and spec.resume is None:
             await self._hand_over(spec.goal)
-        return Started(native=self._native)
 
     # What the harness is sent.
 
@@ -324,18 +321,15 @@ class CodexDriver:
         params = {"threadId": self._native, "input": [{"type": "text", "text": text}]}
         await self._call("turn/start", params if input is None else {**params, "clientUserMessageId": input})
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
-        if delivery.boundary not in _CAPABILITIES.boundaries:
-            raise DriverError(f"this harness has no {delivery.boundary} boundary")
+    async def deliver(self, delivery: Delivery) -> None:
         self._unlanded[delivery.input] = delivery.text
         try:
             await self._hand_over(delivery.text, delivery.input)
         except DriverError:
             del self._unlanded[delivery.input]
             raise
-        return Receipt(boundary=delivery.boundary, queued=(delivery.input,))
 
-    async def interrupt(self) -> Receipt:
+    async def interrupt(self) -> None:
         """Stop the turn, on this thread and on every child of it, as `turn/interrupt` stops one thread alone. A tool
         may run on, as an exec session outlives a turn. What was steered and never landed is lost to the harness at
         this, so it is sent again, and begins the next turn."""
@@ -346,7 +340,6 @@ class CodexDriver:
             except DriverError:
                 if thread in self._turns:  # One that has ended since needs no interrupt.
                     raise
-        return Receipt(boundary="turn", queued=tuple(self._unlanded))
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         asked = self._asking.pop(approval, None)
@@ -481,8 +474,7 @@ class CodexDriver:
     def _completed(self, item: Mapping[str, Any]) -> None:
         match item:
             case {"type": "agentMessage", "id": id, "text": text}:
-                phase = "completed" if item.get("phase") == "commentary" else "final"
-                self._report(Item(kind="message", phase=phase, gist=self._gist(text), native_id=id, body=text))
+                self._report(Item(kind="message", gist=self._gist(text), native_id=id, body=text))
             case {"type": "reasoning", "id": id}:
                 if text := "\n".join((*item.get("summary", ()), *item.get("content", ()))):
                     self._report(Item(kind="thought", gist=self._gist(text), native_id=id, body=text))
@@ -506,7 +498,7 @@ class CodexDriver:
         approval = self._deciding.pop(id, None)
         return Item(
             kind=kind,
-            phase="decided" if approval else "completed",
+            phase="completed",
             gist=self._gist(" ".join(filter(None, (_name(item), outcome)))),
             native_id=id,
             body=_output(item),

@@ -29,7 +29,7 @@ from platoon_harness.primitives import (
 )
 from platoon_harness.schema import Model
 
-Login = Literal["native", "plan", "key", "gateway"]
+Login = Literal["plan", "key", "gateway"]
 Reconciled = Literal["landed", "not_landed", "unknown"]
 Reporter = Callable[[Report], Awaitable[None]]
 
@@ -56,11 +56,9 @@ __all__ = [
     "Native",
     "Offered",
     "Ready",
-    "Receipt",
     "Reconciled",
     "Report",
     "Reporter",
-    "Started",
     "ToolBinding",
     "TurnEnded",
     "TurnStarted",
@@ -78,7 +76,6 @@ class DriverInfo(Model):
     """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one."""
 
     name: str
-    version: str | None = None
     login: Login | None = None
     capabilities: Capabilities = Capabilities()
 
@@ -136,30 +133,17 @@ class Delivery(Model):
     behind: int = 0
 
 
-class Started(Model):
-    """A harness launched. `native` is the id to resume it by, when it has one."""
-
-    native: str | None = None
-
-
-class Receipt(Model):
-    """What came of a request: the `boundary` it takes effect at, if known, and inputs `queued` inside the harness."""
-
-    boundary: Boundary | None = None
-    queued: tuple[str, ...] = ()
-
-
 @runtime_checkable
 class Driver(Protocol):
     """One harness session, one instance per agent. A method it cannot honor raises `DriverError`."""
 
     def describe(self) -> DriverInfo: ...
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started: ...
+    async def start(self, spec: AgentSpec, report: Reporter) -> None: ...
 
-    async def deliver(self, delivery: Delivery) -> Receipt: ...
+    async def deliver(self, delivery: Delivery) -> None: ...
 
-    async def interrupt(self) -> Receipt: ...
+    async def interrupt(self) -> None: ...
 
     async def answer(self, approval: str, verdict: Verdict) -> None: ...
 

@@ -435,7 +435,7 @@ async def test_a_turn_with_text_reports_its_call_its_words_and_what_it_spent(tmp
     call, spent, item = reports[1], reports[2], reports[3]
     assert (call.call_id, call.model, call.purpose) == ("resp_1", "m", None)
     assert (spent.tokens, spent.label, spent.scope, spent.call_id) == (14, "provider", "call", "resp_1")
-    assert (item.kind, item.phase, item.body, item.call_id) == ("message", "final", "hello there", "resp_1")
+    assert (item.kind, item.phase, item.body, item.call_id) == ("message", None, "hello there", "resp_1")
     assert reports[-1].reason == "stopped"
 
 
@@ -612,10 +612,9 @@ async def test_a_delivery_lands_as_a_turn(tmp_path, stand):
     stand.install(turns=[[BEGAN, user("New message"), message_end(), ENDED]])
 
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
-        receipt = await driver.deliver(delivery())
+        await driver.deliver(delivery())
         delivered = await heard.until(InputDelivered)
 
-    assert (receipt.boundary, receipt.queued) == ("turn", ("41",))
     assert (delivered.input, delivered.boundary, delivered.evidence) == ("41", "turn", "message_start")
     assert stand.sent("prompt")[0]["message"] == "New message"
 
@@ -631,18 +630,12 @@ async def test_a_delivery_inside_a_turn_lands_before_the_next_model_call(tmp_pat
     assert len(heard.of(TurnStarted)) == 1
 
 
-@pytest.mark.parametrize(("boundary", "behavior"), [("turn", "followUp"), ("model_call", "steer")])
-async def test_one_way_in_either_begins_a_turn_or_queues_in_one(tmp_path, stand, boundary, behavior):
+@pytest.mark.parametrize("boundary", ["turn", "model_call"])
+async def test_one_way_in_either_begins_a_turn_or_queues_in_one(tmp_path, stand, boundary):
     async with running(make_spec(tmp_path, goal="")) as (driver, _):
         await driver.deliver(delivery(boundary=boundary))
 
-    assert stand.sent("prompt")[0]["streamingBehavior"] == behavior
-
-
-async def test_a_boundary_nobody_declared_is_refused(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="")) as (driver, _):
-        with pytest.raises(DriverError, match="no tool boundary"):
-            await driver.deliver(delivery(boundary="tool"))
+    assert stand.sent("prompt")[0]["streamingBehavior"] == "steer"
 
 
 async def test_a_delivery_pi_refused_says_why_and_stays_on_nobody_s_list(tmp_path, stand):
@@ -652,9 +645,7 @@ async def test_a_delivery_pi_refused_says_why_and_stays_on_nobody_s_list(tmp_pat
     async with running(make_spec(tmp_path, goal="", tools=tools)) as (driver, _):
         with pytest.raises(DriverError, match=r"the key is \*\*\*"):
             await driver.deliver(delivery())
-        receipt = await driver.interrupt()
-
-    assert receipt.queued == ()
+        await driver.interrupt()
 
 
 async def test_an_input_an_extension_took_reached_no_model_and_says_so(tmp_path, stand):
@@ -696,10 +687,9 @@ async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(t
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
         await driver.deliver(delivery("41", "model_call", "queued"))
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         ended = await heard.until(TurnEnded)
 
-    assert receipt.queued == ("41",)
     assert ended.reason == "interrupted"
 
 
@@ -767,7 +757,7 @@ async def test_an_approval_goes_to_the_runtime_and_its_answer_to_the_harness(tmp
     async with running(make_spec(tmp_path)) as (driver, heard):
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "allow")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
         await heard.until(TurnEnded)
 
     assert (asked.id, asked.gist) == ("ask-1", 'bash {"command":"ls"}')
@@ -781,7 +771,7 @@ async def test_a_denial_says_so_and_its_outcome_is_read_from_the_harness(tmp_pat
     async with running(make_spec(tmp_path)) as (driver, heard):
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "deny")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
 
     assert stand.sent("extension_ui_response")[0]["confirmed"] is False
     assert decided.outcome == "failed"
@@ -796,7 +786,7 @@ async def test_a_confirm_of_a_user_s_own_is_an_approval_with_no_tool_behind_it(t
         await heard.until(TurnEnded)
 
     assert asked.gist == "Clear session? All will be lost."
-    assert not [item for item in heard.of(Item) if item.phase == "decided"]
+    assert not [item for item in heard.of(Item) if item.approval is not None]
 
 
 async def test_a_confirm_with_no_title_is_asked_all_the_same(tmp_path, stand):

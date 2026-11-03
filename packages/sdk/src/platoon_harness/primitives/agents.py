@@ -65,7 +65,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -139,15 +139,6 @@ class Agents(View):
         )
         if event.type == "agent.started":
             self._move(event, "idle", "spawning")
-
-    @fold("effect.finished")
-    def launched(self, event: Event) -> None:
-        """A driver may name its session only in what `start` returned, which reaches the journal here."""
-        result = event.data["result"]
-        if event.data["kind"] == "launch" and isinstance(result, dict):
-            self.db.execute(
-                "UPDATE v_agents SET native = coalesce(?, native) WHERE name = ?", (result.get("native"), event.agent)
-            )
 
     def _move(self, event: Event, state: str, *only: str) -> None:
         marks = ", ".join("?" * len(only))

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session
-from platoon_harness.drivers import AgentSpec, Reporter, Started
+from platoon_harness.drivers import AgentSpec, Reporter
 from platoon_harness.primitives import CUT_OFF
 from platoon_harness.testing import ScriptedDriver
 
@@ -23,7 +23,7 @@ def idling[Driver: ScriptedDriver](kind: type[Driver]) -> type[Driver]:
     short under it."""
 
     class Idling(kind):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             self._resumed = spec.resume is not None
             return await super().start(spec, report)
 

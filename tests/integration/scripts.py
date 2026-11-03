@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness import Team
-from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Receipt, Reporter, Started
+from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Reporter
 from platoon_harness.drivers.wire import serve
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
@@ -54,7 +54,7 @@ class Lead(Templated):
     """A lead that goes back to its wait until it holds, as a model would: each message from a worker wakes it. Once
     resumed it has done its first turn, as a harness with a session has."""
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None:
             self._turns = iter(())
         return await super().start(spec, report)
@@ -74,7 +74,7 @@ class Resumable(Templated):
         super().__init__(fresh)
         self._resumed = resumed
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None:
             self._turns = iter(self._resumed)
         return await super().start(spec, report)
@@ -83,13 +83,13 @@ class Resumable(Templated):
 class Stuck(Resumable):
     """Its first handover never comes back. Once resumed it behaves."""
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
+    async def deliver(self, delivery: Delivery) -> None:
         if self._spec.resume is None:
             await asyncio.Event().wait()
         return await super().deliver(delivery)
 
 
-FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt="turn")
+FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 
 HARNESSES = {
     "lead": lambda: Lead([FIX_THE_TEST]),

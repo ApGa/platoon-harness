@@ -16,10 +16,8 @@ from platoon_harness.drivers import (
     Item,
     ModelCall,
     Ready,
-    Receipt,
     Report,
     Reporter,
-    Started,
     TurnEnded,
     Usage,
 )
@@ -41,7 +39,7 @@ class Filtered(ScriptedDriver):
         super().__init__(every_turn_asks_the_model(), **options)
         self._change = change
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         async def changed(item: Report) -> None:
             if (kept := self._change(item)) is not None:
                 await report(kept)
@@ -116,7 +114,7 @@ async def test_a_driver_that_starts_something_to_describe_itself_fails(tmp_path)
 
         def describe(self):
             self._descriptions += 1
-            return self._info.model_copy(update={"version": str(self._descriptions)})
+            return self._info.model_copy(update={"login": "plan" if self._descriptions % 2 else "key"})
 
     result = await check(Eager, tmp_path)
 
@@ -182,7 +180,7 @@ async def test_a_delivery_that_never_reaches_the_prompt_fails(tmp_path):
 
 async def test_a_turn_taken_on_no_goal_fails(tmp_path):
     class Restless(Filtered):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             return await super().start(spec.model_copy(update={"goal": spec.goal or "carry on"}), report)
 
     result = await check(Restless, tmp_path)
@@ -193,7 +191,7 @@ async def test_a_turn_taken_on_no_goal_fails(tmp_path):
 async def test_an_interrupt_that_stops_nothing_fails(tmp_path):
     class Stubborn(Filtered):
         async def interrupt(self):
-            return Receipt(boundary="turn")
+            pass
 
     result = await check(Stubborn, tmp_path)
 
@@ -216,10 +214,9 @@ async def test_an_interrupt_reported_as_anything_else_fails(tmp_path):
 async def test_an_interrupt_that_ends_the_agent_fails(tmp_path):
     class Fatal(Filtered):
         async def interrupt(self):
-            receipt = await super().interrupt()
+            await super().interrupt()
             self._capabilities = self._capabilities.model_copy(update={"persistent": False})
             self._exited = True
-            return receipt
 
     result = await check(Fatal, tmp_path)
 
@@ -229,10 +226,9 @@ async def test_an_interrupt_that_ends_the_agent_fails(tmp_path):
 async def test_a_resume_that_loses_the_past_fails(tmp_path):
     class Amnesiac(Filtered):
         async def start(self, spec, report):
-            started = await super().start(spec, report)
+            await super().start(spec, report)
             if spec.resume is not None:
                 self._messages = []
-            return started
 
     result = await check(Amnesiac, tmp_path)
 
@@ -287,9 +283,8 @@ async def test_a_steer_at_a_boundary_it_does_not_honor_fails(tmp_path):
 async def test_a_steer_an_interrupt_drops_fails(tmp_path):
     class Forgetful(Filtered):
         async def interrupt(self):
-            receipt = await super().interrupt()
+            await super().interrupt()
             self._pending.clear()
-            return receipt
 
     result = await check(Forgetful, tmp_path)
 
@@ -479,7 +474,7 @@ async def test_unsupported_is_a_skip_with_a_reason_never_a_pass(tmp_path):
 
 async def test_a_harness_that_starts_with_access_and_no_model_fails(tmp_path):
     class Defaulting(ScriptedDriver):
-        async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
             return await super().start(spec.model_copy(update={"model": "whatever it likes"}), report)
 
     result = await check(lambda: Defaulting(every_turn_asks_the_model()), tmp_path)
@@ -495,11 +490,10 @@ class Parent(ScriptedDriver):
         super().__init__(every_turn_asks_the_model(), capabilities=capabilities)
         self._seen = seen
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
-        started = await super().start(spec, report)
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        await super().start(spec, report)
         if self._seen:
             await report(ChildSeen(native="child-1", attribution="inferred"))
-        return started
 
 
 async def test_a_child_that_is_reported_passes(tmp_path):

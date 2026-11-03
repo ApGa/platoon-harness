@@ -34,11 +34,9 @@ from . import (
     Login,
     ModelCall,
     Ready,
-    Receipt,
     Reconciled,
     Report,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -96,7 +94,7 @@ _CAPABILITIES = Capabilities(
     resume=True,
     boundaries={"turn", "tool"},
     tool_paths={"mcp-http"},
-    interrupt="turn",
+    interrupt=True,
     approvals="native",
     native_children="observed",
     call_ids="call",
@@ -182,7 +180,7 @@ class ClaudeDriver:
             self._info = DriverInfo(name=_CLAUDE, login=_login(), capabilities=_CAPABILITIES)
         return self._info
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
         named = {*spec.env, *spec.access}
         if _GATEWAY_URL in named and not named.intersection(_GATEWAY_CREDENTIALS):
@@ -197,7 +195,6 @@ class ClaudeDriver:
         await self._handshake(spec)
         if spec.goal and spec.resume is None:
             await self._send(self._user(spec.goal, str(uuid4())))
-        return Started(native=self._native)
 
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches: one path, and its files are written first. The server's token is in a file, and
@@ -278,22 +275,18 @@ class ClaudeDriver:
         id = uuid4().hex
         return await self._exchange(id, {"type": "control_request", "request_id": id, "request": {"subtype": subtype}})
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
-        """Hand the text over, and return when the harness says it is queued, which is what a `Receipt` claims. It lands
-        at the next tool boundary, or else as the next turn. A harness that has stopped reading holds this up until the
-        host drops it, and what was written stays in the pipe, to land if it ever reads again."""
-        if delivery.boundary not in _CAPABILITIES.boundaries:
-            raise DriverError(f"this harness has no {delivery.boundary} boundary")
+    async def deliver(self, delivery: Delivery) -> None:
+        """Hand the text over, and return when the harness says it is queued. It lands at the next tool boundary, or
+        else as the next turn. A harness that has stopped reading holds this up until the host drops it, and what was
+        written stays in the pipe, to land if it ever reads again."""
         id = self._input_id(delivery.input)
         self._inputs[id] = delivery.input
         await self._exchange(id, self._user(delivery.text, id))
-        return Receipt(boundary=delivery.boundary, queued=(delivery.input,))
 
-    async def interrupt(self) -> Receipt:
+    async def interrupt(self) -> None:
         """Stop the turn. What is queued stays queued, so nothing handed over is lost, and it begins the next turn."""
         self._interrupted = self._turn is not None
-        queued = (await self._ask("interrupt")).get("still_queued", ())
-        return Receipt(boundary="turn", queued=tuple(self._inputs[id] for id in queued if id in self._inputs))
+        await self._ask("interrupt")
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._asking:
@@ -472,7 +465,7 @@ class ClaudeDriver:
         for block in blocks:
             match block:
                 case {"type": "text", "text": text}:
-                    item = Item(kind="message", phase="final", gist=self._gist(text), body=text, call_id=call_id)
+                    item = Item(kind="message", gist=self._gist(text), body=text, call_id=call_id)
                     self._report(item)
                 case {"type": "thinking", "thinking": text}:
                     if text:
@@ -496,7 +489,7 @@ class ClaudeDriver:
                     approval = self._deciding.pop(id, None)
                     item = Item(
                         kind="tool",
-                        phase="decided" if approval else "completed",
+                        phase="completed",
                         gist=self._gist(f"{self._tools.pop(id, 'tool')} {outcome}"),
                         native_id=id,
                         body=_text(block.get("content") or ""),

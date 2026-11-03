@@ -34,7 +34,6 @@ from platoon_harness.drivers import (
     Offered,
     Ready,
     Report,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -126,16 +125,16 @@ class _Rig:
         if self.allowing and isinstance(report, ApprovalRequested):
             await self.driver.answer(report.id, "allow")
 
-    async def start(self, **changes: Any) -> Started:
+    async def start(self, **changes: Any) -> None:
         self.awaiting = "an answer to `start`"
-        return await self.driver.start(self._spec(**changes), self._report)
+        await self.driver.start(self._spec(**changes), self._report)
 
-    async def restart(self, **changes: Any) -> Started:
+    async def restart(self, **changes: Any) -> None:
         """Start again as a crash recovery would: a new instance, on the same folder."""
         self.reports.clear()
         self.driver = self.factory()
         self.drivers.append(self.driver)
-        return await self.start(**changes)
+        await self.start(**changes)
 
     async def until[T](self, kind: type[T], where: Callable[[T], bool] = lambda _: True) -> T:
         """The first report of `kind` that holds, when it has arrived."""
@@ -293,7 +292,7 @@ async def no_goal_takes_no_turn(rig: _Rig) -> None:
 
 
 def _interruptible(capabilities: Capabilities) -> str | None:
-    return "it declares no interrupt" if capabilities.interrupt == "none" else None
+    return None if capabilities.interrupt else "it declares no interrupt"
 
 
 @_check(_interruptible)
@@ -321,12 +320,13 @@ def _resumable(capabilities: Capabilities) -> str | None:
 
 @_check(_resumable)
 async def resume(rig: _Rig) -> None:
-    started = await rig.start()
+    await rig.start()
+    native = (await rig.until(Ready)).native
     await rig.until(TurnEnded)
-    _expect(started.native, "`start` gave no native id to resume by")
+    _expect(native, "`ready` gave no native id to resume by")
     await rig.driver.stop(_GRACE)
 
-    await rig.restart(resume=started.native)
+    await rig.restart(resume=native)
     await rig.until(Ready)
     next_call = len(rig.model.calls)
     await rig.deliver()

@@ -130,9 +130,8 @@ async def test_interrupt_ends_the_tree_and_says_so(tmp_path):
     await heard.until(Delta)
     record = Record.read(spec.folder)
 
-    receipt = await driver.interrupt()
+    await driver.interrupt()
 
-    assert receipt.boundary == "turn"
     assert (await heard.until(TurnEnded)).reason == "interrupted"
     assert await heard.until(Exited)
     assert group_of(record.pid) is None

@@ -107,13 +107,7 @@ async def test_every_verb_equals_its_method(tmp_path):
             with open({str(log)!r}, "a") as file:
                 file.write(json.dumps(frame) + "\\n")
             match frame["method"]:
-                case "start":
-                    reply(frame, {{"native": "s-9"}})
-                case "deliver":
-                    reply(frame, {{"boundary": "turn", "queued": ["d1"]}})
-                case "interrupt":
-                    reply(frame, {{"boundary": "tool", "queued": []}})
-                case "answer" | "stop":
+                case "start" | "deliver" | "interrupt" | "answer" | "stop":
                     reply(frame, None)
                 case "reconcile":
                     reply(frame, "landed")
@@ -121,8 +115,8 @@ async def test_every_verb_equals_its_method(tmp_path):
     )
     driver, _ = await started(tmp_path, command)
 
-    assert (await driver.deliver(DELIVERY)).queued == ("d1",)
-    assert (await driver.interrupt()).boundary == "tool"
+    await driver.deliver(DELIVERY)
+    await driver.interrupt()
     await driver.answer("a1", "allow")
     assert await driver.reconcile("d1") == "landed"
     await driver.stop(2)
@@ -574,7 +568,6 @@ async def test_a_served_driver_gets_its_credentials_back_from_the_environment(tm
                 await report(Item(kind="message", gist=spec.access["MODEL_KEY"].reveal()))
                 await report(Item(kind="message", gist=spec.tools.token.reveal()))
                 await report(Item(kind="message", gist=str(spec.folder)))
-                return Started()
 
         serve(Showing())
     """,

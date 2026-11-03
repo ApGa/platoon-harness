@@ -27,10 +27,8 @@ from platoon_harness.drivers import (
     Item,
     ModelCall,
     Ready,
-    Receipt,
     Reconciled,
     Reporter,
-    Started,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -49,7 +47,7 @@ _DEFAULT = Capabilities(
     resume=True,
     boundaries={"turn", "tool"},
     tool_paths={"mcp-http"},
-    interrupt="turn",
+    interrupt=True,
     approvals="native",
     call_ids="call",
     dialects={"chat"},
@@ -148,7 +146,8 @@ class ScriptedDriver:
         self.results: list[Any] = []
         self._turns: Iterator[Sequence[Step]] = iter(turns)
         self._capabilities = capabilities
-        self._info = DriverInfo(name=name, version=version, capabilities=capabilities)
+        self._version = version
+        self._info = DriverInfo(name=name, capabilities=capabilities)
         self._messages: list[dict[str, Any]] = []
         self._pending: deque[Delivery] = deque()
         self._landed: set[str] = set()
@@ -165,7 +164,7 @@ class ScriptedDriver:
     def describe(self) -> DriverInfo:
         return self._info
 
-    async def start(self, spec: AgentSpec, report: Reporter) -> Started:
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None and not self._capabilities.resume:
             raise DriverError("this harness cannot resume")
         if spec.effort is not None:
@@ -177,11 +176,8 @@ class ScriptedDriver:
         if spec.resume is not None and self._transcript.exists():
             self._messages = json.loads(self._transcript.read_text())
         tools = await self._list_tools() if spec.tools is not None else None
-        await report(
-            Ready(native=self._native, version=self._info.version, effective_model=spec.model, tools_visible=tools)
-        )
+        await report(Ready(native=self._native, version=self._version, effective_model=spec.model, tools_visible=tools))
         self._work = asyncio.create_task(self._run())
-        return Started(native=self._native)
 
     @property
     def _transcript(self) -> Path:
@@ -274,7 +270,7 @@ class ScriptedDriver:
 
     async def _say(self, text: str, call_id: str | None = None) -> None:
         await self._report(Delta(text=text))
-        await self._report(Item(kind="message", phase="final", gist=text[:GIST_LIMIT], body=text, call_id=call_id))
+        await self._report(Item(kind="message", gist=text[:GIST_LIMIT], body=text, call_id=call_id))
 
     async def _ask(self, gist: str) -> Verdict:
         id = f"approval-{uuid.uuid4().hex[:8]}"  # A resumed harness must not ask under an id it has used.
@@ -282,7 +278,7 @@ class ScriptedDriver:
         self._approvals[id] = answered
         await self._report(ApprovalRequested(id=id, gist=gist[:GIST_LIMIT]))
         verdict = await answered
-        await self._report(Item(kind="tool", phase="decided", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
+        await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
         return verdict
 
     async def _mcp(self, method: str, params: Mapping[str, Any]) -> Any:
@@ -366,7 +362,7 @@ class ScriptedDriver:
         await self._report(usage)
         return reply
 
-    async def deliver(self, delivery: Delivery) -> Receipt:
+    async def deliver(self, delivery: Delivery) -> None:
         if self._exited:
             raise DriverError("this harness has exited")
         if not self._capabilities.persistent:
@@ -376,16 +372,13 @@ class ScriptedDriver:
         self._pending.append(delivery)
         self._heard_this_turn = True
         self._arrival.set()
-        return Receipt(boundary=delivery.boundary, queued=(delivery.input,))
 
-    async def interrupt(self) -> Receipt:
-        if self._capabilities.interrupt == "none":
+    async def interrupt(self) -> None:
+        if not self._capabilities.interrupt:
             raise DriverError("this harness cannot be interrupted")
-        queued = tuple(delivery.input for delivery in self._pending)
         if self._steps is not None:
             self._interrupted = True
             self._steps.cancel()
-        return Receipt(boundary="turn", queued=queued)
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._approvals:

@@ -36,11 +36,9 @@ platoon_harness.drivers.ModelCall
 platoon_harness.drivers.Native
 platoon_harness.drivers.Offered
 platoon_harness.drivers.Ready
-platoon_harness.drivers.Receipt
 platoon_harness.drivers.Reconciled
 platoon_harness.drivers.Report
 platoon_harness.drivers.Reporter
-platoon_harness.drivers.Started
 platoon_harness.drivers.ToolBinding
 platoon_harness.drivers.TurnEnded
 platoon_harness.drivers.TurnStarted

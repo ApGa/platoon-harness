@@ -432,7 +432,7 @@ async def test_a_turn_with_text_reports_its_call_its_words_and_its_cost(tmp_path
     assert kinds(reports) == [TurnStarted, ModelCall, Delta, Delta, Item, Usage, Usage, TurnEnded]
     _, call, _, _, item, tokens, usd, ended = reports
     assert (call.call_id, call.model) == ("msg_1", "m")
-    assert (item.kind, item.phase, item.body, item.call_id) == ("message", "final", "hello world", "msg_1")
+    assert (item.kind, item.phase, item.body, item.call_id) == ("message", None, "hello world", "msg_1")
     assert (tokens.tokens, tokens.label, tokens.scope, tokens.call_id) == (65, "provider", "call", "msg_1")
     assert (usd.usd, usd.label) == (0.5, "estimated")
     assert ended.reason == "stopped"
@@ -684,14 +684,13 @@ async def test_a_delivery_lands_as_a_turn_with_its_id_on_the_frame(tmp_path, sta
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await heard.until(Ready)
 
-        receipt = await driver.deliver(delivery())
+        await driver.deliver(delivery())
 
         landed = await heard.until(InputDelivered)
         await heard.until(TurnEnded)
 
     sent = next(frame for frame in stand.heard if frame["type"] == "user")
     assert sent["message"] == {"role": "user", "content": "New message"}
-    assert (receipt.boundary, receipt.queued) == ("turn", ("41",))
     assert (landed.input, landed.boundary, landed.evidence) == ("41", "turn", "command_lifecycle")
     assert landed.native_id == sent["uuid"]
     assert kinds(heard.reports[1:3]) == [InputDelivered, TurnStarted]
@@ -723,14 +722,6 @@ async def test_a_steer_that_missed_every_tool_says_it_landed_as_a_turn(tmp_path,
         landed = await heard.until(InputDelivered)
 
     assert landed.boundary == "turn"
-
-
-async def test_a_boundary_nobody_declared_is_refused(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
-        await heard.until(Ready)
-
-        with pytest.raises(DriverError, match="no model_call boundary"):
-            await driver.deliver(delivery(boundary="model_call"))
 
 
 async def test_a_harness_that_stopped_reading_holds_up_a_delivery_and_no_stop(tmp_path, stand):
@@ -770,11 +761,10 @@ async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(t
 
     async with running(make_spec(tmp_path)) as (driver, heard):
         await heard.until(TurnStarted)
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         reason = await heard.until(TurnEnded)
 
     assert reason == TurnEnded(reason="interrupted")
-    assert (receipt.boundary, receipt.queued) == ("turn", ())
 
 
 async def test_what_stays_queued_past_an_interrupt_is_named_by_its_input(tmp_path, stand):
@@ -784,9 +774,7 @@ async def test_what_stays_queued_past_an_interrupt_is_named_by_its_input(tmp_pat
         await heard.until(TurnStarted)
         await driver.deliver(delivery())
 
-        receipt = await driver.interrupt()
-
-    assert receipt.queued == ("41",)
+        await driver.interrupt()
 
 
 async def test_a_turn_that_finished_as_an_interrupt_came_stopped_on_its_own(tmp_path, stand):
@@ -822,7 +810,7 @@ async def test_an_approval_goes_to_the_runtime_and_its_answer_to_the_harness(tmp
     async with running(make_spec(tmp_path)) as (driver, heard):
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "allow")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
         await heard.until(TurnEnded)
 
     reply = next(frame for frame in stand.heard if frame["type"] == "control_response")["response"]
@@ -841,7 +829,7 @@ async def test_a_denial_says_so_and_its_outcome_is_read_from_the_harness(tmp_pat
     async with running(make_spec(tmp_path)) as (driver, heard):
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "deny")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
 
     reply = next(frame for frame in stand.heard if frame["type"] == "control_response")["response"]
     assert reply["response"]["behavior"] == "deny"

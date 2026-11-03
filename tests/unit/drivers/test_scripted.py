@@ -137,11 +137,10 @@ async def test_a_delivery_at_a_turn_boundary_waits_for_the_turn_to_end(tmp_path)
     driver, heard = await started(tmp_path, [Wait(), Say("first")], [Say("second")])
     await heard.until(TurnStarted)
 
-    receipt = await driver.deliver(delivery())
+    await driver.deliver(delivery())
     await heard.until(Item, lambda item: item.gist == "second")
     await driver.stop(1)
 
-    assert receipt.queued == ("d1",)
     order = [type(report) for report in heard.reports]
     assert order.index(TurnEnded) < order.index(InputDelivered)
 
@@ -220,9 +219,8 @@ async def test_hang_holds_until_interrupted_and_says_what_was_queued(tmp_path):
     await heard.until(TurnStarted)
     await driver.deliver(delivery())
 
-    receipt = await driver.interrupt()
+    await driver.interrupt()
 
-    assert receipt.queued == ("d1",)
     assert (await heard.until(TurnEnded)).reason == "interrupted"
     assert (await heard.until(Item)).gist == "next"
     await driver.stop(1)

@@ -114,7 +114,7 @@ async def _reconcile(host: Host, cwd: Path, effect: Effect, agents: dict[str, di
         case "workspace":
             await _finish(host, effect, {"path": str(cwd)})
         case "launch" if agent is not None and agent["state"] != "spawning":
-            await _finish(host, effect, {"native": agent["native"]})
+            await _finish(host, effect)
         case "launch":
             await _fail(host, effect, "its harness was launching when the runtime died, and has no id to resume by")
             if agent is not None:

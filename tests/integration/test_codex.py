@@ -257,7 +257,8 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
     async with FakeModel() as model:
         spec = on_fake_model(tmp_path, model)
         first, heard = CodexDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await first.deliver(delivery)
         delivered = await heard.until(InputDelivered)
         await heard.until(TurnEnded)
@@ -287,13 +288,12 @@ async def test_a_steer_lands_at_the_next_model_call_and_one_an_interrupt_dropped
         await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
         await asyncio.wait_for(model.call(0), TIMEOUT)
         await driver.deliver(steer)
-        receipt = await driver.interrupt()
+        await driver.interrupt()
         await heard.until(TurnEnded)
         delivered = await heard.until(InputDelivered)
         await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
         await driver.stop(2.0)
 
-    assert receipt.queued == ("41",)
     assert delivered.boundary == "turn"
     assert [turn.reason for turn in heard.of(TurnEnded)] == ["interrupted", "stopped"]
     assert model.calls[1].says("cinnabar")
@@ -328,7 +328,8 @@ async def test_a_tool_a_kill_cut_off_reads_as_aborted_on_resume_and_never_ran_ag
         spec = on_fake_model(tmp_path, model, goal="go", sandbox="workspace-write")
         os.mkfifo(spec.cwd / "pipe")
         first, heard = CodexDriver(), Heard()
-        native = (await first.start(spec, heard)).native
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await asyncio.to_thread((spec.cwd / "pipe").read_text)
         record = Record.read(spec.folder)
         assert record is not None
@@ -401,7 +402,8 @@ async def test_effort_reaches_the_model_and_comes_back_on_a_resume(tmp_path):
     async with FakeModel("ok") as model:
         spec = on_fake_model(tmp_path, model, goal="go", effort="low")
         driver, heard = CodexDriver(), Heard()
-        native = (await driver.start(spec, heard)).native
+        await driver.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -480,7 +482,7 @@ async def test_a_denied_command_never_runs_and_the_item_says_so(tmp_path):
         await driver.start(spec, heard)
         asked = await heard.until(ApprovalRequested)
         await driver.answer(asked.id, "deny")
-        decided = await heard.until(Item, lambda item: item.phase == "decided")
+        decided = await heard.until(Item, lambda item: item.approval is not None)
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
