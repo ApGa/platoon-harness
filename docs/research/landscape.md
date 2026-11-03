@@ -5,9 +5,9 @@ Which existing projects are like ours? Reviewed on 2026-11-03.
 Four sweeps each covered one category: tools that run and coordinate existing coding-agent CLIs, multi-agent frameworks, durable
 runtimes and agent-to-agent protocols, and training in harnesses. A verifier per category reopened every candidate the sweep ranked
 close, and corrected it. A final critic then tried to refute that no project combines what ours does, through more searches and a
-directory of about 60 orchestrators, https://github.com/bradAGI/awesome-cli-coding-agents, and added seven projects. Last, the 60
-GitHub repositories that entries below name were rechecked through the GitHub API for existence, license, archive state and last
-push, and all matched. Everything was read from READMEs, LICENSE files, docs and the GitHub API. No project was run, and no code was copied.
+directory of about 60 orchestrators, https://github.com/bradAGI/awesome-cli-coding-agents, and added seven projects. Everything was
+read from READMEs, LICENSE files, docs and the GitHub API, and the review's records keep what each read found. No project was run,
+and no code was copied.
 
 ## Inspected
 
@@ -19,7 +19,7 @@ a project has none, as read on 2026-11-03.
 | NTM | https://github.com/Dicklesworthstone/ntm | v1.38.0 | 2026-10-31 | MIT with an OpenAI/Anthropic rider |
 | Gas Town | https://github.com/gastownhall/gastown | v1.2.1; pushed 2026-10-28 | 2026-06-06 | MIT |
 | Beads | https://github.com/gastownhall/beads | v1.3.2 | 2026-10-24 | MIT |
-| Overstory | https://github.com/jayminwest/overstory | v0.11.0; archived 2026-05-28 | 2026-05-02 | MIT |
+| Overstory | https://github.com/jayminwest/overstory | v0.11.0; archived, last push 2026-05-28 | 2026-05-02 | MIT |
 | Oh My Subagents | https://github.com/ringlochid/oh-my-subagents | v0.3.2 | 2026-08-30 | MIT; `console/` under a Sustainable Use License |
 | Omnigent | https://github.com/omnigent-ai/omnigent | v0.20.0, alpha | 2026-10-28 | Apache-2.0 |
 | CLI Agent Orchestrator | https://github.com/awslabs/cli-agent-orchestrator | v2.5.3 | 2026-10-08 | Apache-2.0 |

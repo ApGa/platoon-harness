@@ -17,8 +17,9 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **Samples are small.** A row with one trial says so. These are cheap models, low effort and tasks that take seconds.
 - **Runs.** A run is one invocation of the live tests, which may hold several, so one number can head rows in more than one table. Only
   runs 17, 18 and 20 had the final preamble. The mixed team and the refused finish last ran on the one before it.
-- **Agents that stay,** sections 13 and 14, are runs 22 to 32, on the preamble with `stays` and the role's words last: 135 model calls
-  from 14 journals, of a limit of 160. Their transcripts and journals are kept outside the repository.
+- **Agents that stay,** sections 13 to 15, are runs 22 to 32, on the preamble with `stays` and the role's words last: 135 model calls
+  from 14 journals, of a limit of 160. Run 33 is one more, on the preamble that teaches `wait` for something named: 6 calls from one
+  journal, of a limit of 30. Their transcripts and journals are kept outside the repository.
 
 ## Results
 
@@ -221,15 +222,20 @@ meant, then ends it. `tests/live/test_stays.py`.
 | 25 | Claude Code | 13 | The same on the final wording, passing: three helper turns, the lead woken once by each answer and by nothing else, each time parked on `wait` with `from` |
 | 23 | Codex | 25 | Failed. The lead sent the follow-up before the first answer, and the helper, told it stays for the next message, held a `wait` for a message from the lead instead of answering, while the lead held one for the helper. Nothing moved until the test gave up at 180 s |
 | 24 | Codex | 6 | Failed. A human as the parent, on a second wording that said never to `wait` for the next message: on its first turn the helper held a `wait` for the human before answering |
-| 28 | Codex | 7 | Passed, on the final wording: an agent a human spawned with `stays` answered, stayed, and was interrupted, where in run 27 the same agent without `stays` finished at its second message |
+| 28 | Codex | 7 | Passed, on the final wording, in `tests/live/test_codex.py`: an agent a human spawned with `stays` answered, stayed, and was interrupted, where in run 27 the same agent without `stays` finished at its second message |
+| 33 | Codex | 6 | Passed, on the preamble that teaches `wait` for something named, in `tests/live/test_stays.py`: the child a human spawned with `stays` answered alpha, then beta, each by ending its turn, never called `wait`, and finished when told |
 
 The final wording for a child that stays reuses the words a root has been told since run 17, "a turn that only ends leaves you here for
-the next message", after both wordings that told a child it stays drew a held `wait` from Codex. On it a Codex child a human spawned
-answered and stayed, in run 28. The owner's flow on Codex has not been rerun on it, as its budget was spent. A child that waits on its parent keeps its answer from it either way: a turn that parks posts no
-report, and one that holds a `wait` has not ended.
+the next message", after both wordings that told a child it stays drew a held `wait` from Codex. On it a Codex agent a human spawned
+answered and stayed, in run 28, which is `test_codex.py`'s test. The Codex child of `test_stays.py` did not run on it: it had failed in
+run 24 on the wording before. Every preamble then still said to call `wait` "with nothing to do until something changes", which beside
+"answer by ending your turn" tells a child that has answered to park, so that sentence now teaches `wait` for something named, and on it
+that child passed in run 33. The owner's flow on Codex has not been rerun on either. A child that waits on its parent keeps its answer
+from it either way: a turn that parks posts no report, and one that holds a `wait` has not ended.
 
 In every Codex agent that began a turn on a task this stage, runs 23, 24 and 26, the first call was our `wait` with a `hold` or a
-`timeout` and nothing to wait on, which is refused. No Claude Code agent did so.
+`timeout` and nothing to wait on, which is refused. No Claude Code agent did so. In run 33, on the preamble that teaches `wait` for
+something named, the Codex child called no `wait` at all.
 
 A woken turn that opened by calling `message_read`, which then showed nothing the wake had not handed it: 0 of 20 such turns on Claude
 Code, and 2 of 14 on Codex, in runs 27 and 28. The delivery text is unchanged.

@@ -20,7 +20,7 @@ on our own runtime, with no model.
 | OpenCode | https://github.com/anomalyco/opencode | `ff90ed9` (2.2.5) | commit 2026-11-02 | MIT |
 | OpenHands SDK | https://github.com/OpenHands/software-agent-sdk | `9884945` (1.59.0) | commit 2026-11-01 | MIT |
 | OpenHands CLI | https://github.com/OpenHands/OpenHands-CLI | `283c6ac` (1.16.0, pins SDK 1.28.1) | commit 2026-10-22 | MIT |
-| pi and pi durable | https://github.com/earendil-works/pi | `c9f4c7b` (1.4.0) | commit 2026-11-01 | MIT |
+| pi and pi durable | https://github.com/earendil-works/pi | `c9f4c7b`, past 1.4.0 | commit 2026-11-01 | MIT |
 | ACP spec | https://github.com/agentclientprotocol/agent-client-protocol | `212f0ca` | commit 2026-11-01 | Apache-2.0 |
 | Agensh | https://github.com/microsoft/Agensh | `d6063b9` (v1.0.2) | commit 2026-10-30 | MIT |
 | DeLM | https://github.com/yuzhenmao/DeLM | `6661761` | commit 2026-10-08 | MIT |
@@ -28,7 +28,8 @@ on our own runtime, with no model.
 | Platoon | https://github.com/ApGa/platoon | `efe3b27` (0.5.0) | commit 2026-10-28 | MIT AND Apache-2.0 |
 
 Evidence is cited as `project@commit:path:line`, against the commit above. Claude Code docs are cited by page, since their line
-numbers belong to copies not kept here.
+numbers belong to copies not kept here. The License column is not from this review, whose records hold no license:
+[compatibility.md](../compatibility.md) records those of the upstreams it shares.
 
 ## Answer
 

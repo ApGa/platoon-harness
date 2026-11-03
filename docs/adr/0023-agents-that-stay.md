@@ -75,7 +75,9 @@ choose, several notify a parent for the first task only, and almost none bounds 
 - A session that closes ends no agent. One left idle has no end in the journal, which is unknown and not `cancelled`.
 - A child that waits on its parent keeps its answer from it: a turn that parks posts no report, and one that holds a `wait` has not
   ended. Twice on Codex a child told it stays for the next message did that, so the words for a child that stays say what a root's
-  have said since run 17, and nothing of waiting. On them a Codex child a human spawned answered and stayed, once, and a Codex lead and helper have not run.
+  have said since run 17, and nothing of waiting, and every agent is taught `wait` as how to wait for something named, never as what
+  to do with nothing to do. On those words the Codex child a human spawned answered twice by ending its turn, called no `wait`, and
+  finished when told, once, in run 33. A Codex lead and helper have not run on them.
 - Deferred, at M2: an idle child's process is released, and resumed natively at its next message, by the path a harness that dies
   while idle will take.
 - Deferred, at M3: Platoon gives one trajectory one reward, so a child's several tasks share one reward unless each becomes its own
@@ -89,5 +91,6 @@ choose, several notify a parent for the first task only, and almost none bounds 
   against FakeModel in `tests/integration`: one process, three turns, the lead woken by each answer and by nothing else.
 - On real models, [the spike](../research/spikes/real-harness.md), sections 13 to 15: the owner's flow passed on Claude Code in 13
   calls, and failed on Codex, where a child held a `wait` for its parent instead of answering. A Codex agent spawned with `stays`
-  answered and stayed, where without it a role's words alone did not keep it from finishing.
+  answered and stayed, in `tests/live/test_codex.py`, where without it a role's words alone did not keep it from finishing, and the
+  Codex child of `tests/live/test_stays.py` passed in run 33 once `wait` was taught for something named.
 - [Architecture section 7](../architecture.md), the monitor and Lifecycle, and section 8, `team check`.

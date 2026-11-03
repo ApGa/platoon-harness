@@ -1,6 +1,6 @@
 """The `codex` driver on a real model, on a native login. Set `PLATOON_HARNESS_LIVE=1` to run these, and say what ran.
 
-Budget: at most 30 model calls in all, each test stating its own, every one of them `gpt-6-luna` at low effort, or
+Budget: at most 37 model calls in all, each test stating its own, every one of them `gpt-6-luna` at low effort, or
 `claude-haiku-5-5` for the mixed team. A call an interrupt cut short reports nothing, so that one is counted by hand.
 """
 
