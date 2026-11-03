@@ -16,7 +16,7 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
   `tests/integration/test_request_shape.py`, on FakeModel, at no cost.
 - **Samples are small.** A row with one trial says so. These are cheap models, low effort and tasks that take seconds.
 - **Runs.** A run is one invocation of the live tests, which may hold several, so one number can head rows in more than one table. Only
-  runs 17 and 18 had the final preamble. The join, the mixed team and the refused finish last ran on the one before it.
+  runs 17, 18 and 20 had the final preamble. The mixed team and the refused finish last ran on the one before it.
 
 ## Results
 
@@ -58,6 +58,7 @@ A lead starts three workers and waits on their end.
 | 5 | Says to finish, mildly | 3, and never closed | 1 of 3 | 13 |
 | 6 | Final words for a worker | **2** | 3 of 3 | 15 |
 | 16 | Final words for a worker | **2**, and never finished, so the test failed | 3 of 3 | 15 |
+| 20 | Final | **2**, and it finished: settled | 3 of 3 | 14 |
 
 Two turns is one to spawn and one wake, which is what `a join of N costs one turn` means. In run 5 each worker's turn end woke the lead,
 as the design says it must, and the lead placed the same wait again. So the promise needs workers to finish, and that took one sentence.
