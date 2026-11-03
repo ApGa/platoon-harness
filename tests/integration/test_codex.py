@@ -49,6 +49,7 @@ from platoon_harness.tools import PREAMBLE
 
 from ..unit.drivers.support import Heard
 from ..unit.runtime.support import in_state, of_type, until
+from . import clients
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -664,3 +665,32 @@ async def test_a_required_server_that_refuses_us_fails_the_start_and_says_why(tm
         await driver.stop(2.0)
 
     assert not model.calls
+
+
+async def test_a_tail_of_live_text_joined_to_what_was_committed_is_the_text(tmp_path, monkeypatch):
+    async with FakeModel(clients.SAID) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.a_tail_joined_to_what_was_committed_is_the_text(team, tmp_path)
+
+
+async def test_stop_below_stops_the_turns_of_a_lead_and_its_child_and_keeps_both(tmp_path, monkeypatch):
+    async with FakeModel([Stall()]) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.stop_below_stops_the_turns_of_a_lead_and_its_child_and_keeps_both(team, tmp_path, model)
+
+
+async def test_an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(tmp_path, monkeypatch):
+    async with FakeModel([Stall()], "carried on") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(team, tmp_path, model)
+
+
+async def test_a_child_is_drawn_under_the_call_that_started_it(tmp_path, monkeypatch):
+    """A child is drawn under the tool item of the call that started it, whose `native_id` is the spawn's anchor."""
+    spawning = ToolCall("agent_spawn", clients.SPAWN, id="call_spawn", namespace="mcp__ph")
+    async with FakeModel(spawning, "spawned it") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        spawned, under, turn = await clients.a_child_and_the_call_that_started_it(team, tmp_path)
+
+    assert spawned.data["turn"] == turn
+    assert under and {item.data["native_id"] for item in under} == set(spawned.native.values())

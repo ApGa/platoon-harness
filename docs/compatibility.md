@@ -146,6 +146,10 @@ by a driver landing; only the row below changes.
   which it took as a wake or through a held `wait` with `from`. No woken turn, of 20 this stage, opened with a `message_read` that
   showed nothing new [R]. It passed again in runs 35 and 39, in 15 and 14 calls, the second on steps worded in an order no reading
   can mistake, and none of 17 woken turns in runs 34 to 39 opened with such a read [R].
+- What a client reads: a follower of live text was shown the start of the message item it became, a child spawned through our tool
+  is drawn under the tool item whose `native_id` is its spawn's anchor, and an interrupt under a stop below reached a child [L]. An
+  interrupt during a call under a `tokens` limit charged the cut turn its estimate, labelled `estimated`, and the session went on,
+  on FakeModel [L] and on `claude-haiku-5-5` in run 44, in 2 calls [R].
 - From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
   `session resume`, took the cut-off notice and settled [L]. On `claude-haiku-5-5`, as the lead `init` wrote, it took
   the job on stdin and a person's message from a second process, and settled with a Codex worker in 20 calls, run 41. Stopped by
@@ -159,7 +163,7 @@ by a driver landing; only the row below changes.
 - Tool found by the model: default 6 of 7 threads, each needing a discovery call. With `omit_tools_from: ["deferred"]`, 8 of 8.
 - `approvalPolicy: never` fails MCP calls closed unless `default_tools_approval_mode` is `approve`.
 - `accept` is not an outcome: 29 of 48 accepted commands ran and 19 failed with EROFS on identical input, cause not established.
-- Stable usage has no response id. `rawResponse/completed` has one but is internal-only. Interrupted calls report nothing, so a turn that stopped short reports a call `unavailable`, which a budget reads as unmeasured, as on Claude Code and pi.
+- Stable usage has no response id. `rawResponse/completed` has one but is internal-only. Interrupted calls report nothing, so a turn that stopped short reports a call `unavailable`, which a budget charges its estimate, as on Claude Code and pi. Under a `tokens` limit an interrupt during a call left the session to go on, on FakeModel [L] and on `gpt-6-luna` in run 45, where the cut call never reached the journal, as no frame says a call began [R].
 - `bearer_token_env_var` reaches the agent shell unless `shell_environment_policy.exclude` names it (1 trial).
 - Resume on a different provider is refused in the app-server README at the pinned clone, which is ahead of 0.164.0. Keep the provider the same.
 - The driver on 0.164.0, on FakeModel [L] and then on `gpt-6-luna` at low effort with a plan login [R]. `thread/start` answers with the effective model, effort and version, and calls no model. A thread has no rollout until its first turn, so one that took no turn cannot resume: `no rollout found`. `claude --resume` says the same of a session that took no turn, so the runtime starts such an agent anew, on either, and it took a message after an owner's stop and a resume [L].
@@ -198,11 +202,14 @@ by a driver landing; only the row below changes.
   taking each answer in its one turn by a held `wait` with `from`. In runs 34 to 39 no agent opened a turn with a `wait` that named
   nothing, and a helper's woken turn opened with a `message_read` that showed nothing new in 4 of 6 [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
 - The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
+- What a client reads: a follower of live text was shown the start of the message item it became, a child spawned through our tool
+  is drawn under the tool item whose `native_id` is its spawn's anchor, the call's own id with no Code Mode, and an interrupt under
+  a stop below reached a child [L].
 - From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
   `session resume`, took the cut-off notice and settled [L]. On `gpt-6-luna`, as the worker `init` wrote, it claimed
   and fixed both tasks of run 41 in one turn of 11 calls. Stopped by `session stop` during `sleep 20`, its interrupted call was
   reported `unavailable`, so a `tokens` limit refused the resume's wake `unavailable`, as section 7 of the architecture says, and the
-  run waited out its wall limit, run 42. With no `tokens` limit it resumed with the text it was told at launch, journaled again whole,
+  run waited out its wall limit, run 42, which a turn charged its estimate now prevents. With no `tokens` limit it resumed with the text it was told at launch, journaled again whole,
   looked for the file, found it missing and ran the command once, in 4 calls, run 43 [R].
 
 **pi 1.4.0, and the driver on 1.5.0.** [Report](research/adapter-others.md), [fixture](research/fixtures/pi-sample.jsonl).
@@ -238,6 +245,9 @@ by a driver landing; only the row below changes.
 - A warning from pi, such as a server of ours that failed, comes as `notify`, and is a `native` frame plus a gap. Pi connects a server after `ready`, so unlike on Claude Code and Codex this cannot fail the start, and the agent runs on with the gap [L].
 - From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
   `session resume`, took the cut-off notice and settled [L]. No live model has run it, as pi has no login here.
+- What a client reads: a follower of live text was shown the start of the message item it became, an interrupt under a stop below
+  reached a child, and an interrupt during a call under a `tokens` limit charged the cut turn its estimate and the session went on
+  [L]. Pi's calls reach us through the shim, whose id is its own and no item's, so a child is drawn under its spawner's turn [L].
 
 **openhands, SDK 1.59.0.** [Report](research/adapter-openhands.md), [fixture](research/fixtures/openhands-events-sample.json).
 

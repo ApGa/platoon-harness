@@ -22,6 +22,7 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
   journal, of a limit of 30. Their transcripts and journals are kept outside the repository.
 - **What an agent is launched with,** section 16, is runs 34 to 39, on a harness's own agents off by default and the preamble as a
   template: 88 model calls from 10 journals, of a limit of 100, with their transcripts and journals kept outside the repository too.
+- **An interrupt under a `tokens` limit,** section 18, is runs 44 and 45: 3 model calls from 2 journals, of a limit of 20.
 - **The command line,** section 17, is runs 40 to 43, through the installed `platoon-harness`: 31 model calls from 4 journals, of a
   limit of 50, with their transcripts and journals kept outside the repository too.
 
@@ -295,6 +296,19 @@ something named. A woken turn that opened with a `message_read` showing nothing 
 Run 42 is the cost section 5 of this note foresaw: a limit in tokens leaves a resume after a stop to a person whenever the cut turn
 went unmeasured, which on Codex is always, as an interrupted call reports nothing. No agent opened a turn with a `wait` that named
 nothing, and no unknown frame came.
+
+### 18. An interrupt under a `tokens` limit
+
+`tests/live/test_interrupts.py`, through the public `Session`, a `tokens` limit of 2,000,000 with an estimate of 200,000 a turn.
+The agent is asked for a long story and interrupted as its turn begins, while its first call is under way, then asked for one
+word.
+
+| Run | Harness | Calls | What happened |
+|---|---|---|---|
+| 44 | Claude Code | 2 | Passed. The cut call reported usage `unavailable`, so the turn was charged its estimate, 200,000, labelled `estimated`, with 1 unmeasured. The next message woke the agent under the same limit, and the session settled at 221,846 tokens, `estimated` |
+| 45 | Codex | 1 | Passed the same way, at 215,123. The cut call never reached the journal, as no Codex frame says a call began, so the journal counts 1 call where the provider heard 2 |
+
+Run 42 is the case these close: there a turn a stop cut left every later reservation in `tokens` refused `unavailable`.
 
 ## What a real model did that scripted harnesses could not show
 

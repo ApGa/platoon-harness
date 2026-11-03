@@ -140,6 +140,7 @@ class Deaf(ScriptedDriver):
 
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
+SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
 
 HARNESSES = {
     "lead": lambda: Lead([FIX_THE_TEST]),
@@ -150,6 +151,7 @@ HARNESSES = {
     "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),
     "saying": lambda: ScriptedDriver(itertools.repeat([Say("done")])),
     "asks_more": lambda: ScriptedDriver(FOLLOWING_UP),
+    "spawning": lambda: ScriptedDriver(SPAWNING),
     "exiting": lambda: ScriptedDriver([[Exit()]]),
     "listening": lambda: ScriptedDriver(LISTENING),
     "returning": lambda: Returning([[Hang()]]),
@@ -182,6 +184,13 @@ def following_up(team: Team) -> Team:
     lead = {"harness": inside("asks_more"), "may_spawn": ["bob"]}
     topology = {"edges": {"lead": ["children"]}, "limits": {"max_hops": 8}}
     return Team.model_validate({**given, "roles": {**given["roles"], "lead": lead}, "topology": topology})
+
+
+def over(team: Team) -> Team:
+    """`team`, whose one role is `bob`, under a scripted lead that spawns `bob` as `w` and goes on working itself."""
+    given = team.canonical()
+    lead = {"harness": inside("spawning"), "may_spawn": ["bob"]}
+    return Team.model_validate({**given, "roles": {**given["roles"], "lead": lead}, "topology": {"edges": {}}})
 
 
 def manager_worker(lead: Any, worker: Any, **roles: Any) -> Team:
