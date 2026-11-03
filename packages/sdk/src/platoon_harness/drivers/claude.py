@@ -86,6 +86,7 @@ _SAYS_NOTHING = frozenset(
         "tool_progress",
         "system/api_retry",
         "system/task_notification",
+        "system/task_progress",
         "system/task_updated",
         "system/thinking_tokens",
     }

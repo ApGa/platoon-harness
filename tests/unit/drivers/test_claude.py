@@ -614,6 +614,7 @@ async def test_frames_with_nothing_for_us_say_nothing(tmp_path, stand):
         {"type": "tool_progress", "tool_use_id": "t-heartbeat-0", "parent_tool_use_id": "t"},
         {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 1},
         {"type": "system", "subtype": "api_retry", "attempt": 1},
+        {"type": "system", "subtype": "task_progress", "task_id": "child", "usage": {"total_tokens": 7}},
         {"type": "system", "subtype": "task_updated", "patch": {}},
         {"type": "system", "subtype": "task_notification", "status": "completed"},
     ]
