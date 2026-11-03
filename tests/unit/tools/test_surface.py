@@ -448,10 +448,8 @@ async def test_the_default_template_says_byte_for_byte_what_the_preamble_said(na
                 assert preamble(kernel, agent, surface) == before_templates(kernel, agent, surface)
 
 
-async def test_a_template_fills_its_slots_and_leaves_out_a_line_of_slots_that_comes_out_blank(
-    kernel, server, lead, worker
-):
-    template = "{{{name}}} holds {tools}\n\n{roles}\n{peers} {channels}\n {help} \nEnd: {ending}"
+async def test_a_template_fills_its_slots_with_values_and_sentences(kernel, server, lead, worker):
+    template = "{{{name}}} holds {tools}\n\nStart {roles}.\nWrite to {peers} on {channels}.\n {help} \nEnd: {ending}"
 
     text = preamble(kernel, worker[0], harness_name("coord"), template)
 
@@ -459,21 +457,21 @@ async def test_a_template_fills_its_slots_and_leaves_out_a_line_of_slots_that_co
     assert lines[0].startswith("{w1} holds `mcp__coord__agent_finish`")
     assert lines[1:] == [
         "",
-        "You can message: @lead. Channels: notes (board), tasks (queue).",
+        "Write to @lead on notes (board), tasks (queue).",
         "End: When your goal is done, make `mcp__coord__agent_finish` your last call, with your report: a turn that "
         "only ends leaves you idle, and whoever waits on you still waiting.",
     ]
 
 
-async def test_a_template_s_own_words_name_a_tool_as_its_surface_does_and_are_never_dropped(kernel, server, lead):
-    """A line with words of its own is kept whatever its slots come to, so a template's words all reach the agent."""
+async def test_a_line_whose_slots_all_come_out_empty_is_left_out_words_and_all(kernel, server, lead):
+    """A line with no slot is never dropped, and its words name a tool as the surface does. One with a slot that says
+    something is kept whole."""
     narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
+    template = "Call `task.claim`, then `wait`.\nIn French: {peers} {channels}\nYou are {name}. {help}\n{ending}"
 
-    text = preamble(
-        kernel, narrow, harness_name("coord"), "Call `task.claim`, then `wait`.\nIn French. {peers}\n{ending}"
-    )
+    text = preamble(kernel, narrow, harness_name("coord"), template)
 
-    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nIn French. "
+    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nYou are n1. "
 
 
 async def test_an_empty_template_tells_nothing_but_a_role_s_words(kernel, server, lead):

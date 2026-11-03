@@ -71,6 +71,9 @@
 
 ### Changed
 
+- The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
+  them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's
+  `instructions`, is never dropped. The default renders byte for byte as before. ADR 0025 is amended.
 - The owner's flow in `tests/live/test_stays.py` words its steps in an order no reading can mistake: on the old words a Codex
   lead sent the follow-up at once, in run 36, and it landed in the helper's first turn.
 - The monitor wakes a parent once for the spawn and once for each message of its own the first time it lands in its child's turn, in

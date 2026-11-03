@@ -1,6 +1,6 @@
 # 0025. What an agent is told is a template
 
-**Status:** Accepted, 2026-11-03
+**Status:** Accepted, 2026-11-03. Amended the same day: `peers`, `roles` and `channels` are values, as the owner was told.
 
 ## Context
 
@@ -13,12 +13,14 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 
 - **A template on the team, and one on a role in its place.** `preamble`, as the code already called it. Left out it is `PREAMBLE`,
   which renders what the code said before byte for byte, for every preset's roles on each surface, as a test holds.
-- **Slots are words in braces**, `{{` and `}}` write a brace, and the runtime fills them per agent and per surface: `name` and `tools`
-  are values, and `help`, `peers`, `roles`, `channels`, `waiting` and `ending` are sentences of ours, empty where they would say
-  nothing, and taught as before, so one naming a tool the agent lacks is left out. A line that holds a slot and comes out blank is
-  left out, so no word of a template's is, and a slot nobody fills is refused when the team loads.
-- **Words a user wrote name tools as the surface does and are never dropped.** An op in backticks, in a template's words or in
-  `Role.instructions`, becomes the surface's tool name. `team check` warns of one a role cannot hold, and of a template that leaves out
+- **Slots are words in braces**, `{{` and `}}` write a brace, and the runtime fills them per agent and per surface: `name`, `tools`,
+  `peers`, `roles` and `channels` are values, as `@a, @b` for `peers`, and `help`, `waiting` and `ending` are sentences of ours, taught
+  as before, so one naming a tool the agent lacks is left out. Each is empty where it would say nothing. The default carries our words
+  around the values, as `You can message: {peers}.`, so a template words those lines as it likes. A line whose slots all come out
+  empty is left out, words and all. A line with no slot, and every word of `Role.instructions`, is never dropped. A slot nobody fills
+  is refused when the team loads.
+- **Words a user wrote name tools as the surface does.** An op in backticks, in a template's words or in `Role.instructions`, becomes
+  the surface's tool name. `team check` warns of one a role cannot hold, and of a template that leaves out
   `tools` or `ending`, saying what breaks: an empty template leaves out both, and tells the role's words alone. A harness that reaches
   none of our tools is told `instructions` alone, so `team check` refuses a role's own template there and warns of its team's. The
   role's own words come last.
@@ -36,8 +38,8 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 | Append that line after the line holding `{tools}` | A rule a template writer cannot see or move |
 | `str.format` with its full grammar | Attributes, indexes and format specs fill nothing here, and a template is a user's text: a slot is a word, and anything else is refused |
 | Drop a user's sentence that names a tool the role lacks, as ours are | Words a user wrote are theirs. A warning before any cost says what is wrong |
-| `peers`, `roles` and `channels` as values, for a user's own sentence | A line whose value came out empty would lose the user's words on it, or say nothing |
-| Leave out a line whose slots are all empty, words and all, with a warning | Words a user wrote would still go |
+| `peers`, `roles` and `channels` as sentences of ours, and a template's own words kept whatever their slots came to | A template could not word a line around a value, and the owner had been told they would be values. A line around a value that came out empty, as `You can message: .`, says nothing, so it goes, words and all |
+| Warn of a template line that can come out empty | Whether it does depends on the agent and the moment, and going is what a line of words around a value asks for |
 | Render the text again at a resume | Claude Code and Codex keep what a session began with, so the journal would hold words no model heard |
 | Record the whole system prompt | It is the harness's and the user's, and on a native login only the harness sees it |
 | Render `told` from the team alone | Who an agent can reach comes from the live graph, so a second derivation would drift from the one a session uses |
@@ -46,7 +48,7 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 
 - A session's record shows what every agent was told, and a test reads it back from the first request on each real binary.
 - A template that leaves out `tools` or `ending` runs, with a warning, since a team may teach those its own way.
-- The CLI will print `told(team)`.
+- `platoon-harness team told` prints `told(team)`.
 
 ## Evidence
 
