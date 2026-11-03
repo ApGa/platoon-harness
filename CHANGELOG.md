@@ -90,6 +90,9 @@
 - `before` and `streams` on `Kernel.read`, and through every link form, as `Session.page`: a page back from `before`, still in
   order, whose cursor is the next `before`, and a set of stream names a page holds, so a transcript pages back without reading the
   journal whole. `Session.events` takes `streams` too. bug-clients-3.
+- `Session.marks()` and `Session.mark(stream, seq)`: how far a person has read each stream, kept per principal in
+  `marks.sqlite` beside the journal, with no runtime, and apart from an agent's cursor, so moving a mark acknowledges nothing.
+  `Link.principal` names who a link acts as. bug-clients-7.
 
 ### Changed
 

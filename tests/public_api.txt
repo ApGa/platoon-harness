@@ -244,6 +244,7 @@ platoon_harness.runtime.paths.HOME_VARIABLE
 platoon_harness.runtime.paths.LOG
 platoon_harness.runtime.paths.Listed
 platoon_harness.runtime.paths.MANIFEST
+platoon_harness.runtime.paths.MARKS
 platoon_harness.runtime.paths.OWNER_TOKEN
 platoon_harness.runtime.paths.RUNNING
 platoon_harness.runtime.paths.Running

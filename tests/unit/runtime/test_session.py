@@ -16,7 +16,7 @@ from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import MANIFEST
+from platoon_harness.runtime.paths import MANIFEST, MARKS
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 from ...integration.scripts import wire
@@ -76,6 +76,8 @@ DERIVED = {
     "get_body": "the link",
     "head": "the link",
     "leave": "the runtime",
+    "mark": "marks.sqlite",
+    "marks": "marks.sqlite",
     "page": "the link",
     "put_body": "the link",
     "reply": "message.send",
@@ -369,6 +371,68 @@ async def test_history_pages_back_as_a_runtime_does(tmp_path):
             back, before = [*page.events, *back], page.cursor
 
     assert [event.seq for event in back[: len(live)]] == [event.seq for event in live]
+
+
+async def test_moving_a_persons_mark_never_acknowledges_a_delivery(tmp_path):
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted([Hang()]), "delivery": "next-turn"}}})
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.create_channel("news", "topic", readers=["role:bob"])
+        await session.send("#news", "for bob's next turn")
+        head = await session.head()
+        unread = await until(lambda: roster(session), session, lambda rows: rows["bob"]["unread"] == 1)
+
+        await session.mark("channel/news", head)
+
+        assert await session.marks() == {"channel/news": head}
+        assert await session.head() == head
+        assert (await roster(session))["bob"]["unread"] == unread["bob"]["unread"]
+
+
+async def test_a_mark_is_a_persons_own(tmp_path):
+    folder = tmp_path / "s"
+    folder.mkdir()
+
+    session_module._mark(folder, "human:ada", "inbox/ada", 7)
+    session_module._mark(folder, "human:ada", "inbox/ada", 3)
+    session_module._mark(folder, "human:bea", "inbox/ada", 9)
+
+    assert session_module._marks_of(folder, "human:ada") == {"inbox/ada": 3}
+    assert session_module._marks_of(folder, "human:cy") == {}
+
+
+async def test_losing_the_marks_loses_only_badges(tmp_path):
+    async with Session.start(solo([Say("still here")]), root=tmp_path) as session:
+        await session.mark("inbox/bob", 1)
+        (session.folder / MARKS).unlink()
+
+        assert await session.marks() == {}
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "item.recorded"), session)
+
+
+async def test_marks_need_no_runtime_and_reading_them_writes_nothing(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path):
+        pass
+
+    async with Session.attach("s", view=True, root=tmp_path) as history:
+        assert await history.marks() == {}
+        assert not (history.folder / MARKS).exists()
+        await history.mark("agent/bob", 2)
+        assert await history.marks() == {"agent/bob": 2}
+
+
+@pytest.mark.parametrize(("stream", "seq"), [("", 1), ("x" * 513, 1), ("inbox/\n", 1), ("inbox/bob", -1)])
+async def test_a_mark_that_names_no_stream_or_seq_is_refused(tmp_path, stream, seq):
+    with pytest.raises(Refused) as refused:
+        session_module._mark(tmp_path, "human:ada", stream, seq)
+
+    assert refused.value.refusal.code == "invalid"
+
+
+async def roster(session: Session) -> dict[str, dict[str, Any]]:
+    rows = (await anext(aiter(session.watch("roster"))))["rows"]
+    return {row["agent"]: row for row in rows}
 
 
 async def test_history_ends_where_the_journal_does(tmp_path):

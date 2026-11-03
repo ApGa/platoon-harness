@@ -22,6 +22,7 @@ RUNNING = "runtime.json"
 OWNER_TOKEN = "owner.token"
 VIEW_TOKEN = "view.token"
 LOG = "runtime.log"
+MARKS = "marks.sqlite"
 
 _SOCKET_LIMIT = 103
 _HASH_LENGTH = 16
@@ -32,6 +33,7 @@ __all__ = [
     "HOME_VARIABLE",
     "LOG",
     "MANIFEST",
+    "MARKS",
     "OWNER_TOKEN",
     "RUNNING",
     "VIEW_TOKEN",

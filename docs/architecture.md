@@ -1252,6 +1252,10 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
 
+**Marks.** A person's mark is how far they have read a stream, a `seq` per stream, kept per principal in `marks.sqlite`, which
+`Session.marks` reads and `Session.mark` moves, on a live session or a closed one, with no runtime. It is neither evidence nor a
+view, and no agent's cursor, so moving one writes no event and acknowledges no delivery, and losing the file loses only badges.
+
 `activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
 turn did not stop on its own, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
 `Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `needs-you` is a derived group, not a state. `actions[]` are

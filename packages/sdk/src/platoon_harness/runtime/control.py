@@ -48,6 +48,11 @@ class Link(Protocol):
     @property
     def clock(self) -> Clock: ...
 
+    @property
+    def principal(self) -> str:
+        """Who this link acts as."""
+        ...
+
     async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome: ...
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome: ...
@@ -101,6 +106,10 @@ class Local:
     @property
     def clock(self) -> Clock:
         return self._kernel.clock
+
+    @property
+    def principal(self) -> str:
+        return self._principal.id
 
     def _refuse_writes(self) -> None:
         if self._denied is not None:
@@ -208,6 +217,7 @@ class Remote:
     def __init__(self, peer: Peer, running: asyncio.Task[None]) -> None:
         self._peer = peer
         self._running = running
+        self._principal = ""
 
     @classmethod
     async def connect(cls, folder: Path, *, view: bool = False) -> Self:
@@ -233,11 +243,16 @@ class Remote:
 
     async def hello(self, token: str) -> None:
         """Say the credential that binds this connection. It is said once."""
-        await self._call("hello", {"token": token, "protocol": PROTOCOL})
+        said = await self._call("hello", {"token": token, "protocol": PROTOCOL})
+        self._principal = said["principal"]
 
     @property
     def clock(self) -> Clock:
         return SystemClock()
+
+    @property
+    def principal(self) -> str:
+        return self._principal
 
     async def _call(self, method: str, params: Mapping[str, Any]) -> Any:
         try:

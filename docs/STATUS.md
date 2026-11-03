@@ -147,7 +147,7 @@ under Runtime below, so every effect is now performed. One real harness has met 
 | Nothing withdraws a sent message | tested | `test_delivery.py`, `test_nothing_withdraws_a_sent_message`: no op takes an entry back, and after an interrupt what it quieted is read before the correction that followed |
 | `topology.patch`, `topology.show` | planned | Named in architecture sections 6 and 8. Neither is in the registry yet |
 | `platoon_harness.patterns`, the library tier of architecture section 6 | planned | |
-| Per-human unread positions in `marks.sqlite`, architecture section 4 | planned | Nothing creates the file yet. The UI that shows badges arrives with the clients |
+| Per-person unread positions in `marks.sqlite`, architecture sections 4 and 12: a `seq` per stream and principal, read by `Session.marks` and moved by `Session.mark`, live or closed with no runtime, writing no event and acknowledging no delivery, and losing the file losing only badges. bug-clients-7 is closed | tested | `tests/unit/runtime/test_session.py`, `test_moving_a_persons_mark_never_acknowledges_a_delivery`, `test_a_mark_is_a_persons_own`, `test_losing_the_marks_loses_only_badges`, and on history with a view credential, where reading writes no file. No client draws a badge yet |
 | `docs/security.md`, and guides for training, the TUI and SwarmChat | planned | The architecture holds their promises until then. `doctor` is under Command line |
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | tested | `tests/unit/runtime/test_opening.py` |
 | An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |

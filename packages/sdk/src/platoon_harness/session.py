@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -31,7 +32,7 @@ from platoon_harness.rpc import Closed
 from platoon_harness.runtime import GRACE, Authority, Runtime
 from platoon_harness.runtime.control import History, Link, Local, Remote
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import LOG, MANIFEST, find_root, open_log, read_running, session_folder
+from platoon_harness.runtime.paths import LOG, MANIFEST, MARKS, find_root, open_log, read_running, session_folder
 from platoon_harness.schema import seconds
 from platoon_harness.team import Team
 
@@ -43,6 +44,12 @@ _ATTEMPTS = 8
 _LOG_TAIL = 2048
 _CLIENT_SECONDS = 1.0
 _WAITED_OUT = ("not_permitted", "unavailable")
+_STREAM_LENGTH = 512
+_MARKS_TABLE = """
+CREATE TABLE IF NOT EXISTS marks(
+    person TEXT NOT NULL, stream TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (person, stream)
+) WITHOUT ROWID, STRICT
+"""
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
 Span = str | float
@@ -713,6 +720,16 @@ class Session:
             if state["snapshot"] or state["rows"] or state["removed"]:
                 yield state
 
+    async def marks(self) -> dict[str, int]:
+        """How far you have read each stream, as you marked it, by stream: where a badge counts from. A mark is neither
+        evidence nor a view, and an agent's cursor is no mark, so losing `marks.sqlite` loses only these."""
+        return _marks_of(self.folder, self._current().principal)
+
+    async def mark(self, stream: str, seq: int) -> None:
+        """Mark that you have read `stream` through `seq`. It writes no event and acknowledges nothing an agent was
+        handed, with a runtime or without one."""
+        _mark(self.folder, self._current().principal, stream, seq)
+
     async def put_body(self, body: bytes) -> str:
         """Store a body and return its ref, which `body=` takes. An orphan is harmless."""
         return f"sha256:{await self._over_link(lambda link: link.put_body(body))}"
@@ -728,6 +745,30 @@ class Session:
     async def tombstone(self, ref: str) -> None:
         """Redact a body: reads stop now, and its bytes follow. Events citing its hash stay whole."""
         await self._do("body.tombstone", sha256=ref.removeprefix("sha256:"))
+
+
+def _marks_of(folder: Path, person: str) -> dict[str, int]:
+    """A person's marks. Reading writes nothing, so a folder nobody marked stays as it was."""
+    if not (folder / MARKS).exists():
+        return {}
+    try:
+        with contextlib.closing(sqlite3.connect(f"{(folder / MARKS).as_uri()}?mode=ro", uri=True)) as db:
+            return dict(db.execute("SELECT stream, seq FROM marks WHERE person = ?", (person,)).fetchall())
+    except sqlite3.Error as error:
+        raise Refused("unavailable", f"marks cannot be read: {error}") from None
+
+
+def _mark(folder: Path, person: str, stream: str, seq: int) -> None:
+    if not (stream.isprintable() and 0 < len(stream) <= _STREAM_LENGTH) or isinstance(seq, bool) or seq < 0:
+        raise Refused("invalid", f"a mark is a stream name of at most {_STREAM_LENGTH} characters and a seq")
+    try:
+        with contextlib.closing(sqlite3.connect(folder / MARKS, timeout=_CLIENT_SECONDS * 5)) as db, db:
+            db.execute(_MARKS_TABLE)
+            db.execute(
+                "INSERT INTO marks VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET seq = excluded.seq", (person, stream, seq)
+            )
+    except sqlite3.Error as error:
+        raise Refused("unavailable", f"marks cannot be written: {error}") from None
 
 
 def _unclaim(folder: Path) -> None:
