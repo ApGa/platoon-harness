@@ -170,6 +170,24 @@ def test_a_role_that_stays_on_a_harness_that_cannot_is_refused():
     assert found == ["roles.worker.stays: a one-shot harness ends with its turn, so it cannot stay"]
 
 
+def test_a_role_that_allows_its_harness_s_own_agents_is_told_what_is_lost():
+    team = Team(roles={"lead": Role(harness="claude", native_children=True)})
+    capabilities = {"claude": Capabilities(persistent=True, native_children="observed")}
+
+    assert warnings(team, capabilities=capabilities) == [
+        "roles.lead.native_children: its harness's own agents are none of ours: their calls reach us only in their "
+        "parent's total, no topology binds them, and their calls to our tools go out on their parent's token"
+    ]
+
+
+def test_a_role_that_allows_agents_its_harness_never_starts_is_told_so():
+    team = Team(roles={"lead": Role(harness="pi", native_children=True)})
+
+    assert warnings(team, capabilities={"pi": BLIND}) == [
+        "roles.lead.native_children: `pi` starts no agents of its own, so this allows nothing"
+    ]
+
+
 def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():
     blind = {"pi": BLIND}
     team = Team(roles={"a": Role(harness="pi")}, budget=Budget(usd=5))

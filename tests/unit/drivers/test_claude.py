@@ -190,13 +190,21 @@ async def test_the_launch_is_the_one_path(tmp_path, stand):
         "--permission-mode",
         "default",
         "--disallowedTools",
-        "AskUserQuestion",
+        "AskUserQuestion,Agent,Workflow,ListAgents,SendMessage",
         "--session-id",
     ]
     assert argv[14] == ready.native
     assert argv[argv.index("--model") + 1] == "fake-model"
     assert argv[argv.index("--allowedTools") + 1] == "mcp__ph__*"
     assert Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text() == "the preamble"
+
+
+async def test_a_role_that_allows_its_harness_s_own_agents_keeps_them(tmp_path, stand):
+    async with running(make_spec(tmp_path, goal="", native_children=True)) as (_, heard):
+        await heard.until(Ready)
+
+    argv = stand.launch["argv"]
+    assert argv[argv.index("--disallowedTools") + 1] == "AskUserQuestion"
 
 
 async def test_it_leaves_the_user_s_setup_and_the_runtime_s_approvals_alone(tmp_path, stand):

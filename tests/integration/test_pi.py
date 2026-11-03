@@ -138,7 +138,13 @@ async def test_the_pi_driver_conforms(tmp_path):
     assert result.failed == (), str(result)
     assert (result.driver, result.version) == ("pi", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"tool_item_carries_its_anchor", "native_child_seen", "one_shot_exits", "declared_but_unproven"}
+    assert skipped == {
+        "tool_item_carries_its_anchor",
+        "native_children_off_by_default",
+        "native_child_seen",
+        "one_shot_exits",
+        "declared_but_unproven",
+    }
     earned = levels(PiDriver().describe().capabilities, Profile(driver="pi", version=result.version), result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons

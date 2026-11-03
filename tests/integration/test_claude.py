@@ -32,7 +32,17 @@ from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import read_running
 from platoon_harness.team import AuthProfile
-from platoon_harness.testing import NAMESPACE, TOOL, FakeModel, FakeTools, Stall, Text, ToolCall, check_driver
+from platoon_harness.testing import (
+    NAMESPACE,
+    TOOL,
+    FakeModel,
+    FakeTools,
+    Request,
+    Stall,
+    Text,
+    ToolCall,
+    check_driver,
+)
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 
 from ..unit.drivers.support import Heard
@@ -239,6 +249,37 @@ async def test_a_question_no_verdict_can_answer_is_not_offered(tmp_path):
 
     assert not model.calls[0].offers("AskUserQuestion")
     assert model.calls[0].offers(BASH)
+
+
+NATIVE_CHILDREN = ("Agent", "Workflow", "ListAgents", "SendMessage")
+
+
+async def first_request(tmp_path: Path, **fields: Any) -> Request:
+    tmp_path.mkdir(exist_ok=True)
+    async with FakeModel("ok") as model:
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go", **fields), heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+    return model.calls[0]
+
+
+async def test_its_own_agents_are_off_unless_a_role_allows_them_and_agent_teams_add_nothing(tmp_path):
+    """`Agent` and `Workflow` start agents of the harness's own, and `ListAgents` and `SendMessage` reach them, and
+    other Claude sessions on the machine too. A user who turns agent teams on in their settings gets no tool more in
+    `-p`."""
+    settings = tmp_path / "home" / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}}))
+
+    off = await first_request(tmp_path / "off")
+    teams = await first_request(tmp_path)
+    allowed = await first_request(tmp_path / "allowed", native_children=True)
+
+    assert not {*off.tools, *teams.tools} & set(NATIVE_CHILDREN)
+    assert not off.says("SendMessage") and not off.says("Available agent types")
+    assert {"Agent", "Workflow", "ListAgents"} <= set(allowed.tools) and allowed.says("SendMessage")
+    assert set(teams.tools) == set(off.tools)
 
 
 async def test_the_token_reaches_the_server_from_the_environment_and_no_file_holds_it(tmp_path):

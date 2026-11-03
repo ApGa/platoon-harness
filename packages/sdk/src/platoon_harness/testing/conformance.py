@@ -569,11 +569,28 @@ def _parenting(capabilities: Capabilities) -> str | None:
 
 
 @_check(_parenting)
+async def native_children_off_by_default(rig: _Rig) -> None:
+    """A harness's own agents are off unless a role allows them, as `spec.native_children` says."""
+    if rig.options.child is None:
+        raise _Skipped("nothing was given that names this harness's tool for a native child")
+    name = rig.options.child.name
+    await rig.start()
+    _expect(name not in (await rig.call(0)).tools, f"the first request offers {name} on the default launch")
+    await rig.until(TurnEnded)
+    await rig.driver.stop(_GRACE)
+    next_call = len(rig.model.calls)
+
+    await rig.restart(native_children=True)
+
+    _expect(name in (await rig.call(next_call)).tools, f"the first request does not offer {name} once allowed")
+
+
+@_check(_parenting)
 async def native_child_seen(rig: _Rig) -> None:
     if rig.options.child is None:
         raise _Skipped("nothing was given that makes this harness start a native child")
     rig.model.script([rig.options.child])
-    await rig.start()
+    await rig.start(native_children=True)
 
     await rig.until(ChildSeen)
 

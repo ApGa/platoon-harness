@@ -79,6 +79,7 @@ def test_every_check_a_level_reads_exists():
         "tool_item_carries_its_anchor",
         "stop_ends_a_running_tool",
         "unset_model_refused",
+        "native_children_off_by_default",
         "native_child_seen",
         "denial_holds",
         "effort_honored_or_refused",
@@ -569,6 +570,38 @@ async def test_a_child_nothing_starts_is_a_skip_and_no_pass(tmp_path):
     result = await check(lambda: Parent(seen=True), tmp_path)
 
     assert result.get("native_child_seen").state == "skipped"
+
+
+class Spawning(Parent):
+    """A harness whose own tool for a child is shown once a role allows it, or always."""
+
+    def __init__(self, *, always: bool) -> None:
+        super().__init__(seen=False)
+        self._always = always
+
+    async def _list_tools(self) -> tuple[str, ...]:
+        names = await super()._list_tools()
+        if self._always or self._spec.native_children:
+            self._tools.append({"type": "function", "function": {"name": "spawn", "parameters": {}}})
+        return names
+
+
+async def test_a_harness_s_own_children_off_until_allowed_passes(tmp_path):
+    result = await check(lambda: Spawning(always=False), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_children_off_by_default").state == "passed"
+
+
+async def test_a_harness_that_offers_its_own_children_unasked_fails(tmp_path):
+    result = await check(lambda: Spawning(always=True), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_children_off_by_default").reason == "the first request offers spawn on the default launch"
+
+
+async def test_whether_a_harness_s_own_children_are_off_is_a_skip_with_nothing_to_name_them(tmp_path):
+    result = await check(lambda: Spawning(always=True), tmp_path)
+
+    assert result.get("native_children_off_by_default").state == "skipped"
 
 
 async def test_our_tool_goes_by_the_name_a_harness_s_model_knows_it_by(tmp_path):

@@ -225,6 +225,14 @@ async def test_a_role_has_the_last_word_in_its_agents_instructions(tmp_path, rec
     )
 
 
+@pytest.mark.parametrize("allowed", [False, True])
+async def test_a_harness_starts_agents_of_its_own_only_where_its_role_allows(tmp_path, recording, allowed):
+    async with Session.start(solo_with(recording, native_children=allowed), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+    assert recording.specs[0].native_children is allowed
+
+
 async def test_a_narrowed_role_keeps_ops_list_so_it_keeps_its_tools(tmp_path):
     async with Session.start(solo(tools=["wait"]), root=tmp_path) as session:
         await in_state(session, "bob", "idle")

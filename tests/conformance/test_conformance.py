@@ -31,6 +31,7 @@ ONE_SHOT_SKIPS = {
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
     "unset_model_refused",
+    "native_children_off_by_default",
     "native_child_seen",
     "denial_holds",
     "effort_honored_or_refused",
@@ -41,6 +42,7 @@ SCRIPTED_SKIPS = {
     "declared_but_unproven",
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
+    "native_children_off_by_default",
     "native_child_seen",
 }
 

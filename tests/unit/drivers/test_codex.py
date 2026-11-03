@@ -183,6 +183,7 @@ async def test_the_launch_is_the_one_path_and_every_approval_comes_to_the_runtim
             "omit_tools_from": ["deferred"],
         }
     }
+    assert thread["config"]["agents"] == {"enabled": False}
     assert (ready.native, ready.version, ready.effective_model) == ("thread-1", "9.9.9", "fake-model")
     assert ready.tools_visible is None
 
@@ -213,7 +214,7 @@ async def test_what_the_user_set_stays_in_what_replaces_it(tmp_path, stand):
 
 
 async def test_nothing_is_set_that_the_role_left_to_the_user(tmp_path, stand):
-    async with running(make_spec(tmp_path, goal="")) as (_, heard):
+    async with running(make_spec(tmp_path, goal="", native_children=True)) as (_, heard):
         await heard.until(Ready)
 
     thread = stand.asked("thread/start")

@@ -447,7 +447,7 @@ async def test_a_compaction_reports_its_call_and_a_gap_for_what_it_forgot(tmp_pa
 async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_path):
     async with FakeModel(CHILD, "the parent is done", "the child is done") as model:
         driver, heard = CodexDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="spawn one"), heard)
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", native_children=True), heard)
         child = await heard.until(ChildSeen)
         await heard.until(TurnEnded)
         await driver.stop(2.0)
@@ -460,10 +460,29 @@ async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_p
     assert len(heard.of(ModelCall)) == len(model.calls)
 
 
+COLLABORATION = ("spawn_agent", "followup_task", "send_message", "interrupt_agent", "list_agents", "wait_agent")
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+async def test_a_catalog_model_s_own_agents_are_off_unless_a_role_allows_them(tmp_path, allowed):
+    """A current catalog model gets the second generation of Codex's own agents, its tools listed in the input, which
+    `features.multi_agent` leaves on. FakeModel stands in for the model under that name."""
+    async with FakeModel("ok") as model:
+        driver, heard = CodexDriver(), Heard()
+        spec = on_fake_model(tmp_path, model, goal="go", model="gpt-6-luna", native_children=allowed)
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert bool(set(COLLABORATION) & set(model.calls[0].tools)) == allowed
+    assert model.calls[0].says("You are `/root`") == allowed
+    assert {request.message.target for request in model.requests} == {"/v1/responses"}
+
+
 async def test_an_interrupt_reaches_a_child_as_well(tmp_path):
     async with FakeModel(CHILD, [Stall()], [Stall()]) as model:
         driver, heard = CodexDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="spawn one"), heard)
+        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", native_children=True), heard)
         await heard.until(ChildSeen)
         await asyncio.wait_for(model.call(2), TIMEOUT)
         await driver.interrupt()

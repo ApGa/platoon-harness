@@ -235,7 +235,7 @@ async def test_a_native_child_runs_inside_the_turn_that_started_it(tmp_path):
     """Budget: at most 15 model calls, counted from the journal, with a child's own calls on top, which reach us only as
     a total. The child runs on the parent's model."""
     work = seeded(tmp_path / "work")
-    team = Team(roles={"ada": claude()}, budget=LIMIT)
+    team = Team(roles={"ada": claude().model_copy(update={"native_children": True})}, budget=LIMIT)
 
     async with Session.start(team, name="child", root=tmp_path / "root", cwd=work, plan_login=True) as session:
         await session.send(
@@ -264,7 +264,7 @@ async def test_an_interrupt_stops_a_native_child(tmp_path):
     only if a child cannot outlive that turn, so this interrupts one during its shell tool, and looks for what it would
     have done."""
     work = seeded(tmp_path / "work")
-    team = Team(roles={"ada": claude()}, budget=LIMIT)
+    team = Team(roles={"ada": claude().model_copy(update={"native_children": True})}, budget=LIMIT)
 
     async with (
         Session.start(team, name="cut", root=tmp_path / "root", cwd=work, plan_login=True) as session,

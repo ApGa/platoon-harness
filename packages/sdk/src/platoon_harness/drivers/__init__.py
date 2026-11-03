@@ -103,7 +103,7 @@ class AgentSpec(Model):
 
     `folder` is the agent's own directory, for its record, log and native home. `access` maps variable names to model
     access, URLs included, and reaches only the harness's environment. `effort` goes to the harness as it stands, and
-    `sandbox` is one of the values the driver declared.
+    `sandbox` is one of the values the driver declared. `native_children` lets the harness start agents of its own.
     """
 
     agent: str
@@ -114,6 +114,7 @@ class AgentSpec(Model):
     model: str | None = None
     effort: str | None = None
     sandbox: str | None = None
+    native_children: bool = False
     tools: ToolBinding | None = None
     access: Mapping[str, Secret] = {}
     env: Mapping[str, str] = {}

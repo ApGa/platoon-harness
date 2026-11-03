@@ -50,6 +50,11 @@
   after its first, on the same harness, until it is told to finish, retired or cancelled. It is resolved once, at the spawn, from the
   spawn, then the role, then whether the session started it, and refused for a harness that is not persistent. `agent.status` shows it,
   and the result of a spawn that stays says how to end it. See ADR 0023.
+- `native_children` on `Role` and `AgentSpec`. A harness's own agents are off unless a role allows them, as such an agent's calls
+  reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's token. Claude Code's
+  `Agent`, `Workflow`, `ListAgents` and `SendMessage` are disallowed, and Codex's own agents are off for the thread by
+  `agents.enabled = false`, both generations. `team_check` says what a role that allows them gives up, `check_driver` has the row
+  `native_children_off_by_default`, and `Request.tools` names the tools a model is shown, exactly.
 - `tests/live/test_stays.py`: the owner's flow on Claude Code and on Codex, and a Codex child's half alone. `tests/live/test_codex.py`
   runs a Codex agent's own sub-agent.
 

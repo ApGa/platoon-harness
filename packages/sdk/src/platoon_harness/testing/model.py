@@ -84,6 +84,24 @@ class Request:
         """Whether the model is shown this tool, in any dialect's shape: a harness prefixes or nests the name."""
         return tool in json.dumps(self.json.get("tools", []))
 
+    @cached_property
+    def tools(self) -> tuple[str, ...]:
+        """The names of the tools the model is shown, exactly, in any dialect's shape. A namespace's tools go by their
+        own names, and a Responses client can list tools in its input, as Codex does for a catalog model."""
+        listed = list(self.json.get("tools") or ())
+        for item in self.json.get("input") or ():
+            if isinstance(item, dict) and item.get("type") == "additional_tools":
+                listed += item.get("tools", ())
+        return tuple(_names(listed))
+
+
+def _names(tools: Sequence[Any]) -> Iterator[str]:
+    for tool in tools:
+        if tool.get("type") == "namespace":
+            yield from _names(tool.get("tools", ()))
+        elif name := tool.get("name") or tool.get("function", {}).get("name"):
+            yield name
+
 
 def _blocks(reply: Reply) -> tuple[Block, ...]:
     if isinstance(reply, str):

@@ -161,6 +161,8 @@ def _thread(spec: AgentSpec, theirs: Mapping[str, Any]) -> dict[str, Any]:
         fields["sandbox"] = spec.sandbox
     if spec.effort is not None:
         config["model_reasoning_effort"] = spec.effort
+    if not spec.native_children:  # Its own agents' tools, of both generations: `features.multi_agent` ends the first.
+        config["agents"] = {"enabled": False}
     if instructions := "\n\n".join(filter(None, (theirs.get("developer_instructions"), spec.instructions))):
         fields["developerInstructions"] = instructions
     if (tools := spec.tools) is not None:

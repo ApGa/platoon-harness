@@ -151,6 +151,7 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
             "reconcile_claims_nothing_unseen",
             "steers_at_declared_boundary",
             "preamble_once_per_request",
+            "native_children_off_by_default",
         ),
     )
     if not capabilities.tool_paths:

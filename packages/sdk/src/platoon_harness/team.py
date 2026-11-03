@@ -87,7 +87,8 @@ class Role(Model):
     an agent is told to stay after its task for the next message, rather than to finish: left out, one the session
     started stays and one spawned does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
     of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
-    otherwise, and `adopt` gives it to the session.
+    otherwise, and `adopt` gives it to the session. `native_children` lets its harness start agents of its own, beside
+    ours.
     """
 
     harness: str | Command
@@ -97,6 +98,7 @@ class Role(Model):
     auth: str | None = None
     workspace: Literal["shared", "worktree", "snapshot", "isolated"] = "shared"
     sandbox: str | None = None
+    native_children: StrictBool = False
     tools: tuple[str, ...] = ("*",)
     delivery: Injection = "wake"
     inbox_depth: Positive = 1024
@@ -249,6 +251,16 @@ def _staying(team: Team, capabilities: Mapping[str, Capabilities]) -> dict[str, 
     return {name: sorted(targets) for name, targets in found.items()}
 
 
+def _native(role: Role, known: Capabilities) -> str:
+    """What an opt-in to a harness's own agents gives up."""
+    if known.native_children == "none":
+        return f"`{role.driver}` starts no agents of its own, so this allows nothing"
+    return (
+        "its harness's own agents are none of ours: their calls reach us only in their parent's total, no topology "
+        "binds them, and their calls to our tools go out on their parent's token"
+    )
+
+
 def _taken_down(team: Team, name: str) -> Iterable[Problem]:
     """A one-shot role's turn is its end, and no refusal can stand in the way of that."""
     for child in sorted(_spawning(team)[name] & team.roles.keys()):
@@ -331,6 +343,8 @@ def team_check(
             if role.stays and not known.persistent:
                 what = "a one-shot harness ends with its turn, so it cannot stay"
                 problems.append(Problem(f"roles.{name}.stays", what))
+            if role.native_children:
+                problems.append(Problem(f"roles.{name}.native_children", _native(role, known), "warning"))
             problems += _budget_problems(team.budget, "budget", role, known)
             problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
         if role.auth is not None and role.auth not in team.auth:

@@ -352,6 +352,7 @@ class Host:
             model=role.model,
             effort=role.effort,
             sandbox=role.sandbox,
+            native_children=role.native_children,
             tools=binding,
             access=admission.access,
             instructions="\n\n".join(filter(None, (teaching, role.instructions))) or None,
