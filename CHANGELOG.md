@@ -71,26 +71,40 @@
 - The headless command line, `platoon-harness`: `run`, which owns a session in the foreground from a team file, the project file or
   `--harness`, with a prompt from an argument, stdin or a file; `serve`; `events`, from a cursor and following; `session list`,
   `show`, `stop` and `resume`; `team check`, `show` and `told`; `init`; `doctor`; `extension list`; and a command for each op a person
-  may run, made from the op registry and its schemas, so `ph task.claim --queue tasks` for an agent is `platoon-harness task claim
-  SESSION --queue tasks` for a person. `--json` prints one line per journal event and then the Ending, in a shape versioned by
-  `format`. Exit codes are an Ending's, 64 for usage and 78 for configuration. `--approvals` answers every approval one way and the
-  manifest keeps it, and nothing prompts. `docs/cli.md` is made from the command definitions, and `docs/headless.md` is a quickstart.
+  may run but `wait`, made from the op registry and its schemas, so `ph task.claim --queue tasks` for an agent is `platoon-harness
+  task claim SESSION --queue tasks` for a person, its help naming commands and flags where its op names ops and arguments. `--json`
+  prints one line per event the runtime it owns journals, from its `runtime.started`, and then the Ending, in a shape versioned by
+  `format`. Exit codes are an Ending's, 64 for usage, a refused `run` or `session resume` among it, and 78 for configuration. Ctrl+C
+  or `SIGTERM` at any point runs the owner's shutdown. `--approvals` answers every approval one way and the manifest keeps it, and
+  nothing prompts. `docs/cli.md` is made from the command definitions, and `docs/headless.md` is a quickstart.
 - `kernel.registry(extensions)`, the op table before any session exists, and `Op.agent`, which keeps `agent.finish` to agents by
   kind as `runtime` keeps an op to the runtime.
 - `runtime.opening.check(team, plan_login=)`, every problem `Session.start` would meet, which `team check` prints, and
   `Session.head()`.
 - An interrupt quiets what was waiting for its agent, whoever interrupts: what came before it wakes nothing and stays unread for the
   next turn, and a wait that already holds closes with no notice, while what comes after wakes as usual. `wake.quieted` records it.
+- `platoon_harness.tools.taught` and `OP_NAMED`, which the command line words its help with.
 - `tests/live/test_cli.py`: milestone 1's flow from a terminal, and a stop and a resume of a live session.
+  `tests/integration/test_cli_harnesses.py` runs, stops and resumes from the command line on each real binary against FakeModel.
 
 ### Changed
 
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
   agent's message follows the reader's setting as before. Nothing withdraws a sent message.
-- An interrupt of an agent on its way to a turn, by a wake that is due, is accepted and cancels that wake, where it was refused.
+- An interrupt of an agent on its way to a turn, by a wake that is due or a wait that holds, is accepted and cancels that wake or
+  closes that wait, where it was refused. Before an agent's first turn begins it is refused saying so, where it said nothing was on
+  its way, as `agent.retire` knew otherwise.
 - The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
   them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's
-  `instructions`, is never dropped. The default renders byte for byte as before. ADR 0025 is amended.
+  `instructions`, is never dropped. An empty `peers` or `channels` is an empty value, where `nobody yet` and `none yet` were words of
+  ours in it, so the default renders byte for byte as before but for a line that would name no peer or no channel. ADR 0025 is
+  amended.
+- A session that was closing reads `closed` once its owner has stopped, where it read `closing` for good.
+- A root another user owns or can write, a sessions folder or a socket directory not this user's, and no socket directory at all are
+  configuration errors, which the command line exits 78 for and `doctor` reports, where they were refused `unsupported`.
+- A start cut short, cancelled or failed, once its incarnation is in the journal, runs the owner's shutdown and appends
+  `session.stopped`, where it ended its harnesses and left the journal as a crash would.
+- `Team.starts(role)` names the agents a role starts, where it counted them, so the command line and the runtime name them alike.
 - `agent.finish` from anyone but an agent is refused `not_permitted` by kind, where its body refused `invalid`.
 - `Session.submit` of a read answers it as a query, which writes nothing, so a view credential may ask it.
 - The plan-login refusal names `--plan-login` beside `plan_login=True`, and history names `platoon-harness session resume`.
@@ -139,6 +153,12 @@
 
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
   was refused between a wake and its turn: bug-coordination-7 and -8.
+- A handover an interrupt cut counted as one that failed, so each later message waited twice as long, and six interrupts lost the
+  agent. That wait had hidden a race: a harness can begin a turn on the handover the interrupt failed, and a message sent at once
+  landed in that turn as the interrupt cut it, on pi against FakeModel. Nothing is handed over while an interrupt is under way.
+- A command whose runtime went for good after it committed, before its ack, was refused on its retry, and running it again after a
+  resume ran it twice. History answers a key its journal holds.
+- A call whose send failed as its connection went left asyncio to say on stderr that nobody read its answer.
 - A resumed `ScriptedDriver` named its first turn as the first instance had, so a call identical to one of that turn, with no id of
   its own, was answered from the journal as a repeat and nothing ran.
 - A test that failed part way could leave a detached runtime running. A fixture every test has ends each one its `tmp_path` holds,

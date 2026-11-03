@@ -146,7 +146,8 @@ by a driver landing; only the row below changes.
   which it took as a wake or through a held `wait` with `from`. No woken turn, of 20 this stage, opened with a `message_read` that
   showed nothing new [R]. It passed again in runs 35 and 39, in 15 and 14 calls, the second on steps worded in an order no reading
   can mistake, and none of 17 woken turns in runs 34 to 39 opened with such a read [R].
-- From the command line: one `platoon-harness run` on FakeModel settled [L]. On `claude-haiku-5-5`, as the lead `init` wrote, it took
+- From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
+  `session resume`, took the cut-off notice and settled [L]. On `claude-haiku-5-5`, as the lead `init` wrote, it took
   the job on stdin and a person's message from a second process, and settled with a Codex worker in 20 calls, run 41. Stopped by
   `session stop` during `sleep 20`, it was resumed with the text it was told at launch, journaled again whole, read the cut-off notice,
   checked, found the file unwritten and ran the command once more, in 6 calls, run 40 [R].
@@ -197,7 +198,8 @@ by a driver landing; only the row below changes.
   taking each answer in its one turn by a held `wait` with `from`. In runs 34 to 39 no agent opened a turn with a `wait` that named
   nothing, and a helper's woken turn opened with a `message_read` that showed nothing new in 4 of 6 [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
 - The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
-- From the command line: one `platoon-harness run` on FakeModel settled [L]. On `gpt-6-luna`, as the worker `init` wrote, it claimed
+- From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
+  `session resume`, took the cut-off notice and settled [L]. On `gpt-6-luna`, as the worker `init` wrote, it claimed
   and fixed both tasks of run 41 in one turn of 11 calls. Stopped by `session stop` during `sleep 20`, its interrupted call was
   reported `unavailable`, so a `tokens` limit refused the resume's wake `unavailable`, as section 7 of the architecture says, and the
   run waited out its wall limit, run 42. With no `tokens` limit it resumed with the text it was told at launch, journaled again whole,
@@ -234,6 +236,8 @@ by a driver landing; only the row below changes.
 - No tool for agents of its own is in pi's core, so a role's `allow_native_children` changes nothing. An extension of the user's can add
   one, which nothing of ours turns off, and a child it starts goes unseen [S].
 - A warning from pi, such as a server of ours that failed, comes as `notify`, and is a `native` frame plus a gap. Pi connects a server after `ready`, so unlike on Claude Code and Codex this cannot fail the start, and the agent runs on with the gap [L].
+- From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
+  `session resume`, took the cut-off notice and settled [L]. No live model has run it, as pi has no login here.
 
 **openhands, SDK 1.59.0.** [Report](research/adapter-openhands.md), [fixture](research/fixtures/openhands-events-sample.json).
 
