@@ -211,7 +211,7 @@ class Transcript(ScrollView, can_focus=True):
     which the screen keeps. Following is one state, kept here: reading up stops it, and the newest line or the follow
     key starts it again."""
 
-    BINDINGS = bindings("transcript")
+    BINDINGS = [*bindings("transcript"), *bindings("panel")]
     DEFAULT_CSS = "Transcript { overflow-x: hidden; }"
 
     class Moved(Message):

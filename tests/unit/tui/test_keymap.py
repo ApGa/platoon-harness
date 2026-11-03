@@ -17,7 +17,7 @@ from platoon_harness_cli.tui.keymap import KEYMAP, TYPED, command, keys, referen
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import Workspace
+from platoon_harness_cli.tui.workspace import Dock, Navigator, Workspace
 
 from ..runtime.support import harness, in_state
 from .support import drawn
@@ -26,8 +26,10 @@ GUIDE = Path(__file__).parents[3] / "docs" / "tui.md"
 PLACES = {
     TerminalUI: ("everywhere",),
     Sessions: ("sessions",),
-    Workspace: ("workspace",),
-    Transcript: ("transcript",),
+    Workspace: ("workspace", "parts"),
+    Transcript: ("transcript", "panel"),
+    Navigator: ("panel",),
+    Dock: ("dock", "panel"),
     Rows: ("list",),
     Confirm: ("question",),
     Form: ("dialog",),
@@ -77,9 +79,9 @@ def test_every_act_of_a_session_has_one_typed_command_that_runs_it():
 
 
 def test_every_act_is_reached_with_keys_every_terminal_delivers():
-    """In a session, by its typed command. Where nothing is typed, the sessions screen, a question, a form and the
-    help, each act has a plain key, quitting included, and so does a list."""
-    for where in ("sessions", "list", "question", "dialog"):
+    """In a session, by its typed command, and between its parts and in each list, by plain keys. Where nothing is
+    typed, the sessions screen, a question, a form and the help, each act has a plain key, quitting included."""
+    for where in ("sessions", "parts", "panel", "dock", "list", "question", "dialog"):
         for key in keys(where):
             assert plain(key.keys.split(",")[0]), key
     for key in keys("everywhere"):
@@ -121,8 +123,7 @@ async def test_a_key_not_built_yet_and_its_typed_command_each_say_why_and_do_not
                 app.screen.query_one(Transcript).focus()
                 await pilot.press(key.keys.split(",")[0])
                 await drawn(pilot, lambda _, said=said: told(said) == 1)
-                app.screen.query_one(Composer).focus()
-                await pilot.press(*key.typed, "enter")
+                await pilot.press("escape", *key.typed, "enter")
                 await drawn(pilot, lambda _, said=said: told(said) == 2)
                 assert app.focused is app.screen.query_one(Composer)
 

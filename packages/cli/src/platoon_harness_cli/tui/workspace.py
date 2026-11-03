@@ -11,7 +11,9 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.screen import Screen
+from textual.widget import Widget
 from textual.widgets import Static
 
 from platoon_harness import Refused, Session
@@ -45,17 +47,34 @@ back."""
 UNBUILT = {"agent.takeover": "take_over"}
 """Commands whose purpose the TUI cannot carry out yet, by the key that says why: a takeover holds an agent's deliveries
 for a person to drive its own terminal, which is not built, so the palette says so rather than hold them."""
+TAB = ("composer", "transcript", "dock", "navigator")
+"""The parts Tab goes through, in order, so the dock is never one key from the composer either way."""
 
 
-class Dock(Rows, can_focus=False):
-    """Where a person must act, a row each. It never takes focus, so a key meant for the composer never answers it, and
-    only the person moves its cursor, with Alt+A, `/next-place` or a click: a row that goes takes the cursor with it, so
-    an act never lands on a row they did not choose."""
+class Dock(Rows):
+    """Where a person must act, a row each. It takes focus only from the person, with Tab or a click, so a key meant for
+    the composer never answers it, and only the person moves its cursor: a row that goes takes the cursor with it, so an
+    act never lands on a row they did not choose."""
+
+    BINDINGS = [*bindings("dock"), *bindings("panel")]
+
+    class Moved(Message):
+        """The person moved the cursor to another place, whose row now shows the keys that take its actions."""
 
     def show(self, rows: list[Row]) -> None:
         chosen = self.cursor
         super().show(rows)
         self.cursor = chosen if chosen in self.keys else None
+
+    def move_to(self, key: str) -> None:
+        super().move_to(key)
+        self.post_message(self.Moved())
+
+
+class Navigator(Rows):
+    """The agents and channels, a row each, of which Enter shows the chosen one."""
+
+    BINDINGS = bindings("panel")
 
 
 def _why(why: dict[str, Any] | None) -> str:
@@ -118,7 +137,7 @@ def _unmeasured(count: int) -> str:
 class Workspace(Screen[None]):
     """One session: who is working, on what, what is blocked, what changed, and where you must act."""
 
-    BINDINGS = bindings("workspace")
+    BINDINGS = [*bindings("workspace"), *bindings("parts")]
 
     def __init__(self, name: str, session: Session | None = None) -> None:
         super().__init__()
@@ -140,7 +159,7 @@ class Workspace(Screen[None]):
         yield Static(id="header")
         yield Static(id="banner")
         with Horizontal(id="body"):
-            yield Rows(id="navigator")
+            yield Navigator(id="navigator")
             with Vertical(id="focus"):
                 yield Static(id="title")
                 yield Transcript(id="transcript")
@@ -186,6 +205,17 @@ class Workspace(Screen[None]):
     def left(self) -> str | None:
         """The session that runs on once you leave it, or None when no runtime holds it."""
         return self.session_name if self.live is not None and self.live.runtime == "live" else None
+
+    @property
+    def focus_chain(self) -> list[Widget]:
+        """The parts that are shown, in the order Tab goes through them."""
+        return sorted(super().focus_chain, key=lambda part: TAB.index(part.id or ""))
+
+    def on_descendant_focus(self) -> None:
+        self._redraw()
+
+    def on_dock_moved(self) -> None:
+        self._redraw()
 
     # Drawing, once a frame.
 
@@ -313,6 +343,8 @@ class Workspace(Screen[None]):
         dock = self.query_one(Dock)
         dock.show(self._dock(live))
         dock.set_class(bool(dock.rows), "-shown")
+        if dock.has_focus and not dock.rows:  # A dock with nothing left to act on gives focus back.
+            self.query_one(Composer).focus()
         self._set("#chip", self._chip(live))
         self._set("#footer", self._footer(live))
 
@@ -522,11 +554,13 @@ class Workspace(Screen[None]):
         return Content("\n").join(lines)
 
     def _dock(self, live: Live) -> list[Row]:
-        """A row per place you must act, and on the one you are at, the keys and typed commands that take its
-        actions."""
-        chosen = self.query_one(Dock).cursor
+        """A row per place you must act, and on the one you are at, the keys that take its actions from where the focus
+        is: the dock's own letters, or a session's keys and typed commands."""
+        dock = self.query_one(Dock)
+        chosen = dock.cursor
         rows = []
-        first, second = (reach(act) for act in ("first_action", "second_action"))
+        acts = ("first_action", "second_action")
+        first, second = [key.shown for key in keys("dock")] if dock.has_focus else [reach(act) for act in acts]
         for place in self._places(live):
             actions = place["actions"]
             hints: list[Any] = []
@@ -792,6 +826,9 @@ class Workspace(Screen[None]):
         navigator = self.query_one("#navigator", Rows)
         if (key := navigator.step(by)) is not None:
             await self.show(self._focus_of(key))
+
+    def action_back(self) -> None:
+        self.query_one(Composer).focus()
 
     def action_navigator(self) -> None:
         self.toggle_class("navigator-shown" if self.size.width < 80 else "navigator-hidden")

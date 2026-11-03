@@ -28,6 +28,7 @@ Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; backgro
 #strip { height: 1; display: none; padding: 0 1; }
 #dock { height: auto; max-height: 4; background: $warning 10%; display: none; }
 #dock.-shown { display: block; }
+#navigator:focus, #dock:focus { background-tint: $foreground 6%; }
 #chip { height: 1; padding: 0 1; }
 #composer { height: auto; min-height: 3; max-height: 10; border-top: solid $panel; }
 #footer { height: 1; background: $panel; padding: 0 1; }

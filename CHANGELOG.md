@@ -110,12 +110,15 @@
   `failed`, derived in the view so every client says the same.
 - Every act of the terminal UI takes only keys every terminal delivers, so an editor's terminal that keeps Ctrl, Alt or F keys,
   as Cursor's on a Mac does, leaves none out of reach. In the composer a line that is exactly `/` and an act's name runs it and
-  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. The sessions screen has a plain key for
-  each act, `?` the help, `p` the palette and `q` quitting among them.
+  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. Tab and Shift+Tab go round the composer,
+  the transcript, the dock and the navigator, and in the dock the arrows choose a place and `y` and `n` answer it. The sessions
+  screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them.
 
 ### Changed
 
-- In the terminal UI, acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for
+- In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
+  goes back to the composer and interrupts nothing. The dock takes focus from Tab or a click, never on its own, two keys from the
+  composer either way. Acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for
   `next for you`, `open` for `open line`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words.
   The sessions screen looks again on `l`, where it was Ctrl+R, and `/` is search, not built yet, from any part but the composer.
 - The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,

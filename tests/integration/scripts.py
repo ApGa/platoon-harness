@@ -47,6 +47,7 @@ FOLLOWING_UP = [
     [Call("agent_retire", {"agent": "@bob"}), Call("agent_finish", {"gist": "all done"})],
 ]
 HANG_IN_A_TURN = [Call("task_claim", {"queue": "tasks"}), Hang()]
+ASK_THEN_HANG = [Ask("Ship the fix?"), Hang()]
 AFTER_A_RESUME = [Call("task_complete", {"queue": "tasks", "gist": "done after the crash"}), Call("agent_finish", {})]
 
 
@@ -160,6 +161,7 @@ HARNESSES = {
     "lead": lambda: Lead([FIX_THE_TEST]),
     "worker": lambda: Templated([WORK]),
     "asking": lambda: Templated([ASK_FIRST]),
+    "asks_then_hangs": lambda: ScriptedDriver([ASK_THEN_HANG]),
     "hanging": lambda: Resumable([HANG_IN_A_TURN], [AFTER_A_RESUME]),
     "stuck": lambda: Stuck([], [[Say("heard it, the second time")]]),
     "fragile": lambda: Templated([[Hang()]], capabilities=FRAGILE),

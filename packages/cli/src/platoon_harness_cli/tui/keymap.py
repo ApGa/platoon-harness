@@ -8,15 +8,30 @@ from typing import Literal
 
 from textual.binding import Binding, BindingType
 
-Where = Literal["everywhere", "sessions", "workspace", "transcript", "composer", "list", "question", "dialog"]
+Where = Literal[
+    "everywhere",
+    "sessions",
+    "workspace",
+    "parts",
+    "panel",
+    "transcript",
+    "dock",
+    "composer",
+    "list",
+    "question",
+    "dialog",
+]
 
 WHERE: dict[Where, str] = {
     "everywhere": "Everywhere",
     "sessions": "The sessions screen",
     "workspace": "A session, unless the part that has focus takes the key",
+    "parts": "Between a session's parts",
+    "panel": "The transcript, the dock or the navigator, once one has focus",
     "transcript": "The transcript, once it has focus",
+    "dock": "The dock, once it has focus",
     "composer": "The composer",
-    "list": "A list: the sessions, the agents and channels, the help",
+    "list": "A list: the sessions, the navigator, the dock, the help",
     "question": "A question",
     "dialog": "A form or the help",
 }
@@ -107,6 +122,7 @@ KEYMAP: tuple[Key, ...] = (
         "Interrupt the agent in view: its turn stops, and it lives on",
         "workspace",
         footer=True,
+        priority=False,
     ),
     Key(
         "alt+s",
@@ -179,10 +195,21 @@ KEYMAP: tuple[Key, ...] = (
         footer=True,
         priority=False,
     ),
+    Key(
+        "tab",
+        "app.focus_next",
+        "next part",
+        "Go to the next part: the composer, the transcript, the dock, the navigator, and round",
+        "parts",
+    ),
+    Key("shift+tab", "app.focus_previous", "part before", "Go to the part before", "parts"),
+    Key("escape", "screen.back", "back", "Go back to the composer, interrupting nothing", "panel", priority=False),
     Key("up", "cursor_up", "line above", "Choose the line above", "transcript"),
     Key("down", "cursor_down", "line below", "Choose the line below", "transcript"),
     Key("enter", "open_line", "open line", "Open or close the chosen line", "transcript"),
     Key("end", "follow", "follow", "Go to the newest line and follow what comes", "transcript"),
+    Key("y", "screen.first_action", "yes", "Take the first action of the chosen place, such as Allow", "dock"),
+    Key("n", "screen.second_action", "no", "Take the second action of the chosen place, such as Deny", "dock"),
     Key(
         "enter",
         "send",
@@ -195,7 +222,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("down", "newer", "newer", "On the last line, what you sent or ran after", "composer"),
     Key("up", "cursor_up", "row above", "Choose the row above, or scroll up the help", "list", priority=False),
     Key("down", "cursor_down", "row below", "Choose the row below, or scroll down the help", "list", priority=False),
-    Key("enter", "choose", "open", "Open the chosen row", "list", priority=False),
+    Key("enter", "choose", "open", "Open the chosen row, or show the chosen place", "list", priority=False),
     Key("y", "yes", "yes", "Say yes", "question", priority=False),
     Key("n,escape", "no", "no", "Say no", "question", priority=False),
     Key("escape", "leave", "leave", "Leave it, and a form sends nothing", "dialog", priority=False),

@@ -715,6 +715,41 @@ async def test_a_typed_command_never_reaches_an_agent_and_any_other_slash_is_ask
         assert screen.query_one(Composer).text == "/"
 
 
+async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_composer_interrupting_nothing(root):
+    """The dock is two keys from the composer either way, so a stray Tab from a draft never lands where a letter
+    answers. In the dock the arrows choose a place and `n` takes its second action, and a dock with nothing left gives
+    focus back."""
+    async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "Ship the fix?" in text)
+        screen = workspace(app)
+        composer, transcript, dock = screen.query_one(Composer), screen.query_one(Transcript), dock_of(app)
+        navigator = screen.query_one("#navigator")
+
+        visited = []
+        for _ in range(4):
+            await pilot.press("tab")
+            visited.append(app.focused)
+        assert visited == [transcript, dock, navigator, composer]
+        await pilot.press("shift+tab")
+        assert app.focused is navigator
+
+        for part in (navigator, transcript, dock):
+            part.focus()
+            await pilot.press("escape")
+            assert app.focused is composer, part
+        assert await of_type(owner, "turn.ended") == [], "Esc from a part interrupted the agent"
+
+        await pilot.press("tab", "tab", "y")
+        assert dock.cursor is None and await of_type(owner, "approval.resolved") == []
+        await pilot.press("down")
+        await drawn(pilot, lambda text: "n Deny" in text)
+        await pilot.press("n")
+        resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
+        assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("deny", "tui")]
+        await drawn(pilot, lambda _: app.focused is composer)
+
+
 async def test_body_tombstone_from_the_palette_asks_once(root):
     async with attached(team(), root) as (owner, _, pilot):
         ref = await owner.put_body(b"something to erase")

@@ -23,6 +23,7 @@ from platoon_harness.kernel import is_held
 from platoon_harness.runtime.paths import read_running
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
@@ -231,6 +232,47 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
         assert isinstance(app.screen, Sessions) and is_held(folder)
         await pilot.press("ctrl+q")
     assert app.return_value is None and is_held(folder)
+
+
+async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
+    """Started from the sessions screen, a message sent, an approval answered from the dock reached by Tab, the agent
+    interrupted, then detached and quit, with letters, Enter, Esc, Tab and the arrows alone, which every terminal
+    delivers, as a terminal that keeps chords for itself, such as an editor's, does not."""
+    team = tmp_path / "crew.toml"
+    team.write_text(f'[roles.lead]\nharness = "{inside("asks_then_hangs")}"\n')
+    folder = tmp_path / "sessions" / "crew"
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press(*str(team), "enter", *"crew", "enter", *"yes", "enter")
+        await drawn(pilot, lambda text: "@lead" in text and " live " in text)
+        guest = await Session.attach("crew")
+
+        await pilot.press(*"ship it", "enter")
+        await drawn(pilot, lambda text: "Ship the fix?" in text)
+        await pilot.press("tab", "tab", "down")
+        await drawn(pilot, lambda text: "y Allow" in text and "n Deny" in text)
+        await pilot.press("y")
+        resolved = await until(lambda: of_type(guest, "approval.resolved"), guest)
+        assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", "tui")]
+        await drawn(pilot, lambda _: app.focused is workspace(app).query_one(Composer))
+        await in_state(guest, "lead", "running")
+
+        await pilot.press("escape")
+        ended = await until(lambda: of_type(guest, "turn.ended"), guest)
+        assert [event.data["reason"] for event in ended] == ["interrupted"]
+
+        await pilot.press(*"/detach", "enter")
+        await drawn(pilot, lambda text: "crew" in text and "Sessions" in text)
+        assert isinstance(app.screen, Sessions) and is_held(folder)
+        await pilot.press("q")
+
+    assert app.return_value is None and is_held(folder)
+    sent = [event.gist for event in await of_type(guest, "message.sent") if event.actor == "human:you"]
+    assert sent == ["ship it"], "a typed command reached an agent"
+    await guest.leave()
 
 
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(tmp_path):
