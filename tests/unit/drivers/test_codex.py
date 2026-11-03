@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import os
+import signal
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -596,6 +597,64 @@ async def test_what_an_interrupt_drops_is_the_runtime_s_to_offer_again(tmp_path,
     assert not heard.of(InputDelivered)
 
 
+def said(stand: Stand, *frames: Any) -> None:
+    """Have the stand-in say frames out of turn, as a harness does when it is ready to."""
+    pipe = os.open(f"/proc/{stand.launch['pid']}/fd/1", os.O_WRONLY)
+    try:
+        os.write(pipe, b"".join(json.dumps(frame).replace("$thread", "thread-1").encode() + b"\n" for frame in frames))
+    finally:
+        os.close(pipe)
+
+
+async def test_an_interrupt_as_a_handover_begins_a_turn_cuts_that_turn_once_it_has_an_id(tmp_path, stand):
+    stand.install(turns=[[]], on_interrupt=[ended("interrupted")])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        await driver.deliver(delivery())
+        await driver.interrupt()
+        said(stand, began("turn-1"))
+        turn = await heard.until(TurnEnded)
+
+    assert stand.asked("turn/interrupt") == {"threadId": "thread-1", "turnId": "turn-1"}
+    assert turn.reason == "interrupted"
+
+
+async def test_an_interrupt_refused_labels_no_turn_that_then_runs_to_its_end(tmp_path, stand):
+    stand.install(turns=[[began()]], refused={"turn/interrupt": "not now"})
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        await heard.until(TurnStarted)
+        with pytest.raises(DriverError, match="not now"):
+            await driver.interrupt()
+        said(stand, ended(turn="turn-1"))
+        turn = await heard.until(TurnEnded)
+
+    assert turn.reason == "stopped"
+
+
+async def test_a_turn_the_harness_cut_with_nobody_interrupting_reads_as_aborted(tmp_path, stand):
+    stand.install(turns=[[began(), ended("interrupted")]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        turn = await heard.until(TurnEnded)
+
+    assert turn.reason == "aborted"
+
+
+async def test_an_answer_to_a_harness_that_died_is_a_driver_error(tmp_path, stand):
+    stand.install(turns=[[began(), asking()]])
+    spec = make_spec(tmp_path)
+
+    async with running(spec) as (driver, heard):
+        asked = await heard.until(ApprovalRequested)
+        os.killpg(stand.launch["pid"], signal.SIGKILL)
+        await heard.until(Exited)
+
+        with pytest.raises(DriverError):
+            await driver.answer(asked.id, "allow")
+
+
 async def test_an_interrupt_that_comes_to_no_turn_asks_nothing(tmp_path, stand):
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await heard.until(Ready)
@@ -795,7 +854,7 @@ async def test_the_turn_ends_with_the_child_that_outlived_it_and_says_how_it_end
         turn = await heard.until(TurnEnded)
 
     assert stand.asked("turn/interrupt") == {"threadId": CHILD, "turnId": "child-1"}
-    assert turn.reason == "interrupted"
+    assert turn.reason == "no quota"
     assert len(heard.of(TurnEnded)) == 1
 
 

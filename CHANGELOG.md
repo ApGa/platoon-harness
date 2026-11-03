@@ -59,6 +59,16 @@
 
 ### Fixed
 
+- A frame of a known type with a shape nobody expected stopped a Claude Code agent. It is a `native` frame and a gap, as on the other
+  two, a request the harness waits on is still answered, and a turn's end still ends the turn. A call whose count is nothing, or a null
+  part, is no measurement.
+- An interrupt as a handover begins a turn reads `interrupted` on every harness: Claude Code read it as a failure, which woke a parent,
+  and Codex sent nothing and ran the turn on. A refused interrupt labels no turn, a failed turn says its failure, and a turn the harness
+  cut with nobody asking reads `aborted` on Codex and pi.
+- A Claude Code goal that starts with `/` is refused, as it ran as a slash command.
+- pi's `reconcile` no longer says `not_landed` of an id it cannot know, an approval's among them, and a compaction whose listing does not
+  read is still reported. Codex's `answer` to a harness that has died is a `DriverError`.
+- A late answer to a JSON-RPC call its caller gave up on is no unknown frame.
 - A role runs in the user's own setup. Claude Code no longer has auto memory turned off, and pi no longer has its network, telemetry and
   version check turned off: those were a sealed launch's settings, left behind.
 - A user's `defaultMode` can no longer answer before the runtime hears, so a role's `deny` holds on Claude Code, and `AskUserQuestion`,

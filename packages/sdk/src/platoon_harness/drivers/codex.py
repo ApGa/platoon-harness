@@ -247,6 +247,7 @@ class CodexDriver:
         self._native = ""
         self._folder = Path()
         self._turns: dict[str, str] = {}
+        self._cut: asyncio.Task[None] | None = None
         self._children: set[str] = set()
         self._opening = False
         self._ending = "stopped"
@@ -326,21 +327,38 @@ class CodexDriver:
             raise
 
     async def interrupt(self) -> None:
-        """Stop the turn, on this thread and on every child of it, as `turn/interrupt` stops one thread alone. A tool
-        may run on, as an exec session outlives a turn. What was steered and never landed is lost to the harness at
-        this, and the runtime offers it again."""
-        self._interrupted = bool(self._turns)
-        for thread, turn in tuple(self._turns.items()):
-            try:
-                await self._call("turn/interrupt", {"threadId": thread, "turnId": turn})
-            except DriverError:
-                if thread in self._turns:  # One that has ended since needs no interrupt.
-                    raise
+        """Stop the turn, on this thread and on every child of it, as `turn/interrupt` stops one thread alone. A turn
+        an input on its way is about to begin has no id yet, so it is cut as it starts. A tool may run on, as an exec
+        session outlives a turn. What was steered and never landed is lost to the harness at this, and the runtime
+        offers it again."""
+        self._interrupted = bool(self._turns or self._unlanded)
+        try:
+            for thread, turn in tuple(self._turns.items()):
+                await self._interrupt_turn(thread, turn)
+        except DriverError:
+            self._interrupted = False
+            raise
+
+    async def _interrupt_turn(self, thread: str, turn: str) -> None:
+        try:
+            await self._call("turn/interrupt", {"threadId": thread, "turnId": turn})
+        except DriverError:
+            if thread in self._turns:  # One that has ended since needs no interrupt.
+                raise
+
+    async def _interrupt_late(self, thread: str, turn: str) -> None:
+        """Cut a turn an interrupt came before. A refusal has nobody to tell, so the turn ends as itself."""
+        try:
+            await self._interrupt_turn(thread, turn)
+        except DriverError:
+            self._interrupted = False
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         asked = self._asking.pop(approval, None)
         if asked is None:
             raise DriverError(f"no approval {approval} is waiting")
+        if asked.verdict.done():
+            raise self._lost()
         if asked.item is not None:
             self._deciding[asked.item] = approval
         asked.verdict.set_result(verdict)
@@ -425,6 +443,8 @@ class CodexDriver:
     def _begin(self, thread: str, turn: str) -> None:
         if not self._turns:
             self._process.put(TurnStarted(turn=turn))
+            if self._interrupted:  # An interrupt came while this turn had no id to name.
+                self._cut = asyncio.create_task(self._interrupt_late(thread, turn))
         self._turns[thread] = turn
         if thread == self._native:
             self._opening = True
@@ -524,23 +544,25 @@ class CodexDriver:
         self._turns.pop(thread, None)
         if thread == self._native:
             self._ending = self._reason(turn)
+            if self._ending != "stopped":  # One cut short took a call with it, and of those Codex reports nothing.
+                self._process.put(GapReport(plane="model", what="usage_lower_bound"))
         if self._turns:
             return
-        reason = "interrupted" if self._interrupted else self._ending
+        reason = "interrupted" if self._interrupted and self._ending == "stopped" else self._ending
         self._process.put(TurnEnded(reason=reason))
         self._interrupted, self._ending = False, "stopped"
         if reason != "stopped":
             self._unlanded.clear()
 
     def _reason(self, turn: Mapping[str, Any]) -> str:
-        """Why a turn stopped. One that was cut short took a call with it, and of those Codex reports nothing."""
+        """Why a turn stopped. One cut short that nobody interrupted was aborted by the harness, which nobody did on
+        purpose."""
         match turn:
             case {"status": "completed"}:
                 return "stopped"
             case {"status": "interrupted"}:
-                reason = "interrupted"
+                return "interrupted" if self._interrupted else "aborted"
+            case {"error": {"message": str(said)}}:
+                return self._process.reason(said)
             case _:
-                said = (turn.get("error") or {}).get("message") or turn.get("status")
-                reason = self._process.reason(str(said))
-        self._process.put(GapReport(plane="model", what="usage_lower_bound"))
-        return reason
+                return self._process.reason(str(turn.get("status")))

@@ -431,15 +431,15 @@ async def test_an_oversized_line_ends_the_connection_loudly(monkeypatch):
             await call
 
 
-async def test_a_call_cancelled_by_a_timeout_leaves_a_stray_answer_harmless():
+async def test_a_late_answer_to_a_call_its_caller_gave_up_on_reaches_nobody_and_is_no_stray():
     async with Wire() as wire:
         with pytest.raises(TimeoutError):
             async with asyncio.timeout(0):
                 await wire.peer.call("go")
 
-        await wire.send(b'{"jsonrpc":"2.0","id":1,"result":"late"}')
+        await wire.send(b'{"jsonrpc":"2.0","id":1,"result":"late"}', b'{"jsonrpc":"2.0","id":1,"result":"again"}')
         await wire.frame()
-        await wire.strayed()
+        assert (await wire.strayed())[0] == b'{"jsonrpc":"2.0","id":1,"result":"again"}'
 
 
 async def test_a_peer_that_stops_reading_is_dropped_rather_than_held_in_memory(monkeypatch):

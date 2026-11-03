@@ -274,6 +274,30 @@ def taken_twice(finished: list[Any]) -> bool:
     return len([event for event in finished if event.data["kind"] == "deliver"]) == 2
 
 
+async def test_an_interrupt_as_a_handover_begins_a_turn_never_reads_as_a_failure(tmp_path, monkeypatch):
+    """The interrupt lands before the turn has begun, as it begins, or once it runs, and each must read as itself."""
+    async with FakeModel([Stall(), Text("first")], "after") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "go")
+            await until(lambda: of_type(session, "effect.started"), session, handing_over)
+            await session.interrupt("@bob")
+            model.release()
+            ended = await until(lambda: of_type(session, "turn.ended"), session, stopped_at_last)
+
+    assert {event.data["reason"] for event in ended} <= {"interrupted", "stopped"}
+
+
+def handing_over(started: list[Any]) -> bool:
+    return any(event.data["kind"] == "deliver" for event in started)
+
+
+def stopped_at_last(ended: list[Any]) -> bool:
+    return bool(ended) and ended[-1].data["reason"] == "stopped"
+
+
 async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
     async with FakeModel([Stall()], "the next turn") as model:
         team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")

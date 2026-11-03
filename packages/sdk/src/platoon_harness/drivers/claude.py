@@ -120,13 +120,14 @@ def _login() -> Login | None:
 
 
 def _call_tokens(usage: Mapping[str, Any]) -> int:
+    """A call's tokens, from its parts. A part left out or null is not counted, and a whole of 0 is nobody's count."""
     parts = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
-    return sum(usage.get(part, 0) for part in parts)
+    return sum(usage.get(part) or 0 for part in parts)
 
 
 def _tree_tokens(spent: Mapping[str, Any]) -> int:
     parts = ("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens", "outputTokens")
-    return sum(model.get(part, 0) for model in spent.values() for part in parts)
+    return sum(model.get(part) or 0 for model in spent.values() for part in parts)
 
 
 def _failed(server: Mapping[str, Any], namespace: str) -> bool:
@@ -179,6 +180,8 @@ class ClaudeDriver:
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
+        if spec.goal.startswith("/"):
+            raise DriverError("a goal that starts with `/` would run as a slash command: reword it")
         named = {*spec.env, *spec.access}
         if _GATEWAY_URL in named and not named.intersection(_GATEWAY_CREDENTIALS):
             raise DriverError(f"{_GATEWAY_URL} with no credential would send a saved login there: name one too")
@@ -252,10 +255,14 @@ class ClaudeDriver:
         await self._lines.exchange(id, self._user(delivery.text, id))
 
     async def interrupt(self) -> None:
-        """Stop the turn. The harness drops what it has queued, which the runtime offers again, as it would begin a turn
-        by itself otherwise."""
-        self._interrupted = self._turn is not None
-        await self._ask("interrupt", cancel_queued=True)
+        """Stop the turn, or the one an input on its way is about to begin. The harness drops what it has queued, which
+        the runtime offers again, as it would begin a turn by itself otherwise, and it has done both by the time it
+        answers, so a turn open then is the one cut, and one that ends with no turn open labels nothing."""
+        self._interrupted = True
+        try:
+            await self._ask("interrupt", cancel_queued=True)
+        finally:
+            self._interrupted = self._turn is not None
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._asking:
@@ -300,18 +307,33 @@ class ClaudeDriver:
         return self._lines.run(process.stdout, self._heard)
 
     def _heard(self, line: bytes) -> None:
+        """One line. Whatever cannot be read is an unknown frame, whichever part of it would not read, and still the
+        harness's request gets its answer, and a turn's end ends the turn."""
+        frame = None
         try:
             frame = json.loads(line)
-        except (ValueError, RecursionError):
-            self._process.unknown("frame", line.decode(errors="replace"))
-            return
+            self._take(frame, line)
+        except UNREADABLE:
+            self._process.unknown(_kind(frame), line.decode(errors="replace"))
+            match frame:
+                case {"type": "control_request", "request_id": id}:
+                    self._refuse(id)
+                case {"type": "result"} if self._turn is not None:
+                    self._turn_over("its end could not be read")
+
+    def _take(self, frame: Any, line: bytes) -> None:
         match frame:
             case {"type": "control_response", "response": {"request_id": id} as response}:
                 self._answered(id, response)
             case {
                 "type": "control_request",
-                "request_id": id,
-                "request": {"subtype": "can_use_tool", "tool_name": name, "input": input, "tool_use_id": tool},
+                "request_id": str(id),
+                "request": {
+                    "subtype": "can_use_tool",
+                    "tool_name": str(name),
+                    "input": input,
+                    "tool_use_id": str(tool),
+                },
             }:
                 self._asking[id] = (tool, input)
                 self._process.put(ApprovalRequested(id=id, gist=self._process.gist(f"{name} {json.dumps(input)}")))
@@ -405,7 +427,8 @@ class ClaudeDriver:
             case {"type": "message_delta", "delta": {"stop_reason": str()}, "usage": usage} if self._call is not None:
                 tokens = _call_tokens({**self._call.usage, **usage})
                 self._counted += tokens
-                self._process.put(Usage(tokens=tokens, label="provider", scope="call", call_id=self._call.id))
+                label = "provider" if tokens else "unavailable"
+                self._process.put(Usage(tokens=tokens or None, label=label, scope="call", call_id=self._call.id))
                 self._call = None
 
     def _said(self, blocks: Sequence[Any], call_id: str | None) -> None:
@@ -464,7 +487,10 @@ class ClaudeDriver:
             self._process.put(Usage(label="unavailable", scope="call", call_id=call.id))
             self._call = None
         self._spent(frame.get("model_usage_since_last_result"))
-        self._process.put(TurnEnded(reason=self._reason(frame)))
+        self._turn_over(self._reason(frame))
+
+    def _turn_over(self, reason: str) -> None:
+        self._process.put(TurnEnded(reason=reason))
         self._turn = None
         self._interrupted = False
         self._counted = 0

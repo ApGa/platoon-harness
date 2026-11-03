@@ -41,7 +41,8 @@ method promises:
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
   again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
-- **`interrupt`** stops the turn. The agent lives on. A delivery the harness took and has not landed when a turn stops short goes back
+- **`interrupt`** stops the turn, or the one a delivery on its way is about to begin, and that turn ends `interrupted`. The agent lives
+  on. A delivery the harness took and has not landed when a turn stops short goes back
   on the runtime's queue, and comes again under a new input, so a driver sends nothing again. Tell a harness that keeps such a thing to
   drop it, where it can be told, or it may hear it twice, which at-least-once allows.
 - **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
@@ -56,7 +57,7 @@ method promises:
 |---|---|---|
 | `Ready` | `native`, `version`, `effective_model`, `tools_visible` | The harness is up. `tools_visible` is a list only when it was observed |
 | `TurnStarted` | `turn` | |
-| `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong. An `interrupted` turn was someone's own doing, so it wakes nobody. `lost` and `stopped by its owner` are the runtime's own, and a driver that says one has sent an unknown frame. For a one-shot harness this is its end, and `stopped` means it finished |
+| `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong, such as `aborted` for a turn the harness cut with nobody asking. An `interrupted` turn was someone's own doing, so it wakes nobody. `lost` and `stopped by its owner` are the runtime's own, and a driver that says one has sent an unknown frame. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
 | `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item |
 | `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness. `evidence` names what showed it, and `native_id` is the harness's own id for what landed |
@@ -70,7 +71,9 @@ method promises:
 | `Exited` | `reason` | The harness is gone |
 
 Never guess. Unknown is `None`, not zero, not an empty list, and not a plausible id. A frame you cannot read becomes `Native` plus a
-gap, which is what `unknown_frame(kind, raw)` returns, and never a log line.
+gap, which is what `unknown_frame(kind, raw)` returns, and never a log line. That holds for a frame of a known type with a shape you did
+not expect, whichever part of it would not read, and `UNREADABLE` names what reading one raises: one changed field in a harness's update
+must cost a gap, not the agent. A request the harness waits on still gets an answer, and a turn's end still ends the turn.
 
 Send `started` where the harness shows it. A tool that has begun and not finished is an `Item` of kind `tool` in that phase, and it is
 all a person watching has to say what is running, since `activity` is the gist of the latest item. Then send its `completed`.

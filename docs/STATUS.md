@@ -175,7 +175,7 @@ on Linux. Nothing here has run on macOS. The host calls these drivers now, so `S
 
 | Capability | State | Evidence |
 |---|---|---|
-| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames, and `codex app-server` has run on it, on FakeModel and on a real model. ACP does not use it yet |
+| One JSON-RPC peer: LF only, requests, notifications, errors, a line limit that ends the connection, pending calls failed at EOF, duplicate ids, two peers that cannot echo errors, a reader that stops being dropped, a late answer to a call its caller gave up on reaching nobody, and `Lines` for a line protocol that is no JSON-RPC | tested | `test_rpc.py`. `jsonrpc=False` is tested on hand-written frames, and `codex app-server` has run on it, on FakeModel and on a real model. ACP does not use it yet |
 | The contract: seven methods, `DriverInfo`, `AgentSpec`, `ToolBinding`, `Delivery`, every field of section 9.2 | tested | `test_public_api.py`, `tests/unit/primitives/test_reports.py`, and every driver below |
 | One closed report vocabulary, serializable for the wire, with a path through `agent.report` for each | tested | `tests/unit/primitives/test_reports.py`, against the architecture's list |
 | `agent.start`: what the runtime concluded, which a report has no field for, so no driver can claim a level or a capability | tested | `test_reports.py`, `test_wire.py`, with a real program trying |

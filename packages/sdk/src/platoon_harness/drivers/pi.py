@@ -191,6 +191,7 @@ class PiDriver:
         self._native = ""
         self._folder = Path()
         self._turn: str | None = None
+        self._interrupted = False
         self._opening = False
         self._failure: str | None = None
         self._inputs: dict[str, str] = {}
@@ -274,9 +275,13 @@ class PiDriver:
         """Stop the turn. A dialog open on a gate of the user's would hold up `abort`, so it is cancelled first. What
         pi queued stays behind in its queue, where no run takes it, so `_ended` clears that, and the runtime offers it
         again."""
-        for id in tuple(self._asking):
-            await self._lines.send({"type": "extension_ui_response", "id": id, "cancelled": True})
-        await self._ask("abort")
+        self._interrupted = True
+        try:
+            for id in tuple(self._asking):
+                await self._lines.send({"type": "extension_ui_response", "id": id, "cancelled": True})
+            await self._ask("abort")
+        finally:
+            self._interrupted = self._turn is not None
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._asking:
@@ -288,11 +293,11 @@ class PiDriver:
 
     async def reconcile(self, input_id: str) -> Reconciled:
         """What came of an input after a crash is in the session's entries, whole and on disk, and the text of each
-        names its input. Pi loses what it had only queued, so an input not there will not land."""
+        names its input. A miss proves nothing, as the id may be an approval's, so this never says `not_landed`."""
         heading = delivery_heading(input_id)
         entries = (await self._ask("get_entries")).get("entries", ())
         said = (entry["message"] for entry in entries if entry.get("message", {}).get("role") == "user")
-        return "landed" if any(text_of(message["content"]).startswith(heading) for message in said) else "not_landed"
+        return "landed" if any(text_of(message["content"]).startswith(heading) for message in said) else "unknown"
 
     async def stop(self, grace: float) -> None:
         """End of stdin ends pi and the tool it has running, which leads a group of its own, as a `SIGTERM` does and a
@@ -456,7 +461,7 @@ class PiDriver:
     async def _compacted(self, result: Mapping[str, Any]) -> None:
         """Name what left the context, by asking. So this can follow the turn's end, and it says nothing of the turn."""
         forgotten = None
-        with contextlib.suppress(DriverError, KeyError):
+        with contextlib.suppress(DriverError, *UNREADABLE):
             listing = await self._ask("get_entries")
             forgotten = _forgotten(listing["entries"], listing["leafId"], result["firstKeptEntryId"])
         self._process.put(Compacted(forgotten=forgotten, summary=result.get("summary")))
@@ -466,9 +471,10 @@ class PiDriver:
         stopped short left in pi's queue, so that is cleared, as the runtime offers it again."""
         if self._turn is None:
             return
-        reason = "interrupted" if aborted else self._failure or "stopped"
+        cut = "interrupted" if self._interrupted else "aborted"  # Pi or an extension of the user's may abort a run.
+        reason = cut if aborted else self._failure or "stopped"
         self._process.put(TurnEnded(reason=reason))
-        self._turn, self._failure = None, None
+        self._turn, self._failure, self._interrupted = None, None, False
         self._asking.clear()
         self._deciding.clear()
         if self._inputs and reason != "stopped":

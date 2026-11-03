@@ -176,6 +176,7 @@ class Peer:
         self._jsonrpc = jsonrpc
         self._last_id = 0
         self._pending: dict[int, asyncio.Future[Any]] = {}
+        self._abandoned: set[int] = set()
         self._serving: dict[int | str, asyncio.Task[None]] = {}
         self._ended: Closed | None = None
 
@@ -206,6 +207,9 @@ class Peer:
             return await answer
         except ConnectionError as error:
             raise self._ended or Closed(str(error)) from error
+        except asyncio.CancelledError:
+            self._abandoned.add(id)
+            raise
         finally:
             del self._pending[id]
 
@@ -265,6 +269,8 @@ class Peer:
             case {"id": id, "error": dict(error)} if "result" not in frame and self._awaits(id):
                 code, message = error.get("code", INTERNAL_ERROR), str(error.get("message", ""))
                 self._pending[id].set_exception(RpcError(code, message, error.get("data")))
+            case {"id": id, "result": _} | {"id": id, "error": _} if type(id) is int and id in self._abandoned:
+                self._abandoned.discard(id)  # Whoever asked gave up, so nobody is left to hear it.
             case {"id": _, "result": _} | {"id": _, "error": _}:
                 self._stray(line)
             case _:

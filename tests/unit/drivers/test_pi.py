@@ -855,6 +855,33 @@ async def test_what_cannot_be_named_stays_unknown_and_the_summary_is_kept(tmp_pa
     assert (compacted.forgotten, compacted.summary) == (None, "the summary")
 
 
+async def test_a_compaction_whose_listing_does_not_read_is_still_reported(tmp_path, stand):
+    stand.install(turns=[[BEGAN, compaction(), ENDED]], entries=[5], leaf="c1")
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        compacted = await heard.until(Compacted)
+
+    assert compacted.forgotten is None
+
+
+async def test_a_run_pi_aborted_with_nobody_interrupting_reads_as_aborted(tmp_path, stand):
+    reports = await played(stand, tmp_path, ABORTED)
+
+    assert reports[-1] == TurnEnded(reason="aborted")
+
+
+async def test_an_interrupt_that_found_no_turn_labels_no_later_abort(tmp_path, stand):
+    stand.install(turns=[[BEGAN, user("go"), ABORTED]])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        await driver.interrupt()
+        await driver.deliver(delivery("41", "turn", "go"))
+        ended = await heard.until(TurnEnded)
+
+    assert ended.reason == "aborted"
+
+
 async def test_a_compaction_that_came_to_nothing_spent_what_nobody_can_say(tmp_path, stand):
     failed = {"type": "compaction_end", "reason": "threshold", "aborted": False, "errorMessage": "boom"}
     reports = await played(stand, tmp_path, failed)
@@ -911,12 +938,13 @@ async def test_an_input_in_the_session_s_entries_landed(tmp_path, stand):
         assert await driver.reconcile("41") == "landed"
 
 
-async def test_an_input_not_in_the_session_s_entries_will_not_land(tmp_path, stand):
+async def test_an_id_not_in_the_session_s_entries_is_unknown_as_it_may_be_an_approval_s(tmp_path, stand):
     stand.install(entries=said_entries(f"{delivery_heading(411)}\n- inbox/ada@3 from @lead: hello", "some goal"))
 
     async with running(make_spec(tmp_path, resume="s-1")) as (driver, heard):
         await heard.until(Ready)
-        assert await driver.reconcile("41") == "not_landed"
+        assert await driver.reconcile("41") == "unknown"
+        assert await driver.reconcile("approval-7") == "unknown"
 
 
 async def test_an_answer_that_cannot_be_had_is_no_verdict_on_an_input(tmp_path, stand):

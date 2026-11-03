@@ -160,6 +160,10 @@ def kinds(reports: list[Any]) -> list[type]:
     return [type(report) for report in reports]
 
 
+def heard_natives(reports: list[Any]) -> list[Native]:
+    return [report for report in reports if isinstance(report, Native)]
+
+
 # What it launches.
 
 
@@ -642,6 +646,49 @@ async def test_a_frame_of_a_known_type_that_does_not_read_is_native_too(tmp_path
     assert next(report for report in reports if isinstance(report, Native)).kind == "assistant"
 
 
+async def test_a_known_frame_of_a_shape_nobody_expected_is_native_and_the_agent_lives_on(tmp_path, stand):
+    nulled = stream({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": None}})
+    numbered = assistant({"type": "text", "text": 5})
+    halved = assistant(said("half an emoji \ud83d here"))
+    unhashable = {"type": "control_response", "response": {"request_id": ["no"], "subtype": "success"}}
+
+    reports = await played(stand, tmp_path, called(), nulled, numbered, halved, unhashable, result())
+
+    assert [native.kind for native in heard_natives(reports)] == ["assistant", "assistant", "control_response"]
+    usage = next(report for report in reports if isinstance(report, Usage))
+    assert (usage.tokens, usage.label) == (30, "provider")
+    assert reports[-1] == TurnEnded(reason="stopped")
+
+
+async def test_a_turn_s_end_that_does_not_read_still_ends_the_turn(tmp_path, stand):
+    reports = await played(stand, tmp_path, result(model_usage_since_last_result={"m": 5}))
+
+    assert heard_natives(reports)[0].kind == "result/success"
+    assert reports[-1] == TurnEnded(reason="its end could not be read")
+
+
+async def test_a_request_the_harness_waits_on_that_does_not_read_is_refused(tmp_path, stand):
+    asked = {"type": "control_request", "request_id": "r1", "request": {"subtype": "can_use_tool", "tool_name": 5}}
+    stand.install(turns=[[STARTED, asked, result()]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        await heard.until(TurnEnded)
+        await heard.until(Native)
+
+    assert next(frame for frame in stand.heard if frame["type"] == "control_response")["response"]["request_id"] == "r1"
+    assert not heard.of(ApprovalRequested)
+
+
+async def test_a_call_whose_count_is_nothing_is_no_measurement(tmp_path, stand):
+    empty = stream({"type": "message_start", "message": {"id": "msg_1", "model": "m", "usage": {}}})
+    closed = stream({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {}})
+
+    reports = await played(stand, tmp_path, empty, closed, result())
+
+    usage = next(report for report in reports if isinstance(report, Usage))
+    assert (usage.tokens, usage.label, usage.call_id) == (None, "unavailable", "msg_1")
+
+
 async def test_a_block_nobody_knows_is_native_too(tmp_path, stand):
     reports = await played(stand, tmp_path, assistant({"type": "new_block", "x": 1}), result())
 
@@ -787,6 +834,40 @@ async def test_an_interrupt_has_the_harness_drop_what_it_queued_since_the_runtim
     )
     assert asked["request"]["cancel_queued"] is True
     assert not heard.of(InputDelivered)
+
+
+async def test_an_interrupt_as_a_handover_begins_a_turn_cuts_that_turn_and_says_so(tmp_path, stand):
+    aborted = result(subtype="error_during_execution", is_error=True, terminal_reason="aborted_streaming")
+    stand.install(turns=[[]], on_interrupt_first=[STARTED], on_interrupt=[aborted])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        await driver.deliver(delivery())
+        await driver.interrupt()
+        ended = await heard.until(TurnEnded)
+
+    assert ended.reason == "interrupted"
+
+
+async def test_an_interrupt_that_cancelled_a_handover_labels_no_later_turn(tmp_path, stand):
+    failure = result(is_error=True, terminal_reason="api_error")
+    stand.install(turns=[[], [STARTED, failure]], queued_from=0)
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await heard.until(Ready)
+        await driver.deliver(delivery())
+        await driver.interrupt()
+        await driver.deliver(delivery("42"))
+        ended = await heard.until(TurnEnded)
+
+    assert ended.reason == "api_error"
+
+
+async def test_a_goal_a_model_may_have_written_never_runs_as_a_slash_command(tmp_path, stand):
+    with pytest.raises(DriverError, match="slash command"):
+        await ClaudeDriver().start(make_spec(tmp_path, goal="/clear the cache"), Heard())
+
+    assert not stand.script.with_suffix(".launch").exists()
 
 
 async def test_a_turn_that_finished_as_an_interrupt_came_stopped_on_its_own(tmp_path, stand):

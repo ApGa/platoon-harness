@@ -33,6 +33,7 @@ def control(id: str, subtype: str) -> None:
     if subtype == "interrupt":
         for input in inputs[script.get("queued_from", len(inputs)) :]:
             say(json.dumps({"type": "command_lifecycle", "state": "cancelled", "command_uuid": input}))
+        play(script.get("on_interrupt_first", ()), inputs[-1] if inputs else "")
     response = {"subtype": "success", "request_id": id, "response": answers.get(subtype)}
     say(json.dumps({"type": "control_response", "response": response}))
     if subtype == "interrupt":
