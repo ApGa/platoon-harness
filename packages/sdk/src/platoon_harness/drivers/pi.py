@@ -49,7 +49,6 @@ from .process import LOG, Process, status
 _PI = "pi"
 _EXTENSION = Path(__file__).with_name("pi_extension.js")
 _EXTENSION_CONFIG = "PLATOON_HARNESS_PI"
-_ENVIRONMENT = {"PI_OFFLINE": "1", "PI_TELEMETRY": "0", "PI_SKIP_VERSION_CHECK": "1"}
 _SIGN_IN = (
     "PI_CODING_AGENT_DIR",
     "PI_CODING_AGENT_SESSION_DIR",
@@ -115,7 +114,7 @@ __all__ = ["PiDriver"]
 def _login() -> Login | None:
     """Which kind of login pi holds for the provider its settings name, or None if it cannot tell. Asking takes a
     provider. Only that field is read, and it fetches no credential and refreshes none."""
-    env = {**inherited(*_SIGN_IN), **_ENVIRONMENT}
+    env = inherited(*_SIGN_IN)
     home = env.get("PI_CODING_AGENT_DIR") or Path(env.get("HOME", "")) / ".pi" / "agent"
     try:
         provider = json.loads((Path(home).expanduser() / "settings.json").read_text())["defaultProvider"]
@@ -213,7 +212,7 @@ class PiDriver:
         self._native = spec.resume or str(uuid4())
         self._folder = spec.folder
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        env = {**harness_env(spec, *_SIGN_IN), **_ENVIRONMENT, _EXTENSION_CONFIG: _extension_config(spec)}
+        env = {**harness_env(spec, *_SIGN_IN), _EXTENSION_CONFIG: _extension_config(spec)}
         self._launched = await Process.launch(self._command(spec), spec, report, read=self._read, env=env)
         self._lines.open(self._launched.stdin)
         await self._handshake(spec, await asyncio.to_thread(_version, env))

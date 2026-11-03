@@ -198,12 +198,11 @@ async def test_it_leaves_the_user_s_setup_alone(tmp_path, stand):
     assert "PI_CODING_AGENT_DIR" not in launch["env"]
 
 
-async def test_the_environment_turns_off_what_pi_does_on_its_own(tmp_path, stand):
+async def test_what_pi_does_on_its_own_is_left_to_it(tmp_path, stand):
     async with running(make_spec(tmp_path, goal="")) as (_, heard):
         await heard.until(Ready)
 
-    env = stand.launch["env"]
-    assert (env["PI_OFFLINE"], env["PI_TELEMETRY"], env["PI_SKIP_VERSION_CHECK"]) == ("1", "0", "1")
+    assert not {"PI_OFFLINE", "PI_TELEMETRY", "PI_SKIP_VERSION_CHECK"} & set(stand.launch["env"])
 
 
 async def test_what_signs_it_in_comes_from_the_shell_and_a_provider_key_does_not(tmp_path, stand, monkeypatch):

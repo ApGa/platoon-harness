@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import json
 import os
-import stat
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -174,7 +173,7 @@ async def test_the_launch_is_the_one_path(tmp_path, stand):
         ready = await heard.until(Ready)
 
     argv = stand.launch["argv"]
-    assert argv[:10] == [
+    assert argv[:14] == [
         "-p",
         "--input-format",
         "stream-json",
@@ -184,9 +183,13 @@ async def test_the_launch_is_the_one_path(tmp_path, stand):
         "--include-partial-messages",
         "--permission-prompt-tool",
         "stdio",
+        "--permission-mode",
+        "default",
+        "--disallowedTools",
+        "AskUserQuestion",
         "--session-id",
     ]
-    assert argv[10] == ready.native
+    assert argv[14] == ready.native
     assert argv[argv.index("--model") + 1] == "fake-model"
     assert argv[argv.index("--allowedTools") + 1] == "mcp__ph__*"
     assert Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text() == "the preamble"
@@ -196,39 +199,32 @@ async def test_it_leaves_the_user_s_setup_and_the_runtime_s_approvals_alone(tmp_
     async with running(make_spec(tmp_path, goal="")) as (_, heard):
         await heard.until(Ready)
 
-    forbidden = ("--setting-sources", "--strict-mcp-config", "--max-turns", "--permission-mode", "--permission-prompts")
-    assert not [flag for flag in stand.launch["argv"] if flag in forbidden or "dangerously" in flag]
+    argv = stand.launch["argv"]
+    forbidden = ("--setting-sources", "--strict-mcp-config", "--max-turns", "--permission-prompts")
+    assert not [flag for flag in argv if flag in forbidden or "dangerously" in flag]
+    assert argv[argv.index("--permission-mode") + 1] == "default"
 
 
-async def test_the_tool_token_is_in_a_private_file_and_never_in_argv(tmp_path, stand):
-    tools = ToolBinding(url="http://127.0.0.1:1/mcp", token=Secret("tok-1"), namespace="ph", bin=tmp_path)
-
-    async with running(make_spec(tmp_path, tools=tools)) as (_, heard):
-        await heard.until(Ready)
-        argv = stand.launch["argv"]
-        path = Path(argv[argv.index("--mcp-config") + 1])
-        servers = json.loads(path.read_text())["mcpServers"]
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-
-    assert "tok-1" not in " ".join(argv)
-    assert servers == {
-        "ph": {
-            "type": "http",
-            "url": "http://127.0.0.1:1/mcp",
-            "headers": {"Authorization": "Bearer tok-1"},
-            "alwaysLoad": True,
-        }
-    }
-
-
-async def test_a_stop_leaves_no_token_at_rest(tmp_path, stand):
+async def test_the_tool_token_stays_in_the_environment_and_argv_names_its_variable(tmp_path, stand):
     tools = ToolBinding(url="http://127.0.0.1:1/mcp", token=Secret("tok-1"), namespace="ph", bin=tmp_path)
     spec = make_spec(tmp_path, tools=tools)
 
     async with running(spec) as (_, heard):
         await heard.until(Ready)
+        launch = stand.launch
 
-    assert not (spec.folder / "mcp.json").exists()
+    argv = launch["argv"]
+    assert "tok-1" not in " ".join(argv)
+    assert launch["env"]["PLATOON_HARNESS_TOKEN"] == "tok-1"
+    assert json.loads(argv[argv.index("--mcp-config") + 1])["mcpServers"] == {
+        "ph": {
+            "type": "http",
+            "url": "http://127.0.0.1:1/mcp",
+            "headers": {"Authorization": "Bearer ${PLATOON_HARNESS_TOKEN}"},
+            "alwaysLoad": True,
+        }
+    }
+    assert not [path for path in spec.folder.rglob("*") if path.is_file() and b"tok-1" in path.read_bytes()]
 
 
 async def test_an_unset_model_on_the_harness_s_own_login_is_its_own_default_and_ready_says_which(tmp_path, stand):
@@ -296,12 +292,13 @@ async def test_what_the_shell_needs_to_sign_in_gets_through_and_a_key_does_not(t
     assert not {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE"} & set(env)
 
 
-async def test_auto_memory_and_background_tasks_are_off(tmp_path, stand):
+async def test_background_tasks_are_off_and_the_user_s_memory_is_left_alone(tmp_path, stand):
     async with running(make_spec(tmp_path, goal="")) as (_, heard):
         await heard.until(Ready)
 
     env = stand.launch["env"]
-    assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
+    assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
+    assert "CLAUDE_CODE_DISABLE_AUTO_MEMORY" not in env
 
 
 async def test_effort_goes_to_the_harness_as_it_stands(tmp_path, stand):
@@ -390,15 +387,25 @@ async def test_ready_says_what_was_observed(tmp_path, stand):
     assert (ready.version, ready.effective_model, ready.tools_visible) == ("2.1.316", "fake-model", None)
 
 
-async def test_a_connected_server_proves_nothing_and_a_failed_one_hides_our_tools(tmp_path, stand):
+async def test_a_connected_server_proves_nothing_and_one_of_theirs_that_failed_is_theirs(tmp_path, stand):
     tools = ToolBinding(url="http://127.0.0.1:1/mcp", token=Secret("t"), namespace="ph", bin=tmp_path)
-    for status, shown in (("connected", None), ("failed", ())):
-        stand.install(servers=[{"name": "ph", "status": status}, {"name": "theirs", "status": "failed"}])
+    stand.install(servers=[{"name": "ph", "status": "connected"}, {"name": "theirs", "status": "failed"}])
 
-        async with running(make_spec(tmp_path, tools=tools, goal="")) as (_, heard):
-            ready = await heard.until(Ready)
+    async with running(make_spec(tmp_path, tools=tools, goal="")) as (_, heard):
+        ready = await heard.until(Ready)
 
-        assert ready.tools_visible == shown
+    assert ready.tools_visible is None
+
+
+async def test_our_tools_failing_to_connect_fails_the_start_and_says_why(tmp_path, stand):
+    tools = ToolBinding(url="http://127.0.0.1:1/mcp", token=Secret("t"), namespace="ph", bin=tmp_path)
+    stand.install(servers=[{"name": "ph", "status": "failed"}])
+    driver = ClaudeDriver()
+
+    with pytest.raises(DriverError, match=r"our tools did not connect.*stderr\.log"):
+        await driver.start(make_spec(tmp_path, tools=tools, goal=""), Heard())
+
+    await driver.stop(GRACE)
 
 
 async def test_a_harness_that_dies_coming_up_says_where_to_look(tmp_path, stand):

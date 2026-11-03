@@ -4,6 +4,7 @@ import asyncio
 import fcntl
 import json
 import os
+import re
 import shutil
 import signal
 from pathlib import Path
@@ -15,6 +16,7 @@ from platoon_harness import Role, Session, Team
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
+    ApprovalRequested,
     Compacted,
     Delivery,
     DriverError,
@@ -30,7 +32,7 @@ from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import read_running
 from platoon_harness.team import AuthProfile
-from platoon_harness.testing import NAMESPACE, TOOL, FakeModel, Stall, Text, ToolCall, check_driver
+from platoon_harness.testing import NAMESPACE, TOOL, FakeModel, FakeTools, Stall, Text, ToolCall, check_driver
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 
 from ..unit.drivers.support import Heard
@@ -162,6 +164,77 @@ async def test_a_real_harness_calls_our_tools_parks_wakes_and_resumes_in_a_sessi
 
     assert model.calls[-1].says("cinnabar")
     assert model.calls[0].offers("mcp__ph__wait")
+
+
+async def test_a_user_s_auto_memory_reaches_the_model_as_it_does_in_their_shell(tmp_path):
+    work = tmp_path / "work"
+    (work / ".git").mkdir(parents=True)  # What Claude Code keys a project's memory on.
+    (work / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    memory = tmp_path / "home" / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(work)) / "memory"
+    memory.mkdir(parents=True)
+    (memory / "MEMORY.md").write_text("- [a fact](fact.md) the word is heliotrope\n")
+
+    async with FakeModel("ok") as model:
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert model.calls[0].says("heliotrope")
+
+
+@pytest.mark.parametrize("mode", ["acceptEdits", "bypassPermissions"])
+async def test_a_denial_holds_whatever_mode_a_user_s_settings_name(tmp_path, mode):
+    settings = tmp_path / "home" / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"permissions": {"defaultMode": mode}}))
+
+    async with FakeModel(ToolCall(BASH, {"command": "touch denied", "description": "x"}), "ok") as model:
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "deny")
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert not (tmp_path / "work" / "denied").exists()
+
+
+async def test_a_question_no_verdict_can_answer_is_not_offered(tmp_path):
+    async with FakeModel("ok") as model:
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert not model.calls[0].offers("AskUserQuestion")
+    assert model.calls[0].offers(BASH)
+
+
+async def test_the_token_reaches_the_server_from_the_environment_and_no_file_holds_it(tmp_path):
+    async with FakeModel(ours("hello"), "ok") as model, FakeTools() as tools:
+        binding = tools.binding(tmp_path)
+        spec = on_fake_model(tmp_path, model, goal="go", tools=binding)
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert model.calls[0].offers(TOOL)
+    assert tools.calls
+    token = binding.token.reveal().encode()
+    assert not [path for path in spec.folder.rglob("*") if path.is_file() and token in path.read_bytes()]
+
+
+async def test_a_server_that_refuses_us_fails_the_start_and_says_why(tmp_path):
+    async with FakeModel() as model, FakeTools() as tools:
+        binding = tools.binding(tmp_path).model_copy(update={"token": Secret("not-the-token")})
+        driver = ClaudeDriver()
+        with pytest.raises(DriverError, match="our tools did not connect"):
+            await driver.start(on_fake_model(tmp_path, model, tools=binding), Heard())
+        await driver.stop(2.0)
+
+    assert not model.calls
 
 
 async def test_a_real_harness_finishes_with_its_turn(tmp_path, monkeypatch):

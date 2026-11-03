@@ -66,6 +66,7 @@ _KEY = "OPENAI_API_KEY"
 _PROVIDER = "platoon-harness"
 _LOGINS: Mapping[str, Login] = {"Logged in using ChatGPT": "plan", "API key configured": "key"}
 _ASKS = "on-request"
+_TOOL_TIMEOUT_S = 300.0
 _TOOLS = frozenset(
     {
         "collabAgentToolCall",
@@ -119,6 +120,7 @@ _CAPABILITIES = Capabilities(
     resume=True,
     boundaries={"turn", "model_call"},
     tool_paths={"mcp-http"},
+    tool_timeout_s=_TOOL_TIMEOUT_S,
     interrupt=True,
     approvals="native",
     native_children="observed",

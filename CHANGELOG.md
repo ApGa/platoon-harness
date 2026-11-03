@@ -59,6 +59,13 @@
 
 ### Fixed
 
+- A role runs in the user's own setup. Claude Code no longer has auto memory turned off, and pi no longer has its network, telemetry and
+  version check turned off: those were a sealed launch's settings, left behind.
+- A user's `defaultMode` can no longer answer before the runtime hears, so a role's `deny` holds on Claude Code, and `AskUserQuestion`,
+  which a verdict cannot answer, is no longer offered.
+- Claude Code's tool token is in no file: `--mcp-config` names its variable, as Codex's and pi's launches do.
+- Our tools failing to connect fails a Claude Code agent's start, where the agent used to run on with no way to coordinate.
+- Codex declares its 300 s cap on one tool call, so a `hold` past it is refused up front.
 - What a harness took and never landed is queued again when its turn stops short, and when it comes back from a crash, by one fold, so
   a steer no longer goes missing across a crash, and no driver sends anything again, or fails to in silence. Claude Code drops its queue
   at an interrupt, as it would otherwise begin a turn on it by itself.

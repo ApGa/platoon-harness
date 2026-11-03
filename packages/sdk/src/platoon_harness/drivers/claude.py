@@ -14,6 +14,7 @@ from uuid import UUID, uuid4, uuid5
 
 from platoon_harness.primitives import Verdict
 from platoon_harness.rpc import Lines
+from platoon_harness.tools.ph import TOKEN_VARIABLE
 
 from . import (
     UNREADABLE,
@@ -56,8 +57,12 @@ _LAUNCH = (
     "--include-partial-messages",
     "--permission-prompt-tool",
     "stdio",
+    "--permission-mode",  # A user's `defaultMode` would answer before the runtime hears.
+    "default",
+    "--disallowedTools",  # The prompt tool brings this in, and no verdict can answer it.
+    "AskUserQuestion",
 )
-_ENVIRONMENT = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
+_ENVIRONMENT = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
 _SIGN_IN = (
     "CLAUDE_CONFIG_DIR",
     "HTTPS_PROXY",
@@ -71,7 +76,6 @@ _SIGN_IN = (
 _GATEWAY_URL = "ANTHROPIC_BASE_URL"
 _GATEWAY_CREDENTIALS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 _LOGINS: Mapping[str, Login] = {"claude.ai": "plan", "api_key": "key"}
-_SERVERS = "mcp.json"
 _INSTRUCTIONS = "instructions.md"
 _SYNTHETIC = "<synthetic>"
 _DENIED = "The runtime denied this."
@@ -123,6 +127,10 @@ def _call_tokens(usage: Mapping[str, Any]) -> int:
 def _tree_tokens(spent: Mapping[str, Any]) -> int:
     parts = ("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens", "outputTokens")
     return sum(model.get(part, 0) for model in spent.values() for part in parts)
+
+
+def _failed(server: Mapping[str, Any], namespace: str) -> bool:
+    return server.get("name") == namespace and server.get("status") == "failed"
 
 
 def _kind(frame: Any) -> str:
@@ -186,18 +194,17 @@ class ClaudeDriver:
             await self._lines.send(self._user(spec.goal, str(uuid4())))
 
     def _command(self, spec: AgentSpec) -> list[str]:
-        """How this agent launches: one path, and its files are written first. The server's token is in a file, and
-        never in argv, where any process could read it."""
+        """How this agent launches: one path, and its files are written first. The server's token stays in the
+        environment, and argv, which any process can read, names only its variable."""
         command = [*_LAUNCH, "--resume" if spec.resume else "--session-id", self._native]
         if spec.model is not None:
             command += ["--model", spec.model]
         if spec.effort is not None:
             command += ["--effort", spec.effort]
         if (tools := spec.tools) is not None:
-            headers = {"Authorization": f"Bearer {tools.token.reveal()}"}
+            headers = {"Authorization": f"Bearer ${{{TOKEN_VARIABLE}}}"}
             server = {"type": "http", "url": tools.url, "headers": headers, "alwaysLoad": True}
-            servers = json.dumps({"mcpServers": {tools.namespace: server}})
-            command += ["--mcp-config", private(spec.folder / _SERVERS, servers)]
+            command += ["--mcp-config", json.dumps({"mcpServers": {tools.namespace: server}})]
             command += ["--allowedTools", f"mcp__{tools.namespace}__*"]
         if spec.instructions is not None:
             command += ["--append-system-prompt-file", private(spec.folder / _INSTRUCTIONS, spec.instructions)]
@@ -205,25 +212,16 @@ class ClaudeDriver:
 
     async def _handshake(self, spec: AgentSpec) -> None:
         """Ask what no frame says before the first turn. `initialize` is the handshake, and none of this calls a model.
-        The harness warns of an effort it does not know and runs on, so that is refused here."""
+        The harness warns of an effort it does not know and runs on, and of a server that failed, so both are refused
+        here. A server that connected proves no model saw its tools, so what `ready` says of those stays unknown."""
         version = (await self._ask("initialize")).get("claude_code_version")
         applied = (await self._ask("get_settings")).get("applied", {})
         refuse_other_effort(spec, applied.get("effort"))
-        ready = Ready(
-            native=self._native,
-            version=version,
-            effective_model=applied.get("model"),
-            tools_visible=await self._tools_visible(spec),
-        )
-        self._process.put(ready)
-
-    async def _tools_visible(self, spec: AgentSpec) -> tuple[str, ...] | None:
-        """A connected server proves no model saw its tools, so that stays unknown. A failed one proves none did."""
-        if spec.tools is None:
-            return None
-        servers = (await self._ask("mcp_status")).get("mcpServers", ())
-        ours = (server.get("status") for server in servers if server.get("name") == spec.tools.namespace)
-        return () if "failed" in ours else None
+        if spec.tools is not None:
+            servers = (await self._ask("mcp_status")).get("mcpServers", ())
+            if any(_failed(server, spec.tools.namespace) for server in servers):
+                raise DriverError(f"our tools did not connect, so it could reach nobody: see {self._folder / LOG}")
+        self._process.put(Ready(native=self._native, version=version, effective_model=applied.get("model")))
 
     # What the harness is sent.
 
@@ -289,7 +287,6 @@ class ClaudeDriver:
         if self._turn is not None or self._inputs:
             self._lines.write(self._control("interrupt", cancel_queued=True))
         await self._launched.stop(grace)
-        (self._folder / _SERVERS).unlink(missing_ok=True)
 
     # What the harness says.
 

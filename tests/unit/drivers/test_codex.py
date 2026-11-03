@@ -361,6 +361,10 @@ def test_describe_cannot_tell_when_the_status_hangs(stand, monkeypatch):
     assert CodexDriver().describe().login is None
 
 
+def test_the_cap_on_one_tool_call_is_declared_so_a_hold_past_it_is_refused_up_front():
+    assert CodexDriver().describe().capabilities.tool_timeout_s == 300.0
+
+
 def test_describe_cannot_tell_with_no_binary(monkeypatch):
     monkeypatch.setenv("PATH", "")
 

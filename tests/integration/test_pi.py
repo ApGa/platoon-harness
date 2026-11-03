@@ -58,6 +58,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
 MODEL = "fake-model"
 PINNED = "1.5.0"
+OFFLINE = "PI_OFFLINE"  # What a test asks of pi, as tests reach no network. A user's pi is left to reach its own.
 TIMEOUT = 60.0
 BASH = "bash"
 PRICE = {"input": 1.0, "output": 2.0, "cacheRead": 0.0, "cacheWrite": 0.0}
@@ -86,7 +87,7 @@ def access(home: Path):
 
     def given(model: FakeModel) -> dict[str, Secret]:
         own_setup(home, model)
-        return {"HOME": Secret(str(home))}
+        return {"HOME": Secret(str(home)), OFFLINE: Secret("yes")}
 
     return given
 
@@ -145,7 +146,7 @@ def on_fake_model(tmp_path: Path, fake: FakeModel, *, settings: Any = None, **fi
     home = tmp_path / "home"
     own_setup(home, fake, **(settings or {}))
     spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
-    return AgentSpec.model_validate({**spec, "access": {"HOME": Secret(str(home))}, **fields})
+    return AgentSpec.model_validate({**spec, "access": {"HOME": Secret(str(home))}, "env": {OFFLINE: "1"}, **fields})
 
 
 def tool(name: str, id: str, **arguments: Any) -> ToolCall:
@@ -158,8 +159,9 @@ def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role:
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OPENAI_BASE_URL", f"{model.url}/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "dummy-key")
+    monkeypatch.setenv(OFFLINE, "yes")
     bob = Role(harness="pi", model=MODEL, auth="fake", **role)
-    return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY"))})
+    return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY", OFFLINE))})
 
 
 def their_extension(home: Path, source: str) -> None:
@@ -203,7 +205,7 @@ async def test_a_role_with_no_login_is_refused_and_says_how_to_sign_in(tmp_path)
     fields = {"agent": "ada", "role": "worker", "goal": "go", "cwd": tmp_path / "work", "folder": tmp_path / "ada"}
 
     for model in (None, "openai/gpt-5.4"):
-        spec = AgentSpec(**fields, model=model, env={"HOME": str(tmp_path / "home")})
+        spec = AgentSpec(**fields, model=model, env={"HOME": str(tmp_path / "home"), OFFLINE: "1"})
         driver = PiDriver()
         with pytest.raises(DriverError, match="no login for"):
             await driver.start(spec, Heard())

@@ -144,8 +144,7 @@ class Recording(LocalAuthority):
 
 def leaks(folder: Path, *secrets: Secret) -> list[str]:
     """Every file under a session folder holding a credential, in plain or encoded form, by path relative to it. The
-    tokens of a client live in their own files, which is no leak, and whatever a live harness holds its token in goes
-    when it stops."""
+    tokens of a client live in their own files, which is no leak."""
     redact = Redactor(secrets)
     found = []
     for path in folder.rglob("*"):
