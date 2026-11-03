@@ -25,8 +25,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **An interrupt under a `tokens` limit,** section 18, is runs 44 and 45: 3 model calls from 2 journals, of a limit of 20.
 - **The command line,** section 17, is runs 40 to 43, through the installed `platoon-harness`: 31 model calls from 4 journals, of a
   limit of 50, with their transcripts and journals kept outside the repository too.
-- **The terminal UI,** section 19, is runs 46 and 47, driven by Pilot: 14 model calls from 1 journal, of a limit of 40. Run 46 made
-  no session and spent nothing.
+- **The terminal UI,** section 19, is runs 46 to 54, driven by Pilot: 75 model calls from 8 journals, each run under the test's
+  limit of 30. Run 46 made no session and spent nothing.
 
 ## Results
 
@@ -321,6 +321,13 @@ detached runtime: a Claude Code lead and a Codex worker in a read-only sandbox w
 |---|---|---|
 | 46 | 0 | Failed before any session was made: the test's own wait for the screen cancelled the worker that was starting it, as a task that awaits a Textual worker and is cancelled cancels the worker. The helper was fixed |
 | 47 | 14 | Passed in 48 s. The plan login was asked about once. The job went from the composer; the lead spawned `w` and ended its turn; `w` asked to run `echo hello > out.txt` and the approval was allowed from the dock, `via` `tui`, once; a memo to the worker's topic was queued while it worked; its story streamed as live text, and Esc interrupted it mid-turn. The memo woke nothing, and `w` took no turn until a person's message came, which landed it. The lead was woken by its wait holding on the cut report, took a turn, and finished on `w`'s next answer; `w` retired with it. After Ctrl+D, a new app attached and saw the session settled. The lead made 9 calls in 3 turns and `w` 5 in 2 |
+| 48 | 6 | Failed on the test. The form filled with Enter, the plan login was asked about once, the job went from the composer, the approval was allowed from the dock once Alt+A had chosen it, live text was seen, and Esc interrupted `w` mid-turn with its memo quiet. Then the test's step that Ctrl+D quits failed, as Ctrl+D now comes back to the sessions screen. The test was fixed |
+| 49 | 9 | Failed on model timing. The same steps held through the approval and the live text, but Esc reached `w` as its turn was ending on `agent.finish`, so the turn ended `finished`, not `interrupted`. The story was made 1,500 words long, to keep the turn open |
+| 50 | 8 | Failed with no approval. Told to run the command "asking for approval", `w` asked the lead for approval in a message and finished, and the lead would not approve for a person. The job was reworded to say to run it itself |
+| 51 | 13 | Every act held, and the test failed on its own first check. The reworded job was 290 characters, so the composer sent a cut gist with the job as its body. The memo woke `w` after its first turn, as `wake` delivery does, and Esc interrupted that turn. The test now refuses a job longer than a gist before it starts a session |
+| 52 | 3 | Esc interrupted `w` mid-story and quieted its wake, and the journal had it idle within a millisecond. The test's own wait then missed the one frame that drew it, as it read the frame count after a pause, and timed out. It now waits through `drawn`, as every other wait does |
+| 53 | 8 | Failed with no approval. Without "your sandbox is read-only", `w` ran the command unescalated, the sandbox refused the write, and it reported the failure. The job now gives both cues |
+| 54 | 14 | Passed in 48 s, on the code of this stage's end. The approval was allowed from the dock once, `via` `tui`. Esc interrupted `w` mid-story with the memo still queued, unread 1, and `w` took no turn until a person's message. Ctrl+D came back to the sessions screen, and a new app attached and saw the session settled. The lead made 11 calls in 3 turns and `w` 3 in 2 |
 
 ## What a real model did that scripted harnesses could not show
 
@@ -337,6 +344,11 @@ detached runtime: a Claude Code lead and a Codex worker in a read-only sandbox w
 - Told it stays for the next message, a Codex child held a `wait` for that message instead of answering, twice, and a role that said
   never to finish lost to a preamble that said to, even with the role's words last. What an agent is told about ending has to agree
   with itself.
+- Whether a Codex worker asks for approval is its own choice, as Codex runs on-request. Of 8 workers that reached the command, 6 asked
+  to escalate. One asked its lead in a message instead, told only to ask for approval. One ran the command unescalated and reported
+  the refused write, not told that its sandbox was read-only. The task needed both cues.
+- A wake hands an agent what woke it and moves its cursor past it, so a `message_read` right after returns no entries. Woken by a
+  memo, a Codex worker read `#memo`, got none, and said there were none.
 
 ## Unknowns
 
