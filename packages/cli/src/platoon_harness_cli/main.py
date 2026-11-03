@@ -60,8 +60,8 @@ def attach(session: str, /) -> int:
     """Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
 
     Attaching changes nothing in the session, and reading it moves only your own marks of how far you have read:
-    only Alt+R, which resumes a session with no runtime, can spend money. Ctrl+D detaches, and the session runs on. It
-    needs a terminal: `events --follow` follows a session as text.
+    only `/resume`, which resumes a session with no runtime, can spend money. `/detach` detaches, and the session runs
+    on. It needs a terminal: `events --follow` follows a session as text.
 
     For example:
 

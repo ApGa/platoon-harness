@@ -22,7 +22,7 @@ from platoon_harness.runtime.paths import MANIFEST
 from ..ops import Flag, described, flags, person_ops
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
-from .keymap import KEYMAP, bindings, keys
+from .keymap import KEYMAP, bindings, command, keys, reach
 from .live import Live
 from .rows import Row, Rows
 from .safe import SafeText, note
@@ -49,8 +49,8 @@ for a person to drive its own terminal, which is not built, so the palette says 
 
 class Dock(Rows, can_focus=False):
     """Where a person must act, a row each. It never takes focus, so a key meant for the composer never answers it, and
-    only the person moves its cursor, with Alt+A or a click: a row that goes takes the cursor with it, so an act never
-    lands on a row they did not choose."""
+    only the person moves its cursor, with Alt+A, `/next-place` or a click: a row that goes takes the cursor with it, so
+    an act never lands on a row they did not choose."""
 
     def show(self, rows: list[Row]) -> None:
         chosen = self.cursor
@@ -376,7 +376,7 @@ class Workspace(Screen[None]):
         """Why this is history, from the session's state: its runtime stopped as its owner asked, went without its
         shutdown, or the session has ended."""
         state = live.status.get("state")
-        resume = " Alt+R resumes it, which can spend money."
+        resume = f" {reach('resume')} resumes it, which can spend money."
         if state in ("closed", "cancelled"):
             return Content.styled(f"The session is {state}: this is its history.", "yellow")
         if state == "stopped":
@@ -484,7 +484,7 @@ class Workspace(Screen[None]):
 
     def _behind(self) -> Content:
         unseen = self.query_one(Transcript).unseen
-        follow = next(key.shown for key in keys("workspace") if key.action == "follow")
+        follow = reach("follow")
         return Content.styled(f"↓ {unseen} new, {follow} to follow" if unseen else f"{follow} to follow", "reverse")
 
     def _inspector(self, live: Live) -> Content:
@@ -522,13 +522,11 @@ class Workspace(Screen[None]):
         return Content("\n").join(lines)
 
     def _dock(self, live: Live) -> list[Row]:
-        """A row per place you must act, and on the one you are at, the keys that take its actions."""
+        """A row per place you must act, and on the one you are at, the keys and typed commands that take its
+        actions."""
         chosen = self.query_one(Dock).cursor
         rows = []
-        first, second = (
-            next(key.shown for key in keys("workspace") if key.action == act)
-            for act in ("first_action", "second_action")
-        )
+        first, second = (reach(act) for act in ("first_action", "second_action"))
         for place in self._places(live):
             actions = place["actions"]
             hints: list[Any] = []
@@ -550,7 +548,7 @@ class Workspace(Screen[None]):
     def _unsendable(self, live: Live) -> str | None:
         """Why the composer cannot send now, or None when it can."""
         if live.runtime != "live":
-            return "this is history: Alt+R resumes the session to send"
+            return f"history: {reach('resume')} resumes it to send"
         if self.target is None:
             return f"{self.focus_on.title if self.focus_on else 'this'} takes no message: choose an agent or a topic"
         return None
@@ -568,11 +566,11 @@ class Workspace(Screen[None]):
         return Content.assemble(*parts)
 
     def _footer(self, live: Live) -> Content:
-        """The footer's keys, each dim while the runtime refuses it for the agent in view, then how many places need
-        you."""
+        """How to reach the typed commands, which every terminal delivers, then the footer's keys, each dim while the
+        runtime refuses it for the agent in view, then how many places need you."""
         agent = self.focus_on.agent if self.focus_on else None
         shown = [key for key in (*keys("everywhere"), *keys("workspace")) if key.footer]
-        parts: list[Any] = []
+        parts: list[Any] = [("/", "bold"), (" commands", "dim"), "  "]
         for key in shown:
             off = (key.action, agent or "") in self._refused
             label = "" if self.size.width < 60 else f" {key.name}"
@@ -650,8 +648,14 @@ class Workspace(Screen[None]):
     def on_composer_empty(self) -> None:
         self.action_detach()
 
-    def on_composer_send(self) -> None:
-        self._send()
+    async def on_composer_send(self) -> None:
+        """Run what the composer holds when it is a typed command, which goes to no agent, or else send it."""
+        composer = self.query_one(Composer)
+        if (key := command(composer.text)) is None:
+            self._send()
+            return
+        composer.remember()
+        await self.run_action(key.runs)
 
     def on_resize(self, event: events.Resize) -> None:
         self._lay_out(event.size.width, event.size.height)
@@ -678,8 +682,8 @@ class Workspace(Screen[None]):
         assert target is not None
         if text.startswith("/"):
             question = SafeText(
-                f"This begins with /, as a harness's own command would. Those are not built yet, so it goes to "
-                f"{target} as a message, which its harness may still read as a command. Send it?"
+                f"This begins with / and is none of our commands, which / alone lists. A harness's own are not built "
+                f"yet, so it goes to {target} as a message, which its harness may still read as a command. Send it?"
             )
             if not await self.app.push_screen_wait(Confirm(question)):
                 return
@@ -741,7 +745,7 @@ class Workspace(Screen[None]):
         said = ", ".join(stopped["stopped"])
         note(self, f"Stopped the turns of {said}. It stops turns, not waits: one parked on a wait is left to it.")
 
-    async def action_next_needing_you(self) -> None:
+    async def action_next_place(self) -> None:
         dock = self.query_one(Dock)
         if (place := dock.step(1)) is None:
             note(self, "Nothing needs you now.")
@@ -762,7 +766,8 @@ class Workspace(Screen[None]):
         live = self.live
         place = live.attention.get(self.query_one(Dock).cursor or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
-            note(self, "Nothing here takes that action: Alt+A goes to where you must act.", severity="warning")
+            said = f"Nothing here takes that action: {reach('next_place')} goes to where you must act."
+            note(self, said, severity="warning")
             return
         action = place["actions"][index]
         args = {**action["args"], **({"via": "tui"} if action["op"] == "approval.resolve" else {})}
@@ -849,7 +854,8 @@ class Workspace(Screen[None]):
     def action_detach(self) -> None:
         """Leave the session to run on: back to the sessions screen when it is under this one, or out."""
         if self.query_one(Composer).text:
-            note(self, "Ctrl+D detaches on an empty composer, and this one holds a draft.", severity="warning")
+            said = f"{reach('detach')} detaches on an empty composer, and this one holds a draft."
+            note(self, said, severity="warning")
             return
         if len(self.app.screen_stack) > 2:
             if (left := self.left()) is not None:
@@ -858,17 +864,12 @@ class Workspace(Screen[None]):
         else:
             self.app.exit(self.left())
 
-    # The palette: these keys, then the commands a person may run, worded as the command line words them.
+    # The palette: the acts of a session, each by its typed command, then the commands a person may run, worded as
+    # the command line words them.
 
     def commands(self) -> list[tuple[str, str, Any]]:
-        found: list[tuple[str, str, Any]] = []
-        for key in (*keys("workspace"), *keys("transcript")):
-            if key.planned:
-                found.append(
-                    (key.name.capitalize(), f"Not built yet: {key.planned}", partial(self.action_planned, key.action))
-                )
-            elif key.where == "workspace":
-                found.append((key.name.capitalize(), key.does, getattr(self, f"action_{key.action}")))
+        acts = (*keys("everywhere"), *keys("workspace"))
+        found: list[tuple[str, str, Any]] = [(key.typed, key.said, partial(self.run_action, key.runs)) for key in acts]
         for name, operation in sorted(person_ops().items()):
             if operation.query or operation.exposes:  # A read is what the screen draws, and the command line prints.
                 continue

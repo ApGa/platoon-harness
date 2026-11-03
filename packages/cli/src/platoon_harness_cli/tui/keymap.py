@@ -1,4 +1,5 @@
-"""The one keymap table. Bindings, help, the footer, the palette and the guide's keymap are all made from it."""
+"""The one keymap table. Bindings, typed commands, help, the footer, the palette and the guide's keymap are all made
+from it."""
 
 import sys
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ Where = Literal["everywhere", "sessions", "workspace", "transcript", "composer",
 WHERE: dict[Where, str] = {
     "everywhere": "Everywhere",
     "sessions": "The sessions screen",
-    "workspace": "A session, whatever has focus",
+    "workspace": "A session, unless the part that has focus takes the key",
     "transcript": "The transcript, once it has focus",
     "composer": "The composer",
     "list": "A list: the sessions, the agents and channels, the help",
@@ -20,12 +21,15 @@ WHERE: dict[Where, str] = {
     "dialog": "A form or the help",
 }
 
+TYPED: tuple[Where, ...] = ("everywhere", "workspace")
+"""Where the acts of a session are, each of which is typed in its composer as `/` and its name."""
+
 
 @dataclass(frozen=True)
 class Key:
     """One action: the keys that run it, where, its name and what it does, in a person's words. `footer` keeps it on
-    the footer, and `priority` runs it before the focused widget's own keys. `planned` says why it is not built yet,
-    which is what pressing it says."""
+    the footer, and `priority` runs it before the focused part's own keys. `planned` says why it is not built yet,
+    which is what pressing it says. An action with no namespace runs on the place that binds it."""
 
     keys: str
     action: str
@@ -48,14 +52,32 @@ class Key:
         said = _NAMES.get(key, (key.upper() if held else key) if len(key) == 1 else key.capitalize())
         return "".join(_HELD[name] for name in held) + said
 
+    @property
+    def typed(self) -> str:
+        """Its typed command, `/` and its name, or nothing for a key that is no act of a session."""
+        return f"/{self.name}" if self.where in TYPED else ""
+
+    @property
+    def said(self) -> str:
+        """What it does, and why it is not built yet when it is not."""
+        return f"{self.does}. Not built yet: {self.planned}" if self.planned else self.does
+
 
 _HELD = {"ctrl": "^", "alt": "Alt+", "shift": "Shift+"}
-_NAMES = {"escape": "Esc", "pageup": "PgUp", "pagedown": "PgDn", "up": "↑", "down": "↓", "slash": "/"}
+_NAMES = {
+    "escape": "Esc",
+    "pageup": "PgUp",
+    "pagedown": "PgDn",
+    "up": "↑",
+    "down": "↓",
+    "slash": "/",
+    "question_mark": "?",
+}
 
 KEYMAP: tuple[Key, ...] = (
-    Key("f1", "help", "help", "Show every key", "everywhere", footer=True),
-    Key("ctrl+p", "command_palette", "commands", "Find a command, an op among them", "everywhere", footer=True),
-    Key("ctrl+q", "leave", "leave", "Leave: a session you are in runs on", "everywhere"),
+    Key("f1", "app.help", "help", "Show every key and typed command", "everywhere"),
+    Key("ctrl+p", "app.command_palette", "palette", "Find a command, an op among them", "everywhere", footer=True),
+    Key("ctrl+q", "app.leave", "quit", "Quit: a session you are in runs on", "everywhere"),
     Key("enter", "open", "open", "Open the session, live or as its history", "sessions", footer=True),
     Key("n", "new", "new", "Start a session from the project's team or a team file", "sessions", footer=True),
     Key(
@@ -74,7 +96,10 @@ KEYMAP: tuple[Key, ...] = (
         "sessions",
         footer=True,
     ),
-    Key("ctrl+r", "look", "look again", "Look again for sessions and how each stands", "sessions"),
+    Key("l", "look", "look again", "Look again for sessions and how each stands", "sessions"),
+    Key("question_mark", "app.help", "help", "Show every key and typed command", "sessions", footer=True),
+    Key("p", "app.command_palette", "palette", "Find a command, an op among them", "sessions"),
+    Key("q", "app.leave", "quit", "Quit: a session you are in runs on", "sessions", footer=True),
     Key(
         "escape",
         "interrupt",
@@ -86,26 +111,33 @@ KEYMAP: tuple[Key, ...] = (
     Key(
         "alt+s",
         "stop_below",
-        "stop below",
+        "stop-below",
         "Stop the turns of the agent in view and of every agent below it",
         "workspace",
     ),
-    Key("alt+a", "next_needing_you", "next for you", "Go to the next place you must act", "workspace", footer=True),
-    Key("alt+y", "first_action", "first action", "Take the first action of where you are, such as Allow", "workspace"),
-    Key(
-        "alt+n", "second_action", "second action", "Take the second action of where you are, such as Deny", "workspace"
-    ),
+    Key("alt+a", "next_place", "next-place", "Go to the next place you must act", "workspace", footer=True),
+    Key("alt+y", "first_action", "yes", "Take the first action of where you are, such as Allow", "workspace"),
+    Key("alt+n", "second_action", "no", "Take the second action of where you are, such as Deny", "workspace"),
     Key("alt+down", "next_row", "next", "Show the next agent or channel", "workspace"),
     Key("alt+up", "previous_row", "previous", "Show the previous agent or channel", "workspace"),
     Key("ctrl+b", "navigator", "navigator", "Show or hide the agents and channels", "workspace"),
     Key("f2", "inspector", "inspector", "Show or hide why the agent in view waits, and what it runs on", "workspace"),
-    Key("ctrl+o", "open_line", "open line", "Open or close the chosen line of the transcript", "workspace"),
-    Key("pageup", "page_up", "page up", "Scroll the transcript up", "workspace"),
-    Key("pagedown", "page_down", "page down", "Scroll the transcript down", "workspace"),
+    Key("ctrl+o", "open_line", "open", "Open or close the chosen line of the transcript", "workspace"),
+    Key("pageup", "page_up", "page-up", "Scroll the transcript up", "workspace"),
+    Key("pagedown", "page_down", "page-down", "Scroll the transcript down", "workspace"),
     Key("ctrl+home", "oldest", "oldest", "Go to the start of the transcript, read back from the journal", "workspace"),
     Key("ctrl+end", "follow", "follow", "Go to the newest line and follow what comes", "workspace"),
     Key("alt+f", "attach_file", "attach", "Attach a file to the message, as its body", "workspace"),
     Key("alt+r", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
+    Key(
+        "slash",
+        "search",
+        "search",
+        "Search the transcript",
+        "workspace",
+        priority=False,
+        planned="search in a transcript is planned",
+    ),
     Key(
         "ctrl+t",
         "tasks",
@@ -133,7 +165,7 @@ KEYMAP: tuple[Key, ...] = (
     Key(
         "alt+t",
         "take_over",
-        "take over",
+        "takeover",
         "Drive the agent in view in its own terminal",
         "workspace",
         planned="driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more",
@@ -152,18 +184,15 @@ KEYMAP: tuple[Key, ...] = (
     Key("enter", "open_line", "open line", "Open or close the chosen line", "transcript"),
     Key("end", "follow", "follow", "Go to the newest line and follow what comes", "transcript"),
     Key(
-        "slash", "search", "search", "Search the transcript", "transcript", planned="search in a transcript is planned"
-    ),
-    Key(
         "enter",
         "send",
         "send",
-        "Send to the target shown above it, which steers an agent at its next boundary",
+        "Send to the target shown above it, which steers an agent at its next boundary, or run a typed command",
         "composer",
     ),
     Key("shift+enter,alt+enter,ctrl+j", "newline", "new line", "Start a new line", "composer"),
-    Key("up", "older", "older", "On the first line, the message you sent before", "composer"),
-    Key("down", "newer", "newer", "On the last line, the message you sent after", "composer"),
+    Key("up", "older", "older", "On the first line, what you sent or ran before", "composer"),
+    Key("down", "newer", "newer", "On the last line, what you sent or ran after", "composer"),
     Key("up", "cursor_up", "row above", "Choose the row above, or scroll up the help", "list", priority=False),
     Key("down", "cursor_down", "row below", "Choose the row below, or scroll down the help", "list", priority=False),
     Key("enter", "choose", "open", "Open the chosen row", "list", priority=False),
@@ -187,18 +216,32 @@ def action_of(where: Where, pressed: str) -> str | None:
     return next((key.action for key in keys(where) if pressed in key.keys.split(",")), None)
 
 
-def _said(key: Key) -> str:
-    return f"{key.does}. Not built yet: {key.planned}" if key.planned else key.does
+def command(line: str) -> Key | None:
+    """The act a line from the composer runs: `/` and an act's name, and `/` alone, which is the help. Anything else is
+    no command."""
+    said = line.strip()
+    said = "/help" if said == "/" else said
+    return next((key for key in KEYMAP if key.typed and key.typed == said), None)
+
+
+def reach(action: str) -> str:
+    """How a person reaches an act of a session, in words: its key, then its typed command, which every terminal
+    delivers."""
+    key = next(key for key in KEYMAP if key.action == action and key.typed)
+    return f"{key.shown} or {key.typed}"
 
 
 def reference() -> str:
-    """The keymap as Markdown, for the guide."""
+    """The keymap as Markdown, for the guide: each act of a session with its typed command beside its key."""
     sections = []
     for where, title in WHERE.items():
-        rows = "\n".join(
-            f"| {' or '.join(f'`{k}`' for k in key.keys.split(','))} | {_said(key)} |" for key in keys(where)
-        )
-        sections.append(f"### {title}\n\n| Keys | Does |\n|---|---|\n{rows}")
+        typed = where in TYPED
+        lines = ["| Keys | Typed | Does |\n|---|---|---|" if typed else "| Keys | Does |\n|---|---|"]
+        for key in keys(where):
+            pressed = " or ".join(f"`{one}`" for one in key.keys.split(","))
+            cells = [pressed, f"`{key.typed}`", key.said] if typed else [pressed, key.said]
+            lines.append(f"| {' | '.join(cells)} |")
+        sections.append(f"### {title}\n\n" + "\n".join(lines))
     return "\n\n".join(sections)
 
 

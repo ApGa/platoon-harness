@@ -378,12 +378,15 @@ async def test_the_palette_s_session_commands_are_the_command_line_s_worded_for_
         assert [(event.agent, event.data["status"]) for event in ended] == [("lead", "retired")]
 
 
-async def test_the_footer_is_the_keymap_table_s(root):
-    async with attached(team(), root) as (_, _, pilot):
-        footer = (await drawn(pilot, lambda text: "help" in text)).splitlines()[-1]
+@pytest.mark.parametrize("width", [120, 59])
+async def test_the_footer_says_how_to_reach_the_typed_commands_then_the_keymap_table_s_keys(root, width):
+    """F1 belongs to the editor in some terminals, and `/` reaches every act in any."""
+    async with attached(team(), root, size=(width, 32)) as (_, _, pilot):
+        footer = (await drawn(pilot, lambda text: "commands" in text.splitlines()[-1])).splitlines()[-1]
 
-        for key in (*keys("everywhere"), *keys("workspace")):
-            assert (f"{key.shown} {key.name}" in footer) == key.footer
+        shown = [key for key in (*keys("everywhere"), *keys("workspace")) if key.footer]
+        said = [part for key in shown for part in ((key.shown, key.name) if width >= 60 else (key.shown,))]
+        assert footer.split() == ["/", "commands", *said]
 
 
 async def test_a_transcript_holds_a_window_of_lines_read_from_the_journal_either_way(root, monkeypatch):
@@ -538,7 +541,8 @@ async def test_alt_a_goes_round_every_place_and_alt_y_answers_the_one_it_is_at(r
         await pilot.press("alt+a")
         at = dock_of(app).cursor
         row = dock_of(app).rows.index(next(row for row in dock_of(app).rows if row.key == at))
-        assert "Alt+Y Allow" in row_text(dock_of(app), row) and next(iter(dock_of(app).render_line(row))).style.reverse
+        assert "Alt+Y or /yes Allow" in row_text(dock_of(app), row)
+        assert next(iter(dock_of(app).render_line(row))).style.reverse
         await pilot.press("alt+y")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
         assert [event.stream for event in resolved] == [at]
@@ -683,10 +687,21 @@ async def test_ctrl_d_away_from_the_composer_keeps_a_draft(root):
         assert app.is_running and app.screen.query_one(Composer).text == "half a thought"
 
 
-async def test_a_slash_command_is_asked_about_before_it_goes_as_a_message(root):
-    async with attached(team([Say("ok")]), root) as (owner, _, pilot):
+async def test_a_typed_command_never_reaches_an_agent_and_any_other_slash_is_asked_about(root):
+    async with attached(team([Say("ok")]), root) as (owner, app, pilot):
+        screen = workspace(app)
+        await pilot.press(*"/inspector", "enter")
+        await drawn(pilot, lambda text: "Choose an agent to see why it waits" in text or "role lead" in text)
+        assert screen.has_class("inspector-shown") and screen.query_one(Composer).text == ""
+        await pilot.press(*"/yes", "enter")
+        await drawn(pilot, lambda _: any("Nothing here" in notice.message for notice in app._notifications))
+        await pilot.press("/", "enter")
+        await drawn(pilot, lambda text: "/stop-below" in text)
+        await pilot.press("escape")
+        await pilot.pause()
+
         await pilot.press(*"/compact", "enter")
-        await drawn(pilot, lambda text: "as a harness's own command would" in text)
+        await drawn(pilot, lambda text: "is none of our commands" in text)
         await pilot.press("n")
         await pilot.pause()
         assert [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"] == []
@@ -696,6 +711,8 @@ async def test_a_slash_command_is_asked_about_before_it_goes_as_a_message(root):
         await pilot.press("y")
         sent = await until(lambda: of_type(owner, "message.sent"), owner)
         assert [event.gist for event in sent if event.actor == "human:you"] == ["/compact"]
+        await pilot.press("up", "up")
+        assert screen.query_one(Composer).text == "/"
 
 
 async def test_body_tombstone_from_the_palette_asks_once(root):

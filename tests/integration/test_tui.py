@@ -57,11 +57,11 @@ async def test_a_session_with_no_runtime_opens_as_read_only_history_with_resume_
     app = TerminalUI("s")
     async with app.run_test(size=(120, 30)) as pilot:
         text = await drawn(pilot, lambda text: "before it stopped" in text and "history" in text)
-        assert "Alt+R resumes it, which can spend money" in text
-        assert "this is history" in text
+        assert "Alt+R or /resume resumes it, which can spend money" in text
+        assert "history: Alt+R or /resume resumes it to send" in text
 
         await pilot.press(*"hello", "enter")
-        await drawn(pilot, lambda text: "Alt+R resumes the session to send" in text)
+        await drawn(pilot, lambda text: "history: Alt+R or /resume resumes it to send" in text)
         await pilot.press("ctrl+q")
 
     assert app.return_value is None, "leaving history said it runs on"
@@ -136,8 +136,9 @@ def _read(master: int, within: float) -> bytes | None:
 
 def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
     """`platoon-harness attach` on a real terminal, read through an emulator until it shows the agent's words, then
-    left with Ctrl+Q: the screen as it was then, and every byte it wrote. The terminal reads until the program has gone,
-    as a real one does: one that stops reading blocks the program's writes, and Textual's exit waits for them."""
+    left by typing `/quit`, with keys every terminal delivers: the screen as it was then, and every byte it wrote. The
+    terminal reads until the program has gone, as a real one does: one that stops reading blocks the program's writes,
+    and Textual's exit waits for them."""
     environ = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "30"}
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
@@ -151,13 +152,13 @@ def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
     stream = pyte.ByteStream(screen)
     try:
         deadline = time.monotonic() + 30
-        while "kestrel" not in _shown(screen) and time.monotonic() < deadline:
+        while not all(said in _shown(screen) for said in ("kestrel", "/ commands")) and time.monotonic() < deadline:
             if (chunk := _read(master, 1.0)) is None:
                 break
             written += chunk
             stream.feed(chunk)
     finally:
-        os.write(master, b"\x11")
+        os.write(master, b"/quit\r")
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline and attached.poll() is None and (chunk := _read(master, 0.1)) is not None:
             written += chunk
@@ -167,7 +168,7 @@ def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
         except subprocess.TimeoutExpired:
             attached.kill()
             attached.wait()
-            raise AssertionError(f"Ctrl+Q left it running, on this screen:\n{_shown(screen)}") from None
+            raise AssertionError(f"/quit left it running, on this screen:\n{_shown(screen)}") from None
     return screen, bytes(written)
 
 
@@ -181,6 +182,7 @@ async def test_no_escape_from_an_agent_ever_reaches_the_terminal(tmp_path):
     shown = _shown(screen)
 
     assert "kestrel \\x1b]0;owned\\x1b\\" in shown
+    assert shown.splitlines()[-1].split()[:2] == ["/", "commands"]
     assert b"\x1b]0;owned" not in written and b"\x1b]52;" not in written and b"\x1bc" not in written
     assert "\x9b".encode() not in written and "‮".encode() not in written
     assert screen.title != "owned"
@@ -212,7 +214,7 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         footer = (await drawn(pilot, lambda text: "No sessions yet" in text)).splitlines()[-1]
-        assert "n new" in footer and "F1 help" in footer
+        assert "n new" in footer and "? help" in footer and "q quit" in footer
 
         await pilot.press("n")
         await pilot.pause()

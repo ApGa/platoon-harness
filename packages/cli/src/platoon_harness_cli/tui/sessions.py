@@ -2,6 +2,7 @@
 one."""
 
 import asyncio
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,8 @@ from .workspace import Workspace
 
 
 class Sessions(Screen[None]):
-    """Every session, from its folder: whether a runtime holds it and its state. It works with none."""
+    """Every session, from its folder: whether a runtime holds it and its state. It works with none. Nothing is typed
+    here, so each act has a plain key."""
 
     BINDINGS = bindings("sessions")
 
@@ -41,8 +43,7 @@ class Sessions(Screen[None]):
 
     def on_mount(self) -> None:
         self.query_one(Rows).focus()
-        shown = [key for key in (*keys("everywhere"), *keys("sessions")) if key.footer]
-        footer = [part for key in shown for part in ((key.shown, "bold"), f" {key.name}  ")]
+        footer = [part for key in keys("sessions") if key.footer for part in ((key.shown, "bold"), f" {key.name}  ")]
         self.query_one("#footer", Static).update(Content.assemble(*footer))
         self.action_look()
 
@@ -168,4 +169,4 @@ class Sessions(Screen[None]):
         self.action_look()
 
     def commands(self) -> list[tuple[str, str, Any]]:
-        return [(key.name.capitalize(), key.does, getattr(self, f"action_{key.action}")) for key in keys("sessions")]
+        return [(key.name.capitalize(), key.does, partial(self.run_action, key.runs)) for key in keys("sessions")]

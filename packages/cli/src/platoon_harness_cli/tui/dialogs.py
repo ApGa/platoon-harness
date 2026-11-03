@@ -12,8 +12,9 @@ from textual.widgets import Input, Static
 from .keymap import WHERE, bindings, keys
 from .rows import Row, Rows
 
-_SAID = 54
-"""How wide what a key does is wrapped in the help, so it fits beside the key in a dialog on 80 columns."""
+_SAID = 42
+"""How wide what a key does is wrapped in the help, so it fits beside the key and its typed command in a dialog on 80
+columns."""
 
 
 class Confirm(ModalScreen[bool]):
@@ -71,7 +72,8 @@ class Form(ModalScreen[dict[str, str] | None]):
 
 
 class Help(ModalScreen[None]):
-    """Every key, from the keymap table, with why one is not built yet on lines of its own."""
+    """Every key, from the keymap table, with an act's typed command beside it, and why one is not built yet on lines
+    of its own."""
 
     BINDINGS = bindings("dialog")
 
@@ -91,7 +93,8 @@ class Help(ModalScreen[None]):
                         Content.styled(line, "dim") for line in textwrap.wrap(f"Not built yet: {key.planned}", _SAID)
                     ]
                 for index, line in enumerate(said):
-                    rows.append(Row(Content.assemble((f"  {key.shown if index == 0 else '':<12} ", "bold"), line)))
+                    shown, typed = (key.shown, key.typed) if index == 0 else ("", "")
+                    rows.append(Row(Content.assemble((f"  {shown:<12} {typed:<12} ", "bold"), line)))
         self.query_one(Rows).show(rows)
 
     def action_leave(self) -> None:

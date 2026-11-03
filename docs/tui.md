@@ -13,7 +13,22 @@ $ platoon-harness attach fix-auth # one session
 
 With no terminal, `platoon-harness` prints its help, since nothing ever prompts with none, and `attach` exits 64 and names
 `events --follow`. A session started here gets a detached runtime of its own, the way tmux starts its server, and the UI is
-its guest: Ctrl+D detaches and the session runs on, and `attach` comes back to it.
+its guest: `/detach`, or Ctrl+D, detaches and the session runs on, and `attach` comes back to it.
+
+## Every act from any terminal
+
+A chord is a shortcut and never the only way: every act also takes only keys every terminal delivers, which are
+printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
+
+- In the composer, a line that is exactly `/` and an act's name runs that act and goes to no agent: `/next-place`, `/yes`,
+  `/interrupt`, `/detach`, `/quit`. Each act has one name, kept in the keymap table beside its key, and the help, the
+  palette and the keymap below show it there.
+- `/` alone, or `/help`, lists them, and the footer always begins `/ commands`.
+- Anything else that begins with `/` is asked about before it goes as a message, since a harness's own commands are not
+  built yet.
+- A typed command not built yet says why, as its key does.
+- Where nothing is typed, on the sessions screen, in a question, a form or the help, every act has a plain key, quitting
+  included.
 
 ## The sessions screen
 
@@ -21,8 +36,9 @@ Every session under the root, whether a runtime holds it and its state, and it w
 project's `platoon-harness.toml` or a team file. When several agents would run on your own plan login it asks once whether
 this is your own work, which is the SDK's `plan_login`. `r` resumes a session whose runtime has gone, after saying that it
 can spend money. `s` stops one as its owner would, after one confirmation, and it stays resumable. Enter opens one: live
-as a guest, or as read-only history when no runtime holds it, with Alt+R offered to resume it. Ctrl+D comes back here from
-a session opened here, which runs on. In a form, Enter goes to the next field, and from the last sends it.
+as a guest, or as read-only history when no runtime holds it, with `/resume` offered to resume it. `/detach` comes back
+here from a session opened here, which runs on. `l` looks again, `?` shows every key, `p` opens the palette and `q`
+quits. In a form, Enter goes to the next field, and from the last sends it.
 
 ## The workspace
 
@@ -31,7 +47,7 @@ a session opened here, which runs on. In a form, Enter goes to the next field, a
 | Header | Who is working, how many places need you, what is blocked or failed, what changed, which it says is not measured until the turn-end probe lands, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
-| Inspector, F2 | Why an agent waits, its harness, model and levels, what it spent with labels, its gaps, and what the runtime refused you |
+| Inspector, `/inspector` | Why an agent waits, its harness, model and levels, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
 
@@ -42,37 +58,38 @@ read or written loses only badges, which is said once.
 
 ### The transcript
 
-Each event is one line, and a line opens on demand, with Enter on the chosen line, Ctrl+O from anywhere, or a click: its
+Each event is one line, and a line opens on demand, with Enter on the chosen line, `/open` from anywhere, or a click: its
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
-was on screen stays where it was. Ctrl+Home reads it from the journal's first line. An agent's transcript shows how each
+was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
 child it spawned began and ended, where the journal has it, inside the turn that spawned it. Below the lines is what the
 agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
-stops following, and the line under the transcript counts what came since; Ctrl+End, or End with the transcript focused,
-follows again. A page the journal would not give is named as lines missed.
+stops following, and the line under the transcript counts what came since; `/follow` follows again. A page the journal
+would not give is named as lines missed.
 
 ### The composer
 
 Enter sends to the target shown above it, and a person's message steers: it lands at the earliest boundary the harness
-has. `@agent` or `#channel` and a space at the start retargets it, and the target follows the focus pane while the draft is
-empty. Something that would go elsewhere than the target shown, such as a message that still begins with another address,
-is asked about first, and so is one that begins with `/`, as a harness's own command would, since those are not built yet.
-Alt+F attaches a file as the message's body. Up and Down on the first and last lines recall what you sent, over an empty
-draft and never over one being written, which a recalled message is once you edit it. Ctrl+D on an empty composer detaches,
-and with a draft it says why it does not.
+has, unless the line is a typed command, which runs. `@agent` or `#channel` and a space at the start retargets it, and the
+target follows the focus pane while the draft is empty. Something that would go elsewhere than the target shown, such as a
+message that still begins with another address, is asked about first, and so is one that begins with `/` and is none of
+ours. `/attach` attaches a file as the message's body. Up and Down on the first and last lines recall what you sent or
+ran, over an empty draft and never over one being written, which a recalled message is once you edit it. Ctrl+D on an
+empty composer detaches, and with a draft it says why it does not.
 
 ### Acting
 
-Approvals never take focus, so a key meant for the composer never answers one. Alt+A goes to the next place you must act,
-and Alt+Y and Alt+N take its first and second action, Allow and Deny for an approval, each carrying the version it was
-drawn from. Only you move where you are: a place that goes, answered here or by another client, takes it with it, so a key
-never acts on a place you did not choose. An answer another client gave as you pressed shows as theirs. Esc interrupts the
-agent in view, and Alt+S stops the turns of it and of every agent below it: both stop turns, not waits. When the runtime
-refuses one, the refusal is kept: the key shows disabled, pressing it again says the runtime's reason and sends nothing,
-and it comes back once that agent's row moves. Retiring or cancelling an agent, closing or cancelling the session, and every other
-command a person may run are in the palette, Ctrl+P, worded as the command line words them, and the ones that end an agent
-or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the command line
-prints any. A takeover says it is not built yet, as Alt+T does.
+Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
+place you must act, and `/yes` and `/no`, or Alt+Y and Alt+N, take its first and second action, Allow and Deny for an
+approval, each carrying the version it was drawn from. Only you move where you are: a place that goes, answered here or
+by another client, takes it with it, so a key never acts on a place you did not choose. An answer another client gave as
+you pressed shows as theirs. Esc interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
+below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows
+disabled, pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves.
+Retiring or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the
+palette, `/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end
+an agent or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the
+command line prints any. A takeover says it is not built yet, as `/takeover` does.
 
 ### Size
 
@@ -80,8 +97,8 @@ prints any. A takeover says it is not built yet, as Alt+T does.
 |---|---|
 | 120 columns or more | Navigator, focus pane, and the inspector beside them |
 | 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
-| 60 to 79 | The focus pane, a line of the team above the composer, and the navigator on Ctrl+B |
-| under 60 | As 60 to 79, with the header shortened to counts and the footer to keys |
+| 60 to 79 | The focus pane, a line of the team above the composer, and the navigator on `/navigator` |
+| under 60 | As 60 to 79, with the header shortened to counts and the footer to `/ commands` and keys |
 | under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
 
 A resize changes which parts show, and never the scroll position, focus or the composer's target.
@@ -102,17 +119,18 @@ from outside is read as markup.
 
 ## Keys
 
-The keymap is one table, from which the bindings, the help (F1), the footer and the palette are made.
+The keymap is one table, from which the bindings, the typed commands, the help (`/`, `?` or F1), the footer, the palette
+and this keymap are made. A part that has focus takes its own keys before the session's.
 
 <!-- keymap: made from the keymap table by `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md` -->
 
 ### Everywhere
 
-| Keys | Does |
-|---|---|
-| `f1` | Show every key |
-| `ctrl+p` | Find a command, an op among them |
-| `ctrl+q` | Leave: a session you are in runs on |
+| Keys | Typed | Does |
+|---|---|---|
+| `f1` | `/help` | Show every key and typed command |
+| `ctrl+p` | `/palette` | Find a command, an op among them |
+| `ctrl+q` | `/quit` | Quit: a session you are in runs on |
 
 ### The sessions screen
 
@@ -122,33 +140,37 @@ The keymap is one table, from which the bindings, the help (F1), the footer and 
 | `n` | Start a session from the project's team or a team file |
 | `r` | Resume a session whose runtime has gone, which can spend money |
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
-| `ctrl+r` | Look again for sessions and how each stands |
+| `l` | Look again for sessions and how each stands |
+| `question_mark` | Show every key and typed command |
+| `p` | Find a command, an op among them |
+| `q` | Quit: a session you are in runs on |
 
-### A session, whatever has focus
+### A session, unless the part that has focus takes the key
 
-| Keys | Does |
-|---|---|
-| `escape` | Interrupt the agent in view: its turn stops, and it lives on |
-| `alt+s` | Stop the turns of the agent in view and of every agent below it |
-| `alt+a` | Go to the next place you must act |
-| `alt+y` | Take the first action of where you are, such as Allow |
-| `alt+n` | Take the second action of where you are, such as Deny |
-| `alt+down` | Show the next agent or channel |
-| `alt+up` | Show the previous agent or channel |
-| `ctrl+b` | Show or hide the agents and channels |
-| `f2` | Show or hide why the agent in view waits, and what it runs on |
-| `ctrl+o` | Open or close the chosen line of the transcript |
-| `pageup` | Scroll the transcript up |
-| `pagedown` | Scroll the transcript down |
-| `ctrl+home` | Go to the start of the transcript, read back from the journal |
-| `ctrl+end` | Go to the newest line and follow what comes |
-| `alt+f` | Attach a file to the message, as its body |
-| `alt+r` | Resume this session when it is history, which can spend money |
-| `ctrl+t` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
-| `alt+d` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
-| `alt+m` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
-| `alt+t` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
-| `ctrl+d` | Detach on an empty composer: the session runs on |
+| Keys | Typed | Does |
+|---|---|---|
+| `escape` | `/interrupt` | Interrupt the agent in view: its turn stops, and it lives on |
+| `alt+s` | `/stop-below` | Stop the turns of the agent in view and of every agent below it |
+| `alt+a` | `/next-place` | Go to the next place you must act |
+| `alt+y` | `/yes` | Take the first action of where you are, such as Allow |
+| `alt+n` | `/no` | Take the second action of where you are, such as Deny |
+| `alt+down` | `/next` | Show the next agent or channel |
+| `alt+up` | `/previous` | Show the previous agent or channel |
+| `ctrl+b` | `/navigator` | Show or hide the agents and channels |
+| `f2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
+| `ctrl+o` | `/open` | Open or close the chosen line of the transcript |
+| `pageup` | `/page-up` | Scroll the transcript up |
+| `pagedown` | `/page-down` | Scroll the transcript down |
+| `ctrl+home` | `/oldest` | Go to the start of the transcript, read back from the journal |
+| `ctrl+end` | `/follow` | Go to the newest line and follow what comes |
+| `alt+f` | `/attach` | Attach a file to the message, as its body |
+| `alt+r` | `/resume` | Resume this session when it is history, which can spend money |
+| `slash` | `/search` | Search the transcript. Not built yet: search in a transcript is planned |
+| `ctrl+t` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
+| `alt+d` | `/review` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
+| `alt+m` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
+| `alt+t` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
+| `ctrl+d` | `/detach` | Detach on an empty composer: the session runs on |
 
 ### The transcript, once it has focus
 
@@ -158,16 +180,15 @@ The keymap is one table, from which the bindings, the help (F1), the footer and 
 | `down` | Choose the line below |
 | `enter` | Open or close the chosen line |
 | `end` | Go to the newest line and follow what comes |
-| `slash` | Search the transcript. Not built yet: search in a transcript is planned |
 
 ### The composer
 
 | Keys | Does |
 |---|---|
-| `enter` | Send to the target shown above it, which steers an agent at its next boundary |
+| `enter` | Send to the target shown above it, which steers an agent at its next boundary, or run a typed command |
 | `shift+enter` or `alt+enter` or `ctrl+j` | Start a new line |
-| `up` | On the first line, the message you sent before |
-| `down` | On the last line, the message you sent after |
+| `up` | On the first line, what you sent or ran before |
+| `down` | On the last line, what you sent or ran after |
 
 ### A list: the sessions, the agents and channels, the help
 

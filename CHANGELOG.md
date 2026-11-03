@@ -108,9 +108,16 @@
   `tests/live/test_tui.py` drives it with Pilot on a Claude Code lead and a Codex worker.
 - `group` on each roster row: what a person must do about the agent, `needs_you`, `working`, `blocked`, `idle`, `done` or
   `failed`, derived in the view so every client says the same.
+- Every act of the terminal UI takes only keys every terminal delivers, so an editor's terminal that keeps Ctrl, Alt or F keys,
+  as Cursor's on a Mac does, leaves none out of reach. In the composer a line that is exactly `/` and an act's name runs it and
+  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. The sessions screen has a plain key for
+  each act, `?` the help, `p` the palette and `q` quitting among them.
 
 ### Changed
 
+- In the terminal UI, acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for
+  `next for you`, `open` for `open line`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words.
+  The sessions screen looks again on `l`, where it was Ctrl+R, and `/` is search, not built yet, from any part but the composer.
 - The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,
   and nothing else, where it escaped every format character, which broke emoji joined by a zero-width joiner.
 - The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.
