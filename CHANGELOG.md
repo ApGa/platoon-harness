@@ -50,6 +50,8 @@
   after its first, on the same harness, until it is told to finish, retired or cancelled. It is resolved once, at the spawn, from the
   spawn, then the role, then whether the session started it, and refused for a harness that is not persistent. `agent.status` shows it,
   and the result of a spawn that stays says how to end it. See ADR 0023.
+- `tests/live/test_stays.py`: the owner's flow on Claude Code and on Codex, and a Codex child's half alone. `tests/live/test_codex.py`
+  runs a Codex agent's own sub-agent.
 
 ### Changed
 
@@ -68,6 +70,8 @@
   manager-worker team without one now gets, and refuses a role that stays on a one-shot harness.
 - A tool result's `next` is in the words of its surface, with no sentence naming a tool its reader does not hold, as a refusal's is.
 - `open_session` takes what each role's driver said, and the runtime asks each driver when it opens a session.
+- The live crash test holds a log to no more runs of a command than the journal saw begin, since a kill can come before a command it
+  set going ran.
 - `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
   argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`

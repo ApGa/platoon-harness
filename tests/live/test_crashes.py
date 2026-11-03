@@ -87,7 +87,8 @@ async def started(session: Session) -> int:
 
 def commands(events: list) -> int:
     """How many times a model set the whole command going, as its harness reported. A part of it run again is a model
-    repairing what it found, which the notice allows."""
+    repairing what it found, which the notice allows. One a kill cut before it ran was set going all the same, so the
+    log holds no more runs than this, and may hold fewer."""
     items = [event for event in events if event.type == "item.recorded" and event.data["kind"] == "tool"]
     return len([event for event in items if event.data["phase"] == "started" and COMMAND in event.gist])
 
@@ -143,7 +144,7 @@ async def test_a_killed_runtime_during_a_shell_tool_is_resumed_and_told(harness,
         await guest.leave()
         print(f"{harness}: left behind", end_what_is_left(work))
 
-    assert log_of(work).count("start") == commands(events), "the shell tool ran behind the journal's back"
+    assert log_of(work).count("start") <= commands(events), "the shell tool ran behind the journal's back"
     assert leaks(guest.folder, *secrets) == []
     assert used["total"] <= 10
 

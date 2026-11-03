@@ -184,6 +184,34 @@ async def tools_called(session: Session) -> Counter[tuple[str, str]]:
     return Counter((event.agent, event.gist.partition(" ")[0]) for event in started)
 
 
+def rereads(events: list[Any]) -> dict[str, tuple[int, int]]:
+    """Per agent, the turns a wake began, and how many of those opened by calling `message_read` for nothing new: the
+    wake had handed it all there was, so the read showed no entry. A read after other calls is polling, and not this."""
+    woken: Counter[str] = Counter()
+    handed: set[str] = set()
+    opening: dict[str, str] = {}
+    called: set[tuple[str, str]] = set()
+    fresh: set[tuple[str, str]] = set()
+    for event in events:
+        agent, data = event.agent, event.data
+        if event.type == "context.offered" and data["how"] == "wake":
+            handed.add(agent)
+        elif event.type == "turn.started":
+            opening.pop(agent, None)
+            if agent in handed:
+                handed.discard(agent)
+                woken[agent] += 1
+                opening[agent] = data["turn"]
+        elif event.type == "item.recorded" and data["kind"] == "tool" and data["phase"] == "started":
+            if "message_read" in event.gist and opening.get(agent) == event.turn:
+                called.add((agent, event.turn))
+            opening.pop(agent, None)
+        elif event.type == "context.offered" and data["how"] == "read" and data["items"]:
+            fresh.add((agent, event.turn))
+    wasted = Counter(agent for agent, _ in called - fresh)
+    return {agent: (count, wasted[agent]) for agent, count in woken.items()}
+
+
 async def spent(session: Session) -> dict[str, Any]:
     """What a live test states: model calls and turns per agent, counted from the journal."""
     events = await journal(session)

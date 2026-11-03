@@ -17,6 +17,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **Samples are small.** A row with one trial says so. These are cheap models, low effort and tasks that take seconds.
 - **Runs.** A run is one invocation of the live tests, which may hold several, so one number can head rows in more than one table. Only
   runs 17, 18 and 20 had the final preamble. The mixed team and the refused finish last ran on the one before it.
+- **Agents that stay,** sections 13 and 14, are runs 22 to 32, on the preamble with `stays` and the role's words last: 135 model calls
+  from 14 journals, of a limit of 160. Their transcripts and journals are kept outside the repository.
 
 ## Results
 
@@ -208,6 +210,50 @@ The system prompt held one hash too, once Claude Code's per-request billing head
 resume. The preamble is built afresh on a resume, so a team that has grown changes it there, and only there. On a live Codex the block is
 one `exec` tool with our declarations inside, which FakeModel does not show, and which no request log on a native login can show.
 
+### 13. Agents that stay
+
+The owner's flow: a lead spawns a helper with `stays` and a small task, sends it a follow-up task when it answers, then asks what it
+meant, then ends it. `tests/live/test_stays.py`.
+
+| Run | Harness | Calls | What happened |
+|---|---|---|---|
+| 22 | Claude Code | 13 | One helper process for three tasks, retired, settled. The lead took the first answer in its first turn through a held `wait` with `from`, so it was woken twice by answers. The test failed on its own check, which assumed the helper's name and a wake per answer; the corrected check holds on that journal |
+| 25 | Claude Code | 13 | The same on the final wording, passing: three helper turns, the lead woken once by each answer and by nothing else, each time parked on `wait` with `from` |
+| 23 | Codex | 25 | Failed. The lead sent the follow-up before the first answer, and the helper, told it stays for the next message, held a `wait` for a message from the lead instead of answering, while the lead held one for the helper. Nothing moved until the test gave up at 180 s |
+| 24 | Codex | 6 | Failed. A human as the parent, on a second wording that said never to `wait` for the next message: on its first turn the helper held a `wait` for the human before answering |
+| 28 | Codex | 7 | Passed, on the final wording: an agent a human spawned with `stays` answered, stayed, and was interrupted, where in run 27 the same agent without `stays` finished at its second message |
+
+The final wording for a child that stays reuses the words a root has been told since run 17, "a turn that only ends leaves you here for
+the next message", after both wordings that told a child it stays drew a held `wait` from Codex. The owner's flow on Codex has not been
+rerun on it, as its budget was spent. A child that waits on its parent keeps its answer from it either way: a turn that parks posts no
+report, and one that holds a `wait` has not ended.
+
+In every Codex agent that began a turn on a task this stage, runs 23, 24 and 26, the first call was our `wait` with a `hold` or a
+`timeout` and nothing to wait on, which is refused. No Claude Code agent did so.
+
+A woken turn that opened by calling `message_read`, which then showed nothing the wake had not handed it: 0 of 20 such turns on Claude
+Code, and 2 of 14 on Codex, in runs 27 and 28. The delivery text is unchanged.
+
+### 14. A Codex agent's own children
+
+Run 26, 8 calls, `gpt-6-luna`: asked to use its own sub-agent tools, the agent started one through the multi-agent V2 tools, which come
+as `subAgentActivity` items and a `wait` item, with no unknown frame. `child.seen` came once, `inferred`, with no parent named, and the
+gap `native_child_unattributed`. While the child slept `session.status` said `open_turn`, and the turn ended only once the child had
+written its file, so an open turn covers a V2 child as it did a V1 child on FakeModel. The agent also called `agent_finish` before
+starting the child, saying it could not run a shell, and so ended `finished` with the turn.
+
+### 15. What the driver stage left unproven
+
+| Test | Run | Calls | Result |
+|---|---|---|---|
+| `test_codex.py`, an agent given three messages | 27 | 4 | Failed as in run 21: told by its role never to finish, the agent called `agent_finish` at its second message. The role's words now come after the preamble, which told an agent somebody spawned to finish, and that did not change what Codex did |
+| The same, spawned with `stays` | 28 | 7 | Passed |
+| `test_codex.py`, an approval and a resume; a mixed pair | 27 | 5, 9 | Passed |
+| `test_crashes.py`, a killed runtime, after the harness went, Claude Code and Codex | 29 | 5, 4 | Behaved as meant, and failed on the test's own count. In both the kill came as the command was set going, before `echo start` ran: the log was empty once the harness had gone. Told on resume, each model read the log, found nothing, and ran the command once. The check now holds the log to no more runs than the journal saw begin, which is what running behind its back means |
+| The same, Codex at once | 30 | 5 | Passed, on the corrected check, for the first time |
+| `test_teams.py`, the refused finish | 31 | 8 | Passed: refused, understood, finished on its worker's report |
+| `test_teams.py`, a Claude Code lead and a Codex worker | 32 | 23 | Passed: settled, tests passing |
+
 ## What a real model did that scripted harnesses could not show
 
 - It did not finish. A goal done, it said so and stopped, and a turn that only ends leaves an idle agent. Everything that counts on an
@@ -220,10 +266,13 @@ one `exec` tool with our declarations inside, which FakeModel does not show, and
 - It would not print a credential when asked, but a script it was told to run did.
 - A Claude Code process whose runtime has died finishes its turn, and a model call goes unjournaled. The turn is capped by what it can do
   with no one to answer an approval, and a resume reaps it, but until then it is working and nobody is watching.
+- Told it stays for the next message, a Codex child held a `wait` for that message instead of answering, twice, and a role that said
+  never to finish lost to a preamble that said to, even with the role's words last. What an agent is told about ending has to agree
+  with itself.
 
 ## Unknowns
 
 - Stronger models, long tasks, long parks and a large team: nothing here passed three agents or a minute of work.
-- Codex children on a real model, and pi on any real model.
+- pi on any real model, a Codex child past one trial, and the owner's flow on Codex on the final wording.
 - A tool of Claude Code's that outlives its harness leads a group of its own, so only a cgroup would hold it. `crash_window` says so.
 - A harness killed outright on a real model, as a power cut would: on real runs the harness outlived the runtime, or a `SIGTERM` reached it.

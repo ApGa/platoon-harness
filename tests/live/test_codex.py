@@ -59,13 +59,14 @@ def one_agent() -> Team:
 
 async def test_one_agent_reaches_our_tool_on_its_first_turn_takes_a_delivery_and_is_interrupted(tmp_path):
     """Budget: at most 8 model calls, counted from the journal, plus the one the interrupt cuts short. The catalog is
-    served remotely and can change without a CLI update, so this is what shows our tool still reaches the model."""
+    served remotely and can change without a CLI update, so this is what shows our tool still reaches the model. The
+    agent stays, so the preamble says what its role says: in run 27 the role's words alone did not keep it there."""
     async with Session.start(one_agent(), root=tmp_path / "root", cwd=tmp_path, plan_login=True) as session:
         goal = (
             "Call the board_post tool of the ph server once, to post `hi` as `hello` on the board `notes`. "
             "Then reply: alpha"
         )
-        await session.spawn("ada", "worker", goal)
+        await session.spawn("ada", "worker", goal, stays=True)
         await ended(session, 1)
         started = (await of_type(session, "agent.started"))[0]
         items = await of_type(session, "item.recorded")
@@ -177,3 +178,36 @@ async def test_a_claude_agent_and_a_codex_agent_share_a_message_and_a_board_entr
     assert {event.actor for event in sent} >= {"agent:ann", "agent:bea"}
     assert (started["ann"]["effective_model"], started["bea"]["effective_model"]) == ("claude-haiku-5-5", MODEL)
     assert len(calls) <= 12
+
+
+async def test_a_codex_agent_s_own_sub_agent_runs_inside_the_turn_that_started_it(tmp_path):
+    """Budget: at most 10 model calls, counted from the journal, a child's own among them, which reach us as the tree's.
+    Current models reach their sub-agents through the multi-agent V2 tools, which had run on FakeModel alone, at V1.
+    This says what frames come, whether the turn ends only once the child has, and whether `settled` sees it live."""
+    team = Team(roles={"ada": Role(harness="codex", model=MODEL, effort=EFFORT, approvals="allow", instructions=BRIEF)})
+    work = tmp_path / "work"
+    work.mkdir()
+
+    async with Session.start(team, name="native", root=tmp_path / "root", cwd=work, plan_login=True) as session:
+        await in_state(session, "ada", "idle")
+        await session.send(
+            "@ada",
+            "Use your own sub-agent tools, not the ph ones, to start one sub-agent that runs `sleep 8 && touch "
+            "child.txt` in the shell and then says done. Wait for it to finish, then reply: done",
+        )
+        async with asyncio.timeout(SECONDS):
+            seen = await until(lambda: of_type(session, "child.seen"), session)
+        during = await session.status()
+        live = not (work / "child.txt").exists()
+        turns = await ended(session, 1)
+        events = [event async for event in session.events()]
+        calls = [event for event in events if event.type == "model.called"]
+        items = [event.gist for event in events if event.type == "item.recorded" and event.data["kind"] == "tool"]
+        unknown = [event.gist for event in events if event.type == "native.recorded"]
+        gaps = [event.data["what"] for event in events if event.type == "gap.recorded"]
+        print(f"model calls: {len(calls)}; child.seen: {[event.data for event in seen]}; during: {during}")
+        print(f"tools: {items}; unknown frames: {unknown}; gaps: {gaps}; turn: {turns[-1].data}")
+
+    assert live and "open_turn" in during["blockers"], "a live child sits inside an open turn"
+    assert (work / "child.txt").exists(), "the turn ended before the child did"
+    assert len(calls) <= 10
