@@ -177,13 +177,11 @@ async def test_what_no_journal_takes_from_a_report_is_refused(kernel, type):
 
 @pytest.mark.parametrize("op", ["agent.cancel", "agent.retire"])
 async def test_ended_is_one_event_every_view_folds(kernel, ada, op):
-    bob = await spawn(kernel, "bob", role="lead")
-    alice = await spawn(kernel, "alice")
+    bob = await spawn(kernel, "bob", role="lead", goal="")
     await channel(kernel, "work", kind="queue")
     result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "work", "gist": "x"}))
     result_of(await kernel.submit(bob, "task.claim", {"queue": "work"}))
     wait = result_of(await kernel.submit(bob, "wait", {"on": [{"stream": "inbox/bob"}]}))
-    await send(kernel, alice, "@bob", "queued")
     await kernel.submit(kernel.runtime, "approval.request", {"id": "a1", "agent": "bob", "gist": "rm -rf?"})
     if op == "agent.cancel":
         await report(kernel, "bob", "turn.started", turn="t1")
@@ -201,7 +199,7 @@ async def test_ended_is_one_event_every_view_folds(kernel, ada, op):
 
 async def test_finish_cancel_retire_and_lost_end_the_same_way(kernel, ada):
     for name in "abcd":
-        await spawn(kernel, name)
+        await spawn(kernel, name, goal="")
 
     result_of(await kernel.submit(agent("a"), "agent.finish", {}))
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "b"}))
@@ -231,7 +229,7 @@ async def test_a_lost_child_tells_a_parent_parked_on_it(kernel):
 @pytest.mark.parametrize(("op", "status"), [("agent.cancel", "cancelled"), ("agent.retire", "retired")])
 async def test_a_child_ended_by_someone_else_is_reported(kernel, ada, op, status):
     lead = await spawn(kernel, "lead", role="lead")
-    await spawn(kernel, "bob", by=lead)
+    await spawn(kernel, "bob", by=lead, goal="")
 
     result_of(await kernel.submit(ada, op, {"agent": "bob"}))
 
@@ -369,6 +367,20 @@ async def test_retiring_is_refused_while_a_turn_is_open(kernel, ada):
     assert state_of(kernel, "bob")["state"] == "running"
 
 
+@pytest.mark.parametrize("way", ["a goal", "a message", "a handover"])
+async def test_retiring_is_refused_while_an_agent_is_on_its_way_to_a_turn(kernel, ada, way):
+    await spawn(kernel, "bob", goal="be bob" if way == "a goal" else "")
+    if way != "a goal":
+        await send(kernel, ada, "@bob", "go on")
+    if way == "a handover":
+        result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    refused = refusal(await kernel.submit(ada, "agent.retire", {"agent": "bob"}))
+
+    assert refused.code == "conflict" and "on its way to one" in refused.detail
+    assert state_of(kernel, "bob")["status"] is None
+
+
 async def test_an_agent_ends_once(kernel, ada):
     await spawn(kernel, "bob")
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
@@ -478,8 +490,8 @@ async def test_a_harness_that_exits_after_a_finish_has_finished(kernel):
 
 
 async def working_child(kernel, *, state: str = "running") -> Principal:
-    """A parent over a child that would end with it, in one of the ways of working."""
-    lead = await spawn(kernel, "lead", role="lead")
+    """A parent out of a turn over a child that would end with it, in one of the ways of working."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
     if state == "spawning":
         result_of(await kernel.submit(lead, "agent.spawn", spawning("bob", "linked")))
         return lead
@@ -573,6 +585,17 @@ async def test_a_finish_refused_over_many_children_keeps_what_to_do_next(kernel)
     refused = refusal(await kernel.submit(lead, "agent.finish", {}))
 
     assert "`wait`" in refused.detail and "`agent.cancel`" in refused.detail
+
+
+async def test_a_finish_refused_over_a_child_that_stays_names_a_wait_it_takes(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", role="linked", by=lead, stays=True)
+    await start_turn(kernel, "bob")
+
+    refused = refusal(await kernel.submit(lead, "agent.finish", {}))
+
+    assert "with `from` hears one that stays when it answers" in refused.detail
+    assert result_of(await kernel.submit(lead, "wait", {"from": ["bob"]}))["state"] == "parked"
 
 
 async def test_a_refused_finish_leaves_the_turn_to_end_as_any_other(kernel):
@@ -841,7 +864,7 @@ async def test_a_turn_stopped_on_purpose_wakes_no_parent(kernel, reason):
 
 async def test_retiring_removes_an_agent_from_relations_never_from_history(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    await spawn(kernel, "w1", by=lead)
+    await spawn(kernel, "w1", by=lead, goal="")
     await spawn(kernel, "w2", by=lead)
     result_of(await kernel.submit(lead, "agent.retire", {"agent": "w1"}))
 
@@ -875,15 +898,24 @@ async def test_on_parent_exit_adopt_gives_orphans_to_the_session(kernel, ada):
     assert of_type(kernel, "agent.adopted")[0].agent == "child"
 
 
-async def test_an_idle_child_that_ends_with_its_parent_is_retired_and_one_at_work_cancelled(kernel, ada):
+async def test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_cut_off(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
-    await spawn(kernel, "idle", role="linked", by=lead, goal="")
-    await spawn(kernel, "busy", role="linked", by=lead, goal="")
+    for name in ("idle", "parked", "busy", "woken"):
+        await spawn(kernel, name, role="linked", by=lead, goal="")
+    await start_turn(kernel, "parked")
+    result_of(await kernel.submit(agent("parked"), "wait", {"from": ["lead"]}))
+    await end_turn(kernel, "parked")
     await start_turn(kernel, "busy")
+    await send(kernel, ada, "@woken", "go on")
 
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
 
-    assert (state_of(kernel, "idle")["status"], state_of(kernel, "busy")["status"]) == ("retired", "cancelled")
+    assert {name: state_of(kernel, name)["status"] for name in ("idle", "parked", "busy", "woken")} == {
+        "idle": "retired",
+        "parked": "retired",
+        "busy": "cancelled",
+        "woken": "cancelled",
+    }
     assert {event.data["reason"] for event in of_type(kernel, "agent.ended")[1:]} == {"parent lead ended"}
 
 
@@ -895,9 +927,21 @@ async def test_cancelling_the_session_cancels_every_agent_however_idle(kernel, a
 
     assert {event.agent: event.data["reason"] for event in of_type(kernel, "agent.ended")} == {
         "lead": "session cancelled",
-        "zed": "session cancelled",
+        "zed": "parent lead ended",
     }
     assert state_of(kernel, "zed")["status"] == "cancelled"
+
+
+async def test_cancelling_the_session_tells_no_parent_that_ends_with_it(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead")
+    for name in ("a", "b"):
+        await spawn(kernel, name, role="linked", by=lead, goal="")
+    head = kernel.head
+
+    result_of(await kernel.submit(ada, "session.cancel", {}))
+
+    assert of_type(kernel, "message.sent", after=head) == []
+    assert {state_of(kernel, name)["status"] for name in ("lead", "a", "b")} == {"cancelled"}
 
 
 async def test_a_closing_session_cancels_no_agent_left_idle(kernel, ada):

@@ -673,8 +673,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness that is
   not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it `unsupported`, from
   what each role's driver said when the session opened. The result of a spawn that stays says so, that its answers come back at the end
-  of each of its turns, and how to end it. An agent's `wait` for the end of one that stays is refused `invalid`, naming `from` for its
-  answers, since that end comes only when someone ends it. See [ADR 0023](adr/0023-agents-that-stay.md).
+  of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has not ended is refused `invalid`,
+  naming `from` for its answers, since that end comes only when someone ends it. See [ADR 0023](adr/0023-agents-that-stay.md).
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
@@ -688,7 +688,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   and is on its way to a turn or in one, which a wake that is due or a wait that holds also means. A wake the budget refused is on its
   way nowhere. The walk follows `cancel-subtree` edges, through a child that holds no turn, and stops at an `adopt` child. Any other
   child `waiting` or `idle` holds no turn, so it does not block, and `on_parent_exit` decides for it. The refusal says what to do next:
-  `wait` for them, or `agent.cancel` each, which is never refused. An agent that has finished can spawn nothing. This
+  `wait` for them, with `from` for one that stays, or `agent.cancel` each, which is never refused. An agent that has finished can spawn
+  nothing. This
   is a check at the call, not a hold, so it has limits: a child that begins work after an accepted `finish` ends with its parent,
   whether the turn ends, the timer fires or the harness exits. So do the working children of a harness that exits, which nothing can
   refuse, and of a one-shot parent, which ends with its turn whatever it was told, as `team check` warns.
@@ -708,10 +709,11 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   reasons: a driver that says one has sent an unknown frame, and its turn ended `unknown`. The wake reserves a turn like any other, so
   a budget that an unmeasured turn left unable to hold refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session. A child that ends
-  with its parent ends `cancelled` if it was at work, in a turn or on its way to one, and `retired` otherwise, since it was cut off
-  from nothing and Platoon drops a cancelled child's tokens. `session.cancel` ends every agent `cancelled`, deepest first.
-- **Retiring** takes an agent that has stopped working out of the live team, never out of history. While a turn is open it is
-  refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
+  with its parent ends `cancelled` if a turn of its was cut off, open or on its way, and `retired` otherwise, idle or parked, since
+  every turn it took is whole and Platoon drops a cancelled child's tokens. `session.cancel` ends every agent `cancelled`, each parent
+  before its children, so that no report goes to a parent ending with it.
+- **Retiring** takes an agent that has stopped working out of the live team, never out of history. While it is at work, in a turn or
+  on its way to one, it is refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
 - **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it, to its
   open turn if it has one, and records a gap. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
 

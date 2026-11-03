@@ -83,9 +83,11 @@ class Role(Model):
 
     `count` is how many start with the session: left out, one, or none if another role spawns this one. `delivery` is
     how a message reaches this role's inboxes, and `inbox_depth` how many entries one holds before refusing more.
-    `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn. `stays` keeps an
-    agent after its task for the next message: left out, one the session started stays and one spawned does not, and a
-    spawn may say otherwise either way.
+    `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn. `stays` says whether
+    an agent is told to stay after its task for the next message, rather than to finish: left out, one the session
+    started stays and one spawned does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
+    of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
+    otherwise, and `adopt` gives it to the session.
     """
 
     harness: str | Command

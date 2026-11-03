@@ -113,8 +113,8 @@ def _refuse_over_working(txn: Txn, agent: Agent) -> None:
         names = ", ".join(f"@{name}" for name in working)
         raise Refused(
             "conflict",
-            f"{agent.name} has children at work, who would end with it. `wait` with `agents` lets them finish. "
-            f"`agent.cancel` stops one now. They are {names}",
+            f"{agent.name} has children at work, who would end with it. `wait` with `agents` lets them finish, and "
+            f"with `from` hears one that stays when it answers. `agent.cancel` stops one now. They are {names}",
         )
 
 
@@ -204,11 +204,13 @@ def end(
         bury_if_spent(txn, task, txn.view(Channels).require(f"queue/{task.queue}"))
     regroup(txn, name, agent.role, joined=False)
     at_work = _at_work(txn)
+    cancelled = txn.view(SessionRecord).state() == "cancelled"
     for child in txn.view(Agents).children(agent.id):
         if child.on_parent_exit == "adopt":
             txn.emit("agent.adopted", f"agent/{child.name}", gist=f"{child.name} adopted", agent=child.name)
-        else:  # One cut off from no work is no failure, and is not dropped from training as a cancelled one is.
-            end(txn, child, "cancelled" if child.name in at_work else "retired", reason=f"parent {name} ended")
+        else:  # One with every turn whole is no failure, and is not dropped from training as a cancelled one is.
+            status = "cancelled" if cancelled or child.name in at_work else "retired"
+            end(txn, child, status, reason=f"parent {name} ended")
 
 
 class Spawn(Args):
@@ -325,7 +327,8 @@ def finish(txn: Txn, a: Finish) -> None:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
     your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
     a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
-    children that would end with you are working. Call `wait` with `agents` for them. `agent.cancel` stops one now."""
+    children that would end with you are working. Call `wait` with `agents` for them, or with `from` for one that
+    stays. `agent.cancel` stops one now."""
     if txn.me.kind != "agent":
         raise Refused("invalid", "only an agent can finish")
     agent = _live(txn, txn.me.name)
@@ -379,12 +382,12 @@ def cancel(txn: Txn, a: Named) -> None:
 
 @op("agent.retire", on=lambda a: f"agent/{a.agent}", tool=True)
 def retire(txn: Txn, a: Named) -> None:
-    """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while a
-    turn is open, or while children that would end with it are working, and when it has ended already. Call `wait` with
-    `agents` for them. `agent.cancel` stops one now."""
+    """Retire an agent that has stopped working: it leaves the team, and its history stays. Refused `conflict` while it
+    is at work, in a turn or on its way to one, or while children that would end with it are, and when it has ended
+    already. Call `wait` with `agents` for them, or with `from` for one that stays. `agent.cancel` stops one now."""
     agent = _live(txn, a.agent)
-    if txn.view(Stamps).turn(agent.name) is not None:
-        raise Refused("conflict", f"{agent.name} has a turn open")
+    if agent.name in _at_work(txn):
+        raise Refused("conflict", f"{agent.name} is at work, in a turn or on its way to one")
     _refuse_over_working(txn, agent)
     end(txn, agent, "retired", reason=f"retired by {txn.me.id}")
 
@@ -769,8 +772,11 @@ def cancel_session(txn: Txn, a: Args) -> None:
     if session.state() in ("cancelled", "stopped"):
         raise Refused("conflict", f"the session is {session.state()}")
     txn.emit("session.cancelled", "session", gist="session cancelled")
-    for agent in sorted(txn.view(Agents).live(), key=lambda agent: -agent.depth):
-        end(txn, agent, "cancelled", reason="session cancelled")  # Deepest first, so none ends as its parent's child.
+    agents = txn.view(Agents)
+    for name in [agent.name for agent in sorted(agents.live(), key=lambda agent: agent.depth)]:
+        agent = agents.get(name)
+        if agent is not None and not agent.ended:  # Each parent first, so no report goes to one that is ending too.
+            end(txn, agent, "cancelled", reason="session cancelled")
 
 
 @op("session.stop", runtime=True)

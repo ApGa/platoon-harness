@@ -300,16 +300,16 @@ def _work_on(txn: Txn, queue: str) -> Condition:
 
 def _ending_of(txn: Txn, name: str) -> Condition:
     """An agent's end, whoever brought it about, so `distinct` counts the waiter's own cancel too. A spawn adds its
-    principal in its own transaction, so a name nobody holds is a typo. One that stays ends only when someone ends it,
-    which an agent waiting on its end would have to do itself."""
+    principal in its own transaction, so a name nobody holds is a typo. One that stays and has not ended ends only when
+    someone ends it, which an agent waiting on its end would have to do itself."""
     if txn.view(Principals).named(name) is None:
         raise Refused("not_found", f"no agent {name}")
     agent = txn.view(Agents).get(name)
-    if txn.me.kind == "agent" and agent is not None and agent.stays:
+    if txn.me.kind == "agent" and agent is not None and agent.stays and not agent.ended:
         raise Refused(
             "invalid",
-            f"{name} stays after each task, so it ends only when it is ended. `wait` with `from` hears its answers. "
-            "`agent.retire` ends it once it is idle",
+            f"{name} stays after each task for the next message, so it ends only when someone ends it, as by telling "
+            "it to finish. `wait` with `from` hears its answers. `agent.retire` ends it when it is idle",
         )
     return Condition(stream=f"agent/{name}", types=("agent.ended",), distinct="agent")
 

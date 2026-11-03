@@ -33,10 +33,13 @@ choose, several notify a parent for the first task only, and almost none bounds 
 - **The result of a spawn that stays says so**, that its answers come back at the end of each of its turns, and how to end it:
   `agent.retire` when it is idle, `agent.cancel` at any time, or telling it to finish. A result's `next` is taught in the words of its
   surface, as a refusal's next step is. A `max_children` refusal says that ending a child makes room.
-- **An agent's `wait` for the end of one that stays is refused** `invalid`, naming `from` for its answers and `agent.retire` to end
-  it. That end comes only when someone ends it. A human or a program may still wait for it.
-- **A child that ends with its parent ends `cancelled` if it was at work, in a turn or on its way to one, and `retired` otherwise.**
-  This is every child's rule. `session.cancel` ends every agent `cancelled`, deepest first, so that none ends as its parent's child.
+- **An agent's `wait` for the end of one that stays is refused** `invalid` while it has not ended, naming `from` for its answers and
+  `agent.retire` to end it. That end comes only when someone ends it. A human or a program may still wait for it. A refusal over
+  working children names `from` for one that stays, and `agent.retire` is refused for an agent on its way to a turn, as in one.
+- **A child that ends with its parent ends `cancelled` if a turn of its was cut off, open or on its way, and `retired` otherwise.**
+  This is every child's rule. A parked child is retired, as every turn it took is whole: the runtime sees a turn cut off, and cannot
+  see whether a wait was part of a task. `session.cancel` ends every agent `cancelled`, each parent before its children, so that no
+  report goes to a parent ending with it.
 - **`team check` warns of a wake cycle that closes through a child that can stay.** It flags a team in which a role may spawn a role
   whose harness is persistent, can message it by an edge, and both their inboxes wake, with no `max_hops`. Any persistent child can
   stay, since a spawn may ask, so every such team is flagged, a manager-worker team among them. It warns rather than refuses, because

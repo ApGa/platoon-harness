@@ -173,6 +173,14 @@ async def test_an_agent_s_wait_for_the_end_of_one_that_stays_is_refused_naming_f
     assert result_of(await kernel.submit(ada, "wait", {"agents": ["bob"]}))
 
 
+async def test_a_wait_for_the_end_of_one_that_stays_and_has_ended_holds(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    await spawn(kernel, "bob", by=lead, stays=True)
+    result_of(await kernel.submit(lead, "agent.cancel", {"agent": "bob"}))
+
+    assert result_of(await kernel.submit(lead, "wait", {"agents": ["bob"]}))["state"] == "released"
+
+
 async def test_tool_arguments_are_friendly_for_senders(kernel):
     lead = await spawn(kernel, "lead", role="lead")
     w1, w2 = await spawn(kernel, "w1"), await spawn(kernel, "w2")

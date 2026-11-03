@@ -64,10 +64,12 @@
   `wait` for it instead of answering.
 - An agent's instructions are the preamble and then the role's words, so a role has the last word. A role that told a Codex agent
   never to finish lost to the preamble in run 21.
-- A child that ends with its parent ends `retired` unless it was at work, which still ends it `cancelled`, as Platoon drops a
-  cancelled child's tokens. `session.cancel` still cancels every agent.
-- An agent's `wait` for the end of one that stays is refused, naming `from`, and a `max_children` refusal says that ending a child
-  makes room.
+- A child that ends with its parent ends `retired` unless a turn of its was cut off, open or on its way, which still ends it
+  `cancelled`, as Platoon drops a cancelled child's tokens. A parked child is retired. `session.cancel` still cancels every agent, each
+  parent before its children, so that no report goes to a parent ending with it.
+- An agent's `wait` for the end of one that stays is refused while it has not ended, naming `from`, a refusal over working children
+  names `from` for one that stays, and a `max_children` refusal says that ending a child makes room.
+- `agent.retire` is refused for an agent on its way to a turn, as for one in a turn: `agent.cancel` is what stops one.
 - `team_check` warns of a wake cycle that closes through a parent and a child that can stay, with no `max_hops`, which every
   manager-worker team without one now gets, and refuses a role that stays on a one-shot harness.
 - `agent.spawned`, `context.offered`, `context.delivered` and `message.sent` are at payload v2, and the folds that read what v1 lacked
