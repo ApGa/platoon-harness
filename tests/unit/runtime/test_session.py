@@ -385,8 +385,9 @@ async def test_moving_a_persons_mark_never_acknowledges_a_delivery(tmp_path):
 
         await session.mark("channel/news", head)
 
+        after = [event async for event in session.events(head)]
         assert await session.marks() == {"channel/news": head}
-        assert await session.head() == head
+        assert [event for event in after if event.actor == "human:you" or event.type == "message.acked"] == []
         assert (await roster(session))["bob"]["unread"] == unread["bob"]["unread"]
 
 
