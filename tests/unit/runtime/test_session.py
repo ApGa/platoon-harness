@@ -395,12 +395,22 @@ async def test_a_mark_is_a_persons_own(tmp_path):
     folder = tmp_path / "s"
     folder.mkdir()
 
-    session_module._mark(folder, "human:ada", "inbox/ada", 7)
     session_module._mark(folder, "human:ada", "inbox/ada", 3)
     session_module._mark(folder, "human:bea", "inbox/ada", 9)
 
     assert session_module._marks_of(folder, "human:ada") == {"inbox/ada": 3}
     assert session_module._marks_of(folder, "human:cy") == {}
+
+
+async def test_a_mark_only_moves_forward(tmp_path):
+    """A second terminal of the same person that drew less marks less, and takes back nothing the first marked read."""
+    folder = tmp_path / "s"
+    folder.mkdir()
+
+    session_module._mark(folder, "human:ada", "inbox/ada", 10)
+    session_module._mark(folder, "human:ada", "inbox/ada", 5)
+
+    assert session_module._marks_of(folder, "human:ada") == {"inbox/ada": 10}
 
 
 async def test_losing_the_marks_loses_only_badges(tmp_path):
@@ -413,15 +423,36 @@ async def test_losing_the_marks_loses_only_badges(tmp_path):
         await until(lambda: of_type(session, "item.recorded"), session)
 
 
+async def test_a_marks_file_that_holds_no_marks_yet_has_none(tmp_path):
+    folder = tmp_path / "s"
+    folder.mkdir()
+    (folder / MARKS).write_bytes(b"")
+
+    assert session_module._marks_of(folder, "human:ada") == {}
+
+
 async def test_marks_need_no_runtime_and_reading_them_writes_nothing(tmp_path):
     async with Session.start(solo(), name="s", root=tmp_path):
         pass
 
-    async with Session.attach("s", view=True, root=tmp_path) as history:
+    async with Session.attach("s", root=tmp_path) as history:
         assert await history.marks() == {}
         assert not (history.folder / MARKS).exists()
         await history.mark("agent/bob", 2)
         assert await history.marks() == {"agent/bob": 2}
+
+
+async def test_a_view_credential_moves_no_mark(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path):
+        pass
+
+    async with Session.attach("s", view=True, root=tmp_path) as viewer:
+        with pytest.raises(Refused) as refused:
+            await viewer.mark("agent/bob", 2)
+
+        assert refused.value.refusal.code == "not_permitted"
+        assert await viewer.marks() == {}
+        assert not (viewer.folder / MARKS).exists()
 
 
 @pytest.mark.parametrize(("stream", "seq"), [("", 1), ("x" * 513, 1), ("inbox/\n", 1), ("inbox/bob", -1)])

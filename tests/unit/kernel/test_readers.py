@@ -118,6 +118,16 @@ async def test_streams_name_what_a_read_holds(kernel):
     assert (forward.cursor, back.cursor) == (4, 0)
 
 
+async def test_a_read_holds_what_its_streams_name_or_its_match_globs(kernel):
+    for stream in ("note/a", "other/b", "note/c", "last/d"):
+        await add(kernel, 1, stream)
+
+    forward = kernel.read(kernel.runtime, streams=["other/b"], match="note/*")
+    back = kernel.read(kernel.runtime, before=5, streams=["other/b"], match="note/*")
+
+    assert [e.seq for e in forward.events] == [e.seq for e in back.events] == [1, 2, 3]
+
+
 async def test_a_filtered_read_back_is_bounded_by_what_it_scans(kernel):
     await add(kernel, 3, "note/a")
     await add(kernel, 3, "other/b")
@@ -416,6 +426,29 @@ async def test_live_text_of_an_agent_that_ended_says_so_once_and_ends(kernel):
     assert (await pending).ended == kernel.head
     assert [delta async for delta in frames] == []
     assert [delta async for delta in kernel.deltas("alice")] == []
+
+
+async def test_readers_of_live_text_cost_a_commit_no_read_of_their_own(kernel, monkeypatch):
+    """Law 8: a reader looks for its agent's end in the tail every follower shares, so ten readers waiting through
+    twenty commits read about as often as one, and each is still told the end once it comes."""
+    await enroll(kernel, ALICE)
+    kernel.push_delta("alice", "last words")
+    readers = [kernel.deltas("alice", after=1) for _ in range(10)]
+    pending = [asyncio.ensure_future(anext(frames)) for frames in readers]
+    await asyncio.sleep(0)
+    reads, reading = [], kernel._reading
+    monkeypatch.setattr(kernel, "_reading", lambda: reads.append(1) or reading())
+
+    for _ in range(20):
+        await add(kernel, 1)
+        for _ in range(3):
+            await asyncio.sleep(0)
+
+    assert len(reads) <= 25
+    result_of(await kernel.submit(kernel.runtime, "principal.revoke", {"id": ALICE.id}))
+    assert [(await frame).ended for frame in pending] == [kernel.head] * 10
+    for frames in readers:
+        await frames.aclose()
 
 
 async def test_deltas_asked_for_after_close_end_at_once(kernel):

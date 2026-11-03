@@ -261,15 +261,25 @@ def test_a_template_with_a_slot_nobody_fills_is_refused_when_the_team_loads():
 
 def test_a_tokens_or_usd_limit_with_no_estimate_is_refused_naming_what_to_give():
     team = Team(
-        roles={"a": Role(harness="claude", budget=Budget(usd=5))},
+        roles={"a": Role(harness="claude", budget=Budget(tokens=5))},
         budget=Budget(tokens=1000, estimate={"usd": 1}),
     )
     found = errors(team, capabilities={"claude": MEASURING})
     tail = "what a turn nobody measured whole is charged on top"
     assert found == [
-        f"roles.a.budget.estimate: a usd limit needs `estimate.usd`: {tail}",
+        f"roles.a.budget.estimate: a tokens limit needs `estimate.tokens`: {tail}",
         f"budget.estimate: a tokens limit needs `estimate.tokens`: {tail}",
     ]
+
+
+def test_a_role_s_limit_holds_on_the_team_s_estimate_where_the_role_has_none():
+    """As a reservation does: a role's own estimate goes over the team's, unit by unit."""
+    team = Team(
+        roles={"a": Role(harness="claude", budget=Budget(usd=5, estimate={"tokens": 10}))},
+        budget=Budget(estimate={"usd": 1}),
+    )
+
+    assert errors(team, capabilities={"claude": MEASURING}) == []
 
 
 def test_a_limit_in_a_unit_a_harness_cannot_measure_holds_on_its_estimates_and_says_so():

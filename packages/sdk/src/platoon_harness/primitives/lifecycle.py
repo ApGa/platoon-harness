@@ -264,7 +264,6 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     if spawner is not None and spawner.finishing:
         raise Refused("conflict", f"{spawner.name} has finished: end your turn")
     depth = 0 if spawner is None else spawner.depth + 1
-    turn = None if spawner is None else txn.view(Stamps).turn(spawner.name)
     parent = None if txn.me.kind == "runtime" else txn.me.id
     stays = next(said for said in (a.stays, role.stays, parent is None) if said is not None)
     if stays and role.persistent is False:
@@ -292,9 +291,8 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "on_parent_exit": role.on_parent_exit,
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
-            "turn": turn,
         },
-        v=3,
+        v=2,
     )
     principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
     txn.emit(

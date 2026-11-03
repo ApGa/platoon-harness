@@ -685,14 +685,13 @@ async def test_an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(tmp
         await clients.an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(team, tmp_path, model)
 
 
-async def test_a_child_is_drawn_under_the_call_that_started_it(tmp_path, monkeypatch):
-    """A child is drawn under the tool item of the call that started it, whose `native_id` is the spawn's anchor."""
+async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, monkeypatch):
+    """The spawn's anchor is the `native_id` of the tool item of the call that made it, so a client can join the two."""
     spawning = ToolCall("agent_spawn", clients.SPAWN, id="call_spawn", namespace="mcp__ph")
     async with FakeModel(spawning, "spawned it") as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
-        spawned, under, turn = await clients.a_child_and_the_call_that_started_it(team, tmp_path)
+        spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
-    assert spawned.data["turn"] == turn
     assert under and {item.data["native_id"] for item in under} == set(spawned.native.values())
 
 

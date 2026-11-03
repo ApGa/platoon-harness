@@ -173,7 +173,7 @@ can both be watched. Leaving only disconnects.
   reservations, append `session.stopped`, keep the folder resumable. A start cut short, cancelled or failed, once its incarnation is
   in the journal ends with this shutdown too. To release is to hand back what will not happen now: a turn
   still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started is
-  cancelled, which queues its entries again and is no failure of its harness's. A spawn
+  cancelled, which queues its entries again and is no failure of its harness's, nor is one under way, which the next runtime fails. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
   while open; one that was closing, which reads `closed` once stopped, or cancelled stays so, and its harnesses are not resumed,
   because nothing new may start. A journal
@@ -393,10 +393,10 @@ for what a harness took and never landed, in `Deliveries` alone.
 
 A subscription is repeated `read(after, match, limit)` plus a shared head pulse. One writer means `seq` order is commit
 order, so a cursor cannot skip a late commit. Each page is its own short read transaction, so a slow client cannot pin
-the WAL. Catch-up and live are one loop. `match` is a glob over stream names and `streams` names them, a filtered page scans at most 4,096
-events, and `Page.cursor` is where to continue, so a page can be empty with more to come. With `before` a page is the newest below
+the WAL. Catch-up and live are one loop. `match` is a glob over stream names and `streams` names them, a page holds what either takes, a
+filtered page scans at most 4,096 events, and `Page.cursor` is where to continue, so a page can be empty with more to come. With `before` a page is the newest below
 it, still in order, and its cursor is the next `before`, or `after` once nothing is left between, so a transcript pages back from
-the journal without reading it all. A client names a row for what it could not read `missed`, as a gap is the journal's own record
+the journal without reading it all. A client names what it could not read `missed`, never a gap, which is the journal's own record
 of what went unseen.
 
 Followers at the tail share one read per pulse into a bounded tail and take a slice; a lagging follower pages by SQL through
@@ -412,6 +412,7 @@ it, an item the agent said or the end of its turn, and the kernel at its agent's
 its frame as one `Delta`. One that reads from before an end is told `ended`, the seq through which the journal holds what that text
 became, and given only what came after it, so a reader that joins late is shown only text not yet committed, after the items that
 were, and `lag` counts frames of it no longer held. A reader of an agent that has ended is told so once, and then nothing more comes.
+A reader looks for that end in the tail every follower shares, so a commit costs it no read of its own.
 
 `read` and `follow` are not ops, so they take no grant: the runtime and any live principal that is not an agent may read the
 whole journal. A page holding a `principal.revoked` goes by SQL, so a follower is refused at its own revocation. `limit` is 1 to
@@ -691,9 +692,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one. A spawn past `max_children` is refused, saying that ending a child makes room.
-  `agent.spawned` names the turn of its spawner's that started it, and its command's `native` holds the anchor of the call that
-  made it, which that call's tool item holds as its `native_id`, so a client draws a child under that item, or with no anchor
-  under that turn.
+  Its command's `native` holds the anchor of the call that made it, which that call's tool item holds as its `native_id`, so a
+  client can join a child to its call, and in journal order a spawn falls inside the turn of its spawner's that made it.
 - **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. The
   runtime keeps every agent alike, so it changes only what the agent is told, a spawn's result, and who may wait on its end. It is
   resolved once, at the spawn: what `agent.spawn` said, else what its role says, else true for an agent the session started and false
@@ -794,11 +794,12 @@ event, tried again when the budget moves.
 
 Time alone exhausts a `wall` limit, so a timer fires `budget.lapse` at the shared one, which moves the journal for whoever sleeps
 until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`, and what the runtime counts itself,
-`turns` and `agents`, is `counted`, which no driver can claim. A turn nobody measured whole, a lost one among
-them, is charged what was measured plus its estimate, labelled `estimated`, and limits hold on that. So an interrupt, which no harness
+`turns` and `agents`, is `counted`, which no driver can claim. A turn nobody measured whole, a lost one or one measured only as a
+`lower_bound` among them, is charged what was measured plus its estimate, labelled `estimated`, and limits hold on that. So an interrupt, which no harness
 measures the cut call of, leaves a session to go on, and a role whose harness cannot measure a unit is charged its estimate for every
 turn, which `team check` warns of. `budget.status`, the roster's usage and the Ending count such turns as `unmeasured`. With no estimate
-no amount can be stated, so `team check` and `budget.set` refuse a `tokens` or `usd` limit without one, a unit nothing estimated shows
+no amount can be stated, so `team check` and `budget.set` refuse a `tokens` or `usd` limit without one, a role's own or else the shared
+one, as a reservation takes them, and a role's estimate reaches the session with or without a limit of its own. A unit nothing estimated shows
 with no amount, as unknown is not zero, and a limit set after turns like that were charged has nothing to hold on and refuses
 `unavailable`, saying to remove it. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.

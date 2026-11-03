@@ -238,10 +238,12 @@ def _cycle(arcs: Mapping[str, Iterable[str]]) -> list[str] | None:
     return None
 
 
-def _unestimated(budget: Budget, where: str) -> Iterable[Problem]:
-    """A limit in a unit a turn can go unmeasured in needs an amount to charge such a turn, or it could hold on none."""
+def _unestimated(budget: Budget, where: str, shared: Budget | None = None) -> Iterable[Problem]:
+    """A limit in a unit a turn can go unmeasured in needs an amount to charge such a turn, or it could hold on none. A
+    role's limit takes the shared estimate where the role has none, as a reservation does."""
+    estimate = {**(shared.estimate if shared else {}), **budget.estimate}
     for unit in _MEASURED:
-        if getattr(budget, unit) is not None and unit not in budget.estimate:
+        if getattr(budget, unit) is not None and unit not in estimate:
             what = f"a {unit} limit needs `estimate.{unit}`: what a turn nobody measured whole is charged on top"
             yield Problem(f"{where}.estimate", what)
 
@@ -429,7 +431,7 @@ def team_check(
                 problems.append(Problem(f"roles.{name}.allow_native_children", _native(role, known), "warning"))
             problems += _unmeasured(team.budget, "budget", role, known)
             problems += _unmeasured(role.budget, f"roles.{name}.budget", role, known)
-        problems += _unestimated(role.budget, f"roles.{name}.budget")
+        problems += _unestimated(role.budget, f"roles.{name}.budget", team.budget)
         if role.auth is not None and role.auth not in team.auth:
             problems.append(Problem(f"roles.{name}.auth", f"unknown profile.{nearest(role.auth, team.auth.keys())}"))
 

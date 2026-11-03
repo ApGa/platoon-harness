@@ -1067,7 +1067,7 @@ platoon-harness budget set [OPTIONS] SESSION
 
 Set a scope's limits and turn estimate.
 
-Refused `invalid` for a `tokens` or `usd` limit with no estimate in that unit, which a turn nobody measured whole could not be charged.
+Refused `invalid` for a `tokens` or `usd` limit with no estimate in that unit, its own or, for a role, the shared one, which a turn nobody measured whole could not be charged.
 
 For example:
 

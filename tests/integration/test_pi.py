@@ -841,14 +841,12 @@ async def test_an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(tmp
         await clients.an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(team, tmp_path, model)
 
 
-async def test_a_child_is_drawn_under_the_call_that_started_it(tmp_path, monkeypatch):
-    """Pi's calls reach us through the shim, whose id is its own and no item's, so a child is drawn under its spawner's
-    turn."""
+async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, monkeypatch):
+    """Pi's calls reach us through the shim, whose id is its own and no item's, so no tool item holds the anchor."""
     async with FakeModel(ToolCall("mcp__ph__agent_spawn", clients.SPAWN, id="call_spawn"), "spawned it") as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
-        spawned, under, turn = await clients.a_child_and_the_call_that_started_it(team, tmp_path)
+        spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
-    assert spawned.data["turn"] == turn
     assert (list(spawned.native), under) == (["platoon-harness/callId"], [])
 
 

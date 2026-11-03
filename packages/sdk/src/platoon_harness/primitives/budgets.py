@@ -12,6 +12,7 @@ Label = Literal["provider", "estimated", "lower_bound", "unavailable"]
 
 _FROM_BEST = ("counted", *get_args(Label))
 _METERED = ("tokens", "usd")
+_UNMEASURED = ("lower_bound", "unavailable")
 
 
 def _weaker(one: str, other: str) -> str:
@@ -25,12 +26,12 @@ class _Scope(NamedTuple):
 
 
 def _charges(held: dict[str, float], seen: dict[str, tuple[float, str]]) -> list[dict[str, Any]]:
-    """What a turn is charged in each metered unit. One nobody measured whole is charged what was measured plus its
-    estimate, which errs high, and with no estimate it states no amount."""
+    """What a turn is charged in each metered unit. One nobody measured whole, a lower bound among them, is charged what
+    was measured plus its estimate, which errs high, and with no estimate it states a bound, or no amount at all."""
     charges = []
     for unit in _METERED:
         amount, label = seen.get(unit, (0.0, "unavailable"))
-        unmeasured = label == "unavailable"
+        unmeasured = label in _UNMEASURED
         if unmeasured and held.get(unit):
             amount, label = amount + held[unit], "estimated"
         charges.append({"unit": unit, "amount": amount, "label": label, "unmeasured": int(unmeasured)})
@@ -40,7 +41,7 @@ def _charges(held: dict[str, float], seen: dict[str, tuple[float, str]]) -> list
 class Budgets(View):
     """Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_budgets(
         scope TEXT PRIMARY KEY,
@@ -99,8 +100,9 @@ class Budgets(View):
 
     @fold("usage.reported")
     def usage(self, event: Event) -> None:
+        """A unit with no amount still says how well the turn is known, when its label says it is not known whole."""
         for unit in _METERED:
-            if (amount := event.data[unit]) is not None or event.data["label"] == "unavailable":
+            if (amount := event.data[unit]) is not None or event.data["label"] in _UNMEASURED:
                 self._seen(event.agent, unit, amount or 0.0, event.data["label"])
 
     def _seen(self, agent: str | None, unit: str, amount: float, label: str) -> None:
@@ -197,9 +199,9 @@ class Budgets(View):
         rows = self.db.execute("SELECT * FROM v_budgets_turn WHERE agent = ?", (agent,))
         return {row["unit"]: (row["amount"], row["label"]) for row in rows}
 
-    def estimate(self, role: str) -> dict[str, float]:
-        """One turn's estimate. A role's own overrides the shared one."""
-        shared, own = self._scope("shared"), self._scope(f"role:{role}")
+    def estimate(self, role: str | None = None) -> dict[str, float]:
+        """One turn's estimate: the shared one, with a role's own over it."""
+        shared, own = self._scope("shared"), None if role is None else self._scope(f"role:{role}")
         return {**(shared.estimate if shared else {}), **(own.estimate if own else {})}
 
     def _past_wall(self, found: _Scope, limit: float, now: float) -> bool:
@@ -238,14 +240,16 @@ class Budgets(View):
             for unit, limit in found.limits.items()
         )
 
-    def status(self) -> list[dict[str, Any]]:
+    def status(self, now: float) -> list[dict[str, Any]]:
+        """Each limit and what is spent against it, which for `wall` is the time since it was set."""
         scopes = self.db.execute("SELECT scope FROM v_budgets ORDER BY scope").fetchall()
         rows = []
         for scope in (row["scope"] for row in scopes):
             found = self._scope(scope)
             assert found is not None
             for unit, limit in found.limits.items():
-                spent, label, unmeasured = self.spent(scope, unit)
+                elapsed = (now - found.since, "counted", 0)
+                spent, label, unmeasured = elapsed if unit == "wall" else self.spent(scope, unit)
                 rows.append(
                     {
                         "scope": scope,
@@ -319,8 +323,9 @@ class SetBudget(Args):
 @op("budget.set", on=lambda a: f"budget/{a.scope}")
 def set_budget(txn: Txn, a: SetBudget) -> None:
     """Set a scope's limits and turn estimate. Refused `invalid` for a `tokens` or `usd` limit with no estimate in that
-    unit, which a turn nobody measured whole could not be charged."""
-    if missing := [unit for unit in _METERED if unit in a.limits and unit not in a.estimate]:
+    unit, its own or, for a role, the shared one, which a turn nobody measured whole could not be charged."""
+    known = {**(txn.view(Budgets).estimate() if a.scope != "shared" else {}), **a.estimate}
+    if missing := [unit for unit in _METERED if unit in a.limits and unit not in known]:
         raise Refused("invalid", f"a {missing[0]} limit needs an estimate in {missing[0]}")
     stream = f"budget/{a.scope}"
     txn.emit("budget.set", stream, gist=f"budget set for {a.scope}", data=a, v=2)
@@ -341,4 +346,4 @@ def lapse(txn: Txn, a: Args) -> None:
 @op("budget.status", query=True)
 def budget_status(txn: Txn, a: Args) -> list[dict[str, Any]]:
     """Each limit with what is spent, held, and how well that is known."""
-    return txn.view(Budgets).status()
+    return txn.view(Budgets).status(txn.now)

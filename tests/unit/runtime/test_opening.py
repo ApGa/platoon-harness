@@ -403,6 +403,22 @@ async def test_budgets_are_set_shared_and_per_role_in_seconds(opened):
     }
 
 
+async def test_a_role_s_estimate_reaches_the_session_with_or_without_a_limit_of_its_own(opened):
+    """A role's estimate is what its turns are reserved and charged, so it goes to the session whether or not the role
+    has a limit, and a role's limit may hold on the shared estimate."""
+    measuring = scripted(capabilities=MEASURING)
+    roles = {
+        "lead": {"harness": measuring, "budget": {"estimate": {"tokens": 50}}},
+        "other": {"harness": measuring, "count": 0, "budget": {"tokens": 500}},
+    }
+    team = team_of(roles=roles, budget={"tokens": 1000, "estimate": {"tokens": 10}})
+    kernel, *_ = await opened(team)
+
+    given = {event.data["scope"]: event.data for event in events_of(kernel, "budget.set")}
+    assert (given["role:lead"]["limits"], given["role:lead"]["estimate"]) == ({}, {"tokens": 50})
+    assert given["role:other"]["limits"] == {"tokens": 500}
+
+
 async def test_a_resource_the_authority_owns_is_no_limit_of_the_session(opened, tmp_path):
     class Managed(LocalAuthority):
         def budget_owner(self, resource: str):

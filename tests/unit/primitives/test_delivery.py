@@ -709,6 +709,27 @@ async def test_a_handover_the_owners_stop_hands_back_is_no_failure(kernel):
     assert ready(kernel) == ["bob"]
 
 
+async def test_a_handover_under_way_the_owners_stop_cut_is_no_failure(kernel):
+    """A wake's handover stays open until its turn begins, so a stop can find one started: the next runtime fails it
+    as in flight, which queues it again and counts toward no loss, however often it happens."""
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+
+    for _ in range(7):
+        await offer(kernel, "bob")
+        deliver = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "deliver"}))[0]
+        attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": deliver["id"]}))
+        result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+        result_of(await kernel.recover())
+        failed = {"id": deliver["id"], "attempt": attempt, "error": "it was in flight when the runtime went"}
+        result_of(await kernel.submit(kernel.runtime, "effect.fail", failed))
+
+    record = result_of(kernel.query(kernel.runtime, "agent.records", {"agent": "bob"}))[0]
+    assert (record["state"], record["failures"]) == ("idle", 0)
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == []
+    assert ready(kernel) == ["bob"]
+
+
 async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, interrupter):
     carol = await spawn(kernel, "carol")
     await start_turn(kernel, "bob")

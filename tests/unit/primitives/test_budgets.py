@@ -305,11 +305,12 @@ async def test_measurements_carry_a_label_and_the_weakest_wins(kernel):
     await wake(kernel, "bob")
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "usage", tokens=10, label="provider")
-    await report(kernel, "bob", "usage", tokens=10, label="lower_bound")
+    await report(kernel, "bob", "usage", tokens=10, label="estimated")
 
     await end_turn(kernel, "bob")
 
-    assert limit(kernel, "tokens")["label"] == "lower_bound"
+    row = limit(kernel, "tokens")
+    assert (row["spent"], row["label"]) == (20, "estimated")
 
 
 async def test_a_turn_nobody_measured_leaves_its_session_to_go_on_under_its_limit(kernel):
@@ -357,6 +358,20 @@ async def test_what_was_measured_is_charged_beneath_the_estimate_when_a_call_of_
     assert (usd["spent"], usd["label"], usd["unmeasured"]) == (6.0, "estimated", 1)
 
 
+async def test_a_turn_measured_only_as_a_lower_bound_is_charged_its_estimate_on_top(kernel):
+    """A bound is no measure of the whole turn, so the turn is charged as any nobody measured whole, and counted so."""
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=40, label="lower_bound")
+
+    await end_turn(kernel, "bob")
+
+    row = limit(kernel, "tokens")
+    assert (row["spent"], row["label"], row["unmeasured"]) == (140, "estimated", 1)
+
+
 async def test_a_turn_with_no_usage_report_is_unmeasured_and_not_free(kernel):
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"usd": 10.0}, estimate={"usd": 1.0})
@@ -389,6 +404,15 @@ async def test_an_agent_cannot_spend_past_wall_time(kernel, clock):
 
     assert await wake(kernel, "bob") is None
     assert of_type(kernel, "wake.refused")[-1].data["detail"]["unit"] == "wall"
+
+
+async def test_the_time_spent_against_a_wall_limit_is_the_time_since_it_was_set(kernel, clock):
+    await set_budget(kernel, limits={"wall": 60})
+
+    clock.advance(25)
+
+    row = limit(kernel, "wall")
+    assert (row["spent"], row["label"], row["limit"]) == (25, "counted", 60)
 
 
 async def test_usage_unknown_is_not_zero(kernel):

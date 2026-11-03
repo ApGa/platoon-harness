@@ -511,7 +511,7 @@ async def test_tokens_nobody_reported_are_a_gap_and_no_guess(tmp_path, stand):
     reports = await played(stand, tmp_path, {"type": "result", "subtype": "success", "is_error": False})
 
     assert GapReport(plane="model", what="usage_lower_bound") in reports
-    assert not [report for report in reports if isinstance(report, Usage)]
+    assert [report for report in reports if isinstance(report, Usage)] == [Usage(label="lower_bound", scope="tree")]
 
 
 async def test_a_call_the_harness_stopped_hearing_is_unknown_and_not_zero(tmp_path, stand):

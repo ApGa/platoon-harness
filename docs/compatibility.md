@@ -147,7 +147,7 @@ by a driver landing; only the row below changes.
   showed nothing new [R]. It passed again in runs 35 and 39, in 15 and 14 calls, the second on steps worded in an order no reading
   can mistake, and none of 17 woken turns in runs 34 to 39 opened with such a read [R].
 - What a client reads: a follower of live text was shown the start of the message item it became, a child spawned through our tool
-  is drawn under the tool item whose `native_id` is its spawn's anchor, and an interrupt under a stop below reached a child [L]. An
+  carries as its spawn's anchor the `native_id` of the tool item of its call, and an interrupt under a stop below reached a child [L]. An
   interrupt during a call under a `tokens` limit charged the cut turn its estimate, labelled `estimated`, and the session went on,
   on FakeModel [L] and on `claude-haiku-5-5` in run 44, in 2 calls [R].
 - From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
@@ -203,8 +203,8 @@ by a driver landing; only the row below changes.
   nothing, and a helper's woken turn opened with a `message_read` that showed nothing new in 4 of 6 [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
 - The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
 - What a client reads: a follower of live text was shown the start of the message item it became, a child spawned through our tool
-  is drawn under the tool item whose `native_id` is its spawn's anchor, the call's own id with no Code Mode, and an interrupt under
-  a stop below reached a child [L].
+  carries as its spawn's anchor the `native_id` of the tool item of its call, the call's own id with no Code Mode, and an interrupt
+  under a stop below reached a child [L].
 - From the command line: one `platoon-harness run` on FakeModel settled, and one stopped mid-turn by `session stop` was resumed by
   `session resume`, took the cut-off notice and settled [L]. On `gpt-6-luna`, as the worker `init` wrote, it claimed
   and fixed both tasks of run 41 in one turn of 11 calls. Stopped by `session stop` during `sleep 20`, its interrupted call was
@@ -247,7 +247,7 @@ by a driver landing; only the row below changes.
   `session resume`, took the cut-off notice and settled [L]. No live model has run it, as pi has no login here.
 - What a client reads: a follower of live text was shown the start of the message item it became, an interrupt under a stop below
   reached a child, and an interrupt during a call under a `tokens` limit charged the cut turn its estimate and the session went on
-  [L]. Pi's calls reach us through the shim, whose id is its own and no item's, so a child is drawn under its spawner's turn [L].
+  [L]. Pi's calls reach us through the shim, whose id is its own and no item's, so no tool item holds a spawn's anchor [L].
 
 **openhands, SDK 1.59.0.** [Report](research/adapter-openhands.md), [fixture](research/fixtures/openhands-events-sample.json).
 

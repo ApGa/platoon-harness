@@ -142,14 +142,15 @@ def _channel(name: str, channel: Any) -> dict[str, Any]:
 
 
 def _budget(scope: str, budget: Budget, authority: Authority) -> dict[str, Any] | None:
-    """The limits a session enforces itself, in seconds, or nothing if it has none."""
+    """The limits a session enforces itself, in seconds, and the estimate a turn is reserved, or nothing if it has
+    neither."""
     units = {unit: getattr(budget, unit) for unit in ("tokens", "usd", "turns", "agents", "wall")}
     limits = {
         unit: seconds(amount) if unit == "wall" else amount
         for unit, amount in units.items()
         if amount is not None and authority.budget_owner(unit) == "session"
     }
-    return {"scope": scope, "limits": limits, "estimate": dict(budget.estimate)} if limits else None
+    return {"scope": scope, "limits": limits, "estimate": dict(budget.estimate)} if limits or budget.estimate else None
 
 
 def _starting(team: Team) -> list[dict[str, str]]:

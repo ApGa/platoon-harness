@@ -498,8 +498,10 @@ class ClaudeDriver:
         self._counted = 0
 
     def _spent(self, spent: Mapping[str, Any] | None) -> None:
-        """What no call said: a native child's, and a compaction's. Dollars are the harness's own estimate."""
+        """What no call said: a native child's, and a compaction's. Dollars are the harness's own estimate. With none of
+        it said, what the calls said is a lower bound on the turn."""
         if spent is None:
+            self._process.put(Usage(label="lower_bound", scope="tree"))
             self._process.put(GapReport(plane="model", what="usage_lower_bound"))
             return
         if (tokens := _tree_tokens(spent) - self._counted) > 0:

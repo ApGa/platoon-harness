@@ -88,16 +88,15 @@
   `tests/integration/test_cli_harnesses.py` runs, stops and resumes from the command line on each real binary against FakeModel.
 
 - `before` and `streams` on `Kernel.read`, and through every link form, as `Session.page`: a page back from `before`, still in
-  order, whose cursor is the next `before`, and a set of stream names a page holds, so a transcript pages back without reading the
-  journal whole. `Session.events` takes `streams` too. bug-clients-3.
+  order, whose cursor is the next `before`, and a set of stream names a page holds besides what `match` globs, so a transcript pages
+  back without reading the journal whole. `Session.events` takes `streams` too. bug-clients-3.
 - `Session.marks()` and `Session.mark(stream, seq)`: how far a person has read each stream, kept per principal in
-  `marks.sqlite` beside the journal, with no runtime, and apart from an agent's cursor, so moving a mark acknowledges nothing.
-  `Link.principal` names who a link acts as. bug-clients-7.
+  `marks.sqlite` beside the journal, with no runtime, and apart from an agent's cursor, so moving a mark acknowledges nothing. A
+  mark only moves forward, and a view credential moves none. `Link.principal` names who a link acts as. bug-clients-7.
 - `below` on `agent.interrupt` and `Session.interrupt`: one act that stops the turns of an agent and of every agent below it and
   keeps them all. It stops turns, not waits, and says whose: an interrupt answers `{stopped}`, where it named an effect.
 - `agent.unread` and `Session.unread(agent)`: what the roster's `unread` counts, with how each entry would land, for a chip and a
   queue line above a composer.
-- `agent.spawned` names its spawner's open turn, at payload v3, so a client draws a child under the call that started it.
 - `tests/integration/clients.py`: the live tail, stop below, an interrupt under a `tokens` limit and a child's anchor, run on the
   real Claude Code, Codex and pi binaries against FakeModel. `tests/live/test_interrupts.py`: an interrupt during a call under a
   `tokens` limit on real models, after which the session goes on.
@@ -198,6 +197,17 @@
 
 ### Fixed
 
+- A handover under way when the owner stopped counted, once the next runtime failed it, as a failure of its harness's, so six stops
+  and resumes during a wake lost the agent.
+- A turn measured only as a lower bound was charged as if measured whole, and a Claude Code result with no tree usage left its
+  turn labelled `provider`. Both are charged their estimate on top now.
+- `budget.status` said a wall limit had nothing spent against it. It says the time since the limit was set.
+- A role's estimate with no limit of its own never reached the session, so its turns were reserved the shared estimate, and a
+  role's limit was refused although the shared estimate covered it.
+- Each reader of live text read the journal on every commit to look for its agent's end, a private read per follower that law 8
+  rules out. It looks in the tail every follower shares.
+- A mark could move backward, when a second terminal of the same person marked less than the first had, and a view credential
+  could move one.
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
   was refused between a wake and its turn: bug-coordination-7 and -8.
 - A handover an interrupt cut counted as one that failed, so each later message waited twice as long, and six interrupts lost the

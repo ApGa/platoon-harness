@@ -1061,20 +1061,6 @@ async def test_interrupt_with_no_turn_is_refused(kernel, ada):
     assert refusal(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"})).code == "conflict"
 
 
-async def test_a_spawn_names_the_turn_of_its_spawner_s_that_started_it(kernel, ada):
-    """With the anchor its command carries in `native`, which a tool item of that turn carries as `native_id`, this
-    is what a client draws a child under."""
-    lead = await spawn(kernel, "lead", role="lead", goal="")
-    await start_turn(kernel, "lead", "t7")
-
-    result_of(await kernel.submit(lead, "agent.spawn", {"name": "w1", "child_role": "worker"}))
-    result_of(await kernel.submit(ada, "agent.spawn", {"name": "w2", "child_role": "worker"}))
-
-    spawned = {event.agent: event for event in of_type(kernel, "agent.spawned")}
-    assert (spawned["w1"].data["turn"], spawned["w1"].v) == ("t7", 3)
-    assert spawned["w2"].data["turn"] is None
-
-
 async def a_tree_at_work(kernel) -> None:
     """`lead` over `w1` over `w2`, each in a turn, and `w3` idle under `lead`."""
     lead = await spawn(kernel, "lead", role="lead", goal="")

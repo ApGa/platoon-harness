@@ -729,12 +729,15 @@ class Session:
     async def marks(self) -> dict[str, int]:
         """How far you have read each stream, as you marked it, by stream: where a badge counts from. A mark is neither
         evidence nor a view, and an agent's cursor is no mark, so losing `marks.sqlite` loses only these."""
-        return _marks_of(self.folder, self._current().principal)
+        return await asyncio.to_thread(_marks_of, self.folder, self._current().principal)
 
     async def mark(self, stream: str, seq: int) -> None:
-        """Mark that you have read `stream` through `seq`. It writes no event and acknowledges nothing an agent was
-        handed, with a runtime or without one."""
-        _mark(self.folder, self._current().principal, stream, seq)
+        """Mark that you have read `stream` through `seq`. A mark only moves forward. It writes no event and
+        acknowledges nothing an agent was handed, with a runtime or without one, and a view credential moves none."""
+        principal = self._current().principal
+        if self._view:
+            raise Refused("not_permitted", "a view credential reads and never writes, a mark among it")
+        await asyncio.to_thread(_mark, self.folder, principal, stream, seq)
 
     async def put_body(self, body: bytes) -> str:
         """Store a body and return its ref, which `body=` takes. An orphan is harmless."""
@@ -754,11 +757,14 @@ class Session:
 
 
 def _marks_of(folder: Path, person: str) -> dict[str, int]:
-    """A person's marks. Reading writes nothing, so a folder nobody marked stays as it was."""
+    """A person's marks. Reading writes nothing, so a folder nobody marked stays as it was, and a file that holds no
+    marks yet has none."""
     if not (folder / MARKS).exists():
         return {}
     try:
         with contextlib.closing(sqlite3.connect(f"{(folder / MARKS).as_uri()}?mode=ro", uri=True)) as db:
+            if db.execute("SELECT 1 FROM sqlite_schema WHERE name = 'marks'").fetchone() is None:
+                return {}
             return dict(db.execute("SELECT stream, seq FROM marks WHERE person = ?", (person,)).fetchall())
     except sqlite3.Error as error:
         raise Refused("unavailable", f"marks cannot be read: {error}") from None
@@ -771,7 +777,8 @@ def _mark(folder: Path, person: str, stream: str, seq: int) -> None:
         with contextlib.closing(sqlite3.connect(folder / MARKS, timeout=_CLIENT_SECONDS * 5)) as db, db:
             db.execute(_MARKS_TABLE)
             db.execute(
-                "INSERT INTO marks VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET seq = excluded.seq", (person, stream, seq)
+                "INSERT INTO marks VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET seq = max(seq, excluded.seq)",
+                (person, stream, seq),
             )
     except sqlite3.Error as error:
         raise Refused("unavailable", f"marks cannot be written: {error}") from None

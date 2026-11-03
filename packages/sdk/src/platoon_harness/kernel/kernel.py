@@ -468,8 +468,9 @@ class Kernel:
         limit: int = 512,
     ) -> Page:
         """Read a page past `after` in one short transaction, oldest first, or with `before` the newest below it, still
-        in order. `match` globs stream names and `streams` names them. `cursor` is where to go on: the next `after`, or
-        going back the next `before`, which is `after` once nothing is left between.
+        in order. `match` globs stream names and `streams` names them, and a page holds what either takes. `cursor` is
+        where to go on: the next `after`, or going back the next `before`, which is `after` once nothing is left
+        between.
 
         This is for the runtime and live principals other than agents, whose reads are ops, checked against grants.
         """
@@ -490,10 +491,10 @@ class Kernel:
             high = min(last, after + span) if before is None else min(last, before - 1)
             low = after if before is None else max(after, high - span)
             rows = db.execute(
-                "SELECT * FROM events WHERE seq > ? AND seq <= ? AND (? IS NULL OR matches(stream, ?)) "
-                "AND (? IS NULL OR stream IN (SELECT value FROM json_each(?))) "
+                "SELECT * FROM events WHERE seq > ? AND seq <= ? AND (? IS NULL AND ? IS NULL "
+                "OR ? IS NOT NULL AND matches(stream, ?) OR stream IN (SELECT value FROM json_each(?))) "
                 f"ORDER BY seq {'DESC' if before is not None else 'ASC'} LIMIT ?",
-                (low, high, match, match, named, named, limit),
+                (low, high, match, named, match, match, named, limit),
             ).fetchall()
         if before is None:
             cursor = rows[-1]["seq"] if len(rows) == limit else max(after, high)
@@ -556,21 +557,36 @@ class Kernel:
     async def deltas(self, agent: str, *, after: int | None = None) -> AsyncGenerator[Delta]:
         """Follow an agent's live text past frame `after`, or from what it is saying now, each delta joining what came
         since the last. An agent's text ends when its principal is revoked, at that seq, so a reader is told so once.
-        It ends when the kernel closes, or once an agent that has ended has had all it said told."""
+        It ends when the kernel closes, or once an agent that has ended has had all it said told. A reader looks for the
+        revocation in the tail every follower shares, so a commit costs it no read of its own."""
         ring = self._ring(agent)
+        if self.closed:
+            return
+        seen = self.head
+        revoked = self._revoked(agent, None, seen)
         while not self.closed:
             if (delta := ring.since(after)) is not None:
                 yield delta
                 after = delta.frame
                 continue
-            with self._reading() as db:
-                revoked = Principals(db).revoked_at(f"agent:{agent}")
             if revoked is not None:
                 if not ring.end(revoked):
                     return
-            else:
-                place = ring.head if after is None or after > ring.head else after
-                await first(ring.wait(place), self._pulse.wait(self.head))
+                continue
+            place = ring.head if after is None or after > ring.head else after
+            await first(ring.wait(place), self._pulse.wait(seen))
+            if (head := self.head) > seen:
+                revoked, seen = self._revoked(agent, seen, head), head
+
+    def _revoked(self, agent: str, after: int | None, head: int) -> int | None:
+        """The seq that revoked an agent: from the shared tail past `after`, where an `agent.ended` of it says so, and
+        by SQL with no `after` or when the tail cannot say, as one holding a `principal.revoked` cannot."""
+        page = None if after is None else self._tail.page(after, None, head)
+        if page is not None:
+            ended = (event.seq for event in page.events if event.type == "agent.ended" and event.agent == agent)
+            return next(ended, None)
+        with self._reading() as db:
+            return Principals(db).revoked_at(f"agent:{agent}")
 
     # Lifetime.
 

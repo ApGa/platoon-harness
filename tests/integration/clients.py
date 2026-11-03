@@ -82,9 +82,8 @@ async def an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(team: Te
     assert (usage["label"], usage["unmeasured"]) == ("estimated", 1) and usage["amount"] > 100_000
 
 
-async def a_child_and_the_call_that_started_it(team: Team, root: Path) -> tuple[Event, list[Event], str]:
-    """`bob` spawns `w` by our tool: the spawn, the tool items of `bob`'s whose `native_id` is among its anchors, and
-    the turn `bob` was in."""
+async def a_spawn_and_the_call_that_made_it(team: Team, root: Path) -> tuple[Event, list[Event]]:
+    """`bob` spawns `w` by our tool: the spawn, and the tool items of `bob`'s whose `native_id` is among its anchors."""
     given = team.canonical()
     roles = {"bob": {**given["roles"]["bob"], "may_spawn": ["bob"]}}
     spawning = Team.model_validate({**given, "roles": roles, "topology": {"limits": {"max_depth": 1}}})
@@ -94,10 +93,9 @@ async def a_child_and_the_call_that_started_it(team: Team, root: Path) -> tuple[
         await until(lambda: of_type(session, "turn.ended"), session)
         spawned = next(event for event in await of_type(session, "agent.spawned") if event.agent == "w")
         tools = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "tool"]
-        turn = next(event for event in await of_type(session, "turn.started") if event.agent == "bob")
 
     under = [item for item in tools if item.agent == "bob" and item.data["native_id"] in spawned.native.values()]
-    return spawned, under, turn.data["turn"]
+    return spawned, under
 
 
 async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:
