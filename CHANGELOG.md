@@ -98,6 +98,9 @@
 - `agent.unread` and `Session.unread(agent)`: what the roster's `unread` counts, with how each entry would land, for a chip and a
   queue line above a composer.
 - `agent.spawned` names its spawner's open turn, at payload v3, so a client draws a child under the call that started it.
+- `tests/integration/clients.py`: the live tail, stop below, an interrupt under a `tokens` limit and a child's anchor, run on the
+  real Claude Code, Codex and pi binaries against FakeModel. `tests/live/test_interrupts.py`: an interrupt during a call under a
+  `tokens` limit on real models, after which the session goes on.
 
 ### Changed
 
