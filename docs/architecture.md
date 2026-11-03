@@ -660,7 +660,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   journal, and an agent that has ended cannot be given one.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5).
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
-  that exits ends its agent `lost`, or `failed` if it never started. A one-shot agent ends with its turn: `finished` if that turn
+  that exits ends its agent `lost`, or `failed` if it never started, and one that exits in a turn leaves the gap `crash_window`, since a
+  tool of its own can run on. A one-shot agent ends with its turn: `finished` if that turn
   `stopped`, and `failed` otherwise.
 - **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn

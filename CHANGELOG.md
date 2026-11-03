@@ -45,6 +45,9 @@
   without it, naming the fix.
 - `check_driver` rows `unset_model_refused` and `native_child_seen`, and its `tool` and `child` arguments, because a real harness
   knows our tool by a prefixed name.
+- `peers` lists the `roles` you may start an agent in, and the preamble names them.
+- The preamble says how to end: an agent somebody spawned makes `agent.finish` its last call, and one the session started stays unless
+  told to finish.
 
 ### Changed
 
@@ -54,6 +57,10 @@
 
 ### Fixed
 
+- A Codex approval id was a count per process, so a second agent's first request collided in the journal and was answered `deny`
+  with nobody asked. It is unique now.
+- A harness that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. It used to leave none.
+- A real child's `system/task_progress` frame no longer costs Claude Code a gap.
 - A secret split across two deltas reached followers unmasked, on every driver but `exec`. Live text is masked as one stream.
 - An `interrupt` or an `answer` that a harness never took held its effect open for ever. Each fails after a minute, as a handover
   already did.
