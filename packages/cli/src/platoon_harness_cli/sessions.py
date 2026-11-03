@@ -79,9 +79,8 @@ async def show(session: str, /, *, json: bool = False) -> int:
     for row in roster:
         harness = row["harness"] if isinstance(row["harness"], str) else row["harness"]["mode"]
         why = f"  {_compact(row['why'])}" if row["why"] else ""
-        lines.append(
-            f"  @{row['agent']:<15} {row['role']:<10} {harness:<8} {row['state']:<8} {row['activity'] or ''}{why}"
-        )
+        doing = " ".join((row["activity"] or "").split())
+        lines.append(f"  @{row['agent']:<15} {row['role']:<10} {harness:<8} {row['state']:<8} {doing}{why}")
     for row in attention:
         lines.append(f"  needs you: {row['kind']} {row['id']}, {row['gist']}")
         lines += [
