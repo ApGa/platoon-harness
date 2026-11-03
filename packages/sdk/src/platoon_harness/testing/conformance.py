@@ -398,25 +398,29 @@ async def _named_pipe(path: Path) -> AsyncGenerator[asyncio.StreamReader]:
 
 @_check()
 async def stop_ends_a_running_tool(rig: _Rig) -> None:
-    """The tool holds a pipe open, so only its end ends the pipe, whichever process group it left for."""
+    """The tool, and what it put in the background, one of those in a session of its own, hold a pipe open, so only
+    the end of all three ends the pipe, whichever process group each left for."""
     if rig.options.shell is None:
         raise _Skipped("nothing was given that makes this harness run a shell command")
     rig.folder.mkdir(parents=True, exist_ok=True)
     async with _named_pipe(rig.folder / "tool") as tool:
         rig.allowing = True
         pipe = shlex.quote(str(rig.folder / "tool"))
-        rig.model.script([rig.options.shell(f"exec 3>{pipe}; echo $$ >&3; exec sleep 600")])
+        left = "sleep 600 & echo $! >&3; setsid sleep 600 & echo $! >&3"
+        rig.model.script([rig.options.shell(f"exec 3>{pipe}; {left}; echo $$ >&3; exec sleep 600")])
         await rig.start()
         rig.awaiting = "the shell tool"
-        pid = int(await tool.readline())
+        pids = [int(await tool.readline()) for _ in range(3)]
         try:
             rig.awaiting = "`stop`"
             await rig.driver.stop(_GRACE)
-            rig.awaiting = "the end of the running shell tool"
+            rig.awaiting = "the end of the running shell tool and what it left in the background"
             await tool.read()
         finally:
             if not tool.at_eof():
-                os.kill(pid, signal.SIGKILL)
+                for pid in pids:
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(pid, signal.SIGKILL)
 
 
 @_check()

@@ -11,7 +11,7 @@ import sys
 import weakref
 from asyncio.subprocess import PIPE, SubprocessStreamProtocol
 from collections import deque
-from collections.abc import Callable, Coroutine, Mapping, Sequence
+from collections.abc import Callable, Coroutine, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -20,7 +20,7 @@ from platoon_harness.primitives import Delta, Exited, GapReport, Native, Report
 from platoon_harness.schema import Model
 
 from . import RAW_LIMIT, SHORT_LIMIT, AgentSpec, DriverError, Reporter, unknown_frame
-from .env import Held, Redactor, harness_env, secrets_of
+from .env import Held, Redactor, harness_env, secrets_of, tmpdir
 
 RECORD = "proc.json"
 LOG = "stderr.log"
@@ -150,12 +150,75 @@ async def _end(group: int, grace: float) -> None:
         await _killed(group)
 
 
+def _marked(folders: Iterable[Path]) -> list[int]:
+    """Pidfds of this user's processes whose environment holds the `TMPDIR` of one of `folders`, which only what a
+    harness started inherits, whichever group it left for. Each is opened before it is looked at, so a pid reused since
+    signals nobody. Only Linux lets one process read another's environment, and what clears its own is not found."""
+    if sys.platform != "linux":
+        return []
+    markers = {f"TMPDIR={tmpdir(folder)}".encode() for folder in folders}
+    found, me = [], os.getuid()
+    with os.scandir("/proc") as entries:
+        for entry in entries:
+            try:
+                if not entry.name.isdecimal() or entry.stat(follow_symlinks=False).st_uid != me:
+                    continue
+                pidfd = os.pidfd_open(int(entry.name))
+            except OSError:
+                continue
+            try:
+                held = not markers.isdisjoint(Path(entry.path, "environ").read_bytes().split(b"\0"))
+            except OSError:
+                held = False
+            if held:
+                found.append(pidfd)
+            else:
+                os.close(pidfd)
+    return found
+
+
+async def _end_marked(folders: Iterable[Path], grace: float) -> None:
+    """End what a harness left running outside its group: TERM, wait, then KILL. A pidfd can be read once its process
+    has exited, which is how this waits."""
+    pidfds = _marked(folders)
+    loop = asyncio.get_running_loop()
+    exits = []
+    for pidfd in pidfds:
+        exited = loop.create_future()
+        loop.add_reader(pidfd, lambda pidfd=pidfd, exited=exited: _note(loop, pidfd, exited))
+        exits.append(exited)
+        with contextlib.suppress(ProcessLookupError):
+            signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+    try:
+        if exits:
+            _, staying = await asyncio.wait(exits, timeout=grace)
+            for pidfd, exited in zip(pidfds, exits, strict=True):
+                if exited in staying:
+                    with contextlib.suppress(ProcessLookupError):
+                        signal.pidfd_send_signal(pidfd, signal.SIGKILL)
+            if staying:
+                await asyncio.wait(staying, timeout=_VERIFY)
+    finally:
+        for pidfd in pidfds:
+            loop.remove_reader(pidfd)
+            os.close(pidfd)
+
+
+def _note(loop: asyncio.AbstractEventLoop, pidfd: int, exited: asyncio.Future[None]) -> None:
+    loop.remove_reader(pidfd)
+    if not exited.done():
+        exited.set_result(None)
+
+
 async def reap(folder: Path, grace: float) -> tuple[str, ...]:
     """End what a crash left in an agent's `folder` and return what was left alone, in words: a group not provably ours,
     or a record that cannot be read. A reused pid can never make this signal a stranger. Only the driver's own record
-    and a wire program's are read, because a harness can write under its folder."""
-    left = []
-    for path in (folder / RECORD, folder / WIRE / RECORD):
+    and a wire program's are read, because a harness can write under its folder. What left a group is found by the
+    `TMPDIR` it inherited, which proves it ours, so a group that outlived its leader is named for what that misses."""
+    left, unproven = [], []
+    records = (folder / RECORD, folder / WIRE / RECORD)
+    recorded = any(path.exists() for path in records)
+    for path in records:
         try:
             record = Record.model_validate_json(path.read_bytes())
         except FileNotFoundError:
@@ -168,11 +231,18 @@ async def reap(folder: Path, grace: float) -> tuple[str, ...]:
             case "ours":
                 await _end(record.pid, grace)
             case "unproven":
-                left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
+                unproven.append((path, record))
                 continue
             case "gone":
                 pass
         path.unlink()
+    if recorded:  # A stop that ran to its end left no record, and nothing.
+        await _end_marked((folder, folder / WIRE), grace)
+    for path, record in unproven:
+        if record.state() == "gone":
+            path.unlink()
+        else:
+            left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
     return tuple(left)
 
 
@@ -463,9 +533,8 @@ class Process:
             self._stopping = asyncio.create_task(self._stop(grace))
 
     async def stop(self, grace: float) -> None:
-        """End the whole tree: end of stdin, wait, TERM, wait, KILL, then verify, in twice `grace` and that check. A
-        process that left the group by `setsid` escapes it, and a stop that came to KILL reports `crash_window`. A
-        second call waits for the first."""
+        """End the whole tree: end of stdin, wait, TERM, wait, KILL, then verify, and what left the group too. A stop
+        that came to KILL reports `crash_window`. A second call waits for the first."""
         self._stop_soon(grace)
         assert self._stopping is not None
         await asyncio.shield(self._stopping)
@@ -473,7 +542,9 @@ class Process:
     async def _stop(self, grace: float) -> None:
         """A SIGKILL gives a harness no chance to end what it started, and a tool that leads a group of its own lives
         on, so that is a gap. It is said first, since the leader's end closes the queue. Stdin that has closed already
-        has had its say."""
+        has had its say. What left the group gets what is left of twice `grace`."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 2 * grace
         if not self.stdin.is_closing():
             self.stdin.close()
             with contextlib.suppress(TimeoutError):
@@ -482,6 +553,7 @@ class Process:
         if self._record.state() != "gone" and not await _termed(self._record.pid, grace):
             self._enqueue(GapReport(plane="control", what="crash_window"))
             await _killed(self._record.pid)
+        await _end_marked((self._folder,), max(deadline - loop.time(), 0.0))
         (self._folder / RECORD).unlink(missing_ok=True)
         self._released.set()
         await asyncio.wait({self._owning, self._logging, self._forwarding}, timeout=_FLUSH)

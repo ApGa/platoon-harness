@@ -19,7 +19,7 @@ _MASK = b"***"
 _CONTINUATION = 0b1000_0000
 _CONTINUATION_MASK = 0b1100_0000
 
-__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "secrets_of"]
+__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "secrets_of", "tmpdir"]
 
 
 def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
@@ -32,7 +32,9 @@ def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str,
 def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The whole environment of one harness process: what it inherits, a `TMPDIR` of its own, and what `spec` names.
     Later entries win: `spec.env` over the inherited, and `spec.access` over both."""
-    env = {**inherited(*names, environ=environ), "TMPDIR": str(_tmpdir(spec.folder))}
+    own = tmpdir(spec.folder)
+    own.mkdir(mode=0o700, parents=True, exist_ok=True)
+    env = {**inherited(*names, environ=environ), "TMPDIR": str(own)}
     if spec.tools is not None:
         env["PATH"] = os.pathsep.join(filter(None, (str(spec.tools.bin), env.get("PATH"))))
         env[URL_VARIABLE] = spec.tools.url
@@ -40,10 +42,9 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
     return {**env, **spec.env, **{name: secret.reveal() for name, secret in spec.access.items()}}
 
 
-def _tmpdir(folder: Path) -> Path:
-    path = folder / "tmp"
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return path
+def tmpdir(folder: Path) -> Path:
+    """A harness's own `TMPDIR`, which whatever it starts inherits, and so carries the name of its folder."""
+    return folder / "tmp"
 
 
 def private(path: Path, text: str) -> str:

@@ -54,6 +54,7 @@ platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.inherited
 platoon_harness.drivers.env.private
 platoon_harness.drivers.env.secrets_of
+platoon_harness.drivers.env.tmpdir
 platoon_harness.drivers.exec.ExecDriver
 platoon_harness.drivers.exec.GOAL
 platoon_harness.drivers.levels.Check

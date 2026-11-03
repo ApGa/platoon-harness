@@ -137,14 +137,26 @@ async def test_a_relative_program_is_found_from_the_cwd(tmp_path):
     assert found == [b"hello"]
 
 
-async def test_stop_ends_a_harness_with_term_first(tmp_path):
+async def test_stop_asks_by_end_of_stdin_first(tmp_path):
+    marker = tmp_path / "asked"
+    ready = asyncio.Event()
+    script = f"echo ready; cat >/dev/null; touch {marker}"
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready))
+    await ready.wait()
+
+    await process.stop(5)
+
+    assert (marker.exists(), process.returncode) == (True, 0)
+
+
+async def test_stop_ends_a_harness_that_will_not_hear_stdin_with_term_before_kill(tmp_path):
     marker = tmp_path / "termed"
     ready = asyncio.Event()
     script = f"trap 'touch {marker}; exit 0' TERM; echo ready; while :; do sleep 0.01; done"
     process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready))
     await ready.wait()
 
-    await process.stop(5)
+    await process.stop(1)
 
     assert marker.exists()
 
@@ -167,7 +179,7 @@ async def test_a_stop_that_term_answered_leaves_no_gap(tmp_path):
     process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready), report=heard)
     await ready.wait()
 
-    await process.stop(5)
+    await process.stop(1)
 
     assert not [report for report in heard.reports if isinstance(report, GapReport)]
 
@@ -211,6 +223,61 @@ async def test_stop_ends_a_forked_child_that_outlives_its_leader(tmp_path):
     await process.stop(1)
 
     assert not running(child)
+
+
+async def test_stop_ends_what_left_the_group_by_the_tmpdir_it_inherited(tmp_path):
+    found = []
+    ready = asyncio.Event()
+    script = 'setsid sleep 100 & left=$!; nohup sleep 100 >/dev/null 2>&1 & echo "$left $!"; exec sleep 100'
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into(found, then=ready))
+    await ready.wait()
+
+    await process.stop(1)
+
+    assert not [pid for pid in map(int, found[0].split()) if running(pid)]
+
+
+async def test_what_clears_its_own_environment_escapes_and_nothing_of_a_stranger_s_is_touched(tmp_path):
+    stranger = spawn_group("sleep", "100")
+    found = []
+    ready = asyncio.Event()
+    script = "env -i setsid sleep 100 & echo $!; exec sleep 100"
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into(found, then=ready))
+    try:
+        await ready.wait()
+
+        await process.stop(1)
+
+        assert running(int(found[0]))
+        assert running(stranger.pid)
+    finally:
+        for pid in (int(found[0]), stranger.pid):
+            os.kill(pid, signal.SIGKILL)
+        stranger.wait()
+
+
+async def test_reap_ends_what_left_a_group_a_crash_left_behind(tmp_path):
+    spec = make_spec(tmp_path)
+    found = []
+    ready = asyncio.Event()
+    process = await launch(
+        tmp_path,
+        "sh",
+        "-c",
+        "setsid sleep 100 & echo $!; exec sleep 100",
+        read=lines_into(found, then=ready),
+        spec=spec,
+    )
+    await ready.wait()
+    record = Record.read(spec.folder)
+    assert record is not None
+    os.killpg(record.pid, signal.SIGKILL)
+    await process.exited()
+
+    assert await reap(spec.folder, 1) == ()
+
+    assert not running(int(found[0]))
+    await process.stop(1)
 
 
 async def test_a_forked_child_holding_stdout_cannot_hold_up_the_exit_report(tmp_path):
@@ -460,7 +527,7 @@ async def test_a_reporter_that_fails_stops_the_agent(tmp_path):
     process = await launch(tmp_path, "sleep", "100", read=read, report=broken, spec=spec)
     record = Record.read(spec.folder)
 
-    await process.stop(5)
+    await process.stop(1)
 
     assert group_of(record.pid) is None
 

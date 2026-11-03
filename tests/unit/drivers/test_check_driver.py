@@ -22,6 +22,7 @@ from platoon_harness.drivers import (
     Usage,
 )
 from platoon_harness.drivers.exec import ExecDriver
+from platoon_harness.drivers.process import Process
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import TOOL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
 from platoon_harness.testing.conformance import _CHECKS
@@ -301,21 +302,29 @@ async def test_a_process_left_behind_fails(tmp_path):
 
 
 class Shelling(ScriptedDriver):
-    """A harness that really runs a shell tool, and that may or may not end it in `stop`."""
+    """A harness that really runs a shell tool, as a `Process` of its own, and that may or may not stop it."""
 
     def __init__(self, ends_it: bool) -> None:
         super().__init__(every_turn_asks_the_model())
         self._ends_it = ends_it
-        self._tool: asyncio.subprocess.Process | None = None
+        self._tool: Process | None = None
 
     async def _run_call(self, call, call_id):
-        self._tool = await asyncio.create_subprocess_shell(json.loads(call["function"]["arguments"])["command"])
-        await self._tool.wait()
+        command = json.loads(call["function"]["arguments"])["command"]
+        spec = self._spec.model_copy(update={"folder": self._spec.folder / "tool"})
+        self._tool = await Process.launch(("sh", "-c", command), spec, self._quiet, read=self._drained)
+        await self._tool.exited()
         return {"role": "tool", "tool_call_id": call["id"], "content": ""}
+
+    async def _quiet(self, report: Report) -> None:
+        pass
+
+    async def _drained(self, process: Process) -> None:
+        await process.stdout.read()
 
     async def stop(self, grace):
         if self._ends_it and self._tool is not None:
-            self._tool.kill()
+            await self._tool.stop(grace)
         await super().stop(grace)
 
 
@@ -345,9 +354,14 @@ async def test_a_shell_tool_that_outlives_stop_fails_and_is_ended(tmp_path):
     result = await check_driver(leaky, folder=tmp_path, shell=shell, timeout=2)
 
     check = result.get("stop_ends_a_running_tool")
-    assert (check.state, check.reason) == ("failed", "the end of the running shell tool never came")
+    assert (check.state, check.reason) == (
+        "failed",
+        "the end of the running shell tool and what it left in the background never came",
+    )
     ran = [driver._tool for driver in drivers if driver._tool is not None]
-    assert -signal.SIGKILL in [await tool.wait() for tool in ran]
+    for tool in ran:
+        await tool.exited()
+    assert -signal.SIGKILL in [tool.returncode for tool in ran]
 
 
 async def test_a_stop_during_a_tool_is_a_skip_with_nothing_to_run_it(tmp_path):

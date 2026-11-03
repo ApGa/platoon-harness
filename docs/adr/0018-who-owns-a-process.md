@@ -1,6 +1,7 @@
 # 0018. Who owns a process
 
-**Status:** Accepted, 2026-11-02
+**Status:** Accepted, 2026-11-02. Its row on an environment marker, and its consequence for `setsid`, are superseded by
+[0021](0021-what-a-harness-leaves-behind.md).
 
 ## Context
 

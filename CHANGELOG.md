@@ -59,6 +59,9 @@
 
 ### Fixed
 
+- `stop` left a tool's background child running on Claude Code and pi, `npm run dev &` among them, with no word in the journal, and
+  `check_driver` passed. On Linux, `Process` now ends what carries the harness's own `TMPDIR`, whichever group it left for, at a stop and
+  after a crash, and `stop_ends_a_running_tool` puts a child in the background and one in a session of its own.
 - A frame of a known type with a shape nobody expected stopped a Claude Code agent. It is a `native` frame and a gap, as on the other
   two, a request the harness waits on is still answered, and a turn's end still ends the turn. A call whose count is nothing, or a null
   part, is no measurement.

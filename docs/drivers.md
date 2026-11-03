@@ -42,12 +42,13 @@ method promises:
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
   again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
 - **`interrupt`** stops the turn, or the one a delivery on its way is about to begin, and that turn ends `interrupted`. The agent lives
-  on. A delivery the harness took and has not landed when a turn stops short goes back
-  on the runtime's queue, and comes again under a new input, so a driver sends nothing again. Tell a harness that keeps such a thing to
-  drop it, where it can be told, or it may hear it twice, which at-least-once allows.
-- **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
-  harness, so ask a harness to end first, and with real grace. `Process` reports the gap `crash_window` when it comes to `SIGKILL`,
-  and the workspace may still be being written.
+  on. A delivery the harness took and has not landed when a turn stops short goes back on the runtime's queue, and comes again under a
+  new input, so a driver sends nothing again. Tell a harness that keeps such a thing to drop it, where it can be told, or it may hear it
+  twice, which at-least-once allows.
+- **`stop`** leaves no process behind, a running tool and what it put in the background included. A tool that leads a group of its
+  own outlives a `SIGKILL` of its harness, so ask a harness to end first, and with real grace. `Process` then ends, on Linux, what
+  carries the harness's own `TMPDIR`, whichever group it left for. It reports the gap `crash_window` when it comes to `SIGKILL`, and the
+  workspace may still be being written.
 
 ### What a driver reports
 
@@ -279,7 +280,7 @@ Each report is a `report` notification whose params are the report, with its `ty
 - **Stdout is the protocol.** A line that is not a frame costs you a `native` frame and a gap, and an unknown report the same.
 - **Exit when stdin ends.** A program still there is sent `SIGTERM`, then `SIGKILL`.
 - **Your own subprocesses are yours to end,** in `stop`. Stay in your process group, and the runtime can end them if you cannot.
-  What leaves the group by `setsid` escapes it. A driver of your own that uses `Process` keeps its record in `spec.folder`, which
+  On Linux, what leaves the group is found by the `TMPDIR` it inherited, and ended too. A driver of your own that uses `Process` keeps its record in `spec.folder`, which
   on the wire is a folder of its own, so recovery finds both.
 
 ## A Python package
@@ -349,7 +350,7 @@ async def test_my_driver_conforms(tmp_path):
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
-| `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
+| `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, and so do the child it put in the background and the one it put in a session of its own. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
 | `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |

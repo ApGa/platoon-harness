@@ -27,6 +27,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0018](0018-who-owns-a-process.md) | Who owns a process | Recorded before exec, a start time tells pids apart, and only a recorded leader proves a group ours |
 | [0019](0019-one-link-two-forms.md) | One link, two forms | `Session` has one link, in-process or over a socket. Start and resume are one path, and a client only pulls |
 | [0020](0020-finish-and-handover-wait-for-the-turn.md) | Finish and handover wait for the turn | `agent.finish` takes effect at turn end and a wake's `deliver` stays open until its turn begins, each with a live bound |
+| [0021](0021-what-a-harness-leaves-behind.md) | What a harness leaves behind | A harness's own `TMPDIR` marks what it started, so `stop` and `reap` end it whichever group it left for |
 
 ## Adding or changing one
 
