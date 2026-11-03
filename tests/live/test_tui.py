@@ -16,6 +16,7 @@ import pytest
 from platoon_harness import Session
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Dock
 
@@ -75,8 +76,8 @@ def chosen(app: TerminalUI) -> dict:
 async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, monkeypatch):
     """Budget: at most 30 model calls, counted from the journal. Started from the sessions screen, with the plan login
     asked about once; the job sent from the composer; the worker's approval answered from the dock; its live text seen;
-    a memo queued for it, then the worker interrupted mid-turn, the memo staying quiet; then a detach, an attach from a
-    new app, and the session seen to settle. Each act is in the journal once."""
+    a memo queued for it, then the worker interrupted mid-turn, the memo staying quiet; then a detach back to the
+    sessions screen, an attach from a new app, and the session seen to settle. Each act is in the journal once."""
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "root"))
     work = seeded(tmp_path / "work")
     (work / "crew.toml").write_text(TEAM)
@@ -121,7 +122,8 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
             await pilot.press(*"@w ", *"Finish the story in one sentence, and end your turn.", "enter")
             await drawn(pilot, lambda text: "Finish the story" in text, within=30)
         await pilot.press("ctrl+d")
-    assert app.return_value == name
+        await drawn(pilot, lambda text: isinstance(app.screen, Sessions) and name in text, within=30)
+        await pilot.press("ctrl+q")
 
     again = TerminalUI(name)
     async with again.run_test(size=(140, 40)) as pilot:
@@ -161,13 +163,14 @@ def live_places(app: TerminalUI) -> list[dict]:
 
 
 async def _quiet(pilot, app: TerminalUI) -> dict:
-    """The worker's row once its interrupted turn has ended: idle, with the memo still waiting for it."""
+    """The worker's row once its interrupted turn has ended: idle, with the memo still waiting for it. A worker that
+    ended its turn before the interrupt reached it has ended, which the journal's checks below then say."""
     screen = workspace(app)
     assert screen.live is not None
     async with asyncio.timeout(WITHIN):
         while True:
             row = screen._row("w") or {}
-            if row.get("state") in ("idle", "ended") and row.get("stopped") == "interrupted":
+            if row.get("state") == "ended" or (row.get("state") == "idle" and row.get("stopped") == "interrupted"):
                 return row
             await drawn(pilot, lambda text: True)
             await screen.live.next_frame(screen.live.frames)

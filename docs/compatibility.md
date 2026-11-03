@@ -335,7 +335,8 @@ Rules that hold on every harness:
   our words once per request [L]. That is a measurement and not a gate, and a live Codex's block, one `exec` tool, cannot be read.
 - **Skills.** Per harness. No unification is claimed.
 - **Slash commands.** A small core of ours plus namespaced passthrough, planned. The TUI sends what its composer holds as a person's
-  message, so it reaches no harness's own slash command yet, and its own commands are in its palette.
+  message, and asks first about one that begins with `/`, since a harness may still read it as its own command, which nothing here
+  claims yet. Its own commands are in its palette.
 - **Hooks.** Displayed, not reimplemented.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as
   bodies. If what was forgotten is unknown, that is a `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
