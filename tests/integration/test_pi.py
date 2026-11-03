@@ -473,21 +473,25 @@ async def test_a_steer_during_a_model_call_is_in_the_next_one_within_the_turn(tm
     assert model.calls[1].says("cinnabar")
 
 
-async def test_a_steer_an_interrupt_stranded_goes_again_and_only_once(tmp_path):
-    steer = Delivery(input="41", boundary="model_call", text="the steer says cinnabar", items=())
+def taken_twice(finished: list[Any]) -> bool:
+    """Whether a wake and a steer have both been handed over."""
+    return len([event for event in finished if event.data["kind"] == "deliver"]) == 2
 
+
+async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
     async with FakeModel([Stall()], "the next turn") as model:
-        driver, heard = PiDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
-        await asyncio.wait_for(model.call(0), TIMEOUT)
-        await driver.deliver(steer)
-        await driver.interrupt()
-        delivered = await heard.until(InputDelivered)
-        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
-        await driver.stop(2.0)
+        team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")
 
-    assert delivered.boundary == "turn"
-    assert [turn.reason for turn in heard.of(TurnEnded)] == ["interrupted", "stopped"]
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "go")
+            await asyncio.wait_for(model.call(0), TIMEOUT)
+            await session.send("@bob", "the word is cinnabar")
+            await until(lambda: of_type(session, "effect.finished"), session, taken_twice)
+            await session.interrupt("@bob")
+            ended = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+
+    assert [event.data["reason"] for event in ended] == ["interrupted", "stopped"]
     assert model.calls[1].message.body.decode().count("cinnabar") == 1
 
 
@@ -523,8 +527,9 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
 async def test_a_session_that_took_no_turn_cannot_resume_and_says_so(tmp_path):
     async with FakeModel() as model:
         spec = on_fake_model(tmp_path, model)
-        first = PiDriver()
-        native = (await first.start(spec, Heard())).native
+        first, heard = PiDriver(), Heard()
+        await first.start(spec, heard)
+        native = (await heard.until(Ready)).native
         await first.stop(2.0)
 
         second, heard = PiDriver(), Heard()

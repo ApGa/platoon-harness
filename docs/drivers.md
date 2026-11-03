@@ -41,8 +41,9 @@ method promises:
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
   again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
-- **`interrupt`** stops the turn. The agent lives on. A delivery the harness took and has not landed is still handed over, and lands
-  in what comes next, so a harness that drops it at an interrupt is sent it again. `Receipt.queued` names those.
+- **`interrupt`** stops the turn. The agent lives on. A delivery the harness took and has not landed when a turn stops short goes back
+  on the runtime's queue, and comes again under a new input, so a driver sends nothing again. Tell a harness that keeps such a thing to
+  drop it, where it can be told, or it may hear it twice, which at-least-once allows.
 - **`stop`** leaves no process behind, a running tool included. A tool that leads a group of its own outlives a `SIGKILL` of its
   harness, so ask a harness to end first, and with real grace. `Process` reports the gap `crash_window` when it comes to `SIGKILL`,
   and the workspace may still be being written.
@@ -348,7 +349,6 @@ async def test_my_driver_conforms(tmp_path):
 | `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, whichever group it left for. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one |
-| `interrupt_keeps_a_steer` | A delivery handed over inside a turn outlives an interrupt. Needs a boundary inside a turn and `interrupt` |
 | `measures_reported` | Each declared unit comes with a turn, and `tokens` adds up to the input and output the model said |
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |

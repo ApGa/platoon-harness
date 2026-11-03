@@ -766,7 +766,7 @@ async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(t
     assert reason == TurnEnded(reason="interrupted")
 
 
-async def test_what_stays_queued_past_an_interrupt_is_named_by_its_input(tmp_path, stand):
+async def test_an_interrupt_has_the_harness_drop_what_it_queued_since_the_runtime_offers_that_again(tmp_path, stand):
     stand.install(turns=[[STARTED]], queued_from=1)
 
     async with running(make_spec(tmp_path)) as (driver, heard):
@@ -774,6 +774,12 @@ async def test_what_stays_queued_past_an_interrupt_is_named_by_its_input(tmp_pat
         await driver.deliver(delivery())
 
         await driver.interrupt()
+
+    asked = next(
+        frame for frame in stand.heard if frame["type"] == "control_request" and "cancel_queued" in frame["request"]
+    )
+    assert asked["request"]["cancel_queued"] is True
+    assert not heard.of(InputDelivered)
 
 
 async def test_a_turn_that_finished_as_an_interrupt_came_stopped_on_its_own(tmp_path, stand):

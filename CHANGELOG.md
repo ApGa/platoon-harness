@@ -38,8 +38,6 @@
   loaded with `-e`, and `gated` approvals through the runtime. `check_driver` passes on the real binary against FakeModel, at 1.5.0.
   No live model has run.
 - `sandbox` on `AgentSpec`, from the role.
-- `check_driver` row `interrupt_keeps_a_steer`: a delivery handed over inside a turn outlives an interrupt, whatever the harness does
-  with it.
 - `effort` on `Role` and `AgentSpec`, handed to the harness as it stands. A driver that cannot honor one fails the spawn.
 - `Session.start(team, plan_login=True)`. A driver reports the login kind, and `prepare` refuses several agents on one plan login
   without it, naming the fix.
@@ -61,6 +59,9 @@
 
 ### Fixed
 
+- What a harness took and never landed is queued again when its turn stops short, and when it comes back from a crash, by one fold, so
+  a steer no longer goes missing across a crash, and no driver sends anything again, or fails to in silence. Claude Code drops its queue
+  at an interrupt, as it would otherwise begin a turn on it by itself.
 - A Codex approval id was a count per process, so a second agent's first request collided in the journal and was answered `deny`
   with nobody asked. It is unique now.
 - A harness that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. It used to leave none.

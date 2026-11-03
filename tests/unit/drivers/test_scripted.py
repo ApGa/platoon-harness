@@ -214,7 +214,7 @@ async def test_answering_what_nobody_asked_is_refused(tmp_path):
     await driver.stop(1)
 
 
-async def test_hang_holds_until_interrupted_and_says_what_was_queued(tmp_path):
+async def test_hang_holds_until_interrupted_and_what_never_landed_goes_with_the_turn(tmp_path):
     driver, heard = await started(tmp_path, [Hang()], [Say("next")])
     await heard.until(TurnStarted)
     await driver.deliver(delivery())
@@ -222,6 +222,8 @@ async def test_hang_holds_until_interrupted_and_says_what_was_queued(tmp_path):
     await driver.interrupt()
 
     assert (await heard.until(TurnEnded)).reason == "interrupted"
+    assert await driver.reconcile("d1") == "unknown"
+    await driver.deliver(delivery())
     assert (await heard.until(Item)).gist == "next"
     await driver.stop(1)
 
@@ -259,15 +261,15 @@ async def test_it_refuses_to_resume_when_it_cannot(tmp_path):
 
 
 async def test_reconcile_tells_landed_from_waiting_from_unknown(tmp_path):
-    driver, heard = await started(tmp_path, [Hang()])
-    await heard.until(TurnStarted)
+    driver, heard = await started(tmp_path, [EndTurn()], [Hang()])
+    await heard.until(TurnEnded)
+    await driver.deliver(delivery("landed"))
+    await heard.until(InputDelivered)
     await driver.deliver(delivery("waiting"))
 
     assert await driver.reconcile("waiting") == "not_landed"
     assert await driver.reconcile("never") == "unknown"
-    await driver.interrupt()
-    await heard.until(InputDelivered)
-    assert await driver.reconcile("waiting") == "landed"
+    assert await driver.reconcile("landed") == "landed"
     await driver.stop(1)
 
 

@@ -377,6 +377,7 @@ class ScriptedDriver:
         if not self._capabilities.interrupt:
             raise DriverError("this harness cannot be interrupted")
         if self._steps is not None:
+            self._pending.clear()
             self._interrupted = True
             self._steps.cancel()
 

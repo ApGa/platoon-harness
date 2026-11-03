@@ -438,6 +438,73 @@ async def test_two_failed_steers_lose_nothing(kernel):
 
 
 @pytest.mark.parametrize("limits", [{"max_hops": 0}])
+async def taken_steer(kernel) -> dict:
+    """A steer a working harness took and has not landed, as far as anyone knows."""
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", ready={"boundaries": ["turn", "model_call"]})
+    await channel(kernel, "urgent", delivery="steer")
+    await start_turn(kernel, "bob")
+    await send(kernel, alice, "#urgent", "stop that")
+    handed = await offer(kernel, "bob")
+    await settle_effects(kernel, "bob")
+    return handed
+
+
+@pytest.mark.parametrize("reason", ["interrupted", "aborted", "stopped by its owner"])
+async def test_what_a_harness_took_and_never_landed_is_offered_again_when_its_turn_stops_short(kernel, reason):
+    first = await taken_steer(kernel)
+
+    await end_turn(kernel, "bob", reason)
+
+    assert ready(kernel) == ["bob"]
+    second = await offer(kernel, "bob")
+    assert second["input"] != first["input"]
+    assert [item["ref"] for item in second["items"]] == [item["ref"] for item in first["items"]]
+
+
+async def test_a_turn_that_stopped_on_its_own_lands_what_it_took_in_the_next(kernel):
+    await taken_steer(kernel)
+
+    await end_turn(kernel, "bob")
+
+    assert ready(kernel) == []
+
+
+async def test_what_landed_is_not_offered_again_when_its_turn_stops_short(kernel):
+    first = await taken_steer(kernel)
+    await report(kernel, "bob", "input.delivered", input=str(first["input"]), boundary="model_call")
+
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert ready(kernel) == []
+
+
+async def test_a_second_short_turn_offers_nothing_twice(kernel):
+    await taken_steer(kernel)
+    await end_turn(kernel, "bob", "interrupted")
+    second = await offer(kernel, "bob")
+    await settle_effects(kernel, "bob")
+    await start_turn(kernel, "bob", "t2")
+    await report(kernel, "bob", "input.delivered", input=str(second["input"]), boundary="turn")
+
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert ready(kernel) == []
+
+
+async def test_a_handover_still_under_way_stays_its_own_when_a_turn_stops_short(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", ready={"boundaries": ["turn", "model_call"]})
+    await channel(kernel, "urgent", delivery="steer")
+    await start_turn(kernel, "bob")
+    await send(kernel, alice, "#urgent", "stop that")
+    await offer(kernel, "bob")
+
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert ready(kernel) == []
+
+
 async def test_an_offer_carries_what_stands_before_it_so_it_cannot_repeat(kernel, ada, limits):
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob", role="steerer", ready={"boundaries": ["tool", "turn"]})

@@ -578,21 +578,18 @@ async def test_an_interrupt_ends_the_turn_and_lives_on(tmp_path, stand):
     assert GapReport(plane="model", what="usage_lower_bound") in heard.reports
 
 
-async def test_what_an_interrupt_drops_is_sent_again_and_begins_the_next_turn(tmp_path, stand):
-    stand.install(
-        turns=[[began()], [], [began(), landed("41"), ended()]],
-        on_interrupt=[ended("interrupted")],
-    )
+async def test_what_an_interrupt_drops_is_the_runtime_s_to_offer_again(tmp_path, stand):
+    stand.install(turns=[[began()], []], on_interrupt=[ended("interrupted")])
 
     async with running(make_spec(tmp_path)) as (driver, heard):
         await heard.until(TurnStarted)
         await driver.deliver(delivery(boundary="model_call"))
         await driver.interrupt()
-        await heard.until(InputDelivered)
-        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
+        await heard.until(TurnEnded)
 
     sent = [frame["params"].get("clientUserMessageId") for frame in stand.heard if frame.get("method") == "turn/start"]
-    assert sent == [None, "41", "41"]
+    assert sent == [None, "41"]
+    assert not heard.of(InputDelivered)
 
 
 async def test_an_interrupt_that_comes_to_no_turn_asks_nothing(tmp_path, stand):

@@ -26,10 +26,13 @@ def control(id: str, subtype: str) -> None:
         "initialize": {"claude_code_version": script.get("version", "9.9.9"), "account": {"email": "someone"}},
         "get_settings": {"applied": script.get("applied", {"model": "fake-model", "effort": "high"})},
         "mcp_status": {"mcpServers": script.get("servers", [])},
-        "interrupt": {"still_queued": inputs[script.get("queued_from", len(inputs)) :]},
+        "interrupt": {"still_queued": []},
     }
     if subtype == script.get("deaf_after"):
         time.sleep(600)
+    if subtype == "interrupt":
+        for input in inputs[script.get("queued_from", len(inputs)) :]:
+            say(json.dumps({"type": "command_lifecycle", "state": "cancelled", "command_uuid": input}))
     response = {"subtype": "success", "request_id": id, "response": answers.get(subtype)}
     say(json.dumps({"type": "control_response", "response": response}))
     if subtype == "interrupt":

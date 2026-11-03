@@ -1,6 +1,7 @@
 """The `claude` driver on the real binary against FakeModel. Free: a dummy key, an isolated home, and loopback only."""
 
 import asyncio
+import fcntl
 import json
 import os
 import shutil
@@ -27,6 +28,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.process import Record
+from platoon_harness.runtime.paths import read_running
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import NAMESPACE, TOOL, FakeModel, Stall, Text, ToolCall, check_driver
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
@@ -113,14 +115,14 @@ async def test_the_claude_driver_conforms(tmp_path):
     assert earned.observable.state == "met", earned.observable.reasons
 
 
-def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch) -> Team:
+def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role: Any) -> Team:
     """One agent on the real binary, reaching FakeModel the way an auth profile would."""
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home / ".claude"))
     monkeypatch.setenv("ANTHROPIC_BASE_URL", model.url)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key")
-    bob = Role(harness="claude", model=MODEL, auth="fake")
+    bob = Role(harness="claude", model=MODEL, auth="fake", **role)
     return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"))})
 
 
@@ -192,6 +194,57 @@ async def test_a_turn_the_owner_stopped_is_told_on_resume_and_the_harness_goes_o
 
     assert [event.data["reason"] for event in ended] == ["stopped by its owner", "stopped"]
     assert model.calls[-1].says("the owner stopping the session")
+
+
+def taken_twice(finished: list[Any]) -> bool:
+    """Whether a wake and a steer have both been handed over."""
+    return len([event for event in finished if event.data["kind"] == "deliver"]) == 2
+
+
+async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
+    async with FakeModel([Stall()], "the next turn") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "go")
+            await asyncio.wait_for(model.call(0), TIMEOUT)
+            await session.send("@bob", "the word is cinnabar")
+            await until(lambda: of_type(session, "effect.finished"), session, taken_twice)
+            await session.interrupt("@bob")
+            ended = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+
+    assert [event.data["reason"] for event in ended] == ["interrupted", "stopped"]
+    assert model.calls[1].message.body.decode().count("cinnabar") == 1
+
+
+def let_go(folder: Path) -> None:
+    """Wait for a dead runtime's lock, which outlives its signal by a moment."""
+    with (folder / "lock").open() as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+
+
+async def test_a_steer_the_harness_took_and_never_landed_survives_a_killed_runtime(tmp_path, monkeypatch):
+    async with FakeModel([Stall()], "noted") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")
+        guest = await Session.start(team, name="crash", root=tmp_path, cwd=tmp_path, detach=True)
+        await in_state(guest, "bob", "idle")
+        await guest.send("@bob", "go")
+        await asyncio.wait_for(model.call(0), TIMEOUT)
+        await guest.send("@bob", "the word is cinnabar")
+        await until(lambda: of_type(guest, "effect.finished"), guest, taken_twice)
+        running = read_running(guest.folder)
+        assert running is not None
+        os.kill(running.pid, signal.SIGKILL)
+        await guest.leave()
+        await asyncio.to_thread(let_go, guest.folder)
+
+        async with Session.resume("crash", root=tmp_path) as session:
+            await until(lambda: of_type(session, "turn.ended"), session)
+            offers = await of_type(session, "context.offered")
+
+    assert model.calls[-1].says("cinnabar")
+    assert "inbox/bob@2" in [item["ref"] for item in offers[-1].data["items"]]
 
 
 def on_fake_model(tmp_path: Path, fake: FakeModel, **fields: Any) -> AgentSpec:

@@ -238,11 +238,11 @@ class ClaudeDriver:
     def _lost(self) -> DriverError:
         return DriverError(f"{_CLAUDE} is gone: see {self._folder / LOG}")
 
-    def _control(self, subtype: str) -> dict[str, Any]:
-        return {"type": "control_request", "request_id": uuid4().hex, "request": {"subtype": subtype}}
+    def _control(self, subtype: str, **fields: Any) -> dict[str, Any]:
+        return {"type": "control_request", "request_id": uuid4().hex, "request": {"subtype": subtype, **fields}}
 
-    async def _ask(self, subtype: str) -> Mapping[str, Any]:
-        frame = self._control(subtype)
+    async def _ask(self, subtype: str, **fields: Any) -> Mapping[str, Any]:
+        frame = self._control(subtype, **fields)
         return await self._lines.exchange(frame["request_id"], frame)
 
     async def deliver(self, delivery: Delivery) -> None:
@@ -254,9 +254,10 @@ class ClaudeDriver:
         await self._lines.exchange(id, self._user(delivery.text, id))
 
     async def interrupt(self) -> None:
-        """Stop the turn. What is queued stays queued, so nothing handed over is lost, and it begins the next turn."""
+        """Stop the turn. The harness drops what it has queued, which the runtime offers again, as it would begin a turn
+        by itself otherwise."""
         self._interrupted = self._turn is not None
-        await self._ask("interrupt")
+        await self._ask("interrupt", cancel_queued=True)
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if approval not in self._asking:
@@ -285,8 +286,8 @@ class ClaudeDriver:
         ending does not stop a running one. It exits 1 after this, which is normal."""
         if self._launched is None:
             return
-        if self._turn is not None:
-            self._lines.write(self._control("interrupt"))
+        if self._turn is not None or self._inputs:
+            self._lines.write(self._control("interrupt", cancel_queued=True))
         await self._launched.stop(grace)
         (self._folder / _SERVERS).unlink(missing_ok=True)
 
@@ -328,6 +329,8 @@ class ClaudeDriver:
                 self._lines.settle(id, {})
             case {"type": "command_lifecycle", "state": "started", "command_uuid": id}:
                 self._landed(id)
+            case {"type": "command_lifecycle", "state": "cancelled", "command_uuid": id}:
+                self._inputs.pop(id, None)
             case {"type": "command_lifecycle"}:
                 pass
             case {"type": "stream_event", "event": event}:

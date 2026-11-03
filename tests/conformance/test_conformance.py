@@ -23,7 +23,6 @@ ONE_SHOT_SKIPS = {
     "approval_answered",
     "malformed_frame_is_a_gap",
     "steers_at_declared_boundary",
-    "interrupt_keeps_a_steer",
     "measures_reported",
     "call_ids_reported",
     "dialects_spoken",

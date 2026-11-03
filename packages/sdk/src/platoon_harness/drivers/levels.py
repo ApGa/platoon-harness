@@ -144,7 +144,6 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
             "delivered_text_in_next_prompt",
             "no_goal_takes_no_turn",
             "interrupt",
-            "interrupt_keeps_a_steer",
             "resume",
             "approval_answered",
             "steers_at_declared_boundary",

@@ -194,7 +194,7 @@ class PiDriver:
         self._turn: str | None = None
         self._opening = False
         self._failure: str | None = None
-        self._unlanded: dict[str, str] = {}
+        self._inputs: dict[str, str] = {}
         self._calls: dict[str, str | None] = {}
         self._tools: dict[str, str] = {}
         self._asking: dict[str, str | None] = {}
@@ -264,16 +264,17 @@ class PiDriver:
             raise DriverError("an extension took this input, so it reached no model")
 
     async def deliver(self, delivery: Delivery) -> None:
-        self._unlanded[delivery.input] = delivery.text
+        self._inputs[delivery.text] = delivery.input
         try:
             await self._hand_over(delivery.text)
         except DriverError:
-            del self._unlanded[delivery.input]
+            self._inputs.pop(delivery.text, None)
             raise
 
     async def interrupt(self) -> None:
         """Stop the turn. A dialog open on a gate of the user's would hold up `abort`, so it is cancelled first. What
-        pi queued stays behind in its queue, where no run takes it, so `_ended` sends that again."""
+        pi queued stays behind in its queue, where no run takes it, so `_ended` clears that, and the runtime offers it
+        again."""
         for id in tuple(self._asking):
             await self._lines.send({"type": "extension_ui_response", "id": id, "cancelled": True})
         await self._ask("abort")
@@ -387,9 +388,7 @@ class PiDriver:
         """An input reached the context: as what began a turn, or inside one. No frame names it, so its text does."""
         boundary: Boundary = "turn" if self._opening else "model_call"
         self._opening = False
-        input = next((input for input, sent in self._unlanded.items() if sent == text), None)
-        if input is not None:
-            del self._unlanded[input]
+        if (input := self._inputs.pop(text, None)) is not None:
             self._process.put(InputDelivered(input=input, boundary=boundary, evidence="message_start"))
 
     def _said(self, message: Mapping[str, Any], blocks: Sequence[Any]) -> None:
@@ -465,7 +464,7 @@ class PiDriver:
 
     def _ended(self, *, aborted: bool) -> None:
         """Pi will do nothing more on its own. Approvals of the turn go moot with it. No run takes what a turn that
-        stopped short left in pi's queue, so that goes again: the first begins a turn, and the rest steer it."""
+        stopped short left in pi's queue, so that is cleared, as the runtime offers it again."""
         if self._turn is None:
             return
         reason = "interrupted" if aborted else self._failure or "stopped"
@@ -473,11 +472,10 @@ class PiDriver:
         self._turn, self._failure = None, None
         self._asking.clear()
         self._deciding.clear()
-        if self._unlanded and reason != "stopped":
-            self._soon(self._send_again(tuple(self._unlanded.values())))
+        if self._inputs and reason != "stopped":
+            self._inputs.clear()
+            self._soon(self._clear_queue())
 
-    async def _send_again(self, texts: Sequence[str]) -> None:
+    async def _clear_queue(self) -> None:
         with contextlib.suppress(DriverError):
             await self._ask("clear_queue")
-            for text in texts:
-                await self._hand_over(text)

@@ -29,7 +29,7 @@ from platoon_harness.primitives import CUT_OFF, Agents
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
-from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
+from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
 from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, solo, until
 
@@ -834,6 +834,52 @@ async def test_a_harness_that_cannot_resume_is_lost_and_told_nothing(tmp_path):
     async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "bob", "ended")
         assert await notices(session) == []
+
+
+def handed_twice(finished: list[Any]) -> bool:
+    """Whether a wake and a steer have both reached the harness."""
+    return len([event for event in finished if event.data["kind"] == "deliver"]) == 2
+
+
+async def test_a_steer_the_harness_took_and_never_landed_survives_a_crash(tmp_path):
+    team = solo_with(lambda: ComesBack([Say("heard")]), delivery="steer")
+    session = await Session.start(team, name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await session.send("@bob", "the word is cinnabar")
+    await until(lambda: of_type(session, "effect.finished"), session, handed_twice)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        offers = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) > 2)
+
+    assert "inbox/bob@2" in [item["ref"] for item in offers[-1].data["items"]]
+
+
+async def test_a_crash_after_a_turn_ended_gives_back_what_it_took_and_never_landed(tmp_path):
+    class Unlanded(ComesBack):
+        async def deliver(self, delivery: Delivery) -> None:
+            if self._spec.resume is not None or not self._turn_count:
+                await super().deliver(delivery)
+            else:
+                self._heard_this_turn = True
+                self._arrival.set()
+
+    team = solo_with(lambda: Unlanded([Say("heard")], first=[Wait()]), delivery="steer")
+    session = await Session.start(team, name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await session.send("@bob", "the word is cinnabar")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    await until(lambda: of_type(session, "effect.finished"), session, handed_twice)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        offers = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) > 2)
+        said = await until(lambda: of_type(session, "item.recorded"), session)
+
+    assert "inbox/bob@2" in [item["ref"] for item in offers[-1].data["items"]]
+    assert said[-1].gist == "heard"
 
 
 async def test_a_second_crash_before_the_next_turn_tells_it_again(tmp_path):

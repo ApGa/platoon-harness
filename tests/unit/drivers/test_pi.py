@@ -693,39 +693,35 @@ async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(t
     assert ended.reason == "interrupted"
 
 
-async def test_what_an_interrupt_stranded_goes_again_once_its_queue_is_cleared(tmp_path, stand):
-    stand.install(
-        turns=[[BEGAN, user("the goal")], [], [BEGAN, user("queued"), message_end(), ENDED]],
-        after_abort=[ABORTED],
-    )
+async def test_what_an_interrupt_stranded_is_cleared_from_its_queue_for_the_runtime_to_offer_again(tmp_path, stand):
+    stand.install(turns=[[BEGAN, user("the goal")], []], after_abort=[ABORTED])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
         await driver.deliver(delivery("41", "model_call", "queued"))
         await driver.interrupt()
-        delivered = await heard.until(InputDelivered)
+        await heard.until(TurnEnded)
 
-    assert delivered.boundary == "turn"
     types = [frame["type"] for frame in stand.heard]
     assert types.index("abort") < types.index("clear_queue")
-    assert [frame["message"] for frame in stand.sent("prompt")] == ["the goal", "queued", "queued"]
-    assert [turn.reason for turn in heard.of(TurnEnded)][:1] == ["interrupted"]
+    assert [frame["message"] for frame in stand.sent("prompt")] == ["the goal", "queued"]
+    assert not heard.of(InputDelivered)
 
 
-async def test_what_a_failed_turn_stranded_goes_again_too(tmp_path, stand):
+async def test_what_a_failed_turn_stranded_is_cleared_too(tmp_path, stand):
     failed = message_end(stopReason="error", errorMessage="boom")
-    stand.install(turns=[[BEGAN, user("the goal")], [failed, ENDED], [BEGAN, user("queued"), message_end(), ENDED]])
+    stand.install(turns=[[BEGAN, user("the goal")], [failed, ENDED]])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
         await driver.deliver(delivery("41", "model_call", "queued"))
-        await heard.until(InputDelivered)
+        await heard.until(TurnEnded)
 
     assert heard.of(TurnEnded)[0].reason == "boom"
-    assert len(stand.sent("clear_queue")) == 1
+    assert len(stand.sent("prompt")) == 2
 
 
-async def test_a_turn_that_ended_on_its_own_sends_nothing_again(tmp_path, stand):
+async def test_a_turn_that_ended_on_its_own_clears_nothing(tmp_path, stand):
     stand.install(turns=[[BEGAN, user("the goal")], [user("queued"), message_end(), ENDED]])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):

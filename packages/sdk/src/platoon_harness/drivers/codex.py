@@ -5,7 +5,6 @@ of it. Every approval the harness asks for comes to the runtime, and a role's bu
 """
 
 import asyncio
-import contextlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -251,12 +250,11 @@ class CodexDriver:
         self._ending = "stopped"
         self._interrupted = False
         self._totals: dict[str, int] = {}
-        self._unlanded: dict[str, str] = {}
+        self._unlanded: set[str] = set()
         self._asking: dict[str, _Asked] = {}
         self._deciding: dict[str, str] = {}
         self._compacting = False
         self._measured = False
-        self._again: asyncio.Task[None] | None = None
 
     def describe(self) -> DriverInfo:
         if self._info is None:
@@ -318,17 +316,17 @@ class CodexDriver:
         await self._call("turn/start", params if input is None else {**params, "clientUserMessageId": input})
 
     async def deliver(self, delivery: Delivery) -> None:
-        self._unlanded[delivery.input] = delivery.text
+        self._unlanded.add(delivery.input)
         try:
             await self._hand_over(delivery.text, delivery.input)
         except DriverError:
-            del self._unlanded[delivery.input]
+            self._unlanded.discard(delivery.input)
             raise
 
     async def interrupt(self) -> None:
         """Stop the turn, on this thread and on every child of it, as `turn/interrupt` stops one thread alone. A tool
         may run on, as an exec session outlives a turn. What was steered and never landed is lost to the harness at
-        this, so it is sent again, and begins the next turn."""
+        this, and the runtime offers it again."""
         self._interrupted = bool(self._turns)
         for thread, turn in tuple(self._turns.items()):
             try:
@@ -440,7 +438,8 @@ class CodexDriver:
         boundary = "turn" if self._opening else "model_call"
         self._opening = False
         match item:
-            case {"clientId": str(input), "id": id} if self._unlanded.pop(input, None) is not None:
+            case {"clientId": str(input), "id": id}:
+                self._unlanded.discard(input)
                 self._process.put(InputDelivered(input=input, boundary=boundary, evidence="userMessage", native_id=id))
 
     def _started(self, item: Mapping[str, Any]) -> None:
@@ -528,8 +527,8 @@ class CodexDriver:
         reason = "interrupted" if self._interrupted else self._ending
         self._process.put(TurnEnded(reason=reason))
         self._interrupted, self._ending = False, "stopped"
-        if self._unlanded and reason != "stopped":
-            self._again = asyncio.create_task(self._send_again(self._unlanded.copy()))
+        if reason != "stopped":
+            self._unlanded.clear()
 
     def _reason(self, turn: Mapping[str, Any]) -> str:
         """Why a turn stopped. One that was cut short took a call with it, and of those Codex reports nothing."""
@@ -543,9 +542,3 @@ class CodexDriver:
                 reason = self._process.reason(str(said))
         self._process.put(GapReport(plane="model", what="usage_lower_bound"))
         return reason
-
-    async def _send_again(self, inputs: Mapping[str, str]) -> None:
-        """Hand over what a turn dropped when it stopped short. The first begins a turn, and the rest steer it."""
-        with contextlib.suppress(DriverError):
-            for input, text in inputs.items():
-                await self._hand_over(text, input)

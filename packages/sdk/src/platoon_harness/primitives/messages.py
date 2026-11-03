@@ -83,6 +83,7 @@ class Cursor(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
+    version = 2
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -116,7 +117,8 @@ class Deliveries(View):
         positions TEXT NOT NULL,
         before TEXT NOT NULL,
         effect INTEGER,
-        delivered INTEGER NOT NULL
+        delivered INTEGER NOT NULL,
+        taken INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
     CREATE TABLE v_deliveries_heard(
@@ -169,7 +171,7 @@ class Deliveries(View):
                 (seq, seq if in_a_result else 0, event.agent, stream),
             )
         self.db.execute(
-            "INSERT INTO v_deliveries_offers VALUES (?, ?, ?, ?, NULL, 0)",
+            "INSERT INTO v_deliveries_offers VALUES (?, ?, ?, ?, NULL, 0, 0)",
             (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before)),
         )
         _, spent = self.heard(event.agent) or (0, ())
@@ -187,19 +189,41 @@ class Deliveries(View):
                 "UPDATE v_deliveries_offers SET effect = ? WHERE input = ?", (data["id"], data["data"]["input"])
             )
 
-    @fold("effect.failed")
-    def handover_failed(self, event: Event) -> None:
-        """What never reached the harness is queued again, even past a newer offer: at-least-once allows the repeat, and
-        the event id dedupes it. Its reservation has come back too, so a refused wake gets another try."""
-        row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE effect = ?", (event.data["id"],)).fetchone()
-        if row is None:
-            return
-        for stream, seq in json.loads(row["before"]).items():
+    @fold("effect.finished")
+    def taken(self, event: Event) -> None:
+        """The harness has it, which says nothing of whether it will land."""
+        self.db.execute("UPDATE v_deliveries_offers SET taken = 1 WHERE effect = ?", (event.data["id"],))
+
+    def _queue_again(self, offer: Any) -> None:
+        """Queue an offer's entries again, even past a newer offer: at-least-once allows the repeat, and the event id
+        dedupes it."""
+        for stream, seq in json.loads(offer["before"]).items():
             self.db.execute(
                 "UPDATE v_deliveries_cursors SET offered = min(offered, ?) WHERE reader = ? AND stream = ?",
-                (seq, row["reader"], stream),
+                (seq, offer["reader"], stream),
             )
-        self.db.execute("DELETE FROM v_deliveries_blocked")
+
+    @fold("effect.failed")
+    def handover_failed(self, event: Event) -> None:
+        """What never reached the harness is queued again. Its reservation has come back too, so a refused wake gets
+        another try."""
+        row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE effect = ?", (event.data["id"],)).fetchone()
+        if row is not None:
+            self._queue_again(row)
+            self.db.execute("DELETE FROM v_deliveries_blocked")
+
+    @fold("turn.ended", "turn.lost", "agent.resumed")
+    def stopped_short(self, event: Event) -> None:
+        """What a harness took and never landed is queued again when its turn stops short, or when it comes back from
+        a crash, as none of them keeps it for certain. One that stopped on its own lands it in the turn that follows."""
+        if event.type == "turn.ended" and event.data["reason"] == "stopped":
+            return
+        rows = self.db.execute(
+            "SELECT * FROM v_deliveries_offers WHERE reader = ? AND taken = 1 AND delivered = 0", (event.agent,)
+        ).fetchall()
+        for row in rows:
+            self._queue_again(row)
+        self.db.execute("UPDATE v_deliveries_offers SET taken = 0 WHERE reader = ?", (event.agent,))
 
     @fold("context.delivered")
     def delivered(self, event: Event) -> None:
