@@ -66,7 +66,7 @@ power loss. Nothing here has run on macOS.
 | Rebuild equals live, idempotent retry, gapless versions, backward references | tested | `test_properties.py` (hypothesis) |
 | Wildcard folds for a view that cannot name what it counts | tested | `tests/unit/kernel/test_views.py` |
 | Acked commands survive SIGKILL, partial commands are invisible | tested | `test_crash.py` (subprocess) |
-| `v`-based upcasting of old payloads | deferred | `v` is recorded. No upcaster exists until a second payload version does |
+| `v`-based upcasting of old payloads | tested | `v` is recorded. `agent.spawned`, `context.offered`, `context.delivered` and `message.sent` are at v2, and each fold that reads a field v1 lacked fills it with what held when v1 was written: `tests/unit/primitives/test_lifecycle.py` folds a journal written at v1 and goes on with it, and a journal written by the SDK before agents could stay opened. A reader of the journal sees each payload as it was written |
 | `next`, `prev` and `group:x` as kernel relations | deferred | `grant.add` still refuses them. Compilation expands them over roles, so a team never needs them |
 | A credential issued after a principal exists, replacing any it held, and refused once revoked | tested | `test_authorize.py`, `test_lifecycle.py` |
 | Names unique across kinds and safe as a path part | tested | `test_authorize.py`, `test_lifecycle.py` |

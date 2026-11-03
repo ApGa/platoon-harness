@@ -164,6 +164,7 @@ class Deliveries(View):
 
     @fold("context.offered")
     def offered(self, event: Event) -> None:
+        """A v1 offer asked nothing of its reader."""
         data = event.data
         before = {stream: self.cursor(event.agent, stream).offered for stream in data["positions"]}
         in_a_result = data["how"] in IN_A_RESULT
@@ -179,7 +180,14 @@ class Deliveries(View):
             INSERT INTO v_deliveries_offers(input, reader, positions, before, delivered, hops, asked)
             VALUES (?, ?, ?, ?, 0, ?, ?)
             """,
-            (event.seq, event.agent, json.dumps(data["positions"]), json.dumps(before), data["hops"], data["asked"]),
+            (
+                event.seq,
+                event.agent,
+                json.dumps(data["positions"]),
+                json.dumps(before),
+                data["hops"],
+                data.get("asked", False),
+            ),
         )
         self._heard(event.agent, data["hops"])
 
@@ -235,14 +243,15 @@ class Deliveries(View):
 
     @fold("context.delivered")
     def delivered(self, event: Event) -> None:
-        """Its offer's hops count in the turn it landed in too, which for a steer can be the one after the offer's."""
+        """Its offer's hops count in the turn it landed in too, which for a steer can be the one after the offer's. A v1
+        landing carried none: its offer's counted alone."""
         for stream, seq in event.data["positions"].items():
             self.db.execute(
                 "UPDATE v_deliveries_cursors SET delivered = max(delivered, ?) WHERE reader = ? AND stream = ?",
                 (seq, event.agent, stream),
             )
         self.db.execute("UPDATE v_deliveries_offers SET delivered = 1 WHERE input = ?", (event.data["input"],))
-        self._heard(event.agent, event.data["hops"])
+        self._heard(event.agent, event.data.get("hops", -1))
 
     @fold("message.acked")
     def acked(self, event: Event) -> None:
@@ -525,6 +534,7 @@ def post(
             "coalesce": channel.coalesce,
             "mention": human,
         },
+        v=2,
     )
     if wants and past_hops:
         ref = f"{event.stream}@{event.version}"

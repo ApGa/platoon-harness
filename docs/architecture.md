@@ -277,6 +277,9 @@ class Event(BaseModel, frozen=True):
     outcome: Outcome | None          # on a command's last event: op, key, args_hash, result or refusal
 ```
 
+A payload changes shape only with its `v`, and a fold that reads a field an older payload lacks fills it with what held when that
+payload was written, so a journal from before the change folds as it was meant.
+
 The session id is a constant of the file and is added only at export. An op cannot pass `seq`, `version`, `actor`,
 `wall_time` or the stamps. Its one say in `actor` is `runtime=True`, for what the runtime posts inside someone else's command,
 such as the monitor; it can name nobody else. The kernel takes the rest from cheap state at `emit`:

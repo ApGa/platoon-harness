@@ -189,6 +189,7 @@ def expose(
             "hops": hops,
             "asked": asked,
         },
+        v=2,
     )
     return event.seq
 

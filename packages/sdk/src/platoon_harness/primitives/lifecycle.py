@@ -286,6 +286,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
         },
+        v=2,
     )
     principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
     txn.emit(

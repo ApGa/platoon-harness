@@ -185,6 +185,7 @@ def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None, 
             agent=found.reader,
             data=data,
             cause=[input],
+            v=2,
         )
 
 

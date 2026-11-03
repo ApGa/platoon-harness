@@ -113,8 +113,9 @@ class Agents(View):
 
     @fold("agent.spawned")
     def spawned(self, event: Event) -> None:
-        """The spawn asks, so a child's first report answers it. One the session started has no parent to ask."""
-        data = event.data
+        """The spawn asks, so a child's first report answers it. One the session started has no parent to ask. A v1
+        spawn said nothing of `stays`, and then a root was told to stay and a child to finish."""
+        data = {"stays": event.data["parent"] is None, **event.data}
         self.db.execute(
             """
             INSERT INTO v_agents(
@@ -189,15 +190,17 @@ class Agents(View):
     @fold("context.offered", "context.delivered")
     def handed(self, event: Event) -> None:
         """A parent's message asks once it lands in a turn: at once in a tool's result, and by a handover once the
-        harness says it landed, which for a steer can be in the turn after the one it was offered in."""
+        harness says it landed, which for a steer can be in the turn after the one it was offered in. A v1 offer or
+        landing asked nothing."""
         lands = event.type == "context.delivered" or event.data["how"] in IN_A_RESULT
-        if lands and event.data["asked"]:
+        if lands and event.data.get("asked", False):
             self.db.execute("UPDATE v_agents SET asked = 1 WHERE name = ?", (event.agent,))
 
     @fold("message.sent")
     def answered(self, event: Event) -> None:
-        """A report answers what its parent asked, unless an interrupt or the owner's stop cut its turn."""
-        if event.data["subject"] is not None and event.data["answers"]:
+        """A report answers what its parent asked, unless an interrupt or the owner's stop cut its turn. A v1 report
+        answered whatever it said."""
+        if event.data["subject"] is not None and event.data.get("answers", True):
             self.db.execute("UPDATE v_agents SET asked = 0 WHERE name = ?", (event.data["subject"],))
 
     @fold("effect.failed")

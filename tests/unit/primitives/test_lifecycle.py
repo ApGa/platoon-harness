@@ -1,5 +1,8 @@
 """Lifecycle and completion: spawn, the one ended transition, the monitor, and what `settled` means."""
 
+import sqlite3
+from pathlib import Path
+
 import pytest
 
 from platoon_harness.kernel import Kernel, Principal, Refused, hash_token
@@ -16,6 +19,7 @@ from .support import (
     events_of,
     gists,
     grant,
+    logical_dump,
     of_type,
     read,
     refusal,
@@ -1319,6 +1323,52 @@ async def test_a_message_s_hops_count_in_the_turn_it_lands_in(kernel):
     sent = await steered_past_its_turn(kernel)
 
     assert of_type(kernel, "message.sent")[-1].data["hops"] == sent["hops"] + 1
+
+
+V1 = {
+    "agent.spawned": "json_remove(data, '$.stays')",
+    "context.offered": "json_set(json_remove(data, '$.asked'), '$.monitored', json('[]'))",
+    "context.delivered": "json_remove(data, '$.asked', '$.hops')",
+    "message.sent": "json_set(json_remove(data, '$.answers'), '$.monitored', json('[]'))",
+}
+
+
+def written_at_v1(folder: Path) -> None:
+    """Leave a journal's payloads as an SDK wrote them before agents could stay, with its views to be folded again."""
+    db = sqlite3.connect(folder / "journal.sqlite")
+    db.execute("DROP TRIGGER events_no_update")
+    for type, data in V1.items():
+        db.execute(f"UPDATE events SET v = 1, data = {data} WHERE type = ?", (type,))
+    db.execute("CREATE TRIGGER events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT, 'immutable'); END")
+    db.execute("DELETE FROM v_folds")
+    db.commit()
+    db.close()
+
+
+async def test_a_journal_written_at_v1_folds_as_it_was_written_and_goes_on(kernel, folder, clock):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await answers(kernel, bob, "t1", reads=False)
+    await send(kernel, lead, "@bob", "and then?")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await settle_effects(kernel, "bob")
+    await start_turn(kernel, "bob", "t2")
+    await report(kernel, "bob", "input.delivered", input=str(handed["input"]), boundary="turn")
+    await read(kernel, bob, "@bob")
+    await end_turn(kernel, "bob")
+    kernel.close()
+    written_at_v1(folder)
+
+    reopened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    stays = {name: state_of(reopened, name)["stays"] for name in ("lead", "bob")}
+    await send(reopened, lead, "@bob", "one more")
+
+    assert stays == {"lead": True, "bob": False}
+    assert await answers(reopened, bob, "t3") == "wake"
+    before = logical_dump(folder)
+    await reopened.rebuild_all()
+    assert logical_dump(folder) == before
+    reopened.close()
 
 
 @pytest.mark.parametrize("limits", [{"max_hops": 3}])
