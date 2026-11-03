@@ -5,7 +5,6 @@ Budget: at most 30 model calls in all, counted from the journal, `claude-haiku-5
 under a `turns` limit and a wall limit, so a runaway stops itself.
 """
 
-import asyncio
 import json
 import os
 import shutil
@@ -169,11 +168,10 @@ async def _quiet(pilot, app: TerminalUI) -> dict:
     """The worker's row once its interrupted turn has ended: idle, with the memo still waiting for it. A worker that
     ended its turn before the interrupt reached it has ended, which the journal's checks below then say."""
     screen = workspace(app)
-    assert screen.live is not None
-    async with asyncio.timeout(WITHIN):
-        while True:
-            row = screen._row("w") or {}
-            if row.get("state") == "ended" or (row.get("state") == "idle" and row.get("stopped") == "interrupted"):
-                return row
-            await drawn(pilot, lambda text: True)
-            await screen.live.next_frame(screen.live.frames)
+
+    def quiet() -> bool:
+        row = screen._row("w") or {}
+        return row.get("state") == "ended" or (row.get("state") == "idle" and row.get("stopped") == "interrupted")
+
+    await drawn(pilot, lambda text: quiet(), within=WITHIN)
+    return screen._row("w") or {}
