@@ -24,7 +24,7 @@ from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
 from .clients import Gaps
-from .common import AgentName, Body, BodyRef, Gist, Name, Paging, name_of, paged
+from .common import DIGEST_ITEMS, AgentName, Body, BodyRef, Gist, Name, Paging, name_of, paged
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
@@ -264,6 +264,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     if spawner is not None and spawner.finishing:
         raise Refused("conflict", f"{spawner.name} has finished: end your turn")
     depth = 0 if spawner is None else spawner.depth + 1
+    turn = None if spawner is None else txn.view(Stamps).turn(spawner.name)
     parent = None if txn.me.kind == "runtime" else txn.me.id
     stays = next(said for said in (a.stays, role.stays, parent is None) if said is not None)
     if stays and role.persistent is False:
@@ -291,8 +292,9 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "on_parent_exit": role.on_parent_exit,
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
+            "turn": turn,
         },
-        v=2,
+        v=3,
     )
     principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
     txn.emit(
@@ -362,27 +364,46 @@ def conclude(txn: Txn, a: Named) -> None:
         _conclude(txn, agent)
 
 
-@op("agent.interrupt", on=lambda a: f"agent/{a.agent}", tool=True)
-def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
-    """Stop an agent's turn at the boundary its harness can, or the turn it is on its way to. What was waiting for it
-    then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on.
-    Refused `conflict` when it is neither in a turn nor on its way to one, as there is nothing to stop, and before its
-    first turn begins, which no harness can stop. `not_permitted` when it is not below you."""
-    agent = _live(txn, a.agent)
-    if agent.name not in _at_work(txn):
-        raise Refused("conflict", f"{agent.name} is neither in a turn nor on its way to one")
+class Interrupt(Named):
+    below: Annotated[bool, Field(description="Stop the turns below it too.")] = False
+
+
+def _below(txn: Txn, agent: Agent) -> list[Agent]:
+    """Every live agent below this one, each parent before its children."""
+    return [found for child in txn.view(Agents).children(agent.id) for found in (child, *_below(txn, child))]
+
+
+def _unstoppable(txn: Txn, agent: Agent, at_work: set[str]) -> str | None:
+    """Why an interrupt would stop no turn of this agent's, or None if it would stop one."""
+    if agent.name not in at_work:
+        return f"{agent.name} is neither in a turn nor on its way to one"
     under_way = txn.view(Stamps).turn(agent.name) is not None or agent.state == "waking"
     if not under_way and (agent.unbegun or agent.state == "spawning"):
-        raise Refused(
-            "conflict", f"{agent.name} has not begun its first turn, which no harness can stop before it does"
-        )
-    txn.emit("wake.quieted", f"wake/{agent.name}", gist=f"wake of {agent.name} quieted", agent=agent.name)
-    close_holding(txn, agent.id)
-    if not under_way:
-        return {"effect": None}
-    return {
-        "effect": txn.effect("interrupt", {"agent": agent.name}, on_uncertain="retry", priority=1, agent=agent.name)
-    }
+        return f"{agent.name} has not begun its first turn, which no harness can stop before it does"
+    return None
+
+
+@op("agent.interrupt", on=lambda a: f"agent/{a.agent}", tool=True)
+def interrupt(txn: Txn, a: Interrupt) -> dict[str, Any]:
+    """Stop an agent's turn at the boundary its harness can, or the turn it is on its way to, and with `below` those of
+    all below it. It stops turns, not waits. What was waiting for each then wakes nothing and stays unread for its next
+    turn, and what comes after wakes it as usual. All live on. Refused `conflict` when it would stop no turn, as before
+    a first turn begins, which no harness can stop. `not_permitted` when one is not below you."""
+    agent = _live(txn, a.agent)
+    agents = [agent, *(_below(txn, agent) if a.below else ())]
+    for found in agents[1:]:
+        txn.view(Grants).authorize(txn.me, interrupt, f"agent/{found.name}")
+    at_work = _at_work(txn)
+    stopping = [found for found in agents if _unstoppable(txn, found, at_work) is None]
+    if not stopping:
+        nobody = f"neither {agent.name} nor anyone below it is in a turn or on its way to one"
+        raise Refused("conflict", _unstoppable(txn, agent, at_work) if len(agents) == 1 else nobody)
+    for found in stopping:
+        txn.emit("wake.quieted", f"wake/{found.name}", gist=f"wake of {found.name} quieted", agent=found.name)
+        close_holding(txn, found.id)
+        if txn.view(Stamps).turn(found.name) is not None or found.state == "waking":
+            txn.effect("interrupt", {"agent": found.name}, on_uncertain="retry", priority=1, agent=found.name)
+    return {"stopped": [f"@{found.name}" for found in stopping]}
 
 
 @op("agent.cancel", on=lambda a: f"agent/{a.agent}", tool=True)
@@ -649,6 +670,20 @@ def agent_records(txn: Txn, a: Records) -> list[dict[str, Any]]:
         {**agent.model_dump(), "turn": stamps.turn(agent.name), "began": stamps.version_of(f"turn/{agent.name}") > 0}
         for agent in found
     ]
+
+
+@op("agent.unread", on=lambda a: f"agent/{a.agent}", query=True)
+def agent_unread(txn: Txn, a: Named) -> dict[str, Any]:
+    """List what waits for an agent's next handover, oldest first, which the roster's `unread` counts: each entry with
+    the `delivery` it would land by now, and the true `total`. Refused `not_permitted` for an agent, which reads its own
+    inbox and channels, and `not_found` when no such agent ever existed."""
+    if txn.me.kind == "agent":
+        raise Refused("not_permitted", "an agent reads its own inbox and channels")
+    agent = txn.view(Agents).get(a.agent)
+    if agent is None:
+        raise Refused("not_found", f"no agent {a.agent}")
+    deliveries = txn.view(Deliveries)
+    return {"entries": deliveries.waiting(agent.name, DIGEST_ITEMS), "total": deliveries.unread(agent.name)}
 
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)

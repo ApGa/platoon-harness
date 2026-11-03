@@ -33,6 +33,7 @@ COVERED = {
     "agent.spawn": "spawn",
     "agent.status": "status",
     "agent.takeover": "takeover",
+    "agent.unread": "unread",
     "approval.resolve": "resolve",
     "attention.list": "attention",
     "blob.get": "blob",

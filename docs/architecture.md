@@ -199,8 +199,8 @@ daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `
 
 `submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. A read-only kernel
 answers only a command its journal answered under the same key, as any retry is answered. `read` and
-`follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
-read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
+`follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence that
+no op reads, and a client draws by. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 `is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, `first(work, *rivals)`
@@ -521,7 +521,7 @@ to do next.
 | Area | Commands | Queries |
 |---|---|---|
 | Session | `session.close` `session.cancel` `topology.patch` `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `topology.show` `ops.list` `budget.status` |
-| Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `peers` |
+| Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `agent.unread` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
@@ -691,6 +691,9 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one. A spawn past `max_children` is refused, saying that ending a child makes room.
+  `agent.spawned` names the turn of its spawner's that started it, and its command's `native` holds the anchor of the call that
+  made it, which that call's tool item holds as its `native_id`, so a client draws a child under that item, or with no anchor
+  under that turn.
 - **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. The
   runtime keeps every agent alike, so it changes only what the agent is told, a spawn's result, and who may wait on its end. It is
   resolved once, at the spawn: what `agent.spawn` said, else what its role says, else true for an agent the session started and false
@@ -704,7 +707,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   its next turn, and a wait that already holds closes with no notice, while what comes after wakes it as usual. Nothing is handed
   over while the interrupt is under way, since a harness can begin a turn on a handover the interrupt failed, which the interrupt
   then cuts. It is the same whoever interrupts, a person or a parent. With nothing under way or on its way it is refused `conflict`,
-  as there is nothing to stop, and so it is before an agent's first turn begins, which no harness can stop before it does.
+  as there is nothing to stop, and so it is before an agent's first turn begins, which no harness can stop before it does. With
+  `below` it does all this for the agent and every agent below it, as one act that keeps them all, and is refused only when it
+  would stop no turn of any. It stops turns, not waits: an agent parked on a wait is left to it, and that wait may hold on a report
+  the act brought about, which wakes its waiter as any does.
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
@@ -1251,6 +1257,9 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 | `roster` | `agent, role, harness, model, parent, state, activity, stopped, held_by, why, unread, levels, usage` | Who is working, on what, what is blocked. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
 | `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
+
+**What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry
+with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
 
 **Marks.** A person's mark is how far they have read a stream, a `seq` per stream, kept per principal in `marks.sqlite`, which
 `Session.marks` reads and `Session.mark` moves, on a live session or a closed one, with no runtime. It is neither evidence nor a

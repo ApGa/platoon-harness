@@ -1047,10 +1047,11 @@ async def test_interrupt_stops_a_turn_and_leaves_the_agent(kernel, ada):
     await spawn(kernel, "bob")
     await start_turn(kernel, "bob")
 
-    effect = result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))["effect"]
+    stopped = result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))
 
     ready = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "interrupt"}))
-    assert [(row["id"], row["priority"]) for row in ready] == [(effect, 1)]
+    assert stopped == {"stopped": ["@bob"]}
+    assert [(row["agent"], row["priority"]) for row in ready] == [("bob", 1)]
     assert state_of(kernel, "bob")["state"] == "running"
 
 
@@ -1058,6 +1059,65 @@ async def test_interrupt_with_no_turn_is_refused(kernel, ada):
     await spawn(kernel, "bob")
 
     assert refusal(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"})).code == "conflict"
+
+
+async def test_a_spawn_names_the_turn_of_its_spawner_s_that_started_it(kernel, ada):
+    """With the anchor its command carries in `native`, which a tool item of that turn carries as `native_id`, this
+    is what a client draws a child under."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await start_turn(kernel, "lead", "t7")
+
+    result_of(await kernel.submit(lead, "agent.spawn", {"name": "w1", "child_role": "worker"}))
+    result_of(await kernel.submit(ada, "agent.spawn", {"name": "w2", "child_role": "worker"}))
+
+    spawned = {event.agent: event for event in of_type(kernel, "agent.spawned")}
+    assert (spawned["w1"].data["turn"], spawned["w1"].v) == ("t7", 3)
+    assert spawned["w2"].data["turn"] is None
+
+
+async def a_tree_at_work(kernel) -> None:
+    """`lead` over `w1` over `w2`, each in a turn, and `w3` idle under `lead`."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    w1 = await spawn(kernel, "w1", role="linked", by=lead, goal="")
+    await spawn(kernel, "w2", role="linked", by=w1, goal="")
+    await spawn(kernel, "w3", role="linked", by=lead, goal="")
+    for name in ("lead", "w1", "w2"):
+        await start_turn(kernel, name)
+
+
+async def test_stop_below_stops_the_turns_of_an_agent_and_of_everyone_under_it_and_keeps_them_all(kernel, ada):
+    await a_tree_at_work(kernel)
+
+    stopped = result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "lead", "below": True}))
+
+    ready = result_of(kernel.query(kernel.runtime, "effect.ready", {"kind": "interrupt"}))
+    assert stopped == {"stopped": ["@lead", "@w1", "@w2"]}
+    assert sorted(row["agent"] for row in ready) == ["lead", "w1", "w2"]
+    assert [state_of(kernel, name)["state"] for name in ("lead", "w1", "w2", "w3")] == ["running"] * 3 + ["idle"]
+
+
+async def test_stop_below_stops_turns_and_not_waits(kernel, ada):
+    await a_tree_at_work(kernel)
+    placed = result_of(await kernel.submit(agent("w1"), "wait", {"from": ["w2"]}))
+    await end_turn(kernel, "w1")
+
+    stopped = result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "lead", "below": True}))
+    await settle_effects(kernel)
+    await end_turn(kernel, "w2", "interrupted")
+
+    assert stopped == {"stopped": ["@lead", "@w2"]}
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "open"
+    assert state_of(kernel, "w1")["state"] == "waiting"
+
+
+async def test_stop_below_with_nobody_at_work_is_refused_saying_so(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "w1", role="linked", by=lead, goal="")
+
+    refused = refusal(await kernel.submit(ada, "agent.interrupt", {"agent": "lead", "below": True}))
+
+    assert refused.code == "conflict"
+    assert refused.detail == "neither lead nor anyone below it is in a turn or on its way to one"
 
 
 async def test_takeover_holds_deliveries_and_release_records_a_gap(kernel, ada):

@@ -196,7 +196,7 @@ async def test_read_only_is_set_honestly(every_tool):
     assert not hints["message.read"], "an agent's read moves its cursor and records exposure"
 
 
-CEILINGS = {"lead": 23_500, "worker": 23_500, "narrow": 7_000}
+CEILINGS = {"lead": 23_650, "worker": 23_500, "narrow": 7_000}
 
 
 @pytest.mark.parametrize("role", CEILINGS)

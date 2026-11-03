@@ -103,6 +103,7 @@ For example:
     - [`spawn`](#platoon-harness-agent-spawn)
     - [`status`](#platoon-harness-agent-status)
     - [`takeover`](#platoon-harness-agent-takeover)
+    - [`unread`](#platoon-harness-agent-unread)
 - [`approval`](#platoon-harness-approval)
     - [`resolve`](#platoon-harness-approval-resolve)
 - [`attention`](#platoon-harness-attention)
@@ -637,9 +638,9 @@ For example:
 platoon-harness agent interrupt --agent STR [OPTIONS] SESSION
 ```
 
-Stop an agent's turn at the boundary its harness can, or the turn it is on its way to.
+Stop an agent's turn at the boundary its harness can, or the turn it is on its way to, and with `--below` those of all below it.
 
-What was waiting for it then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on. Refused `conflict` when it is neither in a turn nor on its way to one, as there is nothing to stop, and before its first turn begins, which no harness can stop. `not_permitted` when it is not below you.
+It stops turns, not waits. What was waiting for each then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. All live on. Refused `conflict` when it would stop no turn, as before a first turn begins, which no harness can stop. `not_permitted` when one is not below you.
 
 For example:
 
@@ -652,6 +653,7 @@ For example:
 **Parameters**:
 
 * `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
+* `--below, --no-below`: Stop the turns below it too.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent list
@@ -788,6 +790,28 @@ For example:
 
 * `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
+
+#### platoon-harness agent unread
+
+```console
+platoon-harness agent unread --agent STR SESSION
+```
+
+List what waits for an agent's next handover, oldest first, which the roster's `unread` counts: each entry with the `delivery` it would land by now, and the true `total`.
+
+Refused `not_permitted` for an agent, which reads its own inbox and channels, and `not_found` when no such agent ever existed.
+
+For example:
+
+    platoon-harness agent unread SESSION --agent AGENT
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 
 ### platoon-harness approval
 

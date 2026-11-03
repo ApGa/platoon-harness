@@ -53,6 +53,30 @@ async def test_roster_counts_unread(kernel):
     assert roster(kernel, "bob")["unread"] == 2
 
 
+async def test_what_waits_for_an_agent_is_what_its_unread_counts_with_how_each_would_land(kernel, ada):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob", goal="")
+    await start_turn(kernel, "bob")
+    await send(kernel, alice, "@bob", "one")
+    result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))
+    await send(kernel, alice, "@bob", "two")
+
+    waiting = result_of(kernel.query(ada, "agent.unread", {"agent": "bob"}))
+
+    assert [(entry["gist"], entry["sender"], entry["delivery"]) for entry in waiting["entries"]] == [
+        ("one", "@alice", "next-turn"),
+        ("two", "@alice", "wake"),
+    ]
+    assert waiting["total"] == roster(kernel, "bob")["unread"] == 2
+
+
+async def test_what_waits_for_an_agent_is_no_other_agent_s_to_read(kernel):
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+
+    assert refusal(kernel.query(alice, "agent.unread", {"agent": "bob"})).code == "not_permitted"
+
+
 async def test_roster_shows_usage_with_its_label(kernel):
     await spawn(kernel, "bob")
     await send(kernel, kernel.runtime, "@bob", "go")

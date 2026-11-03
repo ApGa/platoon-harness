@@ -628,7 +628,7 @@ async def test_an_interrupt_of_an_agent_on_its_way_to_a_turn_cancels_that_wake(k
 
     interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
 
-    assert interrupted == {"effect": None}
+    assert interrupted == {"stopped": ["@bob"]}
     assert ready(kernel) == []
 
 
@@ -654,7 +654,7 @@ async def test_an_interrupt_during_a_handover_fails_it_and_nothing_wakes_again(k
 
     interrupted = await interrupted_handover(kernel, interrupter, carol, "wake up")
 
-    assert interrupted["effect"] is not None
+    assert interrupted == {"stopped": ["@bob"]}
     assert ready(kernel) == []
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["state"] == "idle"
 
@@ -741,7 +741,7 @@ async def test_an_interrupt_of_a_parked_agent_whose_wait_holds_closes_it_and_not
 
     interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
 
-    assert interrupted == {"effect": None}
+    assert interrupted == {"stopped": ["@bob"]}
     assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "cancelled"
     assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == []
     assert ready(kernel) == []
@@ -759,7 +759,7 @@ async def test_an_interrupt_before_an_agent_s_first_turn_begins_is_refused_sayin
 
     assert refusal(retired).code == refusal(early).code == "conflict"
     assert "has not begun its first turn" in refusal(early).detail
-    assert begun["effect"] is not None
+    assert begun == {"stopped": ["@dave"]}
 
 
 async def test_nothing_withdraws_a_sent_message(kernel, ada):

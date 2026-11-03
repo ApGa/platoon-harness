@@ -93,6 +93,11 @@
 - `Session.marks()` and `Session.mark(stream, seq)`: how far a person has read each stream, kept per principal in
   `marks.sqlite` beside the journal, with no runtime, and apart from an agent's cursor, so moving a mark acknowledges nothing.
   `Link.principal` names who a link acts as. bug-clients-7.
+- `below` on `agent.interrupt` and `Session.interrupt`: one act that stops the turns of an agent and of every agent below it and
+  keeps them all. It stops turns, not waits, and says whose: an interrupt answers `{stopped}`, where it named an effect.
+- `agent.unread` and `Session.unread(agent)`: what the roster's `unread` counts, with how each entry would land, for a chip and a
+  queue line above a composer.
+- `agent.spawned` names its spawner's open turn, at payload v3, so a client draws a child under the call that started it.
 
 ### Changed
 

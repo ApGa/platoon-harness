@@ -408,6 +408,17 @@ class Deliveries(View):
             f"SELECT count(*) AS n {_QUEUED} WHERE c.reader = ? AND c.closed = 0", (reader,)
         ).fetchone()["n"]
 
+    def waiting(self, reader: str, limit: int) -> list[dict[str, Any]]:
+        """What `unread` counts, oldest first, each entry with how it would land for this reader now."""
+        rows = self.db.execute(
+            f"""
+            SELECT e.entry, {_delivery("e", "a", "c.reader")} AS delivery {_QUEUED}
+            WHERE c.reader = ? AND c.closed = 0 ORDER BY a.seq LIMIT ?
+            """,
+            (reader, limit),
+        )
+        return [{**Entry.model_validate_json(row["entry"]).model_dump(), "delivery": row["delivery"]} for row in rows]
+
     def stops(self, reader: str, shown: Sequence[Entry], *, whole: bool = False) -> dict[str, int]:
         """How far each cursor may move for `shown`: up to the first entry left out, and never past it."""
         offered = {entry.seq for entry in shown}

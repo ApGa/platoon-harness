@@ -92,6 +92,7 @@ PRIMITIVES = (
             lifecycle.list_agents,
             lifecycle.agent_records,
             lifecycle.agent_status,
+            lifecycle.agent_unread,
         ],
         views=[Agents],
     ),

@@ -345,9 +345,15 @@ class Session:
     async def agents(self) -> list[dict[str, Any]]:
         return await self._ask("agent.list")
 
-    async def interrupt(self, agent: str) -> dict[str, Any]:
-        """Stop an agent's turn. The agent lives on."""
-        return await self._do("agent.interrupt", agent=agent)
+    async def unread(self, agent: str) -> dict[str, Any]:
+        """What waits for an agent's next handover, oldest first, which the roster's `unread` counts: each entry with
+        the `delivery` it would land by now, and the true `total`."""
+        return await self._ask("agent.unread", agent=agent)
+
+    async def interrupt(self, agent: str, *, below: bool = False) -> dict[str, Any]:
+        """Stop an agent's turn, and with `below` the turns of every agent below it, and say whose. It stops turns, not
+        waits, and every agent lives on."""
+        return await self._do("agent.interrupt", agent=agent, below=below)
 
     async def cancel_agent(self, agent: str) -> None:
         """End one agent now."""
