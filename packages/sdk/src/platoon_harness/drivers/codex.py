@@ -544,8 +544,10 @@ class CodexDriver:
         self._turns.pop(thread, None)
         if thread == self._native:
             self._ending = self._reason(turn)
-            if self._ending != "stopped":  # One cut short took a call with it, and of those Codex reports nothing.
-                self._process.put(GapReport(plane="model", what="usage_lower_bound"))
+            if self._ending != "stopped":  # One cut short may have taken a call with it, of which Codex says nothing.
+                self._process.put(
+                    Usage(label="unavailable", scope="call"), GapReport(plane="model", what="usage_lower_bound")
+                )
         if self._turns:
             return
         reason = "interrupted" if self._interrupted and self._ending == "stopped" else self._ending

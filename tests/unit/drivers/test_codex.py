@@ -581,6 +581,7 @@ async def test_an_interrupt_ends_the_turn_and_lives_on(tmp_path, stand):
     assert stand.asked("turn/interrupt") == {"threadId": "thread-1", "turnId": "turn-1"}
     assert turn.reason == "interrupted"
     assert GapReport(plane="model", what="usage_lower_bound") in heard.reports
+    assert Usage(label="unavailable", scope="call") in heard.reports
 
 
 async def test_what_an_interrupt_drops_is_the_runtime_s_to_offer_again(tmp_path, stand):

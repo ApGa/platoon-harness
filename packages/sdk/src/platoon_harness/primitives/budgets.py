@@ -272,7 +272,8 @@ def reserve(txn: Txn, agent: str, role: str, *, turn: bool = True, **extra: floa
 
 
 def reconcile(txn: Txn, agent: str, role: str) -> None:
-    """Turn end: charge what was measured and return the rest. A unit nobody measured is charged its estimate."""
+    """Turn end: charge what was measured and return the rest. A unit not measured whole is charged its estimate, or
+    what was measured, whichever is more, since what was measured was spent."""
     budget = txn.view(Budgets)
     held, seen = budget.reservation(agent), budget.turn_usage(agent)
     held.pop("agents", None)
@@ -285,7 +286,7 @@ def reconcile(txn: Txn, agent: str, role: str) -> None:
         charges.append(
             {
                 "unit": unit,
-                "amount": held.get(unit, 0.0) if unmeasured else amount,
+                "amount": max(amount, held.get(unit, 0.0)) if unmeasured else amount,
                 "label": label,
                 "unmeasured": int(unmeasured),
             }

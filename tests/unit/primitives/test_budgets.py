@@ -320,6 +320,22 @@ async def test_over_budget_is_policy_and_unavailable_is_infrastructure(kernel):
     assert (row["spent"], row["label"], row["unmeasured"]) == (1.0, "unavailable", 1)
 
 
+async def test_what_was_measured_stands_as_a_floor_when_a_call_of_the_turn_was_not(kernel):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 2_000_000, "usd": 10.0}, estimate={"tokens": 100, "usd": 1.0})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=1_000_000, label="provider", scope="call")
+    await report(kernel, "bob", "usage", label="unavailable", scope="call")
+    await report(kernel, "bob", "usage", usd=5.0, label="estimated", scope="tree")
+
+    await end_turn(kernel, "bob")
+
+    tokens, usd = limit(kernel, "tokens"), limit(kernel, "usd")
+    assert (tokens["spent"], tokens["label"], tokens["unmeasured"]) == (1_000_000, "unavailable", 1)
+    assert (usd["spent"], usd["unmeasured"]) == (5.0, 1)
+
+
 async def test_a_turn_with_no_usage_report_is_unmeasured_and_not_free(kernel):
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"usd": 10.0}, estimate={"usd": 1.0})

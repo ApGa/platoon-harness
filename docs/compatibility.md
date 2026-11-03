@@ -145,7 +145,7 @@ by a driver landing; only the row below changes.
 - Tool found by the model: default 6 of 7 threads, each needing a discovery call. With `omit_tools_from: ["deferred"]`, 8 of 8.
 - `approvalPolicy: never` fails MCP calls closed unless `default_tools_approval_mode` is `approve`.
 - `accept` is not an outcome: 29 of 48 accepted commands ran and 19 failed with EROFS on identical input, cause not established.
-- Stable usage has no response id. `rawResponse/completed` has one but is internal-only. Interrupted calls report nothing, so totals are a lower bound.
+- Stable usage has no response id. `rawResponse/completed` has one but is internal-only. Interrupted calls report nothing, so a turn that stopped short reports a call `unavailable`, which a budget reads as unmeasured, as on Claude Code and pi.
 - `bearer_token_env_var` reaches the agent shell unless `shell_environment_policy.exclude` names it (1 trial).
 - Resume on a different provider is refused in the app-server README at the pinned clone, which is ahead of 0.164.0. Keep the provider the same.
 - The driver on 0.164.0, on FakeModel [L] and then on `gpt-6-luna` at low effort with a plan login [R]. `thread/start` answers with the effective model, effort and version, and calls no model. A thread has no rollout until its first turn, so one that took no turn cannot resume: `no rollout found`. `claude --resume` says the same of a session that took no turn, so the runtime starts such an agent anew, on either, and it took a message after an owner's stop and a resume [L].

@@ -740,8 +740,8 @@ Time alone exhausts a `wall` limit, so a timer fires `budget.lapse` at the share
 until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`, and what the runtime counts itself,
 `turns` and `agents`, is `counted`, which no driver can claim. A limit in a unit a role cannot measure
 is refused by `team check`, or falls back to `turns` when that budget also limits `turns`; it never silently stops enforcing. A turn nobody
-measured, a lost one among them, is charged its estimate and counts as unmeasured, so the next reservation in that unit is refused
-`unavailable`, and usage shows that unit with no amount: unknown is not zero. Budget exhaustion means spent, never merely reserved. Native
+measured whole, a lost one among them, is charged its estimate, or what was measured if that is more, and counts as unmeasured, so the
+next reservation in that unit is refused `unavailable`, and usage shows that unit with no amount: unknown is not zero. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology

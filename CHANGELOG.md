@@ -59,6 +59,8 @@
 
 ### Fixed
 
+- A turn with one call unmeasured was charged its estimate alone, so a million measured tokens counted as none. What was measured now
+  stands as a floor. A Codex turn cut short reports a call `unavailable`, as Claude Code's and pi's do, rather than reading as whole.
 - An agent whose harness took no turn was lost at any resume, as Claude Code, Codex and pi write no session until a turn. The runtime
   starts it anew, and tells it what it must know as before. `agent.records` says whether an agent's harness `began`.
 - `stop` left a tool's background child running on Claude Code and pi, `npm run dev &` among them, with no word in the journal, and
