@@ -81,20 +81,20 @@ async def own(
     session: Session, *, after: int, span: float | None, json: bool, begin: Callable[[], Awaitable[None]]
 ) -> int:
     """Own a session in the foreground: print its events past `after`, `begin`, wait for it to settle, then run the
-    owner's shutdown and print how it ended, last. Ctrl+C or SIGTERM cancels the wait, and the shutdown still runs."""
+    owner's shutdown and print how it ended, last. Ctrl+C or SIGTERM cancels the wait, and the shutdown still runs.
+
+    The events print from a thread of their own, as a guest of this runtime, so a reader of stdout that falls behind
+    holds up nothing here: the runtime drops a guest that stops reading, and it comes back where it was."""
     stop = asyncio.Event()
-    printed = asyncio.ensure_future(printing(session.name, after, json=json))
+    printed = asyncio.ensure_future(asyncio.to_thread(asyncio.run, printing(session.name, after, json=json)))
     try:
         with stopping(stop.set):
             await begin()
             settling = asyncio.ensure_future(session.settled(span))
             reason = settling.result().reason if await first(settling, stop.wait()) else "cancelled"
-    except BaseException:
-        printed.cancel()
-        raise
     finally:
         await session.leave()
-    await printed
+        await printed
     async with Session.attach(session.name, view=True) as history:
         ending = (await history.ending()).model_copy(update={"reason": reason})
     code = ENDINGS[reason]
@@ -168,10 +168,15 @@ async def run(
     loaded = source.load(team)
     session = await Session.start(loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd())
     note(f"session {session.name}: follow it with `platoon-harness events {session.name} --follow`")
+    try:
+        target = to or await _only_agent(session)
+    except BaseException:
+        await session.leave()
+        raise
 
     async def begin() -> None:
         gist, body = _gist(text)
-        await session.send(to or await _only_agent(session), gist, body=body)
+        await session.send(target, gist, body=body)
 
     return await own(session, after=0, span=span, json=json, begin=begin)
 

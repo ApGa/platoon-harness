@@ -62,14 +62,16 @@ class Cli:
         (self.folder / name).write_text(text)
         return name
 
-    async def start(self, *args: str, stdin: int = asyncio.subprocess.DEVNULL) -> asyncio.subprocess.Process:
+    async def start(
+        self, *args: str, stdin: int = asyncio.subprocess.DEVNULL, stdout: int = PIPE
+    ) -> asyncio.subprocess.Process:
         process = await asyncio.create_subprocess_exec(
             EXECUTABLE,
             *args,
             cwd=self.folder,
             env=self.env,
             stdin=stdin,
-            stdout=PIPE,
+            stdout=stdout,
             stderr=PIPE,
             start_new_session=True,
         )
@@ -87,16 +89,18 @@ class Cli:
                 end_group(process.pid)
 
 
-async def finished(process: asyncio.subprocess.Process, input: bytes | None = None) -> Done:
-    stdout, stderr = await asyncio.wait_for(process.communicate(input), SECONDS)
+async def finished(process: asyncio.subprocess.Process, input: bytes | None = None, within: float = SECONDS) -> Done:
+    stdout, stderr = await asyncio.wait_for(process.communicate(input), within)
     assert process.returncode is not None
     return Done(process.returncode, stdout.decode(), stderr.decode())
 
 
-async def line_where(process: asyncio.subprocess.Process, seen: list[dict[str, Any]], key: str, value: Any) -> None:
+async def line_where(
+    process: asyncio.subprocess.Process, seen: list[dict[str, Any]], key: str, value: Any, within: float = SECONDS
+) -> None:
     """Read JSON lines from a process into `seen`, until one has `key` at `value`."""
     assert process.stdout is not None
-    async with asyncio.timeout(SECONDS):
+    async with asyncio.timeout(within):
         while line := await process.stdout.readline():
             seen.append(json.loads(line))
             if seen[-1].get(key) == value:

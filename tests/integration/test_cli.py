@@ -2,6 +2,7 @@
 against scripted harnesses on the real tool plane."""
 
 import asyncio
+import fcntl
 import json
 import os
 import signal
@@ -103,6 +104,26 @@ async def test_ctrl_c_runs_the_owner_s_shutdown_and_exits_130(cli: Cli):
     listed = await cli.run("session", "list", "--json")
     assert json.loads(listed.stdout) == [{"name": "s", "live": False, "state": "stopped"}]
     assert list((cli.folder / "home" / "sessions" / "s").rglob("proc.json")) == []
+
+
+async def test_a_reader_of_stdout_that_falls_behind_holds_up_nothing(cli: Cli):
+    """A run prints its events as a guest of its own runtime, so its session goes on while nobody reads them, here
+    through a pipe of one page, and every line is there once someone does."""
+    team = cli.write("solo.toml", solo("listening"))
+    reading, writing = os.pipe()
+    fcntl.fcntl(writing, fcntl.F_SETPIPE_SZ, 4096)
+    run = await cli.start("run", "wait for me", "--team", team, "--trust", "--name", "s", "--json", stdout=writing)
+    os.close(writing)
+    await said(run, "session s")
+
+    sent = await cli.run("message", "send", "s", "--to", "@bob", "--gist", "here you are")
+    with os.fdopen(reading, "rb") as pipe:
+        printed = await asyncio.to_thread(pipe.read)
+    code = await asyncio.wait_for(run.wait(), 60)
+
+    assert (sent.code, code) == (0, 0), sent.stderr
+    lines = [json.loads(line) for line in printed.splitlines()]
+    assert lines[-1]["reason"] == "settled" and len(printed) > 4096
 
 
 # The prompt.

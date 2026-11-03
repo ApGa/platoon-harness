@@ -25,6 +25,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("codex") is None, reason="codex is not installed"),
 ]
 
+WITHIN = 300.0
 LIMITS = ("budget.turns = 16", 'budget.wall = "4m"', "budget.tokens = 6000000")
 HARNESSES = {
     "claude": (f'model = "{CLAUDE}"', f'effort = "{EFFORT}"'),
@@ -77,12 +78,13 @@ async def test_init_then_a_claude_lead_and_a_codex_worker_settle_headless(cli: C
     run.stdin.write(JOB.encode())
     run.stdin.close()
     await said(run, "session m1")
-    following = await cli.start("events", "m1", "--follow", "--json")
+    following = asyncio.ensure_future(finished(await cli.start("events", "m1", "--follow", "--json"), within=WITHIN))
     seen: list[dict] = []
-    await line_where(run, seen, "type", "task.claimed")
+    await line_where(run, seen, "type", "task.claimed", within=WITHIN)
+    running = asyncio.ensure_future(finished(run, within=WITHIN))
     sent = await cli.run("message", "send", "m1", "--to", "@lead", "--gist", FOLLOW_UP)
-    done = await finished(run)
-    followed = (await finished(following)).lines()
+    done = await running
+    followed = (await following).lines()
 
     events = [*seen, *done.lines()[:-1]]
     ending = done.lines()[-1]
@@ -108,10 +110,10 @@ async def test_a_session_stopped_mid_turn_resumes_told_what_it_was_told_at_launc
     )
     seen: list[dict] = []
     while not (seen and seen[-1]["type"] == "item.recorded" and seen[-1]["data"]["kind"] == "tool"):
-        await line_where(run, seen, "type", "item.recorded")
+        await line_where(run, seen, "type", "item.recorded", within=WITHIN)
     stopped = await cli.run("session", "stop", "r1")
     ran = await finished(run)
-    resumed = await cli.run("session", "resume", "r1", "--json")
+    resumed = await finished(await cli.start("session", "resume", "r1", "--json"), within=WITHIN)
     journal = (await cli.run("events", "r1", "--json")).lines()
 
     told = [event["data"]["instructions"] for event in journal if event["type"] == "agent.instructed"]
