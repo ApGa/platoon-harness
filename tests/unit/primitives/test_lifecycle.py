@@ -431,7 +431,7 @@ async def test_what_a_harness_says_as_its_turn_ends_counts_after_a_finish(kernel
 
     assert of_type(kernel, "agent.ended")[-1].data["report"] == "my last words"
     ending = result_of(kernel.query(kernel.runtime, "session.ending", {}))
-    assert ending["usage"]["tokens"] == {"amount": 1000.0, "label": "provider"}
+    assert ending["usage"]["tokens"] == {"amount": 1000.0, "label": "provider", "unmeasured": 0}
 
 
 async def test_a_stated_report_outranks_a_last_message(kernel):
@@ -2277,25 +2277,12 @@ async def test_a_settled_task_leaves_no_lease_to_wait_for(tmp_path, clock):
     kernel.close()
 
 
-async def test_timers_of_leases_long_gone_hide_no_timer_to_come(tmp_path, clock):
-    kernel, lead = await short_of_until(tmp_path, clock)
-    await channel(kernel, "q", "queue")
-    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 100_000}}))
-    for _ in range(70):
-        result_of(await kernel.submit(lead, "task.add", {"queue": "q", "gist": "do"}))
-        result_of(await kernel.submit(lead, "task.claim", {"queue": "q"}))
-        result_of(await kernel.submit(lead, "task.complete", {"queue": "q"}))
-
-    assert not status(kernel)["stalled"]
-    kernel.close()
-
-
-async def test_a_wall_limit_to_come_can_still_end_a_session_so_it_has_not_stalled(tmp_path, clock):
+async def test_a_timer_that_can_only_end_a_session_moves_nothing(tmp_path, clock):
     kernel, _ = await short_of_until(tmp_path, clock)
 
     result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}}))
 
-    assert not status(kernel)["stalled"]
+    assert status(kernel)["stalled"]
     kernel.close()
 
 
@@ -2627,7 +2614,7 @@ async def test_an_ending_says_why_with_each_agent_and_what_was_measured(kernel):
     found = await ending(kernel)
 
     assert found["reason"] == "settled"
-    assert found["usage"]["tokens"] == {"amount": 120.0, "label": "estimated"}
+    assert found["usage"]["tokens"] == {"amount": 120.0, "label": "estimated", "unmeasured": 0}
     assert [(row["agent"], row["role"], row["state"]) for row in found["agents"]] == [("bob", "worker", "idle")]
     assert found["agents"][0]["usage"]["tokens"]["amount"] == 120.0
 
@@ -2646,7 +2633,7 @@ async def test_an_agent_that_failed_or_was_lost_is_what_an_ending_says(kernel, h
 
 async def test_exhausting_the_budget_outranks_a_failed_agent(kernel):
     await spawn(kernel, "bob")
-    await kernel.submit(kernel.runtime, "budget.set", {"limits": {"tokens": 10}})
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"tokens": 10}, "estimate": {"tokens": 5}}))
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "usage", tokens=120, label="provider")
     await report(kernel, "bob", "exited")

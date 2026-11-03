@@ -155,19 +155,13 @@ class Runtime:
 
     async def _hand_back(self) -> None:
         """Release what will not happen now. A turn still open ends, which reconciles its reservation, and its agent is
-        told on resume. A handover that never started fails, which queues its entries again and returns a wake's
-        reservation. A spawn still to come keeps its own, since the next runtime goes on with it."""
-        kernel, host = self.kernel, self.host
+        told on resume. `session.stop` cancels a handover that never started, which queues its entries again and returns
+        a wake's reservation. A spawn still to come keeps its own, since the next runtime goes on with it."""
+        host = self.host
         for record in self._records():
             if record["turn"] is not None:
                 report = TurnEnded(reason=OWNER_STOP)
                 await host.insist("agent.report", {"agent": record["name"], "report": report})
-        requested = kernel.query(kernel.runtime, "effect.list", {"state": "requested"}).result
-        for row in (row for row in requested if row["kind"] == "deliver"):
-            started = await host.insist("effect.start", {"id": row["id"]})
-            if started.refusal is None:
-                failed = {"id": row["id"], "attempt": started.result, "error": "the owner stopped before it started"}
-                await host.insist("effect.fail", failed)
         await host.insist("session.stop", {})
 
     async def _end_daemons(self) -> None:

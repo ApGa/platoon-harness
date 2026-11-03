@@ -100,7 +100,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 7
+    version = 8
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -232,10 +232,10 @@ class Deliveries(View):
                 (seq, offer["reader"], stream),
             )
 
-    @fold("effect.failed")
+    @fold("effect.failed", "effect.cancelled")
     def handover_failed(self, event: Event) -> None:
-        """What never reached the harness is queued again. Its reservation has come back too, so a refused wake gets
-        another try."""
+        """What never reached the harness, by a handover that failed or one cancelled before it started, is queued
+        again. Its reservation has come back too, so a refused wake gets another try."""
         row = self.db.execute("SELECT * FROM v_deliveries_offers WHERE effect = ?", (event.data["id"],)).fetchone()
         if row is not None:
             self._queue_again(row)
@@ -694,12 +694,12 @@ def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
 
 @op("message.read", on=lambda a: None, exposes=True, tool=True)
 def read(txn: Txn, a: Read) -> dict[str, Any]:
-    """Read your inbox, or `#channel` or `+group`, from where you left off. Passing `after`, a `cursor` from an earlier
-    read, acks up to it and reads past it. `sender` and `thread` filter, and a filtered read leaves unread what it
-    skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and
-    past what one result holds `text` is null. Pass `rest` or `body` to `blob.get`. `behind` counts what is left, up to
-    4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to see yours. `invalid` for an
-    `after` past every event: leave it out."""
+    """Read your inbox, or `#channel` or `+group`, past `after`, a `cursor` from an earlier read, which an agent's
+    read acks. Left out, an agent reads on from where it left off. `sender` and `thread` filter, and a filtered read
+    leaves unread what it skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut,
+    with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `blob.get`. `behind`
+    counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list`
+    to see yours. `invalid` for an `after` past every event: leave it out."""
     stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
     txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)

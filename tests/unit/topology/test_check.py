@@ -259,34 +259,33 @@ def test_a_template_with_a_slot_nobody_fills_is_refused_when_the_team_loads():
         Team.loads('[roles.lead]\nharness = "claude"\npreamble = "You are @{nam}."\n')
 
 
-def test_a_budget_in_a_unit_a_harness_cannot_measure_is_refused():
-    blind = {"pi": BLIND}
-    team = Team(roles={"a": Role(harness="pi")}, budget=Budget(usd=5))
-    assert "`pi` cannot measure usd" in text(errors(team, capabilities=blind))
-
-
-def test_a_per_role_budget_is_checked_against_that_role():
-    capabilities = {"pi": BLIND, "claude": MEASURING}
+def test_a_tokens_or_usd_limit_with_no_estimate_is_refused_naming_what_to_give():
     team = Team(
-        roles={
-            "a": Role(harness="claude", budget=Budget(tokens=1000)),
-            "b": Role(harness="pi", budget=Budget(tokens=10)),
-        }
+        roles={"a": Role(harness="claude", budget=Budget(usd=5))},
+        budget=Budget(tokens=1000, estimate={"usd": 1}),
     )
-    assert errors(team, capabilities=capabilities) == [
-        'roles.b.budget.tokens: `pi` cannot measure tokens. Remove the limit, or set `fallback = "turns"`'
+    found = errors(team, capabilities={"claude": MEASURING})
+    tail = "what a turn nobody measured whole is charged on top"
+    assert found == [
+        f"roles.a.budget.estimate: a usd limit needs `estimate.usd`: {tail}",
+        f"budget.estimate: a tokens limit needs `estimate.tokens`: {tail}",
     ]
 
 
-def test_a_budget_falls_back_to_turns_only_when_the_team_says_so():
-    blind = {"pi": BLIND}
-    role = {"a": Role(harness="pi")}
-    assert errors(Team(roles=role, budget=Budget(tokens=10, turns=5, fallback="turns")), capabilities=blind) == []
-
-
-def test_a_fallback_with_no_turns_limit_would_stop_enforcing():
-    team = Team(roles={"a": Role(harness="pi")}, budget=Budget(tokens=10, fallback="turns"))
-    assert "no `turns` limit" in text(errors(team, capabilities={"pi": BLIND}))
+def test_a_limit_in_a_unit_a_harness_cannot_measure_holds_on_its_estimates_and_says_so():
+    capabilities = {"pi": BLIND, "claude": MEASURING}
+    team = Team(
+        roles={
+            "a": Role(harness="claude", budget=Budget(tokens=1000, estimate={"tokens": 100})),
+            "b": Role(harness="pi", budget=Budget(tokens=10, estimate={"tokens": 5})),
+        }
+    )
+    assert errors(team, capabilities=capabilities) == []
+    assert (
+        "roles.b.budget.tokens: `pi` cannot measure tokens, so each of its turns is charged its estimate"
+        in warnings(team, capabilities=capabilities)
+    )
+    assert "roles.a.budget.tokens" not in text(warnings(team, capabilities=capabilities))
 
 
 def test_the_runtime_measures_turns_agents_and_wall_for_everyone():
@@ -408,12 +407,6 @@ def test_a_grant_of_another_op_is_no_spawning():
     written = Grant(who="role:a", ops="board.*", on="role/a")
     team = Team(roles={"a": Role(harness="pi")}, topology=Topology(grants=[written]))
     assert errors(team) == []
-
-
-def test_a_fallback_needs_turns_in_its_own_budget_as_budget_set_does():
-    limited = Role(harness="pi", budget=Budget(tokens=5, fallback="turns"))
-    team = Team(roles={"a": limited}, budget=Budget(turns=3))
-    assert "falls back to turns" in text(errors(team, capabilities={"pi": BLIND}))
 
 
 def test_a_channel_cannot_use_a_relation():

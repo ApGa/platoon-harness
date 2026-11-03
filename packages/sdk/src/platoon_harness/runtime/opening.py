@@ -149,7 +149,7 @@ def _budget(scope: str, budget: Budget, authority: Authority) -> dict[str, Any] 
         for unit, amount in units.items()
         if amount is not None and authority.budget_owner(unit) == "session"
     }
-    return {"scope": scope, "limits": limits, "fallback": budget.fallback} if limits else None
+    return {"scope": scope, "limits": limits, "estimate": dict(budget.estimate)} if limits else None
 
 
 def _starting(team: Team) -> list[dict[str, str]]:

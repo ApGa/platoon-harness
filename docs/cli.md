@@ -457,7 +457,7 @@ platoon-harness session status SESSION
 
 Say whether this session is settled and what remains.
 
-Your own open turn is always among `blockers` while you ask. A message can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing scheduled, so only someone acting can move it.
+Asked in a turn, that turn is among `blockers`. A message can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing scheduled, so only someone acting can move it.
 
 For example:
 
@@ -724,7 +724,7 @@ platoon-harness agent spawn --name STR --child-role STR [OPTIONS] SESSION
 
 Start a new agent in a role you may spawn.
 
-Put anything longer than `--goal` in `--body`. With neither it starts idle and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the session is closing or you have finished: use another name, or stop. `not_found` when no such role exists. `unsupported` for `--stays` on a harness that cannot stay.
+Put anything longer than `--goal` in `--body`. With neither it starts idle and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the session is closing or its spawner finished: use another name, or stop. `not_found` when no such role exists. `unsupported` for `--stays` on a harness that cannot stay.
 
 For example:
 
@@ -1021,7 +1021,7 @@ platoon-harness budget set [OPTIONS] SESSION
 
 Set a scope's limits and turn estimate.
 
-`--fallback` lets `turns` stand in for what a role cannot measure.
+Refused `invalid` for a `tokens` or `usd` limit with no estimate in that unit, which a turn nobody measured whole could not be charged.
 
 For example:
 
@@ -1035,8 +1035,7 @@ For example:
 
 * `--scope`: `shared`, or `role:<name>` for one role's. *[default: shared]*
 * `--limits`: A limit per unit, such as `{"usd": 5, "wall": 1800}`, with `wall` in seconds. As JSON.
-* `--estimate`: What a turn is reserved before it is measured, per unit. As JSON.
-* `--fallback`: `turns`, to count turns for a unit a role cannot measure. *[choices: turns]*
+* `--estimate`: What a turn is reserved before it is measured, per unit, and charged on top of what was measured when nobody measured it whole. A `tokens` or `usd` limit needs one. As JSON.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness budget status
@@ -1194,9 +1193,9 @@ The `message` ops, each on one session, with the arguments an agent's `ph messag
 platoon-harness message read [OPTIONS] SESSION
 ```
 
-Read your inbox, or `#channel` or `+group`, from where you left off.
+Read your inbox, or `#channel` or `+group`, past `--after`, a `cursor` from an earlier read, which an agent's read acks.
 
-Passing `--after`, a `cursor` from an earlier read, acks up to it and reads past it. `--sender` and `--thread` filter, and a filtered read leaves unread what it skipped. `--bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `platoon-harness blob get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `platoon-harness channel list` to see yours. `invalid` for an `--after` past every event: leave it out.
+Left out, an agent reads on from where it left off. `--sender` and `--thread` filter, and a filtered read leaves unread what it skipped. `--bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `platoon-harness blob get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `platoon-harness channel list` to see yours. `invalid` for an `--after` past every event: leave it out.
 
 For example:
 
@@ -1325,7 +1324,7 @@ platoon-harness task claim --queue STR [OPTIONS] SESSION
 
 Claim the next open task, or `--task` by id.
 
-`text` is its body; a long one comes back cut, with `rest` a ref. Pass it to `platoon-harness blob get`. Keep working: the runtime renews your lease while you are active. `platoon-harness task complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused `conflict`, naming the owner, when `--task` is taken, and when you hold `max_inflight` tasks: claim another, or finish one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open.
+`text` is its body; a long one comes back cut, with `rest` a ref. Pass it to `platoon-harness blob get`. The runtime renews an agent's lease while its harness is at work. `platoon-harness task complete` finds the task without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused `conflict`, naming the owner, when `--task` is taken, and when you hold `max_inflight` tasks: claim another, or finish one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open.
 
 For example:
 
@@ -1457,7 +1456,7 @@ platoon-harness task renew --queue STR [OPTIONS] SESSION
 
 Extend your lease, up to the queue's `lease_max`.
 
-The runtime already does this while you are active. Refused `stale_fence` when the lease has gone: claim again.
+The runtime already does this for an agent while its harness is at work. Refused `stale_fence` when the lease has gone: claim again.
 
 For example:
 

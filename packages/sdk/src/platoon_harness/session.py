@@ -146,9 +146,14 @@ class Session:
 
         async def enter(self: Session) -> None:
             options = {"name": name, "root": root, "human": human, "approvals": approvals, "cwd": cwd}
-            await self._take_up(
-                await asyncio.to_thread(prepare, team, plan_login=plan_login, **options), detach, authority, clock
-            )
+            preparing = asyncio.ensure_future(asyncio.to_thread(prepare, team, plan_login=plan_login, **options))
+            try:
+                folder = await asyncio.shield(preparing)
+            except asyncio.CancelledError:  # A thread runs on, so what it makes is taken back once it has.
+                with contextlib.suppress(Exception):
+                    _unclaim(await preparing)
+                raise
+            await self._take_up(folder, detach, authority, clock)
 
         return cls(enter)
 
@@ -633,9 +638,9 @@ class Session:
         *,
         limits: Mapping[str, float] | None = None,
         estimate: Mapping[str, float] | None = None,
-        fallback: Literal["turns"] | None = None,
     ) -> None:
-        await self._do("budget.set", scope=scope, limits=limits or {}, estimate=estimate or {}, fallback=fallback)
+        """Set a scope's limits and what a turn is estimated at, which a `tokens` or `usd` limit needs."""
+        await self._do("budget.set", scope=scope, limits=limits or {}, estimate=estimate or {})
 
     async def manifest(self) -> dict[str, Any]:
         return await self._ask("session.manifest")
@@ -702,6 +707,12 @@ class Session:
     async def tombstone(self, ref: str) -> None:
         """Redact a body: reads stop now, and its bytes follow. Events citing its hash stay whole."""
         await self._do("body.tombstone", sha256=ref.removeprefix("sha256:"))
+
+
+def _unclaim(folder: Path) -> None:
+    """Free the name of a session no runtime has opened, whose folder holds its manifest and nothing else."""
+    (folder / MANIFEST).unlink()
+    folder.rmdir()
 
 
 def _resume_command(folder: Path) -> str:

@@ -249,7 +249,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it
     ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your
     reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the
-    session is closing or you have finished: use another name, or stop. `not_found` when no such role exists.
+    session is closing or its spawner finished: use another name, or stop. `not_found` when no such role exists.
     `unsupported` for `stays` on a harness that cannot stay."""
     session = txn.view(SessionRecord)
     if not session.accepting():
@@ -720,8 +720,10 @@ def _done(txn: Txn, until: str, settled: bool) -> bool:
 
 def _scheduled(txn: Txn) -> bool:
     """Whether anything the journal knows of can still move this session with nobody acting. A lease's timer outlives
-    the lease, so a lease counts by its claim. An extension daemon's private schedule is not in the journal."""
-    return txn.view(Timers).besides("lease.expire") or txn.view(Tasks).any_claimed() or work(txn).due is not None
+    the lease, so a lease counts by its claim. A wall limit's lapse can only end the session, which moves nothing. An
+    extension daemon's private schedule is not in the journal."""
+    timers = txn.view(Timers).besides("lease.expire", "budget.lapse")
+    return timers or txn.view(Tasks).any_claimed() or work(txn).due is not None
 
 
 def _standing(txn: Txn) -> dict[str, Any]:
@@ -743,9 +745,9 @@ def _standing(txn: Txn) -> dict[str, Any]:
 
 @op("session.status", query=True, tool=True)
 def session_status(txn: Txn, a: Args) -> dict[str, Any]:
-    """Say whether this session is settled and what remains. Your own open turn is always among `blockers` while you
-    ask. A message can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing
-    scheduled, so only someone acting can move it."""
+    """Say whether this session is settled and what remains. Asked in a turn, that turn is among `blockers`. A message
+    can un-settle it; only close ends it. `stalled` says it has stopped short of `until` with nothing scheduled, so only
+    someone acting can move it."""
     return _standing(txn)
 
 
@@ -817,5 +819,11 @@ def cancel_session(txn: Txn, a: Args) -> None:
 
 @op("session.stop", runtime=True)
 def stop(txn: Txn, a: Args) -> None:
-    """Record that the owner has shut down. The folder stays resumable."""
+    """Record that the owner has shut down, and cancel each handover that has not started, which queues its entries
+    again and is no failure of its harness's. The folder stays resumable."""
+    for effect in txn.view(Effects).in_state("requested"):
+        if effect.kind == "deliver":
+            data = {"id": effect.id, "kind": effect.kind}
+            stream = f"effect/{effect.id}"
+            txn.emit("effect.cancelled", stream, gist="deliver cancelled", agent=effect.agent, data=data)
     txn.emit("session.stopped", "session", gist="session stopped")

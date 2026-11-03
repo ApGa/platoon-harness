@@ -51,7 +51,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("codex") is None, reason="codex is not installed"),
 ]
 
-LIMIT = Budget(turns=12, wall="3m")  # A limit in tokens would refuse the wake a lost turn needs, which is by design.
+LIMIT = Budget(turns=12, wall="3m")
 COMMAND = "echo start >> ran.log; sleep 15; echo end >> ran.log"
 ASKED = f"Run this shell command once, then reply: done. The command: {COMMAND}"
 QUOTE = "Quote exactly what your history shows as the result of that shell command, then say whether it ran to the end."

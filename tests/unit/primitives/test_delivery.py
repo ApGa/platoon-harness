@@ -693,6 +693,22 @@ async def test_handovers_an_interrupt_cut_never_lose_their_agent(kernel, interru
     assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == []
 
 
+async def test_a_handover_the_owners_stop_hands_back_is_no_failure(kernel):
+    """Stopped and resumed again and again while a wake waited to start, an agent is woken as before and never lost."""
+    await spawn(kernel, "bob", goal="")
+    await send(kernel, kernel.runtime, "@bob", "must arrive")
+
+    for _ in range(7):
+        await offer(kernel, "bob")
+        result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+        result_of(await kernel.submit(kernel.runtime, "runtime.start", {}))
+
+    record = result_of(kernel.query(kernel.runtime, "agent.records", {"agent": "bob"}))[0]
+    assert (record["state"], record["failures"], record["failure"]) == ("idle", 0, None)
+    assert of_type(kernel, "effect.failed") == []
+    assert ready(kernel) == ["bob"]
+
+
 async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, interrupter):
     carol = await spawn(kernel, "carol")
     await start_turn(kernel, "bob")

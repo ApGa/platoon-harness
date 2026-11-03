@@ -42,7 +42,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("claude") is None, reason="claude is not installed"),
 ]
 
-LIMIT = Budget(turns=30, tokens=6_000_000, wall="4m")
+LIMIT = Budget(turns=30, tokens=6_000_000, wall="4m", estimate={"tokens": 500_000})
 SETTLE = "60s"
 
 

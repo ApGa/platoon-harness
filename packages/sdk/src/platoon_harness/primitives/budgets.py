@@ -21,19 +21,31 @@ def _weaker(one: str, other: str) -> str:
 class _Scope(NamedTuple):
     limits: dict[str, float]
     estimate: dict[str, float]
-    fallback: str | None
     since: float
+
+
+def _charges(held: dict[str, float], seen: dict[str, tuple[float, str]]) -> list[dict[str, Any]]:
+    """What a turn is charged in each metered unit. One nobody measured whole is charged what was measured plus its
+    estimate, which errs high, and with no estimate it states no amount."""
+    charges = []
+    for unit in _METERED:
+        amount, label = seen.get(unit, (0.0, "unavailable"))
+        unmeasured = label == "unavailable"
+        if unmeasured and held.get(unit):
+            amount, label = amount + held[unit], "estimated"
+        charges.append({"unit": unit, "amount": amount, "label": label, "unmeasured": int(unmeasured)})
+    return charges
 
 
 class Budgets(View):
     """Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster."""
 
+    version = 2
     schema = """
     CREATE TABLE v_budgets(
         scope TEXT PRIMARY KEY,
         limits TEXT NOT NULL,
         estimate TEXT NOT NULL,
-        fallback TEXT,
         since REAL NOT NULL
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_budgets_spent(
@@ -65,14 +77,8 @@ class Budgets(View):
     def limits_set(self, event: Event) -> None:
         data = event.data
         self.db.execute(
-            "INSERT OR REPLACE INTO v_budgets VALUES (?, ?, ?, ?, ?)",
-            (
-                data["scope"],
-                json.dumps(data["limits"]),
-                json.dumps(data["estimate"]),
-                data["fallback"],
-                event.wall_time,
-            ),
+            "INSERT OR REPLACE INTO v_budgets VALUES (?, ?, ?, ?)",
+            (data["scope"], json.dumps(data["limits"]), json.dumps(data["estimate"]), event.wall_time),
         )
 
     @fold("budget.reserved")
@@ -124,20 +130,21 @@ class Budgets(View):
 
     @fold("turn.lost")
     def lost(self, event: Event) -> None:
-        """A lost turn's cost is unknown, so its estimate stands, and it counts as unmeasured even with no estimate."""
+        """Nobody measured a lost turn whole, whatever it reported, so it is charged as any such turn is."""
         rows = self.db.execute(
             "SELECT * FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,)
         ).fetchall()
         held = {row["unit"]: row["amount"] for row in rows}
+        seen = {unit: (amount, "unavailable") for unit, (amount, _) in self.turn_usage(event.agent or "").items()}
         for role in {row["role"] for row in rows}:
-            for unit in _METERED:
-                self._charge(role, event.agent, unit, held.pop(unit, 0.0), "unavailable", 1)
-            for unit, amount in held.items():
-                self._charge(role, event.agent, unit, amount, "counted")
+            for charge in _charges(held, seen):
+                self._charge(role, event.agent, **charge)
+            if "turns" in held:
+                self._charge(role, event.agent, "turns", held["turns"], "counted")
         self.db.execute("DELETE FROM v_budgets_reserved WHERE agent = ? AND unit != 'agents'", (event.agent,))
         self.db.execute("DELETE FROM v_budgets_turn WHERE agent = ?", (event.agent,))
 
-    @fold("effect.failed")
+    @fold("effect.failed", "effect.cancelled")
     def wake_failed(self, event: Event) -> None:
         if event.data["kind"] == "deliver":
             self.db.execute(
@@ -165,7 +172,7 @@ class Budgets(View):
         row = self.db.execute("SELECT * FROM v_budgets WHERE scope = ?", (scope,)).fetchone()
         if row is None:
             return None
-        return _Scope(json.loads(row["limits"]), json.loads(row["estimate"]), row["fallback"], row["since"])
+        return _Scope(json.loads(row["limits"]), json.loads(row["estimate"]), row["since"])
 
     def spent(self, scope: str, unit: str) -> tuple[float, str, int]:
         """The amount spent, its weakest label, and how many turns went unmeasured."""
@@ -203,21 +210,19 @@ class Budgets(View):
             if self._past_wall(found, limit, now):
                 raise Refused("over_budget", {"scope": scope, "unit": unit, "limit": limit})
             return
-        spent, _, unmeasured = self.spent(scope, unit)
-        if unmeasured and found.fallback == "turns":
-            return
-        if unmeasured:
+        spent, label, unmeasured = self.spent(scope, unit)
+        if label == "unavailable":
             raise Refused(
                 "unavailable",
-                f"{unmeasured} turns of {unit} went unmeasured, so {scope} cannot hold, however high its limit. "
-                f'Give it `fallback = "turns"` and a `turns` limit, or remove its {unit} limit',
+                f"{unmeasured} turns of {unit} went unmeasured before {scope} had an estimate to charge them, so its "
+                f"{unit} limit cannot hold, however high: remove it",
             )
         held = self.held(scope, unit)
         if spent >= limit or spent + held + want > limit:
             raise Refused("over_budget", {"scope": scope, "unit": unit, "limit": limit, "spent": spent, "held": held})
 
     def check(self, role: str, wanted: dict[str, float], now: float) -> None:
-        """Refuse `over_budget` past a limit, and `unavailable` when a limit's unit cannot be measured."""
+        """Refuse `over_budget` past a limit, and `unavailable` when what a limit holds on has no amount."""
         for scope in ("shared", f"role:{role}"):
             if (found := self._scope(scope)) is not None:
                 for unit, limit in found.limits.items():
@@ -255,11 +260,15 @@ class Budgets(View):
         return rows
 
     def usage_of(self, scope: str) -> dict[str, dict[str, Any]]:
-        """What `shared` or one `agent:x` has spent, with labels: a unit nobody measured has no amount. The row may hold
-        an estimate, which the budget charges and nobody may read as a measurement."""
+        """What `shared` or one `agent:x` has spent, with labels and how many turns nobody measured whole: a unit no
+        amount could be stated for has none."""
         rows = self.db.execute("SELECT * FROM v_budgets_spent WHERE scope = ? AND unit != 'agents'", (scope,))
         return {
-            row["unit"]: {"amount": None if row["label"] == "unavailable" else row["amount"], "label": row["label"]}
+            row["unit"]: {
+                "amount": None if row["label"] == "unavailable" else row["amount"],
+                "label": row["label"],
+                "unmeasured": row["unmeasured"],
+            }
             for row in rows
         }
 
@@ -276,25 +285,14 @@ def reserve(txn: Txn, agent: str, role: str, *, turn: bool = True, **extra: floa
 
 
 def reconcile(txn: Txn, agent: str, role: str) -> None:
-    """Turn end: charge what was measured and return the rest. A unit not measured whole is charged its estimate, or
-    what was measured, whichever is more, since what was measured was spent."""
+    """Turn end: charge what was measured and return the rest. A unit nobody measured whole is charged what was
+    measured plus the turn's estimate, labelled `estimated`."""
     budget = txn.view(Budgets)
     held, seen = budget.reservation(agent), budget.turn_usage(agent)
     held.pop("agents", None)
     if not held and not seen:
         return
-    charges = []
-    for unit in _METERED:
-        amount, label = seen.get(unit, (0.0, "unavailable"))
-        unmeasured = label == "unavailable"
-        charges.append(
-            {
-                "unit": unit,
-                "amount": max(amount, held.get(unit, 0.0)) if unmeasured else amount,
-                "label": label,
-                "unmeasured": int(unmeasured),
-            }
-        )
+    charges = _charges(held, seen)
     if "turns" in held:
         charges.append({"unit": "turns", "amount": 1.0, "label": "counted", "unmeasured": 0})
     data = {"role": role, "charges": charges}
@@ -310,21 +308,22 @@ class SetBudget(Args):
         Field(description='A limit per unit, such as `{"usd": 5, "wall": 1800}`, with `wall` in seconds.'),
     ] = {}
     estimate: Annotated[
-        dict[Literal["tokens", "usd"], Annotated[float, Field(ge=0, strict=False)]],
-        Field(description="What a turn is reserved before it is measured, per unit."),
+        dict[Literal["tokens", "usd"], Annotated[float, Field(gt=0, strict=False)]],
+        Field(
+            description="What a turn is reserved before it is measured, per unit, and charged on top of what was "
+            "measured when nobody measured it whole. A `tokens` or `usd` limit needs one."
+        ),
     ] = {}
-    fallback: Annotated[
-        Literal["turns"] | None, Field(description="`turns`, to count turns for a unit a role cannot measure.")
-    ] = None
 
 
 @op("budget.set", on=lambda a: f"budget/{a.scope}")
 def set_budget(txn: Txn, a: SetBudget) -> None:
-    """Set a scope's limits and turn estimate. `fallback` lets `turns` stand in for what a role cannot measure."""
-    if a.fallback == "turns" and "turns" not in a.limits:
-        raise Refused("invalid", "a fallback to turns needs a turns limit, or nothing would be enforced")
+    """Set a scope's limits and turn estimate. Refused `invalid` for a `tokens` or `usd` limit with no estimate in that
+    unit, which a turn nobody measured whole could not be charged."""
+    if missing := [unit for unit in _METERED if unit in a.limits and unit not in a.estimate]:
+        raise Refused("invalid", f"a {missing[0]} limit needs an estimate in {missing[0]}")
     stream = f"budget/{a.scope}"
-    txn.emit("budget.set", stream, gist=f"budget set for {a.scope}", data=a)
+    txn.emit("budget.set", stream, gist=f"budget set for {a.scope}", data=a, v=2)
     if a.scope == "shared" and "wall" in a.limits:
         key = f"{stream}/{txn.view(Stamps).version_of(stream)}"
         timer = Timer(due=txn.now + a.limits["wall"], op="budget.lapse", args={}, key=key)

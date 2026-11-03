@@ -774,7 +774,7 @@ async def test_every_word_of_the_vocabulary_has_somewhere_to_go(tmp_path):
         await until(lambda: of_type(session, "turn.ended"), session)
         ending = await session.ending()
 
-    assert ending.usage["tokens"] == {"amount": 7.0, "label": "provider"}
+    assert ending.usage["tokens"] == {"amount": 7.0, "label": "provider", "unmeasured": 0}
     assert ending.gaps == ({"agent": "bob", "what": "hidden_call", "plane": "model", "count": 1},)
 
 

@@ -34,7 +34,7 @@ async def fail_next_handover(kernel) -> None:
     result_of(await kernel.submit(kernel.runtime, "effect.fail", args))
 
 
-async def test_a_unit_nobody_measured_has_no_amount_and_keeps_its_estimate_for_the_budget(kernel):
+async def test_a_turn_nobody_measured_is_charged_its_estimate_and_a_unit_with_none_has_no_amount(kernel):
     await spawn(kernel, "bob", goal="")
     await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
     await wake(kernel, "bob")
@@ -43,8 +43,8 @@ async def test_a_unit_nobody_measured_has_no_amount_and_keeps_its_estimate_for_t
 
     usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
 
-    assert usage["tokens"] == {"amount": None, "label": "unavailable"}
-    assert usage["usd"] == {"amount": None, "label": "unavailable"}
+    assert usage["tokens"] == {"amount": 100, "label": "estimated", "unmeasured": 1}
+    assert usage["usd"] == {"amount": None, "label": "unavailable", "unmeasured": 1}
     assert limit(kernel, "tokens")["spent"] == 100
 
 
@@ -58,7 +58,7 @@ async def test_what_the_runtime_counts_is_no_provider_s_word(kernel):
 
     usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
 
-    assert usage["turns"] == {"amount": 1.0, "label": "counted"}
+    assert usage["turns"] == {"amount": 1.0, "label": "counted", "unmeasured": 0}
     assert limit(kernel, "agents")["label"] == "counted"
 
 
@@ -78,8 +78,8 @@ async def test_a_lost_turn_is_a_turn_counted_and_tokens_unmeasured(kernel):
     result_of(await kernel.recover())
 
     usage = result_of(kernel.query(kernel.runtime, "session.ending", {}))["usage"]
-    assert usage["turns"] == {"amount": 1.0, "label": "counted"}
-    assert usage["tokens"] == {"amount": None, "label": "unavailable"}
+    assert usage["turns"] == {"amount": 1.0, "label": "counted", "unmeasured": 0}
+    assert usage["tokens"] == {"amount": 100, "label": "estimated", "unmeasured": 1}
 
 
 async def test_a_wake_reserves_an_estimate(kernel):
@@ -171,21 +171,29 @@ async def test_a_turn_lost_to_a_crash_keeps_its_estimate_as_spent(kernel):
     await kernel.recover()
 
     row = limit(kernel, "tokens")
-    assert (row["spent"], row["held"], row["label"], row["unmeasured"]) == (100, 0, "unavailable", 1)
+    assert (row["spent"], row["held"], row["label"], row["unmeasured"]) == (100, 0, "estimated", 1)
 
 
-async def test_a_lost_turn_with_no_estimate_is_unmeasured_and_not_free(kernel):
+async def test_what_a_lost_turn_measured_is_charged_beneath_its_estimate(kernel):
     await spawn(kernel, "bob")
-    await set_budget(kernel, limits={"tokens": 1000})
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
     await wake(kernel, "bob")
     await start_turn(kernel, "bob")
+    await report(kernel, "bob", "usage", tokens=40, label="provider")
 
     await kernel.recover()
 
-    assert limit(kernel, "tokens")["unmeasured"] == 1
-    await send(kernel, kernel.runtime, "@bob", "again")
-    assert result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"})) is None
-    assert of_type(kernel, "wake.refused")[-1].data["why"] == "unavailable"
+    row = limit(kernel, "tokens")
+    assert (row["spent"], row["label"], row["unmeasured"]) == (140, "estimated", 1)
+
+
+async def test_a_tokens_or_usd_limit_with_no_estimate_is_refused(kernel):
+    for unit in ("tokens", "usd"):
+        outcome = await kernel.submit(kernel.runtime, "budget.set", {"limits": {unit: 1000}})
+        assert (refusal(outcome).code, refusal(outcome).detail) == (
+            "invalid",
+            f"a {unit} limit needs an estimate in {unit}",
+        )
 
 
 async def test_partial_usage_of_a_lost_turn_does_not_leak_into_the_next(kernel):
@@ -293,7 +301,7 @@ async def test_a_refused_wake_retries_when_a_lost_turn_moves_the_budget(kernel):
 
 async def test_measurements_carry_a_label_and_the_weakest_wins(kernel):
     await spawn(kernel, "bob")
-    await set_budget(kernel, limits={"tokens": 1000})
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
     await wake(kernel, "bob")
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "usage", tokens=10, label="provider")
@@ -304,37 +312,36 @@ async def test_measurements_carry_a_label_and_the_weakest_wins(kernel):
     assert limit(kernel, "tokens")["label"] == "lower_bound"
 
 
-async def test_over_budget_is_policy_and_unavailable_is_infrastructure(kernel):
+async def test_a_turn_nobody_measured_leaves_its_session_to_go_on_under_its_limit(kernel):
+    """An interrupt cuts a call short, which no harness measures. Live run 42 stopped here."""
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"usd": 10.0}, estimate={"usd": 1.0})
     await wake(kernel, "bob")
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "usage", label="unavailable")
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert await wake(kernel, "bob") is not None
+    assert of_type(kernel, "wake.refused") == []
+
+
+async def test_over_budget_is_policy_and_unavailable_is_infrastructure(kernel):
+    """Turns nobody could charge, as none had an estimate when they ran, leave a limit set after them with no amount
+    to hold on, so it says what to do."""
+    await spawn(kernel, "bob")
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
     await end_turn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000}, estimate={"tokens": 100})
 
     assert await wake(kernel, "bob") is None
 
     refused = of_type(kernel, "wake.refused")[-1]
     assert refused.data["why"] == "unavailable"
-    row = limit(kernel, "usd")
-    assert (row["spent"], row["label"], row["unmeasured"]) == (1.0, "unavailable", 1)
+    assert "however high: remove it" in refused.data["detail"]
 
 
-async def test_a_budget_that_cannot_hold_says_how_to_go_on(kernel):
-    await spawn(kernel, "bob")
-    await set_budget(kernel, limits={"tokens": 1000})
-    await wake(kernel, "bob")
-    await start_turn(kernel, "bob")
-    await end_turn(kernel, "bob")
-
-    assert await wake(kernel, "bob") is None
-
-    detail = of_type(kernel, "wake.refused")[-1].data["detail"]
-    assert "however high its limit" in detail
-    assert '`fallback = "turns"` and a `turns` limit' in detail and "remove its tokens limit" in detail
-
-
-async def test_what_was_measured_stands_as_a_floor_when_a_call_of_the_turn_was_not(kernel):
+async def test_what_was_measured_is_charged_beneath_the_estimate_when_a_call_of_the_turn_was_not(kernel):
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"tokens": 2_000_000, "usd": 10.0}, estimate={"tokens": 100, "usd": 1.0})
     await wake(kernel, "bob")
@@ -346,8 +353,8 @@ async def test_what_was_measured_stands_as_a_floor_when_a_call_of_the_turn_was_n
     await end_turn(kernel, "bob")
 
     tokens, usd = limit(kernel, "tokens"), limit(kernel, "usd")
-    assert (tokens["spent"], tokens["label"], tokens["unmeasured"]) == (1_000_000, "unavailable", 1)
-    assert (usd["spent"], usd["unmeasured"]) == (5.0, 1)
+    assert (tokens["spent"], tokens["label"], tokens["unmeasured"]) == (1_000_100, "estimated", 1)
+    assert (usd["spent"], usd["label"], usd["unmeasured"]) == (6.0, "estimated", 1)
 
 
 async def test_a_turn_with_no_usage_report_is_unmeasured_and_not_free(kernel):
@@ -359,28 +366,19 @@ async def test_a_turn_with_no_usage_report_is_unmeasured_and_not_free(kernel):
     await end_turn(kernel, "bob")
 
     row = limit(kernel, "usd")
-    assert (row["spent"], row["label"], row["unmeasured"]) == (1.0, "unavailable", 1)
+    assert (row["spent"], row["label"], row["unmeasured"]) == (1.0, "estimated", 1)
 
 
-async def test_an_unmeasurable_unit_falls_back_to_turns_when_the_team_says_so(kernel):
+async def test_a_limit_in_a_unit_a_harness_never_measures_holds_on_its_estimates(kernel):
     await spawn(kernel, "bob")
-    await set_budget(kernel, limits={"usd": 10.0, "turns": 2}, fallback="turns")
-    await wake(kernel, "bob")
-    await start_turn(kernel, "bob")
-    await end_turn(kernel, "bob")
-
-    assert await wake(kernel, "bob") is not None
-    await start_turn(kernel, "bob", "t2")
-    await end_turn(kernel, "bob")
+    await set_budget(kernel, limits={"usd": 2.5}, estimate={"usd": 1.0})
+    for turn in ("t1", "t2"):
+        assert await wake(kernel, "bob") is not None
+        await start_turn(kernel, "bob", turn)
+        await end_turn(kernel, "bob")
 
     assert await wake(kernel, "bob") is None
-    assert of_type(kernel, "wake.refused")[-1].data["detail"]["unit"] == "turns"
-
-
-async def test_a_fallback_needs_something_to_fall_back_to(kernel):
-    outcome = await kernel.submit(kernel.runtime, "budget.set", {"limits": {"usd": 1.0}, "fallback": "turns"})
-
-    assert refusal(outcome).code == "invalid"
+    assert of_type(kernel, "wake.refused")[-1].data["detail"]["unit"] == "usd"
 
 
 async def test_an_agent_cannot_spend_past_wall_time(kernel, clock):
@@ -412,7 +410,7 @@ turns = st.lists(st.tuples(st.integers(0, 3), st.integers(0, 500)), min_size=1, 
 
 
 @settings(max_examples=30, deadline=None)
-@given(script=turns, cap=st.integers(100, 2000), estimate=st.integers(0, 300))
+@given(script=turns, cap=st.integers(100, 2000), estimate=st.integers(1, 300))
 def test_overshoot_is_bounded_by_the_largest_turn_times_the_live_agents(
     tmp_path_factory, script, cap, estimate
 ) -> None:

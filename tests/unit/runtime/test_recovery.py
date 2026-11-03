@@ -998,7 +998,8 @@ async def test_a_driver_cannot_say_what_only_the_runtime_can(tmp_path, reason):
 
 
 async def test_a_wake_the_budget_refuses_ends_the_session_needs_human(tmp_path):
-    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+    """The lost turn is charged its estimate, which leaves no room for the next."""
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "estimate": {"tokens": 600}}))
 
     async with Session.resume("s", root=tmp_path) as session:
         ending = await asyncio.wait_for(session.settled(), SECONDS)
@@ -1010,8 +1011,8 @@ async def test_a_wake_the_budget_refuses_ends_the_session_needs_human(tmp_path):
     assert "budget" in kinds
 
 
-async def test_a_budget_that_falls_back_to_turns_still_wakes_an_agent_after_a_crash(tmp_path):
-    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "turns": 5, "fallback": "turns"}))
+async def test_a_lost_turn_charged_its_estimate_still_leaves_room_to_wake_its_agent(tmp_path):
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "estimate": {"tokens": 100}}))
 
     async with Session.resume("s", root=tmp_path) as session:
         items = await until(lambda: of_type(session, "item.recorded"), session)
@@ -1020,12 +1021,12 @@ async def test_a_budget_that_falls_back_to_turns_still_wakes_an_agent_after_a_cr
 
 
 async def test_raising_the_budget_lets_the_wake_it_refused_go_on(tmp_path):
-    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "estimate": {"tokens": 600}}))
 
     async with Session.resume("s", root=tmp_path) as session:
         await until(lambda: of_type(session, "wake.refused"), session)
 
-        await session.set_budget("role:bob", limits={"tokens": 1000, "turns": 5}, fallback="turns")
+        await session.set_budget("role:bob", limits={"tokens": 5000}, estimate={"tokens": 600})
 
         items = await until(lambda: of_type(session, "item.recorded"), session)
 
@@ -1033,13 +1034,13 @@ async def test_raising_the_budget_lets_the_wake_it_refused_go_on(tmp_path):
 
 
 async def test_a_lost_turn_stays_in_attention_until_its_agent_is_back_in_a_turn(tmp_path):
-    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000}))
+    await cut_off_by_a_crash(tmp_path, comes_back(budget={"tokens": 1000, "estimate": {"tokens": 600}}))
 
     async with Session.resume("s", root=tmp_path) as session:
         await until(lambda: of_type(session, "wake.refused"), session)
         assert "turn/bob" in {row["id"] for row in await session.attention()}
 
-        await session.set_budget("role:bob", limits={"tokens": 1000, "turns": 5}, fallback="turns")
+        await session.set_budget("role:bob", limits={"tokens": 5000}, estimate={"tokens": 600})
 
         await until(lambda: of_type(session, "turn.started"), session, lambda found: len(found) == 2)
         assert "turn/bob" not in {row["id"] for row in await session.attention()}
@@ -1068,7 +1069,16 @@ async def goal_unbegun(tmp_path: Path, team: Team, **options: Any) -> None:
 
 
 async def test_a_goal_the_budget_will_not_retell_ends_the_session_needs_human(tmp_path):
-    await goal_unbegun(tmp_path, goal_to_come(budget={"tokens": 1000}))
+    """A limit lowered under what is held leaves no room for the goal once the crash has charged the turn it cut."""
+    session = await Session.start(
+        goal_to_come(budget={"tokens": 1000, "estimate": {"tokens": 400}}), name="s", root=tmp_path
+    )
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    await session.spawn("ada", "ada", "the important thing")
+    await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) == 2)
+    await session.set_budget(limits={"tokens": 500}, estimate={"tokens": 400})
+    await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
         ending = await asyncio.wait_for(session.settled(), SECONDS)

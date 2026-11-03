@@ -62,7 +62,7 @@ def name_of(principal: str) -> str:
 def checked_after(txn: Txn, after: int | None) -> int | None:
     """`after` as given. Past the head it is no cursor, and reading from it would hide what is unread."""
     if after is not None and after > txn.view(Stamps).head():
-        raise Refused("invalid", f"`after` {after} is past every event: leave it out to go on from where you left off")
+        raise Refused("invalid", f"`after` {after} is past every event: leave it out")
     return after
 
 

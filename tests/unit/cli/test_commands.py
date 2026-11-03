@@ -113,6 +113,20 @@ def test_a_command_s_help_names_commands_and_flags_where_its_op_names_ops_and_ar
     assert "end your turn" not in claim and "wait" not in claim
 
 
+@pytest.mark.parametrize("name", sorted(person_ops()))
+def test_a_persons_surface_shows_no_sentence_written_to_an_agent(name: str):
+    """A person has no turn, no place a read leaves off, no harness to keep a lease at work, and nothing to finish."""
+    command, _ = parsed([*name.split("."), "fix-auth", *needed(name)])
+    parameters = inspect.signature(command).parameters.values()
+    flags = [
+        parameter.annotation.__metadata__[0].help for parameter in parameters if parameter.kind.name == "KEYWORD_ONLY"
+    ]
+
+    said = " ".join([command.__doc__ or "", *flags]).lower()
+
+    assert not re.search(r"\b(your (own )?(open )?turn|you left off|you are active|you have finished)\b", said)
+
+
 def test_the_reference_names_only_flags_the_command_line_takes():
     """Command by command, the flags the reference lists are the ones `--help` shows, which the parser takes."""
     sections = re.split(r"^#{2,4} platoon-harness", REFERENCE.read_text(), flags=re.MULTILINE)[2:]

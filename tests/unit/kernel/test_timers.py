@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from platoon_harness.kernel import Kernel
+from platoon_harness.kernel import Kernel, Timers
 from platoon_harness.kernel.timers import fire_timers
 
 from .support import events_of, notes, refusal_of, result_of, supervised, until
@@ -181,3 +181,18 @@ async def test_a_refused_timer_is_still_cleared(kernel, clock):
 
     assert pending(kernel) == []
     assert events_of(kernel)[-2].type == "op.refused"
+
+
+async def test_timers_left_out_hide_no_timer_to_come(kernel):
+    async def set_timer(op: str, key: str, due: float) -> None:
+        timer = {"due": due, "op": op, "args": {}, "key": key}
+        args = {"type": "timer.set", "stream": f"timer/{key}", "data": timer}
+        result_of(await kernel.submit(kernel.runtime, "note.mark", args))
+
+    for number in range(70):
+        await set_timer("lease.expire", f"lease/{number}", 1010.0 + number)
+    await set_timer("note.add", "later", 9000.0)
+
+    with kernel._reading() as db:
+        assert Timers(db).besides("lease.expire")
+        assert not Timers(db).besides("lease.expire", "note.add")

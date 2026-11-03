@@ -134,7 +134,8 @@ Each law is a sentence, and each has a test of the same name.
   session is a portable artifact (§5.8). A root to write in must be this user's, and writable by nobody else, since a manifest in it
   names what a resume runs. The fallback and `sessions/` are made 0700, and a chosen root is left as it is.
 - **A session's folder** is built aside and renamed into place with its manifest in it, so a name is claimed whole or not at all, and
-  a crash burns none.
+  a crash burns none. A start cancelled while it prepares takes its folder back once the thread that made it is done, so a name it
+  claimed is free again.
 - **Sockets** live at `<runtime dir>/<short hash>.sock` in a 0700 directory from `XDG_RUNTIME_DIR` or a short per-user fallback,
   never inside the session folder: a Python `bind` allows 107 bytes on Linux and 103 on macOS, and a deep folder exceeds that.
   The hash is of the folder, not the session id, since a copy of a closed session keeps its journal and must not take the socket of
@@ -171,8 +172,8 @@ can both be watched. Leaving only disconnects.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
   reservations, append `session.stopped`, keep the folder resumable. A start cut short, cancelled or failed, once its incarnation is
   in the journal ends with this shutdown too. To release is to hand back what will not happen now: a turn
-  still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started fails,
-  which queues its entries again. A spawn
+  still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started is
+  cancelled, which queues its entries again and is no failure of its harness's. A spawn
   still to come keeps its reservation, since the next runtime goes on with it. The next `runtime.started` reopens a session stopped
   while open; one that was closing, which reads `closed` once stopped, or cancelled stays so, and its harnesses are not resumed,
   because nothing new may start. A journal
@@ -551,7 +552,7 @@ Each statement here is a promise with a test.
   wait moved past it). None means understood. A handover that fails is queued again and offered under a new input, even past a
   newer offer: at-least-once allows the repeat, and the event id dedupes it. The next try waits twice as long as the last, from one
   second. Six in a row lose an agent out of a turn, with the reason; a working agent keeps its turn, and what is queued waits for
-  its end. A handover an interrupt cut is no failure of its harness's, and counts toward neither. What a harness took and never
+  its end. A handover an interrupt cut, or the owner's stop handed back, is no failure of its harness's, and counts toward neither. What a harness took and never
   landed is queued again the same way when its turn stops short of `stopped`, and when it comes back from a crash, since no harness
   keeps that for certain and a driver cannot say what a crash left. One that stopped on its own lands it in the turn that follows.
 - **Cursors** are per `(reader, stream)` and held by the server. An omitted `after` means the reader's server-held
@@ -727,7 +728,7 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   the line. A human's `agent.interrupt` is no cut-off. A host that is closing reports a turn interrupted as `stopped by its owner`,
   which tells the two apart and leaves a crash part of the way through a stop nothing to lose. Only the runtime gives those two
   reasons: a driver that says one has sent an unknown frame, and its turn ended `unknown`. The wake reserves a turn like any other, so
-  a budget that an unmeasured turn left unable to hold refuses it, and the session ends `needs_human`.
+  a budget the cut turn's charge leaves no room in refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session. A child that ends
   with its parent ends `cancelled` if a turn of its was cut off, open or on its way, and `retired` otherwise, idle or parked, since
   every turn it took is whole and Platoon drops a cancelled child's tokens. `session.cancel` ends every agent `cancelled`, each parent
@@ -748,7 +749,8 @@ A team with no root uses `"settled"`. A close ends no agent: one left idle keeps
 `cancelled`, until M3 closes idle children before a rollout returns.
 
 A session has **stalled** when it is open and settled short of `until` with nothing scheduled: no timer, no wait deadline to come and
-no lease held. So a wall limit, a lease or a wait's `timeout` is waited for, and a lease's timer counts only while its claim does.
+no lease held. So a lease or a wait's `timeout` is waited for, and a lease's timer counts only while its claim does. A timer that
+can only end a session moves nothing, so a wall limit is not waited for, and a session stalled under one says `needs_human` at once.
 Short of exhaustion, a wake the budget refused keeps even a `"settled"` session from being done, because it is work left that only a
 human can unblock, and so does a wait that names someone still here, through `agents` or `from`, so two agents parked on each other
 stall under every `until` but `"program"`. A worker parked on a `queue` or a channel is no such thing, and a session closes around it.
@@ -777,11 +779,13 @@ event, tried again when the budget moves.
 
 Time alone exhausts a `wall` limit, so a timer fires `budget.lapse` at the shared one, which moves the journal for whoever sleeps
 until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound` or `unavailable`, and what the runtime counts itself,
-`turns` and `agents`, is `counted`, which no driver can claim. A limit in a unit a role cannot measure
-is refused by `team check`, or falls back to `turns` when that budget also limits `turns`; it never silently stops enforcing. A turn nobody
-measured whole, a lost one among them, is charged its estimate, or what was measured if that is more, and counts as unmeasured, so the
-next reservation in that unit is refused `unavailable`, and usage shows that unit with no amount: unknown is not zero. No limit is high
-enough for an unknown amount, so the refusal names the two ways on: `fallback = "turns"` with a `turns` limit, or no limit in that unit. Budget exhaustion means spent, never merely reserved. Native
+`turns` and `agents`, is `counted`, which no driver can claim. A turn nobody measured whole, a lost one among
+them, is charged what was measured plus its estimate, labelled `estimated`, and limits hold on that. So an interrupt, which no harness
+measures the cut call of, leaves a session to go on, and a role whose harness cannot measure a unit is charged its estimate for every
+turn, which `team check` warns of. `budget.status`, the roster's usage and the Ending count such turns as `unmeasured`. With no estimate
+no amount can be stated, so `team check` and `budget.set` refuse a `tokens` or `usd` limit without one, a unit nothing estimated shows
+with no amount, as unknown is not zero, and a limit set after turns like that were charged has nothing to hold on and refuses
+`unavailable`, saying to remove it. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology
@@ -898,7 +902,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
   from a human or program, and every event carries `topology_rev`.
 - **`team check`** runs before any cost and reports everything at once. It refuses recursive spawning without `max_depth`, whether
-  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a budget unit a role cannot measure, and an unknown
+  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, and an unknown
   preset, harness, extension, role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
   preset is refused at load. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`,
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A parent and a child that can
@@ -908,7 +912,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   The `manager-worker` and `tree` presets carry `max_hops`, 8 unless given, as `mesh` and `star` do, so no shipped preset sets it off. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
-  resolve, a setting no primitive enforces yet, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
+  resolve, a setting no primitive enforces yet, a limit in a unit a role's harness cannot measure, which holds on estimates, and a
+one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
 and one that says it stays, and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
 It warns of a role that lets its harness start agents of its own, saying what that gives up, and of what a preamble template
 leaves out or a user's words name that a role cannot hold. A harness that reaches none of our tools is told `instructions` alone, so it

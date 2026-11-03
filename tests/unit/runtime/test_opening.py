@@ -13,7 +13,7 @@ from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
 from platoon_harness.kernel import Event, Kernel, Refused, is_held
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime import LocalAuthority, opening
-from platoon_harness.runtime.opening import PLAN_LOGIN_FIX, open_session, prepare
+from platoon_harness.runtime.opening import PLAN_LOGIN_FIX, check, open_session, prepare
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError
 from platoon_harness.testing import Say, ScriptedDriver
@@ -61,17 +61,17 @@ def test_every_problem_is_reported_at_once(tmp_path):
     assert sum("harness" in problem.where for problem in error.value.problems) == 1
 
 
-def test_capabilities_come_from_each_role_s_driver(tmp_path):
+def test_capabilities_come_from_each_role_s_driver():
     blind, measuring = Capabilities(persistent=True), MEASURING
+    budget = {"tokens": 10, "estimate": {"tokens": 5}}
     roles = {
-        "reads": {"harness": scripted(capabilities=measuring), "budget": {"tokens": 10}},
-        "guesses": {"harness": scripted(capabilities=blind), "budget": {"tokens": 10}},
+        "reads": {"harness": scripted(capabilities=measuring), "budget": budget},
+        "guesses": {"harness": scripted(capabilities=blind), "budget": budget},
     }
 
-    with pytest.raises(ConfigError) as error:
-        prepare(team_of(roles=roles), root=tmp_path)
+    found = check(team_of(roles=roles))
 
-    assert [problem.where for problem in error.value.problems] == ["roles.guesses.budget.tokens"]
+    assert [problem.where for problem in found if problem.where.endswith(".tokens")] == ["roles.guesses.budget.tokens"]
 
 
 def test_a_driver_that_cannot_describe_itself_is_a_problem_at_its_role(tmp_path):
@@ -279,7 +279,7 @@ TEAM = """
 [roles.lead]
 may_spawn = ["worker"]
 approvals = "deny"
-budget = { tokens = 500 }
+budget = { tokens = 500, estimate = { tokens = 50 } }
 
 [roles.worker]
 tools = ["task.*", "wait"]
@@ -408,7 +408,14 @@ async def test_a_resource_the_authority_owns_is_no_limit_of_the_session(opened, 
         def budget_owner(self, resource: str):
             return "authority" if resource == "tokens" else "session"
 
-    team = team_of(roles={"lead": {"harness": scripted(capabilities=MEASURING), "budget": {"tokens": 5, "turns": 5}}})
+    team = team_of(
+        roles={
+            "lead": {
+                "harness": scripted(capabilities=MEASURING),
+                "budget": {"tokens": 5, "turns": 5, "estimate": {"tokens": 1}},
+            }
+        }
+    )
     folder = prepare(team, name="managed", root=tmp_path)
     text = (folder / MANIFEST).read_text()
     manifest = Manifest.model_validate_json(text)

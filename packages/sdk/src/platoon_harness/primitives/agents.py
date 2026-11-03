@@ -75,7 +75,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 7
+    version = 8
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -229,6 +229,12 @@ class Agents(View):
                 """,
                 (event.wall_time, event.agent, event.data["id"]),
             )
+
+    @fold("effect.cancelled")
+    def handed_back(self, event: Event) -> None:
+        """A handover cancelled before it started, as the owner's stop does, gives back its wake and is no failure."""
+        if event.data["kind"] == "deliver":
+            self._move(event, "idle", "waking")
 
     @fold("wake.quieted")
     def quiet(self, event: Event) -> None:

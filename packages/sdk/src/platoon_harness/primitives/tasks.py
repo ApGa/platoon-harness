@@ -232,7 +232,7 @@ class Claim(Args):
 @op("task.claim", on=lambda a: f"queue/{a.queue}", tool=True)
 def claim(txn: Txn, a: Claim) -> dict[str, Any]:
     """Claim the next open task, or `task` by id. `text` is its body; a long one comes back cut, with `rest` a ref. Pass
-    it to `blob.get`. Keep working: the runtime renews your lease while you are active. `task.complete` finds the task
+    it to `blob.get`. The runtime renews an agent's lease while its harness is at work. `task.complete` finds the task
     without being told. If your lease lapses someone else may redo the work, so make it safe to repeat. Refused
     `conflict`, naming the owner, when `task` is taken, and when you hold `max_inflight` tasks: claim another, or finish
     one first. `not_found` when no such task or queue exists. `queue_empty` when nothing is open. Call `wait` with
@@ -307,8 +307,8 @@ def _caller_lease(txn: Txn, a: Held) -> Task:
 
 @op("task.renew", on=lambda a: f"queue/{a.queue}")
 def renew(txn: Txn, a: Held) -> dict[str, Any]:
-    """Extend your lease, up to the queue's `lease_max`. The runtime already does this while you are active. Refused
-    `stale_fence` when the lease has gone: claim again."""
+    """Extend your lease, up to the queue's `lease_max`. The runtime already does this for an agent while its harness
+    is at work. Refused `stale_fence` when the lease has gone: claim again."""
     channel = _queue(txn, a.queue)
     task = _caller_lease(txn, a)
     assert task.claimed_at is not None and task.fence is not None

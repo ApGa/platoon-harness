@@ -61,7 +61,9 @@ async def test_roster_shows_usage_with_its_label(kernel):
     await report(kernel, "bob", "usage", tokens=10, label="provider")
     await end_turn(kernel, "bob")
 
-    assert roster(kernel, "bob")["usage"]["tokens"] == {"amount": 10, "label": "provider"}
+    usage = roster(kernel, "bob")["usage"]
+    assert usage["tokens"] == {"amount": 10, "label": "provider", "unmeasured": 0}
+    assert usage["usd"] == {"amount": None, "label": "unavailable", "unmeasured": 1}
 
 
 async def test_why_is_an_approval(kernel):

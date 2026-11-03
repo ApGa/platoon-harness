@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import threading
 from typing import Any
 
 import pytest
@@ -268,6 +269,27 @@ async def test_a_handover_that_never_started_is_queued_again_and_its_reservation
     async with Session.resume(folder.name, root=tmp_path) as resumed:
         item = await until(lambda: of_type(resumed, "item.recorded"), resumed)
         assert item[0].gist == "heard"
+
+
+async def test_a_start_cancelled_while_it_prepares_leaves_no_session(tmp_path, monkeypatch):
+    """Preparing runs in a thread that nothing can cut short, so what it makes after the cancel is taken back."""
+    began, release = threading.Event(), threading.Event()
+
+    def slow(*args: Any, **options: Any) -> Any:
+        began.set()
+        release.wait(SECONDS)
+        return prepare(*args, **options)
+
+    monkeypatch.setattr(session_module, "prepare", slow)
+    starting = asyncio.ensure_future(Session.start(solo(), name="s", root=tmp_path))
+    await asyncio.to_thread(began.wait, SECONDS)
+
+    starting.cancel()
+    release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await starting
+    assert list((tmp_path / "sessions").iterdir()) == []
 
 
 async def test_a_detached_runtime_takes_nothing_it_could_not_keep(tmp_path):
@@ -955,23 +977,34 @@ async def test_a_worker_parked_for_more_work_leaves_a_session_with_no_root_to_cl
     assert ending.reason == "settled"
 
 
-async def test_a_wall_limit_to_come_is_waited_for_and_ends_the_session(tmp_path):
+async def test_a_wall_limit_to_come_does_not_hold_off_a_stall(tmp_path):
     clock = ManualClock(1000.0)
     team = until_lead([Say("I think we are done")], budget={"wall": "1m"})
 
     async with Session.start(team, root=tmp_path, clock=clock) as session:
         await session.send("@lead", "go")
-        settling = asyncio.ensure_future(session.settled())
-        await in_state(session, "lead", "idle")
-        async with asyncio.timeout(SECONDS):
-            await clock.slept_until(1060.0)
-        assert not settling.done()
 
-        clock.advance(60.0)
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
 
-        ending = await asyncio.wait_for(settling, SECONDS)
+    assert (ending.state, ending.reason) == ("open", "needs_human")
 
-    assert ending.reason == "budget_exhausted"
+
+async def test_a_wake_the_budget_refuses_under_a_wall_limit_ends_the_session_needs_human_at_once(tmp_path):
+    """Live run 42 waited out its wall limit here. A scripted turn reports no usage, so each is charged its estimate."""
+    clock = ManualClock(1000.0)
+    budget = {"wall": "1m", "tokens": 100, "estimate": {"tokens": 60}}
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted([Say("one")], [Say("two")])}}, "budget": budget})
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await session.send("@bob", "and again")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+        refused = await of_type(session, "wake.refused")
+
+    assert (ending.state, ending.reason) == ("open", "needs_human")
+    assert [event.data["why"] for event in refused] == ["over_budget"]
 
 
 async def test_a_wait_deadline_to_come_is_waited_for_and_then_it_is_a_human_s_turn(tmp_path):
@@ -1194,7 +1227,7 @@ async def test_usage_after_agent_finish_is_charged_and_a_teammate_s_next_wake_ru
                 "ada": {"harness": harness(lambda: ReportsAsItsTurnEnds([[Say("done"), Call("agent_finish", {})]]))},
                 "bob": {"harness": scripted([Say("bob ran")])},
             },
-            "budget": {"tokens": 100_000},
+            "budget": {"tokens": 100_000, "estimate": {"tokens": 1000}},
         }
     )
 
@@ -1207,7 +1240,7 @@ async def test_usage_after_agent_finish_is_charged_and_a_teammate_s_next_wake_ru
 
     assert ending.reason == "settled"
     rows = {row["agent"]: row for row in ending.agents}
-    assert rows["ada"]["usage"]["tokens"] == {"amount": 1000.0, "label": "provider"}
+    assert rows["ada"]["usage"]["tokens"] == {"amount": 1000.0, "label": "provider", "unmeasured": 0}
     assert rows["ada"]["report"] == {"gist": "done", "body": rows["ada"]["report"]["body"]}
     assert rows["bob"]["report"]["gist"] == "bob ran"
 
@@ -1241,8 +1274,8 @@ async def test_a_session_that_ran_a_harness_with_no_meter_says_nothing_of_tokens
 
         ending = await session.settled(timeout="10s")
 
-    assert ending.usage["tokens"] == {"amount": None, "label": "unavailable"}
-    assert ending.usage["turns"] == {"amount": 1.0, "label": "counted"}
+    assert ending.usage["tokens"] == {"amount": None, "label": "unavailable", "unmeasured": 1}
+    assert ending.usage["turns"] == {"amount": 1.0, "label": "counted", "unmeasured": 0}
 
 
 async def test_a_failed_spawn_says_why_in_the_ending(tmp_path):

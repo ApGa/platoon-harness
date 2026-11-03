@@ -66,15 +66,19 @@ __all__ = [
 ]
 
 
+Amount = Annotated[StrictInt | StrictFloat, Field(gt=0, allow_inf_nan=False)]
+
+
 class Budget(Model):
-    """Limits on a session or a role. `fallback` says what stands in for a unit a harness cannot measure."""
+    """Limits on a session or a role. `estimate` is what one turn is reserved in `tokens` or `usd` before it is
+    measured, and charged on top of what was measured when nobody measured it whole, so a limit in either needs one."""
 
     tokens: Positive | None = None
-    usd: Annotated[StrictInt | StrictFloat, Field(gt=0, allow_inf_nan=False)] | None = None
+    usd: Amount | None = None
     turns: Positive | None = None
     agents: Positive | None = None
     wall: Duration | None = None
-    fallback: Literal["turns"] | None = None
+    estimate: Annotated[Mapping[Literal["tokens", "usd"], Amount], Sorted] = {}
 
 
 class AuthProfile(Model):
@@ -234,15 +238,19 @@ def _cycle(arcs: Mapping[str, Iterable[str]]) -> list[str] | None:
     return None
 
 
-def _budget_problems(budget: Budget, where: str, role: Role, capabilities: Capabilities) -> Iterable[Problem]:
+def _unestimated(budget: Budget, where: str) -> Iterable[Problem]:
+    """A limit in a unit a turn can go unmeasured in needs an amount to charge such a turn, or it could hold on none."""
     for unit in _MEASURED:
-        if getattr(budget, unit) is None or unit in capabilities.measures:
-            continue
-        if budget.fallback is None:
-            what = f'`{role.driver}` cannot measure {unit}. Remove the limit, or set `fallback = "turns"`'
-            yield Problem(f"{where}.{unit}", what)
-        elif budget.turns is None:
-            yield Problem(f"{where}.{unit}", "falls back to turns, but this budget has no `turns` limit")
+        if getattr(budget, unit) is not None and unit not in budget.estimate:
+            what = f"a {unit} limit needs `estimate.{unit}`: what a turn nobody measured whole is charged on top"
+            yield Problem(f"{where}.estimate", what)
+
+
+def _unmeasured(budget: Budget, where: str, role: Role, capabilities: Capabilities) -> Iterable[Problem]:
+    for unit in _MEASURED:
+        if getattr(budget, unit) is not None and unit not in capabilities.measures:
+            what = f"`{role.driver}` cannot measure {unit}, so each of its turns is charged its estimate"
+            yield Problem(f"{where}.{unit}", what, "warning")
 
 
 def _population(team: Team, role: str) -> float:
@@ -419,8 +427,9 @@ def team_check(
                 problems.append(Problem(f"roles.{name}.stays", what))
             if role.allow_native_children:
                 problems.append(Problem(f"roles.{name}.allow_native_children", _native(role, known), "warning"))
-            problems += _budget_problems(team.budget, "budget", role, known)
-            problems += _budget_problems(role.budget, f"roles.{name}.budget", role, known)
+            problems += _unmeasured(team.budget, "budget", role, known)
+            problems += _unmeasured(role.budget, f"roles.{name}.budget", role, known)
+        problems += _unestimated(role.budget, f"roles.{name}.budget")
         if role.auth is not None and role.auth not in team.auth:
             problems.append(Problem(f"roles.{name}.auth", f"unknown profile.{nearest(role.auth, team.auth.keys())}"))
 
@@ -437,6 +446,7 @@ def team_check(
             )
             problems.append(Problem("topology.limits.max_hops", what, "warning"))
 
+    problems += _unestimated(team.budget, "budget")
     problems += _warnings(team)
     if not unsound:
         ops = (operation for extension in (*PRIMITIVES, *loaded) for operation in extension.ops)

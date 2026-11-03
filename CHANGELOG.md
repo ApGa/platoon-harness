@@ -149,6 +149,19 @@
   has no `native`, `DriverInfo` has no `version`, and `Item.phase` is `started` or `completed`: a message or a thought has none, and
   `approval` is what says an item answers one.
 
+- A turn nobody measured whole, a lost one or one an interrupt cut short among them, is charged what was measured plus its estimate,
+  labelled `estimated`, and limits hold on that, where it was charged its estimate and left every later reservation in its unit
+  refused `unavailable`. On Codex every interrupt did that, so one Esc under a `tokens` limit left a session to a person. `Budget` and
+  `budget.set` take `estimate`, which a `tokens` or `usd` limit needs, and `team check` and `budget.set` refuse one without it.
+  `fallback = "turns"` is gone, as an estimate does its job. Usage in the Ending and the roster counts `unmeasured` turns, as
+  `budget.status` did.
+- A timer that can only end a session moves nothing, so a wall limit no longer holds off a stall: a wake the budget refuses under one
+  ends the session `needs_human` at once. Live run 42 waited out its four minute wall and exited 2.
+- `session.stop` cancels each handover that has not started, which queues its entries again and is no failure of its harness's. The
+  owner's stop failed them before, which counted toward the six that lose an agent.
+- Op descriptions hold for every reader who may run the op, so a person's surface shows no sentence written to an agent, such as
+  "Your own open turn is always among `blockers` while you ask".
+
 ### Fixed
 
 - Esc did not stop an agent with something queued, as what an interrupted harness took was queued again and woke it, and an interrupt
@@ -304,6 +317,9 @@
 - A long `forgotten` no longer loses its agent: the list passed what an event holds, and the report was refused.
 - `view.watch("roster")` no longer misses a row. It keyed on `event.agent`, so a row that moved on an event naming someone else or
   nobody, a message, a wait's progress or a budget, stayed stale. A roster now changes as a whole.
+
+- Ctrl+C while `run` prepared could leave a session folder behind after `run` said no session was made. A start cancelled while it
+  prepares takes its folder back.
 
 ### Changed
 
