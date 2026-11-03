@@ -42,8 +42,9 @@ and acknowledges nothing an agent was handed.
 
 Each event is one line, and a line opens on demand, with Enter on the chosen line, Ctrl+O from anywhere, or a click: its
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
-lines are read back from the journal a page at a time as you scroll up, and what was on screen stays where it was. Below
-them is what the agent in view is saying now, live, until the journal holds it as an item. Reading up stops following, and
+transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
+was on screen stays where it was. Below them is what the agent in view is saying now, live, until the journal holds it as an
+item. Reading up stops following, and
 the line under the transcript counts what came since; Ctrl+End, or End with the transcript focused, follows again.
 
 ### The composer
@@ -69,7 +70,7 @@ line words them, and the ones nothing takes back ask once.
 | Size | Layout |
 |---|---|
 | 120 columns or more | Navigator, focus pane, and the inspector beside them |
-| 80 to 119 | Navigator and focus pane |
+| 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
 | 60 to 79 | The focus pane, a line of the team above the composer, and the navigator on Ctrl+B |
 | under 60 | The header shortens to counts, and the footer to keys |
 | under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
