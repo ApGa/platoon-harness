@@ -59,6 +59,8 @@
 
 ### Fixed
 
+- An agent whose harness took no turn was lost at any resume, as Claude Code, Codex and pi write no session until a turn. The runtime
+  starts it anew, and tells it what it must know as before. `agent.records` says whether an agent's harness `began`.
 - `stop` left a tool's background child running on Claude Code and pi, `npm run dev &` among them, with no word in the journal, and
   `check_driver` passed. On Linux, `Process` now ends what carries the harness's own `TMPDIR`, whichever group it left for, at a stop and
   after a crash, and `stop_ends_a_running_tool` puts a child in the background and one in a session of its own.

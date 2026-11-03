@@ -309,6 +309,23 @@ def stopped_at_last(ended: list[Any]) -> bool:
     return bool(ended) and ended[-1].data["reason"] == "stopped"
 
 
+async def test_an_agent_that_took_no_turn_comes_back_anew_on_a_resume(tmp_path, monkeypatch):
+    """Its harness wrote no session to reopen, so a resume that asked for one would lose it."""
+    async with FakeModel("here") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+
+        async with Session.start(team, name="idle", root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+
+        async with Session.resume("idle", root=tmp_path) as session:
+            await until(lambda: of_type(session, "agent.resumed"), session)
+            await session.send("@bob", "are you there?")
+            ended = await until(lambda: of_type(session, "turn.ended"), session)
+
+    assert ended[-1].data["reason"] == "stopped"
+    assert model.calls[-1].says("are you there?")
+
+
 async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
     async with FakeModel([Stall()], "the next turn") as model:
         team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")

@@ -135,7 +135,7 @@ under Runtime below, so every effect is now performed. One real harness has met 
 | Team to session wiring: `Team` roles, limits and groups reaching `session.open` and `group.define` | tested | `tests/unit/runtime/test_opening.py` |
 | An agent with no goal, which holds no turn's reservation and waits | tested | `test_lifecycle.py`, `tests/unit/runtime/test_opening.py` |
 | A one-shot agent ending with its turn | tested | `test_lifecycle.py`, and on the `exec` driver in `tests/integration/test_independence.py` |
-| A resumed harness back on the agent as it stood | tested | `test_lifecycle.py`, `tests/unit/runtime/test_recovery.py` |
+| A resumed harness back on the agent as it stood, and one that took no turn started anew, as it wrote no session to reopen | tested | `test_lifecycle.py`, `tests/unit/runtime/test_recovery.py`, and an idle agent through an owner's stop and a resume on each real binary in `tests/integration/` |
 | `session.ending`: the reason, each agent and its last report, usage with labels, gaps | tested | `test_lifecycle.py`, `tests/unit/runtime/test_session.py` |
 
 ### Tool plane (`platoon_harness.tools`)

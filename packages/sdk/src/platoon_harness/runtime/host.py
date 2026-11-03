@@ -65,12 +65,11 @@ class DriverLink:
     none. `leaving` means its end is our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or
     `refused` says why it never will. `handing` is set to drop a handover under way."""
 
-    def __init__(self, agent: str, role: str, driver: Driver, info: DriverInfo, *, resumed: bool) -> None:
+    def __init__(self, agent: str, role: str, driver: Driver, info: DriverInfo) -> None:
         self.agent = agent
         self.role = role
         self.driver = driver
         self.info = info
-        self.resumed = resumed
         self.leaving = False
         self.ready = asyncio.Event()
         self.refused: str | None = None
@@ -238,7 +237,7 @@ class Host:
         """Bring a harness up on its own binding. A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role])
-        link = DriverLink(agent, role, driver, info, resumed=resume is not None)
+        link = DriverLink(agent, role, driver, info)
         self._links[agent] = link
         spec = self._spec(link, admission, goal, resume)
         link.redact = Redactor(secrets_of(spec))
@@ -472,7 +471,8 @@ class Host:
 
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
         """Commit what was declared with what was verified, so no driver can claim a level. A model that is not the one
-        pinned is refused here: the effective model must equal the requested one, and an unknown one stays unknown."""
+        pinned is refused here: the effective model must equal the requested one, and an unknown one stays unknown. A
+        harness for an agent that has started before comes back to it, whether it reopened a session or began anew."""
         pinned = self._team.roles[link.role].model
         if pinned is not None and ready.effective_model not in (None, pinned):
             link.refuse(f"it runs {ready.effective_model}, and its role pins {pinned}")
@@ -491,7 +491,8 @@ class Host:
             "verified": profile.model_dump(mode="json"),
             "levels": levels(info.capabilities, profile, None).model_dump(mode="json"),
             "assurance": "cooperative",
-            "resumed": link.resumed,
+            "resumed": self._kernel.query(self._kernel.runtime, "agent.status", {"agent": link.agent}).result["state"]
+            != "spawning",
         }
         await self._taken(link, ready, await self.insist("agent.start", args))
         link.ready.set()

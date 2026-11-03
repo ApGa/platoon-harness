@@ -340,7 +340,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `interrupt` or an `answer` that does not come back in a minute fails too, which leaves the turn open and the approval unanswered, and
   only a wall limit ends a harness that stays that way.
 - **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
-  `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. `agent.retell` then tells
+  `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. A harness that took no turn
+  has written no session to reopen, so it starts anew, with no `resume`. `agent.retell` then tells
   it what it cannot know, a goal that never began or a turn that was cut off (§7). With no native id, no
   `resume`, or a failure to resume, its agent is `lost` with the gap `crash_window`, through the normal ended transition, and that is
   the one agent's: a driver that raises anything, or a group that outlives `SIGKILL`, stops no other. A `reconcile` that does not answer

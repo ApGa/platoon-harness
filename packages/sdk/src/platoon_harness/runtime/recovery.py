@@ -44,12 +44,13 @@ async def _reap(host: Host, folder: Path, agent: dict[str, Any]) -> None:
 
 async def _resume(host: Host, agent: dict[str, Any]) -> None:
     """Bring a harness back on a fresh credential. It is told what it cannot know, a goal that never began or a turn
-    that was cut off, since a resumed harness waits to be told, and a resume is someone wanting the session to go on."""
+    that was cut off, since a resumed harness waits to be told, and a resume is someone wanting the session to go on.
+    A harness that took no turn has written no session to reopen, so it starts anew."""
     name, role, native = agent["name"], agent["role"], agent["native"]
     if native is None or not (await host.describe(role)).capabilities.resume:
         raise DriverError("its harness cannot resume")
     admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
-    await host.connect(name, role, admission, resume=native)
+    await host.connect(name, role, admission, resume=native if agent["began"] else None)
     await _must(host, "agent.retell", {"agent": name})
 
 

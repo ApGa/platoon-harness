@@ -569,11 +569,15 @@ class Records(Args):
 
 @op("agent.records", query=True, runtime=True)
 def agent_records(txn: Txn, a: Records) -> list[dict[str, Any]]:
-    """List every agent as the runtime keeps it, or one, with its open turn. Recovery and shutdown read these."""
+    """List every agent as the runtime keeps it, or one, with its open turn, and whether its harness has ever said
+    anything of a turn. Recovery and shutdown read these."""
     stamps = txn.view(Stamps)
     agents = txn.view(Agents)
     found = agents.listed() if a.agent is None else filter(None, [agents.get(a.agent)])
-    return [{**agent.model_dump(), "turn": stamps.turn(agent.name)} for agent in found]
+    return [
+        {**agent.model_dump(), "turn": stamps.turn(agent.name), "began": stamps.version_of(f"turn/{agent.name}") > 0}
+        for agent in found
+    ]
 
 
 @op("agent.status", on=lambda a: f"agent/{a.agent}", query=True, tool=True)

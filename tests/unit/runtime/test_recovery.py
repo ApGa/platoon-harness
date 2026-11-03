@@ -31,6 +31,7 @@ from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
+from ...integration.scripts import ran_before
 from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
@@ -211,10 +212,10 @@ async def test_a_launch_in_flight_ends_the_agent_with_a_gap(tmp_path):
 async def test_a_harness_that_said_ready_before_the_crash_has_its_launch_finished(tmp_path):
     class UpButSlow(ScriptedDriver):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:
-            found = await super().start(spec, report)
-            if spec.resume is None:
+            back = ran_before(spec)
+            await super().start(spec, report)
+            if not back:
                 await asyncio.Event().wait()
-            return found
 
     session = await Session.start(solo_with(UpButSlow), name="s", root=tmp_path)
     await in_state(session, "bob", "idle")
@@ -227,6 +228,52 @@ async def test_a_harness_that_said_ready_before_the_crash_has_its_launch_finishe
 
     assert "launch" in kinds
     assert len(resumed) == 1
+
+
+class Sessionless(ScriptedDriver):
+    """A harness with no session to reopen until it has taken a turn, as Claude Code, Codex and pi each are. It keeps
+    what it was asked to start in `starts`."""
+
+    starts: list[AgentSpec] = []
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        type(self).starts.append(spec)
+        if spec.resume is not None and not (spec.folder / f"{spec.resume}.json").exists():
+            raise DriverError(f"no session {spec.resume}")
+        await super().start(spec, report)
+
+
+def sessionless(*turns: Any) -> type[Sessionless]:
+    return type("Fresh", (Sessionless,), {"starts": [], "__init__": lambda self: Sessionless.__init__(self, turns)})
+
+
+async def test_an_agent_that_took_no_turn_starts_anew_and_takes_what_comes(tmp_path):
+    kind = sessionless([Say("heard")])
+    session = await Session.start(solo_with(kind), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "agent.resumed"), session)
+        await session.send("@bob", "are you there?")
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+
+    assert [spec.resume for spec in kind.starts] == [None, None]
+    assert items[-1].gist == "heard"
+
+
+async def test_an_agent_that_took_a_turn_reopens_its_session(tmp_path):
+    kind = sessionless([Say("one")])
+    session = await Session.start(solo_with(kind), name="s", root=tmp_path)
+    await session.send("@bob", "first")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "agent.resumed"), session)
+        await in_state(session, "bob", "idle")
+
+    assert [spec.resume for spec in kind.starts] == [None, "scripted-bob"]
 
 
 async def test_a_harness_that_cannot_resume_is_lost_with_a_gap_and_its_tasks_reopen(tmp_path):
@@ -257,8 +304,9 @@ async def test_a_harness_that_fails_to_resume_is_lost_and_says_why(tmp_path):
                 raise DriverError("its session file is gone")
             return await super().start(spec, report)
 
-    session = await Session.start(solo_with(Fussy), name="s", root=tmp_path)
-    await in_state(session, "bob", "idle")
+    session = await Session.start(solo_with(lambda: Fussy([[Say("done")]])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "turn.ended"), session)
     await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
@@ -286,10 +334,14 @@ async def test_model_access_that_went_away_loses_the_agent_and_says_so(tmp_path)
 async def test_an_agent_with_no_native_id_cannot_resume(tmp_path):
     class Nameless(ScriptedDriver):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:
-            await report(Ready(version="1"))
+            async def unnamed(said: Report) -> None:
+                await report(said.model_copy(update={"native": None}) if isinstance(said, Ready) else said)
 
-    session = await Session.start(solo_with(Nameless), name="s", root=tmp_path)
-    await in_state(session, "bob", "idle")
+            await super().start(spec, unnamed)
+
+    session = await Session.start(solo_with(lambda: Nameless([[Say("done")]])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "turn.ended"), session)
     await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
@@ -325,10 +377,14 @@ async def hanging_delivery(tmp_path: Path, make: Any, **role: Any) -> None:
 
 
 class Hangs(Knowing, Hanging):
-    """It hangs on a handover until it is resumed."""
+    """It hangs on a handover until it is back after a crash."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        self.back = ran_before(spec)
+        await super().start(spec, report)
 
     async def deliver(self, delivery: Delivery) -> None:
-        if self._spec.resume is None:
+        if not self.back:
             return await Hanging.deliver(self, delivery)
         return await ScriptedDriver.deliver(self, delivery)
 
@@ -543,10 +599,14 @@ async def test_a_crashed_session_rebuilds_to_what_it_held(tmp_path):
 
 
 class TakesItAndBeginsNothing(ScriptedDriver):
-    """A harness that accepts a handover and goes quiet, until it comes back from a resume."""
+    """A harness that accepts a handover and goes quiet, until it is back after a crash."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        self.back = ran_before(spec)
+        await super().start(spec, report)
 
     async def deliver(self, delivery: Delivery) -> None:
-        if self._spec.resume is not None:
+        if self.back:
             await super().deliver(delivery)
 
 
@@ -597,11 +657,15 @@ async def test_a_launch_cut_short_by_a_stop_is_not_recorded_as_finished(tmp_path
 
 
 class QuietAtFirst(ScriptedDriver):
-    """A harness that says ready and takes its time over its goal, as a real one does, until a crash has come."""
+    """A harness that says ready and takes its time over its goal, as a real one does, the first time it runs. A harness
+    that took no turn starts anew after a crash, so what it did before is in its folder."""
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        if spec.resume is not None:
+        first = spec.folder / "first"
+        if first.exists():
             return await super().start(spec, report)
+        first.parent.mkdir(parents=True, exist_ok=True)
+        first.touch()
         await report(Ready(native=f"n-{spec.agent}"))
 
 
@@ -1140,7 +1204,7 @@ async def test_a_stop_asked_during_recovery_ends_it(tmp_path, monkeypatch):
 
 class BrokenOnResume(ScriptedDriver):
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        if spec.resume is not None:
+        if ran_before(spec):
             raise RuntimeError("a bug in the driver")
         return await super().start(spec, report)
 
@@ -1190,7 +1254,7 @@ async def test_a_group_that_will_not_die_loses_its_own_agent_and_no_other(tmp_pa
 async def test_a_harness_that_exits_at_once_on_resume_costs_no_wait_and_says_why(tmp_path):
     class ExitsOnResume(ScriptedDriver):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:
-            if spec.resume is None:
+            if not ran_before(spec):
                 return await super().start(spec, report)
             await report(Exited(reason="no such session"))
 

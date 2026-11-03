@@ -8,9 +8,7 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session
-from platoon_harness.drivers import AgentSpec, Reporter
 from platoon_harness.primitives import CUT_OFF
-from platoon_harness.testing import ScriptedDriver
 
 from ..unit.runtime.support import boundaries, cut, harness, of_type, rebuilt_equals_live, until
 from .scripts import FIX_THE_TEST, WORK, Lead, Templated, manager_worker
@@ -18,17 +16,13 @@ from .scripts import FIX_THE_TEST, WORK, Lead, Templated, manager_worker
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
 
 
-def idling[Driver: ScriptedDriver](kind: type[Driver]) -> type[Driver]:
+def idling[Driver: Templated](kind: type[Driver]) -> type[Driver]:
     """A harness that runs its script fresh and once resumed only idles, so that no script can raise on a world cut
     short under it."""
 
     class Idling(kind):
-        async def start(self, spec: AgentSpec, report: Reporter) -> None:
-            self._resumed = spec.resume is not None
-            return await super().start(spec, report)
-
         async def _walk(self, steps: Any) -> str:
-            return "stopped" if self._resumed else await super()._walk(steps)
+            return "stopped" if self.back else await super()._walk(steps)
 
     return Idling
 

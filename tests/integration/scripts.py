@@ -40,8 +40,25 @@ HANG_IN_A_TURN = [Call("task_claim", {"queue": "tasks"}), Hang()]
 AFTER_A_RESUME = [Call("task_complete", {"queue": "tasks", "gist": "done after the crash"}), Call("agent_finish", {})]
 
 
+def ran_before(spec: AgentSpec) -> bool:
+    """Whether a harness has started in this agent's folder before, as one coming back after a crash has, whether it
+    reopened a session or began anew, having taken no turn. Ask once a start."""
+    mark = spec.folder / "ran"
+    before = mark.exists()
+    spec.folder.mkdir(parents=True, exist_ok=True)
+    mark.touch()
+    return before
+
+
 class Templated(ScriptedDriver):
-    """A scripted harness whose tool arguments may say `{agent}`, since one role's agents share a script."""
+    """A scripted harness whose tool arguments may say `{agent}`, since one role's agents share a script. `back` says
+    it has started in this agent's folder before."""
+
+    back = False
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        self.back = ran_before(spec)
+        await super().start(spec, report)
 
     async def _call(self, tool: str, arguments: Any) -> Any:
         return await super()._call(tool, {key: self._filled(value) for key, value in arguments.items()})
@@ -55,9 +72,9 @@ class Lead(Templated):
     resumed it has done its first turn, as a harness with a session has."""
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        if spec.resume is not None:
+        await super().start(spec, report)
+        if self.back:
             self._turns = iter(())
-        return await super().start(spec, report)
 
     async def _walk(self, steps: Any) -> str:
         if steps:
@@ -68,23 +85,23 @@ class Lead(Templated):
 
 
 class Resumable(Templated):
-    """It runs one script fresh, and another once resumed."""
+    """It runs one script fresh, and another once back."""
 
     def __init__(self, fresh: Any, resumed: Any) -> None:
         super().__init__(fresh)
         self._resumed = resumed
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        if spec.resume is not None:
+        await super().start(spec, report)
+        if self.back:
             self._turns = iter(self._resumed)
-        return await super().start(spec, report)
 
 
 class Stuck(Resumable):
-    """Its first handover never comes back. Once resumed it behaves."""
+    """Its first handover never comes back. Once back it behaves."""
 
     async def deliver(self, delivery: Delivery) -> None:
-        if self._spec.resume is None:
+        if not self.back:
             await asyncio.Event().wait()
         return await super().deliver(delivery)
 
