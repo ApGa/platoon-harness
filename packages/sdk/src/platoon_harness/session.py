@@ -319,8 +319,9 @@ class Session:
     async def spawn(
         self, name: str, role: str, goal: str = "", *, body: str | bytes | None = None, stays: bool | None = None
     ) -> dict[str, Any]:
-        """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it. `stays` keeps
-        it after its task for more, and left out, its role decides."""
+        """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it. `stays` says
+        whether it is told to stay after its task for the next message, rather than to finish: left out, its role
+        decides, else it does not."""
         return await self._do(
             "agent.spawn", name=name, child_role=role, goal=goal, body=await self._stored(body), stays=stays
         )

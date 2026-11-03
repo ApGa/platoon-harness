@@ -12,7 +12,8 @@ from .common import BodyRef, Injection, Name, Policy
 
 class Role(Args):
     """What a spawn reads from a role. `approvals` is the policy for this role's requests. `stays` is the role's own
-    word on whether its agents stay, and `persistent` whether its harness can, as its driver said at open."""
+    word on whether its agents are told to stay for the next message, and `persistent` whether its harness can, as its
+    driver said at open."""
 
     harness: JsonValue = None
     model: str | None = None

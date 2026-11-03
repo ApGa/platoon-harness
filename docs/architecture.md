@@ -669,12 +669,14 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   is a grant on `role/<name>`. Spawn adds the child's principal in its own transaction, so its relations hold from that commit
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one. A spawn past `max_children` is refused, saying that ending a child makes room.
-- **Agents that stay.** `stays` keeps an agent after its task for the next message. It is resolved once, at the spawn: what
-  `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness that is
-  not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it `unsupported`, from
-  what each role's driver said when the session opened. The result of a spawn that stays says so, that its answers come back at the end
-  of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has not ended is refused `invalid`,
-  naming `from` for its answers, since that end comes only when someone ends it. See [ADR 0023](adr/0023-agents-that-stay.md).
+- **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. The
+  runtime keeps every agent alike, so it changes only what the agent is told, a spawn's result, and who may wait on its end. It is
+  resolved once, at the spawn: what `agent.spawn` said, else what its role says, else true for an agent the session started and false
+  for one spawned. A harness that is not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses
+  `stays` for it `unsupported`, from what each role's driver said when the session opened. The result of a spawn that stays says so,
+  that its answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has
+  not ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
+  [ADR 0023](adr/0023-agents-that-stay.md).
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
@@ -1053,8 +1055,9 @@ be reached, the preamble names the roles an agent may start, since a model guess
 to end too, by whether the agent stays: one that does not is told to make `agent.finish` its last call, or a join on it never holds;
 one the session started is told to stay unless told to finish, since a human talks to it over many turns; and a child that stays is
 told to answer by ending its turn, which sends what it said last to its parent and leaves it there for the next message, and to
-finish only when told to. A child that waited on its parent instead would keep its answer from it, as a Codex model did when told it
-stayed for the next message. That text is in every request
+finish only when told to. It teaches `wait` as how to wait for something named, and never as what to do with nothing to do: a child
+that waited on its parent instead would keep its answer from it, as a Codex model did when told it stayed for the next message, and
+Codex agents opened turns with a `wait` that named nothing. That text is in every request
 of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in

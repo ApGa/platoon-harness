@@ -62,6 +62,9 @@
 - What the preamble says of ending follows whether an agent stays, and a child that stays is told to answer by ending its turn, which
   sends its last words to its parent and leaves it there for the next message. Told it stayed for the next message, a Codex child held a
   `wait` for it instead of answering.
+- The preamble teaches `wait` as how to wait for something named, where it used to say to call it with nothing to do until something
+  changed, which beside "answer by ending your turn" told a child that had answered to park. `stays` is said one way everywhere: an
+  agent told to stay after its task for the next message.
 - An agent's instructions are the preamble and then the role's words, so a role has the last word. A role that told a Codex agent
   never to finish lost to the preamble in run 21.
 - A child that ends with its parent ends `retired` unless a turn of its was cut off, open or on its way, which still ends it

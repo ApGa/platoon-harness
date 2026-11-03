@@ -224,9 +224,10 @@ async def test_the_preamble_names_the_roles_an_agent_may_start(kernel, server, l
     assert "start agents" not in preamble(kernel, worker[0])
 
 
-async def test_the_preamble_teaches_parking(kernel, lead):
-    assert "call `wait` and end your turn" in preamble(kernel, lead[0])
-    assert "call `ph wait` and end your turn" in preamble(kernel, lead[0], shell_name)
+async def test_the_preamble_teaches_parking_as_waiting_for_something_named(kernel, lead):
+    assert "call `wait` naming it and end your turn" in preamble(kernel, lead[0])
+    assert "call `ph wait` naming it and end your turn" in preamble(kernel, lead[0], shell_name)
+    assert "nothing to do" not in preamble(kernel, lead[0])
 
 
 async def test_the_preamble_tells_an_agent_how_to_end_by_whether_it_stays(kernel, server, lead, worker):

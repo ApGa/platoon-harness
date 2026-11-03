@@ -14,7 +14,10 @@ _NAMESPACE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
 _NO_NEXT_STEP = "Carry on without it, and say so."
-_PARKING = "With nothing to do until something changes, call `wait` and end your turn: the runtime starts the next."
+_PARKING = (
+    "To wait for something before you go on, call `wait` naming it and end your turn: the runtime starts the next when "
+    "it holds."
+)
 _FINISHING = (
     "When your goal is done, make `agent.finish` your last call, with your report: a turn that only ends leaves you "
     "idle, and whoever waits on you still waiting."

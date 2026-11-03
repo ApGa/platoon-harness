@@ -63,9 +63,9 @@ _NOTICE = (
     "history shows, and none was repeated. Check before you repeat anything, then carry on."
 )
 _STAYS = (
-    "It stays when its task is done, and what it says at the end of each of its turns comes back to you. Message it "
-    "for more. To end it, tell it to finish. `agent.retire` ends it when it is idle. `agent.cancel` ends it at any "
-    "time."
+    "It stays after its task for the next message, and what it says at the end of each of its turns comes back to you. "
+    "Message it for more. To end it, tell it to finish. `agent.retire` ends it when it is idle. `agent.cancel` ends it "
+    "at any time."
 )
 
 
@@ -219,7 +219,8 @@ class Spawn(Args):
     goal: Annotated[Gist, Field(description="What it should do, at most 280 characters.")] = ""
     body: Body = None
     stays: Annotated[
-        bool | None, Field(description="Whether it stays after its task for more. Left out, its role decides.")
+        bool | None,
+        Field(description="Whether it stays after its task for the next message. Left out, its role says, else not."),
     ] = None
 
 
