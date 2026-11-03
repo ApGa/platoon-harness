@@ -61,6 +61,8 @@
 
 ### Fixed
 
+- A budget that an unmeasured turn left unable to hold said so and no more. Its `unavailable` refusal names the two ways on, a
+  `fallback = "turns"` with a `turns` limit or no limit in that unit, and says no higher limit helps.
 - A Codex interrupt that came while a `turn/start` was on its way, which the harness then refused, stayed set and cut the next turn.
   A refused handover with no other turn on its way clears it.
 - A role a written grant lets another spawn was not counted as spawnable, so a plan login with one such role was not refused, and the

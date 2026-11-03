@@ -320,6 +320,20 @@ async def test_over_budget_is_policy_and_unavailable_is_infrastructure(kernel):
     assert (row["spent"], row["label"], row["unmeasured"]) == (1.0, "unavailable", 1)
 
 
+async def test_a_budget_that_cannot_hold_says_how_to_go_on(kernel):
+    await spawn(kernel, "bob")
+    await set_budget(kernel, limits={"tokens": 1000})
+    await wake(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+
+    assert await wake(kernel, "bob") is None
+
+    detail = of_type(kernel, "wake.refused")[-1].data["detail"]
+    assert "however high its limit" in detail
+    assert '`fallback = "turns"` and a `turns` limit' in detail and "remove its tokens limit" in detail
+
+
 async def test_what_was_measured_stands_as_a_floor_when_a_call_of_the_turn_was_not(kernel):
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"tokens": 2_000_000, "usd": 10.0}, estimate={"tokens": 100, "usd": 1.0})

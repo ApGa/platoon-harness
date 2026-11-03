@@ -207,7 +207,11 @@ class Budgets(View):
         if unmeasured and found.fallback == "turns":
             return
         if unmeasured:
-            raise Refused("unavailable", f"{unmeasured} turns of {unit} went unmeasured, so {scope} cannot hold")
+            raise Refused(
+                "unavailable",
+                f"{unmeasured} turns of {unit} went unmeasured, so {scope} cannot hold, however high its limit. "
+                f'Give it `fallback = "turns"` and a `turns` limit, or remove its {unit} limit',
+            )
         held = self.held(scope, unit)
         if spent >= limit or spent + held + want > limit:
             raise Refused("over_budget", {"scope": scope, "unit": unit, "limit": limit, "spent": spent, "held": held})

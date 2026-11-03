@@ -741,7 +741,8 @@ until it does. Measurements carry a label: `provider`, `estimated`, `lower_bound
 `turns` and `agents`, is `counted`, which no driver can claim. A limit in a unit a role cannot measure
 is refused by `team check`, or falls back to `turns` when that budget also limits `turns`; it never silently stops enforcing. A turn nobody
 measured whole, a lost one among them, is charged its estimate, or what was measured if that is more, and counts as unmeasured, so the
-next reservation in that unit is refused `unavailable`, and usage shows that unit with no amount: unknown is not zero. Budget exhaustion means spent, never merely reserved. Native
+next reservation in that unit is refused `unavailable`, and usage shows that unit with no amount: unknown is not zero. No limit is high
+enough for an unknown amount, so the refusal names the two ways on: `fallback = "turns"` with a `turns` limit, or no limit in that unit. Budget exhaustion means spent, never merely reserved. Native
 subagents spend outside admission, which is a labelled gap. `over_budget` is policy; `unavailable` is infrastructure.
 
 ## 8. Topology
