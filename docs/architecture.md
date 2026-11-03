@@ -873,7 +873,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `native_children`** lets its harness start agents of its own, beside ours. Left out, it is false: such an agent is no agent
   of ours, since its calls reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's
   token. A driver turns them off for one launch by the harness's own setting, and what a harness keeps out of reach of that is in
-  [compatibility.md](compatibility.md). Its approvals still come to the runtime, under its parent's role.
+  [compatibility.md](compatibility.md). Its approvals still come to the runtime, under its parent's role. See
+  [ADR 0024](adr/0024-a-harness-s-own-agents-are-off.md).
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so the preamble
   lists them at launch and `peers` as they stand; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
@@ -1091,7 +1092,8 @@ to end can leave its parent waiting for ever. The role's own `instructions` come
 shows what every agent was told, and on each real binary a test finds that text whole, once, in the first request. The harness's own
 system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude Code's settings and `CLAUDE.md`
 files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role would be told, on a session of
-its own in a folder thrown away after, which starts no harness. Tool descriptions, refusals and handovers stay fixed.
+its own in a folder thrown away after, which starts no harness. Tool descriptions, refusals and handovers stay fixed. See
+[ADR 0025](adr/0025-what-an-agent-is-told-is-a-template.md).
 
 ## 11. Provenance
 

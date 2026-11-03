@@ -30,6 +30,8 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0021](0021-what-a-harness-leaves-behind.md) | What a harness leaves behind | A harness's own `TMPDIR` marks what it started, so `stop` and `reap` end it whichever group it left for |
 | [0022](0022-what-a-harness-took-is-the-runtime-s-again.md) | What a harness took is the runtime's again | An offer taken and never landed is queued again when its turn stops short or its harness comes back, and no driver sends it again |
 | [0023](0023-agents-that-stay.md) | Agents that stay | `stays` keeps an agent for follow-ups, a report wakes its parent once for each thing the parent asked, and an idle child ends `retired` |
+| [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | `native_children` on a role, false unless said, and each driver turns them off by the harness's own setting for one launch |
+| [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | `preamble` on a team or a role, with slots the runtime fills, the default saying what it said before, and the text journaled |
 
 ## Adding or changing one
 
