@@ -5,6 +5,7 @@ Budget: at most 219 model calls in all, each test stating its own, all `claude-h
 Every session has a `Budget`, so that a runaway stops itself.
 """
 
+import asyncio
 import os
 import shutil
 import time
@@ -23,14 +24,15 @@ from .support import (
     CODEX,
     EFFORT,
     Recording,
+    gone,
     leaks,
-    polled,
     running_in,
     seeded,
     seen,
     spent,
     tests_pass,
     tools_called,
+    touched,
 )
 
 pytestmark = [
@@ -264,19 +266,23 @@ async def test_an_interrupt_stops_a_native_child(tmp_path):
     work = seeded(tmp_path / "work")
     team = Team(roles={"ada": claude()}, budget=LIMIT)
 
-    async with Session.start(team, name="cut", root=tmp_path / "root", cwd=work, plan_login=True) as session:
+    async with (
+        Session.start(team, name="cut", root=tmp_path / "root", cwd=work, plan_login=True) as session,
+        touched(work / "begun.txt") as begun,
+    ):
         await session.send(
             "@ada",
             "Use your Agent tool once, with subagent_type general-purpose, to have a subagent run `touch begun.txt && "
             "sleep 12 && touch child.txt` in the shell. Do nothing else yourself, then reply: done",
         )
-        await polled((work / "begun.txt").exists)
+        await begun.read()
         await session.interrupt("@ada")
         ended = (await seen(session, "turn.ended"))[0]
         record = Record.read(session.folder / "agents" / "ada")
         assert record is not None
         interrupted = time.monotonic()
-        await polled(lambda: not {pid for pid in running_in(work) if pid != record.pid}, within=10.0)
+        async with asyncio.timeout(10.0):
+            await gone(*(pid for pid in running_in(work) if pid != record.pid))
         print(f"the tool had gone {time.monotonic() - interrupted:.2f} s after the turn ended")
         used = await spent(session)
         await session.send("@ada", "Say which files you can see in this directory, by `ls`.")

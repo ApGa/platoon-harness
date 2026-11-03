@@ -2,10 +2,11 @@
 `PLATOON_HARNESS_LIVE=1` to run these, and say what ran.
 
 Budget: at most 100 model calls in all, each test stating its own, all `claude-haiku-5-5` or `gpt-6-luna` at low effort.
-Every session has a `Budget`, so that a runaway stops itself. What a process outside the session did only a look can
-tell, so these look, and each look is bounded.
+Every session has a `Budget`, so that a runaway stops itself. A process outside the session is waited for by its pidfd,
+and each wait is bounded.
 """
 
+import asyncio
 import os
 import shutil
 import signal
@@ -24,15 +25,15 @@ from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
 from platoon_harness.team import Budget
 
 from ..unit.drivers.support import Heard, make_spec
-from ..unit.runtime.support import in_state, journal, of_type
+from ..unit.runtime.support import in_state, journal, of_type, until
 from .support import (
     CLAUDE,
     CODEX,
     EFFORT,
     alive,
     end_what_is_left,
+    gone,
     leaks,
-    polled,
     running_in,
     seeded,
     seen,
@@ -76,18 +77,19 @@ def log_of(work: Path) -> list[str]:
     return path.read_text().split() if path.exists() else []
 
 
-async def started(session: Session, work: Path) -> int:
-    """Ask for the command, and return the harness that runs it, once the command is under way."""
+async def started(session: Session) -> int:
+    """Ask for the command, and return the harness that runs it, once its harness says the command is under way."""
     await in_state(session, "ada", "idle")
     await session.send("@ada", ASKED)
-    await polled(lambda: log_of(work))
+    await until(lambda: of_type(session, "item.recorded"), session, commands)
     return harness_of(session)
 
 
 def commands(events: list) -> int:
-    """How many times a model set the command going, as its harness reported."""
+    """How many times a model set the whole command going, as its harness reported. A part of it run again is a model
+    repairing what it found, which the notice allows."""
     items = [event for event in events if event.type == "item.recorded" and event.data["kind"] == "tool"]
-    return len([event for event in items if event.data["phase"] == "started" and "echo start" in event.gist])
+    return len([event for event in items if event.data["phase"] == "started" and COMMAND in event.gist])
 
 
 def words_of(events: list) -> list[str]:
@@ -105,21 +107,22 @@ async def test_a_killed_runtime_during_a_shell_tool_is_resumed_and_told(harness,
     team = Team(roles={"ada": ROLES[harness]}, budget=LIMIT)
     guest = await Session.start(team, name="crash", root=root, cwd=work, detach=True, plan_login=True)
     try:
-        pid = await started(guest, work)
+        pid = await started(guest)
         secrets = [token_of(pid), Secret((guest.folder / OWNER_TOKEN).read_text())]
         secrets.append(Secret((guest.folder / VIEW_TOKEN).read_text()))
         running = read_running(guest.folder)
         assert running is not None
         os.kill(running.pid, signal.SIGKILL)
         killed = time.monotonic()
-        await polled(lambda: not alive(running.pid))
+        await gone(running.pid)
         tools = [other for other in running_in(work) if other != pid]
         print(f"{harness}: at the kill: harness alive {alive(pid)}, {len(tools)} tool processes")
         if wait:
-            await polled(lambda: not alive(pid), within=40.0)
-            print(f"{harness}: the harness went {time.monotonic() - killed:.1f} s after the runtime")
-            await polled(lambda: not running_in(work), within=30.0)
-            print(f"{harness}: the tool went {time.monotonic() - killed:.1f} s after the runtime: {log_of(work)}")
+            async with asyncio.timeout(70.0):
+                await gone(pid)
+                print(f"{harness}: the harness went {time.monotonic() - killed:.1f} s after the runtime")
+                await gone(*running_in(work))
+                print(f"{harness}: the tool went {time.monotonic() - killed:.1f} s after the runtime: {log_of(work)}")
 
         async with Session.resume("crash", root=root) as session:
             print(f"{harness}: resumed {time.monotonic() - killed:.1f} s after the kill, {alive(pid)=}")
@@ -153,7 +156,7 @@ async def test_an_owner_s_stop_during_a_shell_tool_is_told_on_resume(harness, tm
 
     try:
         async with Session.start(team, name="stop", root=root, cwd=work, plan_login=True) as session:
-            await started(session, work)
+            await started(session)
         print(f"{harness}: after the stop: {running_in(work)}, log {log_of(work)}")
 
         async with Session.resume("stop", root=root) as session:
@@ -208,7 +211,7 @@ async def test_a_harness_killed_alone_ends_its_agent_and_a_native_resume_cures_i
     try:
         async with Session.start(team, name="alone", root=root, cwd=work, plan_login=True) as session:
             if when == "during-a-tool":
-                pid = await started(session, work)
+                pid = await started(session)
             else:
                 await in_state(session, "ada", "idle")
                 await session.send("@ada", "Reply with the single word ready, and do not finish.")

@@ -1,12 +1,12 @@
 """What the team tests share: a throwaway repository with a seeded bug, and what a journal says was spent."""
 
 import asyncio
+import contextlib
 import os
 import signal
 import subprocess
-import time
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
@@ -89,15 +89,37 @@ async def seen(session: Session, kind: str, *, count: int = 1, within: float = 7
     raise AssertionError(f"the session ended before {count} {kind}")
 
 
-async def polled(holds: Callable[[], Any], *, within: float = 90.0) -> Any:
-    """Look until an outside fact holds. No journal event says what a process outside the session did, so only a look
-    can tell, and it is bounded."""
-    deadline = time.monotonic() + within
-    while time.monotonic() < deadline:
-        if found := holds():
-            return found
-        await asyncio.sleep(0.05)
-    raise AssertionError(f"this did not hold within {within} s")
+async def gone(*pids: int) -> None:
+    """Wait for processes outside the session to end. A pidfd can be read once its process has, so nothing looks."""
+    loop = asyncio.get_running_loop()
+    held = []
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            held.append(os.pidfd_open(pid))
+    ends = [loop.create_future() for _ in held]
+    for pidfd, ended in zip(held, ends, strict=True):
+        loop.add_reader(pidfd, lambda ended=ended: ended.done() or ended.set_result(None))
+    try:
+        await asyncio.gather(*ends)
+    finally:
+        for pidfd in held:
+            loop.remove_reader(pidfd)
+            os.close(pidfd)
+
+
+@contextlib.asynccontextmanager
+async def touched(path: Path) -> AsyncGenerator[asyncio.StreamReader]:
+    """A named pipe at `path`, whose reader ends once a command has opened it and let go, as `touch` does, so a test
+    can wait for a command it cannot see run."""
+    os.mkfifo(path)
+    reader = asyncio.StreamReader()
+    pipe = os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb", 0)
+    protocol = asyncio.StreamReaderProtocol(reader)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, pipe)
+    try:
+        yield reader
+    finally:
+        transport.close()
 
 
 def alive(pid: int) -> bool:
