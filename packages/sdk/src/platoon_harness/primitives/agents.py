@@ -19,7 +19,8 @@ class Agent(BaseModel, frozen=True):
     harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing`
     says it called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its
     own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers
-    failed in a row, and the next waits until `retry_at`. `instructions` is the body of what its harness was told last,
+    failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last interrupt, and a handover
+    asked for before it is no failure of its harness's. `instructions` is the body of what its harness was told last,
     or None for nothing."""
 
     name: str
@@ -53,6 +54,7 @@ class Agent(BaseModel, frozen=True):
     failure: str | None
     failures: int
     retry_at: float
+    quieted: int
     levels: dict[str, Any]
     instructions: str | None
 
@@ -73,7 +75,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 6
+    version = 7
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -107,6 +109,7 @@ class Agents(View):
         failure TEXT,
         failures INTEGER NOT NULL DEFAULT 0,
         retry_at REAL NOT NULL DEFAULT 0,
+        quieted INTEGER NOT NULL DEFAULT 0,
         levels TEXT NOT NULL DEFAULT '{}',
         instructions TEXT
     ) WITHOUT ROWID, STRICT;
@@ -214,14 +217,22 @@ class Agents(View):
 
     @fold("effect.failed")
     def failed(self, event: Event) -> None:
-        """A failed handover gives back its wake, and the next waits twice as long as the last."""
+        """A failed handover gives back its wake, and the next waits twice as long as the last. One an interrupt cut,
+        asked for before it, is no failure of its harness's, so what comes after wakes as usual."""
         self.db.execute("UPDATE v_agents SET failure = ? WHERE name = ?", (event.data["error"], event.agent))
         if event.data["kind"] == "deliver":
             self._move(event, "idle", "waking")
             self.db.execute(
-                "UPDATE v_agents SET failures = failures + 1, retry_at = ? + (1 << failures) WHERE name = ?",
-                (event.wall_time, event.agent),
+                """
+                UPDATE v_agents SET failures = failures + 1, retry_at = ? + (1 << failures)
+                WHERE name = ? AND quieted < ?
+                """,
+                (event.wall_time, event.agent, event.data["id"]),
             )
+
+    @fold("wake.quieted")
+    def quiet(self, event: Event) -> None:
+        self.db.execute("UPDATE v_agents SET quieted = ? WHERE name = ?", (event.seq, event.agent))
 
     @fold("agent.parked")
     def parked(self, event: Event) -> None:

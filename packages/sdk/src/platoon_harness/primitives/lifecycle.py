@@ -366,13 +366,16 @@ def conclude(txn: Txn, a: Named) -> None:
 def interrupt(txn: Txn, a: Named) -> dict[str, Any]:
     """Stop an agent's turn at the boundary its harness can, or the turn it is on its way to. What was waiting for it
     then wakes nothing and stays unread for its next turn, and what comes after wakes it as usual. The agent lives on.
-    Refused `conflict` when it is neither in a turn nor on its way to one: there is nothing to stop. `not_permitted`
-    when it is not below you."""
+    Refused `conflict` when it is neither in a turn nor on its way to one, as there is nothing to stop, and before its
+    first turn begins, which no harness can stop. `not_permitted` when it is not below you."""
     agent = _live(txn, a.agent)
-    pending = work(txn)
-    under_way = txn.view(Stamps).turn(agent.name) is not None or agent.state == "waking"
-    if not under_way and agent.name not in (*pending.agents, *pending.later):
+    if agent.name not in _at_work(txn):
         raise Refused("conflict", f"{agent.name} is neither in a turn nor on its way to one")
+    under_way = txn.view(Stamps).turn(agent.name) is not None or agent.state == "waking"
+    if not under_way and (agent.unbegun or agent.state == "spawning"):
+        raise Refused(
+            "conflict", f"{agent.name} has not begun its first turn, which no harness can stop before it does"
+        )
     txn.emit("wake.quieted", f"wake/{agent.name}", gist=f"wake of {agent.name} quieted", agent=agent.name)
     close_holding(txn, agent.id)
     if not under_way:

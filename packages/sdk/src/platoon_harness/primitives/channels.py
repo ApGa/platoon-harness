@@ -31,8 +31,8 @@ def channel_grants(kind: str, name: str, *, write: bool) -> list[tuple[str, str]
 
 
 class Channel(BaseModel, frozen=True):
-    """Settings on the reader's side, so an agent cannot buy a wake: only a person's message to an agent steers. A
-    queue's or board's objects sit under `stream`."""
+    """Settings on the reader's side, so an agent cannot buy a wake, and a person's message to an agent steers whatever
+    they say. A queue's or board's objects sit under `stream`."""
 
     stream: str
     kind: Literal["inbox", "topic", "queue", "board"]

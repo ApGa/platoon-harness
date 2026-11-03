@@ -2,7 +2,7 @@
 
 from typing import Any, Literal, NamedTuple
 
-from platoon_harness.kernel import Args, Daemon, Kernel, Refused, Txn, first, op
+from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, first, op
 
 from .agents import Agent, Agents
 from .budgets import reserve
@@ -53,18 +53,31 @@ def _stranded(txn: Txn) -> list[tuple[str, str]]:
     return found
 
 
+def _interrupting(txn: Txn) -> set[str | None]:
+    """Agents an interrupt is under way for."""
+    effects = txn.view(Effects)
+    return {
+        effect.agent
+        for state in ("requested", "started")
+        for effect in effects.in_state(state)
+        if effect.kind == "interrupt"
+    }
+
+
 def work(txn: Txn) -> Work:
-    """The courier's input, and what `settled` asks about. A wait stays open while its agent's turn runs."""
+    """The courier's input, and what `settled` asks about. A wait stays open while its agent's turn runs, and nothing is
+    handed to an agent while an interrupt of it is under way, as it could land in the turn that interrupt cuts."""
     stranded = _stranded(txn)
     if not txn.view(SessionRecord).accepting():
         return Work([], [], stranded, [], None)
     agents = txn.view(Agents)
+    interrupting = _interrupting(txn)
     ready: list[str] = []
     later: list[str] = []
     dues: list[float] = []
     for reader, due, steer in txn.view(Deliveries).waking():
         agent = agents.get(reader)
-        if agent is None or agent.failures >= _HANDOVERS:
+        if agent is None or agent.failures >= _HANDOVERS or reader in interrupting:
             continue
         if not (agent.state in ("idle", "waiting") or (agent.state == "running" and steer and _steerable(agent))):
             continue

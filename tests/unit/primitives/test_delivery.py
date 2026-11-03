@@ -611,6 +611,7 @@ async def test_what_is_sent_after_an_interrupt_wakes_as_usual_and_brings_what_wa
     await start_turn(kernel, "bob")
     await send(kernel, carol, "@bob", "while you work")
     result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+    await settle_effects(kernel, "bob")
     await end_turn(kernel, "bob", "interrupted")
 
     await send(kernel, carol, "@bob", "after the interrupt")
@@ -631,12 +632,12 @@ async def test_an_interrupt_of_an_agent_on_its_way_to_a_turn_cancels_that_wake(k
     assert ready(kernel) == []
 
 
-async def test_an_interrupt_during_a_handover_fails_it_and_nothing_wakes_again(kernel, interrupter):
-    carol = await spawn(kernel, "carol")
-    await send(kernel, carol, "@bob", "wake up")
+async def interrupted_handover(kernel, interrupter: Principal, sender: Principal, gist: str) -> dict:
+    """Send to bob, hand it over, and interrupt bob during the handover, which the host fails as interrupted before it
+    performs the interrupt."""
+    await send(kernel, sender, "@bob", gist)
     await offer(kernel, "bob")
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["state"] == "waking"
-
     interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
     deliver = next(
         row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["kind"] == "deliver"
@@ -644,10 +645,52 @@ async def test_an_interrupt_during_a_handover_fails_it_and_nothing_wakes_again(k
     attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": deliver["id"]}))
     failed = {"id": deliver["id"], "attempt": attempt, "error": "it was interrupted"}
     result_of(await kernel.submit(kernel.runtime, "effect.fail", failed))
+    await settle_effects(kernel, "bob")
+    return interrupted
+
+
+async def test_an_interrupt_during_a_handover_fails_it_and_nothing_wakes_again(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+
+    interrupted = await interrupted_handover(kernel, interrupter, carol, "wake up")
 
     assert interrupted["effect"] is not None
     assert ready(kernel) == []
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["state"] == "idle"
+
+
+async def test_what_comes_after_an_interrupted_handover_wakes_as_usual(kernel, interrupter):
+    """A handover an interrupt cut is no failure of its harness's, so it puts off nothing that comes after."""
+    carol = await spawn(kernel, "carol")
+    await interrupted_handover(kernel, interrupter, carol, "wake up")
+
+    await send(kernel, carol, "@bob", "after the interrupt")
+
+    assert ready(kernel) == ["bob"]
+
+
+async def test_nothing_is_handed_over_while_an_interrupt_is_under_way(kernel, interrupter):
+    """A harness can take a handover the interrupt failed and begin its turn all the same, which the interrupt then
+    cuts, so what comes after waits until the interrupt has been performed, and lands in the turn after."""
+    carol = await spawn(kernel, "carol")
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+
+    await send(kernel, carol, "@bob", "after the interrupt")
+    waiting = ready(kernel)
+    await settle_effects(kernel, "bob")
+    await end_turn(kernel, "bob", "interrupted")
+
+    assert (waiting, ready(kernel)) == ([], ["bob"])
+
+
+async def test_handovers_an_interrupt_cut_never_lose_their_agent(kernel, interrupter):
+    carol = await spawn(kernel, "carol")
+
+    for number in range(6):
+        await interrupted_handover(kernel, interrupter, carol, f"message {number}")
+
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["stranded"] == []
 
 
 async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, interrupter):
@@ -667,6 +710,56 @@ async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, i
         "stranded": [],
         "due": None,
     }
+
+
+async def test_an_interrupt_of_a_parked_agent_whose_wait_holds_closes_it_and_nothing_wakes(kernel, interrupter):
+    """A wait that holds is the turn its agent is on its way to, so an interrupt reaches it between the two."""
+    carol = await spawn(kernel, "carol")
+    await channel(kernel, "news", delivery="pull")
+    await start_turn(kernel, "bob")
+    placed = result_of(await kernel.submit(Principal(id="agent:bob"), "wait", {"channels": ["#news"]}))
+    await end_turn(kernel, "bob")
+    await send(kernel, carol, "#news", "here it is")
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]
+    assert ready(kernel) == []
+
+    interrupted = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "bob"}))
+
+    assert interrupted == {"effect": None}
+    assert result_of(kernel.query(kernel.runtime, "wait.progress", {"id": placed["id"]}))["state"] == "cancelled"
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == []
+    assert ready(kernel) == []
+
+
+async def test_an_interrupt_before_an_agent_s_first_turn_begins_is_refused_saying_so(kernel, interrupter):
+    """A spawn whose goal turn has not begun is at work, as `agent.retire` says too, and no harness can stop a turn
+    before it begins. Once it has, the interrupt stops it."""
+    await spawn(kernel, "dave", by=Principal(id="agent:alice"))
+
+    retired = await kernel.submit(interrupter, "agent.retire", {"agent": "dave"})
+    early = await kernel.submit(interrupter, "agent.interrupt", {"agent": "dave"})
+    await start_turn(kernel, "dave")
+    begun = result_of(await kernel.submit(interrupter, "agent.interrupt", {"agent": "dave"}))
+
+    assert refusal(retired).code == refusal(early).code == "conflict"
+    assert "has not begun its first turn" in refusal(early).detail
+    assert begun["effect"] is not None
+
+
+async def test_nothing_withdraws_a_sent_message(kernel, ada):
+    """A person sends a correction instead: no op takes an entry back, and an interrupt leaves what it quieted to be
+    read, before what came after."""
+    await spawn(kernel, "bob", goal="")
+    await start_turn(kernel, "bob")
+    await send(kernel, ada, "@bob", "use the old API")
+    result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))
+    await end_turn(kernel, "bob", "interrupted")
+
+    await send(kernel, ada, "@bob", "no: use the new API")
+
+    assert {name for name in kernel.ops if name.startswith("message.")} == {"message.send", "message.read"}
+    entries = result_of(await kernel.submit(Principal(id="agent:bob"), "message.read", {}))["entries"]
+    assert [entry["gist"] for entry in entries] == ["use the old API", "no: use the new API"]
 
 
 async def test_a_wait_that_holds_only_after_an_interrupt_wakes_as_usual(kernel, interrupter):
