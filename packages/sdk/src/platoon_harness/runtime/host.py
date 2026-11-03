@@ -34,7 +34,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.env import Held, Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel, Outcome, first, hash_token, tool_name
+from platoon_harness.kernel import Effect, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Team
@@ -91,7 +91,15 @@ class Host:
     by their priority, each in its own task, so Esc works while a delivery hangs."""
 
     def __init__(
-        self, kernel: Kernel, tools: ToolServer, team: Team, authority: Authority, folder: Path, cwd: Path
+        self,
+        kernel: Kernel,
+        tools: ToolServer,
+        team: Team,
+        authority: Authority,
+        folder: Path,
+        cwd: Path,
+        *,
+        plan_login: bool,
     ) -> None:
         self._kernel = kernel
         self._tools = tools
@@ -99,6 +107,7 @@ class Host:
         self._authority = authority
         self._folder = folder
         self._cwd = cwd
+        self._plan_login = plan_login
         self._links: dict[str, DriverLink] = {}
         self._acting: dict[int, asyncio.Task[None]] = {}
         self._admitted: dict[str, Admission] = {}
@@ -226,6 +235,11 @@ class Host:
     async def _launch(self, effect: Effect) -> None:
         data = effect.data
         agent, role = data["agent"], data["role"]
+        if not self._plan_login and await self._on_a_plan_login(role) and (others := await self.on_plan_logins(agent)):
+            raise DriverError(
+                f"{agent} would join {', '.join(others)} headless on one plan login: start the session with "
+                "`plan_login=True` to say this is your own work, or give its role an auth profile"
+            )
         admission = self._admitted.pop(agent, None)
         if admission is None:  # It finished in a runtime that has gone, and what it gave went too.
             admission = await self.admit(SpawnRequest(agent=agent, role=role, resumed=True))
@@ -282,6 +296,28 @@ class Host:
             make = partial(make_driver, self._team.roles[role])
             self._described[role] = await asyncio.to_thread(lambda: make().describe())
         return self._described[role]
+
+    async def _on_a_plan_login(self, role: str) -> bool:
+        """Whether a role's agents run on a plan login: its harness says so now, and the role names no auth profile. A
+        driver that cannot say runs nothing."""
+        if self._team.roles[role].auth is not None:
+            return False
+        try:
+            return (await self.describe(role)).login == "plan"
+        except (ConfigError, DriverError):
+            return False
+
+    async def on_plan_logins(self, besides: str | None = None) -> list[str]:
+        """The live agents but `besides` whose harness runs on a plan login."""
+        kernel = self._kernel
+        records = kernel.query(kernel.runtime, "agent.records", {})
+        if records.refusal is not None:
+            raise Refused.of(records.refusal)
+        return [
+            record["name"]
+            for record in records.result
+            if record["state"] != "ended" and record["name"] != besides and await self._on_a_plan_login(record["role"])
+        ]
 
     def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None) -> AgentSpec:
         role = self._team.roles[link.role]

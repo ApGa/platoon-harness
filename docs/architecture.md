@@ -1221,7 +1221,10 @@ Threat tiers stay separate, in docs and in events.
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan
   login exits 78 and names the fix unless the user opts in, with `Session.start(team, plan_login=True)`. `prepare` refuses it from each role's
   `DriverInfo.login`, which comes from the harness's own status command, and a role with an auth profile is on no login. One agent alone is not
-  refused, unless another role can spawn more. `web --remote` refuses a second person on a plan-login session.
+  refused, unless another role can spawn more. The manifest keeps the opt-in, and without it the runtime holds the same line later, on what each
+  harness says then: a launch that would put an agent on a plan login beside a live one fails, as a human can spawn more than a team said, and a
+  resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. `web --remote`
+  refuses a second person on a plan-login session.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step in a project or team file. The check reads where
   each value came from, since mappings merge across layers.

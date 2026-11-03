@@ -1,6 +1,7 @@
 """From a team to a live session: checked before any cost, and safe to repeat."""
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import pytest
 from platoon_harness import Session, Team
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
-from platoon_harness.kernel import Event, Kernel, Refused
+from platoon_harness.kernel import Event, Kernel, Refused, is_held
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime import LocalAuthority, opening
 from platoon_harness.runtime.opening import open_session, prepare
@@ -146,6 +147,53 @@ def test_a_role_with_an_auth_profile_is_on_no_login(tmp_path, monkeypatch):
 async def test_session_start_says_so_for_its_owner(tmp_path):
     async with Session.start(team_of(roles={"worker": planned(count=2)}), root=tmp_path, plan_login=True) as session:
         await in_state(session, "worker-1", "idle")
+
+
+async def test_a_spawn_that_would_put_a_second_agent_on_a_plan_login_fails_naming_the_fix(tmp_path):
+    async with Session.start(team_of(roles={"lead": planned()}), root=tmp_path) as session:
+        await in_state(session, "lead", "idle")
+        await session.spawn("extra", "lead")
+        await in_state(session, "extra", "ended")
+        extra = next(agent for agent in (await session.ending()).agents if agent["agent"] == "extra")
+
+    assert extra["status"] == "failed"
+    assert "extra would join lead headless on one plan login" in extra["reason"]
+    assert "plan_login=True" in extra["reason"]
+
+
+async def test_an_owner_who_said_so_spawns_more_on_a_plan_login(tmp_path):
+    async with Session.start(team_of(roles={"lead": planned()}), root=tmp_path, plan_login=True) as session:
+        await in_state(session, "lead", "idle")
+        await session.spawn("extra", "lead")
+        await in_state(session, "extra", "idle")
+
+
+class SignedIn(ScriptedDriver):
+    """A harness whose login is whatever its shell says now, as a user can sign a harness in again between runs."""
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"login": os.environ.get("PLATOON_HARNESS_TEST_LOGIN")})
+
+
+@pytest.mark.parametrize("said", [False, True])
+async def test_a_resume_that_would_bring_back_several_agents_on_a_plan_login_needs_the_owner_s_word(
+    tmp_path, monkeypatch, said
+):
+    team = team_of(roles={"worker": {"harness": harness(SignedIn), "count": 2}})
+    async with Session.start(team, name="s", root=tmp_path, plan_login=said) as session:
+        await in_state(session, "worker-2", "idle")
+    head = len(await journal(await Session.attach("s", root=tmp_path)))
+    monkeypatch.setenv("PLATOON_HARNESS_TEST_LOGIN", "plan")
+
+    if said:
+        async with Session.resume("s", root=tmp_path) as session:
+            await in_state(session, "worker-2", "idle")
+        return
+    with pytest.raises(ConfigError, match="worker-1, worker-2 would run headless on one plan login"):
+        await Session.resume("s", root=tmp_path)
+
+    assert not is_held(tmp_path / "sessions" / "s")
+    assert len(await journal(await Session.attach("s", root=tmp_path))) == head
 
 
 def test_a_name_for_the_human_must_be_one(tmp_path):

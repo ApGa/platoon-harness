@@ -84,7 +84,13 @@ def prepare(
         raise ConfigError(errors)
     for warning in problems:
         log.warning("%s", warning)
-    manifest = Manifest.of(resolved, human=f"human:{human}", approvals=approvals, cwd=str(Path(cwd or ".").resolve()))
+    manifest = Manifest.of(
+        resolved,
+        human=f"human:{human}",
+        approvals=approvals,
+        cwd=str(Path(cwd or ".").resolve()),
+        plan_login=plan_login,
+    )
     return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 
 

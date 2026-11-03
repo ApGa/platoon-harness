@@ -191,8 +191,8 @@ def sanitized(team: Team, environ: Mapping[str, str] = os.environ) -> str:
 
 class Manifest(Model):
     """What reproduces a session, and all a runtime needs to take one up: `team` is the sanitized resolved form, which
-    reloads alone, `human` the principal who started it, `approvals` a policy stated over every role's own, and `cwd`
-    where a shared workspace is."""
+    reloads alone, `human` the principal who started it, `approvals` a policy stated over every role's own, `cwd`
+    where a shared workspace is, and `plan_login` whether its owner said several agents may run on one plan login."""
 
     team: str
     topology_hash: str
@@ -200,6 +200,7 @@ class Manifest(Model):
     human: str = "human:you"
     approvals: Literal["ask", "deny", "allow"] | None = None
     cwd: str = "."
+    plan_login: bool = False
     sdk_version: str = __version__
     team_schema: int = TEAM_SCHEMA
     wire_protocol: int = WIRE_PROTOCOL
