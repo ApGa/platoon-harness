@@ -238,6 +238,20 @@ async def test_a_live_journal_is_read_alongside_its_writer(kernel, folder, clock
     reader.close()
 
 
+async def test_a_read_only_kernel_answers_a_retry_from_its_journal_and_runs_nothing(kernel, folder, clock):
+    first = await kernel.submit(kernel.runtime, "note.add", {}, key="once")
+    kernel.close()
+    reader = Kernel.open(folder, clock=clock, extensions=[notes], read_only=True)
+
+    again = await reader.submit(reader.runtime, "note.add", {}, key="once")
+    fresh = await reader.submit(reader.runtime, "note.add", {}, key="never")
+
+    assert again == first
+    assert refusal_of(fresh) == "unsupported"
+    assert len(events_of(reader)) == 1
+    reader.close()
+
+
 async def test_read_only_refuses_stale_views_loudly(folder, clock):
     kernel = Kernel.open(folder, clock=clock)
     result_of(await kernel.submit(kernel.runtime, "runtime.start", {}))

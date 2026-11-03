@@ -194,7 +194,8 @@ The kernel knows streams, principals, grants and effects. It does not know what 
 is; those are primitives, written as `Extension` values on the same contract a third party uses. Its own ops, views and
 daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime`, `op` and `ops` are taken names.
 
-`submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. `read` and
+`submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. A read-only kernel
+answers only a command its journal answered under the same key, as any retry is answered. `read` and
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence and
 read by nothing. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
@@ -1174,8 +1175,9 @@ async with Session.start(team, name="fix-auth") as session:   # owner: leaving s
 owner, as its own verb because restarting can spend money. The human is one principal, `human:you` unless `start` says otherwise. That
 is a name in the journal and not a claim: identity still comes from the credential.
 
-A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, whose
-writes are refused `unavailable` naming the resume command), and the control socket (`Remote`). Everything else is written once
+A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, which
+answers a command its journal answered under the same key and refuses any other write `unavailable`, naming the resume command), and
+the control socket (`Remote`). Everything else is written once
 on top of it, so following a journal is one loop of `read` and a long-poll in either form. A client that loses its runtime attaches
 again, and a command it had sent retries under its key, so it stays one operation. On history it looks for a runtime on each call,
 and opens the journal again once a writer has touched it. A session is entered once: awaiting one that was left starts nothing, because

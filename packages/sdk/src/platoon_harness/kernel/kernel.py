@@ -245,7 +245,8 @@ class Kernel:
         expected_version: int | None = None,
         native: Mapping[str, str] | None = None,
     ) -> Outcome:
-        """Run one command and return its outcome once durable. A refusal is an outcome, not an exception.
+        """Run one command and return its outcome once durable. A refusal is an outcome, not an exception. A read-only
+        kernel answers only a command its journal answered under the same key, as any retry is answered.
 
         `native` holds a backend's ids for this command, stamped on its events as evidence and read by nothing.
         """
@@ -257,9 +258,18 @@ class Kernel:
             return command.refused(Refusal(code="unsupported", detail="a query has no version to expect"), None)
         try:
             command.check()
-            return await self._writing().call(lambda db: self._execute(db, command), owner=principal.id)
+            if self._writer is None:
+                return self._answered_before(command)
+            return await self._writer.call(lambda db: self._execute(db, command), owner=principal.id)
         except Refused as refused:
             return command.refused(refused.refusal, None)
+
+    def _answered_before(self, command: _Command) -> Outcome:
+        with self._reading() as db:
+            prior = None if command.key is None else prior_outcome(db, command.principal.id, command.key)
+        if prior is None or prior.args_hash != command.args_hash:
+            raise Refused("unsupported", "this kernel is read-only")
+        return prior
 
     def _decode(self, command: _Command) -> tuple[Op, Args]:
         operation = self.ops.get(command.op)

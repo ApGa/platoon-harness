@@ -274,6 +274,27 @@ async def test_a_retry_after_a_lost_ack_is_one_operation_and_gets_the_first_answ
     assert len(await of_type(guest, "message.sent")) == 1
 
 
+async def test_a_retry_whose_runtime_went_for_good_after_it_committed_gets_the_first_answer(guest, owner, monkeypatch):
+    """The ack goes with the runtime, so the retry finds history, which answers what the journal holds under its key
+    and refuses anything else, naming what restarts the session."""
+    real = Remote.submit
+    lost = []
+
+    async def losing(self: Remote, op: str, args: Any, **keys: Any) -> Outcome:
+        lost.append(await real(self, op, args, **keys))
+        await owner.leave()
+        raise Closed("the ack went with the runtime")
+
+    monkeypatch.setattr(Remote, "submit", losing)
+
+    answered = await guest.submit("message.send", key="once", to="@bob", gist="once, though it went")
+    other = await guest.submit("message.send", key="twice", to="@bob", gist="never sent")
+
+    assert (answered.result, answered.seq) == (lost[0].result, lost[0].seq)
+    assert other.refusal is not None and "platoon-harness session resume s" in other.refusal.detail
+    assert [event.gist for event in await of_type(guest, "message.sent")] == ["once, though it went"]
+
+
 async def test_calls_that_find_a_connection_gone_together_share_one_new_one(guest, owner):
     gone = guest._link
     gone._peer.close()

@@ -154,6 +154,16 @@ class History(Local):
         detail = f"no runtime holds this session, so this is history: {resume_with} restarts it"
         super().__init__(kernel, principal, denied=Refusal(code="unavailable", detail=detail))
 
+    async def submit(self, op: str, args: Mapping[str, Any], *, key: str | None = None) -> Outcome:
+        """A command the journal answered under `key` gets that answer, as a retry would from a runtime, so one whose
+        runtime went after it committed stays one operation. Any other write is refused, naming what restarts it."""
+        operation = self._kernel.ops.get(op)
+        if key is not None and operation is not None and not (operation.query or operation.exposes):
+            answered = await self._kernel.submit(self._principal, op, args, key=key)
+            if answered.seq is not None:
+                return answered
+        return await super().submit(op, args, key=key)
+
     def stale(self) -> bool:
         """Whether a writer has changed the journal, which an immutable reader cannot read past."""
         return self._kernel.query(self._principal, "session.status", {}).refusal is not None
