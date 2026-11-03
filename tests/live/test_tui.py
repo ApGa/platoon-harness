@@ -62,9 +62,9 @@ turns = 8
 wall = "10m"
 """
 JOB = (
-    "Spawn one worker named w with this task: run `echo hello > out.txt` yourself, which waits for a person to "
-    "approve it, as expected, then reply with a 1,500-word story about a lighthouse keeper. Then wait for w's answer, "
-    "and finish."
+    "Spawn one worker named w with this task: your sandbox is read-only, so run `echo hello > out.txt` yourself with "
+    "escalated permissions, which waits for a person to approve it, then reply with a 1,500-word story about a "
+    "lighthouse keeper. Then wait for w's answer, and finish."
 )
 
 
