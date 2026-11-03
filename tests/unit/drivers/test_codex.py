@@ -660,6 +660,20 @@ async def test_a_verdict_answers_the_request_that_asked(tmp_path, stand, method,
     assert asked.gist == "touch x"
 
 
+async def test_an_approval_s_id_is_its_own_across_agents_and_processes(tmp_path, stand):
+    """Ids are journaled per session, and a process counts from one, so a count would collide: a report the journal
+    refuses is answered `deny`, and the second agent to ask would be turned down with nobody asked."""
+    asked = []
+    for name in ("one", "two"):
+        stand.install(turns=[[began(), asking("item/commandExecution/requestApproval")]], on_answer=[ended()])
+        async with running(make_spec(tmp_path / name)) as (driver, heard):
+            asked.append(await heard.until(ApprovalRequested))
+            await driver.answer(asked[-1].id, "allow")
+            await heard.until(TurnEnded)
+
+    assert asked[0].id != asked[1].id
+
+
 @pytest.mark.parametrize(
     ("verdict", "answer"),
     [
@@ -928,6 +942,6 @@ async def test_a_resumed_thread_says_what_landed_and_a_miss_proves_nothing(tmp_p
         await heard.until(Ready)
         assert await driver.reconcile("41") == "landed"
         assert await driver.reconcile("42") == "unknown"
-        assert await driver.reconcile("approval-1") == "unknown"
+        assert await driver.reconcile("an-approval") == "unknown"
 
     assert stand.asked("thread/turns/list") == {"threadId": "thread-1", "itemsView": "full"}

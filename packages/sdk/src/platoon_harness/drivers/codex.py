@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
@@ -260,7 +261,6 @@ class CodexDriver:
         self._interrupted = False
         self._spent: dict[str, int] = {}
         self._unlanded: dict[str, str] = {}
-        self._approvals = 0
         self._asking: dict[str, _Asked] = {}
         self._deciding: dict[str, str] = {}
         self._compacting = False
@@ -436,8 +436,7 @@ class CodexDriver:
     async def _decided(self, method: str, params: Mapping[str, Any]) -> Mapping[str, Any]:
         """Wait for the runtime's word, in this request's own task. A turn that ends first takes this with it, and the
         harness has dropped the request by then, so nothing answers."""
-        self._approvals += 1
-        id = f"approval-{self._approvals}"
+        id = uuid4().hex
         asked = _Asked(params.get("turnId"), params.get("itemId"), asyncio.get_running_loop().create_future())
         self._asking[id] = asked
         said = params.get("command") or params.get("message") or params.get("reason") or method
