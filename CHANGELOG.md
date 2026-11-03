@@ -121,6 +121,7 @@
   so a stop of one that ignores `SIGTERM` comes to `SIGKILL` and says so.
 - `wait.cancel` let a report from a turn an interrupt or the owner's stop cut wake its reader, which such a report never does. Only a
   report that answers is restored.
+- The scan for local paths reads the CLI's sources too, a home folder whose name begins with a capital, and this cluster's name.
 - The plan-login refusal was checked only at the start, so a human spawning more agents later, and a resume after a harness was signed
   in on a plan, escaped it. The manifest keeps `plan_login`, and without it a launch beside a live agent on a plan login fails, and a
   resume that would bring back several is refused, each naming the fix in the same words, `PLAN_LOGIN_FIX`.

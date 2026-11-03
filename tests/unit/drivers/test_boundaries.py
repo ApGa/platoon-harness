@@ -11,14 +11,15 @@ ROOT = Path(__file__).parents[3]
 SDK = ROOT / "packages" / "sdk" / "src" / "platoon_harness"
 ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_harness"}
 PUBLIC = (
-    *SDK.rglob("*.py"),
+    *ROOT.glob("packages/*/src/**/*.py"),
     *ROOT.glob("*.md"),
     *ROOT.glob("packages/*/README.md"),
     *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
     *(ROOT / "tests" / "conformance").glob("*.py"),
 )
 LOCAL = re.compile(
-    r"(?<![\w.-])/(home|groups|Users)/[a-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|ANTHROPIC_API_KEY=sk-|sk-ant-"
+    r"(?<![\w.-])/(home|groups|Users)/[A-Za-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|(?i:\babci\b)"
+    r"|ANTHROPIC_API_KEY=sk-|sk-ant-"
     r"|[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"
 )
 """An absolute path under a home or a group, this cluster's names, a key, or an email address."""
@@ -48,6 +49,8 @@ def test_nothing_public_holds_a_local_path_or_an_account(path):
     ("line", "caught"),
     [
         ("see /home/someone/notes", True),
+        ("see /Users/Someone/notes", True),
+        ("ssh login1.abci.ai", True),
         ("(/groups/somegroup/scratch)", True),
         ("write to someone@example.com", True),
         ("opencode@ff90ed91607c:packages/protocol/src/groups/event.ts:69", False),
