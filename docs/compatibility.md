@@ -457,8 +457,9 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Fallback, cold resume, token exclusion, slow init and shell socket are 1 trial each.
 - Several agents in one `codex app-server`, with distinct tokens.
 - Codex child agents on a real model past one trial, and v1 on a real model: v2 ran once through the driver, in run 26.
-- What a Codex child that stays does on the words it is told now. Told it stayed for the next message, a child held a `wait` for its
-  parent instead of answering, in runs 23 and 24, and three Codex agents opened a turn with a `wait` that named nothing to wait on.
+- What a Codex child that stays does under a Codex lead on the words it is told now: on them a child a human spawned answered and
+  stayed, once. Told it stayed for the next message, a child held a `wait` for its parent instead of answering, in runs 23 and 24, and
+  three Codex agents opened a turn with a `wait` that named nothing to wait on.
 - Teams past three agents, and work past a minute: everything in [the spike](research/spikes/real-harness.md) was small and quick.
 - Auto compaction, a turn that fails and a child's approval on a real Codex model, and `fileChange` items anywhere: FakeModel offered no patch tool, so a stand-in is all that has shown one.
 - Whether a steer that ended a model call on FakeModel does so on a real model.

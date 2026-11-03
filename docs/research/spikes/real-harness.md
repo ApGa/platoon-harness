@@ -224,8 +224,8 @@ meant, then ends it. `tests/live/test_stays.py`.
 | 28 | Codex | 7 | Passed, on the final wording: an agent a human spawned with `stays` answered, stayed, and was interrupted, where in run 27 the same agent without `stays` finished at its second message |
 
 The final wording for a child that stays reuses the words a root has been told since run 17, "a turn that only ends leaves you here for
-the next message", after both wordings that told a child it stays drew a held `wait` from Codex. The owner's flow on Codex has not been
-rerun on it, as its budget was spent. A child that waits on its parent keeps its answer from it either way: a turn that parks posts no
+the next message", after both wordings that told a child it stays drew a held `wait` from Codex. On it a Codex child a human spawned
+answered and stayed, in run 28. The owner's flow on Codex has not been rerun on it, as its budget was spent. A child that waits on its parent keeps its answer from it either way: a turn that parks posts no
 report, and one that holds a `wait` has not ended.
 
 In every Codex agent that began a turn on a task this stage, runs 23, 24 and 26, the first call was our `wait` with a `hold` or a
