@@ -170,6 +170,29 @@ async def test_what_the_journal_says_a_harness_was_told_is_what_it_sent_its_mode
     assert sum(text.count(told) for text in strings(model.calls[0].json)) == 1
 
 
+async def test_what_the_journal_says_a_resumed_harness_was_told_is_what_it_sent_its_model(tmp_path, monkeypatch):
+    """A harness that reopens its own session is handed and journaled what it was told when that began, though a
+    channel has come since, and that text is in the request after the resume whole, once."""
+    async with FakeModel("first", "second") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, instructions=TOLD)
+
+        async with Session.start(team, name="told", root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "go")
+            await until(lambda: of_type(session, "turn.ended"), session)
+            await session.create_channel("news", "topic", readers=["all"], writers=["all"])
+
+        async with Session.resume("told", root=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "again")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 2)
+            instructed = await of_type(session, "agent.instructed")
+            told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+
+    assert len(told) == 2 and told[0] == told[1] and "news" not in told[1]
+    assert sum(text.count(told[1]) for text in strings(model.calls[-1].json)) == 1
+
+
 async def test_a_real_harness_that_stays_answers_a_task_a_follow_up_and_a_question_on_one_process(
     tmp_path, monkeypatch
 ):
@@ -495,6 +518,29 @@ async def test_a_catalog_model_s_own_agents_are_off_unless_a_role_allows_them(tm
     assert bool(set(COLLABORATION) & set(model.calls[0].tools)) == allowed
     assert model.calls[0].says("You are `/root`") == allowed
     assert {request.message.target for request in model.requests} == {"/v1/responses"}
+
+
+async def test_a_resumed_session_keeps_the_instructions_and_the_setting_of_its_own_agents_it_began_with(tmp_path):
+    """`thread/resume` keeps the `developerInstructions` and the `agents.enabled` a thread began with, whatever it is
+    sent, which is why a resume is handed that text again."""
+    async with FakeModel("one", "two") as model:
+        spec = on_fake_model(tmp_path, model, goal="go", instructions="ALPHA-ONE", model="gpt-6-luna")
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        native = (await heard.until(Ready)).native
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+        resumed, heard = CodexDriver(), Heard()
+        again = {"resume": native, "goal": "", "instructions": "BRAVO-TWO", "allow_native_children": True}
+        await resumed.start(spec.model_copy(update=again), heard)
+        await heard.until(Ready)
+        await resumed.deliver(Delivery(input="41", boundary="turn", text="again", items=()))
+        await heard.until(TurnEnded)
+        await resumed.stop(2.0)
+
+    assert model.calls[-1].says("ALPHA-ONE") and not model.calls[-1].says("BRAVO-TWO")
+    assert not set(COLLABORATION) & set(model.calls[-1].tools)
 
 
 async def test_an_interrupt_reaches_a_child_as_well(tmp_path):

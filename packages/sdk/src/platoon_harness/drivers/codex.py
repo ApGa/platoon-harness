@@ -151,8 +151,9 @@ def _provider(spec: AgentSpec) -> dict[str, Any] | None:
 
 
 def _thread(spec: AgentSpec, theirs: Mapping[str, Any]) -> dict[str, Any]:
-    """How this agent's thread opens, the same on a resume. `theirs` is the user's config: a field here replaces the
-    one there, so what they wrote stays in what is sent."""
+    """How this agent's thread opens, sent again on a resume, where a thread keeps the instructions and the setting of
+    its own agents it began with. `theirs` is the user's config: a field here replaces the one there, so what they wrote
+    stays in what is sent."""
     config: dict[str, Any] = {}
     fields = {"cwd": str(spec.cwd), "approvalPolicy": _ASKS, "approvalsReviewer": "user", "config": config}
     if spec.model is not None:

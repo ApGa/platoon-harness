@@ -119,6 +119,9 @@
   in it ran: a member that has exited counts for `killpg(group, 0)` until its parent reaps it, and an orphan waits on pid 1. A group is
   judged by whether anything in it still runs, on Linux, and a process whose main thread has exited while another runs still does,
   so a stop of one that ignores `SIGTERM` comes to `SIGKILL` and says so.
+- A resume rendered what an agent was told afresh and journaled that, while Claude Code and Codex kept what their session began with,
+  so the record held words no model heard. A harness that reopens its own session is handed, and journaled, what it was told when
+  that began.
 - `wait.cancel` let a report from a turn an interrupt or the owner's stop cut wake its reader, which such a report never does. Only a
   report that answers is restored.
 - The scan for local paths reads the CLI's sources too, a home folder whose name begins with a capital, and this cluster's name.

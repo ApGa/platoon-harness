@@ -19,7 +19,8 @@ class Agent(BaseModel, frozen=True):
     harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing`
     says it called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its
     own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers
-    failed in a row, and the next waits until `retry_at`."""
+    failed in a row, and the next waits until `retry_at`. `instructions` is the body of what its harness was told last,
+    or None for nothing."""
 
     name: str
     role: str
@@ -53,6 +54,7 @@ class Agent(BaseModel, frozen=True):
     failures: int
     retry_at: float
     levels: dict[str, Any]
+    instructions: str | None
 
     @property
     def id(self) -> str:
@@ -71,7 +73,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 5
+    version = 6
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -105,7 +107,8 @@ class Agents(View):
         failure TEXT,
         failures INTEGER NOT NULL DEFAULT 0,
         retry_at REAL NOT NULL DEFAULT 0,
-        levels TEXT NOT NULL DEFAULT '{}'
+        levels TEXT NOT NULL DEFAULT '{}',
+        instructions TEXT
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_agents_parent ON v_agents(parent);
     CREATE INDEX v_agents_state ON v_agents(state);
@@ -155,6 +158,12 @@ class Agents(View):
         )
         if event.type == "agent.started":
             self._move(event, "idle", "spawning")
+
+    @fold("agent.instructed")
+    def instructed(self, event: Event) -> None:
+        self.db.execute(
+            "UPDATE v_agents SET instructions = ? WHERE name = ?", (event.data["instructions"], event.agent)
+        )
 
     def _move(self, event: Event, state: str, *only: str) -> None:
         marks = ", ".join("?" * len(only))

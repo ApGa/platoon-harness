@@ -237,6 +237,27 @@ async def test_what_a_harness_is_told_is_journaled_at_launch_and_at_every_resume
     assert len(told) == 2 and told == [spec.instructions for spec in recording.specs]
 
 
+async def test_a_harness_that_reopens_its_session_is_handed_what_it_was_told_when_that_began(tmp_path, recording):
+    """Claude Code and Codex keep what a session began with, whatever a resume passes, so a resume hands that again and
+    journals it, though who the agent can reach has changed since."""
+    roles = {"bob": {"harness": harness(recording)}, "ann": {"harness": harness(recording), "count": 0}}
+    team = Team.model_validate({"roles": roles, "topology": {"edges": {"bob": ["all"]}, "limits": {"max_hops": 4}}})
+    async with Session.start(team, name="told", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await session.spawn("ann", "ann")
+        await in_state(session, "ann", "idle")
+    async with Session.resume("told", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        instructed = [event for event in await of_type(session, "agent.instructed") if event.agent == "bob"]
+        told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+
+    launched, resumed = [spec for spec in recording.specs if spec.agent == "bob"]
+    assert resumed.resume is not None and "You can message: @you." in told[0]
+    assert told == [launched.instructions, resumed.instructions] == [told[0]] * 2
+
+
 async def test_nothing_told_is_journaled_as_nothing(tmp_path, recording):
     def none() -> ScriptedDriver:
         return recording(capabilities=Capabilities(persistent=True, boundaries={"turn"}))

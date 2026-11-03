@@ -416,7 +416,8 @@ class Host:
         ]
 
     def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None) -> AgentSpec:
-        """How an agent starts. Its instructions are the preamble and then the role's words, so a role has the last."""
+        """How an agent starts. Its instructions are the preamble and then the role's words, so a role has the last. A
+        harness that reopens its own session keeps what it was told when that began, so it is handed that again."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
         surface = _surface_of(link.info.capabilities)
@@ -438,9 +439,17 @@ class Host:
             allow_native_children=role.allow_native_children,
             tools=binding,
             access=admission.access,
-            instructions=_told(self._kernel, principal, self._team, link.role, surface),
+            instructions=_told(self._kernel, principal, self._team, link.role, surface)
+            if resume is None
+            else self._told(link.agent),
             resume=resume,
         )
+
+    def _told(self, agent: str) -> str | None:
+        """What an agent's harness was told last, which `agent.instruct` journaled."""
+        kernel = self._kernel
+        body = kernel.query(kernel.runtime, "agent.records", {"agent": agent}).result[0]["instructions"]
+        return None if body is None else kernel.get_body(body.removeprefix("sha256:")).decode()
 
     def _binding(self, folder: Path, token: Secret, *, surface: str) -> ToolBinding:
         bin = folder / "bin"

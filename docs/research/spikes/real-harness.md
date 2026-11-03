@@ -210,7 +210,8 @@ tools and ours, as sent.
 | pi | 4 | One hash, 10,506 bytes | 1 |
 
 The system prompt held one hash too, once Claude Code's per-request billing header is left out. So a prompt cache can hold across a
-resume. The preamble is built afresh on a resume, so a team that has grown changes it there, and only there. On a live Codex the block is
+resume. The preamble was built afresh on a resume then. It is now handed again as it was at launch, since Claude Code and Codex keep
+what a session began with whatever a resume passes, so nothing changes it there either. On a live Codex the block is
 one `exec` tool with our declarations inside, which FakeModel does not show, and which no request log on a native login can show.
 
 ### 13. Agents that stay

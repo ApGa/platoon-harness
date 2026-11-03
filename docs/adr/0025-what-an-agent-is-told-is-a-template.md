@@ -20,8 +20,9 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 - **Words a user wrote name tools as the surface does and are never dropped.** An op in backticks, in a template's words or in
   `Role.instructions`, becomes the surface's tool name. `team check` warns of one a role lacks, and of a template that leaves out
   `tools` or `ending`, saying what breaks. The role's own words come last.
-- **`agent.instructed` journals the exact text** at a launch and at every resume. The harness's own prompt and the user's own
-  configuration are theirs, and neither is recorded nor changed.
+- **`agent.instructed` journals the exact text** at a launch and at every resume. A harness that reopens its own session is handed
+  the text it was told when that began, since Claude Code and Codex keep that whatever a resume passes. The harness's own prompt and
+  the user's own configuration are theirs, and neither is recorded nor changed.
 - **`told(team)`** renders what an agent of each role would be told, on a session thrown away after, which starts no harness.
 
 ## Alternatives considered
@@ -32,6 +33,7 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 | Append that line after the line holding `{tools}` | A rule a template writer cannot see or move |
 | `str.format` with its full grammar | Attributes, indexes and format specs fill nothing here, and a template is a user's text: a slot is a word, and anything else is refused |
 | Drop a user's sentence that names a tool the role lacks, as ours are | Words a user wrote are theirs. A warning before any cost says what is wrong |
+| Render the text again at a resume | Claude Code and Codex keep what a session began with, so the journal would hold words no model heard |
 | Record the whole system prompt | It is the harness's and the user's, and on a native login only the harness sees it |
 | Render `told` from the team alone | Who an agent can reach comes from the live graph, so a second derivation would drift from the one a session uses |
 
@@ -45,6 +47,7 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 
 - `tests/unit/tools/test_surface.py`, the default against a frozen copy of the code before it, and the template's rules.
 - `tests/unit/runtime/test_host.py`, `tests/unit/topology/test_check.py`, and `tests/integration/` on the real Claude Code, Codex and
-  pi binaries against FakeModel.
+  pi binaries against FakeModel, at a launch and after a resume. Resumed with other text, Claude Code 2.1.316 and Codex 0.164.0 sent
+  the text the session began with, and pi 1.5.0 the text it was passed.
 - `tests/live/test_launch.py`, run 34: a team's template with one sentence more was told and acted on, on Claude Code and Codex.
 - [Architecture section 10](../architecture.md), the everyday instruction surface.
