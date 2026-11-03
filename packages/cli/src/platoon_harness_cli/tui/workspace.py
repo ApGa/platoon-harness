@@ -1,0 +1,852 @@
+"""The workspace: one session, as a person works with it every day."""
+
+import json
+from collections import defaultdict
+from functools import partial
+from pathlib import Path
+from typing import Any
+
+from textual import events, work
+from textual.app import ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.content import Content
+from textual.screen import Screen
+from textual.widgets import Static
+
+from platoon_harness import Refused, Session
+from platoon_harness.config import Manifest
+from platoon_harness.kernel import GIST_LIMIT, Delta, Event, is_held
+from platoon_harness.runtime.paths import MANIFEST
+
+from ..ops import Flag, described, flags, person_ops
+from .composer import ADDRESS, Composer
+from .dialogs import Confirm, Form
+from .keymap import KEYMAP, bindings, keys
+from .live import Live
+from .rows import Row, Rows
+from .safe import SafeText, note
+from .transcript import Focus, Transcript
+
+GROUPS = (
+    ("needs_you", "Needs you", "⚠", "yellow"),
+    ("working", "Working", "●", "green"),
+    ("blocked", "Blocked", "◌", "yellow"),
+    ("idle", "Idle", "○", "dim"),
+    ("done", "Done", "✓", "dim green"),
+    ("failed", "Failed", "✗", "red"),
+)
+GLYPHS = {group: (glyph, style) for group, _, glyph, style in GROUPS}
+ATTACHED_LIMIT = 12 * 1024 * 1024
+"""The largest file a message carries as its body, which is what the control socket takes."""
+CONFIRMED = frozenset({"agent.cancel", "agent.retire", "session.cancel", "session.close"})
+"""The ops a palette asks once about, as nothing takes them back."""
+
+
+class Dock(Rows, can_focus=False):
+    """Where a person must act, a row each. It never takes focus, so a key meant for the composer never answers it."""
+
+
+def _why(why: dict[str, Any] | None) -> str:
+    """What an agent waits on, in words, from the roster's typed `why`."""
+    if why is None:
+        return ""
+    match why["kind"]:
+        case "approval":
+            return "asks you to approve"
+        case "wait":
+            missing = ", ".join(why["missing"][:3]) + ("…" if len(why["missing"]) > 3 else "")
+            return f"waits {why['have']} of {why['need']}" + (f", for {missing}" if missing else "")
+        case "peer":
+            return f"waits on @{why['id']}"
+        case "budget":
+            return f"held by the budget: {why['code']}"
+        case "lease":
+            return f"holds {why['id']}"
+        case "timer":
+            return "a wake is due"
+        case "infra":
+            return why["detail"]
+        case "lost":
+            return f"lost: {why['reason']}"
+    return why["kind"]
+
+
+def _named(action: str) -> str:
+    """An action as a person calls it, by the keymap's name for it."""
+    return next(key.name for key in KEYMAP if key.action == action)
+
+
+def _harness(row: dict[str, Any]) -> str:
+    """A harness as a row names it: its command, or the last part of a program's reference."""
+    harness = row["harness"]
+    return harness.rpartition(":")[2] if isinstance(harness, str) else harness.get("mode", "program")
+
+
+def _amount(unit: str, usage: dict[str, Any], limit: float | None) -> Content:
+    """A spend with its label: unknown is no zero, and an amount nobody measured whole says so."""
+    amount = usage.get("amount")
+    said = "unknown" if amount is None else f"{amount:,.0f}" if unit != "usd" else f"${amount:,.2f}"
+    if limit is not None:
+        said += f"/{limit:,.0f}" if unit != "usd" else f"/${limit:,.2f}"
+    unmeasured = f", {usage['unmeasured']} turns unmeasured" if usage.get("unmeasured") else ""
+    return Content.assemble(f"{unit} {said} ", (f"({usage.get('label', 'unavailable')}{unmeasured})", "dim"))
+
+
+class Workspace(Screen[None]):
+    """One session: who is working, on what, what is blocked, what changed, and where you must act."""
+
+    BINDINGS = bindings("workspace")
+
+    def __init__(self, name: str, session: Session | None = None) -> None:
+        super().__init__()
+        self.session_name = name
+        self.live: Live | None = None
+        self.focus_on: Focus | None = None
+        self.target: str | None = None
+        self.attached: tuple[str, bytes] | None = None
+        self.marks: dict[str, int] = {}
+        self.unread: dict[str, int] = {}
+        self.chosen: str | None = None
+        self.human = "human:you"
+        self._given = session
+        self._refused: dict[tuple[str, str], tuple[str, str]] = {}
+        self._shown: dict[str, Content] = {}
+        self._queued: dict[str, Any] | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="header")
+        yield Static(id="banner")
+        with Horizontal(id="body"):
+            yield Rows(id="navigator")
+            with Vertical(id="focus"):
+                yield Static(id="title")
+                yield Transcript(id="transcript")
+                yield Static(id="behind")
+            yield Static(id="inspector")
+        yield Static(id="strip")
+        yield Dock(id="dock")
+        yield Static(id="chip")
+        yield Composer(id="composer")
+        yield Static(id="footer")
+
+    async def on_mount(self) -> None:
+        composer = self.query_one(Composer)
+        composer.known = self._known
+        composer.focus()
+        self._lay_out(self.size.width, self.size.height)
+        self.query_one("#header", Static).update(SafeText(f"{self.session_name}  attaching…", "bold"))
+        self._join()
+
+    @work(exclusive=True, group="attach")
+    async def _join(self) -> None:
+        try:
+            session = self._given or await Session.attach(self.session_name)
+            self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).human
+            self.marks = await session.marks()
+            through = await session.head()
+        except Refused as refused:
+            self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))
+            return
+        self.query_one(Transcript).through = through
+        self.live = Live(session, self._draw)
+        await self.live.start(through)
+
+    async def on_unmount(self) -> None:
+        """Leave as a guest leaves: the session, and its runtime, run on."""
+        if self.live is not None:
+            await self.live.stop()
+            await self.live.session.leave()
+
+    # Drawing, once a frame.
+
+    async def _draw(self, events: list[Event], deltas: list[Delta]) -> None:
+        live = self.live
+        assert live is not None
+        transcript = self.query_one(Transcript)
+        focus = self.focus_on
+        added = transcript.take(events)
+        for delta in deltas:
+            if focus is not None and delta.agent == focus.agent:
+                transcript.take_delta(delta)
+        transcript.draw()
+        if deltas and not events:  # Live text alone moves nothing but the transcript.
+            return
+        await self._count(events, live)
+        if focus is None and (live.roster or live.frames == 0):
+            await self.show(self._first_focus(live))
+        elif focus is not None and (added or transcript.following):
+            self._mark(transcript)
+        await self._read_queue(live)
+        self._redraw()
+
+    def _first_focus(self, live: Live) -> Focus:
+        """The agent the session started first, or what was sent to you when it started none."""
+        roots = [row["agent"] for row in live.roster if row["parent"] is None]
+        return self._agent(roots[0]) if roots else Focus.of_person(self.human)
+
+    def _agent(self, name: str) -> Focus:
+        live = self.live
+        children = [row["agent"] for row in live.roster if row["parent"] == name] if live else []
+        return Focus.of_agent(name, children)
+
+    def _foci(self, live: Live) -> list[Focus]:
+        """Every channel, as a focus, and what was sent to you."""
+        return [Focus.of_person(self.human), *(Focus.of_channel(row["name"], row["kind"]) for row in live.channels)]
+
+    async def _count(self, events: list[Event], live: Live) -> None:
+        """How many lines past your mark each channel holds, counted from the journal once and then from what comes."""
+        for focus in self._foci(live):
+            if focus.key not in self.unread:
+                self.unread[focus.key] = await self._past_mark(live.session, focus)
+            mark = self.marks.get(focus.marks[0], 0)
+            self.unread[focus.key] += sum(1 for event in events if event.seq > mark and focus.holds(event))
+
+    async def _past_mark(self, session: Session, focus: Focus) -> int:
+        page = await session.page(
+            after=self.marks.get(focus.marks[0], 0), streams=focus.streams or None, match=focus.match, limit=100
+        )
+        return len(page.events)
+
+    def _mark(self, transcript: Transcript) -> None:
+        """Mark what you have read: the focus in view, through the newest line it shows, while it follows."""
+        focus = self.focus_on
+        live = self.live
+        if focus is None or live is None or not transcript.following:
+            return
+        for stream in focus.marks:
+            if self.marks.get(stream, 0) < transcript.through:
+                self._mark_one(live.session, stream, transcript.through)
+        self.unread[focus.key] = 0
+
+    def _mark_one(self, session: Session, stream: str, seq: int) -> None:
+        self.marks[stream] = seq
+        self.run_worker(session.mark(stream, seq), group="marks")
+
+    async def _read_queue(self, live: Live) -> None:
+        """What waits for the target's next handover, read when the roster says something does."""
+        row = self._row(self.target.removeprefix("@")) if self.target else None
+        if row is None or not row["unread"]:
+            self._queued = None
+        elif self._queued is None or self._queued["total"] != row["unread"]:
+            try:
+                self._queued = await live.session.unread(row["agent"])
+            except Refused:
+                self._queued = None
+
+    def _row(self, agent: str | None) -> dict[str, Any] | None:
+        if self.live is None or agent is None:
+            return None
+        return next((row for row in self.live.roster if row["agent"] == agent), None)
+
+    def _redraw(self) -> None:
+        live = self.live
+        if live is None:
+            return
+        for found, refusal in list(self._refused.items()):
+            if self._fingerprint(found[1]) != refusal[1]:
+                del self._refused[found]
+        self._set("#header", self._header(live))
+        self._set("#banner", self._banner(live))
+        self.query_one("#banner").display = live.runtime != "live"
+        self.query_one("#navigator", Rows).show(self._navigator(live))
+        self._set("#strip", self._strip(live))
+        self._set("#title", self._title())
+        self._set("#behind", self._behind())
+        self.query_one("#behind").display = not self.query_one(Transcript).following
+        self._set("#inspector", self._inspector(live))
+        dock = self.query_one(Dock)
+        dock.show(self._dock(live))
+        dock.display = bool(dock.rows)
+        self._set("#chip", self._chip(live))
+        self._set("#footer", self._footer(live))
+
+    def _set(self, selector: str, content: Content) -> None:
+        """Show `content` in a static, which repaints only when it differs from what it shows."""
+        if self._shown.get(selector) != content:
+            self._shown[selector] = content
+            self.query_one(selector, Static).update(content)
+
+    def _header(self, live: Live) -> Content:
+        counts = defaultdict(int)
+        for row in live.roster:
+            counts[row["group"]] += 1
+        acting = len(self._places(live))
+        state = live.status.get("state", "")
+        if self.size.width < 60:
+            return Content.assemble(
+                SafeText(self.session_name, "bold"),
+                f" {counts['working']}● ",
+                (f"{acting}⚠", "yellow" if acting else "dim"),
+            )
+        runtime = {"live": ("live", "green")}.get(live.runtime, ("history", "yellow"))
+        standing = "stalled" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
+        parts: list[Any] = [SafeText(self.session_name, "bold"), "  ", runtime, (f" {state}", "dim")]
+        parts += [(f", {standing}" if standing else "", "yellow" if standing == "stalled" else "dim"), "   "]
+        parts += [(f"● {counts['working']} working  ", "green")]
+        parts += [(f"⚠ {acting} need you  ", "yellow" if acting else "dim")]
+        if counts["blocked"]:
+            parts += [(f"◌ {counts['blocked']} blocked  ", "yellow")]
+        if counts["failed"]:
+            parts += [(f"✗ {counts['failed']} failed  ", "red")]
+        limits = {row["unit"]: row["limit"] for row in live.budgets if row["scope"] == "shared"}
+        for unit, usage in (live.ending.usage if live.ending else {}).items():
+            if unit in ("tokens", "usd"):
+                parts += [_amount(unit, usage, limits.get(unit)), "  "]
+        if live.changes:
+            added = sum(row["added"] or 0 for row in live.changes.values())
+            removed = sum(row["removed"] or 0 for row in live.changes.values())
+            parts += [f"changed {len(live.changes)} files +{added} -{removed}"]
+        return Content.assemble(*parts)
+
+    def _banner(self, live: Live) -> Content:
+        resume = " Alt+R resumes it, which can spend money."
+        return {
+            "history": Content.styled(f"No runtime holds this session, so this is its history.{resume}", "yellow"),
+            "stopped": Content.styled(
+                f"Its runtime stopped, as its owner asked: this is its history now.{resume}", "yellow"
+            ),
+            "gone": Content.styled(
+                f"Its runtime went without its shutdown, killed or crashed: this is its history now.{resume}", "red"
+            ),
+            "closed": Content.styled("The session has closed: this is its history.", "yellow"),
+        }.get(live.runtime, Content(""))
+
+    def _places(self, live: Live) -> list[dict[str, Any]]:
+        """Where you must act, oldest first: every row of `attention` but a mention you have read past."""
+        rows = sorted(live.attention.values(), key=lambda row: row["since_seq"])
+        return [row for row in rows if row["kind"] != "mention" or not self._read(row)]
+
+    def _read(self, mention: dict[str, Any]) -> bool:
+        return self.marks.get(mention["id"].partition("@")[0], 0) >= mention["since_seq"]
+
+    def _mentions(self, live: Live) -> set[str]:
+        """The keys of the rows an unread mention names: its sender's and the stream it is on."""
+        named = set()
+        for row in live.attention.values():
+            if row["kind"] == "mention" and not self._read(row):
+                stream = row["id"].partition("@")[0]
+                named |= {f"@{row['agent']}", f"@{stream.partition('/')[2]}" if stream.startswith("inbox/") else ""}
+                named.add(f"#{stream.partition('/')[2]}" if stream.startswith("channel/") else "")
+        return named - {""}
+
+    def _navigator(self, live: Live) -> list[Row]:
+        mentioned = self._mentions(live)
+        rows: list[Row] = []
+        members: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in live.roster:
+            members[row["group"]].append(row)
+        for group, title, glyph, style in GROUPS:
+            if not members[group]:
+                continue
+            rows.append(Row(Content.styled(f"{title} ({len(members[group])})", "bold dim")))
+            names = {row["agent"] for row in members[group]}
+            under: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
+            for row in members[group]:
+                under[row["parent"] if row["parent"] in names else None].append(row)
+            rows += self._tree(under, None, 0, glyph, style, mentioned)
+        if not live.roster:
+            rows.append(Row(Content.styled("No agents yet", "dim")))
+        rows.append(Row(Content.styled("Channels", "bold dim")))
+        for focus in self._foci(live):
+            unread = self.unread.get(focus.key, 0)
+            count = ("99+" if unread >= 100 else str(unread)) if unread else ""
+            mark = ("@", "yellow") if focus.key in mentioned else ""
+            rows.append(Row(Content.assemble(SafeText(focus.title), (f" {count}", "bold"), " ", mark), focus.key))
+        return rows
+
+    def _tree(
+        self,
+        under: dict[str | None, list[dict[str, Any]]],
+        parent: str | None,
+        depth: int,
+        glyph: str,
+        style: str,
+        mentioned: set[str],
+    ) -> list[Row]:
+        rows = []
+        for row in sorted(under[parent], key=lambda found: found["agent"]):
+            detail = _why(row["why"]) if row["group"] in ("blocked", "needs_you", "failed") else row["activity"] or ""
+            stopped = f"turn {row['stopped']}" if row["stopped"] and row["group"] == "idle" else ""
+            line = Content.assemble(
+                "  " * depth,
+                (f"{glyph} ", style),
+                SafeText(f"@{row['agent']}", "bold"),
+                ("@" if f"@{row['agent']}" in mentioned else "", "yellow"),
+                SafeText(f" {_harness(row)} ", "dim"),
+                (f"↧{row['unread']} " if row["unread"] else "", "cyan"),
+                SafeText(" ".join((stopped or detail).split())),
+            )
+            rows.append(Row(line, f"@{row['agent']}"))
+            rows += self._tree(under, row["agent"], depth + 1, glyph, style, mentioned)
+        return rows
+
+    def _strip(self, live: Live) -> Content:
+        """The team on one line, for a screen too narrow for the navigator."""
+        return Content.assemble(
+            *(
+                part
+                for row in live.roster
+                for part in (
+                    (f"{GLYPHS[row['group']][0]}", GLYPHS[row["group"]][1]),
+                    SafeText(f"{row['agent']}  "),
+                )
+            )
+        )
+
+    def _title(self) -> Content:
+        focus = self.focus_on
+        if focus is None:
+            return Content("")
+        row = self._row(focus.agent)
+        if row is None:
+            return SafeText(focus.title, "bold")
+        return Content.assemble(
+            SafeText(focus.title, "bold"),
+            SafeText(f"  {row['role']} on {_harness(row)}", "dim"),
+            SafeText(f"  {row['state']}", GLYPHS[row["group"]][1]),
+            SafeText(f"  {_why(row['why'])}"),
+        )
+
+    def _behind(self) -> Content:
+        unseen = self.query_one(Transcript).unseen
+        follow = next(key.shown for key in keys("workspace") if key.action == "follow")
+        return Content.styled(f"↓ {unseen} new, {follow} to follow" if unseen else f"{follow} to follow", "reverse")
+
+    def _inspector(self, live: Live) -> Content:
+        focus = self.focus_on
+        row = self._row(focus.agent if focus else None)
+        if row is None:
+            return Content.styled("Choose an agent to see why it waits, what it runs on and what it spent.", "dim")
+        lines: list[Content] = [
+            SafeText(f"@{row['agent']}", "bold"),
+            SafeText(f"role {row['role']}, parent {('@' + row['parent']) if row['parent'] else 'none'}"),
+            SafeText(f"harness {_harness(row)}, model {row['model'] or 'its default'}"),
+            SafeText(
+                f"state {row['state']}"
+                + (f", {row['group'].replace('_', ' ')}" if row["group"] != row["state"] else "")
+            ),
+        ]
+        if row["why"] is not None:
+            lines.append(SafeText(f"why {_why(row['why'])}", "yellow"))
+        if row["held_by"]:
+            lines.append(SafeText(f"held by @{row['held_by']}"))
+        for level, said in (row["levels"] or {}).items():
+            reasons = "; ".join(said.get("reasons", ()))
+            lines.append(SafeText(f"{level} {said.get('state')}" + (f": {reasons}" if reasons else "")))
+        for unit, usage in row["usage"].items():
+            lines.append(_amount(unit, usage, None))
+        gaps = [gap for gap in (live.ending.gaps if live.ending else ()) if gap["agent"] == row["agent"]]
+        lines += [SafeText(f"gap {gap['what']}, {gap['count']} on the {gap['plane']} plane", "yellow") for gap in gaps]
+        lines += [
+            SafeText(f"{_named(action)}: {reason}", "dim")
+            for (action, agent), (reason, _) in self._refused.items()
+            if agent == row["agent"]
+        ]
+        return Content("\n").join(lines)
+
+    def _dock(self, live: Live) -> list[Row]:
+        places = self._places(live)
+        if self.chosen not in [row["id"] for row in places]:
+            self.chosen = places[0]["id"] if places else None
+        rows = []
+        first, second = (
+            next(key.shown for key in keys("workspace") if key.action == act)
+            for act in ("first_action", "second_action")
+        )
+        for place in places:
+            actions = place["actions"]
+            hints: list[Any] = []
+            if place["id"] == self.chosen:
+                hints = [
+                    (f"  {hint} {action['label']}", "bold")
+                    for hint, action in zip((first, second), actions, strict=False)
+                ]
+            line = Content.assemble(
+                ("⚠ ", "yellow"),
+                (f"{place['kind']} ", "bold"),
+                SafeText(f"@{place['agent']} " if place["agent"] else ""),
+                SafeText(" ".join(place["gist"].split())),
+                *hints,
+            )
+            rows.append(Row(line, place["id"]))
+        return rows
+
+    def _unsendable(self, live: Live) -> str | None:
+        """Why the composer cannot send now, or None when it can."""
+        if live.runtime != "live":
+            return "this is history: Alt+R resumes the session to send"
+        if self.target is None:
+            return f"{self.focus_on.title if self.focus_on else 'this'} takes no message: choose an agent or a topic"
+        return None
+
+    def _chip(self, live: Live) -> Content:
+        cannot = self._unsendable(live)
+        if cannot is not None:
+            return SafeText(cannot, "dim")
+        parts: list[Any] = [("to: ", "dim"), SafeText(self.target or "", "bold reverse")]
+        if self._queued is not None:
+            ways = sorted({entry["delivery"] for entry in self._queued["entries"]})
+            parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "cyan")]
+        if self.attached is not None:
+            parts += [SafeText(f"  + {self.attached[0]} ({len(self.attached[1]):,} bytes)", "magenta")]
+        refused = self._refusal_of_focus()
+        if refused:
+            parts += [SafeText(f"  {refused}", "dim")]
+        return Content.assemble(*parts)
+
+    def _refusal_of_focus(self) -> str:
+        agent = self.focus_on.agent if self.focus_on else None
+        return "; ".join(
+            f"{_named(action)}: {reason}" for (action, of), (reason, _) in self._refused.items() if of == agent
+        )
+
+    def _footer(self, live: Live) -> Content:
+        """The footer's keys, each dim while the runtime refuses it for the agent in view, then how many places need
+        you."""
+        agent = self.focus_on.agent if self.focus_on else None
+        shown = [key for key in (*keys("everywhere"), *keys("workspace")) if key.footer]
+        parts: list[Any] = []
+        for key in shown:
+            off = (key.action, agent or "") in self._refused
+            label = "" if self.size.width < 60 else f" {key.name}"
+            parts += [(key.shown, "dim" if off else "bold"), (label, "dim strike" if off else "dim"), "  "]
+        if places := len(self._places(live)):
+            parts.append((f" ⚠ {places} need you ", "bold reverse yellow"))
+        return Content.assemble(*parts)
+
+    # What a person does.
+
+    def _known(self, address: str) -> bool:
+        live = self.live
+        if live is None:
+            return False
+        agents = {f"@{row['agent']}" for row in live.roster}
+        topics = {row["name"] for row in live.channels if row["kind"] == "topic"}
+        return address in agents | topics
+
+    async def show(self, focus: Focus) -> None:
+        """Show a focus in the focus pane. The composer's target follows it while the draft is empty."""
+        live = self.live
+        if live is None:
+            return
+        self.focus_on = focus
+        transcript = self.query_one(Transcript)
+        await transcript.show(focus, live.session, transcript.through)
+        live.follow_tail(focus.agent)
+        if not self.query_one(Composer).text.strip():
+            self.target = focus.to
+        navigator = self.query_one("#navigator", Rows)
+        navigator.show(self._navigator(live))
+        if focus.key in navigator.keys:
+            navigator.move_to(focus.key)
+        self._mark(transcript)
+        await self._read_queue(live)
+        self._redraw()
+
+    def _focus_of(self, key: str) -> Focus:
+        live = self.live
+        assert live is not None
+        if key.startswith("@") and self._row(key.removeprefix("@")) is not None:
+            return self._agent(key.removeprefix("@"))
+        return next((focus for focus in self._foci(live) if focus.key == key), Focus.of_person(self.human))
+
+    async def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
+        if chosen.rows.id == "navigator":
+            await self.show(self._focus_of(chosen.key))
+        elif isinstance(chosen.rows, Dock):
+            self.chosen = chosen.key
+            await self._go_to(chosen.key)
+
+    async def _go_to(self, place: str) -> None:
+        live = self.live
+        row = live.attention.get(place) if live else None
+        if row is None:
+            return
+        stream = row["id"].partition("@")[0]
+        if stream.startswith("channel/"):
+            await self.show(self._focus_of(f"#{stream.partition('/')[2]}"))
+        elif stream.startswith("inbox/") and row["kind"] == "mention":
+            await self.show(Focus.of_person(self.human))
+        elif row["agent"]:
+            await self.show(self._agent(row["agent"]))
+        self._redraw()
+
+    def on_transcript_moved(self) -> None:
+        self._redraw()
+
+    async def on_composer_retarget(self, retarget: Composer.Retarget) -> None:
+        self.target = retarget.to
+        if self.live is not None:
+            await self._read_queue(self.live)
+        self._redraw()
+
+    def on_composer_empty(self) -> None:
+        self.action_detach()
+
+    def on_composer_send(self) -> None:
+        self._send()
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._lay_out(event.size.width, event.size.height)
+        self._redraw()
+
+    def _lay_out(self, width: int, height: int) -> None:
+        """The layout by size: a resize changes which panes show, and never what is in view, focus or the target."""
+        self.set_class(width < 120, "medium")
+        self.set_class(width < 80, "narrow")
+        self.set_class(width < 60, "slim")
+        self.set_class(height < 16, "short")
+
+    @work(group="act")
+    async def _send(self) -> None:
+        live = self.live
+        composer = self.query_one(Composer)
+        if live is None or (cannot := self._unsendable(live)) is not None:
+            note(self, cannot or "not attached yet", severity="warning")
+            return
+        text = composer.text.strip()
+        if not text and self.attached is None:
+            return
+        target = self.target
+        assert target is not None
+        if (found := ADDRESS.match(composer.text)) is not None and found[1] != target:
+            question = SafeText(f"This begins with {found[1]}, and goes to {target}, as shown. Send it to {target}?")
+            if not await self.app.push_screen_wait(Confirm(question)):
+                return
+        if self.attached is not None and len(text) > GIST_LIMIT:
+            note(self, "a long message and a file are two bodies: send them one at a time", severity="warning")
+            return
+        gist, body = text, None
+        if self.attached is not None:
+            gist, body = text or f"file {self.attached[0]}", self.attached[1]
+        elif len(text) > GIST_LIMIT:
+            gist, body = f"{text[: GIST_LIMIT - 1]}…", text
+        try:
+            await live.session.send(target, gist, body=body)
+        except Refused as refused:
+            note(self, str(refused), severity="error")
+            return
+        composer.remember()
+        self.attached = None
+        self._redraw()
+
+    def _fingerprint(self, agent: str) -> str:
+        row = self._row(agent)
+        return json.dumps([row[name] for name in ("state", "group", "why", "unread")] if row else None)
+
+    def _refusing(self, action: str, agent: str, refused: Refused) -> None:
+        """Keep a refusal the runtime gave, which disables that act on that agent until its row moves."""
+        detail = refused.refusal.detail
+        reason = detail if isinstance(detail, str) else json.dumps(detail)
+        self._refused[(action, agent)] = (reason, self._fingerprint(agent))
+        note(self, f"{_named(action)} @{agent}: {reason}", severity="warning")
+        self._redraw()
+
+    @work(group="act")
+    async def action_interrupt(self) -> None:
+        await self._interrupt(below=False)
+
+    @work(group="act")
+    async def action_stop_below(self) -> None:
+        await self._interrupt(below=True)
+
+    async def _interrupt(self, *, below: bool) -> None:
+        live, focus = self.live, self.focus_on
+        action = "stop_below" if below else "interrupt"
+        if live is None or focus is None or focus.agent is None:
+            note(self, f"{_named(action)} needs an agent in view", severity="warning")
+            return
+        try:
+            stopped = await live.session.interrupt(focus.agent, below=below)
+        except Refused as refused:
+            self._refusing(action, focus.agent, refused)
+            return
+        said = ", ".join(stopped["stopped"])
+        note(self, f"Stopped the turns of {said}. It stops turns, not waits: one parked on a wait is left to it.")
+
+    async def action_next_needing_you(self) -> None:
+        dock = self.query_one(Dock)
+        if (place := dock.step(1)) is None:
+            note(self, "Nothing needs you now.")
+            return
+        self.chosen = place
+        await self._go_to(place)
+
+    @work(group="act")
+    async def action_first_action(self) -> None:
+        await self._act(0)
+
+    @work(group="act")
+    async def action_second_action(self) -> None:
+        await self._act(1)
+
+    async def _act(self, index: int) -> None:
+        """Take an action of the place you are at, as its row offers it, with the version it was drawn from."""
+        live = self.live
+        place = live.attention.get(self.chosen or "") if live else None
+        if live is None or place is None or index >= len(place["actions"]):
+            note(self, "Nothing here takes that action.", severity="warning")
+            return
+        action = place["actions"][index]
+        args = {**action["args"], **({"via": "tui"} if action["op"] == "approval.resolve" else {})}
+        outcome = await live.session.submit(action["op"], **args)
+        refusal = outcome.refusal
+        if refusal is None:
+            note(self, f"{action['label']}: {place['gist']}")
+        elif refusal.code == "conflict" and isinstance(refusal.detail, dict) and refusal.detail.get("resolved_by"):
+            detail = refusal.detail
+            via = f" via {detail['via']}" if detail.get("via") else ""
+            note(self, f"Already decided, {detail['state']}, by {detail['resolved_by']}{via}")
+        else:
+            note(self, f"{refusal.code}: {refusal.detail}", severity="warning")
+
+    async def action_next_row(self) -> None:
+        await self._step(1)
+
+    async def action_previous_row(self) -> None:
+        await self._step(-1)
+
+    async def _step(self, by: int) -> None:
+        navigator = self.query_one("#navigator", Rows)
+        if (key := navigator.step(by)) is not None:
+            await self.show(self._focus_of(key))
+
+    def action_navigator(self) -> None:
+        self.toggle_class("navigator-shown" if self.size.width < 80 else "navigator-hidden")
+
+    def action_inspector(self) -> None:
+        self.toggle_class("inspector-shown")
+
+    def action_open_line(self) -> None:
+        self.query_one(Transcript).toggle()
+
+    def action_page_up(self) -> None:
+        self.query_one(Transcript).scroll_page_up(animate=False)
+
+    def action_page_down(self) -> None:
+        self.query_one(Transcript).scroll_page_down(animate=False)
+
+    def action_oldest(self) -> None:
+        self.query_one(Transcript).action_oldest()
+
+    async def action_follow(self) -> None:
+        await self.query_one(Transcript).action_follow()
+
+    @work(group="act")
+    async def action_attach_file(self) -> None:
+        about = SafeText("A file to send as the message's body. The message's text is its gist.")
+        given = await self.app.push_screen_wait(Form(Content.styled("Attach a file", "bold"), [("path", about, "")]))
+        if not given or "path" not in given:
+            return
+        path = Path(given["path"]).expanduser()
+        try:
+            found = path.read_bytes()
+        except OSError as error:
+            note(self, f"{path}: {error}", severity="error")
+            return
+        if len(found) > ATTACHED_LIMIT:
+            note(self, f"{path.name} is past the {ATTACHED_LIMIT:,} bytes a message carries", severity="error")
+            return
+        self.attached = (path.name, found)
+        self._redraw()
+
+    @work(group="act")
+    async def action_resume(self) -> None:
+        live = self.live
+        if live is None or live.runtime == "live" or is_held(live.session.folder):
+            note(self, "A runtime holds this session already.")
+            return
+        if live.runtime == "closed":
+            note(self, "The session has closed, so nothing would come back.")
+            return
+        question = SafeText(f"Resume {self.session_name}? Its harnesses come back, which can spend money.")
+        if not await self.app.push_screen_wait(Confirm(question)):
+            return
+        try:
+            resumed = await Session.resume(self.session_name, detach=True)
+        except Refused as refused:
+            note(self, str(refused), severity="error")
+            return
+        await resumed.leave()
+
+    def action_planned(self, action: str) -> None:
+        key = next(key for key in KEYMAP if key.action == action and key.planned)
+        note(self, f"{key.does}: not built yet, as {key.planned}", severity="warning")
+
+    def action_detach(self) -> None:
+        self.app.exit(self.session_name)
+
+    # The palette: these keys, then the ops a person may run, worded as the command line words them.
+
+    def commands(self) -> list[tuple[str, str, Any]]:
+        found: list[tuple[str, str, Any]] = []
+        for key in (*keys("workspace"), *keys("transcript")):
+            if key.planned:
+                found.append(
+                    (key.name.capitalize(), f"Not built yet: {key.planned}", partial(self.action_planned, key.action))
+                )
+            elif key.where == "workspace":
+                found.append((key.name.capitalize(), key.does, getattr(self, f"action_{key.action}")))
+        for name, operation in sorted(person_ops().items()):
+            first = described(operation).partition(". ")[0].rstrip(".")
+            found.append((name.replace(".", " "), f"{first}.", partial(self._run_op, name)))
+        return found
+
+    @work(group="act")
+    async def _run_op(self, name: str) -> None:
+        live = self.live
+        if live is None:
+            return
+        operation = person_ops()[name]
+        schema = operation.input.model_json_schema()
+        fields = flags(operation)
+        given = {
+            "agent": f"@{self.focus_on.agent}" if self.focus_on and self.focus_on.agent else "",
+            "to": self.target or "",
+        }
+        asked = [
+            (
+                field.name,
+                SafeText(f"{field.flag[2:]}: {schema['properties'][field.name].get('description', '')}"),
+                given.get(field.name, ""),
+            )
+            for field in fields
+        ]
+        answer = await self.app.push_screen_wait(Form(SafeText(name.replace(".", " "), "bold"), asked)) if asked else {}
+        if answer is None:
+            return
+        try:
+            args = {field.name: _value(field, answer[field.name]) for field in fields if field.name in answer}
+        except ValueError as error:
+            note(self, str(error), severity="error")
+            return
+        for field in fields:
+            if field.body and field.name in args:
+                args[field.name] = await live.session.put_body(args[field.name].encode())
+        if name in CONFIRMED:
+            question = SafeText(
+                f"{name.replace('.', ' ')} {' '.join(map(str, args.values()))}? It cannot be taken back."
+            )
+            if not await self.app.push_screen_wait(Confirm(question)):
+                return
+        outcome = await live.session.submit(name, **args)
+        if outcome.refusal is not None:
+            note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
+        else:
+            note(self, json.dumps(outcome.result)[:GIST_LIMIT] if outcome.result is not None else "done")
+
+
+def _value(field: Flag, text: str) -> Any:
+    """A form's text as the value an op's field takes."""
+    if field.json:
+        return json.loads(text)
+    kinds = [
+        kind for kind in (*getattr(field.annotation, "__args__", ()), field.annotation) if kind in (int, float, bool)
+    ]
+    if bool in kinds:
+        return text.lower() in ("y", "yes", "true", "1")
+    if kinds:
+        return kinds[0](text)
+    if "tuple" in str(field.annotation):
+        return [part.strip() for part in text.split(",") if part.strip()]
+    return text

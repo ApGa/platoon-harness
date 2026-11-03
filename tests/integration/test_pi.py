@@ -850,3 +850,10 @@ async def test_a_child_is_drawn_under_the_call_that_started_it(tmp_path, monkeyp
 
     assert spawned.data["turn"] == turn
     assert (list(spawned.native), under) == (["platoon-harness/callId"], [])
+
+
+async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    async with FakeModel(clients.SAID) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.the_tui_sends_from_its_composer_and_draws_the_reply_once(team, tmp_path)

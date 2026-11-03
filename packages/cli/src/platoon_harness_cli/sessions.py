@@ -7,7 +7,7 @@ from typing import Any
 
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import is_held
-from platoon_harness.runtime.paths import find_root, listing, read_running, session_folder
+from platoon_harness.runtime.paths import find_root, listing, read_running
 
 from .ops import command_line
 from .output import note, refused, safe, say, shown
@@ -101,16 +101,21 @@ async def stop(session: str, /) -> int:
     session
         A session, by name.
     """
-    folder = session_folder(find_root(), session)
     async with Session.attach(session, view=True) as attached:
-        incarnation = max([event.version async for event in attached.events(match="runtime")], default=None)
-        running = read_running(folder)
-        if not is_held(folder) or running is None:
-            raise Refused("conflict", f"no runtime holds session {session}: it has stopped")
-        if running.incarnation != incarnation:
-            raise Refused("busy", f"the runtime of session {session} is starting: try again once it is up")
-        os.kill(running.pid, signal.SIGTERM)
+        await ask_to_stop(attached)
         async for _ in attached.events(await attached.head(), follow=True):
             pass
     note(f"stopped session {session}: `platoon-harness session resume {session}` restarts it")
     return 0
+
+
+async def ask_to_stop(attached: Session) -> None:
+    """Send a session's runtime the owner's stop, SIGTERM, if it is the one the journal last saw start. It returns at
+    once: the runtime lets go of the session once its shutdown is done."""
+    incarnation = max([event.version async for event in attached.events(match="runtime")], default=None)
+    running = read_running(attached.folder)
+    if not is_held(attached.folder) or running is None:
+        raise Refused("conflict", f"no runtime holds session {attached.name}: it has stopped")
+    if running.incarnation != incarnation:
+        raise Refused("busy", f"the runtime of session {attached.name} is starting: try again once it is up")
+    os.kill(running.pid, signal.SIGTERM)

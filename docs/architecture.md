@@ -497,7 +497,7 @@ One definition reaches every surface.
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, but `wait` and the ops on a wait, as a wait parks a turn and a person has none. Its name is split at the dot, a flag per argument comes from its schema, a read runs on a view credential, and its help is the op's description, each op named as the command that runs it and each argument as its flag. An extension's op has no command yet |
 | Web | `POST /x/command {op, args, key, expected_version}` |
-| TUI | Palette entries and generated forms; buttons come from `actions[]`; disabled entries carry `authorize`'s reason |
+| TUI | Palette entries from the command line's definitions, worded as its help, with generated forms; the dock's actions come from `actions[]`; an act the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
 one (`claudecode/toolUseId`, Codex `callId`) and the turn otherwise. The op and args stay in the key because one Codex script can
@@ -1184,8 +1184,8 @@ beside old ones, on a closed session, with no writer lock.
 
 ## 12. Clients
 
-Clients hold no timers, decide nothing and compute no status. They submit ops and render kernel views, so no second scheduler
-can exist.
+Clients decide nothing, hold no timer that does, and compute no status. They submit ops and render kernel views, so no second
+scheduler can exist.
 
 ```python
 async with Session.start(team, name="fix-auth") as session:   # owner: leaving stops agents and keeps the folder
@@ -1273,9 +1273,14 @@ view so every client says the same, and no state: `needs_you` while an attention
 otherwise. A mention is the person's to read, which their marks say, so it names no group. `actions[]` are
 op references, each with whatever keeps a stale button from deciding anything, so any client can draw them.
 
-- **TUI.** Textual. One 15 Hz coalescer between the journal and widgets drops render frames, never events. `TranscriptView` is on
-  the Line API with paging from the journal, so history is virtual. Untrusted text crosses one `SafeText` boundary, and a lint
-  bans bare `str` in label-like widgets. Approvals never take focus.
+- **TUI.** Textual, in the CLI package, which `platoon-harness` opens on a terminal and a headless command never imports. It starts a
+  session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most 15 frames a second,
+  dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a slow screen is handled.
+  Its two timers decide nothing: one paces frames, and one looks for a runtime to attach to while it shows history. The transcript is
+  on the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and
+  drawn through an LRU of strips keyed by width; live text follows below it, one tail for the agent in view. Unread counts and read
+  mentions come from the person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans bare `str` in label-like
+  widgets. Approvals never take focus. [tui.md](tui.md) is its guide.
 - **SwarmChat.** A follower folds the journal into its own rebuildable `swarmchat.sqlite` and serves the pinned, hash-checked
   frontend assets, the `view_*` replies, an overlay, and one `/x/command` route into the same ops. Upstream's server never runs,
   and nothing re-ingests the projection, so two authorities and echo loops have no path. Direct chats key on the unordered

@@ -4,7 +4,6 @@ text."""
 import json
 import os
 import sys
-import unicodedata
 from typing import Any
 
 from platoon_harness import Ending
@@ -13,7 +12,9 @@ from platoon_harness.kernel import Event, Refusal
 FORMAT = 1
 """The shape of a JSONL line. Every line carries it, so a consumer that starts with `--after` knows it too."""
 
-_CONTROLS = ("Cc", "Cf", "Zl", "Zp")
+_BIDI = (0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A))
+_CONTROLS = (*range(0x09), *range(0x0B, 0x20), 0x7F, *range(0x80, 0xA0), *_BIDI)
+_ESCAPED = {code: chr(code).encode("unicode_escape").decode() for code in _CONTROLS}
 
 
 def event_line(event: Event) -> str:
@@ -43,12 +44,9 @@ def readable_ending(ending: Ending, code: int) -> str:
 
 
 def safe(text: str) -> str:
-    """Text as a terminal shows text: a control character, which could move the cursor or retitle the window, is shown
-    as its escape. A line break stays one."""
-    return "\n".join(
-        "".join(c if unicodedata.category(c) not in _CONTROLS else c.encode("unicode_escape").decode() for c in line)
-        for line in text.split("\n")
-    )
+    """Text as a terminal shows text: each control it would act on, C0 but tab and newline, DEL, C1 and the bidi
+    controls, which could move the cursor, retitle the window or reorder what is read, is shown as its escape."""
+    return text.translate(_ESCAPED)
 
 
 def say(text: str) -> bool:

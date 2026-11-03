@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness import Team
-from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, DriverInfo, Reporter
+from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Delta, DriverInfo, Item, Reporter
 from platoon_harness.drivers.wire import serve
+from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 PROGRAM = str(Path(__file__))
 TOLD = "Begin every reply with the word kestrel, then use `peers`."
+HOSTILE = "kestrel \x1b]0;owned\x1b\\ \x1b]52;c;ZXZpbA==\x1b\\ \x1b[2J \x9b31m \x1bc \u202eevil"
 
 WORKERS = ["w1", "w2"]
 FIX_THE_TEST = [
@@ -114,6 +116,18 @@ class Stuck(Resumable):
         return await super().deliver(delivery)
 
 
+class Streaming(ScriptedDriver):
+    """It says a long answer a word at a time, a hundred words a second for five seconds, as a model streams one."""
+
+    async def _say(self, text: str, call_id: str | None = None) -> None:
+        words = [f"word{n} " for n in range(500)]
+        for word in words:
+            await self._report(Delta(text=word))
+            await asyncio.sleep(0.01)
+        said = "".join(words)
+        await self._report(Item(kind="message", gist=said[:GIST_LIMIT], body=said, call_id=call_id))
+
+
 class OnAPlan(ScriptedDriver):
     """A harness signed in on a plan, as its status command would say."""
 
@@ -157,6 +171,8 @@ HARNESSES = {
     "returning": lambda: Returning([[Hang()]]),
     "deaf": lambda: Deaf([[Hang()]]),
     "planned": lambda: OnAPlan(itertools.repeat([Say("done")])),
+    "hostile": lambda: ScriptedDriver([[Say(HOSTILE)]]),
+    "streaming": lambda: Streaming(itertools.repeat([Say("")])),
 }
 
 

@@ -2,12 +2,13 @@
 
 import logging
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from cyclopts import App, CycloptsError, Group, Parameter
 from rich.console import Console
 
 from platoon_harness import ConfigError, Refused
+from platoon_harness.runtime.paths import find_root, session_folder
 from platoon_harness.version import __version__ as sdk_version
 
 from . import __version__, machine, running, sessions, teams
@@ -17,8 +18,9 @@ from .output import note, refused
 
 HELP = """Bring the agent harnesses you already use together as a team, from a terminal or from CI.
 
-A session is a folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for
-clients to attach to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
+On a terminal, `platoon-harness` alone opens the terminal UI, and `attach` opens one session there. A session is a
+folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for clients to attach
+to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
 
 For example:
 
@@ -50,6 +52,33 @@ def _flags(app: App) -> None:
             _flags(app[name])
 
 
+def _terminal() -> bool:
+    return sys.stdin is not None and sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def attach(session: str, /) -> int:
+    """Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
+
+    Attaching has no side effects: only Alt+R, which resumes a session with no runtime, can spend money. Ctrl+D
+    detaches, and the session runs on. It needs a terminal: `events --follow` follows a session as text.
+
+    For example:
+
+        platoon-harness attach fix-auth
+
+    Parameters
+    ----------
+    session
+        A session, by name. `platoon-harness session list` shows them.
+    """
+    if not _terminal():
+        raise Usage(f"attach draws on a terminal, and none is here: `platoon-harness events {session} --follow`")
+    session_folder(find_root(), session)
+    from .tui import run as tui
+
+    return tui(session)
+
+
 def build() -> App:
     """The whole command line. Commands that act on a session come from the op registry, so they cannot drift."""
     app = App(
@@ -60,6 +89,8 @@ def build() -> App:
         console=Console(),
         error_console=Console(stderr=True),
     )
+    app.default(_opened(app))
+    app.command(attach)
     app.command(running.run)
     app.command(running.serve)
     app.command(running.events)
@@ -79,6 +110,19 @@ def build() -> App:
             app.command(group)
     _flags(app)
     return app
+
+
+def _opened(app: App) -> Callable[[], int]:
+    def opened() -> int:
+        """Open the terminal UI on a terminal, and say this help anywhere else, as nothing prompts with none."""
+        if not _terminal():
+            app.help_print()
+            return 0
+        from .tui import run as tui
+
+        return tui()
+
+    return opened
 
 
 def main(tokens: Sequence[str] | None = None) -> int:

@@ -60,8 +60,9 @@ platoon-harness COMMAND
 
 Bring the agent harnesses you already use together as a team, from a terminal or from CI.
 
-A session is a folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for
-clients to attach to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
+On a terminal, `platoon-harness` alone opens the terminal UI, and `attach` opens one session there. A session is a
+folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for clients to attach
+to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
 
 For example:
 
@@ -73,6 +74,7 @@ For example:
 
 ## Table of Contents
 
+- [`attach`](#platoon-harness-attach)
 - [`run`](#platoon-harness-run)
 - [`serve`](#platoon-harness-serve)
 - [`events`](#platoon-harness-events)
@@ -147,6 +149,7 @@ For example:
 
 **Commands**:
 
+* [`attach`](#platoon-harness-attach): Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
 * [`doctor`](#platoon-harness-doctor): Say whether this machine can run sessions, and what it has.
 * [`events`](#platoon-harness-events): Print a session's events past a cursor, live or closed, writing nothing.
 * [`extension`](#platoon-harness-extension): What is installed, read from metadata alone.
@@ -173,6 +176,25 @@ For example:
 * [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 * [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
 * [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
+
+### platoon-harness attach
+
+```console
+platoon-harness attach SESSION
+```
+
+Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
+
+Attaching has no side effects: only Alt+R, which resumes a session with no runtime, can spend money. Ctrl+D
+detaches, and the session runs on. It needs a terminal: `events --follow` follows a session as text.
+
+For example:
+
+    platoon-harness attach fix-auth
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
 
 ### platoon-harness run
 

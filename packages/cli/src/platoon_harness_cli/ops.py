@@ -76,7 +76,7 @@ def groups(found: dict[str, App]) -> dict[str, App]:
 
 
 @dataclass(frozen=True)
-class _Field:
+class Flag:
     """One argument of an op, as a flag. `json` takes JSON text, and `body` stored text, or a file's with `-file`."""
 
     name: str
@@ -106,7 +106,17 @@ def _type_of(field: Mapping[str, Any]) -> tuple[Any, bool]:
     return (found | None if nullable else found), kind not in _KINDS and kind != "array" and "enum" not in branch
 
 
-def _fields(schema: Mapping[str, Any]) -> list[_Field]:
+def flags(operation: Op) -> list[Flag]:
+    """The flags an op's command takes, a flag per argument."""
+    return _fields(operation.input.model_json_schema())
+
+
+def described(operation: Op) -> str:
+    """An op's description in a person's words, as its command's help says it."""
+    return _described(operation.fn.__doc__ or "", flags(operation))
+
+
+def _fields(schema: Mapping[str, Any]) -> list[Flag]:
     required = set(schema.get("required", ()))
     fields = []
     for name, field in schema.get("properties", {}).items():
@@ -118,11 +128,11 @@ def _fields(schema: Mapping[str, Any]) -> list[_Field]:
             default = inspect.Parameter.empty
         elif is_json or isinstance(default, list | dict):
             default = None if is_json else tuple(default)
-        fields.append(_Field(name, annotation, default, is_json, body))
+        fields.append(Flag(name, annotation, default, is_json, body))
     return fields
 
 
-def _described(text: str, fields: list[_Field]) -> str:
+def _described(text: str, fields: list[Flag]) -> str:
     """An op's own words as a person reads them at a command line: each op it names as the command that runs it, with a
     sentence that names one with no command left out, as an agent's are, and each of its arguments as a flag."""
     flags = {field.name: field.flag for field in fields}
@@ -130,7 +140,7 @@ def _described(text: str, fields: list[_Field]) -> str:
     return OP_NAMED.sub(lambda named: f"`{flags[named[1]]}`" if named[1] in flags else named[0], said)
 
 
-def _help(field: Mapping[str, Any], found: _Field, fields: list[_Field]) -> str:
+def _help(field: Mapping[str, Any], found: Flag, fields: list[Flag]) -> str:
     said = _described(field.get("description", ""), fields)
     if found.json:
         said = f"{said} As JSON.".strip()
@@ -139,7 +149,7 @@ def _help(field: Mapping[str, Any], found: _Field, fields: list[_Field]) -> str:
     return said
 
 
-def _parameters(schema: Mapping[str, Any], fields: list[_Field]) -> list[inspect.Parameter]:
+def _parameters(schema: Mapping[str, Any], fields: list[Flag]) -> list[inspect.Parameter]:
     properties = schema.get("properties", {})
     parameters = []
     for found in fields:
@@ -167,14 +177,14 @@ def _parameters(schema: Mapping[str, Any], fields: list[_Field]) -> list[inspect
     return parameters
 
 
-def _example(name: str, fields: list[_Field]) -> str:
+def _example(name: str, fields: list[Flag]) -> str:
     """The command with what it needs, each value named for what it is."""
     needed = [field for field in fields if field.default is inspect.Parameter.empty]
     flags = (field.flag if field.annotation is bool else f"{field.flag} {field.name.upper()}" for field in needed)
     return " ".join(["platoon-harness", *name.split("."), "SESSION", *flags])
 
 
-async def _arguments(session: Session, fields: list[_Field], given: Mapping[str, Any]) -> dict[str, Any]:
+async def _arguments(session: Session, fields: list[Flag], given: Mapping[str, Any]) -> dict[str, Any]:
     """What the op takes from the flags given: a list for a repeated flag, JSON parsed, and a body stored first. A flag
     left out leaves the op its own default."""
     args: dict[str, Any] = {}
@@ -194,7 +204,7 @@ async def _arguments(session: Session, fields: list[_Field], given: Mapping[str,
     return args
 
 
-async def _body(session: Session, field: _Field, text: str | None, path: Path | None) -> str | None:
+async def _body(session: Session, field: Flag, text: str | None, path: Path | None) -> str | None:
     """A body as a ref: text stored, or a file's bytes, or a ref as it stands."""
     if text is not None and path is not None:
         raise Usage(f"give {field.flag} or {field.flag}-file, not both")

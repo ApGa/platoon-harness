@@ -334,7 +334,8 @@ Rules that hold on every harness:
   Claude Code, Codex and pi each kept the tool block byte for byte across a tool call, a wake and a resume by a new process, and said
   our words once per request [L]. That is a measurement and not a gate, and a live Codex's block, one `exec` tool, cannot be read.
 - **Skills.** Per harness. No unification is claimed.
-- **Slash commands.** A small core of ours plus namespaced passthrough. The syntax is a TUI decision and is not set here.
+- **Slash commands.** A small core of ours plus namespaced passthrough, planned. The TUI sends what its composer holds as a person's
+  message, so it reaches no harness's own slash command yet, and its own commands are in its palette.
 - **Hooks.** Displayed, not reimplemented.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as
   bodies. If what was forgotten is unknown, that is a `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
@@ -404,7 +405,7 @@ detection rows describe our code. The others record probes of upstreams or throw
 | Kernel and journal | **Tested.** Unit tests, including SIGKILL. The spike's prototype had 0 violations in 226,807 acked commands over 40 kills. Power loss not tested | **Not run.** Needs `fullfsync=ON` and `checkpoint_fullfsync=ON`. `F_FULLFSYNC` latency is unmeasured and decides the 50 ms mark | **Not a target.** Not run. The design uses `flock`, Unix sockets and process groups | **Not run.** Linux rules inside the distro filesystem. `/mnt/c` is 9p and refused |
 | Control socket | **Measured.** Python `bind` allows 107 bytes | **Not run.** 103 usable, from headers | Not run | Not run |
 | Filesystem detection | **Exercised:** xfs, tmpfs, Lustre, FUSE control, `proc`, symlinks. Other magics come from headers | **Not run.** Written from the man page | Not run | 9p magic known, not exercised |
-| TUI | **Probed.** Textual 8.2.8 on a real PTY | Not run | Untested: probes used Unix `pty` | Not run |
+| TUI | **Tested.** Textual 8.2.8 under Pilot, and `platoon-harness attach` on a real PTY read through `pyte`. Real terminals, tmux and SSH have not been measured | Not run | Untested: the tests use Unix `pty` | Not run |
 | SwarmChat client | **Probed** against a stub authority, not our backend. Headless Chromium on RHEL 9.4 x86-64. Firefox and WebKit untested | Not run by us. Upstream runs `unittest` only | Not run by us. Upstream runs `unittest` only | Not run |
 | Claude Code, Codex | **Real model** on x86-64 | Not run. Seatbelt not tested | Not run | Not run. Codex's sandbox does not support WSL1 |
 | pi, OpenCode, OpenHands | **Loopback** on x86-64 | Not run | Not run | Not run |

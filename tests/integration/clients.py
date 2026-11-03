@@ -1,5 +1,5 @@
-"""What the TUI and SwarmChat read, held on a real binary against FakeModel. Each scenario takes a team whose one role,
-`bob`, runs that binary, and each harness's test file runs it on its own."""
+"""What the TUI and SwarmChat read, and the TUI itself, held on a real binary against FakeModel. Each scenario takes a
+team whose one role, `bob`, runs that binary, and each harness's test file runs it on its own."""
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -9,8 +9,11 @@ from platoon_harness import Session, Team
 from platoon_harness.kernel import Delta, Event
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
+from platoon_harness_cli.tui.app import Harness
+from platoon_harness_cli.tui.transcript import Transcript
 
 from ..unit.runtime.support import in_state, of_type, until
+from ..unit.tui.support import drawn, workspace
 from .scripts import over
 
 TIMEOUT = 60.0
@@ -95,3 +98,21 @@ async def a_child_and_the_call_that_started_it(team: Team, root: Path) -> tuple[
 
     under = [item for item in tools if item.agent == "bob" and item.data["native_id"] in spawned.native.values()]
     return spawned, under, turn.data["turn"]
+
+
+async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:
+    """The TUI, as a guest over the socket: a message typed in its composer reaches the harness once, and the reply
+    is drawn once, as a line of the transcript. Its caller points `PLATOON_HARNESS_HOME` at `root`."""
+    async with Session.start(team, name="s", root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        app = Harness("s")
+        async with app.run_test(size=(120, 30)) as pilot:
+            await drawn(pilot, lambda text: "@bob" in text, within=TIMEOUT)
+            await pilot.press(*"go", "enter")
+            await drawn(pilot, lambda text: f"@bob  {SAID}" in text, within=TIMEOUT)
+            lines = [block.line.plain for block in workspace(app).query_one(Transcript).blocks]
+        sent = [event for event in await of_type(session, "message.sent") if event.actor == "human:you"]
+        said = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "message"]
+
+    assert [event.gist for event in sent] == ["go"] and [event.gist for event in said] == [SAID]
+    assert sum(SAID in line for line in lines) == 1 and sum(line.endswith("go") for line in lines) == 1

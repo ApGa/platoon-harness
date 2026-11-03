@@ -101,11 +101,18 @@
 - `tests/integration/clients.py`: the live tail, stop below, an interrupt under a `tokens` limit and a child's anchor, run on the
   real Claude Code, Codex and pi binaries against FakeModel. `tests/live/test_interrupts.py`: an interrupt during a call under a
   `tokens` limit on real models, after which the session goes on.
+- The terminal UI: `platoon-harness` on a terminal opens the sessions screen, and `platoon-harness attach SESSION` one session. It
+  starts a session on a detached runtime and is its guest, so Ctrl+D detaches and the session runs on. The workspace has a navigator
+  grouped by what a person must do, a focus pane with a transcript read from the journal a page at a time, live text below it, an
+  inspector, a dock of the places a person must act, and a composer whose target is always shown. One keymap table makes the
+  bindings, the help, the footer, the palette and the keymap of `docs/tui.md`. Untrusted text crosses one `SafeText` boundary.
 - `group` on each roster row: what a person must do about the agent, `needs_you`, `working`, `blocked`, `idle`, `done` or
   `failed`, derived in the view so every client says the same.
 
 ### Changed
 
+- The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,
+  and nothing else, where it escaped every format character, which broke emoji joined by a zero-width joiner.
 - The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.
 - A person's message to an agent steers, whatever the reader's delivery setting, and a script's `Session.send` is a person's. An
   agent's message follows the reader's setting as before. Nothing withdraws a sent message.
