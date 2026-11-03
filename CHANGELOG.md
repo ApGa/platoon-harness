@@ -106,6 +106,7 @@
   grouped by what a person must do, a focus pane with a transcript read from the journal a page at a time, live text below it, an
   inspector, a dock of the places a person must act, and a composer whose target is always shown. One keymap table makes the
   bindings, the help, the footer, the palette and the keymap of `docs/tui.md`. Untrusted text crosses one `SafeText` boundary.
+  `tests/live/test_tui.py` drives it with Pilot on a Claude Code lead and a Codex worker.
 - `group` on each roster row: what a person must do about the agent, `needs_you`, `working`, `blocked`, `idle`, `done` or
   `failed`, derived in the view so every client says the same.
 

@@ -25,6 +25,8 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 - **An interrupt under a `tokens` limit,** section 18, is runs 44 and 45: 3 model calls from 2 journals, of a limit of 20.
 - **The command line,** section 17, is runs 40 to 43, through the installed `platoon-harness`: 31 model calls from 4 journals, of a
   limit of 50, with their transcripts and journals kept outside the repository too.
+- **The terminal UI,** section 19, is runs 46 and 47, driven by Pilot: 14 model calls from 1 journal, of a limit of 40. Run 46 made
+  no session and spent nothing.
 
 ## Results
 
@@ -309,6 +311,16 @@ word.
 | 45 | Codex | 1 | Passed the same way, at 215,123. The cut call never reached the journal, as no Codex frame says a call began, so the journal counts 1 call where the provider heard 2 |
 
 Run 42 is the case these close: there a turn a stop cut left every later reservation in `tokens` refused `unavailable`.
+
+### 19. The terminal UI
+
+`tests/live/test_tui.py`, the TUI driven by Pilot in the test's process, on a session it started from its sessions screen on a
+detached runtime: a Claude Code lead and a Codex worker in a read-only sandbox whose role asks for approvals.
+
+| Run | Calls | What happened |
+|---|---|---|
+| 46 | 0 | Failed before any session was made: the test's own wait for the screen cancelled the worker that was starting it, as a task that awaits a Textual worker and is cancelled cancels the worker. The helper was fixed |
+| 47 | 14 | Passed in 48 s. The plan login was asked about once. The job went from the composer; the lead spawned `w` and ended its turn; `w` asked to run `echo hello > out.txt` and the approval was allowed from the dock, `via` `tui`, once; a memo to the worker's topic was queued while it worked; its story streamed as live text, and Esc interrupted it mid-turn. The memo woke nothing, and `w` took no turn until a person's message came, which landed it. The lead was woken by its wait holding on the cut report, took a turn, and finished on `w`'s next answer; `w` retired with it. After Ctrl+D, a new app attached and saw the session settled. The lead made 9 calls in 3 turns and `w` 5 in 2 |
 
 ## What a real model did that scripted harnesses could not show
 
