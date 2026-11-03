@@ -124,6 +124,16 @@ Agent, tool, branch and file names, messages and tool output reach the screen th
 shows each control a terminal would act on as its escape: C0 but tab and newline, DEL, C1 and the bidi controls. Nothing
 from outside is read as markup.
 
+## Terminals that keep keys
+
+Some terminals keep keys for themselves. The terminal inside VS Code, and inside editors built on it such as Cursor, hands
+a key bound to an editor command to the editor, by the list in `terminal.integrated.commandsToSkipShell`, and there F1
+opens the editor's own command palette. `"terminal.integrated.sendKeybindingsToShell": true` sends most keys to the program
+instead. On macOS, Option types a character, `å` for Option+A, unless the terminal is set to send it as Meta: in VS Code
+and Cursor `"terminal.integrated.macOptionIsMeta": true`, in Terminal.app's profile "Use Option as Meta key", and in
+iTerm2's "Left Option key: Esc+". Until then every Alt key here arrives as a character instead. Nothing here was measured
+on a Mac. None of these settings is needed, since every act has a typed command and a plain-key path.
+
 ## Keys
 
 The keymap is one table, from which the bindings, the typed commands, the help (`/`, `?` or F1), the footer, the palette

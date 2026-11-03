@@ -112,7 +112,8 @@
   as Cursor's on a Mac does, leaves none out of reach. In the composer a line that is exactly `/` and an act's name runs it and
   goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. Tab and Shift+Tab go round the composer,
   the transcript, the dock and the navigator, and in the dock the arrows choose a place and `y` and `n` answer it. The sessions
-  screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them.
+  screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them. `docs/tui.md` names the VS Code,
+  Cursor, Terminal.app and iTerm2 settings that keep keys. ADR 0026.
 
 ### Changed
 
