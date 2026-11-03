@@ -230,7 +230,7 @@ points, which are marked `slow`.
 | A harness that says ready and never begins its goal is lost, and one resumed before it began is told again | tested | `test_host.py`, `test_recovery.py` |
 | Model pinning: `ready` naming another model fails the spawn or the resume, and an unnamed one stays unknown | tested | `test_host.py`. Claude Code has been through it with the model matching. An alias it resolves fails, and that was reasoned from a probe and not run through the host |
 | `assurance` on `agent.started` and `agent.resumed` | tested | `test_host.py`. Always `cooperative`: nothing earns `isolated` until OS isolation exists |
-| A token in memory and its hash in the journal, a binding per agent, `ph` in `agents/<id>/bin`, instructions and preamble | tested | `test_host.py` |
+| A token in memory and its hash in the journal, a binding per agent, `ph` in `agents/<id>/bin`, the preamble and then the role's words, so a role has the last word | tested | `test_host.py` |
 | A delivery as text in the words of its surface, with refs and the input id | tested | `test_host.py`, `tests/unit/tools/test_surface.py` |
 | Reports in order, bodies stored by hash, deltas to followers and never the journal, capabilities and levels on `agent.started` | tested | `test_host.py` |
 | A takeover holding deliveries, already requested ones too | tested | `test_host.py`. Driving the native session during one is not built, so `agent.takeover` holds and releases and no more |

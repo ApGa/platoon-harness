@@ -35,7 +35,7 @@ method promises:
   for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
-  `sandboxes`, and None leaves it to the harness. `spec.instructions` holds the role's words and the preamble, fixed at launch: hand
+  `sandboxes`, and None leaves it to the harness. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
   them over once, through the harness's supported path, and never per turn.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it

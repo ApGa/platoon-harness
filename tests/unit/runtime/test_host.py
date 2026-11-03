@@ -205,9 +205,24 @@ async def test_each_agent_gets_its_own_binding_instructions_preamble_and_ph(tmp_
     assert stat.S_IMODE(ph.stat().st_mode) & stat.S_IXUSR
     assert ph.read_text().startswith("#!/usr/bin/env python3")
     assert "?surface=mcp__ph" in spec.tools.url
-    assert spec.instructions is not None and spec.instructions.startswith("Be brief.\n\n")
-    assert "`mcp__ph__wait`" in spec.instructions
+    assert spec.instructions is not None and "`mcp__ph__wait`" in spec.instructions
     assert "wait" in ready.data["tools_visible"]
+
+
+async def test_a_role_has_the_last_word_in_its_agents_instructions(tmp_path, recording):
+    """The preamble says how to end, and a role may say otherwise, so the role's words come after it."""
+    team = solo_with(recording, instructions="Never call agent_finish.")
+
+    async with Session.start(team, cwd=tmp_path, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+
+    instructions = recording.specs[0].instructions
+    assert instructions is not None and instructions.startswith("You are @bob.")
+    assert instructions.endswith(
+        "make `mcp__ph__agent_finish` your last call, or your session never closes. Told "
+        "nothing of the kind, stay: it ends you for good, and a turn that only ends leaves you "
+        "here for the next message.\n\nNever call agent_finish."
+    )
 
 
 async def test_a_narrowed_role_keeps_ops_list_so_it_keeps_its_tools(tmp_path):

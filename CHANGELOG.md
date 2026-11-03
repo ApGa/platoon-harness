@@ -49,6 +49,8 @@
 
 ### Changed
 
+- An agent's instructions are the preamble and then the role's words, so a role has the last word. A role that told a Codex agent
+  never to finish lost to the preamble in run 21.
 - `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
   argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
 - An unset model is refused only where access was given. On the harness's own login it means the harness's own default, and `ready`

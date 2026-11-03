@@ -320,6 +320,7 @@ class Host:
         ]
 
     def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None) -> AgentSpec:
+        """How an agent starts. Its instructions are the preamble and then the role's words, so a role has the last."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
         teaching, binding = None, None
@@ -340,7 +341,7 @@ class Host:
             sandbox=role.sandbox,
             tools=binding,
             access=admission.access,
-            instructions="\n\n".join(filter(None, (role.instructions, teaching))) or None,
+            instructions="\n\n".join(filter(None, (teaching, role.instructions))) or None,
             resume=resume,
         )
 

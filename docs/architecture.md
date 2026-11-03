@@ -876,7 +876,7 @@ class Driver(Protocol):
 ```
 
 `AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, effort (a string handed to the harness as it stands), sandbox
-(one of the values the driver declared, or left to the harness), tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (appended by the supported path; native
+(one of the values the driver declared, or left to the harness), tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path; native
 project files are never touched) and resume. A fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a
 delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
 such setting refuses an effort.
