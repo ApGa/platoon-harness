@@ -35,7 +35,6 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers import claude as module
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.process import Record
 
@@ -359,7 +358,7 @@ def test_a_status_that_says_nothing_readable_is_no_login_we_know_of(stand):
 
 
 def test_a_status_that_hangs_is_cut_short(stand, monkeypatch):
-    monkeypatch.setattr(module, "_STATUS_SECONDS", 0.2)
+    monkeypatch.setattr("platoon_harness.drivers.process._STATUS_SECONDS", 0.2)
     stand.install(status_seconds=30)
 
     assert ClaudeDriver().describe().login is None

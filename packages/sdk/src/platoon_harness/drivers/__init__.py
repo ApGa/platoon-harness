@@ -1,12 +1,13 @@
 """The driver contract: how one harness session is presented to the runtime, whoever wrote the driver."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from platoon_harness.config import Secret
 from platoon_harness.primitives import (
     RAW_LIMIT,
+    SHORT_LIMIT,
     ApprovalRequested,
     Boundary,
     Capabilities,
@@ -33,8 +34,13 @@ Login = Literal["plan", "key", "gateway"]
 Reconciled = Literal["landed", "not_landed", "unknown"]
 Reporter = Callable[[Report], Awaitable[None]]
 
+UNREADABLE = (AttributeError, KeyError, TypeError, ValueError, RecursionError)
+"""What reading a harness's frame raises, whichever part of it would not read."""
+
 __all__ = [
     "RAW_LIMIT",
+    "SHORT_LIMIT",
+    "UNREADABLE",
     "AgentSpec",
     "ApprovalRequested",
     "Boundary",
@@ -64,6 +70,9 @@ __all__ = [
     "TurnStarted",
     "Usage",
     "Verdict",
+    "refuse_other_effort",
+    "refuse_unset_model",
+    "text_of",
     "unknown_frame",
 ]
 
@@ -150,6 +159,25 @@ class Driver(Protocol):
     async def reconcile(self, input_id: str) -> Reconciled: ...
 
     async def stop(self, grace: float) -> None: ...
+
+
+def refuse_unset_model(spec: AgentSpec) -> None:
+    """On a harness's own login its default is the user's. Where access was given, it may go somewhere nobody chose."""
+    if spec.model is None and spec.access:
+        raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
+
+
+def refuse_other_effort(spec: AgentSpec, effort: str | None) -> None:
+    """A harness warns of an effort it cannot honor and runs on, so hold what it says it runs at to what was asked."""
+    if spec.effort not in (None, effort):
+        raise DriverError(f"it runs at effort {effort}, and {spec.effort} was asked for")
+
+
+def text_of(content: str | Sequence[Mapping[str, Any]]) -> str:
+    """What a message or a tool's result says, in either of its shapes."""
+    if isinstance(content, str):
+        return content
+    return "\n".join(block["text"] for block in content if "text" in block)
 
 
 def unknown_frame(

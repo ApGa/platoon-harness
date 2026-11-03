@@ -15,7 +15,6 @@ platoon_harness.config.load_team
 platoon_harness.config.merge
 platoon_harness.config.sanitized
 platoon_harness.drivers.AgentSpec
-platoon_harness.drivers.RAW_LIMIT
 platoon_harness.drivers.ApprovalRequested
 platoon_harness.drivers.Boundary
 platoon_harness.drivers.Capabilities
@@ -35,13 +34,16 @@ platoon_harness.drivers.Login
 platoon_harness.drivers.ModelCall
 platoon_harness.drivers.Native
 platoon_harness.drivers.Offered
+platoon_harness.drivers.RAW_LIMIT
 platoon_harness.drivers.Ready
 platoon_harness.drivers.Reconciled
 platoon_harness.drivers.Report
 platoon_harness.drivers.Reporter
+platoon_harness.drivers.SHORT_LIMIT
 platoon_harness.drivers.ToolBinding
 platoon_harness.drivers.TurnEnded
 platoon_harness.drivers.TurnStarted
+platoon_harness.drivers.UNREADABLE
 platoon_harness.drivers.Usage
 platoon_harness.drivers.Verdict
 platoon_harness.drivers.claude.ClaudeDriver
@@ -51,9 +53,7 @@ platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.inherited
 platoon_harness.drivers.env.private
-platoon_harness.drivers.env.refuse_unset_model
 platoon_harness.drivers.env.secrets_of
-platoon_harness.drivers.env.signed_in
 platoon_harness.drivers.exec.ExecDriver
 platoon_harness.drivers.exec.GOAL
 platoon_harness.drivers.levels.Check
@@ -74,11 +74,15 @@ platoon_harness.drivers.process.LOG_LIMIT
 platoon_harness.drivers.process.Process
 platoon_harness.drivers.process.RECORD
 platoon_harness.drivers.process.REPORT_QUOTA
-platoon_harness.drivers.process.WIRE
 platoon_harness.drivers.process.Reader
 platoon_harness.drivers.process.Record
+platoon_harness.drivers.process.WIRE
 platoon_harness.drivers.process.exit_reason
 platoon_harness.drivers.process.reap
+platoon_harness.drivers.process.status
+platoon_harness.drivers.refuse_other_effort
+platoon_harness.drivers.refuse_unset_model
+platoon_harness.drivers.text_of
 platoon_harness.drivers.unknown_frame
 platoon_harness.drivers.wire.DRIVER_ERROR
 platoon_harness.drivers.wire.UNKNOWN_PROTOCOL
@@ -143,6 +147,7 @@ platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boards
 platoon_harness.primitives.Boundary
 platoon_harness.primitives.Budgets
+platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.Capabilities
 platoon_harness.primitives.Changed
 platoon_harness.primitives.Changes
@@ -165,7 +170,6 @@ platoon_harness.primitives.Item
 platoon_harness.primitives.Lines
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
-platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.OWNER_STOP
 platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.Plane
@@ -174,6 +178,7 @@ platoon_harness.primitives.RAW_LIMIT
 platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Ready
 platoon_harness.primitives.Report
+platoon_harness.primitives.SHORT_LIMIT
 platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
 platoon_harness.primitives.Task
@@ -196,6 +201,7 @@ platoon_harness.rpc.Handler
 platoon_harness.rpc.INVALID_PARAMS
 platoon_harness.rpc.LINE_LIMIT
 platoon_harness.rpc.LineTooLong
+platoon_harness.rpc.Lines
 platoon_harness.rpc.METHOD_NOT_FOUND
 platoon_harness.rpc.Peer
 platoon_harness.rpc.RpcError
@@ -278,11 +284,11 @@ platoon_harness.testing.Fail
 platoon_harness.testing.FakeModel
 platoon_harness.testing.FakeTools
 platoon_harness.testing.Hang
+platoon_harness.testing.NAMESPACE
 platoon_harness.testing.Request
 platoon_harness.testing.Say
 platoon_harness.testing.ScriptedDriver
 platoon_harness.testing.Stall
-platoon_harness.testing.NAMESPACE
 platoon_harness.testing.TOOL
 platoon_harness.testing.Text
 platoon_harness.testing.Think

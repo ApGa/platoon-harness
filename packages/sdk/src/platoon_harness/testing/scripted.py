@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness.drivers import (
+    SHORT_LIMIT,
     AgentSpec,
     ApprovalRequested,
     Capabilities,
@@ -32,6 +33,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     TurnStarted,
     Usage,
+    refuse_unset_model,
 )
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
@@ -41,7 +43,6 @@ from .loopback import post
 BASE_URL = "OPENAI_BASE_URL"
 API_KEY = "OPENAI_API_KEY"
 
-_REASON_LIMIT = 256
 _DEFAULT = Capabilities(
     persistent=True,
     resume=True,
@@ -169,8 +170,7 @@ class ScriptedDriver:
             raise DriverError("this harness cannot resume")
         if spec.effort is not None:
             raise DriverError("a scripted harness has no effort to set")
-        if spec.model is None and spec.access:
-            raise DriverError("set a model: with access given, this harness will not pick one")
+        refuse_unset_model(spec)
         self._spec, self._report = spec, report
         self._native = spec.resume or f"scripted-{spec.agent}"
         if spec.resume is not None and self._transcript.exists():
@@ -234,7 +234,7 @@ class ScriptedDriver:
                 raise
             reason = "interrupted"
         except DriverError as error:
-            reason = f"failed: {error}"[:_REASON_LIMIT]
+            reason = f"failed: {error}"[:SHORT_LIMIT]
         self._steps = None
         self._transcript.parent.mkdir(parents=True, exist_ok=True)
         self._transcript.write_text(json.dumps(self._messages))

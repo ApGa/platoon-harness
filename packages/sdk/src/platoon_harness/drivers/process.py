@@ -11,14 +11,15 @@ import sys
 import weakref
 from asyncio.subprocess import PIPE, SubprocessStreamProtocol
 from collections import deque
-from collections.abc import Callable, Coroutine, Sequence
+from collections.abc import Callable, Coroutine, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self
 
+from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Delta, Exited, GapReport, Native, Report
 from platoon_harness.schema import Model
 
-from . import RAW_LIMIT, AgentSpec, DriverError, Reporter
+from . import RAW_LIMIT, SHORT_LIMIT, AgentSpec, DriverError, Reporter, unknown_frame
 from .env import Held, Redactor, harness_env, secrets_of
 
 RECORD = "proc.json"
@@ -35,6 +36,7 @@ _REPORT_FLOOR = 1024
 _FLUSH = 0.5
 _VERIFY = 5.0
 _LOST_GRACE = 1.0
+_STATUS_SECONDS = 5.0
 
 GroupState = Literal["ours", "gone", "unproven"]
 Reader = Callable[["Process"], Coroutine[Any, Any, None]]
@@ -51,6 +53,7 @@ __all__ = [
     "Record",
     "exit_reason",
     "reap",
+    "status",
 ]
 
 
@@ -215,6 +218,14 @@ def _kill(record: Record) -> None:
         _signal(record.pid, signal.SIGKILL)
 
 
+def status(command: Sequence[str], env: Mapping[str, str]) -> subprocess.CompletedProcess[bytes] | None:
+    """What a harness says of itself in a short run of its own, or None if it says nothing in time."""
+    try:
+        return subprocess.run(command, capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def exit_reason(code: int | None) -> str:
     """How a leader's end reads."""
     return f"killed by signal {-code}" if code is not None and code < 0 else f"exited with code {code}"
@@ -231,7 +242,7 @@ def _size(report: Report) -> int:
     return weight
 
 
-def _check_program(command: Sequence[str], spec: AgentSpec, env: dict[str, str]) -> None:
+def _check_program(command: Sequence[str], spec: AgentSpec, env: Mapping[str, str]) -> None:
     """Refuse a program that cannot run, while the reason can still reach whoever asked."""
     program = spec.cwd / command[0] if os.sep in command[0] else command[0]
     if not spec.cwd.is_dir():
@@ -246,7 +257,8 @@ class Process:
     `read` is called once, at once, and returns the driver's reader of `stdout`, which must wait only on the pipe, so
     that the pipe drains. It hands what it finds to `put`, which never waits either. A harness's end reaches `report` as
     `exited`. If nothing stops it, a closing loop or interpreter takes the group down rather than leave it. The host
-    masks what `put` passes on, and a driver that cuts text masks it first with `redact`, as a cut can split a secret.
+    masks what `put` passes on, and text cut to fit is masked first, as a cut can split a secret: `gist`, `reason` and
+    `unknown` do both.
     """
 
     def __init__(
@@ -285,12 +297,20 @@ class Process:
 
     @classmethod
     async def launch(
-        cls, command: Sequence[str], spec: AgentSpec, report: Reporter, *, read: Reader, quota: int = REPORT_QUOTA
+        cls,
+        command: Sequence[str],
+        spec: AgentSpec,
+        report: Reporter,
+        *,
+        read: Reader,
+        env: Mapping[str, str] | None = None,
+        quota: int = REPORT_QUOTA,
     ) -> "Process":
-        """Start `command` in its own group, on the allowlisted environment. The harness cannot exec until its record
-        is on disk: `sh` waits for one line on stdin, and exits unexecuted if we die first."""
+        """Start `command` in its own group, on the allowlisted environment, or on `env`, which a driver builds from
+        that one. The harness cannot exec until its record is on disk: `sh` waits for one line on stdin, and exits
+        unexecuted if we die first."""
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        env = harness_env(spec)
+        env = harness_env(spec) if env is None else env
         _check_program(command, spec, env)
         log = _Log(spec.folder / LOG)
         loop = asyncio.get_running_loop()
@@ -333,18 +353,29 @@ class Process:
         """Wait for the leader. A forked child may live on, and only `stop` ends it."""
         await self._streams.exited.wait()
 
-    def put(self, report: Report) -> None:
-        """Queue a report, without waiting, so that a pipe always drains. Past the quota a delta is dropped, as deltas
+    def put(self, *reports: Report) -> None:
+        """Queue reports, without waiting, so that a pipe always drains. Past the quota a delta is dropped, as deltas
         may be, and anything else stops this agent with a gap."""
-        if self._sealed:
-            return
-        size = _size(report)
-        if self._waiting + size <= self._quota:
-            self._waiting += size
-            self._enqueue(report, size)
-            self._exit_reported |= isinstance(report, Exited)
-        elif not isinstance(report, Delta):
-            self._lose("reports passed their quota")
+        for report in reports:
+            if self._sealed:
+                return
+            size = _size(report)
+            if self._waiting + size <= self._quota:
+                self._waiting += size
+                self._enqueue(report, size)
+                self._exit_reported |= isinstance(report, Exited)
+            elif not isinstance(report, Delta):
+                self._lose("reports passed their quota")
+
+    def gist(self, text: str) -> str:
+        return self.redact(text)[:GIST_LIMIT]
+
+    def reason(self, text: str) -> str:
+        return self.redact(text)[:SHORT_LIMIT]
+
+    def unknown(self, kind: str, raw: str) -> None:
+        """Report a frame nobody's vocabulary covers."""
+        self.put(*unknown_frame(self.reason(kind), self.redact(raw)))
 
     def _lose(self, why: str) -> None:
         """Stop this agent with a gap, since what it reports can no longer be whole."""
@@ -432,15 +463,22 @@ class Process:
             self._stopping = asyncio.create_task(self._stop(grace))
 
     async def stop(self, grace: float) -> None:
-        """End the whole tree: TERM, wait, KILL, then verify. A process that left the group by `setsid` escapes it, and
-        a stop that came to KILL reports `crash_window`. A second call waits for the first."""
+        """End the whole tree: end of stdin, wait, TERM, wait, KILL, then verify, in twice `grace` and that check. A
+        process that left the group by `setsid` escapes it, and a stop that came to KILL reports `crash_window`. A
+        second call waits for the first."""
         self._stop_soon(grace)
         assert self._stopping is not None
         await asyncio.shield(self._stopping)
 
     async def _stop(self, grace: float) -> None:
         """A SIGKILL gives a harness no chance to end what it started, and a tool that leads a group of its own lives
-        on, so that is a gap. It is said first, since the leader's end closes the queue."""
+        on, so that is a gap. It is said first, since the leader's end closes the queue. Stdin that has closed already
+        has had its say."""
+        if not self.stdin.is_closing():
+            self.stdin.close()
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(grace):
+                    await self.exited()
         if self._record.state() != "gone" and not await _termed(self._record.pid, grace):
             self._enqueue(GapReport(plane="control", what="crash_window"))
             await _killed(self._record.pid)

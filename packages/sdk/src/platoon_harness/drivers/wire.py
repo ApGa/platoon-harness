@@ -28,7 +28,6 @@ from . import (
     Reconciled,
     Reporter,
     ToolBinding,
-    unknown_frame,
 )
 from .env import inherited
 from .process import LOG, WIRE, Process, exit_reason
@@ -122,8 +121,7 @@ class WireDriver:
 
     def _stray(self, line: bytes) -> None:
         assert self._process is not None
-        for report in unknown_frame("frame", self._process.redact(line.decode(errors="replace"))):
-            self._process.put(report)
+        self._process.unknown("frame", line.decode(errors="replace"))
 
     async def _call(self, verb: str, params: Any = None) -> Any:
         if self._peer is None:

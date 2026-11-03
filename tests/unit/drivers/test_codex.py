@@ -33,7 +33,6 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers import codex as module
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.tools.ph import TOKEN_VARIABLE
 
@@ -357,7 +356,7 @@ def test_describe_reads_the_kind_of_login_and_nothing_else(stand, said, login):
 
 def test_describe_cannot_tell_when_the_status_hangs(stand, monkeypatch):
     stand.install(status_seconds=30)
-    monkeypatch.setattr(module, "_STATUS_SECONDS", 0.05)
+    monkeypatch.setattr("platoon_harness.drivers.process._STATUS_SECONDS", 0.05)
 
     assert CodexDriver().describe().login is None
 

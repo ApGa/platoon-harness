@@ -77,7 +77,7 @@ def test_the_tool_binding_reaches_ph_and_nothing_prints_it(tmp_path):
     tools = ToolBinding(url="http://127.0.0.1:1/mcp", token=Secret("tool-token"), namespace="ph", bin=bin)
     spec = make_spec(tmp_path, tools=tools)
 
-    env = harness_env(spec, {"PATH": "/usr/bin"})
+    env = harness_env(spec, environ={"PATH": "/usr/bin"})
 
     assert env["PATH"] == f"{bin}{os.pathsep}/usr/bin"
     assert (env[URL_VARIABLE], env[TOKEN_VARIABLE]) == ("http://127.0.0.1:1/mcp", "tool-token")
@@ -87,7 +87,7 @@ def test_the_tool_binding_reaches_ph_and_nothing_prints_it(tmp_path):
 def test_later_entries_win(tmp_path):
     spec = make_spec(tmp_path, env={"HOME": "/from/spec", "X": "1"}, access={"X": Secret("2")})
 
-    env = harness_env(spec, {"HOME": "/inherited"})
+    env = harness_env(spec, environ={"HOME": "/inherited"})
 
     assert (env["HOME"], env["X"]) == ("/from/spec", "2")
 

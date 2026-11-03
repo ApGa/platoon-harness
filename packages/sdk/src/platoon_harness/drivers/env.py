@@ -12,38 +12,27 @@ from urllib.parse import quote, quote_plus
 from platoon_harness.config import Secret
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
-from . import AgentSpec, DriverError, Report
+from . import AgentSpec, Report
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
 _CONTINUATION = 0b1000_0000
 _CONTINUATION_MASK = 0b1100_0000
 
-__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "refuse_unset_model", "secrets_of", "signed_in"]
+__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "secrets_of"]
 
 
-def inherited(environ: Mapping[str, str] = os.environ) -> dict[str, str]:
-    """All a process takes from ours. A variable that would change a harness's behavior, or that leaks a parent's
-    identity, has no way through."""
-    return {name: environ[name] for name in _INHERITED if name in environ}
+def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
+    """All a process takes from ours: what any process needs, and `names`, what a harness needs to sign in as it does in
+    the shell, which is where its login lives and its way out to the network. A variable that would change a harness's
+    behavior, or that leaks a parent's identity, has no way through, and provider keys stay in auth profiles."""
+    return {name: environ[name] for name in (*_INHERITED, *names) if name in environ}
 
 
-def refuse_unset_model(spec: AgentSpec) -> None:
-    """On a harness's own login its default is the user's. Where access was given, it may go somewhere nobody chose."""
-    if spec.model is None and spec.access:
-        raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
-
-
-def signed_in(names: Iterable[str], environ: Mapping[str, str] = os.environ) -> dict[str, str]:
-    """What a harness needs from the shell to sign in as it does there, out of `names`: where its login lives, and its
-    way out to the network. Provider keys stay in auth profiles."""
-    return {name: environ[name] for name in names if name in environ}
-
-
-def harness_env(spec: AgentSpec, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
+def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The whole environment of one harness process: what it inherits, a `TMPDIR` of its own, and what `spec` names.
     Later entries win: `spec.env` over the inherited, and `spec.access` over both."""
-    env = {**inherited(environ), "TMPDIR": str(_tmpdir(spec.folder))}
+    env = {**inherited(*names, environ=environ), "TMPDIR": str(_tmpdir(spec.folder))}
     if spec.tools is not None:
         env["PATH"] = os.pathsep.join(filter(None, (str(spec.tools.bin), env.get("PATH"))))
         env[URL_VARIABLE] = spec.tools.url

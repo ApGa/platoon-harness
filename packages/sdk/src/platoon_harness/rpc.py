@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from typing import Any, NoReturn
 
 LINE_LIMIT = 16 * 1024 * 1024
@@ -27,6 +27,7 @@ __all__ = [
     "Closed",
     "Handler",
     "LineTooLong",
+    "Lines",
     "Peer",
     "RpcError",
     "Stray",
@@ -76,6 +77,65 @@ async def read_lines(reader: asyncio.StreamReader, limit: int = LINE_LIMIT) -> A
         held += chunk[start:]
     if held:
         yield bytes(held)
+
+
+class Lines:
+    """JSON lines on one stream, with answers arriving among the other end's events, for a protocol that is no JSON-RPC.
+    `lost` makes what a frame with nowhere to go raises, and `settle` is how a reader gives an answer to its waiter."""
+
+    def __init__(self, lost: Callable[[], Exception]) -> None:
+        self._lost = lost
+        self._writer: asyncio.StreamWriter | None = None
+        self._waiting: dict[str, asyncio.Future[Any]] = {}
+
+    def open(self, writer: asyncio.StreamWriter) -> None:
+        self._writer = writer
+
+    async def run(self, reader: asyncio.StreamReader, heard: Callable[[bytes], None]) -> None:
+        """Hear every line that holds anything. When none are left, nothing can be answered, so every waiter is told."""
+        try:
+            async for line in read_lines(reader):
+                if line.strip():
+                    heard(line)
+        finally:
+            self._writer = None
+            for id in self._waiting:
+                self.settle(id, self._lost())
+
+    def write(self, frame: Mapping[str, Any]) -> None:
+        """Send a frame and do not wait, as a reader must not. With nowhere to go, it goes nowhere."""
+        if self._writer is not None:
+            self._writer.write(json.dumps(frame).encode() + b"\n")
+
+    async def send(self, frame: Mapping[str, Any]) -> None:
+        """Send a frame, and wait until it has left."""
+        if self._writer is None:
+            raise self._lost()
+        self.write(frame)
+        try:
+            await self._writer.drain()
+        except ConnectionError as error:
+            raise self._lost() from error
+
+    async def exchange(self, id: str, frame: Mapping[str, Any]) -> Any:
+        """Send a frame and wait for the answer to its id."""
+        answer = asyncio.get_running_loop().create_future()
+        self._waiting[id] = answer
+        try:
+            await self.send(frame)
+            return await answer
+        finally:
+            del self._waiting[id]
+
+    def settle(self, id: str, answer: Any) -> None:
+        """Give a waiter its answer, or an `Exception` to raise. One nobody waits for any more has nobody to reach."""
+        waiting = self._waiting.get(id)
+        if waiting is None or waiting.done():
+            return
+        if isinstance(answer, Exception):
+            waiting.set_exception(answer)
+        else:
+            waiting.set_result(answer)
 
 
 async def _unknown_method(method: str, params: Any) -> NoReturn:

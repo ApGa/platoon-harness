@@ -12,11 +12,12 @@ from .budgets import Label
 from .common import BodyRef, Gist, Name
 
 RAW_LIMIT = 2048
+SHORT_LIMIT = 256
 OWNER_STOP = "stopped by its owner"
 CUT_OFF = {"lost": "a crash", OWNER_STOP: "the owner stopping the session"}
 """The reasons only the runtime can give a turn, each with what cut that turn off, as a notice says it."""
 
-Short = Annotated[str, Field(max_length=256)]
+Short = Annotated[str, Field(max_length=SHORT_LIMIT)]
 Boundary = Literal["turn", "tool", "model_call"]
 Plane = Literal["control", "tool", "model"]
 Attribution = Literal["exact", "declared", "inferred", "forked"]

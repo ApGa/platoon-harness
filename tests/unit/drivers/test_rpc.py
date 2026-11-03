@@ -15,6 +15,7 @@ from platoon_harness.rpc import (
     METHOD_NOT_FOUND,
     PARSE_ERROR,
     Closed,
+    Lines,
     LineTooLong,
     Peer,
     RpcError,
@@ -479,3 +480,82 @@ async def test_codex_framing_drops_the_jsonrpc_member():
 
         await wire.peer.notify("initialized")
         assert await wire.frame() == {"method": "initialized"}
+
+
+class Other:
+    """A `Lines` under test, on a socket whose far end a test holds."""
+
+    def __init__(self, lines: Lines, reading: asyncio.Task[None], reader: asyncio.StreamReader, writer) -> None:
+        self.lines, self.reading, self.reader, self.writer = lines, reading, reader, writer
+        self.heard: list[bytes] = []
+
+    @classmethod
+    async def open(cls) -> "Other":
+        ours, theirs = socket.socketpair()
+        reader, writer = await asyncio.open_connection(sock=ours)
+        far_reader, far_writer = await asyncio.open_connection(sock=theirs)
+        lines = Lines(lambda: OSError("nobody is there"))
+        lines.open(writer)
+        heard: list[bytes] = []
+        other = cls(lines, asyncio.create_task(lines.run(reader, heard.append)), far_reader, far_writer)
+        other.heard = heard
+        return other
+
+    async def asked(self, id: str) -> asyncio.Task:
+        """A call of `exchange`, once its frame has arrived here."""
+        call = asyncio.create_task(self.lines.exchange(id, {"id": id}))
+        assert json.loads(await self.reader.readline()) == {"id": id}
+        return call
+
+    async def hang_up(self) -> None:
+        self.writer.close()
+        await self.reading
+
+
+async def test_lines_gives_each_answer_to_its_waiter_among_events():
+    other = await Other.open()
+    call = await other.asked("one")
+
+    other.writer.write(b'{"event": 1}\n\n')
+    other.lines.settle("one", {"said": True})
+
+    assert await call == {"said": True}
+    await other.hang_up()
+    assert other.heard == [b'{"event": 1}']
+
+
+async def test_lines_raises_what_an_answer_says_went_wrong():
+    other = await Other.open()
+    call = await other.asked("one")
+
+    other.lines.settle("one", ValueError("refused"))
+
+    with pytest.raises(ValueError, match="refused"):
+        await call
+    await other.hang_up()
+
+
+async def test_an_answer_nobody_waits_for_has_nobody_to_reach():
+    other = await Other.open()
+
+    other.lines.settle("nobody", {})
+
+    await other.hang_up()
+
+
+async def test_when_lines_end_every_waiter_hears_and_so_does_the_next_to_send():
+    other = await Other.open()
+    call = await other.asked("one")
+
+    await other.hang_up()
+
+    with pytest.raises(OSError, match="nobody is there"):
+        await call
+    with pytest.raises(OSError, match="nobody is there"):
+        await other.lines.send({})
+    other.lines.write({})
+
+
+async def test_lines_that_were_never_opened_refuse_a_send():
+    with pytest.raises(OSError, match="nobody"):
+        await Lines(lambda: OSError("nobody")).send({})

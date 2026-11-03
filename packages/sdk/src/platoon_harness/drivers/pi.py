@@ -8,19 +8,18 @@ that extension asks, and every approval comes to the runtime. A role's budget is
 import asyncio
 import contextlib
 import json
-import subprocess
 import sys
 from collections.abc import Coroutine, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
-from platoon_harness.rpc import read_lines
+from platoon_harness.rpc import Lines
 from platoon_harness.tools import SHIM, delivery_heading
 
 from . import (
+    UNREADABLE,
     AgentSpec,
     ApprovalRequested,
     Boundary,
@@ -36,15 +35,16 @@ from . import (
     ModelCall,
     Ready,
     Reconciled,
-    Report,
     Reporter,
     TurnEnded,
     TurnStarted,
     Usage,
-    unknown_frame,
+    refuse_other_effort,
+    refuse_unset_model,
+    text_of,
 )
-from .env import harness_env, inherited, private, refuse_unset_model, signed_in
-from .process import LOG, Process
+from .env import harness_env, inherited, private
+from .process import LOG, Process, status
 
 _PI = "pi"
 _EXTENSION = Path(__file__).with_name("pi_extension.js")
@@ -67,11 +67,9 @@ _BASE_URL = "OPENAI_BASE_URL"
 _KEY = "OPENAI_API_KEY"
 _PROVIDER = "platoon-harness"
 _LOGINS: Mapping[str, Login] = {"oauth": "plan", "api_key": "key"}
-_STATUS_SECONDS = 5.0
 _TOOL_TIMEOUT_S = 600.0
 _NO_PRICE = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 _INSTRUCTIONS = "instructions.md"
-_REASON_LIMIT = 256
 _DIALOGS = frozenset({"select", "input", "editor"})
 _IN_CONTEXT = frozenset({"message", "custom_message", "branch_summary"})
 _SAYS_NOTHING = frozenset(
@@ -117,24 +115,20 @@ __all__ = ["PiDriver"]
 def _login() -> Login | None:
     """Which kind of login pi holds for the provider its settings name, or None if it cannot tell. Asking takes a
     provider. Only that field is read, and it fetches no credential and refreshes none."""
-    env = {**inherited(), **signed_in(_SIGN_IN), **_ENVIRONMENT}
+    env = {**inherited(*_SIGN_IN), **_ENVIRONMENT}
     home = env.get("PI_CODING_AGENT_DIR") or Path(env.get("HOME", "")) / ".pi" / "agent"
     try:
         provider = json.loads((Path(home).expanduser() / "settings.json").read_text())["defaultProvider"]
-        command = (_PI, "auth", "check", "--provider", provider, "--json", "--no-refresh")
-        done = subprocess.run(command, capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
-        return _LOGINS.get(json.loads(done.stdout).get("authType"))
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, AttributeError, TypeError):
+        done = status((_PI, "auth", "check", "--provider", provider, "--json", "--no-refresh"), env)
+        return None if done is None else _LOGINS.get(json.loads(done.stdout).get("authType"))
+    except (OSError, *UNREADABLE):
         return None
 
 
 def _version(env: Mapping[str, str]) -> str | None:
     """What pi says of itself, since no record does."""
-    try:
-        done = subprocess.run((_PI, "--version"), capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return done.stdout.decode(errors="replace").strip() or None
+    done = status((_PI, "--version"), env)
+    return None if done is None else done.stdout.decode(errors="replace").strip() or None
 
 
 def _extension_config(spec: AgentSpec) -> str:
@@ -165,13 +159,6 @@ def _kind(frame: Any) -> str:
     return kind if isinstance(kind, str) else "frame"
 
 
-def _text(content: str | Sequence[Mapping[str, Any]]) -> str:
-    """What a message or a tool's result says, in either of its shapes."""
-    if isinstance(content, str):
-        return content
-    return "\n".join(block["text"] for block in content if "text" in block)
-
-
 def _forgotten(entries: Sequence[Mapping[str, Any]], leaf: str, first_kept: str) -> tuple[str, ...] | None:
     """What a compaction took out of the context, which names only what it kept: on the branch that ended at `leaf`,
     the messages from the one before's first kept entry up to this one's."""
@@ -200,11 +187,10 @@ class PiDriver:
 
     def __init__(self) -> None:
         self._info: DriverInfo | None = None
-        self._process: Process | None = None
+        self._launched: Process | None = None
+        self._lines = Lines(self._lost)
         self._native = ""
         self._folder = Path()
-        self._gone: DriverError | None = None
-        self._answers: dict[str, asyncio.Future[Mapping[str, Any]]] = {}
         self._turn: str | None = None
         self._opening = False
         self._failure: str | None = None
@@ -227,10 +213,10 @@ class PiDriver:
         self._native = spec.resume or str(uuid4())
         self._folder = spec.folder
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        own = {**signed_in(_SIGN_IN), **_ENVIRONMENT, _EXTENSION_CONFIG: _extension_config(spec), **spec.env}
-        launched = spec.model_copy(update={"env": own})
-        await Process.launch(self._command(spec), launched, report, read=self._read)
-        await self._handshake(spec, await asyncio.to_thread(_version, harness_env(launched)))
+        env = {**harness_env(spec, *_SIGN_IN), **_ENVIRONMENT, _EXTENSION_CONFIG: _extension_config(spec)}
+        self._launched = await Process.launch(self._command(spec), spec, report, read=self._read, env=env)
+        self._lines.open(self._launched.stdin)
+        await self._handshake(spec, await asyncio.to_thread(_version, env))
         if spec.goal and spec.resume is None:
             await self._hand_over(spec.goal)
 
@@ -257,37 +243,18 @@ class PiDriver:
         available = (await self._ask("get_available_models")).get("models", ())
         if not any(known.get("provider") == provider for known in available):
             raise DriverError(f"{_PI} has no login for {provider}: sign in with `pi`, or give the role an auth profile")
-        if spec.effort not in (None, state.get("thinkingLevel")):
-            raise DriverError(f"it runs at effort {state.get('thinkingLevel')}, and {spec.effort} was asked for")
+        refuse_other_effort(spec, state.get("thinkingLevel"))
         effective = f"{provider}/{id}" if spec.model == f"{provider}/{id}" else id
-        self._report(Ready(native=self._native, version=version, effective_model=effective))
+        self._process.put(Ready(native=self._native, version=version, effective_model=effective))
 
     # What the harness is sent.
 
     def _lost(self) -> DriverError:
         return DriverError(f"{_PI} is gone: see {self._folder / LOG}")
 
-    async def _send(self, frame: Mapping[str, Any]) -> None:
-        if self._process is None:
-            raise DriverError("this driver has not started")
-        if self._gone is not None:
-            raise self._gone
-        try:
-            self._process.stdin.write(json.dumps(frame).encode() + b"\n")
-            await self._process.stdin.drain()
-        except ConnectionError as error:
-            raise self._lost() from error
-
     async def _ask(self, command: str, **fields: Any) -> Mapping[str, Any]:
-        """Send a command and wait for the response to its id."""
         id = uuid4().hex
-        answer: asyncio.Future[Mapping[str, Any]] = asyncio.get_running_loop().create_future()
-        self._answers[id] = answer
-        try:
-            await self._send({"id": id, "type": command, **fields})
-            return await answer
-        finally:
-            del self._answers[id]
+        return await self._lines.exchange(id, {"id": id, "type": command, **fields})
 
     async def _hand_over(self, text: str) -> None:
         """`prompt` begins a turn, and with a `streamingBehavior` it queues in one under way, so no turn can end between
@@ -308,7 +275,7 @@ class PiDriver:
         """Stop the turn. A dialog open on a gate of the user's would hold up `abort`, so it is cancelled first. What
         pi queued stays behind in its queue, where no run takes it, so `_ended` sends that again."""
         for id in tuple(self._asking):
-            await self._send({"type": "extension_ui_response", "id": id, "cancelled": True})
+            await self._lines.send({"type": "extension_ui_response", "id": id, "cancelled": True})
         await self._ask("abort")
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
@@ -317,7 +284,7 @@ class PiDriver:
         tool = self._asking.pop(approval)
         if tool is not None:
             self._deciding[tool] = approval
-        await self._send({"type": "extension_ui_response", "id": approval, "confirmed": verdict == "allow"})
+        await self._lines.send({"type": "extension_ui_response", "id": approval, "confirmed": verdict == "allow"})
 
     async def reconcile(self, input_id: str) -> Reconciled:
         """What came of an input after a crash is in the session's entries, whole and on disk, and the text of each
@@ -325,33 +292,21 @@ class PiDriver:
         heading = delivery_heading(input_id)
         entries = (await self._ask("get_entries")).get("entries", ())
         said = (entry["message"] for entry in entries if entry.get("message", {}).get("role") == "user")
-        return "landed" if any(_text(message["content"]).startswith(heading) for message in said) else "not_landed"
+        return "landed" if any(text_of(message["content"]).startswith(heading) for message in said) else "not_landed"
 
     async def stop(self, grace: float) -> None:
         """End of stdin ends pi and the tool it has running, which leads a group of its own, as a `SIGTERM` does and a
         `SIGKILL` does not."""
-        if self._process is None:
-            return
-        with contextlib.suppress(TimeoutError):
-            async with asyncio.timeout(grace):
-                self._process.stdin.close()
-                await self._process.exited()
-        await self._process.stop(grace)
+        if self._launched is not None:
+            await self._launched.stop(grace)
 
     # What the harness says.
 
-    def _report(self, *reports: Report) -> None:
-        assert self._process is not None
-        for report in reports:
-            self._process.put(report)
-
-    def _gist(self, text: str) -> str:
-        assert self._process is not None
-        return self._process.redact(text)[:GIST_LIMIT]
-
-    def _unknown(self, kind: str, raw: str) -> None:
-        assert self._process is not None
-        self._report(*unknown_frame(kind[:_REASON_LIMIT], self._process.redact(raw)))
+    @property
+    def _process(self) -> Process:
+        if self._launched is None:
+            raise DriverError("this driver has not started")
+        return self._launched
 
     def _soon(self, work: Coroutine[Any, Any, None]) -> None:
         """Run what must ask pi something, which the read loop cannot wait for."""
@@ -359,28 +314,17 @@ class PiDriver:
         self._later.add(task)
         task.add_done_callback(self._later.discard)
 
-    async def _read(self, process: Process) -> None:
-        """Translate every line, and when none are left, tell whoever waits on an answer."""
-        self._process = process
-        try:
-            async for line in read_lines(process.stdout):
-                self._heard(line)
-        finally:
-            self._gone = self._lost()
-            for answer in self._answers.values():
-                if not answer.done():
-                    answer.set_exception(self._gone)
+    def _read(self, process: Process) -> Coroutine[Any, Any, None]:
+        return self._lines.run(process.stdout, self._heard)
 
     def _heard(self, line: bytes) -> None:
         """One line. Whatever cannot be read is an unknown frame, whichever part of it would not read."""
-        if not line.strip():
-            return
         frame = None
         try:
             frame = json.loads(line)
             self._take(frame)
-        except (AttributeError, KeyError, TypeError, ValueError, RecursionError):
-            self._unknown(_kind(frame), line.decode(errors="replace"))
+        except UNREADABLE:
+            self._process.unknown(_kind(frame), line.decode(errors="replace"))
 
     def _take(self, frame: Any) -> None:
         match frame:
@@ -390,17 +334,17 @@ class PiDriver:
                 self._asked(id, frame.get("title") or "", frame.get("message") or "")
             case {"type": "extension_ui_request", "method": method, "id": id} if method in _DIALOGS:
                 self._cancel(id)
-                self._unknown(f"extension_ui_request/{method}", json.dumps(frame))
+                self._process.unknown(f"extension_ui_request/{method}", json.dumps(frame))
             case {"type": "extension_ui_request", "method": "notify", "notifyType": "warning" | "error" as level}:
-                self._unknown("notify", f"{level}: {frame.get('message')}")
+                self._process.unknown("notify", f"{level}: {frame.get('message')}")
             case {"type": "agent_start"}:
                 self._begin()
             case {"type": "agent_settled"}:
                 self._ended(aborted=bool(frame.get("aborted")))
             case {"type": "message_start", "message": {"role": "user", "content": content}}:
-                self._landed(_text(content))
+                self._landed(text_of(content))
             case {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": text}}:
-                self._report(Delta(text=text))
+                self._process.put(Delta(text=text))
             case {"type": "message_end", "message": {"role": "assistant", "content": list(blocks)} as message}:
                 self._said(message, blocks)
             case {"type": "tool_execution_start", "toolCallId": id, "toolName": name}:
@@ -415,33 +359,29 @@ class PiDriver:
                 raise ValueError("nothing here takes this")
 
     def _answered(self, id: str, frame: Mapping[str, Any]) -> None:
-        """An answer to a command of ours. One nobody waits for any more has nobody to reach."""
-        answer = self._answers.get(id)
-        if answer is None or answer.done():
-            return
+        """An answer to a command of ours."""
         if frame.get("success"):
-            answer.set_result(frame.get("data") or {})
+            self._lines.settle(id, frame.get("data") or {})
         else:
-            assert self._process is not None
-            answer.set_exception(DriverError(self._process.redact(str(frame.get("error")))))
+            self._lines.settle(id, DriverError(self._process.redact(str(frame.get("error")))))
 
     def _asked(self, id: str, title: str, said: str) -> None:
         """A `confirm` is an approval, the gate's or one a user's extension wants. Our gate's title is its tool call."""
         tool = title if title in self._tools else None
         self._asking[id] = tool
-        self._report(ApprovalRequested(id=id, gist=self._gist(said if tool else f"{title} {said}".strip())))
+        self._process.put(
+            ApprovalRequested(id=id, gist=self._process.gist(said if tool else f"{title} {said}".strip()))
+        )
 
     def _cancel(self, id: str) -> None:
-        """Answer what nobody here can, since an extension is waiting on it. This writes and does not wait."""
-        assert self._process is not None
-        answer = {"type": "extension_ui_response", "id": id, "cancelled": True}
-        self._process.stdin.write(json.dumps(answer).encode() + b"\n")
+        """Answer what nobody here can, since an extension is waiting on it."""
+        self._lines.write({"type": "extension_ui_response", "id": id, "cancelled": True})
 
     def _begin(self) -> None:
         if self._turn is None:
             self._turn = uuid4().hex
             self._opening = True
-            self._report(TurnStarted(turn=self._turn))
+            self._process.put(TurnStarted(turn=self._turn))
 
     def _landed(self, text: str) -> None:
         """An input reached the context: as what began a turn, or inside one. No frame names it, so its text does."""
@@ -450,44 +390,48 @@ class PiDriver:
         input = next((input for input, sent in self._unlanded.items() if sent == text), None)
         if input is not None:
             del self._unlanded[input]
-            self._report(InputDelivered(input=input, boundary=boundary, evidence="message_start"))
+            self._process.put(InputDelivered(input=input, boundary=boundary, evidence="message_start"))
 
     def _said(self, message: Mapping[str, Any], blocks: Sequence[Any]) -> None:
         """A model call has ended. Only now is its id known, and a call the harness stopped hearing may have none."""
         call_id = message.get("responseId")
         failed = message.get("stopReason") == "error"
-        self._failure = self._reason(message.get("errorMessage")) if failed else None
-        self._report(ModelCall(call_id=call_id, model=message.get("model")))
+        self._failure = self._process.reason(str(message.get("errorMessage"))) if failed else None
+        self._process.put(ModelCall(call_id=call_id, model=message.get("model")))
         self._spent(message.get("usage") or {}, call_id)
         for block in blocks:
             match block:
                 case {"type": "text", "text": text}:
-                    self._report(Item(kind="message", gist=self._gist(text), body=text, call_id=call_id))
+                    self._process.put(Item(kind="message", gist=self._process.gist(text), body=text, call_id=call_id))
                 case {"type": "thinking", "thinking": text}:
                     if text:
-                        self._report(Item(kind="thought", gist=self._gist(text), body=text, call_id=call_id))
+                        self._process.put(
+                            Item(kind="thought", gist=self._process.gist(text), body=text, call_id=call_id)
+                        )
                 case {"type": "toolCall", "id": id}:
                     self._calls[id] = call_id
                 case _:
-                    self._unknown("assistant", json.dumps(block))
+                    self._process.unknown("assistant", json.dumps(block))
 
     def _spent(self, usage: Mapping[str, Any], call_id: str | None) -> None:
         """What a call spent. Zero tokens means nobody heard, and dollars with no price behind them are no measurement:
         `totalFromProvider` says the provider billed them, and otherwise pi worked them out."""
         tokens = usage.get("totalTokens") or None
-        self._report(Usage(tokens=tokens, label="provider" if tokens else "unavailable", scope="call", call_id=call_id))
+        self._process.put(
+            Usage(tokens=tokens, label="provider" if tokens else "unavailable", scope="call", call_id=call_id)
+        )
         cost = usage.get("cost") or {}
         billed = cost.get("totalFromProvider", False)
         if cost.get("total") or billed:
             usd, label = cost.get("total"), "provider" if billed else "estimated"
-            self._report(Usage(usd=usd, label=label, scope="call", call_id=call_id))
+            self._process.put(Usage(usd=usd, label=label, scope="call", call_id=call_id))
 
     def _tool_began(self, id: str, name: str, arguments: Any) -> None:
         self._tools[id] = name
         said = json.dumps(arguments)
-        gist = self._gist(f"{name} {said}")
+        gist = self._process.gist(f"{name} {said}")
         call_id = self._calls.pop(id, None)
-        self._report(Item(kind="tool", phase="started", gist=gist, native_id=id, call_id=call_id, body=said))
+        self._process.put(Item(kind="tool", phase="started", gist=gist, native_id=id, call_id=call_id, body=said))
 
     def _tool_ended(self, id: str, result: Mapping[str, Any], failed: Any) -> None:
         """A tool's end. One an approval let through is that approval's observed outcome."""
@@ -496,17 +440,17 @@ class PiDriver:
         item = Item(
             kind="tool",
             phase="completed",
-            gist=self._gist(f"{self._tools.pop(id, 'tool')} {outcome}"),
+            gist=self._process.gist(f"{self._tools.pop(id, 'tool')} {outcome}"),
             native_id=id,
-            body=_text(result.get("content") or ""),
+            body=text_of(result.get("content") or ""),
             approval=approval,
             outcome=outcome,
         )
-        self._report(item)
+        self._process.put(item)
 
     def _compaction(self, result: Mapping[str, Any] | None) -> None:
         """One or two model calls whose usage comes as one, with no id. One that came to nothing says what it spent."""
-        self._report(ModelCall(purpose="compaction"))
+        self._process.put(ModelCall(purpose="compaction"))
         self._spent((result or {}).get("usage") or {}, None)
         if result is not None:
             self._soon(self._compacted(result))
@@ -517,7 +461,7 @@ class PiDriver:
         with contextlib.suppress(DriverError, KeyError):
             listing = await self._ask("get_entries")
             forgotten = _forgotten(listing["entries"], listing["leafId"], result["firstKeptEntryId"])
-        self._report(Compacted(forgotten=forgotten, summary=result.get("summary")))
+        self._process.put(Compacted(forgotten=forgotten, summary=result.get("summary")))
 
     def _ended(self, *, aborted: bool) -> None:
         """Pi will do nothing more on its own. Approvals of the turn go moot with it. No run takes what a turn that
@@ -525,7 +469,7 @@ class PiDriver:
         if self._turn is None:
             return
         reason = "interrupted" if aborted else self._failure or "stopped"
-        self._report(TurnEnded(reason=reason))
+        self._process.put(TurnEnded(reason=reason))
         self._turn, self._failure = None, None
         self._asking.clear()
         self._deciding.clear()
@@ -537,7 +481,3 @@ class PiDriver:
             await self._ask("clear_queue")
             for text in texts:
                 await self._hand_over(text)
-
-    def _reason(self, said: Any) -> str:
-        assert self._process is not None
-        return self._process.redact(str(said))[:_REASON_LIMIT]

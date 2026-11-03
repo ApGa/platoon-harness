@@ -7,20 +7,19 @@ of it. Every approval the harness asks for comes to the runtime, and a role's bu
 import asyncio
 import contextlib
 import json
-import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
-from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
 from platoon_harness.rpc import METHOD_NOT_FOUND, Closed, Peer, RpcError
 from platoon_harness.tools.ph import TOKEN_VARIABLE
 from platoon_harness.version import __version__
 
 from . import (
+    UNREADABLE,
     AgentSpec,
     ApprovalRequested,
     Capabilities,
@@ -37,15 +36,16 @@ from . import (
     ModelCall,
     Ready,
     Reconciled,
-    Report,
     Reporter,
     TurnEnded,
     TurnStarted,
     Usage,
-    unknown_frame,
+    refuse_other_effort,
+    refuse_unset_model,
+    text_of,
 )
-from .env import inherited, refuse_unset_model, signed_in
-from .process import LOG, Process
+from .env import harness_env, inherited
+from .process import LOG, Process, status
 
 _CODEX = "codex"
 _SIGN_IN = (
@@ -66,9 +66,7 @@ _BASE_URL = "OPENAI_BASE_URL"
 _KEY = "OPENAI_API_KEY"
 _PROVIDER = "platoon-harness"
 _LOGINS: Mapping[str, Login] = {"Logged in using ChatGPT": "plan", "API key configured": "key"}
-_STATUS_SECONDS = 5.0
 _ASKS = "on-request"
-_REASON_LIMIT = 256
 _TOOLS = frozenset(
     {
         "collabAgentToolCall",
@@ -137,13 +135,8 @@ __all__ = ["CodexDriver"]
 
 def _login() -> Login | None:
     """Which kind of login `codex` says it has, or None if it cannot tell. Nothing else it said is kept."""
-    command = (_CODEX, "login", "status")
-    env = {**inherited(), **signed_in(_SIGN_IN)}
-    try:
-        done = subprocess.run(command, capture_output=True, env=env, timeout=_STATUS_SECONDS, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    said = done.stderr.decode(errors="replace")
+    done = status((_CODEX, "login", "status"), inherited(*_SIGN_IN))
+    said = "" if done is None else done.stderr.decode(errors="replace")
     return next((login for phrase, login in _LOGINS.items() if phrase in said), None)
 
 
@@ -207,7 +200,7 @@ def _output(item: Mapping[str, Any]) -> str | None:
         case {"aggregatedOutput": str(output)}:
             return output
         case {"result": {"content": list(blocks)}}:
-            return "\n".join(block["text"] for block in blocks if "text" in block)
+            return text_of(blocks)
         case {"error": {"message": str(message)}}:
             return message
         case {"changes": list(changes)}:
@@ -216,7 +209,7 @@ def _output(item: Mapping[str, Any]) -> str | None:
             return None
 
 
-def _answered(method: str, params: Mapping[str, Any], verdict: Verdict) -> Mapping[str, Any]:
+def _reply(method: str, params: Mapping[str, Any], verdict: Verdict) -> Mapping[str, Any]:
     """A verdict in the shape each request takes. `decline` lets the model go on, as a denial does elsewhere, where
     `cancel` would stop its turn."""
     allowed = verdict == "allow"
@@ -248,7 +241,7 @@ class CodexDriver:
 
     def __init__(self) -> None:
         self._info: DriverInfo | None = None
-        self._process: Process | None = None
+        self._launched: Process | None = None
         self._peer: Peer | None = None
         self._native = ""
         self._folder = Path()
@@ -257,7 +250,7 @@ class CodexDriver:
         self._opening = False
         self._ending = "stopped"
         self._interrupted = False
-        self._spent: dict[str, int] = {}
+        self._totals: dict[str, int] = {}
         self._unlanded: dict[str, str] = {}
         self._asking: dict[str, _Asked] = {}
         self._deciding: dict[str, str] = {}
@@ -275,8 +268,14 @@ class CodexDriver:
         if _BASE_URL in spec.access and _KEY not in spec.access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._folder = spec.folder
-        launched = spec.model_copy(update={"env": {**signed_in(_SIGN_IN), **spec.env}})
-        await Process.launch((_CODEX, "app-server"), launched, report, read=self._read)
+        env = harness_env(spec, *_SIGN_IN)
+        self._launched = await Process.launch((_CODEX, "app-server"), spec, report, read=self._read, env=env)
+        await self._handshake(spec)
+        if spec.goal and spec.resume is None:
+            await self._hand_over(spec.goal)
+
+    async def _handshake(self, spec: AgentSpec) -> None:
+        """Open the thread, which answers with what `ready` needs and calls no model."""
         await self._call("initialize", {"clientInfo": {"name": "platoon_harness", "version": __version__}})
         await self._notify("initialized")
         theirs = (await self._call("config/read", {"cwd": str(spec.cwd)}))["config"]
@@ -285,13 +284,10 @@ class CodexDriver:
             opened = await self._call("thread/start", fields)
         else:
             opened = await self._call("thread/resume", {"threadId": spec.resume, "excludeTurns": True, **fields})
-        if spec.effort not in (None, opened.get("reasoningEffort")):
-            raise DriverError(f"it runs at effort {opened.get('reasoningEffort')}, and {spec.effort} was asked for")
+        refuse_other_effort(spec, opened.get("reasoningEffort"))
         self._native = opened["thread"]["id"]
         version = opened["thread"].get("cliVersion")
-        self._report(Ready(native=self._native, version=version, effective_model=opened.get("model")))
-        if spec.goal and spec.resume is None:
-            await self._hand_over(spec.goal)
+        self._process.put(Ready(native=self._native, version=version, effective_model=opened.get("model")))
 
     # What the harness is sent.
 
@@ -299,7 +295,7 @@ class CodexDriver:
         return DriverError(f"{_CODEX} is gone: see {self._folder / LOG}")
 
     async def _call(self, method: str, params: Any) -> Any:
-        if self._peer is None or self._process is None:
+        if self._peer is None:
             raise DriverError("this driver has not started")
         try:
             return await self._peer.call(method, params)
@@ -358,40 +354,30 @@ class CodexDriver:
 
     async def stop(self, grace: float) -> None:
         """End of stdin ends the app-server and whatever tool it has running, even one in a session of its own."""
-        if self._process is None or self._peer is None:
-            return
-        with contextlib.suppress(TimeoutError):
-            async with asyncio.timeout(grace):
-                self._peer.close()
-                await self._process.exited()
-        await self._process.stop(grace)
+        if self._launched is not None:
+            await self._launched.stop(grace)
 
     # What the harness says.
 
-    def _report(self, *reports: Report) -> None:
-        assert self._process is not None
-        for report in reports:
-            self._process.put(report)
-
-    def _gist(self, text: str) -> str:
-        assert self._process is not None
-        return self._process.redact(text)[:GIST_LIMIT]
+    @property
+    def _process(self) -> Process:
+        if self._launched is None:
+            raise DriverError("this driver has not started")
+        return self._launched
 
     def _read(self, process: Process) -> Any:
-        self._process = process
         self._peer = Peer(process.stdout, process.stdin, self._inbound, stray=self._stray, jsonrpc=False)
         return self._peer.run()
 
     def _stray(self, line: bytes) -> None:
-        assert self._process is not None
-        self._report(*unknown_frame("frame", self._process.redact(line.decode(errors="replace"))))
+        self._process.unknown("frame", line.decode(errors="replace"))
 
     async def _inbound(self, method: str, params: Any) -> Any:
         """One frame. Whatever cannot be read is refused, which answers a request the harness waits on and makes a
         stray of the frame."""
         try:
             return await self._take(method, params)
-        except (AttributeError, KeyError, TypeError, ValueError) as error:
+        except UNREADABLE as error:
             raise RpcError(METHOD_NOT_FOUND, f"{method} cannot be read: {error}") from error
 
     async def _take(self, method: str, params: Any) -> Any:
@@ -406,7 +392,7 @@ class CodexDriver:
             ):
                 return await self._decided(method, params)
             case "turn/started", {"threadId": str(thread), "turn": {"id": str(turn)}}:
-                self._began(thread, turn)
+                self._begin(thread, turn)
             case "turn/completed", {"threadId": str(thread), "turn": {"id": str()} as turn}:
                 self._ended(thread, turn)
             case "item/started" | "item/completed", {"threadId": thread} if thread != self._native:
@@ -417,7 +403,7 @@ class CodexDriver:
                 self._completed(item)
             case "item/agentMessage/delta", {"threadId": thread, "delta": text}:
                 if thread == self._native:
-                    self._report(Delta(text=text))
+                    self._process.put(Delta(text=text))
             case "thread/tokenUsage/updated", {
                 "threadId": str(thread),
                 "tokenUsage": {"total": {"totalTokens": total}},
@@ -433,18 +419,18 @@ class CodexDriver:
         asked = _Asked(params.get("turnId"), params.get("itemId"), asyncio.get_running_loop().create_future())
         self._asking[id] = asked
         said = params.get("command") or params.get("message") or params.get("reason") or method
-        self._report(ApprovalRequested(id=id, gist=self._gist(said)))
-        return _answered(method, params, await asked.verdict)
+        self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said)))
+        return _reply(method, params, await asked.verdict)
 
-    def _began(self, thread: str, turn: str) -> None:
+    def _begin(self, thread: str, turn: str) -> None:
         if not self._turns:
-            self._report(TurnStarted(turn=turn))
+            self._process.put(TurnStarted(turn=turn))
         self._turns[thread] = turn
         if thread == self._native:
             self._opening = True
         elif thread not in self._children:
             self._children.add(thread)
-            self._report(
+            self._process.put(
                 ChildSeen(native=thread, attribution="inferred"),
                 GapReport(plane="model", what="native_child_unattributed"),
             )
@@ -455,7 +441,7 @@ class CodexDriver:
         self._opening = False
         match item:
             case {"clientId": str(input), "id": id} if self._unlanded.pop(input, None) is not None:
-                self._report(InputDelivered(input=input, boundary=boundary, evidence="userMessage", native_id=id))
+                self._process.put(InputDelivered(input=input, boundary=boundary, evidence="userMessage", native_id=id))
 
     def _started(self, item: Mapping[str, Any]) -> None:
         match item:
@@ -465,29 +451,31 @@ class CodexDriver:
                 self._compacting = True
                 self._measured = False
             case {"type": "fileChange", "id": id}:
-                self._report(Item(kind="patch", phase="started", gist=self._gist(_name(item)), native_id=id))
+                self._process.put(
+                    Item(kind="patch", phase="started", gist=self._process.gist(_name(item)), native_id=id)
+                )
             case {"type": type, "id": id} if type in _TOOLS:
                 said = json.dumps(item["arguments"]) if "arguments" in item else None
-                gist = self._gist(" ".join(filter(None, (_name(item), said))))
-                self._report(Item(kind="tool", phase="started", gist=gist, native_id=id, body=said))
+                gist = self._process.gist(" ".join(filter(None, (_name(item), said))))
+                self._process.put(Item(kind="tool", phase="started", gist=gist, native_id=id, body=said))
 
     def _completed(self, item: Mapping[str, Any]) -> None:
         match item:
             case {"type": "agentMessage", "id": id, "text": text}:
-                self._report(Item(kind="message", gist=self._gist(text), native_id=id, body=text))
+                self._process.put(Item(kind="message", gist=self._process.gist(text), native_id=id, body=text))
             case {"type": "reasoning", "id": id}:
                 if text := "\n".join((*item.get("summary", ()), *item.get("content", ()))):
-                    self._report(Item(kind="thought", gist=self._gist(text), native_id=id, body=text))
+                    self._process.put(Item(kind="thought", gist=self._process.gist(text), native_id=id, body=text))
             case {"type": "plan", "id": id, "text": text}:
-                self._report(Item(kind="thought", gist=self._gist(text), native_id=id, body=text))
+                self._process.put(Item(kind="thought", gist=self._process.gist(text), native_id=id, body=text))
             case {"type": "userMessage"}:
                 pass
             case {"type": "contextCompaction"}:
                 self._compacted()
             case {"type": "fileChange", "id": _}:
-                self._report(self._finished("patch", item))
+                self._process.put(self._finished("patch", item))
             case {"type": type, "id": _} if type in _TOOLS:
-                self._report(self._finished("tool", item))
+                self._process.put(self._finished("tool", item))
             case _:
                 raise RpcError(METHOD_NOT_FOUND, f"nothing here takes an item of type {item['type']}")
 
@@ -499,7 +487,7 @@ class CodexDriver:
         return Item(
             kind=kind,
             phase="completed",
-            gist=self._gist(" ".join(filter(None, (_name(item), outcome)))),
+            gist=self._process.gist(" ".join(filter(None, (_name(item), outcome)))),
             native_id=id,
             body=_output(item),
             approval=approval,
@@ -511,20 +499,20 @@ class CodexDriver:
         on its side reports no usage for it, which leaves a call nobody saw."""
         self._compacting = False
         if not self._measured:
-            self._report(ModelCall(purpose="compaction"), GapReport(plane="model", what="hidden_call"))
-        self._report(Compacted())
+            self._process.put(ModelCall(purpose="compaction"), GapReport(plane="model", what="hidden_call"))
+        self._process.put(Compacted())
 
     def _used(self, thread: str, total: int) -> None:
         """One model call's worth, as what `total` rose by, since `last` comes again at an interrupt. No id goes with
         it. Out of a turn nothing was spent: a resume sends the old total."""
-        spent, self._spent[thread] = total - self._spent.get(thread, 0), total
+        spent, self._totals[thread] = total - self._totals.get(thread, 0), total
         if spent <= 0 or not self._turns:
             return
         ours = thread == self._native
         self._measured |= ours and self._compacting
         purpose = "compaction" if ours and self._compacting else None
         usage = Usage(tokens=spent, label="provider", scope="call" if ours else "tree")
-        self._report(ModelCall(purpose=purpose), usage)
+        self._process.put(ModelCall(purpose=purpose), usage)
 
     def _ended(self, thread: str, turn: Mapping[str, Any]) -> None:
         """An end. Approvals of that turn go moot with it, and ours ends with the last thread still at work."""
@@ -538,7 +526,7 @@ class CodexDriver:
         if self._turns:
             return
         reason = "interrupted" if self._interrupted else self._ending
-        self._report(TurnEnded(reason=reason))
+        self._process.put(TurnEnded(reason=reason))
         self._interrupted, self._ending = False, "stopped"
         if self._unlanded and reason != "stopped":
             self._again = asyncio.create_task(self._send_again(self._unlanded.copy()))
@@ -551,10 +539,9 @@ class CodexDriver:
             case {"status": "interrupted"}:
                 reason = "interrupted"
             case _:
-                assert self._process is not None
                 said = (turn.get("error") or {}).get("message") or turn.get("status")
-                reason = self._process.redact(str(said))[:_REASON_LIMIT]
-        self._report(GapReport(plane="model", what="usage_lower_bound"))
+                reason = self._process.reason(str(said))
+        self._process.put(GapReport(plane="model", what="usage_lower_bound"))
         return reason
 
     async def _send_again(self, inputs: Mapping[str, str]) -> None:

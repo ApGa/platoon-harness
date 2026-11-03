@@ -391,7 +391,7 @@ def test_a_status_that_says_nothing_readable_is_no_login_we_know_of(tmp_path, st
 
 def test_a_status_that_hangs_is_cut_short(tmp_path, stand, monkeypatch):
     settled_on(tmp_path / "home", monkeypatch, "openai")
-    monkeypatch.setattr("platoon_harness.drivers.pi._STATUS_SECONDS", 0.1)
+    monkeypatch.setattr("platoon_harness.drivers.process._STATUS_SECONDS", 0.1)
     stand.install(status_seconds=5)
 
     assert PiDriver().describe().login is None

@@ -296,15 +296,17 @@ architecture asks for and is easy to get wrong:
   stranger;
 - pipes that always drain, and reports in a bounded queue whose breach stops the agent with a gap;
 - stderr in a bounded log, never journaled, with credentials masked;
-- `stop(grace)`: `SIGTERM`, wait, `SIGKILL`, then verify;
-- the allowlisted environment from `harness_env(spec)`, with what a login needs from the shell added by name through `signed_in`.
+- `stop(grace)`: end of stdin, wait, `SIGTERM`, wait, `SIGKILL`, then verify;
+- the allowlisted environment from `harness_env(spec)`, with what a login needs from the shell added by name, as in
+  `harness_env(spec, "CODEX_HOME")`.
 
 The host masks every report on its way in, whichever driver said it, and holds back the end of live text until the next delta or any
-other report, as a secret can straddle two deltas. So if you cut text to fit a field, mask it first with `process.redact`, because a
-cut can split a secret. `Held(process.redact)` does the same for a stream of chunks.
+other report, as a secret can straddle two deltas. So if you cut text to fit a field, mask it first, because a cut can split a secret:
+`process.gist`, `process.reason` and `process.unknown` do both, and `Held(process.redact)` does the same for a stream of chunks.
 
-For a line protocol, `read_lines` in `platoon_harness.rpc` splits on LF only and bounds a line. For JSON-RPC, `Peer` is the whole
-client: it takes a handler for inbound calls, and `jsonrpc=False` for a peer that omits that member.
+For a line protocol, `read_lines` in `platoon_harness.rpc` splits on LF only and bounds a line, and `Lines` adds answers that arrive
+among events. For JSON-RPC, `Peer` is the whole client: it takes a handler for inbound calls, and `jsonrpc=False` for a peer that omits
+that member.
 
 ## Conformance
 
