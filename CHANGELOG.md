@@ -110,21 +110,22 @@
   `failed`, derived in the view so every client says the same.
 - Every act of the terminal UI takes only keys every terminal delivers, so an editor's terminal that keeps Ctrl, Alt or F keys,
   as Cursor's on a Mac does, leaves none out of reach. In the composer a line that is exactly `/` and an act's name runs it and
-  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. Tab and Shift+Tab go round the composer,
-  the transcript, the dock and the navigator, and in the dock the arrows choose a place and `y` and `n` answer it. The sessions
-  screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them. `docs/tui.md` names the VS Code,
-  Cursor, Terminal.app and iTerm2 settings that keep keys. ADR 0026.
+  goes to no agent, `/` alone lists them, and the footer always begins `/ commands`. Tab and Shift+Tab go round the parts in
+  the order they are on screen. The dock takes focus with no place chosen, so its `y` and `n` answer only a place chosen there
+  with the arrows. The sessions screen has a plain key for each act, `?` the help, `p` the palette and `q` quitting among them.
+  `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep keys. ADR 0026.
 
 ### Changed
 
 - In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
-  goes back to the composer and interrupts nothing. Alt+Y, Alt+N and Alt+S are gone: a terminal sends Alt and a letter as Esc
-  then that letter, so Esc then a word typed at once answered a place or stopped turns. `/yes`, `/no` and `/stop-below` reach
-  them. The dock takes focus from Tab or a click, never on its own, two keys from the composer either way. Acts are named as they
-  are typed: `palette` where it was `commands`, `quit` for `leave`, `next-place` for `next for you`, `yes` and `no` for `first
-  action` and `second action`, `open` for `open line`, and `stop-below`, `page-up`, `page-down` and `takeover` joined where they
-  were two words. The sessions screen looks again on `l`, where it was Ctrl+R, and `/` is search, not built yet, from any part but
-  the composer.
+  goes back to the composer and interrupts nothing. The footer names Esc by what it does from the part with focus, which is
+  marked. Alt+Y, Alt+N and Alt+S are gone: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word typed at
+  once answered a place or stopped turns. `/yes`, `/no` and `/stop-below` reach them. The dock takes focus from Tab or Shift+Tab,
+  never on its own or from a click, and a part hidden while it has focus gives it back to the composer. Under 80 columns Esc or a
+  row chosen in the navigator closes it. Acts are named as they are typed: `palette` where it was `commands`, `quit` for `leave`,
+  `next-place` for `next for you`, `yes` and `no` for `first action` and `second action`, `open` for `open line`, and
+  `stop-below`, `page-up`, `page-down` and `takeover` joined where they were two words. The sessions screen looks again on `l`,
+  where it was Ctrl+R, and `/` is search, not built yet, from any part but the composer.
 - The command line shows a control a terminal would act on, C0 but tab and newline, DEL, C1 and the bidi controls, as its escape,
   and nothing else, where it escaped every format character, which broke emoji joined by a zero-width joiner.
 - The problem a plan login with several agents raises is at `plan_login`, the setting that answers it, where it was at `roles`.

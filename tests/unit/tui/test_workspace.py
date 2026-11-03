@@ -11,6 +11,7 @@ import pytest
 from rich.cells import cell_len
 from textual import events
 from textual._xterm_parser import XTermParser
+from textual.strip import Strip
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
@@ -21,7 +22,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import Dock
+from platoon_harness_cli.tui.workspace import CHOOSE, Dock
 
 from ..runtime.support import harness, in_state, of_type, until
 from .support import drawn, workspace
@@ -101,8 +102,8 @@ def at_once(app: TerminalUI, sent: str) -> None:
 
 
 async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root):
-    """A terminal sends Alt and a letter as Esc then that letter, so no chord decides or stops anything, and the word
-    reaches the composer."""
+    """A terminal sends Alt and a letter as Esc then that letter, so no chord decides or stops anything, and in the dock
+    the letter lets go of the place chosen there, so a `y` or `n` later in the word answers nothing."""
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -114,6 +115,11 @@ async def test_esc_then_a_word_typed_at_once_answers_and_stops_nothing(root):
             at_once(app, f"\x1b{word}")
             await drawn(pilot, lambda _, word=word: composer.text.endswith(word))
         assert composer.text == "no waityesstop"
+
+        await pilot.press("shift+tab", "down")
+        await drawn(pilot, lambda text: "y Allow  n Deny" in text)
+        at_once(app, "\x1bplease continue")
+        await drawn(pilot, lambda _: any(CHOOSE in notice.message for notice in app._notifications))
         assert await of_type(owner, "approval.resolved") == [] and await of_type(owner, "turn.ended") == []
 
 
@@ -756,10 +762,15 @@ async def test_a_typed_command_never_reaches_an_agent_and_any_other_slash_is_ask
         assert screen.query_one(Composer).text == "/"
 
 
+def drawing(app: TerminalUI, part) -> list:
+    """How the screen draws a part, a cell at a time: its text and its style."""
+    region = part.region
+    update = app.screen._compositor.render_full_update()
+    return [list(Strip.join(line).crop(region.x, region.right)) for line in update.strips[region.y : region.bottom]]
+
+
 async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_composer_interrupting_nothing(root):
-    """The dock is two keys from the composer either way, so a stray Tab from a draft never lands where a letter
-    answers. In the dock the arrows choose a place and `n` takes its second action, and a dock with nothing left gives
-    focus back."""
+    """Each part shows that it has focus, and the footer names Esc by what it does from there."""
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -771,24 +782,74 @@ async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_compos
         for _ in range(4):
             await pilot.press("tab")
             visited.append(app.focused)
-        assert visited == [transcript, dock, navigator, composer]
+        assert visited == [navigator, transcript, dock, composer]
         await pilot.press("shift+tab")
-        assert app.focused is navigator
+        assert app.focused is dock
 
-        for part in (navigator, transcript, dock):
-            part.focus()
+        for part, shown in ((navigator, navigator), (transcript, screen.query_one("#focus")), (dock, dock)):
             await pilot.press("escape")
-            assert app.focused is composer, part
+            footer = (await drawn(pilot, lambda text: "Esc interrupt" in text.splitlines()[-1])).splitlines()[-1]
+            unfocused, back = drawing(app, shown), footer.replace("Esc interrupt", "Esc back").split()
+            part.focus()
+            await drawn(pilot, lambda text, back=back: text.splitlines()[-1].split() == back)
+            assert drawing(app, shown) != unfocused, f"{part} shows no mark of its focus"
+        await pilot.press("escape")
+        assert app.focused is composer
         assert await of_type(owner, "turn.ended") == [], "Esc from a part interrupted the agent"
 
-        await pilot.press("tab", "tab", "y")
-        assert dock.cursor is None and await of_type(owner, "approval.resolved") == []
-        await pilot.press("down")
-        await drawn(pilot, lambda text: "n Deny" in text)
+
+async def test_the_dock_takes_focus_with_no_place_chosen_so_its_letters_answer_only_a_place_chosen_in_it(root):
+    """A place chosen from the composer is let go once Tab or Shift+Tab reaches the dock, so a stray one from a draft,
+    then the draft going on, answers nothing. A click chooses a place and gives no focus. A dock with nothing left gives
+    focus back."""
+    async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "Ship the fix?" in text)
+        composer, dock = app.screen.query_one(Composer), dock_of(app)
+
+        await pilot.press(*"/next-place", "enter", "shift+tab")
+        await drawn(pilot, lambda text: CHOOSE in text)
+        await pilot.press(*"no rush, yes")
+        await drawn(pilot, lambda _: any(CHOOSE in notice.message for notice in app._notifications))
+        assert app.focused is dock and dock.cursor is None
+
+        await pilot.press("escape")
+        await pilot.click("#dock")
+        await pilot.press(*"no wait")
+        assert app.focused is composer and composer.text == "no wait" and dock.cursor is not None
+        assert await of_type(owner, "approval.resolved") == []
+
+        await pilot.press(*["backspace"] * 7, "shift+tab", "down")
+        await drawn(pilot, lambda text: "y Allow  n Deny" in text)
         await pilot.press("n")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
         assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("deny", "tui")]
         await drawn(pilot, lambda _: app.focused is composer)
+
+
+async def test_a_part_hidden_while_it_has_focus_gives_focus_back_to_the_composer(root):
+    """A resize under 80 columns hides the navigator, which lies over the focus pane there once shown, until Esc or a
+    row chosen in it closes it."""
+    async with attached(team([Hang()]), root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await in_state(owner, "lead", "running")
+        screen = workspace(app)
+        composer, navigator = screen.query_one(Composer), screen.query_one("#navigator")
+
+        await pilot.press("tab")
+        assert app.focused is navigator
+        await pilot.resize_terminal(79, 32)
+        await drawn(pilot, lambda _: app.focused is composer)
+        await pilot.press(*"hello")
+        assert composer.text == "hello"
+
+        await pilot.press(*["backspace"] * 5, *"/navigator", "enter", "tab")
+        assert navigator.display and app.focused is navigator
+        await pilot.press("down", "enter")
+        await drawn(pilot, lambda _: not navigator.display and app.focused is composer)
+        await pilot.press(*"/navigator", "enter", "tab", "escape")
+        await drawn(pilot, lambda _: not navigator.display and app.focused is composer)
+        assert await of_type(owner, "turn.ended") == [], "Esc from the navigator interrupted the agent"
 
 
 async def test_body_tombstone_from_the_palette_asks_once(root):

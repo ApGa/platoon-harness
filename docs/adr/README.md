@@ -32,7 +32,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0023](0023-agents-that-stay.md) | Agents that stay | `stays` keeps an agent for follow-ups, a report wakes its parent once for each thing the parent asked, and an idle child ends `retired` |
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | `allow_native_children` on a role, false unless said, and each driver turns them off by the harness's own setting for one launch |
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | `preamble` on a team or a role, with slots the runtime fills, the default saying what it said before, and the text journaled |
-| [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | A chord is a shortcut and never decides: each act has a typed command or a plain key, Tab reaches the dock, and Esc leaves a panel without interrupting |
+| [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | A chord is a shortcut and never decides: each act has a typed command or a plain key, Tab reaches the dock with no place chosen, and Esc leaves a panel without interrupting |
 
 ## Adding or changing one
 

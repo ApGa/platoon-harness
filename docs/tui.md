@@ -29,12 +29,15 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 - A typed command not built yet says why, as its key does.
 - No chord decides or stops anything: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word typed
   at once would run one. `/yes`, `/no` and `/stop-below` have no key.
-- Tab goes from the composer to the transcript, the dock and the navigator, and round, and Shift+Tab the other way, so the
-  dock is two keys from the composer either way and a stray Tab from a draft never lands where a letter answers.
-- Only Tab, Shift+Tab or a click moves focus to the dock, so an approval never takes it, and a dock with nothing left to
-  act on gives it back to the composer.
+- Tab and Shift+Tab go round the parts in the order they are on screen: the navigator, the transcript, the dock and the
+  composer.
+- Only Tab or Shift+Tab moves focus to the dock, and its `y` and `n` act only on a place chosen there with the arrows: it
+  takes focus with no place chosen, and a character it does not take lets go of the one chosen, so a stray Tab from a
+  draft, then the draft going on, answers nothing. A click chooses a place and gives no focus.
+- A part hidden while it has focus, by a resize, `/navigator` or a dock left empty, gives focus back to the composer.
 - Esc in the composer interrupts the agent in view, and from any other part goes back to the composer, interrupting
-  nothing.
+  nothing. The footer names Esc by what it does from the part with focus, and that part is marked: the navigator by its
+  edge, the transcript by its title and the dock by its band.
 - Where nothing is typed, on the sessions screen, in a question, a form or the help, every act has a plain key, quitting
   included.
 
@@ -89,10 +92,10 @@ empty composer detaches, and with a draft it says why it does not.
 
 Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
 place you must act, and `/yes` and `/no` take its first and second action, Allow and Deny for an approval, each carrying
-the version it was drawn from. With the dock reached by Tab, the arrows choose a place, Enter goes to it, and `y` and
-`n` take the same two actions. Only you move where you are: a place that goes, answered here or by another client, takes
-it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows as
-theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
+the version it was drawn from. With the dock reached by Shift+Tab, the arrows choose a place, Enter goes to it, and `y`
+and `n` take the same two actions. Only you move where you are: a place that goes, answered here or by another client,
+takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows
+as theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
 below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows disabled,
 pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves. Retiring
 or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the palette,
@@ -106,11 +109,12 @@ command line prints any. A takeover says it is not built yet, as `/takeover` doe
 |---|---|
 | 120 columns or more | Navigator, focus pane, and the inspector beside them |
 | 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
-| 60 to 79 | The focus pane, a line of the team above the composer, and the navigator on `/navigator` |
+| 60 to 79 | The focus pane, a line of the team above the composer, and the navigator over the focus pane on `/navigator`, until Esc or a row chosen in it closes it |
 | under 60 | As 60 to 79, with the header shortened to counts and the footer to `/ commands` and keys |
 | under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
 
-A resize changes which parts show, and never the scroll position, focus or the composer's target.
+A resize changes which parts show, and never the scroll position or the composer's target. It moves focus only by hiding
+the part that has it, which gives focus back to the composer.
 
 ### Reconnecting
 
@@ -195,7 +199,7 @@ and this keymap are made. A part that has focus takes its own keys before the se
 
 | Keys | Does |
 |---|---|
-| `tab` | Go to the next part: the composer, the transcript, the dock, the navigator, and round |
+| `tab` | Go to the next part: the navigator, the transcript, the dock, the composer, and round |
 | `shift+tab` | Go to the part before |
 
 ### The transcript, the dock or the navigator, once one has focus

@@ -194,7 +194,7 @@ KEYMAP: tuple[Key, ...] = (
         "tab",
         "app.focus_next",
         "next part",
-        "Go to the next part: the composer, the transcript, the dock, the navigator, and round",
+        "Go to the next part: the navigator, the transcript, the dock, the composer, and round",
         "parts",
     ),
     Key("shift+tab", "app.focus_previous", "part before", "Go to the part before", "parts"),

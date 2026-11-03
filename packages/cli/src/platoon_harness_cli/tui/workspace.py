@@ -13,7 +13,6 @@ from textual.content import Content
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.screen import Screen
-from textual.widget import Widget
 from textual.widgets import Static
 
 from platoon_harness import Refused, Session
@@ -47,19 +46,34 @@ back."""
 UNBUILT = {"agent.takeover": "take_over"}
 """Commands whose purpose the TUI cannot carry out yet, by the key that says why: a takeover holds an agent's deliveries
 for a person to drive its own terminal, which is not built, so the palette says so rather than hold them."""
-TAB = ("composer", "transcript", "dock", "navigator")
-"""The parts Tab goes through, in order, so the dock is never one key from the composer either way."""
+CHOOSE = f"{next(key.shown for key in keys('list') if key.action == 'cursor_down')} chooses a place"
+"""How a place is chosen in the dock once it has focus."""
 
 
 class Dock(Rows):
-    """Where a person must act, a row each. It takes focus only from the person, with Tab or a click, so a key meant for
-    the composer never answers it, and only the person moves its cursor: a row that goes takes the cursor with it, so an
-    act never lands on a row they did not choose."""
+    """Where a person must act, a row each. Only the person moves its cursor: a row that goes takes the cursor with it,
+    so an act never lands on a row they did not choose. Only Tab or Shift+Tab gives it focus, since a click chooses a
+    place and gives none, and its letters act only on a place chosen there with the arrows: it takes focus with none
+    chosen, and a character it does not take lets go of the one chosen, so what is typed for the composer answers
+    nothing."""
 
     BINDINGS = [*bindings("dock"), *bindings("panel")]
+    FOCUS_ON_CLICK = False
 
     class Moved(Message):
-        """The person moved the cursor to another place, whose row now shows the keys that take its actions."""
+        """The cursor moved, so which row shows the keys that take its actions changed."""
+
+    def on_focus(self) -> None:
+        self._let_go()
+
+    def on_key(self, event: events.Key) -> None:
+        if event.is_printable:
+            self._let_go()
+
+    def _let_go(self) -> None:
+        self.cursor = None
+        self.refresh()
+        self.post_message(self.Moved())
 
     def show(self, rows: list[Row]) -> None:
         chosen = self.cursor
@@ -206,13 +220,14 @@ class Workspace(Screen[None]):
         """The session that runs on once you leave it, or None when no runtime holds it."""
         return self.session_name if self.live is not None and self.live.runtime == "live" else None
 
-    @property
-    def focus_chain(self) -> list[Widget]:
-        """The parts that are shown, in the order Tab goes through them."""
-        return sorted(super().focus_chain, key=lambda part: TAB.index(part.id or ""))
-
     def on_descendant_focus(self) -> None:
         self._redraw()
+
+    def on_descendant_blur(self, blurred: events.DescendantBlur) -> None:
+        """A part hidden while it has focus, by a resize, `/navigator` or a dock left empty, gives it back to the
+        composer."""
+        if not blurred.widget.display:
+            self.query_one(Composer).focus()
 
     def on_dock_moved(self) -> None:
         self._redraw()
@@ -337,14 +352,13 @@ class Workspace(Screen[None]):
         self.query_one("#navigator", Rows).show(self._navigator(live))
         self._set("#strip", self._strip(live))
         self._set("#title", self._title())
+        self.query_one("#title").set_class(self.query_one(Transcript).has_focus, "-focused")
         self._set("#behind", self._behind())
         self.query_one("#behind").set_class(not self.query_one(Transcript).following, "-shown")
         self._set("#inspector", self._inspector(live))
         dock = self.query_one(Dock)
         dock.show(self._dock(live))
         dock.set_class(bool(dock.rows), "-shown")
-        if dock.has_focus and not dock.rows:  # A dock with nothing left to act on gives focus back.
-            self.query_one(Composer).focus()
         self._set("#chip", self._chip(live))
         self._set("#footer", self._footer(live))
 
@@ -555,14 +569,14 @@ class Workspace(Screen[None]):
 
     def _dock(self, live: Live) -> list[Row]:
         """A row per place you must act, and on the one you are at, the keys that take its actions from where the focus
-        is: the dock's own letters, or a session's typed commands. Hints come before the gist, so a narrow screen cuts
-        the gist and never a hint."""
+        is: the dock's own letters, or a session's typed commands. A dock with focus and no place chosen says how to
+        choose one on its first row. Hints come before the gist, so a narrow screen cuts the gist and never a hint."""
         dock = self.query_one(Dock)
         chosen = dock.cursor
         rows = []
         acts = ("first_action", "second_action")
         first, second = [key.shown for key in keys("dock")] if dock.has_focus else [reach(act) for act in acts]
-        for place in self._places(live):
+        for index, place in enumerate(self._places(live)):
             actions = place["actions"]
             hints: list[Any] = []
             if place["id"] == chosen:
@@ -570,6 +584,8 @@ class Workspace(Screen[None]):
                     (f"{hint} {action['label']}  ", "bold")
                     for hint, action in zip((first, second), actions, strict=False)
                 ]
+            elif chosen is None and dock.has_focus and index == 0:
+                hints = [(f"{CHOOSE}  ", "bold")]
             line = Content.assemble(
                 ("⚠ ", "yellow"),
                 (f"{place['kind']} ", "bold"),
@@ -601,14 +617,19 @@ class Workspace(Screen[None]):
         return Content.assemble(*parts)
 
     def _footer(self, live: Live) -> Content:
-        """How to reach the typed commands, which every terminal delivers, then the footer's keys, each dim while the
-        runtime refuses it for the agent in view, then how many places need you."""
+        """How to reach the typed commands, which every terminal delivers, then the footer's keys, each named by what it
+        runs from the part with focus, which may take it for its own, and dim while the runtime refuses that for the
+        agent in view, then how many places need you."""
         agent = self.focus_on.agent if self.focus_on else None
-        shown = [key for key in (*keys("everywhere"), *keys("workspace")) if key.footer]
+        active = self.active_bindings
         parts: list[Any] = [("/", "bold"), (" commands", "dim"), "  "]
-        for key in shown:
-            off = (key.action, agent or "") in self._refused
-            label = "" if self.size.width < 60 else f" {key.name}"
+        for key in (*keys("everywhere"), *keys("workspace")):
+            if not key.footer:
+                continue
+            runs = active[key.keys.split(",")[0]].binding.action
+            now = next((other for other in KEYMAP if other.runs == runs), key)
+            off = (now.action, agent or "") in self._refused
+            label = "" if self.size.width < 60 else f" {now.name}"
             parts += [(key.shown, "dim" if off else "bold"), (label, "dim strike" if off else "dim"), "  "]
         if places := len(self._places(live)):
             parts.append((f" ⚠ {places} need you ", "bold reverse yellow"))
@@ -653,6 +674,7 @@ class Workspace(Screen[None]):
 
     async def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
         if chosen.rows.id == "navigator":
+            self.remove_class("navigator-shown")
             await self.show(self._focus_of(chosen.key))
         elif isinstance(chosen.rows, Dock):
             await self._go_to(chosen.key)
@@ -697,7 +719,8 @@ class Workspace(Screen[None]):
         self._redraw()
 
     def _lay_out(self, width: int, height: int) -> None:
-        """The layout by size: a resize changes which panes show, and never what is in view, focus or the target."""
+        """The layout by size: a resize changes which panes show, and never what is in view or the target, nor focus
+        but by hiding the part that has it."""
         self.set_class(width < 120, "medium")
         self.set_class(width < 80, "narrow")
         self.set_class(width < 60, "slim")
@@ -799,10 +822,11 @@ class Workspace(Screen[None]):
     async def _act(self, index: int) -> None:
         """Take an action of the place you are at, as its row offers it, with the version it was drawn from."""
         live = self.live
-        place = live.attention.get(self.query_one(Dock).cursor or "") if live else None
+        dock = self.query_one(Dock)
+        place = live.attention.get(dock.cursor or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
-            said = f"Nothing here takes that action: {reach('next_place')} goes to where you must act."
-            note(self, said, severity="warning")
+            how = CHOOSE if dock.has_focus else f"{reach('next_place')} goes to where you must act"
+            note(self, f"Nothing here takes that action: {how}.", severity="warning")
             return
         action = place["actions"][index]
         args = {**action["args"], **({"via": "tui"} if action["op"] == "approval.resolve" else {})}
@@ -829,6 +853,8 @@ class Workspace(Screen[None]):
             await self.show(self._focus_of(key))
 
     def action_back(self) -> None:
+        """Go back to the composer, closing the navigator where it lies over the focus pane."""
+        self.remove_class("navigator-shown")
         self.query_one(Composer).focus()
 
     def action_navigator(self) -> None:

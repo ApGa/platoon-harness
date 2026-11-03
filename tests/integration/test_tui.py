@@ -235,9 +235,9 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
 
 
 async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
-    """Started from the sessions screen, a message sent, an approval answered from the dock reached by Tab, the agent
-    interrupted, then detached and quit, with letters, Enter, Esc, Tab and the arrows alone, which every terminal
-    delivers, as a terminal that keeps chords for itself, such as an editor's, does not."""
+    """Started from the sessions screen, a message sent, an approval answered from the dock reached by Shift+Tab, the
+    agent interrupted, then detached and quit, with letters, Enter, Esc, Shift+Tab and the arrows alone, which every
+    terminal delivers, as a terminal that keeps chords for itself, such as an editor's, does not."""
     team = tmp_path / "crew.toml"
     team.write_text(f'[roles.lead]\nharness = "{inside("asks_then_hangs")}"\n')
     folder = tmp_path / "sessions" / "crew"
@@ -252,7 +252,7 @@ async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
 
         await pilot.press(*"ship it", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
-        await pilot.press("tab", "tab", "down")
+        await pilot.press("shift+tab", "down")
         await drawn(pilot, lambda text: "y Allow" in text and "n Deny" in text)
         await pilot.press("y")
         resolved = await until(lambda: of_type(guest, "approval.resolved"), guest)
