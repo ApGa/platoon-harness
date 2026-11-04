@@ -16,11 +16,11 @@ from .common import (
     event_at,
     expose,
     expose_read,
-    handed,
     lines_of,
     maker,
     size_of,
 )
+from .provenance import handed
 
 
 class Blob(Args):

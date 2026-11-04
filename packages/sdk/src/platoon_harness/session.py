@@ -25,11 +25,24 @@ from pathlib import Path
 from typing import Any, Literal, Self
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, first, is_held
-from platoon_harness.primitives import BODY_REF, PRIMITIVES, Condition, Policy, Verdict
+from platoon_harness.primitives import (
+    BODY_REF,
+    PRIMITIVES,
+    Condition,
+    Contributors,
+    Exposure,
+    Lineage,
+    NotSeen,
+    Policy,
+    Seen,
+    Unknown,
+    Uses,
+    Verdict,
+)
 from platoon_harness.rpc import Closed
 from platoon_harness.runtime import GRACE, Authority, Runtime
 from platoon_harness.runtime.control import History, Link, Local, Remote
@@ -55,6 +68,7 @@ CREATE TABLE IF NOT EXISTS marks(
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
 Span = str | float
+_EXPOSURE: TypeAdapter[Seen | NotSeen | Unknown] = TypeAdapter(Exposure)
 
 __all__ = ["Ending", "Reason", "Session"]
 
@@ -777,6 +791,28 @@ class Session:
     async def tombstone(self, ref: str) -> None:
         """Redact a body: reads stop now, and its bytes follow. Events citing its hash stay whole."""
         await self._do("body.tombstone", sha256=ref.removeprefix("sha256:"))
+
+    # Provenance.
+
+    async def exposure(self, agent: str, ref: str, *, before: str | None = None) -> Seen | NotSeen | Unknown:
+        """Whether the event `ref` reached `agent` through us before the event `before`, or by now: `Seen`, `NotSeen` or
+        `Unknown`, each with why, and never a boolean."""
+        return _EXPOSURE.validate_python(await self._ask("exposure", agent=agent, ref=ref, before=before))
+
+    async def lineage(self, ref: str, *, after: str | None = None) -> Lineage:
+        """One hop back from an event: who made it, what it cites with its citer's exposure, what it followed from, its
+        ancestry, and a page of what its maker was offered and the gaps in its record. Pass `cursor` as `after`."""
+        return Lineage.model_validate(await self._ask("lineage", ref=ref, after=after))
+
+    async def uses(self, ref: str, *, after: str | None = None) -> Uses:
+        """One hop forward from an event: what cites it, what follows from it, its next version or the commits it is a
+        parent of, and each agent it was offered to. Pass `cursor` as `after`."""
+        return Uses.model_validate(await self._ask("uses", ref=ref, after=after))
+
+    async def contributors(self, ref: str, *, after: str | None = None) -> Contributors:
+        """Each maker a walk back from an outcome reaches, and apart from them each maker whose work was only handed to
+        one of them: reachability in the record, never credit. Pass `cursor` as `after`."""
+        return Contributors.model_validate(await self._ask("contributors", ref=ref, after=after))
 
 
 def _marks_of(folder: Path, person: str) -> dict[str, int]:

@@ -127,11 +127,14 @@ For example:
 - [`channel`](#platoon-harness-channel)
     - [`create`](#platoon-harness-channel-create)
     - [`list`](#platoon-harness-channel-list)
+- [`contributors`](#platoon-harness-contributors)
 - [`effect`](#platoon-harness-effect)
     - [`settle`](#platoon-harness-effect-settle)
 - [`episode`](#platoon-harness-episode)
     - [`close`](#platoon-harness-episode-close)
     - [`open`](#platoon-harness-episode-open)
+- [`exposure`](#platoon-harness-exposure)
+- [`lineage`](#platoon-harness-lineage)
 - [`message`](#platoon-harness-message)
     - [`read`](#platoon-harness-message-read)
     - [`send`](#platoon-harness-message-send)
@@ -146,6 +149,7 @@ For example:
     - [`list`](#platoon-harness-task-list)
     - [`release`](#platoon-harness-task-release)
     - [`renew`](#platoon-harness-task-renew)
+- [`uses`](#platoon-harness-uses)
 - [`view`](#platoon-harness-view)
     - [`watch`](#platoon-harness-view-watch)
 
@@ -172,12 +176,16 @@ For example:
 * [`body`](#platoon-harness-body): The `body` ops, each on one session, with the arguments an agent's `ph body.<op>` takes as flags.
 * [`budget`](#platoon-harness-budget): The `budget` ops, each on one session, with the arguments an agent's `ph budget.<op>` takes as flags.
 * [`channel`](#platoon-harness-channel): The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
+* [`contributors`](#platoon-harness-contributors): Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
 * [`effect`](#platoon-harness-effect): The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
 * [`episode`](#platoon-harness-episode): The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
+* [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness never said it took, the surfaces no result proves observed and the gaps content could have come through.
+* [`lineage`](#platoon-harness-lineage): Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
 * [`message`](#platoon-harness-message): The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
 * [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
 * [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 * [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
+* [`uses`](#platoon-harness-uses): Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
 * [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
 
 ### platoon-harness attach
@@ -1196,6 +1204,29 @@ For example:
 
 * `--after`: A `cursor` from an earlier call.
 
+### platoon-harness contributors
+
+```console
+platoon-harness contributors --ref STR [OPTIONS] SESSION
+```
+
+Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
+
+It walks at most 4096 events and says when it stopped short. It weighs and ranks nobody: credit is an annotation. Pass `cursor` as `--after` for the next page. Refused `invalid` for a range or a body's hash, which name no event, and `not_found` for no such event.
+
+For example:
+
+    platoon-harness contributors SESSION --ref REF
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--ref`: An event's ref, `stream@version`. **[required]**
+* `--after`: A `cursor` from an earlier answer.
+
 ### platoon-harness effect
 
 The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
@@ -1271,6 +1302,53 @@ For example:
 
 * `--episode`: A name for the span. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
+
+### platoon-harness exposure
+
+```console
+platoon-harness exposure --agent STR --ref STR [OPTIONS] SESSION
+```
+
+Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness never said it took, the surfaces no result proves observed and the gaps content could have come through.
+
+Seen means handed over and taken, never understood, and an agent with a shell never answers `not_seen`. Refused `invalid` for a range or a body's hash, which name no event, and for a person or a program, whose reads are no evidence, and `not_found` when no such event or agent exists.
+
+For example:
+
+    platoon-harness exposure SESSION --agent AGENT --ref REF
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--agent`: The agent, as `@agent`. **[required]**
+* `--ref`: An event's ref, `stream@version`. **[required]**
+* `--before`: The ref of the event the answer stops before. Left out, the head.
+
+### platoon-harness lineage
+
+```console
+platoon-harness lineage --ref STR [OPTIONS] SESSION
+```
+
+Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
+
+Pass `cursor` as `--after` for the next page. Refused `invalid` for a range or a body's hash, which name no event, and `not_found` for no such event.
+
+For example:
+
+    platoon-harness lineage SESSION --ref REF
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--ref`: An event's ref, `stream@version`. **[required]**
+* `--after`: A `cursor` from an earlier answer.
 
 ### platoon-harness message
 
@@ -1561,6 +1639,29 @@ For example:
 * `--task`: A task's id; your live lease if left out.
 * `--fence`: The `--fence` from your claim; your live lease if left out.
 * `--key`: Name this command, so that running it again with the same key is one operation.
+
+### platoon-harness uses
+
+```console
+platoon-harness uses --ref STR [OPTIONS] SESSION
+```
+
+Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
+
+Pass `cursor` as `--after` for the next page. Refused `invalid` for a range or a body's hash, which name no event, and `not_found` for no such event.
+
+For example:
+
+    platoon-harness uses SESSION --ref REF
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--ref`: An event's ref, `stream@version`. **[required]**
+* `--after`: A `cursor` from an earlier answer.
 
 ### platoon-harness view
 

@@ -158,6 +158,7 @@ platoon_harness.primitives.body_of
 platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boundary
 platoon_harness.primitives.Budgets
+platoon_harness.primitives.Calls
 platoon_harness.primitives.Capabilities
 platoon_harness.primitives.Changes
 platoon_harness.primitives.channel_grants
@@ -166,12 +167,15 @@ platoon_harness.primitives.ChildSeen
 platoon_harness.primitives.cited
 platoon_harness.primitives.Compacted
 platoon_harness.primitives.Condition
+platoon_harness.primitives.Contributors
 platoon_harness.primitives.Cursor
 platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.Deliveries
 platoon_harness.primitives.Delta
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
+platoon_harness.primitives.Exposure
+platoon_harness.primitives.Exposures
 platoon_harness.primitives.GAPS
 platoon_harness.primitives.Gap
 platoon_harness.primitives.GapReport
@@ -183,6 +187,7 @@ platoon_harness.primitives.Injection
 platoon_harness.primitives.InputDelivered
 platoon_harness.primitives.Item
 platoon_harness.primitives.Kept
+platoon_harness.primitives.Lineage
 platoon_harness.primitives.Lines
 platoon_harness.primitives.lines_of
 platoon_harness.primitives.Looks
@@ -190,6 +195,7 @@ platoon_harness.primitives.maker
 platoon_harness.primitives.Mode
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
+platoon_harness.primitives.NotSeen
 platoon_harness.primitives.on
 platoon_harness.primitives.OWNER_STOP
 platoon_harness.primitives.Plane
@@ -198,9 +204,11 @@ platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.RAW_LIMIT
 platoon_harness.primitives.REF
 platoon_harness.primitives.Ready
+platoon_harness.primitives.References
 platoon_harness.primitives.Repo
 platoon_harness.primitives.Report
 platoon_harness.primitives.REPORTS
+platoon_harness.primitives.Seen
 platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
 platoon_harness.primitives.SHORT_LIMIT
@@ -209,7 +217,9 @@ platoon_harness.primitives.Task
 platoon_harness.primitives.Tasks
 platoon_harness.primitives.TurnEnded
 platoon_harness.primitives.TurnStarted
+platoon_harness.primitives.Unknown
 platoon_harness.primitives.Usage
+platoon_harness.primitives.Uses
 platoon_harness.primitives.Verdict
 platoon_harness.primitives.Waits
 platoon_harness.primitives.WAKING

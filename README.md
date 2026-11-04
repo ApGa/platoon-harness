@@ -38,6 +38,7 @@ $ uv run platoon-harness            # the terminal UI
 | [docs/tui.md](docs/tui.md), [docs/web.md](docs/web.md), [docs/headless.md](docs/headless.md), [docs/cli.md](docs/cli.md) | The terminal UI, the browser, headless runs, and every command |
 | [docs/topologies.md](docs/topologies.md) | Teams and topologies, with a worked example per preset |
 | [docs/workspaces.md](docs/workspaces.md) | Where each agent works, a worktree of its own among them, and what becomes of it |
+| [docs/provenance.md](docs/provenance.md) | What reached each agent, what it rests on, whose work an outcome reaches, and credit beside the journal |
 | [docs/drivers.md](docs/drivers.md), [docs/compatibility.md](docs/compatibility.md) | How a harness is driven, and what each one supports |
 | [AGENTS.md](AGENTS.md) | Rules for changing this repository, human or agent |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |

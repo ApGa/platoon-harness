@@ -479,7 +479,7 @@ and opened read-only with `immutable=1`. Its agents' workspaces are not part of 
 your repository, so git in a copy would move the original's HEAD, and a copy leaves `agents/*/workspace` out. A reader holding the WAL stops that, and the close logs it. Estimators and exports use
 this form; a live journal is never read over a network filesystem. `Kernel.open(path, read_only=True)` picks between the two by
 whether `lock` is held or the WAL has content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it
-holds is behind the journal. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
+holds is behind the journal, naming the views and the fix: a writer refolds them as it opens, and writes no event. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
 refuses `unavailable` once a writer has touched the file.
 
 `filesystem(path)` says what holds a path, from `statfs(2)` so that links and bind mounts resolve, and from the mount table by
@@ -554,7 +554,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
-| Evidence | `blob.get` | `lineage` `exposure` |
+| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` |
 | Evidence, kernel | `body.tombstone` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
@@ -1270,18 +1270,64 @@ writers, and whether content could reach an agent through it unseen:
 `since` names where a gap recorded after the fact began: a `crash_window` recorded in a turn, by `runtime.start` beside its
 `turn.lost` or when a harness exits, names that turn's `turn.started`. Any other is where it stands.
 
+**Views.** Three folds index the references events already hold, and the graph is still not stored. `Exposures` holds each item an
+offer named, by the event it names, with how it was offered and the tool call it came under, each confirmation, each compaction and
+each start's declared coverage, levels and assurance. `References` holds what cites an event, what follows from one, which commits
+name one a parent, and which of an agent's events came under one tool call's id. `Calls` holds each model call by its harness's id,
+each tool item by its own, and where each turn began and who drove it. `Gaps` indexes each gap by where it began. A fold sees one
+event, so an offered event's maker is found by its ref when an answer needs it.
+
+**Four queries.** Each is a query op that is no agent's tool, a `Session` method with a typed answer, and a command:
+
 ```python
-await session.exposure(agent, ref, before=event)   # Seen(edge) | NotSeen(coverage) | Unknown(gaps), never a boolean
-await session.lineage(ref)                         # paths and the gaps that qualify them, always together
+await session.exposure("@bob", "board/notes/spec@1", before="inbox/alice@4")  # Seen | NotSeen | Unknown, never a boolean
+await session.lineage("inbox/alice@4")                                          # one hop back
+await session.uses("board/notes/spec@1")                                        # one hop forward
+await session.contributors("task/tasks/1@3")                                    # whose work the record ties to it
 ```
 
-`platoon-harness why <ref>` prints the same thing.
+- **The bound.** An answer about an event an agent made counts what its harness reported taking before the model call that chose that
+  event: both are reports on the agent's own ordered stream, and the call is joined through the op's anchor, the tool item that holds
+  it and that item's `call_id`. With no call joined it counts what was reported before the event's commit, and says `commit`. An event
+  someone else made is bounded at its commit too, as two report streams have no order between them, and with no `before` the bound is
+  the head. Every answer names its `head`, and says it is `open` while the turn its event was made in has not ended, since a later
+  report can still confirm an offer or join a call.
+- **`exposure(agent, ref, before)`** answers `Seen`: each offer of the event its harness said it took below the bound, with what it
+  showed, its evidence, the turn it landed in, and each compaction since, marked `forgot` or `kept` by the id its harness reported
+  delivering that input under and `unsaid` otherwise, as a read always is. It answers `NotSeen` when nothing offered the event there, a
+  stored conformance result proves every coverage surface observed, and no gap content could come through lies below the bound. Else it
+  answers `Unknown`, listing the offers never confirmed, the surfaces no result proves observed, the gaps content could have come
+  through and the offers from before payload 3, which no event can be tied to. No check proves a surface yet, so **at M2 nothing answers
+  `NotSeen`**, and an agent with a shell never will. `Seen` means handed over and taken, never understood, and a compaction never undoes
+  it.
+- **`lineage(ref)`** is one hop back: the event; its maker, turn and the person who drove that turn if one held the agent; the model
+  call that chose it, with the tool item that joins them and how many of its agent's ops share that tool call; each citation, with the
+  cited event's maker and the citer's `exposure` to it at the bound, and for a range whether a confirmed offer showed those lines; a
+  commit's `Informed-By` values that name no recorded commit, as written; each cause; its previous version on its own stream, or a
+  commit's parents; its maker's declared coverage; and one page of what its maker was offered and the gaps in its record below the
+  bound, newest first, with true totals.
+- **`uses(ref)`** is one hop forward, oldest first: what cites the event, what follows from it, its next version or the commits that name
+  it a parent, and each agent it was offered to, with whether its harness said it took it.
+- **`contributors(ref)`** walks back from an outcome along citations, causes and ancestry, at most 4,096 events, and names each maker it
+  reaches in the order it reached them, the outcome's own first: the kinds that reached it, how many of its events and the first, its
+  hops, the surfaces no result proves observed and the gaps content could come through below them. Apart from them it names each maker
+  whose events were only offered to a walked maker, which the walk does not go through, and it says how far it walked and whether it
+  stopped short. It is reachability in the record and never credit: it weighs and ranks nobody.
+
+The queries ask about events, so a range or a body's hash is refused `invalid`, naming what to ask by, and so is an `agent` that is a
+person or a program, whose reading is no evidence. They read the journal alone, never an annotation, and answer alike after a rebuild
+and on a closed copy, which refuses them `unavailable` while its views are behind its journal (§5.8). What qualifies every answer is
+said beside it and never hidden: which request held a ref is the gateway's to know (G12), a native child's reads are unseen, a read
+through a shell, a file or git makes an answer `Unknown`, and words an agent copied into another entry show only in that entry's
+lineage.
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
 `(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)`, unique on producer,
 version, params, target and kind. `head_seq` names the exact trace. Rewards live here with `scope: local | team`, a required
 `status`, and `value` nullable, so `invalid`, `error`, `cancelled` and `unscored` are never zero. A new estimator adds rows
 beside old ones, on a closed session, with no writer lock.
+
+See [ADR 0038](adr/0038-provenance-is-answered-from-the-record.md). [provenance.md](provenance.md) is the guide.
 
 ## 12. Clients
 

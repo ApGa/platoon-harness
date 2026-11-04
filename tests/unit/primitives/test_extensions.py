@@ -11,7 +11,7 @@ from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.primitives.clients import Changes
 
 ARCHITECTURE = Path(__file__).parents[3] / "docs" / "architecture.md"
-OUT_OF_SCOPE = {"topology.patch", "topology.show", "lineage", "exposure"}
+OUT_OF_SCOPE = {"topology.patch", "topology.show"}
 VIEWS = {
     "stamps": (1, "7caa58b4f618"),
     "principals": (2, "8efbf0bd0ad6"),
@@ -32,7 +32,10 @@ VIEWS = {
     "looks": (1, "a69ac95512f7"),
     "attention": (3, "a02f9e6d3aa6"),
     "changes": (2, "d0bd725d3230"),
-    "gaps": (1, "0851cd5dd6fd"),
+    "gaps": (2, "81d2cf7fb55b"),
+    "exposures": (1, "f1205ac4d018"),
+    "calls": (1, "abc99d83af57"),
+    "references": (1, "a09e00bc5ff2"),
 }
 
 

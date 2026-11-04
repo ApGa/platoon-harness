@@ -1,6 +1,8 @@
 """What clients render: `roster`, `attention` and `changes`, watched as a snapshot and then keyed changes."""
 
 import json
+import sqlite3
+from collections.abc import Collection
 from typing import Annotated, Any, Literal
 
 from pydantic import Field
@@ -11,7 +13,7 @@ from . import why
 from .agents import Agent, Agents
 from .approvals import Approvals
 from .budgets import Budgets
-from .common import name_of
+from .common import DIGEST_ITEMS, name_of
 from .messages import Deliveries
 from .repo import unsettled
 from .tasks import Tasks
@@ -282,35 +284,70 @@ class Changes(View):
 
 
 class Gaps(View):
-    """Every incident gap, counted by agent and kind, which is what an ending has to state."""
+    """Every incident gap by its agent and where it `began`: where it stands, or the `since` that a gap recorded after
+    the fact names. An ending counts them by agent and kind, and an answer takes those below its bound."""
 
+    version = 2
     schema = """
     CREATE TABLE v_gaps(
+        seq INTEGER PRIMARY KEY,
         agent TEXT NOT NULL,
         what TEXT NOT NULL,
         plane TEXT NOT NULL,
-        count INTEGER NOT NULL,
-        PRIMARY KEY (agent, what)
-    ) WITHOUT ROWID, STRICT;
+        began INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX v_gaps_began ON v_gaps(agent, began, seq);
     """
 
-    def _count(self, agent: str | None, what: str, plane: str) -> None:
+    def _gap(self, event: Event, what: str, plane: str, since: int | None = None) -> None:
         self.db.execute(
-            "INSERT INTO v_gaps VALUES (?, ?, ?, 1) ON CONFLICT DO UPDATE SET count = count + 1", (agent, what, plane)
+            "INSERT INTO v_gaps VALUES (?, ?, ?, ?, ?)",
+            (event.seq, event.agent, what, plane, event.seq if since is None else since),
         )
 
     @fold("gap.recorded")
     def recorded(self, event: Event) -> None:
-        self._count(event.agent, event.data["what"], event.data["plane"])
+        """A v1 gap named no `since`."""
+        self._gap(event, event.data["what"], event.data["plane"], event.data.get("since"))
 
     @fold("turn.lost")
     def turn_lost(self, event: Event) -> None:
         """A v1 lost turn named its gap itself. From v2 it is a `gap.recorded` beside it."""
         if event.v < 2:
-            self._count(event.agent, event.data["gap"], "control")
+            self._gap(event, event.data["gap"], "control")
 
     def rows(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.db.execute("SELECT * FROM v_gaps ORDER BY agent, what")]
+        """How many gaps of each kind each agent has, as an ending states them."""
+        rows = self.db.execute(
+            "SELECT agent, what, min(plane) AS plane, count(*) AS count FROM v_gaps GROUP BY agent, what "
+            "ORDER BY agent, what"
+        )
+        return [dict(row) for row in rows]
+
+    def below(
+        self, agent: str, bound: int, *, besides: Collection[str] = (), before: tuple[int, int] | None = None
+    ) -> tuple[list[sqlite3.Row], int]:
+        """An agent's gaps but those of the kinds `besides` that began below `bound`, newest first by where they began
+        and going back past `before`, as many as a page holds and one more, and how many began below `bound` in all."""
+        marks = ", ".join("?" * len(besides))
+        where = f"agent = ? AND began < ? AND what NOT IN ({marks})"
+        began, seq = before or (bound, 0)
+        rows = self.db.execute(
+            f"SELECT * FROM v_gaps WHERE {where} AND (began, seq) < (?, ?) ORDER BY began DESC, seq DESC LIMIT ?",
+            (agent, bound, *besides, began, seq, DIGEST_ITEMS + 1),
+        ).fetchall()
+        total = self.db.execute(f"SELECT count(*) AS n FROM v_gaps WHERE {where}", (agent, bound, *besides))
+        return rows, total.fetchone()["n"]
+
+    def counted(self, agent: str, bound: int, *, besides: Collection[str] = ()) -> dict[str, int]:
+        """How many of an agent's gaps but those of the kinds `besides` began below `bound`, by kind."""
+        marks = ", ".join("?" * len(besides))
+        rows = self.db.execute(
+            f"SELECT what, count(*) AS n FROM v_gaps WHERE agent = ? AND began < ? AND what NOT IN ({marks}) "
+            "GROUP BY what ORDER BY what",
+            (agent, bound, *besides),
+        )
+        return {row["what"]: row["n"] for row in rows}
 
 
 def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]) -> why.Why | None:

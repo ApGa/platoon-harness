@@ -178,6 +178,16 @@ def test_text_a_terminal_shows_escapes_what_could_take_it_over():
     assert safe("ok\x1b]0;owned\x07 and‮back\nnext") == "ok\\x1b]0;owned\\x07 and\\u202eback\nnext"
 
 
+@pytest.mark.parametrize("name", ["exposure", "lineage", "uses", "contributors"])
+def test_the_provenance_commands_derive_from_the_registry(name: str):
+    """Each query is a command of its own name, reading on a view credential, with its op's flags and help."""
+    command, arguments = parsed([name, "fix-auth", *needed(name)])
+
+    assert name in person_ops() and arguments["session"] == "fix-auth"
+    assert "key" not in inspect.signature(command).parameters
+    assert (command.__doc__ or "").split()[:4] == (OPS[name].fn.__doc__ or "").split()[:4]
+
+
 def test_the_reference_is_made_from_the_definitions():
     """On a failure, run `uv run python -m platoon_harness_cli.reference > docs/cli.md`."""
     assert (Path(__file__).parents[3] / "docs" / "cli.md").read_text() == reference()

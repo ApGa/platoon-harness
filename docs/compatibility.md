@@ -513,6 +513,12 @@ whose `native_id` is the anchor a read went under. Nothing joins by order or tim
 | `openhands` 1.59.0 | `request`, read from the SDK's completion log, with no `native_id` [L] | `llm_response_id` [L] | The shim's own id, which no item holds [L] | Not yet, as for pi [L] | Event ids through `Condensation`, which no delivered input carries until the worker reports a message's id [L] | Opaque, a gap [L] |
 | `exec` | Never: the goal is in argv, which says nothing of whether it landed | None | `ph`'s own id, which nothing holds | Never | Nothing | None |
 
+What the queries make of it (architecture §11): a Claude Code tool call joins the model call that chose it, so an answer about an
+event it made is bounded at that call, `call`. A Codex tool call reaches its script's item and no call, and a pi, OpenHands or `exec`
+one reaches nothing, so theirs are bounded at the event's commit, `commit`, which can count a read the same model call chose as
+below. A compaction is `unsaid` on Claude Code and Codex, which name nothing they forgot, and for every read. Every harness here has a
+shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each.
+
 ### Workspaces
 
 What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's

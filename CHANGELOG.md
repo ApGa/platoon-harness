@@ -4,6 +4,17 @@
 
 ### Added
 
+- Provenance queries for people and programs, none an agent's tool: `exposure(agent, ref, before)` answers `seen`, with each offer
+  its harness said it took and each compaction since marked `forgot`, `kept` or `unsaid`, `not_seen` or `unknown`, with every
+  reason, and never a boolean; `lineage(ref)` is one hop back, with the model call that chose the event, each citation with its
+  citer's exposure, each cause, its ancestry and a page of what its maker was offered and the gaps in its record; `uses(ref)` is one
+  hop forward; and `contributors(ref)` names each maker a walk back along citations, causes and ancestry reaches, and apart from them
+  the makers only handed to one, weighing nobody. Each is a `Session` method with a typed answer, `Seen`, `NotSeen`, `Unknown`,
+  `Lineage`, `Uses` or `Contributors`, and a command of its name. An answer about an event an agent made is bounded at the model call
+  that chose it, on its own report stream, or at its commit, said; it says its `head` and whether its turn is `open`; and it is the
+  same after a rebuild and on a closed copy. No check proves coverage yet, so nothing answers `not_seen`. See ADR 0038.
+- The views behind them: `Exposures`, `References` and `Calls`, and `Gaps` at version 2 as an index of each gap by where it began.
+  `Stamps.event(seq)` gives the event a `cause` names.
 - Refs on everything a model is shown. A ref is `stream@version`, with `#La-b` for lines of that event's body, and every result,
   handover, notice and refusal names what it shows by one: a message row says `body: true` and gives no hash, `rest` is an event
   ref with a range, and `blob.get` takes the ref of the event that carries a body. Every write of content returns the ref it made,
@@ -225,6 +236,10 @@
 
 ### Changed
 
+- A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
+  opens, and writes no event.
+- `maker` names a commit's maker as the agent whose workspace made it, and None when nobody's did, and `blob.get` reads whether its
+  caller was handed an event from the `Exposures` view.
 - `agent.spawned`, at payload version 3, carries its spawner as its envelope agent, so a spawn is its spawner's, in its spawner's
   turn and context version, and the `Channels` fold reads the child from `data.name`. `agent.instructed`, at version 2, names its
   text `body`, as every content event does, and `agent.instruct` takes `body`. `context.offered` is at version 3, its items naming

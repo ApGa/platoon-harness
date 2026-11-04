@@ -204,6 +204,14 @@ class Kernel:
         last = last_seq(db)
         return tuple(view.name for view in self._views if marks.get(view.name) != (view.version, last))
 
+    def _stale(self, stale: tuple[str, ...]) -> str:
+        """Why a read-only kernel cannot answer from its views, and the fix: a writer refolds them as it opens."""
+        return (
+            f"views behind this journal: {', '.join(stale)}. A writer refolds them as it opens, and writes no event: "
+            "once no runtime holds this folder, open it with `Kernel.open` and the extensions that hold them, then "
+            "close it"
+        )
+
     def _prepare_views(self, db: sqlite3.Connection) -> None:
         db.execute("BEGIN IMMEDIATE")
         try:
@@ -438,7 +446,7 @@ class Kernel:
         try:
             with self._reading() as db:
                 if self._writer is None and (stale := self._find_stale(db)):
-                    raise Refused("unavailable", f"stale views: {', '.join(stale)}")
+                    raise Refused("unavailable", self._stale(stale))
                 operation, decoded = self._decode(command)
                 target = operation.on(decoded)
                 me = Grants(db).authorize(principal, operation, target)

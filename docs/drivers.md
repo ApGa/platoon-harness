@@ -88,6 +88,17 @@ must cost a gap, not the agent. A request the harness waits on still gets an ans
 Send `started` where the harness shows it. A tool that has begun and not finished is an `Item` of kind `tool` in that phase, and it is
 all a person watching has to say what is running, since `activity` is the gist of the latest item. Then send its `completed`.
 
+**What the provenance queries read of your reports.** `exposure`, `lineage` and `contributors` say only what your ids let them, and
+nothing joins by order or timing:
+
+- A `ModelCall` with a real `call_id`, sent before the tool items that call chose, each naming that `call_id`, lets a tool call join
+  the model call that chose it. An answer about an event that call made then counts only what was confirmed before the call, on your
+  agent's own report stream. With no `call_id` the bound is the event's commit, and the answer says `commit`.
+- A tool item whose `native_id` is the anchor the MCP call went under confirms what that call's result showed, and reaches the item.
+- `InputDelivered.native_id`, the id your harness's compaction would name that input by, and `Compacted.forgotten` naming those ids,
+  let a compaction mark a handover `forgot` or `kept`. Otherwise it is `unsaid`, as a read always is.
+- Every `GapReport` you send is a reason an answer is `unknown` from where it began, if content could come through it: `GAPS` says which.
+
 `Usage.tokens` counts every token of what the scope covers, input and output, with cached input included, as a provider's total does, so
 that budgets mean the same across drivers. A harness that gives you parts, add them. A zero on an aborted call means unknown, because a
 harness writes it for a call it stopped hearing: report `tokens=None` with the label `unavailable`, which a budget treats as unmeasured.

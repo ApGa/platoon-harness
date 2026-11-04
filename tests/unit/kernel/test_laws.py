@@ -7,10 +7,11 @@ import sys
 from pathlib import Path
 
 import pytest
-from pydantic import Field, create_model
+from pydantic import Field, TypeAdapter, ValidationError, create_model
 
 from platoon_harness import kernel as kernel_package
 from platoon_harness.kernel import Args, Event, Extension, Kernel, Refused, Txn, View, fold, op
+from platoon_harness.primitives import Exposure
 from platoon_harness.testing.extension import private_reaches
 
 from .support import (
@@ -253,6 +254,10 @@ async def test_absence_stays_honest(kernel):
     assert unknown == (None, None, None, None, None, None)
     listed = result_of(kernel.query(kernel.runtime, "effect.ready", {}))
     assert [(row["id"], row["timeout"], row["agent"]) for row in listed] == [(effect, None, None)]
+    answers = TypeAdapter(Exposure).json_schema()["discriminator"]["mapping"]
+    assert set(answers) == {"seen", "not_seen", "unknown"}
+    with pytest.raises(ValidationError):
+        TypeAdapter(Exposure).validate_python(False)
 
 
 def test_nothing_has_a_private_api():

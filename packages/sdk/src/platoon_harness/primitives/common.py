@@ -56,8 +56,12 @@ _ADDRESS = re.compile(rf"([@#+])({NAME})")
 _STREAMS = {"@": "inbox/", "#": "channel/", "+": "channel/+"}
 
 
-def maker(event: Event) -> str:
-    """Whose an event is: its actor, and for an event the runtime writes, the agent it is about."""
+def maker(event: Event) -> str | None:
+    """Whose an event is: its actor, and for an event the runtime writes, the agent it is about. A commit is the agent's
+    whose workspace made it, and nobody's, None, when that was the shared one or no single workspace did."""
+    if event.type == "repo.committed":
+        made_in = event.data["made_in"] or ""
+        return f"agent:{made_in[1:]}" if made_in.startswith("@") else None
     return f"agent:{event.agent}" if event.actor == "runtime" and event.agent is not None else event.actor
 
 
@@ -67,10 +71,16 @@ def body_of(event: Event) -> str | None:
     return body if isinstance(body, str) else None
 
 
+def parts_of(ref: str) -> tuple[str, int, str | None] | None:
+    """A ref's stream, version and what follows its `#`, or None for what is no ref."""
+    match = _REF.fullmatch(ref)
+    return None if match is None else (match["stream"], int(match["version"]), match["span"])
+
+
 def event_at(txn: Txn, ref: str) -> Event | None:
     """The event a ref names, whatever lines it names of it, or None."""
-    match = _REF.fullmatch(ref)
-    return None if match is None else txn.view(Stamps).at(match["stream"], int(match["version"]))
+    parts = parts_of(ref)
+    return None if parts is None else txn.view(Stamps).at(parts[0], parts[1])
 
 
 def cited(txn: Txn, refs: Iterable[str]) -> tuple[str, ...]:
@@ -108,17 +118,6 @@ def _cited_lines(txn: Txn, ref: str, event: Event, span: str) -> None:
         raise Refused("invalid", f"{ref} names lines of a body that is not text: cite it whole")
     if int(lines[2]) > (total := len(text.splitlines())):
         raise Refused("invalid", {"lines": total, "detail": f"{ref} names lines past the end of its body"})
-
-
-def handed(txn: Txn, agent: str, ref: str) -> bool:
-    """Whether an event was offered to an agent: an item of an offer on its context stream names it, whatever it
-    showed of it."""
-    for offer in txn.view(Stamps).events(f"context/{agent}"):
-        if offer.type == "context.offered" and any(
-            item["ref"].partition("#")[0] == ref for item in offer.data["items"]
-        ):
-            return True
-    return False
 
 
 def stream_of(address: str) -> str:

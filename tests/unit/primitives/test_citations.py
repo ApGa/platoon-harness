@@ -194,6 +194,13 @@ async def test_a_retold_goal_is_handed_over_by_its_spawn_s_ref(kernel):
     )
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
     assert [(item["ref"], item["body"]) for item in handed["items"]] == [("agent/bob@1", True)]
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "input.delivered", input=str(handed["input"]), boundary="turn", evidence="userMessage")
+    first = (await send(kernel, Principal(id="agent:bob"), "@lead", "on it"))["ref"]
+    history = result_of(kernel.query(kernel.runtime, "lineage", {"ref": first}))["history"]
+    reached = result_of(kernel.query(kernel.runtime, "contributors", {"ref": first}))
+    assert [shown["ref"] for row in history for shown in row["shown"]] == ["agent/bob@1"]
+    assert [(row["maker"], row["to"]) for row in reached["handed_only"]] == [("agent:lead", ["agent:bob"])]
 
 
 async def test_a_reply_to_a_carried_message_finds_it_by_the_ref_it_was_shown_by(kernel):

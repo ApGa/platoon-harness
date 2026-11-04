@@ -89,6 +89,11 @@ class Stamps(View):
         row = self.db.execute("SELECT * FROM events WHERE stream = ? AND version = ?", (stream, version)).fetchone()
         return None if row is None else decode(row)
 
+    def event(self, seq: int) -> Event | None:
+        """The event at a seq, as a `cause` names it, or None."""
+        row = self.db.execute("SELECT * FROM events WHERE seq = ?", (seq,)).fetchone()
+        return None if row is None else decode(row)
+
     def events(self, stream: str | None = None, *, after: int = 0) -> Iterator[Event]:
         """The events past `after`, oldest first, on one stream or all of them. Read it before emitting, too."""
         if stream is None:
