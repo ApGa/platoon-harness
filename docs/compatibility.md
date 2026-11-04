@@ -289,7 +289,8 @@ by a driver landing; only the row below changes.
 - An interrupt while an approval was open measured the turn whole, as no run was under way, and the next turn's request told the
   model `The turn ended before this ran.` [L]. An allow and an interrupt sent together leave the action answered in its own turn,
   whichever the worker heard first, and the next request held its result right after its call [L]. A provider's 500 ended the turn
-  `LLMServiceUnavailableError` after one request, with its usage a lower bound [L].
+  `LLMServiceUnavailableError` after one request, with its usage a lower bound [L]. Four identical `think` calls ended it `stuck`,
+  its usage whole [L]. The SDK's cap of 500 steps a run, which the worker lifts, has not been run past.
 - Condensation with OpenHands' own default condenser: once its view held more than 80 events, after 40 `think` calls, it forgot
   events by id, a set the worker puts in the conversation's order, with the summary, and its call is measured under the usage id
   `condenser` [L].

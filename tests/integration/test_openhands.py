@@ -462,6 +462,19 @@ async def test_a_failed_model_call_is_not_retried_and_ends_the_turn_with_the_sdk
     assert any(gap.what == "usage_lower_bound" for gap in heard.of(GapReport))
 
 
+async def test_a_run_the_sdk_finds_repeating_itself_ends_the_turn_stuck_and_whole(tmp_path):
+    thinking = [ToolCall("think", {"thought": "again"}, id=f"call_{n}") for n in range(4)]
+
+    async with FakeModel(*thinking, "never asked for") as model:
+        driver, heard = OpenHandsDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, model, goal="go"), heard)
+        ended = await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert (ended.reason, len(model.calls)) == ("stuck", 4)
+    assert not heard.of(GapReport)
+
+
 async def test_a_condensation_names_what_it_forgot_and_its_own_call(tmp_path):
     """OpenHands' own condenser, which forgets once its view holds more than 80 events."""
     thinking = [ToolCall("think", {"thought": f"step {n}"}, id=f"call_{n}") for n in range(40)]
