@@ -11,9 +11,15 @@
 // it may not. The feed keeps `live` current.
 const X = {caps: null};
 
-// The parts of SwarmChat's page not built over a session yet, and why.
-X.layouts = {board: 'Not built yet: the board layout, and the tasks and board views, are planned.',
-  map: 'Not built yet: the map is planned.'};
+// What is not built over a session yet, and why: two of SwarmChat's layouts, and what the brief asks the page to show.
+X.unbuilt = {board: 'Not built yet: the board layout, and the tasks and board views, are planned.',
+  map: 'Not built yet: the map is planned.',
+  activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.',
+  review: 'Not built yet: reviewing what an agent changed is planned.',
+  provenance: 'Not built yet: following a message into its provenance is planned.'};
+
+// Only an agent leaves evidence of what reached it, so only an agent can be seen as.
+X.AS_AGENT = 'Only an agent leaves evidence of what reached it, so only an agent can be seen as.';
 
 // The acts of a person's page, each a label, the op it runs, and what it adds to the agent: an agent's own, and the
 // session's, on the person's own page.
@@ -63,7 +69,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-said:empty { display: none; }
 .pop .it.x-need { display: grid; gap: 6px; cursor: default; }
 .pop.x-ask { max-width: 380px; }
-.row.special.x-off { opacity: .55; cursor: not-allowed; }
+.row.special.x-off, .pop .it.x-off { opacity: .55; cursor: not-allowed; }
 button[disabled] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
@@ -71,7 +77,7 @@ $('#login p').textContent = 'This page opens from a link that platoon-harness we
   'made. Each link opens once, so ask for a new one.';
 $('#login input').placeholder = 'Session token';
 for (const b of $$('#layouts button')) {
-  if (X.layouts[b.dataset.layout]) { b.disabled = true; b.title = X.layouts[b.dataset.layout]; }
+  if (X.unbuilt[b.dataset.layout]) { b.disabled = true; b.title = X.unbuilt[b.dataset.layout]; }
 }
 
 const baseApi = api;
@@ -106,10 +112,12 @@ setLive = state => {
     off: 'Lost web. Trying again.'}[state] || '';
 };
 
+// An address that names a layout not built, or someone who cannot be seen as, shows what can be shown, saying why.
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
-  if (X.layouts[r.layout]) { toast(X.layouts[r.layout]); r.layout = 'chat'; }
+  if (X.unbuilt[r.layout]) { toast(X.unbuilt[r.layout]); r.layout = 'chat'; }
+  if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   return r;
 };
 
@@ -349,7 +357,35 @@ renderTop = function () {
 const baseAvatar = avatar;
 avatar = (id, size = '') => {
   const kind = X.kind(id) || 'unknown';
-  return new Safe(baseAvatar(id, size).s.replace('<span class="av ', html`<span data-kind="${kind}" class="av x-${kind} `.s));
+  return new Safe(baseAvatar(id, size).s.replace('<span class="av ', () => html`<span data-kind="${kind}" class="av x-${kind} `.s));
+};
+
+// The people, with each agent's status where SwarmChat draws someone's first field: who is working, and who is held up,
+// is what the list is read for, and the picture already says an agent.
+const basePeopleRows = peopleRows;
+peopleRows = () => {
+  const users = S.users;
+  S.users = new Map([...users].map(([id, u]) =>
+    [id, X.kind(id) === 'agent' && u.status ? {...u, fields: {status: u.status, ...u.fields}} : u]));
+  try { return basePeopleRows(); } finally { S.users = users; }
+};
+
+// Seeing as someone, offered for everyone, and taken only for an agent.
+const baseOpenAsPicker = openAsPicker;
+openAsPicker = anchor => {
+  baseOpenAsPicker(anchor);
+  const box = $('#overlay .pop');
+  const off = () => {
+    for (const it of $$('[data-as]', box)) {
+      if (!it.dataset.as || X.kind(it.dataset.as) === 'agent') continue;
+      it.removeAttribute('data-as');
+      it.classList.add('x-off');
+      it.setAttribute('aria-disabled', 'true');
+      it.title = X.AS_AGENT;
+    }
+  };
+  off();
+  $('input', box).addEventListener('input', off);
 };
 
 // Delivered, where SwarmChat says read: what a handover landed or a tool's result showed, which is evidence, and never
@@ -368,10 +404,11 @@ messageHtml = (m, prev, o = {}) => {
     ? 'An approval is answered with Allow or Deny, not a reply.'
     : `What ${first(m.from)} said in its turn is no message a reply can cite: write to ${first(m.from)} in the chat.`);
   const reply = html`<button data-x-reply="${m.id}" data-x-ref="${m.x_ref || ''}"${why ? html` disabled title="${why}"` : ''}>Reply</button>`;
+  const provenance = html`<button disabled title="${X.unbuilt.provenance}">Provenance</button>`;
   return new Safe(drawn.s
-    .replace(knew, reached.s)
-    .replace(html`<button data-receipts="${m.id}">Read by</button>`.s, html`<button data-receipts="${m.id}">Delivered to</button>`.s)
-    .replace('<div class="actions">', X.card(m).s + '<div class="actions">' + reply.s));
+    .replace(knew, () => reached.s)
+    .replace(html`<button data-receipts="${m.id}">Read by</button>`.s, () => html`<button data-receipts="${m.id}">Delivered to</button>`.s)
+    .replace('\n</div><div class="actions">', () => `${X.card(m).s}\n</div><div class="actions">${reply.s}${provenance.s}`));
 };
 
 // An approval left for the person, as a card in the agent's chat with them.
@@ -464,7 +501,7 @@ chatRows = () => {
   const as = S.route.as;
   const rows = baseChatRows().map(row => ({...row, html: i => {
     const drawn = row.html(i);
-    return as ? drawn.replace(html`<span class="t">${`${first(as)}'s unread`}</span>`.s, html`<span class="t">What waits for ${first(as)}</span>`.s) : drawn;
+    return as ? drawn.replace(html`<span class="t">${`${first(as)}'s unread`}</span>`.s, () => html`<span class="t">What waits for ${first(as)}</span>`.s) : drawn;
   }}));
   if (S.filter) return rows;
   const why = X.cannot('attention.list'), n = X.needs ? X.needs.length : 0;
@@ -484,7 +521,7 @@ ChatView = class extends ChatView {
   renderHead() {
     super.renderHead();
     const board = $('[data-goto="board"]', this.head);
-    if (board) { board.disabled = true; board.title = X.layouts.board; }
+    if (board) { board.disabled = true; board.title = X.unbuilt.board; }
   }
   divider() {
     const d = super.divider();
@@ -517,21 +554,43 @@ ThreadPane = class extends ThreadPane {
   }
 };
 
+// A person's page: an agent's acts, and what of it is not built yet, or on the person's own, the session's acts and
+// new links, which a view link cannot make.
 PersonView = class extends PersonView {
   constructor(main, id) {
     super(main, id);
-    const card = $('.card', main), agent = X.kind(id) === 'agent';
+    const card = $('.card', main), agent = X.kind(id) === 'agent', mine = id === X.caps.person;
     if (!agent) {
       const see = $('[data-see-as]', card);
-      if (see) { see.disabled = true; see.title = 'Only an agent leaves evidence of what reached it, so only an agent can be seen as.'; }
+      if (see) { see.disabled = true; see.title = X.AS_AGENT; }
     }
-    const acts = agent ? ['interrupt', 'stop-below', 'retire', 'cancel'] : id === X.caps.person ? ['close', 'cancel-session'] : [];
-    if (!acts.length) return;
-    card.insertAdjacentHTML('afterend', html`<div class="x-acts">${acts.map(act => {
+    if (!agent && !mine) return;
+    const acts = (agent ? ['interrupt', 'stop-below', 'retire', 'cancel'] : ['close', 'cancel-session']).map(act => {
       const why = X.cannot(X.acts[act][1]);
       return html`<button class="btn" data-x-act="${act}" data-x-agent="${id}"${why ? html` disabled title="${why}"` : ''}>${X.acts[act][0]}</button>`;
-    })}</div><p class="x-said" aria-live="polite"></p>`.s);
+    });
+    const why = X.caps.credential === 'view' ? X.caps.cannot : null;
+    const more = agent
+      ? [['activity', 'Tool activity'], ['review', 'Review changes']].map(([k, label]) => html`<button class="btn" disabled title="${X.unbuilt[k]}">${label}</button>`)
+      : ['view', 'control'].map(kind => html`<button class="btn" data-x-link="${kind}"${why ? html` disabled title="${why}"` : ''}>New ${kind} link</button>`);
+    card.insertAdjacentHTML('afterend', html`<div class="x-acts">${acts}</div><div class="x-acts">${more}</div><p class="x-said" aria-live="polite"></p>`.s);
   }
+};
+
+// Make a link of either kind, which opens once, within ten minutes, and say it.
+X.mint = async el => {
+  const said = $('.x-said', el.closest('.person')), kind = el.dataset.xLink;
+  el.disabled = true;
+  try {
+    const r = await fetch('/x/link', {method: 'POST', body: JSON.stringify({class: kind}),
+      headers: {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}});
+    const p = await r.json().catch(() => ({error: `web answered ${r.status}`}));
+    if (r.status === 401) login(p.error);
+    said.textContent = r.ok ? `A ${kind} link, which opens once, within ten minutes: ${p.link}` : p.error;
+  } catch (_) {
+    said.textContent = 'web could not be reached, so no link was made.';
+  }
+  el.disabled = false;
 };
 
 // Take an act of a person's page, asking first where its op is one that nothing takes back, and say what came of it.
@@ -569,7 +628,7 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-attach]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach]');
   if (!el) return baseClick(e);
   if (el.disabled) return;
   const d = el.dataset;
@@ -577,6 +636,7 @@ onClick = e => {
   if (d.xDecide) return X.decide(el);
   if (d.xAct) return X.lifecycle(el);
   if (d.xAction) return X.action(el);
+  if (d.xLink) return X.mint(el);
   if (d.xGoto) {
     overlay.close();
     const c = [...S.chats.values()].find(c => c.kind === 'direct' && c.members.includes(d.xGoto) && c.members.includes(X.caps.person));

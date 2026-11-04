@@ -242,6 +242,14 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- On SwarmChat's page, the people list showed `agent` beside every agent, where SwarmChat draws someone's first field, so
+  who was working or held up needed a page per agent; it shows each agent's status there. Seeing as a person or the
+  runtime was offered, and choosing one left the page half in a mode it had refused; the picker draws them disabled,
+  saying why, and an address naming one shows everyone. An approval's card floated beside its message, crushing it on a
+  narrow window; it sits under the question. A `via` holding a dollar and a backtick or a quote put the message's own
+  markup into its card, as a string's replace read them; no replacement the page makes reads them now. Tool activity,
+  reviewing changes and provenance had no control, where every unbuilt act is drawn disabled saying why; each has one.
+  A person's own page makes links of either kind, which only `/x/link` did.
 - Two `web` processes on one session folded one projection, each from its own cursor, and the first to meet a line the other
   had written crashed with a traceback, dropping every browser it served. One `web` serves a session at a time, holding
   `swarmchat.lock` beside the projection, and a second exits 64, saying where the first serves. The fold passes over an event

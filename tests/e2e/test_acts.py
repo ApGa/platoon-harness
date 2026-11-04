@@ -211,6 +211,10 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
         needs = page.locator("[data-x-needs]")
         await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
 
+        await chat(page, "bob & you")
+        card, question = page.locator(".msg .body > .x-card"), said(page, "Ship the fix?")
+        await expect(card).to_have_count(1, timeout=SECONDS)
+        under = (await card.bounding_box() or {})["y"] - (await question.bounding_box() or {})["y"]
         await needs.click()
         place = page.locator(".x-needs .x-need")
         await expect(place).to_have_text(re.compile(r"⚠ approval .*bob: Ship the fix\?AllowDeny$"))
@@ -226,6 +230,7 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
         await page.context.close()
 
     assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", "browser")]
+    assert under > 0
     assert errors == []
 
 
@@ -270,6 +275,9 @@ async def test_a_reply_in_a_thread_cites_the_message_it_answers(chromium: Browse
         aloud = page.locator("#main .msg", has_text="a thought aloud").locator("[data-x-reply]")
         await expect(aloud).to_be_disabled()
         await expect(aloud).to_have_attribute("title", re.compile("is no message a reply can cite"))
+        provenance = question.locator(".actions button", has_text="Provenance")
+        await expect(provenance).to_be_disabled()
+        await expect(provenance).to_have_attribute("title", re.compile("^Not built yet: "))
 
         await question.hover()
         await question.locator("[data-x-reply]").click()
@@ -324,6 +332,13 @@ async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(
         await expect(said_here).to_have_text("Retire @w: done.", timeout=SECONDS)
 
         await page.goto(web.link("control").partition("#")[0] + "#person=you")
+        await page.locator('[data-x-link="view"]').click()
+        await expect(said_here).to_have_text(re.compile(r"^A view link, which opens once, within ten minutes: "))
+        made = (await said_here.text_content() or "").rpartition(" ")[2]
+        served = f"http://127.0.0.1:{web.port}/view#link="
+        viewer, viewer_errors = await opened(chromium, made)
+        credential = await viewer.evaluate("X.caps.credential")
+        await viewer.context.close()
         await page.locator('[data-x-act="close"]').click()
         await page.locator(".x-ask [data-x-yes]").click()
         await expect(said_here).to_have_text("Close the session: done.", timeout=SECONDS)
@@ -335,4 +350,5 @@ async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(
     assert [(event.agent, event.data["status"]) for event in ended] == [("w", "retired")]
     assert closing in ("closing", "closed")
     assert commands == ["agent.interrupt"]
-    assert errors == []
+    assert made.startswith(served) and credential == "view"
+    assert errors == [] and viewer_errors == []

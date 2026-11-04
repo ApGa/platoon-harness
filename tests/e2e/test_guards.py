@@ -29,7 +29,7 @@ HOSTILE = (
     "<style>body{background:url(http://evil.example/bg)}</style> "
     'http://evil.example/"onmouseover="window.__pwned=1 `</code><img src=x onerror=window.__pwned=1>` '
     "```html\n</pre><img src=x onerror=window.__pwned=1>\n``` {{constructor.constructor('window.__pwned=1')()}} "
-    "\u202eevil \x1b]0;owned\x07"
+    "\u202eevil \x1b]0;owned\x07 $` $' $&"
 )
 
 
@@ -136,6 +136,26 @@ async def test_a_sender_cannot_be_chosen_from_the_page_since_identity_comes_from
     assert [outcome["refusal"]["code"] for outcome in forged] == ["invalid"] * 3
     assert [event.actor for event in refused] == ["human:you"] * 3
     assert [(event.actor, event.gist) for event in sent] == [("human:you", "as myself")]
+    assert errors == []
+
+
+async def test_a_decision_said_through_text_a_replacement_would_expand_is_drawn_as_that_text(
+    chromium: Browser, root: Path
+):
+    """`via` is free text, and replace reads a dollar and a quote or a backtick in what it puts in as other text."""
+    via = "ci $` and $' and $& end"
+    async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        approval = (await until(session.approvals, session))[0]
+        await session.resolve(approval["id"], "allow", expected_version=approval["version"], via=via)
+        page, errors = await opened(chromium, web.link("control"))
+        await chat(page, "bob & you")
+
+        await expect(page.locator(".x-card.x-done")).to_have_text(f"Allowed by you via {via}", timeout=SECONDS)
+        await expect(said(page, "Ship the fix?")).to_have_count(1)
+        await page.context.close()
+
     assert errors == []
 
 

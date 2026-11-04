@@ -27,6 +27,11 @@ request can reach `web` and its answer never reach the page.
 - **Asked in the page.** An op in `CONFIRMED` asks once, in a popover beside its button, drawn with SwarmChat's own template.
 - **A reply cites an entry.** Reply opens the message's thread with a composer that sends `reply_to`, the message's journal
   ref. What a harness said in its turn is no entry a reply can cite, so its Reply is disabled, saying so.
+- **What is not built is drawn.** Tool activity and Review changes on an agent's page and Provenance among a message's
+  actions are disabled, saying why, beside the layouts ADR 0027 disabled, so nothing the brief asks the page for is
+  missing without a word. Links of either kind are made from the person's own page, through `/x/link`.
+- **What the page draws, the page says.** Each agent's status stands beside its name in the people list, where SwarmChat
+  draws someone's first field, and seeing as anyone but an agent is drawn disabled, as the person's page already did.
 
 ## Alternatives considered
 

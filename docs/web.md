@@ -32,8 +32,7 @@ stop that one for new links.
 A link opens once, within ten minutes, and is spent for a session in that browser of the same kind, which lasts twelve
 hours. Its secret is after `#`, so it never reaches a server log or a referrer. A link opened a second time says it was
 used already. `web` keeps only hashes of what it gave out, in its own memory, so stopping it ends every browser's session:
-open a new link. A page that acts can make more links of either kind, through `/x/link`; the page has no button for it
-yet. Your own credential never reaches a browser, and who sends from a page is the credential's, never anything the page
+open a new link. A page that acts can make more links of either kind, from your own page: see Acting. Your own credential never reaches a browser, and who sends from a page is the credential's, never anything the page
 says.
 
 A control link acts as you, on your login. Never hand one to somebody else: on a plan login that would be your login
@@ -53,16 +52,18 @@ serving another person, which its terms do not allow. Give them a view link.
   stage.
 - **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
   apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
-  it is doing. An agent's end is one line in its chat with you, saying what the terminal says of it: its report when it
+  it is doing. The people list shows it beside each agent's name, where SwarmChat shows a first field, so who is working
+  and who needs you reads at a glance. An agent's end is one line in its chat with you, saying what the terminal says of it: its report when it
   finished with one, and otherwise how it ended and why.
-- **Approvals.** An approval left for you is a card in the agent's chat with you, which says who decided it and through
-  what, or that it went moot with the turn that asked.
+- **Approvals.** An approval left for you is a card under its question in the agent's chat with you, which says who
+  decided it and through what, or that it went moot with the turn that asked.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a
   handover landed it in, or a tool's result showed it to, which is evidence, and when. It never says one understood it. A
   person's reading leaves no evidence, so a person is in neither list. "What had reached" an agent, beside a message it
   sent, says how much of each of its chats had been delivered to it then.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
-  reach it, oldest first. Nothing is marked. A person cannot be seen as, for the same reason.
+  reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
+  draws them disabled, saying so, and an address that names one shows everyone.
 
 Browsing writes nothing to the journal, moves no agent's cursor, and moves no mark of yours: the terminal's unread counts
 are yours alone.
@@ -84,6 +85,7 @@ not hold.
 | Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
+| A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
 
 **Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run:
 these are the ops the terminal asks about too, one set both read, and nothing takes them back.
@@ -118,10 +120,13 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 
 ## Not built yet
 
-Disabled where its control is, with the reason: the board layout, the tasks and board views, and the map. Tool activity,
-diff review, provenance and a button to make a link have no control yet. Live text, what an agent is saying before its turn
-commits it, is not shown in the page: an agent's words appear once they are in the journal. Pictures in a body are offered
-as a download and not drawn. [STATUS.md](STATUS.md) says what each is.
+Each is drawn disabled where its control is, saying why: the board layout, with the tasks and board views, and the map in
+the top bar; Tool activity and Review changes on an agent's page; and Provenance among each message's actions. Live text,
+what an agent is saying before its turn commits it, is not shown in the page: an agent's words appear once they are in the
+journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
+only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may
+run are the terminal's and the command line's for now. The page is laid out for a wide window, and at a phone's width it
+is not usable yet. [STATUS.md](STATUS.md) says what each is.
 
 ## Security
 
