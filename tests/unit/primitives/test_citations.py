@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from platoon_harness.kernel import Kernel, Principal
+from platoon_harness.kernel import Kernel, Principal, Tombstones
 from platoon_harness.primitives import PRIMITIVES, REF, maker
 
 from .support import (
@@ -428,6 +428,29 @@ async def test_a_citation_must_name_an_existing_event_and_lines_that_exist(kerne
     assert of_type(kernel, "message.sent", after=head) == []
     if "past the end" in said:
         assert refused.detail["lines"] == 2
+
+
+async def test_each_ref_cited_and_each_body_it_names_is_looked_at_once(kernel, ada, monkeypatch):
+    """A citation is checked in the writer, so repeating a ref or naming one body by many ranges costs no more."""
+    bob = await spawn(kernel, "bob")
+    ref = (await send(kernel, bob, "@ada", "two lines", body=await stored(kernel, "one\ntwo\n")))["ref"]
+    looked: list[str] = []
+    inline = Tombstones.inline
+    monkeypatch.setattr(Tombstones, "inline", lambda self, sha256: looked.append(sha256) or inline(self, sha256))
+    based_on = [f"{ref}#L1-1"] * 200 + [f"{ref}#L1-2", f"{ref}#L2-2"]
+
+    await send(kernel, bob, "@ada", "on those lines", based_on=based_on)
+
+    assert len(looked) == 1 and of_type(kernel, "message.sent")[-1].based_on == tuple(based_on)
+
+
+async def test_a_citation_too_long_for_an_event_is_refused_before_any_ref_is_looked_at(kernel, ada):
+    bob = await spawn(kernel, "bob")
+    based_on = [f"inbox/nobody@{n}" for n in range(1, 2000)]
+
+    refused = refusal(await kernel.submit(bob, "message.send", {"to": "@ada", "gist": "x", "based_on": based_on}))
+
+    assert refused.code == "invalid" and "based_on exceeds 16384 bytes" in str(refused.detail)
 
 
 async def test_a_citation_of_lines_of_a_body_in_blobs_is_kept_as_given(kernel, ada):

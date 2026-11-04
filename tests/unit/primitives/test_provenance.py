@@ -12,6 +12,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import TypeAdapter
 
+from platoon_harness.drivers import claude, codex, pi
+from platoon_harness.drivers import exec as one_shot
+from platoon_harness.drivers.openhands import worker
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import (
     PRIMITIVES,
@@ -24,6 +27,7 @@ from platoon_harness.primitives import (
     Uses,
 )
 from platoon_harness.primitives.provenance import Bound, Coverage, Facts, Incident, decide
+from platoon_harness.testing import scripted
 
 from .support import (
     ROLES,
@@ -44,6 +48,21 @@ from .support import (
 EXPOSURE: TypeAdapter[Seen | NotSeen | Unknown] = TypeAdapter(Exposure)
 SURFACES = ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
 PROVENANCE = ("exposure", "lineage", "uses", "contributors")
+COVERAGE = {
+    **{
+        name: dict(module._CAPABILITIES.coverage)
+        for name, module in (
+            ("claude", claude),
+            ("codex", codex),
+            ("pi", pi),
+            ("exec", one_shot),
+            ("openhands", worker),
+        )
+    },
+    "scripted": dict(scripted._DEFAULT.coverage),
+    "every surface observed": dict.fromkeys(SURFACES, "observed"),
+}
+"""What each driver we ship declares of each surface, and the most any could."""
 
 
 def ask(kernel: Kernel, op: str, **args: Any) -> Any:
@@ -259,9 +278,25 @@ async def test_a_ranged_citation_says_whether_its_lines_were_shown(kernel):
     (before,) = lineage(kernel, gist_only).declared
     (after,) = lineage(kernel, whole).declared
 
-    assert isinstance(before.exposure, Seen) and before.lines_shown is False
+    assert isinstance(before.exposure, Seen) and before.lines_shown is None
     assert [shown.form for edge in before.exposure.edges for shown in edge.shown] == ["gist"]
     assert isinstance(after.exposure, Seen) and after.lines_shown is True
+
+
+async def test_whether_a_range_was_shown_is_unknown_when_its_citer_s_exposure_is(kernel):
+    """The body was handed over whole, and nothing says its harness took it: whether its lines were shown is unknown."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    body = await stored(kernel, "one\ntwo\nthree\n")
+    sent = (await send(kernel, alice, "@bob", "see the body", body=body))["ref"]
+    await start_turn(kernel, "bob")
+    shim = {"platoon-harness/callId": "x1"}
+    result_of(await kernel.submit(bob, "message.read", {"bodies": True, "after": 0}, native=shim))
+    cited = (await send(kernel, bob, "@alice", "lines two to three", based_on=[f"{sent}#L2-3"]))["ref"]
+
+    (declared,) = lineage(kernel, cited).declared
+
+    assert isinstance(declared.exposure, Unknown) and declared.lines_shown is None
+    assert [shown.form for offer in declared.exposure.handed for shown in offer.shown] == ["gist", "body"]
 
 
 async def test_the_bound_compares_confirmations_and_calls_on_the_report_stream(kernel):
@@ -348,6 +383,42 @@ async def test_seen_lists_each_compaction_since_as_forgot_kept_or_unsaid(kernel)
     assert [mark.mark for mark in answer.edges[0].compactions or ()] == ["kept", "unsaid", "forgot"]
 
 
+async def test_marks_end_at_the_compaction_that_forgot(kernel):
+    """What one compaction forgot is gone, so a later one that names other ids kept nothing of it."""
+    alice, _ = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = (await send(kernel, alice, "@bob", "forget me"))["ref"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await start_turn(kernel, "bob")
+    await confirm(kernel, "bob", handed["input"], evidence="message_start", native_id="e1")
+    for forgotten in (["e1"], ["e2"]):
+        await report(kernel, "bob", "compacted", forgotten=await stored(kernel, json.dumps(forgotten)))
+
+    answer = exposure(kernel, "bob", sent)
+
+    assert isinstance(answer, Seen)
+    assert [mark.mark for mark in answer.edges[0].compactions or ()] == ["forgot"]
+    assert answer.edges[0].compacted == 1
+
+
+async def test_an_exposure_answer_cuts_each_list_it_holds(kernel):
+    """One event offered again and again, with a compaction after each: a page of edges, each with a page of marks, and
+    the true counts beside them."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = (await send(kernel, alice, "@bob", "the plan"))["ref"]
+    await start_turn(kernel, "bob")
+    for n in range(40):
+        result_of(await kernel.submit(bob, "message.read", {"after": 0}, native=tool(f"t{n}")))
+        await done(kernel, "bob", f"t{n}")
+        await report(kernel, "bob", "compacted")
+
+    answer = exposure(kernel, "bob", sent)
+
+    assert isinstance(answer, Seen) and (len(answer.edges), answer.total) == (32, 40)
+    assert [edge.compacted for edge in answer.edges] == list(range(40, 8, -1))
+    assert [len(edge.compactions or ()) for edge in answer.edges] == [min(32, n) for n in range(40, 8, -1)]
+    assert {mark.mark for edge in answer.edges for mark in edge.compactions or ()} == {"unsaid"}
+
+
 async def test_a_compaction_never_undoes_seen(kernel):
     alice, _ = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     sent = (await send(kernel, alice, "@bob", "forget me"))["ref"]
@@ -401,7 +472,16 @@ async def test_only_gaps_content_could_come_through_are_reasons_for_unknown(kern
 
 def facts(**given: Any) -> Facts:
     standing = [Coverage(surface=surface, declared="observed") for surface in SURFACES]
-    nothing = {"edges": [], "handed": [], "standing": standing, "incidents": [], "gaps": 0, "older_offers": 0}
+    nothing = {
+        "edges": [],
+        "confirmed": 0,
+        "handed": [],
+        "unconfirmed": 0,
+        "standing": standing,
+        "incidents": [],
+        "gaps": 0,
+        "older_offers": 0,
+    }
     return Facts(**{**nothing, **given})
 
 
@@ -420,20 +500,20 @@ def test_not_seen_needs_proved_coverage_and_no_gap_below_the_bound():
     assert isinstance(proved, NotSeen) and proved.proved == SURFACES
 
 
-async def test_no_agent_answers_not_seen_at_m2(kernel):
-    """No check proves a surface yet, so even an agent whose driver declares every one observed is `unknown`."""
-    declared = {"coverage": dict.fromkeys(SURFACES, "observed")}
+@pytest.mark.parametrize("declared", COVERAGE.values(), ids=list(COVERAGE))
+async def test_no_agent_answers_not_seen_at_m2(kernel, declared):
+    """No check proves a surface yet, so the agent of every driver we ship, and one declaring every surface observed,
+    is `unknown` about what was never handed to it."""
     alice = await spawn(kernel, "alice")
-    for name, ready in (("sure", declared), ("bare", {})):
-        await spawn(kernel, name, ready=ready)
+    await spawn(kernel, "bob", ready={"coverage": declared})
     sent = (await send(kernel, alice, "@alice", "to nobody else"))["ref"]
 
-    answers = [exposure(kernel, name, sent) for name in ("sure", "bare")]
+    answer = exposure(kernel, "bob", sent)
 
-    assert all(isinstance(answer, Unknown) and answer.handed == () for answer in answers)
-    assert [len(answer.standing) for answer in answers if isinstance(answer, Unknown)] == [7, 7]
-    assert [coverage.declared for coverage in answers[0].standing] == ["observed"] * 7  # type: ignore[union-attr]
-    assert [coverage.declared for coverage in answers[1].standing] == [None] * 7  # type: ignore[union-attr]
+    assert isinstance(answer, Unknown) and answer.handed == ()
+    assert [(coverage.surface, coverage.declared) for coverage in answer.standing] == [
+        (surface, declared.get(surface)) for surface in SURFACES
+    ]
 
 
 async def test_the_queries_ask_about_events_and_refuse_a_range_a_hash_or_a_person(kernel, ada):
@@ -686,6 +766,41 @@ async def test_git_ancestry_is_its_own_kind_and_a_commit_is_its_workspace_s(kern
 
 
 @pytest.mark.parametrize("repo", [REPO])
+async def test_a_look_s_trigger_is_no_contributor_to_a_commit_it_found(kernel):
+    """Every look takes the shared workspace first, so a worker's turn end finds a commit someone made there: the turn
+    end prompted the look, and the commit owes it nothing."""
+    await spawn(kernel, "worker")
+    await start_turn(kernel, "worker")
+    await end_turn(kernel, "worker")
+    ended = of_type(kernel, "turn.ended")[-1]
+    page = {"agent": "worker", "workspace": "shared", "cause": ended.seq, "commits": [commit(ROOT, [], "shared", [])]}
+    result_of(await kernel.submit(kernel.runtime, "repo.report", page))
+    found = ref_of(of_type(kernel, "repo.committed")[-1])
+
+    reached = contributors(kernel, found)
+    back = lineage(kernel, found)
+    forward = uses(kernel, ref_of(ended))
+
+    assert [(row.maker, row.kinds) for row in reached.rows] == [(None, ())]
+    assert back.cause == () and back.made.maker is None
+    assert found not in [getattr(row, "ref", None) for row in forward.rows]
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_a_commit_s_answers_are_bounded_at_the_look_that_recorded_it(kernel):
+    """Git made the commit somewhere before its look, at a time the record does not hold, and the bound says so."""
+    trailers = [{"written": CITED[:8], "sha": CITED}]
+    refs = await committed(kernel, [commit(CITED, [], None, [])], [commit(CHILD, [], "@alice", trailers)])
+
+    found = lineage(kernel, refs[CHILD])
+    before = exposure(kernel, "alice", refs[CITED], before=refs[CHILD])
+
+    assert (found.bound.by, found.bound.seq) == ("look", found.event.seq)
+    assert [edge.exposure.bound.by for edge in found.declared if edge.exposure is not None] == ["look"]
+    assert before.bound == found.bound
+
+
+@pytest.mark.parametrize("repo", [REPO])
 async def test_an_unresolvable_trailer_is_kept_and_labelled_never_in_based_on(kernel):
     trailers = [
         {"written": CITED[:8], "sha": CITED},
@@ -817,6 +932,8 @@ def brute(kernel: Kernel, agent: str, ref: str, before: str | None) -> tuple[Any
                 native = confirmation.data["native_id"]
                 by_id = confirmation.data["evidence"] != "tool_item" and native is not None and forgotten is not None
                 marks.append((offer.seq, "unsaid" if not by_id else "forgot" if native in forgotten else "kept"))
+                if marks[-1][1] == "forgot":
+                    break
         return ("seen", bound, [offer.seq for offer in seen], marks)
     gaps = [
         ref_of(event)

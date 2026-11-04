@@ -6,9 +6,11 @@ decision.
 
 Three things stay apart in every answer, and none is ever drawn as another:
 
-- **What an agent claims.** A citation, `based_on` on a write, is its writer's claim, checked only to name an event that exists.
+- **What an agent claims.** A citation, `based_on` on a write, is its writer's claim, checked to name an event and, for a range,
+  lines of its body.
 - **What reached it.** An offer the runtime made, and its harness's own report that it took it, is observed exposure. Seen means
-  handed over and taken, never understood.
+  handed over and taken, never understood: a read's result returned to its harness, or, under Codex's `callId`, to the Code Mode
+  script that made the call.
 - **What an estimator thinks.** Credit and rewards are annotations, each by a named producer at a version, never facts.
 
 ## Refs and citations
@@ -19,8 +21,9 @@ event's words, an announce of a board write or a child's report, is shown by the
 
 The eight writes of content take `based_on`: `message.send`, `board.post`, `board.revise`, `task.add`, `task.complete`,
 `task.fail`, `agent.spawn` and `agent.finish`. A citation must name an existing event, and a range lines of that event's body, or
-the whole write is refused. A citation of something its citer was never handed is kept, and `exposure` says so beside it. A commit
-cites through its `Informed-By` trailers. Nothing asks agents to cite yet: that is the next stage, a sentence of the preamble's own.
+the whole write is refused, so a citation says whether the event it names exists, and never what that event holds. A citation of
+something its citer was never handed is kept, and `exposure` says so beside it. A commit cites through its `Informed-By` trailers.
+Nothing asks agents to cite yet: that is the next stage, a sentence of the preamble's own.
 
 ## Asking the record
 
@@ -46,8 +49,11 @@ async def citations(session, ref):
 
 `lineage` names the model call that chose the event when the harness's ids join one, and its answers stop there: what the agent's
 harness reported taking before that call counts, and nothing after. With no call joined, an answer stops at the event's commit and
-says `commit`. Every answer names its `head`, and is `open` while the turn its event was made in has not ended, since a later report
-can still confirm what was handed over.
+says `commit`. A git commit is recorded by the look that found it, after git made it at a time the record does not hold, so its
+answers stop at that look and say `look`: what counts may have come after the commit. Every answer names its `head`, and is `open`
+while the turn its event was made in has not ended, since a later report can still confirm what was handed over. A ranged citation
+says whether its lines were shown as exposure says whether its event was: true when a confirmed offer showed them, and otherwise
+null, as no answer can say they were not.
 
 ## What `unknown` means
 

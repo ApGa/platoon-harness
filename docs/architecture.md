@@ -317,9 +317,10 @@ refuses. A ref is `stream@version`, with an optional `#range`. Data names a body
 `based_on` holds event refs alone. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
 `correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
 
-An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A write of content an agent makes
-carries that agent as its envelope agent, so its turn and context version are its maker's: `agent.spawned`, at payload version 3,
-names its spawner and not the child it starts.
+An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A commit's maker is the agent whose
+workspace its reflog names, and nobody, None, for the shared workspace or when no single workspace did (§13). A write of content an
+agent makes carries that agent as its envelope agent, so its turn and context version are its maker's: `agent.spawned`, at payload
+version 3, names its spawner and not the child it starts.
 
 ### 5.4 Effects
 
@@ -699,7 +700,11 @@ One stream per task. States: `open → claimed → done | failed | dead`. A `fai
   `cited` is that check, for an extension's own writes too.
 - **A citation is its citer's claim,** recorded as given, and never merged with exposure, ancestry or credit. One of something its
   citer was never handed is kept: whether it was handed, and for a range whether those lines were shown, is exposure's to say.
+  So a citation says whether the event it names exists, even on a stream its citer may not read, and never what that event holds.
   A commit cites through its `Informed-By` trailers (§13).
+- **An answer given by ending a turn cites nothing.** It reaches its reader as the monitor's report, shown by the ref of the item it
+  carries. A child that stays and answers that way cites through `message.send` or `agent.finish`, as any agent does, and no op is
+  added for it.
 
 ### Wait
 
@@ -1279,7 +1284,8 @@ offer named, by the event it names, with how it was offered and the tool call it
 each start's declared coverage, levels and assurance. `References` holds what cites an event, what follows from one, which commits
 name one a parent, and which of an agent's events came under one tool call's id. `Calls` holds each model call by its harness's id,
 each tool item by its own, and where each turn began and who drove it. `Gaps` indexes each gap by where it began. A fold sees one
-event, so an offered event's maker is found by its ref when an answer needs it.
+event, so an offered event's maker is found by its ref when an answer needs it, once an answer: the makers only handed work cost a
+read for each distinct event offered to a walked maker.
 
 **Four queries.** Each is a query op that is no agent's tool, a `Session` method with a typed answer, and a command:
 
@@ -1294,11 +1300,13 @@ await session.contributors("task/tasks/1@3")                                    
   event: both are reports on the agent's own ordered stream, and the call is joined through the op's anchor, the tool item that holds
   it and that item's `call_id`. With no call joined it counts what was reported before the event's commit, and says `commit`. An event
   someone else made is bounded at its commit too, as two report streams have no order between them, and with no `before` the bound is
-  the head. Every answer names its `head`, and says it is `open` while the turn its event was made in has not ended, since a later
-  report can still confirm an offer or join a call.
+  the head. A git commit is recorded by the look that found it, after git made it at a time the record does not hold, so it is bounded
+  at that look and says `look`: what counts below may have come after the commit. Every answer names its `head`, and says it is
+  `open` while the turn its event was made in has not ended, since a later report can still confirm an offer or join a call. Every
+  list in an answer is a page beside its true count.
 - **`exposure(agent, ref, before)`** answers `Seen`: each offer of the event its harness said it took below the bound, with what it
-  showed, its evidence, the turn it landed in, and each compaction since, marked `forgot` or `kept` by the id its harness reported
-  delivering that input under and `unsaid` otherwise, as a read always is. It answers `NotSeen` when nothing offered the event there, a
+  showed, its evidence, the turn it landed in, and each compaction since, up to the one that forgot it, marked `forgot` or `kept` by
+  the id its harness reported delivering that input under and `unsaid` otherwise, as a read always is. It answers `NotSeen` when nothing offered the event there, a
   stored conformance result proves every coverage surface observed, and no gap content could come through lies below the bound. Else it
   answers `Unknown`, listing the offers never confirmed, the surfaces no result proves observed, the gaps content could have come
   through and the offers from before payload 3, which no event can be tied to. No check proves a surface yet, so **at M2 nothing answers
@@ -1306,7 +1314,8 @@ await session.contributors("task/tasks/1@3")                                    
   it.
 - **`lineage(ref)`** is one hop back: the event; its maker, turn and the person who drove that turn if one held the agent; the model
   call that chose it, with the tool item that joins them and how many of its agent's ops share that tool call; each citation, with the
-  cited event's maker and the citer's `exposure` to it at the bound, and for a range whether a confirmed offer showed those lines; a
+  cited event's maker and the citer's `exposure` to it at the bound, and for a range whether those lines were shown, decided as
+  exposure is: true when a confirmed offer showed them, false only beside `not_seen`, and null otherwise; a
   commit's `Informed-By` values that name no recorded commit, as written; each cause; its previous version on its own stream, or a
   commit's parents; its maker's declared coverage; and one page of what its maker was offered and the gaps in its record below the
   bound, newest first, with true totals.
@@ -1320,9 +1329,11 @@ await session.contributors("task/tasks/1@3")                                    
 
 The queries ask about events, so a range or a body's hash is refused `invalid`, naming what to ask by, and so is an `agent` that is a
 person or a program, whose reading is no evidence. They read the journal alone, never an annotation, and answer alike after a rebuild
-and on a closed copy, which refuses them `unavailable` while its views are behind its journal (§5.8). What qualifies every answer is
+and on a closed copy, which refuses them `unavailable` while its views are behind its journal (§5.8). A client's query runs on a
+reader of its own off the runtime's event loop, so a long one keeps no report or tool call waiting. What qualifies every answer is
 said beside it and never hidden: which request held a ref is the gateway's to know (G12), a native child's reads are unseen, a read
-through a shell, a file or git makes an answer `Unknown`, and words an agent copied into another entry show only in that entry's
+through a shell, a file or git makes an answer `Unknown`, a read's `Seen` means its result returned to the harness, or under Codex's
+`callId` to the Code Mode script that made the call, and words an agent copied into another entry show only in that entry's
 lineage.
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
@@ -1518,8 +1529,10 @@ another. The core gives the first three, on git and the filesystem alone, and re
   own workspace, reads HEAD once and uses that commit throughout, and records a status that names another HEAD as the gap
   `workspace_unobserved`, never a mixed state, as it does a look that fails. A session whose cwd is in no git repository observes no
   change and says so: `session.status` names the repository as `repo`, None then.
-- **What a look records,** on `repo/<name>`, with no agent in the envelope, so it claims no turn or context, its `cause` the event that
-  prompted it, and its data naming the workspace, `@ada` or `shared`: `repo.committed` for each commit its workspace's HEAD reaches, and
+- **What a look records,** on `repo/<name>`, with no agent in the envelope, so it claims no turn or context, and its data naming the
+  workspace, `@ada` or `shared`. A reading and a gap name as their `cause` the event that prompted the look, and a commit or a rewrite
+  names none, as it was someone's act in git that the prompt did not cause: a worker's turn end whose look finds a commit in the
+  shared workspace is no contributor to it. A look records `repo.committed` for each commit its workspace's HEAD reaches, and
   each commit those cite in an `Informed-By` trailer, that the session did not start with, the workspace did not start from and the
   journal does not hold, parents first and each after what it cites; `repo.rewritten` when a branch no longer reaches commits the
   journal holds, naming only those; and `workspace.changed` whenever a workspace's head, branch or uncommitted state differs from its

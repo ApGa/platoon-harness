@@ -124,6 +124,7 @@ platoon_harness.kernel.filesystem
 platoon_harness.kernel.Filesystem
 platoon_harness.kernel.first
 platoon_harness.kernel.fold
+platoon_harness.kernel.DATA_LIMIT
 platoon_harness.kernel.GIST_LIMIT
 platoon_harness.kernel.Grant
 platoon_harness.kernel.Grants

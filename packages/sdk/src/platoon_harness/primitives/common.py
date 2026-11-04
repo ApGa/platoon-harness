@@ -2,13 +2,14 @@
 
 import json
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from functools import cache
 from hashlib import sha256
 from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Tombstones, Txn
+from platoon_harness.kernel import DATA_LIMIT, GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Tombstones, Txn
 
 
 def _bare(name: str) -> str:
@@ -86,9 +87,14 @@ def event_at(txn: Txn, ref: str) -> Event | None:
 def cited(txn: Txn, refs: Iterable[str]) -> tuple[str, ...]:
     """`based_on` as its citer gave it, once each ref names an event and each range lines of that event's text body,
     or a refusal of the whole write naming the first that does not. A body in `blobs/`, which an op cannot read, keeps
-    its range as given. Whether the citer was handed what it cites is exposure's to say, so that is not checked here."""
+    its range as given. Whether the citer was handed what it cites is exposure's to say, so that is not checked here,
+    and a citation says only whether an event exists, never what it holds. One that cannot fit an event is refused
+    before any is looked at, and each ref, each event and each body is looked at once."""
     refs = tuple(refs)
-    for ref in refs:
+    if size_of(refs) > DATA_LIMIT:
+        raise Refused("invalid", f"based_on exceeds {DATA_LIMIT} bytes: cite fewer refs")
+    lines_in = cache(lambda body: _lines_in(txn, body))
+    for ref in dict.fromkeys(refs):
         named = ref[:80]
         if ref.startswith("sha256:"):
             raise Refused("invalid", f"a body's hash is no ref: {_GIVEN}, which names the event that carries it")
@@ -99,24 +105,29 @@ def cited(txn: Txn, refs: Iterable[str]) -> tuple[str, ...]:
         if event is None:
             raise Refused("not_found", f"nothing is {named}: {_GIVEN}")
         if match["span"] is not None:
-            _cited_lines(txn, named, event, match["span"])
+            _cited_lines(named, event, match["span"], lines_in)
     return refs
 
 
-def _cited_lines(txn: Txn, ref: str, event: Event, span: str) -> None:
+def _lines_in(txn: Txn, body: str) -> int | None:
+    """How many lines a body has, or None for one in `blobs/`, which an op cannot read. One that is not text raises
+    `UnicodeDecodeError`."""
+    data = inline_body(txn, body)
+    return None if data is None else len(data.decode().splitlines())
+
+
+def _cited_lines(ref: str, event: Event, span: str, lines_in: Callable[[str], int | None]) -> None:
     lines = re.fullmatch(LINE_RANGE, span)
     if lines is None or int(lines[1]) > int(lines[2]):
         raise Refused("invalid", f"{ref} names no lines, as a range is `#La-b` from a first line to a later one")
     body = body_of(event)
     if body is None:
         raise Refused("invalid", f"{ref} names lines of an event that has no body: cite it whole")
-    data = inline_body(txn, body)
-    if data is None:
-        return  # In `blobs/`, which an op cannot read.
-    text = decoded(data)
-    if text is None:
-        raise Refused("invalid", f"{ref} names lines of a body that is not text: cite it whole")
-    if int(lines[2]) > (total := len(text.splitlines())):
+    try:
+        total = lines_in(body)
+    except UnicodeDecodeError:
+        raise Refused("invalid", f"{ref} names lines of a body that is not text: cite it whole") from None
+    if total is not None and int(lines[2]) > total:
         raise Refused("invalid", {"lines": total, "detail": f"{ref} names lines past the end of its body"})
 
 

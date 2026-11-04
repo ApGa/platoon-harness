@@ -11,8 +11,10 @@
   hop forward; and `contributors(ref)` names each maker a walk back along citations, causes and ancestry reaches, and apart from them
   the makers only handed to one, weighing nobody. Each is a `Session` method with a typed answer, `Seen`, `NotSeen`, `Unknown`,
   `Lineage`, `Uses` or `Contributors`, and a command of its name. An answer about an event an agent made is bounded at the model call
-  that chose it, on its own report stream, or at its commit, said; it says its `head` and whether its turn is `open`; and it is the
-  same after a rebuild and on a closed copy. No check proves coverage yet, so nothing answers `not_seen`. See ADR 0038.
+  that chose it, on its own report stream, at its commit, or for a git commit at the look that recorded it, said; it says its `head`
+  and whether its turn is `open`; each list in it is a page beside its true count; and it is the same after a rebuild and on a
+  closed copy. A ranged citation's lines are shown true, or null when nothing confirmed shows them. A client's query runs off the
+  runtime's event loop. No check proves coverage yet, so nothing answers `not_seen`. See ADR 0038.
 - The views behind them: `Exposures`, `References` and `Calls`, and `Gaps` at version 2 as an index of each gap by where it began.
   `Stamps.event(seq)` gives the event a `cause` names.
 - Rewards and credit beside the journal, in `annotations.sqlite`: `Session.annotate` and the `annotate` command write one by a named
@@ -32,7 +34,8 @@
 - `based_on` on `agent.spawn` and `agent.finish`, so all eight writes of content take it, and every citation is checked: a ref must
   name an existing event, and a range lines of that event's text body, or the whole write is refused naming it. A body in `blobs/`
   keeps its range as given, and a citation of something its citer was never handed is kept as its claim. `cited` is the check, for
-  an extension's own writes.
+  an extension's own writes, reading each ref, event and body once, and refusing a `based_on` too long for an event first.
+  `DATA_LIMIT` is a public kernel name.
 - The launch offer: a fresh start's `agent.instruct` offers what that launch hands the harness, its instructions and its goal,
   and the goal goes as the first delivery under that offer's id, so `AgentSpec.goal` is a `Delivery` and each driver sends it as
   it sends any input. The first input a harness says it took confirms its own launch, and never one a harness before it was
@@ -244,6 +247,8 @@
 
 - A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
   opens, and writes no event.
+- A look's commit and rewrite name no `cause`, as the turn end that prompted the look did not cause what git holds, so a bystander's
+  turn end is no contributor to a commit in the shared workspace. Its reading and gap still name what prompted it.
 - `maker` names a commit's maker as the agent whose workspace made it, and None when nobody's did, and `blob.get` reads whether its
   caller was handed an event from the `Exposures` view.
 - `agent.spawned`, at payload version 3, carries its spawner as its envelope agent, so a spawn is its spawner's, in its spawner's

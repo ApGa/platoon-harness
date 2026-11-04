@@ -154,8 +154,19 @@ async def test_a_repo_event_names_no_agent_and_claims_no_turn(kernel):
     events = [event for event in events_of(kernel) if event.stream == "repo/app"]
     assert [event.type for event in events] == ["repo.committed", "workspace.changed"]
     assert all((event.agent, event.turn, event.context_version) == (None, None, None) for event in events)
-    assert all(event.cause == (1,) and event.actor == "runtime" for event in events)
+    assert [event.cause for event in events] == [(), (1,)] and all(event.actor == "runtime" for event in events)
     assert events[0].data["made_in"] == "@bob" and events[0].gist == f"{ONE[:12]} make 1111"
+
+
+async def test_a_look_names_what_prompted_it_as_the_cause_of_its_reading_and_of_no_commit_it_found(kernel):
+    """A commit and a rewrite were someone's act in git, which the turn end that prompted the look did not cause."""
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE), commit(TWO, ONE)], reading=reading(TWO), cause=1)
+    rewrite = {"branch": "main", "was": TWO, "now": ONE, "dropped": [TWO]}
+    await looked(kernel, rewrite=rewrite, reading=reading(ONE), cause=2)
+
+    causes = {event.type: event.cause for event in events_of(kernel) if event.stream == "repo/app"}
+    assert causes == {"repo.committed": (), "repo.rewritten": (), "workspace.changed": (2,)}
 
 
 async def test_each_commit_is_recorded_once_parents_first(kernel):

@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import stat
+import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -546,3 +547,26 @@ async def test_a_protocol_nobody_here_speaks_is_said_at_once(owner, monkeypatch)
         await asyncio.wait_for(guest._entered(), SECONDS)
 
     assert refused.value.refusal.code == "unsupported"
+
+
+async def test_a_query_never_holds_up_the_runtime(owner, monkeypatch):
+    """A query runs on a reader off the event loop, so however long one takes, every command and report goes on."""
+    kernel = owner._runtime.kernel
+    asked, release = threading.Event(), threading.Event()
+    released: list[bool] = []
+    query = kernel.query
+
+    def slow(principal: Any, op: str, args: Any) -> Outcome:
+        if op == "lineage":
+            asked.set()
+            released.append(release.wait(SECONDS))
+        return query(principal, op, args)
+
+    monkeypatch.setattr(kernel, "query", slow)
+    traced = asyncio.ensure_future(owner.lineage("session@1"))
+    await asyncio.to_thread(asked.wait, SECONDS)
+    sent = await owner.send("@bob", "while it reads")
+    release.set()
+
+    assert (await traced).event.ref == "session@1" and sent["ref"]
+    assert released == [True]

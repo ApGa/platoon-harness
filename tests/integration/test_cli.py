@@ -528,7 +528,7 @@ async def test_provenance_of_a_closed_session_from_the_command_line_and_credit_b
     assert worker in ("agent:w1", "agent:w2") and [step["ref"] for step in lineage["ancestry"]] == ["task/tasks/1@2"]
     rows = [(row["maker"], row["kinds"]) for row in json.loads(reached.stdout)["rows"]]
     assert rows == [(worker, ["cause", "ancestry"]), ("agent:lead", ["ancestry"])]
-    assert json.loads(seen.stdout)["answer"] in ("seen", "unknown")
+    assert (json.loads(seen.stdout)["answer"], json.loads(seen.stdout)["handed"]) == ("unknown", [])
     assert [(row["producer"], row["value"]) for row in json.loads(listed.stdout)] == [("split", 1.0)]
     assert refused.code == 1 and "ask by task/tasks/1@3" in refused.stderr
     assert path.read_bytes() == before

@@ -98,7 +98,9 @@ class Rewrite(Args):
 class Report(Args):
     """One page of a look at `workspace`, which `agent`'s probe or stop asked for and the event `cause` prompted. Its
     `commits` come parents first, and the page with a `reading` is its last, which moves the workspace's last look.
-    `unobserved` says why the look could not read the workspace, which records the gap and nothing else."""
+    `unobserved` says why the look could not read the workspace, which records the gap and nothing else. A reading and
+    a gap follow from what prompted the look, so they name it as their cause; a commit or a rewrite the look found was
+    someone's act in git, which that did not cause, so it names none."""
 
     agent: Name
     workspace: Where
@@ -186,12 +188,12 @@ def report(txn: Txn, a: Report) -> None:
             cited = [ref for found in commit.informed_by if found.sha and (ref := looks.ref(found.sha))]
             gist = f"{commit.sha[:12]} {commit.subject}"[:GIST_LIMIT]
             data = commit.model_dump(mode="json", exclude={"subject"})
-            txn.emit("repo.committed", stream, gist=gist, cause=cause, based_on=list(dict.fromkeys(cited)), data=data)
+            txn.emit("repo.committed", stream, gist=gist, based_on=list(dict.fromkeys(cited)), data=data)
     if a.rewrite is not None and (dropped := [sha for sha in a.rewrite.dropped if looks.ref(sha)]):
         rewrite = a.rewrite.model_dump(mode="json", exclude={"dropped"})
         data = {"workspace": a.workspace, **rewrite, "dropped": dropped[:DROPPED_LIMIT], "dropped_total": len(dropped)}
         gist = f"{a.workspace}: {a.rewrite.branch or 'HEAD'} no longer reaches {_some(len(dropped), 'recorded commit')}"
-        txn.emit("repo.rewritten", stream, gist=gist[:GIST_LIMIT], cause=cause, data=data)
+        txn.emit("repo.rewritten", stream, gist=gist[:GIST_LIMIT], data=data)
     if a.reading is not None and looks.reading(a.workspace) != (reading := a.reading.model_dump(mode="json")):
         refs = [a.reading.body] if a.reading.body else ()
         gist = _said(a.workspace, a.reading)[:GIST_LIMIT]

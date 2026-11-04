@@ -89,7 +89,8 @@ class Link(Protocol):
 
 class Local:
     """The link as the kernel in-process. `denied` is the refusal for every write, which a view credential and a session
-    with no runtime have; a command otherwise cannot tell those apart from a mistake in its arguments."""
+    with no runtime have; a command otherwise cannot tell those apart from a mistake in its arguments. A query runs on a
+    reader of its own off the event loop, so however long one takes, no harness's report waits behind it."""
 
     def __init__(
         self,
@@ -121,13 +122,13 @@ class Local:
         kernel = self._kernel
         operation = kernel.ops.get(op)
         if operation is not None and (operation.query or operation.exposes):
-            return kernel.query(self._principal, op, args)
+            return await self.query(op, args)
         if self._denied is not None:
             return Outcome(op=op, args_hash="", refusal=self._denied.model_copy(update={"op": op}))
         return await kernel.submit(self._principal, op, args, key=key)
 
     async def query(self, op: str, args: Mapping[str, Any]) -> Outcome:
-        return self._kernel.query(self._principal, op, args)
+        return await asyncio.to_thread(self._kernel.query, self._principal, op, args)
 
     async def read(
         self,

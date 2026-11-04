@@ -424,7 +424,7 @@ async def test_a_turn_s_commits_are_recorded_after_it_ends_as_its_agent_s(repo, 
         [ended] = [event for event in await of_type(session, "turn.ended") if event.agent == "ada"]
         rows = (await session.submit("view.watch", name="changes")).result["rows"]
 
-    assert found.data["made_in"] == "@ada" and found.cause == (ended.seq,)
+    assert found.data["made_in"] == "@ada" and found.cause == () and found.seq > ended.seq
     assert (found.agent, found.turn) == (None, None)
     assert {row["id"] for row in rows} == {f"commit/{found.data['sha']}", "workspace/@ada"}
 
@@ -547,4 +547,4 @@ async def test_a_turn_the_owner_s_stop_cut_off_is_looked_at_on_resume(repo, tmp_
         [cut] = [event for event in await of_type(session, "turn.ended") if event.agent == "ada"]
 
     assert found.data["made_in"] == "@ada"
-    assert cut.data["reason"] == "stopped by its owner" and found.cause == (cut.seq,)
+    assert cut.data["reason"] == "stopped by its owner" and found.cause == () and found.seq > cut.seq

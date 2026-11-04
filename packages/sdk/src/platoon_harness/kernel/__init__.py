@@ -12,6 +12,7 @@ from .extension import Extension
 from .journal import Filesystem, filesystem, is_held
 from .kernel import Kernel, registry
 from .model import (
+    DATA_LIMIT,
     GIST_LIMIT,
     NAME,
     Delta,
@@ -33,6 +34,7 @@ from .txn import Stamps, Txn
 from .view import View, fold
 
 __all__ = [
+    "DATA_LIMIT",
     "GIST_LIMIT",
     "NAME",
     "Args",

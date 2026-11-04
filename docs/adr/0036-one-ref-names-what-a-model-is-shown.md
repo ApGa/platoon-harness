@@ -29,6 +29,8 @@ returned no ref at all, and `based_on` was checked only to exist: `agent/bob@1#L
   body, or the whole write is refused naming the ref: `not_found` for a missing event, `invalid` for a body's hash, a malformed
   range, lines that do not exist, or a range on an event with no body. A body in `blobs/`, which an op cannot read, keeps its range
   as given. A citation of something its citer was never handed is kept as its claim: whether it was handed is exposure's answer.
+  So a citation says whether the event it names exists, even on a stream its citer may not read, and never what that event holds.
+  The check reads each ref, each event and each body once, and refuses a `based_on` too long for an event before it reads any.
 - **A spawn is its spawner's.** `agent.spawned`, payload version 3, carries the spawner as its envelope agent, so its turn and
   context version are the spawner's and a citation on it is judged against what the spawner was handed. The child's own events
   stay the child's.
@@ -46,6 +48,7 @@ returned no ref at all, and `based_on` was checked only to exist: `agent/bob@1#L
 | Refusing a citation of what its citer was never handed | It makes declared a subset of observed, and loses the claim that credit research wants to compare with exposure |
 | Keeping a write and dropping a citation that fails | It silently loses a claim |
 | Grants on an event's stream deciding `blob.get` | A group member would read on in an entry never addressed to it, and carried events live on streams no read op grants |
+| Refusing a citation of an event on a stream its citer may not read, in a denial's words, so existence never shows | It refuses the claim declared exposure exists to compare, and a citation discloses a version, never content |
 
 ## Consequences
 

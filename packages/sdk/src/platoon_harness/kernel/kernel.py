@@ -416,7 +416,7 @@ class Kernel:
 
     @contextmanager
     def _reading(self) -> Generator[sqlite3.Connection]:
-        """A connection inside one short read transaction."""
+        """A connection inside one short read transaction, on any thread. One a close overtook is closed, not kept."""
         if self.closed:
             raise Refused("unavailable", "the kernel is closed" if self.failure is None else str(self.failure))
         if self._frozen is not None and fingerprint(self._folder) != self._frozen:
@@ -434,7 +434,7 @@ class Kernel:
             except sqlite3.Error:
                 db.close()
             else:
-                if self._idle.qsize() < _IDLE_READERS:
+                if self._idle.qsize() < _IDLE_READERS and not self.closed:
                     self._idle.put(db)
                 else:
                     db.close()

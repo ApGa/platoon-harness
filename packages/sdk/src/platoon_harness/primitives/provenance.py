@@ -8,7 +8,8 @@ architecture section 11.
 import json
 import sqlite3
 from collections import deque
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
+from functools import cache, partial
 from typing import Annotated, Any, Literal, NamedTuple, get_args
 
 from pydantic import Field
@@ -26,6 +27,7 @@ WALK_LIMIT = 4096
 """How many events a walk back from an outcome reaches before it stops and says so."""
 
 _PAGE = DIGEST_ITEMS
+_OFFER = "o.*, c.ref AS confirmed, c.seq AS confirmed_seq, c.turn, c.boundary, c.evidence, c.native_id"
 _SURFACES: tuple[Surface, ...] = get_args(Surface)
 _UNCARRIED = tuple(what for what, kind in GAPS.items() if not kind.carries)
 
@@ -163,21 +165,21 @@ class Exposures(View):
         ).fetchone()
         return row is not None
 
-    def offers_of(self, agent: str, stream: str, version: int, bound: int) -> list[sqlite3.Row]:
-        """The offers of one event to an agent made below `bound`, oldest first, each with its confirmation when that
-        too was reported below it."""
-        return self.db.execute(
-            """
-            SELECT o.*, c.ref AS confirmed, c.seq AS confirmed_seq, c.turn, c.boundary, c.evidence, c.native_id
+    def offers_of(
+        self, agent: str, stream: str, version: int, bound: int, *, confirmed: bool
+    ) -> tuple[list[sqlite3.Row], int]:
+        """The offers of one event to an agent made below `bound` that its harness said it took below it, each with that
+        report, or those it did not, oldest first and as many as a page holds, and how many there are in all."""
+        found = """
             FROM v_exposures_offers AS o
             LEFT JOIN v_exposures_confirmed AS c ON c.offer = o.offer AND c.seq < ?4
             WHERE o.offer IN (
                 SELECT offer FROM v_exposures WHERE stream = ?1 AND version = ?2 AND agent = ?3 AND offer < ?4
-            )
-            ORDER BY o.offer
-            """,
-            (stream, version, agent, bound),
-        ).fetchall()
+            ) AND (c.offer IS NOT NULL) = ?5
+        """
+        args = (stream, version, agent, bound, confirmed)
+        rows = self.db.execute(f"SELECT {_OFFER} {found} ORDER BY o.offer LIMIT {_PAGE}", args).fetchall()
+        return rows, self.db.execute(f"SELECT count(*) AS n {found}", args).fetchone()["n"]
 
     def shown(self, offer: int, stream: str | None = None, version: int | None = None) -> list[sqlite3.Row]:
         """What an offer showed, of one event or of all it named."""
@@ -191,8 +193,8 @@ class Exposures(View):
         """An agent's offers below `bound` and `before`, newest first, as many as a page holds and one more, each with
         its confirmation when that was reported below `bound`."""
         return self.db.execute(
-            """
-            SELECT o.*, c.ref AS confirmed, c.seq AS confirmed_seq, c.turn, c.boundary, c.evidence, c.native_id
+            f"""
+            SELECT {_OFFER}
             FROM v_exposures_offers AS o
             LEFT JOIN v_exposures_confirmed AS c ON c.offer = o.offer AND c.seq < ?2
             WHERE o.agent = ?1 AND o.offer < ?2 AND o.offer < ?3
@@ -217,11 +219,11 @@ class Exposures(View):
         ).fetchone()
         return row["n"]
 
-    def compactions(self, agent: str, after: int, before: int) -> list[sqlite3.Row]:
-        return self.db.execute(
-            "SELECT * FROM v_exposures_compactions WHERE agent = ? AND seq > ? AND seq < ? ORDER BY seq",
-            (agent, after, before),
-        ).fetchall()
+    def compactions(self, agent: str, after: int, before: int) -> tuple[list[sqlite3.Row], int]:
+        """An agent's compactions between two seqs, oldest first and as many as a page holds, and how many in all."""
+        found = "FROM v_exposures_compactions WHERE agent = ? AND seq > ? AND seq < ?"
+        rows = self.db.execute(f"SELECT * {found} ORDER BY seq LIMIT {_PAGE}", (agent, after, before)).fetchall()
+        return rows, self.db.execute(f"SELECT count(*) AS n {found}", (agent, after, before)).fetchone()["n"]
 
     def start(self, agent: str, bound: int) -> sqlite3.Row | None:
         """An agent's latest start or resume below `bound`."""
@@ -386,16 +388,19 @@ class Calls(View):
 
 class Bound(Model):
     """Where an answer stops counting: at the model `call` that chose its event, by that call's ref, on its agent's
-    report stream; at the event's `commit` when no call is joined; or at the `head`. What lies below `seq` counts."""
+    report stream; at the event's `commit` when no call is joined; at the `look` that recorded a git commit, which git
+    made before it, at a time the record does not hold, so what counts may have come after that commit; or at the
+    `head`. What lies below `seq` counts."""
 
-    by: Literal["call", "commit", "head"]
+    by: Literal["call", "commit", "look", "head"]
     seq: int
     call: str | None = None
 
 
 class Anchor(Model):
     """The tool call a command came under: the `id` its client gave it under `key`, which says whose id that is, and
-    how many of its agent's commands share it, more than one only for a script, as a Codex Code Mode script is."""
+    how many of its agent's commands share it. Codex's `callId` names a Code Mode script, whose calls share it, so what
+    such a call returned went to that script, however few ops share it."""
 
     key: str
     id: str
@@ -431,8 +436,9 @@ class Mark(Model):
 
 class Offer(Model):
     """One offer to an agent, which is an observed edge: the offer's `ref` and `seq`, `how` it was made, what it showed,
-    the tool call it came under, and once its harness said it took it below the bound, that `confirmed` report, with
-    each compaction since. `compactions` is None where an answer does not ask."""
+    the tool call it came under, and once its harness said it took it below the bound, that `confirmed` report, with a
+    page of the compactions since as `compactions`, which ends at one that forgot what it handed over, and how many
+    there are, `compacted`, up to that one when the page holds it. Those two are None where an answer does not ask."""
 
     kind: Literal["observed"] = "observed"
     ref: str
@@ -442,6 +448,7 @@ class Offer(Model):
     anchor: Anchor | None = None
     confirmed: Confirmation | None = None
     compactions: tuple[Mark, ...] | None = None
+    compacted: int | None = None
 
 
 class Incident(Model):
@@ -464,8 +471,9 @@ class Coverage(Model):
 
 
 class Seen(Model):
-    """The event reached the agent through us below the bound: `edges` holds each offer of it its harness said it took
-    there, `total` of them. Seen means handed over and taken, never understood."""
+    """The event reached the agent through us below the bound: `edges` holds a page of the offers of it its harness said
+    it took there, `total` of them. Seen means handed over and taken, never understood: a read's result returned to
+    its harness, or under a Codex `callId` to the Code Mode script that made the call."""
 
     answer: Literal["seen"] = "seen"
     edges: tuple[Offer, ...]
@@ -539,7 +547,8 @@ class Made(Model):
 class Declared(Model):
     """A citation, which is its citer's claim: the `ref` as cited, the cited event's `maker` and `gist`, the citer's
     `exposure` to it at the bound, None for a person's or a program's, whose reads are no evidence, and for a range
-    whether a confirmed offer showed those lines."""
+    whether those lines were shown, decided as exposure is: True when a confirmed offer showed them, False only beside
+    `not_seen`, and None otherwise."""
 
     kind: Literal["declared"] = "declared"
     ref: str
@@ -656,12 +665,15 @@ class Contributors(Model):
 
 
 class Facts(NamedTuple):
-    """What exposure is decided from, below one bound: the offers of the event its harness said it took, `edges`, and
-    those it did not, `handed`; each surface as its driver declared it; the gaps content could come through, newest
-    first, as many as a page holds, and how many there are; and how many offers came before payload 3."""
+    """What exposure is decided from, below one bound, each list a page with its count beside it: the offers of the
+    event its harness said it took, `edges`, `confirmed` of them, and those it did not, `handed`, `unconfirmed` of
+    them; each surface as its driver declared it; the gaps content could come through, newest first, `gaps` of them;
+    and how many offers came before payload 3."""
 
     edges: Sequence[Offer]
+    confirmed: int
     handed: Sequence[Offer]
+    unconfirmed: int
     standing: Sequence[Coverage]
     incidents: Sequence[Incident]
     gaps: int
@@ -674,10 +686,10 @@ def decide(
     """The one rule: `Seen` on any offer its harness took below the bound; `NotSeen` only when nothing offered it there,
     every surface is in `proved` and no gap content could come through lies below the bound; `Unknown` otherwise, with
     every reason. No check proves a surface yet, so the queries pass none, and nothing answers `NotSeen`."""
-    if facts.edges:
-        return Seen(edges=tuple(facts.edges[:_PAGE]), total=len(facts.edges), bound=bound, head=head, open=open)
+    if facts.confirmed:
+        return Seen(edges=tuple(facts.edges[:_PAGE]), total=facts.confirmed, bound=bound, head=head, open=open)
     unproved = tuple(coverage for coverage in facts.standing if coverage.surface not in proved)
-    if not (facts.handed or unproved or facts.gaps or facts.older_offers):
+    if not (facts.unconfirmed or unproved or facts.gaps or facts.older_offers):
         return NotSeen(
             proved=tuple(surface for surface in _SURFACES if surface in proved), bound=bound, head=head, open=open
         )
@@ -686,7 +698,7 @@ def decide(
         standing=unproved,
         incidents=tuple(facts.incidents[:_PAGE]),
         older_offers=facts.older_offers,
-        totals={"handed": len(facts.handed), "incidents": facts.gaps},
+        totals={"handed": facts.unconfirmed, "incidents": facts.gaps},
         bound=bound,
         head=head,
         open=open,
@@ -755,10 +767,11 @@ def _join(txn: Txn, event: Event) -> Join:
 
 def _bound(event: Event, join: Join, agent: str | None) -> Bound:
     """Where what an agent was handed stops counting for an event: below the model call that chose it, when the event
-    is the agent's and its call is joined, as the two are reports on one ordered stream, and else below its commit."""
+    is the agent's and its call is joined, as the two are reports on one ordered stream, and else below its commit, or
+    for a git commit below the look that recorded it."""
     if join.call is not None and agent is not None and maker(event) == f"agent:{agent}":
         return Bound(by="call", seq=join.call.seq, call=_ref(join.call))
-    return Bound(by="commit", seq=event.seq)
+    return Bound(by="look" if event.type == "repo.committed" else "commit", seq=event.seq)
 
 
 def _open(txn: Txn, event: Event | None, agent: str | None = None) -> bool:
@@ -782,19 +795,32 @@ def _forgotten(txn: Txn, ref: str | None) -> frozenset[str] | None:
     return frozenset(map(str, listed)) if isinstance(listed, list) else None
 
 
-def _marks(txn: Txn, agent: str, confirmed: Confirmation, bound: Bound) -> tuple[Mark, ...]:
-    """Each compaction since a confirmation, below the bound. Only an input its harness reported delivering under an
-    id can be named forgotten or kept, so a read's, confirmed by its tool item, is unsaid."""
+Forgetting = Callable[[str | None], frozenset[str] | None]
+"""What each compaction named as forgotten, by its record, read once for one answer however many offers ask."""
+
+
+def _marks(
+    txn: Txn, agent: str, confirmed: Confirmation, bound: Bound, forgetting: Forgetting
+) -> tuple[tuple[Mark, ...], int]:
+    """The compactions since a confirmation below the bound, up to the one that forgot what it handed over, as many as
+    a page holds, and how many. Only an input its harness reported delivering under an id can be named forgotten or
+    kept, so a read's, confirmed by its tool item, is unsaid."""
+    rows, total = txn.view(Exposures).compactions(agent, confirmed.seq, bound.seq)
+    by_id = confirmed.evidence != "tool_item" and confirmed.native_id is not None
     marks = []
-    for row in txn.view(Exposures).compactions(agent, confirmed.seq, bound.seq):
-        forgotten = _forgotten(txn, row["forgotten"])
-        by_id = confirmed.evidence != "tool_item" and confirmed.native_id is not None and forgotten is not None
-        mark = "unsaid" if not by_id else "forgot" if confirmed.native_id in forgotten else "kept"
+    for row in rows:
+        forgotten = forgetting(row["forgotten"]) if by_id else None
+        mark = "unsaid" if forgotten is None else "forgot" if confirmed.native_id in forgotten else "kept"
         marks.append(Mark(compaction=row["ref"], mark=mark))
-    return tuple(marks)
+        if mark == "forgot":
+            return tuple(marks), len(marks)
+    return tuple(marks), total
 
 
-def _offer(txn: Txn, row: sqlite3.Row, shown: Sequence[sqlite3.Row], bound: Bound, *, marked: bool) -> Offer:
+def _offer(
+    txn: Txn, row: sqlite3.Row, shown: Sequence[sqlite3.Row], bound: Bound, forgetting: Forgetting | None = None
+) -> Offer:
+    """An offer as an answer shows it, and with `forgetting` the compactions since it was confirmed."""
     anchor = None
     if row["key"] is not None:
         anchor = Anchor(key=row["key"], id=row["anchor"], ops=_commands(txn, row["agent"], row["anchor"]))
@@ -802,7 +828,9 @@ def _offer(txn: Txn, row: sqlite3.Row, shown: Sequence[sqlite3.Row], bound: Boun
     if row["confirmed"] is not None:
         fields = ("turn", "boundary", "evidence", "native_id")
         confirmed = Confirmation(ref=row["confirmed"], seq=row["confirmed_seq"], **{key: row[key] for key in fields})
-    marks = None if not marked else () if confirmed is None else _marks(txn, row["agent"], confirmed, bound)
+    marks, compacted = None, None
+    if forgetting is not None:
+        marks, compacted = ((), 0) if confirmed is None else _marks(txn, row["agent"], confirmed, bound, forgetting)
     return Offer(
         ref=row["ref"],
         seq=row["offer"],
@@ -811,6 +839,7 @@ def _offer(txn: Txn, row: sqlite3.Row, shown: Sequence[sqlite3.Row], bound: Boun
         anchor=anchor,
         confirmed=confirmed,
         compactions=marks,
+        compacted=compacted,
     )
 
 
@@ -831,14 +860,19 @@ def _incident(txn: Txn, row: sqlite3.Row) -> Incident:
 
 def _facts(txn: Txn, agent: str, event: Event, bound: Bound) -> Facts:
     exposures = txn.view(Exposures)
-    edges: list[Offer] = []
-    handed: list[Offer] = []
-    for row in exposures.offers_of(agent, event.stream, event.version, bound.seq):
-        offer = _offer(txn, row, exposures.shown(row["offer"], event.stream, event.version), bound, marked=True)
-        (edges if offer.confirmed is not None else handed).append(offer)
+    forgetting = cache(partial(_forgotten, txn))
+
+    def offers(confirmed: bool) -> tuple[list[Offer], int]:
+        rows, total = exposures.offers_of(agent, event.stream, event.version, bound.seq, confirmed=confirmed)
+        found = [(row, exposures.shown(row["offer"], event.stream, event.version)) for row in rows]
+        return [_offer(txn, row, shown, bound, forgetting) for row, shown in found], total
+
+    edges, confirmed = offers(True)
+    handed, unconfirmed = offers(False)
     rows, gaps = txn.view(Gaps).below(agent, bound.seq, besides=_UNCARRIED)
     incidents = [_incident(txn, row) for row in rows]
-    return Facts(edges, handed, _standing(txn, agent, bound), incidents, gaps, exposures.older(agent, bound.seq))
+    standing, older = _standing(txn, agent, bound), exposures.older(agent, bound.seq)
+    return Facts(edges, confirmed, handed, unconfirmed, standing, incidents, gaps, older)
 
 
 def _exposed(txn: Txn, agent: str, event: Event, bound: Bound, open: bool) -> tuple[Seen | NotSeen | Unknown, Facts]:
@@ -906,8 +940,8 @@ def _declared(txn: Txn, ref: str, citer: str | None, bound: Bound, open: bool) -
     span = (parts_of(ref) or ("", 0, None))[2]
     lines = None
     if span is not None:
-        shown = (item for offer in facts.edges for item in offer.shown if item.form == "body")
-        lines = any(_covers(item.ref, span) for item in shown)
+        held = [item.ref for edge in facts.edges for item in edge.shown if item.form == "body"]
+        lines = True if any(_covers(shown, span) for shown in held) else False if isinstance(answer, NotSeen) else None
     return Declared(ref=ref, maker=maker(cited), gist=cited.gist, exposure=answer, lines_shown=lines)
 
 
@@ -929,7 +963,7 @@ def _history(
     exposures = txn.view(Exposures)
     before = _position(after) or (bound.seq, 0)
     rows: list[tuple[tuple[int, int], Offer | Incident]] = [
-        ((row["offer"], 0), _offer(txn, row, exposures.shown(row["offer"]), bound, marked=False))
+        ((row["offer"], 0), _offer(txn, row, exposures.shown(row["offer"]), bound))
         for row in exposures.history(agent, bound.seq, before[0])
     ]
     gaps, total = txn.view(Gaps).below(agent, bound.seq, before=before)
@@ -1162,14 +1196,16 @@ def _contributor(txn: Txn, made_by: str | None, found: dict[str, Any]) -> Contri
 
 def _handed_only(txn: Txn, makers: dict[str | None, dict[str, Any]]) -> tuple[HandedOnly, ...]:
     """Each maker whose events were offered to an agent the walk reached, below the last of its reached events, and
-    that the walk did not reach, with the first such offer."""
+    that the walk did not reach, with the first such offer. A fold sees one event, so no view holds an offered event's
+    maker: each is read by its ref, once for one answer however many agents it was offered to."""
     stamps, exposures = txn.view(Stamps), txn.view(Exposures)
+    made = cache(lambda stream, version: maker(_held(stamps.at(stream, version))))
     handed: dict[str | None, tuple[set[str], int]] = {}
     for made_by, found in makers.items():
         if (agent := _agent_of(made_by)) is None:
             continue
         for row in exposures.events_offered(agent, found["last"] + 1):
-            who = maker(_held(stamps.at(row["stream"], row["version"])))
+            who = made(row["stream"], row["version"])
             if who not in makers:
                 to, first = handed.get(who, (set(), row["offer"]))
                 handed[who] = (to | {f"agent:{agent}"}, min(first, row["offer"]))
