@@ -47,6 +47,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0039](0039-estimators-write-beside-the-journal-at-m2.md) | Estimators write rewards and credit beside the journal from M2 | `annotations.sqlite` written with no runtime, by a named producer at a version, about the trace up to `head_seq`, a value only when scored, through `Session.annotate` and `platoon-harness annotate` alone |
 | [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) | Pi names what landed and which call made a tool call | An input reported under the entry pi wrote it down as, asked of `get_entries` once its message ends, with what pi says after it held in order, and our tool calls going through the shim under pi's own `toolCallId` |
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | An `Informed-By` value that is an event's ref joins the commit's `based_on` once checked as any citation is, beside the commits it names; anything else stays as written, and whether the maker could read what it cites is its exposure's to say, at the look |
+| [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | A ninth slot, `citing`, one sentence filled for an agent holding a write of content, in the default template, and the one place an agent is asked, at 78 bytes a request |
 
 ## Adding or changing one
 

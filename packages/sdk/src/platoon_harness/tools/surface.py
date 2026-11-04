@@ -19,11 +19,11 @@ _NAMESPACE_SHAPE = re.compile(r"[A-Za-z0-9_-]+")
 _SENTENCE = re.compile(r"(?<=\.)\s+")
 OP_NAMED = re.compile(r"`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)`")
 """A name in backticks, as words name an op or an argument, with the name as its one group."""
-_SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "ending")
+_SLOTS = ("name", "tools", "help", "peers", "roles", "channels", "waiting", "citing", "ending")
 """What a preamble template's slots hold for one agent, on its harness's surface. `name`, `tools`, `peers`, `roles` and
 `channels` are values: its name, its tools by their exact names, who it can message, which roles it can start and its
-channels. `help`, `waiting` and `ending` are sentences of ours: how to ask `ph` for help, how to wait and how to end.
-Each is empty where it would say nothing."""
+channels. `help`, `waiting`, `citing` and `ending` are sentences of ours: how to ask `ph` for help, how to wait, to cite
+what a write rests on and how to end. Each is empty where it would say nothing."""
 PREAMBLE = """\
 You are @{name}. You coordinate with this session through these tools, by exactly these names: {tools}.
 {help}
@@ -31,6 +31,7 @@ You can message: {peers}.
 You can start agents in these roles: {roles}.
 Channels: {channels}.
 {waiting}
+{citing}
 {ending}"""
 """The template every agent's preamble fills unless its team or its role gives another. A slot is a word in braces, and
 `{{` and `}}` write a brace. A line whose slots all come out empty is left out, words and all, and a line with no slot
@@ -40,6 +41,8 @@ _PARKING = (
     "To wait for something before you go on, call `wait` naming it and end your turn: the runtime starts the next when "
     "it holds."
 )
+_CITING = "When what you write rests on something you read, put its `ref` in `based_on`."
+"""The one place agents are asked to cite: tool descriptions say what `based_on` is and never ask."""
 _FINISHING = (
     "When your goal is done, make `agent.finish` your last call, with your report: a turn that only ends leaves you "
     "idle, and whoever waits on you still waiting."
@@ -273,7 +276,8 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, tem
     schemas never enumerate targets, filled into `template`. A harness has it once, at launch, so it is a snapshot:
     `peers` is what stays current."""
     slots(template)  # A slot nobody fills is refused here as it is when a team loads.
-    held = sorted(op["name"] for op in _held(kernel, agent))
+    tools = _held(kernel, agent)
+    held = sorted(op["name"] for op in tools)
     values = dict.fromkeys(_SLOTS, "")
     values["name"] = agent.name
     values["tools"] = ", ".join(f"`{surface(op)}`" for op in held)
@@ -288,6 +292,8 @@ def preamble(kernel: Kernel, agent: Principal, surface: Surface = tool_name, tem
         )
     teach = _teacher(surface, kernel.ops, held)
     values["waiting"] = teach(_PARKING)
+    if any("based_on" in op["schema"].get("properties", {}) for op in tools):
+        values["citing"] = _CITING
     values["ending"] = teach(_ending(kernel, agent))
     lines = (_line(line, values, surface, _tools(kernel)) for line in template.split("\n"))
     return "\n".join(line for line in lines if line is not None)

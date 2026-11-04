@@ -2,7 +2,8 @@
 
 **Status:** Accepted, 2026-11-03. Amended the same day: `peers`, `roles` and `channels` are values, as the owner was told. Amended
 again: an empty `peers` or `channels` is an empty value, where the code before said `nobody yet` and `none yet`, so that the slot
-rule is one rule.
+rule is one rule. Extended by [0042](0042-agents-are-asked-to-cite-by-their-template.md): a ninth slot, `citing`, which the default
+fills.
 
 ## Context
 

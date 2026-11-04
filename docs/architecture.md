@@ -1196,9 +1196,11 @@ instructions, skills, slash commands, hooks and compaction interact with coordin
 `PREAMBLE`, which renders what the preamble said before it was a template byte for byte, but for a line that would name no peer or no
 channel, which goes as any line whose slots all come out empty does, as a test holds for every preset's roles on each surface. A slot
 is a word in braces, and `{{` and `}}` write a brace. Per agent and per surface the runtime fills five values: `name`, `tools` by
-their exact names, `peers` it can message, as `@a, @b`, `roles` it can start and `channels`. It fills three sentences of ours, `help`
+their exact names, `peers` it can message, as `@a, @b`, `roles` it can start and `channels`. It fills four sentences of ours, `help`
 on how to ask `ph` for a tool's arguments, on that surface alone, `waiting` and `ending`, taught as above, so one that names a tool
-the agent lacks is left out. Each is empty where it would say nothing, `peers` with nobody in it among them, and the default template
+the agent lacks is left out, and `citing`, which asks an agent holding a write of content, an op that takes `based_on`, to put there
+the `ref` of what its write rests on. That slot is the one place an agent is asked to cite: a tool's description says what
+`based_on` is and never asks, so a template without the slot asks nothing, and a citation is taken all the same. Each is empty where it would say nothing, `peers` with nobody in it among them, and the default template
 carries our words around the values, as `You can message: {peers}.`, so a template words those lines as it likes. A line whose slots
 all come out empty is left out, words and all. A line with no slot is never dropped, and nor is any word of `Role.instructions`, and a
 slot nobody fills is refused when the team loads. An op named in backticks, in the template's own words or in `Role.instructions`,

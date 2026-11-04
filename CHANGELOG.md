@@ -4,6 +4,10 @@
 
 ### Added
 
+- Agents are asked to cite. The preamble template has a ninth slot, `citing`, which asks an agent holding a write of content to
+  put the `ref` of what its write rests on in `based_on`, and the default template fills it, so asking is on by default; a tool's
+  description says what `based_on` is and never asks, so a template without the slot asks nothing. It costs 78 bytes a request, 20
+  tokens by Qwen3's tokenizer. `tests/live/test_citing.py` runs it on real models. See ADR 0042.
 - A commit's `Informed-By` trailer takes an event's ref, such as the board entry the commit implements: once checked as any
   citation is, it joins the commit's `based_on` beside the commits its hex values name, so lineage shows it with the commit maker's
   exposure and contributors walk from code to what informed it. A value that is neither stays as written and unresolved, never

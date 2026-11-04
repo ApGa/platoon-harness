@@ -23,6 +23,7 @@ from platoon_harness.tools import (
     tool_name,
 )
 from platoon_harness.tools.surface import (
+    _CITING,
     _PARKING,
     _ending,
     _held,
@@ -424,8 +425,10 @@ def test_a_refusal_keeps_a_next_step_a_model_can_take():
 
 def before_templates(kernel: Kernel, agent: Principal, surface: Surface) -> str:
     """The preamble as the code said it before it was a template, kept to hold the default template to it, but for a
-    line that would name no peer or no channel, which goes as any line whose slots all come out empty does."""
-    held = sorted(op["name"] for op in _held(kernel, agent))
+    line that would name no peer or no channel, which goes as any line whose slots all come out empty does, and the line
+    that asks an agent holding a write of content to cite, which the default says since it had a slot for it."""
+    tools = _held(kernel, agent)
+    held = sorted(op["name"] for op in tools)
     names = ", ".join(f"`{surface(op)}`" for op in held)
     lines = [
         f"You are @{agent.name}. You coordinate with this session through these tools, by exactly these names: {names}."
@@ -445,7 +448,12 @@ def before_templates(kernel: Kernel, agent: Principal, surface: Surface) -> str:
         if kept:
             lines.append(f"Channels: {kept}.")
     teach = _teacher(surface, kernel.ops, held)
-    return "\n".join(filter(None, (*lines, teach(_PARKING), teach(_ending(kernel, agent)))))
+    citing = _CITING if any(_cites(op) for op in tools) else ""
+    return "\n".join(filter(None, (*lines, teach(_PARKING), citing, teach(_ending(kernel, agent)))))
+
+
+def _cites(op: dict) -> bool:
+    return "based_on" in op["schema"].get("properties", {})
 
 
 TEAMS = {**PRESET_TEAMS, "built": BUILT}
@@ -523,7 +531,41 @@ def test_a_slot_nobody_fills_is_refused_with_the_nearest():
 
 
 def test_the_default_template_fills_every_slot():
-    assert set(slots(PREAMBLE)) == {"name", "tools", "help", "peers", "roles", "channels", "waiting", "ending"}
+    every = {"name", "tools", "help", "peers", "roles", "channels", "waiting", "citing", "ending"}
+    assert set(slots(PREAMBLE)) == every
+
+
+@pytest.mark.parametrize("name", TEAMS)
+async def test_the_citing_sentence_is_said_to_every_agent_holding_a_citing_tool(name):
+    """Asking to cite is on by default, for every preset's roles on each surface, and only an agent that holds a write
+    of content, an op taking `based_on`, is asked."""
+    team = TEAMS[name].resolved()
+    capabilities = dict.fromkeys(team.roles, Capabilities(persistent=True))
+    async with _rehearsed(team, capabilities) as kernel:
+        agents = {role: agent async for role, agent in _one_of_each(kernel, team)}
+        for agent in agents.values():
+            cites = any(_cites(op) for op in _held(kernel, agent))
+            for surface in SURFACES.values():
+                assert (_CITING in preamble(kernel, agent, surface)) is cites
+
+
+async def test_with_no_citing_slot_no_surface_text_asks_to_cite(kernel, server, lead):
+    """A template without the slot turns asking off: no tool's description or argument asks, on any surface, and a
+    citation is still taken."""
+    template = PREAMBLE.replace("{citing}\n", "")
+
+    for surface in SURFACES.values():
+        told = preamble(kernel, lead[0], surface, template)
+        texts = [told, *(text for tool in list_tools(kernel, lead[0], surface) for text in _described(tool))]
+        assert _CITING not in told
+        assert not [text for text in texts if re.search(r"(?i)\bcite\b|`ref` in", text)]
+    assert "based_on" in {name for tool in list_tools(kernel, lead[0]) for name in tool["inputSchema"]["properties"]}
+
+
+def _described(tool: dict) -> list[str]:
+    """What a tool says of itself and of each of its arguments."""
+    fields = tool["inputSchema"]["properties"].values()
+    return [tool["description"], *(field["description"] for field in fields if "description" in field)]
 
 
 async def test_a_role_s_words_come_last_naming_tools_as_the_surface_does(kernel, server, lead):
