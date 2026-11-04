@@ -470,6 +470,14 @@ Git, as the runtime's own git meets it [V]:
   in the session's checkout takes refs alone.
 - `worktree remove` deletes ignored files without asking, and refuses one with submodules.
 - `worktree add` with LFS files and no LFS filter checks out their pointers, silently.
+- Commit, amend, a merge `git merge` makes, cherry-pick, revert and each pick of a rebase write a HEAD reflog entry whose time is the new
+  commit's committer time, under a set `GIT_COMMITTER_DATE` too; a fast-forward, a reset and a rebase's start onto existing commits
+  write one at the time they ran. Reflog times have one-second resolution. A HEAD reflog the runtime made goes on taking an agent's
+  entries under `core.logAllRefUpdates=false`.
+- `rev-list --ignore-missing` passes over a missing negative only when it comes before `--stdin`.
+- `rev-parse` resolves `HEAD`, `main` and `main@{1.year.ago}` as readily as a hex prefix, and a ref named in hex digits before an object
+  with that prefix, so a look resolves an `Informed-By` value with `rev-parse --disambiguate`, which names objects alone.
+- `log --numstat -z` puts a renamed file's two paths in entries of their own after its counts, and says `-` for a binary file's.
 - `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
 - `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36, by git's release notes.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as

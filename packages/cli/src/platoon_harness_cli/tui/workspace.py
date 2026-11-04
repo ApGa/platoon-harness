@@ -26,6 +26,7 @@ from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
+from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .transcript import PAGE, Focus, Transcript
@@ -121,8 +122,12 @@ def _spend(unit: str, amount: float | None, label: str, limit: float | None) -> 
     return f"{unit} {said}" + ("" if limit is None else f"/{_quantity(unit, limit)}")
 
 
+def _some(count: int, what: str) -> str:
+    return f"{count} {what}{'' if count == 1 else 's'}"
+
+
 def _unmeasured(count: int) -> str:
-    return f"{count} turn{'' if count == 1 else 's'} unmeasured"
+    return f"{_some(count, 'turn')} unmeasured"
 
 
 class Workspace(Screen[None]):
@@ -144,6 +149,7 @@ class Workspace(Screen[None]):
         self._refused: dict[tuple[str, str], tuple[str, str]] = {}
         self._shown: dict[str, Content] = {}
         self._queued: dict[str, Any] | None = None
+        self._inspected: dict[str, Any] | None = None
         self._unmarked = False
 
     def compose(self) -> ComposeResult:
@@ -235,6 +241,7 @@ class Workspace(Screen[None]):
         elif focus is not None and (added or transcript.following):
             self._mark(transcript)
         await self._read_queue(live)
+        await self._inspect(live)
         self._redraw()
 
     def _first_focus(self, live: Live) -> Focus:
@@ -311,6 +318,14 @@ class Workspace(Screen[None]):
             except Refused:
                 self._queued = None
 
+    async def _inspect(self, live: Live) -> None:
+        """What `agent.status` says of the agent in view, which the inspector shows of its workspace."""
+        agent = self.focus_on.agent if self.focus_on else None
+        try:
+            self._inspected = None if agent is None else await live.session.status(agent)
+        except Refused:
+            self._inspected = None
+
     def _row(self, agent: str | None) -> dict[str, Any] | None:
         if self.live is None or agent is None:
             return None
@@ -369,12 +384,16 @@ class Workspace(Screen[None]):
         return Content.assemble(*parts, self._changed(live), "  ", *self._spent(live))
 
     def _changed(self, live: Live) -> Content:
-        """What changed, as the turn-end probe says it. Nothing measures it before workspaces land, and that is said."""
+        """What changed, as the looks found it: not observed in a session whose cwd is in no git repository, and not
+        measured until the first look."""
+        if live.status.get("repo") is None:
+            return Content.styled("changes not observed", "dim")
         if not live.changes:
             return Content.styled("changes not measured", "dim")
-        added = sum(row["added"] or 0 for row in live.changes.values())
-        removed = sum(row["removed"] or 0 for row in live.changes.values())
-        return Content(f"changed {len(live.changes)} files +{added} -{removed}")
+        rows = live.changes.values()
+        commits = sum(row["kind"] == "commit" and not row["dropped"] for row in rows)
+        paths = sum(row["total"] or 0 for row in rows if row["kind"] == "workspace")
+        return Content(f"{_some(commits, 'commit')}, {_some(paths, 'path')} uncommitted")
 
     def _spent(self, live: Live) -> list[Any]:
         """Each shared limit and what is spent against it, any metered amount with no limit, and once how many turns
@@ -528,6 +547,7 @@ class Workspace(Screen[None]):
             lines.append(SafeText(f"why {why_said(row['why'])}", "yellow"))
         if row["held_by"]:
             lines.append(SafeText(f"held by @{row['held_by']}"))
+        lines += self._workspace(live, row)
         for level, said in (row["levels"] or {}).items():
             reasons = "; ".join(said.get("reasons", ()))
             lines.append(SafeText(f"{level} {said.get('state')}" + (f": {reasons}" if reasons else "")))
@@ -543,6 +563,24 @@ class Workspace(Screen[None]):
             if agent == row["agent"]
         ]
         return Content("\n").join(lines)
+
+    def _workspace(self, live: Live, row: dict[str, Any]) -> list[Content]:
+        """Where the agent in view works: the mode, branch and folder of its workspace, the commit it started from and
+        how well what runs there is tied to its credential, and why its stop kept it, if it did."""
+        workspace = row["workspace"]
+        if workspace is None:
+            return []
+        status = self._inspected if self._inspected and self._inspected["agent"] == row["agent"] else {}
+        made = status.get("workspace") or {}
+        assurance = f", {made['assurance']}" if made.get("assurance") else ""
+        lines: list[Content] = [SafeText(f"workspace {workspace['mode']}{assurance}")]
+        lines += [SafeText(f"  branch {workspace['branch']}")] if workspace["branch"] else []
+        lines += [SafeText(f"  from {made['base'][:12]}")] if made.get("base") else []
+        lines.append(SafeText(f"  {workspace['path']}", "dim"))
+        left = live.ending.workspaces if live.ending else ()
+        if kept := next((found for found in left if found["agent"] == row["agent"]), None):
+            lines.append(SafeText(f"kept: {'; '.join(kept['why'])}", "yellow"))
+        return lines
 
     def _dock(self, live: Live) -> list[Row]:
         """A row per place you must act, and on the one you are at, the keys that take its actions from where the focus
@@ -568,10 +606,19 @@ class Workspace(Screen[None]):
                 (f"{place['kind']} ", "bold"),
                 SafeText(f"@{place['agent']} " if place["agent"] else ""),
                 *hints,
-                SafeText(" ".join(place["gist"].split())),
+                SafeText(
+                    " ".join(place["gist"].split()) + (self._resolve(place) if place["kind"] == "conflict" else "")
+                ),
             )
             rows.append(Row(line, place["id"]))
         return rows
+
+    def _resolve(self, conflict: dict[str, Any]) -> str:
+        """Where a conflict is resolved, since the runtime never resolves one: in the workspace it is in."""
+        row = self._row(conflict["agent"])
+        if row is None or row["workspace"] is None:
+            return ": resolve it in your checkout"
+        return f": resolve it in {row['workspace']['path']}, or tell @{conflict['agent']}"
 
     def _unsendable(self, live: Live) -> str | None:
         """Why the composer cannot send now, or None when it can."""
@@ -890,6 +937,22 @@ class Workspace(Screen[None]):
             note(self, str(refused), severity="error")
             return
         await resumed.leave()
+
+    def action_review(self) -> None:
+        """List what changed. Reading the list to its end moves your mark on the repository's stream."""
+        live = self.live
+        if live is None:
+            return
+        if (repo := live.status.get("repo")) is None:
+            note(self, "Nothing is observed: the session's cwd is in no git repository.", severity="warning")
+            return
+        stream = f"repo/{repo}"
+
+        def read(seq: int) -> None:
+            self.marks[stream] = seq
+            self.run_worker(self._mark_one(live.session, stream, seq), group="marks")
+
+        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read))
 
     def action_planned(self, action: str) -> None:
         key = next(key for key in KEYMAP if key.action == action and key.planned)

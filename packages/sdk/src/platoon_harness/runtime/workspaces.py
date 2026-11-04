@@ -32,17 +32,19 @@ NOT_YET = MappingProxyType(
 
 _OLDEST_GIT = (2, 36)
 _CODEX_FREE = "danger-full-access"
-_UNDER_WAY = MappingProxyType(
+UNDER_WAY = MappingProxyType(
     {
-        "MERGE_HEAD": "a merge",
-        "rebase-merge": "a rebase",
-        "rebase-apply": "a rebase",
-        "CHERRY_PICK_HEAD": "a cherry-pick",
-        "REVERT_HEAD": "a revert",
-        "BISECT_LOG": "a bisect",
-        "sequencer": "a sequence of picks",
+        "MERGE_HEAD": "merge",
+        "rebase-merge": "rebase",
+        "rebase-apply": "rebase",
+        "CHERRY_PICK_HEAD": "cherry-pick",
+        "REVERT_HEAD": "revert",
+        "BISECT_LOG": "bisect",
+        "sequencer": "sequence",
     }
 )
+"""What git keeps under a work tree's git directory while an operation is under way, and which operation it is. A
+`sequence` is a cherry-pick or revert of several commits, between its picks."""
 _FIELDS = MappingProxyType({"1": 8, "2": 9, "u": 10})  # How many fields come before a path in each kind of entry.
 _NAMED = 8
 
@@ -50,12 +52,15 @@ __all__ = [
     "BRANCHES",
     "BUNDLE",
     "NOT_YET",
+    "UNDER_WAY",
     "branch_of",
     "end_worktree",
     "make_worktree",
+    "operations",
     "present",
     "problems",
     "read_repo",
+    "status_of",
     "write_bundle",
 ]
 
@@ -305,7 +310,8 @@ def end_worktree(workspace: Workspace, folder: Path, checkout: Path, left: Seque
         why = ["its folder has gone, and git still holds its reflog: `git worktree prune` forgets it once unlocked"]
     else:
         try:
-            why = [*(["a process of its may still run"] if left else []), *_losses(root, checkout, workspace.base)]
+            alone = _only_in_worktree(root, checkout, workspace.base)
+            why = [*(["a process of its may still run"] if left else []), *_losses(root), *alone]
         except GitError as error:
             why = [f"could not be read: {error}"]
     if not why:
@@ -320,29 +326,27 @@ def end_worktree(workspace: Workspace, folder: Path, checkout: Path, left: Seque
     return {"removed": False, "kept": kept.model_dump(mode="json")}
 
 
-def _losses(root: Path, checkout: Path, base: str | None) -> list[str]:
-    """What removing a worktree would lose, each in words."""
+def _losses(root: Path) -> list[str]:
+    """What removing a workspace would lose that is not committed, each in words."""
     found = []
-    uncommitted, ignored, entries = [], [], iter(_lines(git("status", "--porcelain=v2", "--ignored", "-z", cwd=root)))
-    for entry in entries:
-        kind = entry[0]
-        path = entry.split(" ", _FIELDS[kind])[-1] if kind in _FIELDS else entry[2:]
-        (ignored if kind == "!" else uncommitted).append(path)
-        if kind == "2":
-            next(entries)  # A rename's other path.
+    entries = status_of(git("status", "--porcelain=v2", "--ignored", "-z", cwd=root))
+    uncommitted = [path for kind, _, path in entries if kind != "!"]
+    ignored = [path for kind, _, path in entries if kind == "!"]
     if uncommitted:
         found.append(f"{len(uncommitted)} uncommitted paths")
     if ignored:
         found.append(f"ignored: {_listed(ignored)}")
-    names = list(_UNDER_WAY)
-    asked = (part for name in names for part in ("--git-path", name))
-    paths = git("rev-parse", "--path-format=absolute", *asked, cwd=root).splitlines()
-    found += sorted(
-        {f"{_UNDER_WAY[name]} under way" for name, path in zip(names, paths, strict=True) if Path(path).exists()}
-    )
+    kinds = {UNDER_WAY[name] for name in operations(root)}
+    found += sorted(f"a {'sequence of picks' if kind == 'sequence' else kind} under way" for kind in kinds)
     hidden = [entry for entry in _lines(git("ls-files", "-v", "-z", cwd=root)) if entry[0].islower() or entry[0] == "S"]
     if hidden:
         found.append(f"{len(hidden)} index entries hidden from status")
+    return found
+
+
+def _only_in_worktree(root: Path, checkout: Path, base: str | None) -> list[str]:
+    """The commits a worktree's own HEAD, reflog and refs hold that are neither its base nor reachable from a ref of
+    your repository, in words, if any."""
     held = {
         *git("log", "-g", "--format=%H", "HEAD", cwd=root).split(),
         *git("for-each-ref", "--format=%(objectname)", "refs/worktree", "refs/bisect", cwd=root).split(),
@@ -350,8 +354,29 @@ def _losses(root: Path, checkout: Path, base: str | None) -> list[str]:
     }
     given = "".join(f"{sha}\n" for sha in held) + (f"^{base}\n" if base else "")
     alone = git("rev-list", "--ignore-missing", "--stdin", "--not", "--glob=refs/*", cwd=checkout, input=given).split()
-    if alone:
-        found.append(f"{len(alone)} commits only it holds, in its HEAD, reflog or own refs")
+    return [f"{len(alone)} commits only it holds, in its HEAD, reflog or own refs"] if alone else []
+
+
+def operations(root: Path) -> dict[str, Path]:
+    """What git keeps of each operation under way in a work tree, by its name in `UNDER_WAY`, in that table's order."""
+    names = list(UNDER_WAY)
+    asked = (part for name in names for part in ("--git-path", name))
+    paths = git("rev-parse", "--path-format=absolute", *asked, cwd=root).splitlines()
+    return {name: Path(path) for name, path in zip(names, paths, strict=True) if Path(path).exists()}
+
+
+def status_of(text: str) -> list[tuple[str, str, str]]:
+    """Each path `git status --porcelain=v2 -z` names, as the kind of its entry, its index and work tree letters where
+    it has them, and the path: a rename's other path and the headers are passed over."""
+    found, entries = [], iter(_lines(text))
+    for entry in entries:
+        kind = entry[0]
+        if kind in _FIELDS:
+            found.append((kind, entry[2:4], entry.split(" ", _FIELDS[kind])[-1]))
+        elif kind != "#":
+            found.append((kind, "", entry[2:]))
+        if kind == "2":
+            next(entries)  # A rename's other path.
     return found
 
 

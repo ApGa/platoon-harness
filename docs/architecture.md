@@ -325,7 +325,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
 | `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
-| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop removes its agent's workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
+| `probe` | None | Repeat: a look records only what the journal does not hold, so a repeat records nothing twice |
+| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop looks once more at what its agent left, then removes its workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
 | `erase` | None | Repeat: erasing twice is harmless |
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
@@ -539,7 +540,7 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -720,6 +721,9 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   `below` it does all this for the agent and every agent below it, as one act that keeps them all, and is refused only when it
   would stop no turn of any. It stops turns, not waits: an agent parked on a wait is left to it, and that wait may hold on a report
   the act brought about, which wakes its waiter as any does.
+- **A look at every turn's end.** In a session that observes a repository, each turn's end and each resume request a `probe` owned by
+  the agent, so a look at what it left runs before anything handed over after that point, and keeps the session from settling until it
+  has. An agent that ends is looked at by its stop instead. A resume's look is the one that sees a turn a crash cut off (§13).
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
@@ -971,8 +975,8 @@ effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `d
 `item{kind: message|thought|tool|patch, phase: started|completed, native_id, call_id, gist, body, approval, outcome}`,
 `input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist}`, `model.call{call_id, model, purpose}`,
 `usage{tokens, usd, label, scope: call|turn|tree, call_id}`, `compacted{forgotten, summary}`,
-`child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw, cut}`, `exited{reason}`, and
-`changes{path, added, removed, tests}` from the runtime's own probe. Unknown frames become `native` plus a gap, never a log line. A
+`child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw, cut}` and `exited{reason}`. What changed in a
+workspace is the runtime's own look, so no driver reports it (§13). Unknown frames become `native` plus a gap, never a log line. A
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
 and `summary` go the same way, since either can pass what an event holds. `forgotten` holds native ids, and with `None` the runtime
 records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
@@ -1174,7 +1178,10 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 | **Judged attribution** | Annotation: judge, version, evidence refs, value | A `judge` principal | A versioned opinion |
 | **Validated intervention** | Annotation: design, comparison, measured result | A `program` principal | One controlled comparison |
 
-Git ancestry, tests and merges are events on `repo/<name>`, never merged with these. **Three axes never merge:** evidence type
+Git ancestry, declared `informed_by`, observed reads and credit are four relations, and none is derived from another: a commit's
+`parents` are ancestry, its `Informed-By` trailers are its one declaration, which `based_on` cites, an agent's read is exposure, and
+credit is an annotation. Commits, rewrites and each workspace's state are events on `repo/<name>`, which a look records with no agent
+in the envelope, since a look is the runtime's observation and claims no turn or context (§13). **Three axes never merge:** evidence type
 says why an edge is believed; **attribution** (`exact`, `declared`, `inferred`, `forked`) says how well a model call is tied to
 an agent, tracking a Platoon draft in our own versioned enum; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
@@ -1185,7 +1192,7 @@ does. A tool op can commit before the model call that caused it is reported. `ca
 
 **Coverage.** Standing gaps come from `coverage` at `agent.started`: any harness with a shell is blind to `shell_reads` for life.
 Incident gaps are events of a closed set: `stream_lost`, `compaction_opaque`, `exposure_unconfirmed`, `native_child_unattributed`,
-`usage_lower_bound`, `unknown_update`, `hidden_call`, `crash_window`, `takeover`.
+`usage_lower_bound`, `unknown_update`, `hidden_call`, `crash_window`, `takeover`, `workspace_unobserved`.
 
 ```python
 await session.exposure(agent, ref, before=event)   # Seen(edge) | NotSeen(coverage) | Unknown(gaps), never a boolean
@@ -1236,7 +1243,8 @@ A stop aborts every connection, so no client can hold up shutdown either.
 
 `settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the
 state, each agent, usage with its labels, every gap, each workspace an agent's end did not take, with where it is, what it takes, why
-and the commands that let it go, and a reason, which `session.ending` works out in the kernel. Timing out leaves
+and the commands that let it go, the agents whose last look never finished, so what they last changed was not observed, and a reason,
+which `session.ending` works out in the kernel. Timing out leaves
 the session as it is. What only a person can move, an approval left to `ask` or a session that has stalled, ends it with `needs_human`
 and leaves the session as it is, unless another client holding a control credential is attached. It waits for that client to act or
 to go, and looks once a second, because a client can leave without moving the journal. So a session at rest cannot hang `settled()`
@@ -1273,9 +1281,9 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 
 | View | Row | Answers |
 |---|---|---|
-| `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, usage` | Who is working, on what, what is blocked. A row names everyone as `agent` does, so `parent` finds its row |
-| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops` |
-| `changes` | `agent, path or commit, added, removed, tests, since_mark` | What changed. A runtime probe at each `turn.ended` feeds it, so opaque harnesses are covered |
+| `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
+| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict` |
+| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, dropped`, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
 
 **What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry
 with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
@@ -1288,7 +1296,8 @@ but for `web`'s projection, `swarmchat.sqlite`, which is folded from the journal
 
 `activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
 turn did not stop on its own, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
-`Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `group` is what a person must do about an agent, derived in the
+`Lost(reason)`, so "barrier 2 of 3, missing w7" needs no guessing. `workspace` is `{mode, path, branch}` of where an agent works, and
+`agent.status` adds its base and assurance, and why its stop kept it. `group` is what a person must do about an agent, derived in the
 view so every client says the same, and no state: `needs_you` while an attention row other than a mention names it, `done` or
 `failed` once it has ended, `working` in a turn, on its way to one or held, `blocked` while `why` names what it waits on, and `idle`
 otherwise. A mention is the person's to read, which their marks say, so it names no group. `actions[]` are
@@ -1355,13 +1364,36 @@ another. The core gives the first two, on git and the filesystem alone, and refu
   refs hold its base or reachable from a ref of your repository. A kept one stays locked and is named with its host, path, size and
   reason on the agent's record and in the Ending. No branch is ever removed, and closing a session ends no agent, so it keeps the
   workspaces of agents that never ended.
+- **The look.** Each turn's end and each resume request a `probe` of that agent's (§7), and its stop looks once more before it ends the
+  workspace. Looks run one at a time and change no ref, index or file. Each takes the shared workspace's commits and then the agent's
+  own workspace, reads HEAD once and uses that commit throughout, and records a status that names another HEAD as the gap
+  `workspace_unobserved`, never a mixed state, as it does a look that fails. A session whose cwd is in no git repository observes no
+  change and says so: `session.status` names the repository as `repo`, None then.
+- **What a look records,** on `repo/<name>`, with no agent in the envelope, so it claims no turn or context, its `cause` the event that
+  prompted it, and its data naming the workspace, `@ada` or `shared`: `repo.committed` for each commit its workspace's HEAD reaches, and
+  each commit those cite in an `Informed-By` trailer, that the session did not start with, the workspace did not start from and the
+  journal does not hold, parents first and each after what it cites; `repo.rewritten` when a branch no longer reaches commits the
+  journal holds, naming only those; and `workspace.changed` whenever a workspace's head, branch or uncommitted state differs from its
+  last look, with any merge, rebase, cherry-pick, revert or bisect under way, its paths, conflicted first, cut to fit with the true
+  `total`, and the whole list as a body. A line count nobody measured, of an untracked or binary file, is None. Your checkout's
+  uncommitted state is recorded only when a role works in it.
+- **Whose a commit is.** A commit is the agent's whose workspace's HEAD reflog records making it, an entry moving HEAD onto it at its
+  own committer time, and nobody's when that workspace is the shared one, when none records it, or when two do. Git writes that entry
+  when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
+  It reads records the agent's own git writes, so it is evidence at the workspace's assurance, never proof. See
+  [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
+- **`Informed-By`** is the one way to declare a commit's semantic parents. A value of 4 to 40 hex digits naming one commit in the
+  commit's own repository is resolved to its full SHA once, at the commit's first record; anything else, a ref among them, is kept as
+  written and unresolved. `based_on` cites the recorded commits a commit names.
+- **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
+  a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
+  its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. For your checkout it is open
+  while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`.
 - **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
   HEAD, replacing the last and holding what it held, so a commit an agent rewrote outlives git's pruning. Nothing is written into your
   repository for it.
 
-Git operations by agents are observed at turn end; commits, tests, merges and conflicts are events on `repo/<name>`. Git ancestry,
-declared `informed_by`, observed reads and credit stay different relations. Uncommitted work is never discarded, and conflicts are
-surfaced, never auto-resolved. Gitea and GitLab are extensions.
+Uncommitted work is never discarded, and no branch an agent has is ever moved. Gitea and GitLab are extensions.
 
 ## 14. Training
 

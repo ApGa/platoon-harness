@@ -28,8 +28,9 @@ VIEWS = {
     "boards": (1, "0d20dc5d4414"),
     "tasks": (1, "0f9ee7057d2b"),
     "approvals": (1, "62d28b8408f1"),
-    "attention": (2, "5facc571cc2b"),
-    "changes": (1, "0bd106b56a2b"),
+    "looks": (1, "a69ac95512f7"),
+    "attention": (3, "a02f9e6d3aa6"),
+    "changes": (2, "d0bd725d3230"),
     "gaps": (1, "0851cd5dd6fd"),
 }
 

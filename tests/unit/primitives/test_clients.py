@@ -429,30 +429,6 @@ async def test_watch_says_when_a_key_went_away(kernel, ada):
     assert second["rows"] == [] and second["removed"] == ["approval/a1"]
 
 
-async def test_changes_come_from_the_runtime_probe_with_absence_kept_honest(kernel):
-    await spawn(kernel, "bob")
-    await report(kernel, "bob", "changes", path="src/app.py", added=3, removed=1, tests="passed")
-    await report(kernel, "bob", "changes", path="opaque.bin")
-
-    rows = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "changes"}))["rows"]
-
-    assert [(row["agent"], row["path"], row["added"]) for row in rows] == [
-        ("bob", "src/app.py", 3),
-        ("bob", "opaque.bin", None),
-    ]
-
-
-async def test_changes_since_a_mark(kernel):
-    await spawn(kernel, "bob")
-    await report(kernel, "bob", "changes", path="a.py", added=1, removed=0)
-    mark = kernel.head
-    await report(kernel, "bob", "changes", path="b.py", added=1, removed=0)
-
-    rows = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "changes", "after": mark}))["rows"]
-
-    assert [(row["path"], row["since_mark"]) for row in rows] == [("b.py", mark)]
-
-
 async def test_a_watcher_too_far_behind_gets_a_new_snapshot(kernel, monkeypatch):
     await spawn(kernel, "bob")
     cursor = kernel.head

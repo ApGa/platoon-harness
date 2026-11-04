@@ -4,8 +4,10 @@ whichever client answers first, a reply in a thread, a file as a body, and an ag
 about first where they are marked so."""
 
 import asyncio
+import contextlib
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import Transcript
 
 from ..integration.scripts import wire
+from ..unit.runtime.gitting import commit, git, repository, working
 from ..unit.runtime.support import in_state, of_type, scripted, solo, until
 from ..unit.tui.support import drawn, workspace
 from .support import SECONDS, chat, opened, said, serving
@@ -223,6 +226,38 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
 
     assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", winner)]
     assert len(refused) == 1 and refused[0].outcome.refusal.code == "conflict"
+    assert errors == []
+
+
+async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, root: Path, monkeypatch):
+    """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, with no action here."""
+    repo = repository(root / "repo", monkeypatch)
+    git("checkout", "-q", "-b", "theirs", cwd=repo)
+    commit(repo, "README", "theirs\n")
+    git("checkout", "-q", "main", cwd=repo)
+
+    def merged(cwd: Path) -> None:
+        commit(cwd, "README", "ours\n")
+        with contextlib.suppress(subprocess.CalledProcessError):
+            git("merge", "-q", "theirs", cwd=cwd)
+
+    team = Team.model_validate({"roles": {"bob": {"harness": working(merged), "workspace": "worktree"}}})
+    async with Session.start(team, name="s", root=root / "home", cwd=repo) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "merge theirs")
+        await until(lambda: session.attention(), session)
+        async with serving("s", root / "home") as web:
+            page, errors = await opened(chromium, web.link("control"))
+            needs = page.locator("[data-x-needs]")
+            await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
+            await needs.click()
+            place = page.locator(".x-needs .x-need")
+            await expect(place).to_have_text(
+                re.compile(r"⚠ conflict .*bob: @bob: merge stopped on conflicts in 1 files: README$"), timeout=SECONDS
+            )
+            await expect(place.get_by_role("button")).to_have_count(0)
+            await page.context.close()
+
     assert errors == []
 
 

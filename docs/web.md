@@ -106,7 +106,7 @@ not hold.
 | A reply | Reply on a message opens its thread, with a composer at the foot that answers that message | `message.send` with `reply_to`, the entry the message is in the journal. What an agent said in its turn, and an approval, are no entry a reply can cite, so their Reply is disabled, saying so |
 | A file | Attach, beside Send, whose title says the most a body may be. A file larger is refused before it is sent, saying both sizes | The file to `/x/body`, saying how much has gone, then `message.send` with it as the body. A body keeps no name, so the gist is your text and the file's name, `TEXT (file NAME)`, or `file NAME` alone, made by the function the terminal's composer calls, and refused when the two run past 280 characters, as there |
 | An approval | A card in the agent's chat with you, Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
-| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
+| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A conflict an agent's merge stopped on is one, with no action, since the runtime never resolves one. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
 | A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
@@ -147,7 +147,7 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 
 Each is drawn disabled where its control is, saying why: the tasks and board views, with each task open, claimed and by
 whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
-chat, which holds what it announced; Tool activity and Review changes on an agent's page; and Provenance among each
+chat, which holds what it announced; Tool activity and Review changes on an agent's page, which names the terminal's `/review` for what changed; and Provenance among each
 message's actions. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
 only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may

@@ -922,14 +922,14 @@ async def test_live_text_goes_with_the_runtime_that_said_it(root):
 
 
 async def test_the_header_says_what_changed_and_each_limit_in_a_few_characters(root):
-    """Nothing measures what changed yet, which is said. Each shared limit shows what is spent against it, and how
-    many turns nobody measured whole is said once."""
+    """A session whose cwd is in no repository observes no change, which is said. Each shared limit shows what is
+    spent against it, and how many turns nobody measured whole is said once."""
     given = team([Say("done")]).canonical()
     limited = Team.model_validate({**given, "budget": {"turns": 8, "tokens": 1000, "estimate": {"tokens": 10}}})
     async with attached(limited, root, size=(140, 32)) as (_, _, pilot):
         await pilot.press(*"go", "enter")
         header = (await drawn(pilot, lambda text: "turns 1/8" in text.splitlines()[0])).splitlines()[0]
 
-        assert "changes not measured" in header and "/1,000" in header
+        assert "changes not observed" in header and "/1,000" in header
         assert "turns unmeasured" not in header
         assert header.rstrip().endswith(("1 turn unmeasured)", "/1,000", "turns 1/8"))

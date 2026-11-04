@@ -64,8 +64,9 @@ role in a worktree is one such: its sandbox keeps `.git` read-only, so its first
 cost, with the three ways out.
 
 The ending's `workspaces` names each agent's worktree its end did not take, with its host, path, branch, size and why, such as
-`1 uncommitted paths` or `ignored: .venv/`, and the commands that let it go once nothing in it is wanted. See
-[workspaces.md](workspaces.md).
+`1 uncommitted paths` or `ignored: .venv/`, and the commands that let it go once nothing in it is wanted. Its `unobserved` names each
+agent whose last look never finished, as when a session is cancelled before its stops ran, so what that agent last changed was not
+recorded. See [workspaces.md](workspaces.md).
 
 ## From another shell
 

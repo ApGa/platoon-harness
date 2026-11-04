@@ -1,0 +1,189 @@
+"""What the runtime's looks find in the session's repository, on `repo/<name>`: each commit, each rewrite of what the
+journal holds, and each workspace's head and uncommitted state. A look is the runtime's observation, not an act of an
+agent's, so none of its events names an agent in its envelope, and none claims a turn or a context."""
+
+import json
+from typing import Annotated, Any, Literal
+
+from pydantic import Field
+
+from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Txn, View, fold, op
+
+from .common import BodyRef, Name
+from .sessions import SessionRecord
+
+Sha = Annotated[str, Field(pattern=r"^([0-9a-f]{40}|[0-9a-f]{64})$")]
+Where = Annotated[str, Field(pattern=rf"^(shared|@{NAME})$")]
+"""A workspace in the address grammar: `@ada` for an agent's own, and `shared` for the session's checkout."""
+UnderWay = Literal["merge", "rebase", "cherry-pick", "revert", "bisect", "sequence"]
+PathState = Literal["modified", "added", "deleted", "renamed", "copied", "type_changed", "untracked", "conflicted"]
+
+DROPPED_LIMIT = 64
+_WHY_LIMIT = 512
+_NAMED = 3
+
+
+class Cited(Args):
+    """One `Informed-By` value of a commit as it was `written`, and the commit it names, or None when it names no one
+    commit: only 4 to 40 hex digits naming one commit in the commit's own repository do."""
+
+    written: Annotated[str, Field(max_length=256)]
+    sha: Sha | None
+
+
+class Commit(Args):
+    """A commit a look found: its `parents`, the `branch` its workspace's HEAD was on, or None for one found only as
+    cited, the workspace whose HEAD reflog records making it as `made_in`, or None when none or two do, its `author`,
+    its lines `added` and `removed` against its first parent, None when a file's were not measured, as a binary file's
+    are not, how many `files` it touched, and what it says it was `informed_by`."""
+
+    sha: Sha
+    parents: tuple[Sha, ...]
+    subject: str
+    author: str
+    branch: str | None
+    made_in: Where | None
+    added: int | None
+    removed: int | None
+    files: int
+    informed_by: tuple[Cited, ...] = ()
+
+
+class Uncommitted(Args):
+    """A path a workspace holds uncommitted, in `state`, with its lines against HEAD, None when nobody measured them,
+    as for an untracked or a binary file."""
+
+    path: str
+    state: PathState
+    added: int | None
+    removed: int | None
+
+
+class Reading(Args):
+    """What a look read of a workspace, which is its last look from then on: its `head` and `branch`, any operation
+    `under_way` and the branch a rebase is `rebasing`, and its uncommitted `paths`, conflicted first and cut to fit,
+    with the true `total`, how many are `conflicted`, and the whole list as a `body` when it was cut. Its state is None
+    for the shared workspace when no role works in it, since your own edits there are not the session's."""
+
+    head: Sha | None
+    branch: str | None
+    under_way: UnderWay | None = None
+    rebasing: str | None = None
+    paths: tuple[Uncommitted, ...] | None = None
+    total: int | None = None
+    conflicted: int | None = None
+    body: BodyRef | None = None
+
+
+class Rewrite(Args):
+    """A branch that `was` at the last look's tip and is `now` at another, or gone, with what that tip reached and it
+    no longer does as `dropped`."""
+
+    branch: str | None
+    was: Sha
+    now: Sha | None
+    dropped: tuple[Sha, ...]
+
+
+class Report(Args):
+    """One page of a look at `workspace`, which `agent`'s probe or stop asked for and the event `cause` prompted. Its
+    `commits` come parents first, and the page with a `reading` is its last, which moves the workspace's last look.
+    `unobserved` says why the look could not read the workspace, which records the gap and nothing else."""
+
+    agent: Name
+    workspace: Where
+    cause: int | None = None
+    commits: tuple[Commit, ...] = ()
+    rewrite: Rewrite | None = None
+    reading: Reading | None = None
+    unobserved: str | None = None
+
+
+class Looks(View):
+    """Each workspace's last look, which the next one starts from, and the ref of each commit the journal holds."""
+
+    schema = """
+    CREATE TABLE v_looks(workspace TEXT PRIMARY KEY, reading TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_commits(sha TEXT PRIMARY KEY, ref TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    """
+
+    @fold("repo.committed")
+    def committed(self, event: Event) -> None:
+        self.db.execute(
+            "INSERT OR IGNORE INTO v_looks_commits VALUES (?, ?)",
+            (event.data["sha"], f"{event.stream}@{event.version}"),
+        )
+
+    @fold("workspace.changed")
+    def changed(self, event: Event) -> None:
+        reading = {key: value for key, value in event.data.items() if key != "workspace"}
+        self.db.execute(
+            "INSERT OR REPLACE INTO v_looks VALUES (?, ?)",
+            (event.data["workspace"], json.dumps(reading, sort_keys=True)),
+        )
+
+    def ref(self, sha: str) -> str | None:
+        """The ref of the event that recorded a commit, or None while the journal holds none."""
+        row = self.db.execute("SELECT ref FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
+        return None if row is None else row["ref"]
+
+    def reading(self, workspace: str) -> dict[str, Any] | None:
+        row = self.db.execute("SELECT reading FROM v_looks WHERE workspace = ?", (workspace,)).fetchone()
+        return None if row is None else json.loads(row["reading"])
+
+    def readings(self) -> dict[str, dict[str, Any]]:
+        return {row["workspace"]: json.loads(row["reading"]) for row in self.db.execute("SELECT * FROM v_looks")}
+
+
+def _said(where: str, reading: Reading) -> str:
+    """A reading in a line: its conflicts, else how much it holds uncommitted, else where it stands."""
+    if reading.conflicted:
+        named = ", ".join(path.path for path in (reading.paths or ())[:_NAMED] if path.state == "conflicted")
+        what = reading.under_way or "work"
+        return f"{where}: {what} stopped on conflicts in {reading.conflicted} files: {named}"
+    if reading.total:
+        under_way = f", a {reading.under_way} under way" if reading.under_way else ""
+        return f"{where}: {reading.total} paths uncommitted{under_way}"
+    at = "no commit" if reading.head is None else reading.head[:12]
+    return f"{where} at {at}" + (f" on {reading.branch}" if reading.branch else "")
+
+
+@op("repo.report", runtime=True)
+def report(txn: Txn, a: Report) -> None:
+    """Record one page of a look, on `repo/<name>` with no agent in the envelope. A commit the journal holds is passed
+    over, so a look repeated after a crash records nothing twice, a rewrite names only what the journal holds, and a
+    reading is recorded only when it differs from the workspace's last."""
+    repo = txn.view(SessionRecord).settings().repo
+    if repo is None:
+        raise Refused("unsupported", "this session observes no repository")
+    stream, looks, cause = f"repo/{repo.name}", txn.view(Looks), () if a.cause is None else (a.cause,)
+    if a.unobserved is not None:
+        data = {"plane": "control", "what": "workspace_unobserved", "why": a.unobserved[:_WHY_LIMIT]}
+        gist = f"gap: workspace_unobserved, {a.workspace}"
+        txn.emit("gap.recorded", f"agent/{a.agent}", gist=gist, agent=a.agent, cause=cause, data=data)
+        return
+    for commit in a.commits:
+        if looks.ref(commit.sha) is None:
+            cited = [ref for found in commit.informed_by if found.sha and (ref := looks.ref(found.sha))]
+            gist = f"{commit.sha[:12]} {commit.subject}"[:GIST_LIMIT]
+            data = commit.model_dump(mode="json", exclude={"subject"})
+            txn.emit("repo.committed", stream, gist=gist, cause=cause, based_on=list(dict.fromkeys(cited)), data=data)
+    if a.rewrite is not None and (dropped := [sha for sha in a.rewrite.dropped if looks.ref(sha)]):
+        rewrite = a.rewrite.model_dump(mode="json", exclude={"dropped"})
+        data = {"workspace": a.workspace, **rewrite, "dropped": dropped[:DROPPED_LIMIT], "dropped_total": len(dropped)}
+        gist = f"{a.workspace}: {a.rewrite.branch or 'HEAD'} no longer reaches {len(dropped)} recorded commits"
+        txn.emit("repo.rewritten", stream, gist=gist[:GIST_LIMIT], cause=cause, data=data)
+    if a.reading is not None and looks.reading(a.workspace) != (reading := a.reading.model_dump(mode="json")):
+        refs = [a.reading.body] if a.reading.body else ()
+        gist = _said(a.workspace, a.reading)[:GIST_LIMIT]
+        txn.emit(
+            "workspace.changed", stream, gist=gist, cause=cause, refs=refs, data={"workspace": a.workspace, **reading}
+        )
+
+
+@op("repo.looks", query=True, runtime=True)
+def looks(txn: Txn, a: Args) -> dict[str, dict[str, Any]]:
+    """The head and branch each workspace's last look read, by workspace, which the next look starts from."""
+    return {
+        where: {"head": read["head"], "branch": read["branch"]} for where, read in txn.view(Looks).readings().items()
+    }

@@ -92,6 +92,14 @@ class Effects(View):
         rows = self.db.execute("SELECT * FROM v_effects WHERE agent = ? AND state = 'requested' ORDER BY id", (agent,))
         return self._load(rows.fetchall())
 
+    def last(self, agent: str, *kinds: str) -> Effect | None:
+        """The newest of an agent's effects of these kinds, or None if it had none."""
+        marks = ", ".join("?" * len(kinds))
+        rows = self.db.execute(
+            f"SELECT * FROM v_effects WHERE agent = ? AND kind IN ({marks}) ORDER BY id DESC LIMIT 1", (agent, *kinds)
+        )
+        return next(iter(self._load(rows.fetchall())), None)
+
     def ready(self, kind: str | None = None) -> list[Effect]:
         """Requested effects a daemon may start now: per agent in order, unless priority bypasses that."""
         rows = self.db.execute(

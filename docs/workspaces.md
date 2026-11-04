@@ -98,6 +98,35 @@ $ git worktree remove ~/.local/state/platoon-harness/sessions/fix-auth/agents/ad
 `remove` refuses one with uncommitted or untracked files until you say `--force`. Once a session folder is deleted, `git worktree
 unlock <path>` and then `git worktree prune` forget its worktrees, and `git branch -D` deletes their branches.
 
+## What a look sees
+
+At the end of each agent's turn, and when a resumed agent comes back, the runtime looks at what it left, one look at a time: first
+your checkout's new commits, then the agent's own workspace. A stopping agent's stop looks once more before it ends the workspace. A
+look changes no ref, index or file, and records on `repo/<name>`, `<name>` being your repository's folder name:
+
+- each new commit its workspace's HEAD reaches, and each commit those cite in an `Informed-By` trailer, parents first, once each;
+- whose each commit is: the agent's whose workspace's HEAD reflog records making it, at the commit's own committer time, so a worker
+  that builds on another's commit never takes it; a commit made in your checkout is nobody's, as is one no workspace made, or two;
+- what a branch no longer reaches of the commits it had, after a reset, an amend or a rebase;
+- each workspace's head, branch, any merge, rebase, cherry-pick, revert or bisect under way, and its uncommitted paths, conflicted
+  first, with their lines added and removed, or `?` for an untracked or binary file, which nobody measured.
+
+Your checkout's uncommitted state is recorded only when a role works there, since your own edits are not the session's. Declare what
+a commit builds on with a trailer, `git commit --trailer Informed-By=<sha>`: a value of 4 to 40 hex digits naming one commit in its own
+repository is resolved to its full SHA, and anything else, a branch name among them, is kept as written.
+
+The terminal's header counts what changed, `/review` lists it, and a merge stopped on conflicts waits in the dock, and under Needs you
+in the browser, until its agent's next turn. What a look cannot see:
+
+- a one-turn agent's work, until its turn has ended;
+- commits on a branch no workspace has at HEAD;
+- a worktree an agent makes with git, which is outside every look;
+- who made a commit when the agent's git did not move HEAD onto it, as `commit-tree` with `update-ref` does not, or when two
+  workspaces made the same commit in one second. Attribution reads what the agent's own git wrote, so it is evidence, never proof.
+
+A look runs the filters your repository's config names, as your own `git status` does. One that cannot read a workspace records the
+gap `workspace_unobserved` and nothing else, and the Ending names each agent whose last look never finished as `unobserved`.
+
 ## Taking an agent's work
 
 An agent's commits are on its branch in your repository, so you merge, rebase or cherry-pick them as you would anyone's:
@@ -121,5 +150,4 @@ $ git fetch ~/.local/state/platoon-harness/sessions/fix-auth/commits.bundle 'ref
 ```
 
 It is built in a repository of its own beside it, so nothing is written into yours for it, and `session.stopped` records it, with how
-many recorded commits git no longer had. The look that records commits is the next step of this work, so until it lands the bundle
-holds nothing.
+many recorded commits git no longer had.

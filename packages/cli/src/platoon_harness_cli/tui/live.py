@@ -40,7 +40,7 @@ class Live:
         self.attention: dict[str, dict[str, Any]] = {}
         self.status: dict[str, Any] = {}
         self.budgets: list[dict[str, Any]] = []
-        self.changes: dict[tuple[str, str], dict[str, Any]] = {}
+        self.changes: dict[str, dict[str, Any]] = {}
         self.ending: Ending | None = None
         self.channels: list[dict[str, Any]] = []
         self.runtime: Literal["live", "history"] = "live"
@@ -153,7 +153,9 @@ class Live:
         changes = await self._watch("changes")
         if changes["snapshot"]:
             self.changes = {}
-        self.changes |= {(row["agent"], row["path"]): row for row in changes["rows"]}
+        self.changes |= {row["id"]: row for row in changes["rows"]}
+        for gone in changes["removed"]:
+            self.changes.pop(gone, None)
         self.status = await session.status()
         self.budgets = await session.budgets()
         self.ending = await session.ending()

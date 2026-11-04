@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,9 +29,20 @@ def limits() -> dict[str, int]:
 
 
 @pytest.fixture
-async def kernel(folder: Path, clock: ManualClock, limits: dict[str, int]) -> AsyncIterator[Kernel]:
+def repo() -> dict[str, Any] | None:
+    """The repository the session opens on, all but its tips, or None for a session that observes none."""
+    return None
+
+
+@pytest.fixture
+async def kernel(
+    folder: Path, clock: ManualClock, limits: dict[str, int], repo: dict[str, Any] | None
+) -> AsyncIterator[Kernel]:
     opened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
-    result_of(await opened.submit(opened.runtime, "session.open", {"roles": ROLES, "limits": limits}))
+    settings: dict[str, Any] = {"roles": ROLES, "limits": limits}
+    if repo is not None:
+        settings["repo"] = {**repo, "tips": f"sha256:{await opened.put_body(b'')}"}
+    result_of(await opened.submit(opened.runtime, "session.open", settings))
     await grant(opened, "agent")
     await grant(opened, "human")
     yield opened

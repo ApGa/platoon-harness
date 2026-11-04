@@ -69,8 +69,8 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
 - Most Python agents' worktrees are kept, for their ignored `.venv` and `__pycache__`, and a person removes them with git's own
   commands, which the Ending names.
 - Your hooks run for agents' commits in a worktree, while `post-checkout` does not run when the runtime makes one.
-- A recorded commit an agent rewrote can be fetched back from `commits.bundle` in the session folder, once a look records it; the look
-  is the next stage's.
+- A recorded commit an agent rewrote can be fetched back from `commits.bundle` in the session folder, once a look has recorded it
+  ([ADR 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)).
 
 ## Evidence
 

@@ -33,7 +33,6 @@ from .reports import (
     OWNER_STOP,
     ApprovalRequested,
     Capabilities,
-    Changed,
     ChildSeen,
     Compacted,
     Delta,
@@ -50,7 +49,7 @@ from .reports import (
     TurnStarted,
     Usage,
 )
-from .sessions import SessionRecord
+from .sessions import Repo, SessionRecord
 from .tasks import Tasks, bury_if_spent
 from .waits import Waits, close_holding
 
@@ -184,7 +183,7 @@ def end(
     body = body or agent.final_body
     wake = False if txn.me.id == agent.parent else _wakes(txn, agent, ended=True, badly=status != "finished")
     heard = _monitor(txn, agent, report, body, wake=wake)
-    txn.emit(
+    ended = txn.emit(
         "agent.ended",
         f"agent/{name}",
         gist=(f"{name} finished: {report}" if status == "finished" and report else ending)[:GIST_LIMIT],
@@ -200,7 +199,7 @@ def end(
     for effect in txn.view(Effects).requested_for(name):
         data = {"id": effect.id, "kind": effect.kind}
         txn.emit("effect.cancelled", f"effect/{effect.id}", gist=f"{effect.kind} cancelled", agent=name, data=data)
-    txn.effect("stop", {"agent": name}, on_uncertain="retry", priority=1, agent=name)
+    txn.effect("stop", {"agent": name, "cause": ended.seq}, on_uncertain="retry", priority=1, agent=name)
     for task in owned:
         bury_if_spent(txn, task, txn.view(Channels).require(f"queue/{task.queue}"))
     regroup(txn, name, agent.role, joined=False)
@@ -488,7 +487,8 @@ def start(txn: Txn, a: Start) -> None:
     data = {**a.ready.model_dump(exclude={"type"}), **stated}
     stream = f"agent/{agent.name}"
     if a.resumed:
-        txn.emit("agent.resumed", stream, gist=f"{agent.name} resumed", agent=agent.name, data=data)
+        resumed = txn.emit("agent.resumed", stream, gist=f"{agent.name} resumed", agent=agent.name, data=data)
+        _look(txn, agent.name, resumed.seq)  # The turn a crash cut off is looked at here, as no other turn may come.
     else:
         txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, data=data)
         regroup(txn, agent.name, agent.role, joined=True)
@@ -551,6 +551,14 @@ def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
         _monitor(txn, agent, gist, wake=wake, answers=not on_purpose)
 
 
+def _look(txn: Txn, agent: str, cause: int) -> None:
+    """Ask for a look at what an agent's turn left in the session's repository, owned by the agent, so that it starts
+    before anything handed over after this point and keeps the session from settling until it has run. An agent that
+    ends is looked at by its stop instead."""
+    if txn.view(SessionRecord).settings().repo is not None:
+        txn.effect("probe", {"agent": agent, "cause": cause}, on_uncertain="retry", agent=agent)
+
+
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools. A
     one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished."""
@@ -567,9 +575,9 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     parked = bool(txn.view(Waits).open_for(agent.id))
     if not parked and agent.state != "held":
         _report_turn(txn, agent, reason)
-    txn.emit(
-        "turn.ended", f"turn/{name}", gist=f"turn ended: {reason}"[:GIST_LIMIT], agent=name, data={"reason": reason}
-    )
+    gist = f"turn ended: {reason}"[:GIST_LIMIT]
+    ended = txn.emit("turn.ended", f"turn/{name}", gist=gist, agent=name, data={"reason": reason})
+    _look(txn, name, ended.seq)
     reconcile(txn, name, agent.role)
     if parked and agent.state != "held":
         txn.emit("agent.parked", f"agent/{name}", gist=f"{name} parked", agent=name)
@@ -636,9 +644,6 @@ def report(txn: Txn, a: AgentReport) -> None:
         case ChildSeen() as child:
             data = child.model_dump(exclude={"type"})
             txn.emit("child.seen", f"agent/{name}", gist=f"{name} has a native child", agent=name, data=data)
-        case Changed() as change:
-            data = change.model_dump(exclude={"type"})
-            txn.emit("change.recorded", f"agent/{name}", gist=change.path[:GIST_LIMIT], agent=name, data=data)
 
 
 def _public(agent: Agent) -> dict[str, Any]:
@@ -692,7 +697,8 @@ def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
-    return {**_public(agent), "turn": txn.view(Stamps).turn(agent.name)}
+    shown = agent.model_dump(mode="json", include={"workspace", "kept"})
+    return {**_public(agent), "turn": txn.view(Stamps).turn(agent.name), **shown}
 
 
 @op("peers", query=True, tool=True)
@@ -766,6 +772,7 @@ def _standing(txn: Txn) -> dict[str, Any]:
     blockers = _blockers(txn)
     until = session.settings().until
     done = _done(txn, until, not blockers)
+    repo = session.settings().repo
     return {
         "state": state,
         "settled": not blockers,
@@ -774,6 +781,7 @@ def _standing(txn: Txn) -> dict[str, Any]:
         "done": done,
         "asking": txn.view(Approvals).asking(),
         "stalled": state == "open" and not blockers and not done and until != "program" and not _scheduled(txn),
+        "repo": None if repo is None else repo.name,
     }
 
 
@@ -797,7 +805,7 @@ def _came_to(txn: Txn, state: str) -> str:
     return "agent_failed" if failed else "settled"
 
 
-def _left(agent: Agent, prefix: str) -> dict[str, Any] | None:
+def _left(agent: Agent, repo: Repo) -> dict[str, Any] | None:
     """A workspace an agent's end did not take, as the Ending names it, with the commands that let it go, for a person
     to run once nothing in it is wanted. Its folder is where the agent works, less the session's subfolder."""
     workspace = agent.workspace
@@ -807,24 +815,30 @@ def _left(agent: Agent, prefix: str) -> dict[str, Any] | None:
         left = agent.kept.model_dump()
     else:
         folder = PurePath(workspace.path)
-        folder = folder.parents[len(PurePath(prefix).parts) - 1] if prefix else folder
+        folder = folder.parents[len(PurePath(repo.prefix).parts) - 1] if repo.prefix else folder
         why = "its stop never finished" if agent.ended else "its agent has not ended"
         left = {"path": str(folder), "host": workspace.host, "branch": workspace.branch, "bytes": None, "why": [why]}
-    path = left["path"]
-    release = [f"git worktree unlock {path}", f"git worktree remove {path}"]
+    path, git = left["path"], f"git -C {repo.top}"
+    release = [f"{git} worktree unlock {path}", f"{git} worktree remove {path}"]
     return {"agent": agent.name, "mode": workspace.mode, **left, "release": release}
+
+
+def _unobserved(txn: Txn, agent: Agent) -> bool:
+    """Whether an agent's last look, by a probe or by its stop, was cancelled or never finished."""
+    effect = txn.view(Effects).last(agent.name, "probe", "stop")
+    return effect is not None and effect.state != "finished"
 
 
 @op("session.ending", query=True)
 def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
     """What this session has come to: its state, why, each agent and its last report, what was spent with its labels,
-    every gap, and each workspace left in place, with why and the commands that let it go."""
+    every gap, each workspace left in place, with why and the commands that let it go, and the agents whose last look
+    never finished, which left what they changed unobserved."""
     session = txn.view(SessionRecord)
     state = session.state()
     budget = txn.view(Budgets)
     agents = txn.view(Agents).listed()
     repo = session.settings().repo
-    prefix = "" if repo is None else repo.prefix
     return {
         "state": state,
         "reason": _came_to(txn, state),
@@ -839,7 +853,8 @@ def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
         ],
         "usage": budget.usage_of("shared"),
         "gaps": txn.view(Gaps).rows(),
-        "workspaces": [left for agent in agents if (left := _left(agent, prefix)) is not None],
+        "workspaces": [left for agent in agents if repo and (left := _left(agent, repo)) is not None],
+        "unobserved": [agent.name for agent in agents if repo and _unobserved(txn, agent)],
     }
 
 

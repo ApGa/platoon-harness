@@ -11,6 +11,19 @@
   views are planned. A post's thread is followed by an index on each message's parent, so the Board's time grows with a
   session's messages and not with their square; the projection is version 4, which `web` folds again from the journal when
   it starts. See `docs/web.md` and ADR 0035.
+- The look: at each turn's end and each resume the lifecycle asks the host for a `probe`, and an agent's stop looks once more before
+  it ends the workspace. Looks run one at a time, change no ref, index or file, and record on `repo/<name>`, with no agent in the
+  envelope, `repo.committed` once per new commit, parents first, `repo.rewritten` for what a branch no longer reaches of what the
+  journal holds, and `workspace.changed` for a workspace's head, branch and uncommitted state when they differ. A commit is the
+  agent's whose workspace's HEAD reflog records making it at its committer time, and an `Informed-By` trailer is resolved once from
+  hex alone. A look that fails records the gap `workspace_unobserved`, and the Ending names the agents whose last look never
+  finished as `unobserved`. `repo.report` and `repo.looks` are runtime-only ops. See ADR 0032.
+- The `changes` view rebuilt on the look, with a row per commit, per workspace reading and per uncommitted path, each with the `seq`
+  that last moved it; a `conflict` attention row while an agent rests on a conflict its look found; the roster's `workspace`,
+  `agent.status`'s workspace and why it was kept, and `session.status`'s `repo`.
+- In the terminal, the header says what changed, `/review` or Alt+D lists it, grouped by workspace, with rows past your mark marked
+  new, the inspector names the agent's workspace, and the dock says where a conflict is resolved. In the browser, a conflict is
+  listed under Needs you.
 - `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
   `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
   a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume
@@ -178,6 +191,8 @@
 
 ### Changed
 
+- The `changes` report has left the driver vocabulary, with `Changed` and `change.recorded`, as only the runtime observes a
+  workspace. The `changes` view's rows lost `agent`, `tests` and `since_mark`: a client compares `seq` with the person's mark.
 - Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before.
 - A relative program in a `command` harness resolves against the session's cwd, for the harness and for `describe` alike.
 - Claude Code's `EnterWorktree` and `ExitWorktree` are off on every launch, and a Codex thread naming a `cwd` other than its

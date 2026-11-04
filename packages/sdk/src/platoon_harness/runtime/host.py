@@ -6,7 +6,7 @@ import json
 import logging
 import shutil
 import socket
-from collections.abc import Awaitable, Callable, Coroutine, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -53,6 +53,7 @@ from platoon_harness.tools import (
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
 from .git import GitError
+from .looks import PAGE, look, tips_of
 from .opening import PLAN_LOGIN_FIX, make_driver
 from .paths import agent_folder
 from .workspaces import branch_of, end_worktree, make_worktree, present, write_bundle
@@ -129,12 +130,15 @@ class Host:
         self._admitted: dict[str, Admission] = {}
         self._described: dict[str, DriverInfo] = {}
         self._closing = False
+        self._looking = asyncio.Lock()
+        self._tips: list[str] | None = None
         self._acts: dict[str, Callable[[Effect], Awaitable[Any]]] = {
             "admit": self._admit,
             "workspace": self.workspace,
             "launch": self._launch,
             "deliver": self._deliver,
             "interrupt": self._interrupt,
+            "probe": self._probe,
             "stop": self._stop,
             "answer": self._answer,
         }
@@ -252,18 +256,24 @@ class Host:
         """Make an agent's workspace, or adopt what an earlier attempt of this effect made, since no agent starts in
         one before its effect has finished. A mode that cannot be given fails loudly and never degrades."""
         mode, agent, repo = effect.data["workspace"], effect.data["agent"], self._repo()
+        folder, branch = agent_folder(self._folder, agent), branch_of(self._folder.name, agent)
         if mode == "shared":
             host = socket.gethostname()
             repository = None if repo is None else repo.repository
             made = Workspace(mode="shared", path=str(self._cwd), host=host, repository=repository)
-        elif mode == "worktree" and repo is not None:
-            folder, branch = agent_folder(self._folder, agent), branch_of(self._folder.name, agent)
-            made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
-        elif mode == "worktree":
+        elif mode != "worktree":
+            raise DriverError(f"workspace `{mode}` is not available yet: use `shared` or `worktree`")
+        elif repo is None:
             raise GitError(f"`worktree` needs a git work tree, and {self._cwd} was in none when the session opened")
         else:
-            raise DriverError(f"workspace `{mode}` is not available yet: use `shared` or `worktree`")
+            made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
         return made.model_dump()
+
+    def _tips_at_open(self, repo: Repo) -> list[str]:
+        """The commits every ref named when the session opened, read from the journal once."""
+        if self._tips is None:
+            self._tips = tips_of(self._kernel.get_body(repo.tips.removeprefix("sha256:")).decode())
+        return self._tips
 
     def _goal(self, data: Mapping[str, Any]) -> str:
         body = data["body"]
@@ -479,10 +489,77 @@ class Host:
             return answering.result()
         raise DriverError("its harness did not take it in time")
 
+    async def _probe(self, effect: Effect) -> dict[str, Any]:
+        """Look at what an agent's turn left: the shared workspace's commits, then its own workspace."""
+        agent = effect.data["agent"]
+        await self._look(agent, effect.data["cause"], self._places(agent))
+        return {}
+
+    def _places(self, agent: str) -> tuple[str, ...]:
+        """The workspaces a look at an agent's takes: the shared one's commits, then its own, if it has one."""
+        workspace = self._workspace_of(agent)
+        return ("shared",) if workspace.mode == "shared" else ("shared", f"@{agent}")
+
+    def _root(self, where: str) -> Path:
+        """Where a workspace's work tree is: your checkout's top for the shared one, and in its agent's folder else."""
+        repo = self._repo()
+        assert repo is not None
+        return Path(repo.top) if where == "shared" else agent_folder(self._folder, where[1:]) / "workspace"
+
+    async def _look(self, agent: str, cause: int | None, places: Sequence[str]) -> None:
+        """Look at each of `places`, one look at a time in the session, and record what is new in pages, the shared
+        workspace first, so that a worker whose base holds its new commits finds them recorded. A workspace a look
+        cannot read records the gap `workspace_unobserved` and no change. Nothing is looked at outside a repository."""
+        if (repo := self._repo()) is None:
+            return
+        kernel = self._kernel
+        async with self._looking:
+            readings = kernel.query(kernel.runtime, "repo.looks", {}).result
+            makers = {"shared": Path(repo.top)}
+            for record in kernel.query(kernel.runtime, "agent.records", {}).result:
+                workspace = record["workspace"]
+                if workspace and workspace["mode"] != "shared" and not record["removed"]:
+                    makers[f"@{record['name']}"] = self._root(f"@{record['name']}")
+            shared = any(role.workspace == "shared" for role in self._team.roles.values())
+            for where in places:
+                base = repo.head if where == "shared" else self._workspace_of(agent).base
+                try:
+                    seen = await asyncio.to_thread(
+                        look,
+                        self._root(where),
+                        base=base,
+                        tips=self._tips_at_open(repo),
+                        last=readings.get(where),
+                        makers={name: root for name, root in makers.items() if root.is_dir()},
+                        record=shared or where != "shared",
+                    )
+                except (GitError, OSError) as error:
+                    await self._report({"agent": agent, "workspace": where, "cause": cause, "unobserved": str(error)})
+                    continue
+                reading = seen.reading
+                if seen.whole is not None:
+                    reading = {**reading, "body": await self._stored(seen.whole)}
+                pages = [seen.commits[start : start + PAGE] for start in range(0, len(seen.commits), PAGE)] or [[]]
+                for index, commits in enumerate(pages):
+                    page: dict[str, Any] = {"agent": agent, "workspace": where, "cause": cause, "commits": commits}
+                    if index == len(pages) - 1:
+                        page |= {"rewrite": seen.rewrite, "reading": reading}
+                    if not await self._report(page):
+                        break
+
+    async def _report(self, page: Mapping[str, Any]) -> bool:
+        """Record a page of a look. One the journal refused is a look that did not land, which is said as its gap."""
+        refused = (await self.insist("repo.report", page)).refusal
+        if refused is not None and "unobserved" not in page:
+            why = f"its look could not be recorded: {refused.code}: {refused.detail}"
+            await self._report({**{key: page[key] for key in ("agent", "workspace", "cause")}, "unobserved": why})
+        return refused is None
+
     async def _stop(self, effect: Effect) -> dict[str, Any]:
-        """End what an ended agent left, then its workspace, if nothing would go with it. With no link, a crash may have
-        left it, and `reap` proves what is ours. A link stays until its harness has stopped, so a shutdown that cuts
-        this short can still stop it. Each step is safe to repeat, so a repeat finishes what the last one began."""
+        """End what an ended agent left, look once more at what it left, then end its workspace, if nothing would go
+        with it. With no link, a crash may have left it, and `reap` proves what is ours. A link stays until its harness
+        has stopped, so a shutdown that cuts this short can still stop it. Each step is safe to repeat, so a repeat
+        finishes what the last one began, and a workspace an earlier one removed is not looked for."""
         name = effect.data["agent"]
         folder = agent_folder(self._folder, name)
         link = self.link(name)
@@ -493,6 +570,9 @@ class Host:
             left = await self._end(link, GRACE)
             self._links.pop(name, None)
         record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
+        if record["workspace"] is not None:
+            places = [where for where in self._places(name) if where == "shared" or self._root(where).exists()]
+            await self._look(name, effect.data.get("cause"), places)
         ended = {"removed": False, "kept": None}
         if record["workspace"] is not None and record["workspace"]["mode"] == "worktree":
             workspace, repo = Workspace.model_validate(record["workspace"]), self._repo()

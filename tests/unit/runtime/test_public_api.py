@@ -7,7 +7,7 @@ import pytest
 
 import platoon_harness
 from platoon_harness import runtime, session
-from platoon_harness.runtime import authority, control, git, host, opening, paths, recovery, workspaces
+from platoon_harness.runtime import authority, control, git, host, looks, opening, paths, recovery, workspaces
 
 MODULES = {
     "session": session,
@@ -16,6 +16,7 @@ MODULES = {
     "runtime.control": control,
     "runtime.git": git,
     "runtime.host": host,
+    "runtime.looks": looks,
     "runtime.opening": opening,
     "runtime.paths": paths,
     "runtime.recovery": recovery,

@@ -75,6 +75,9 @@ method promises:
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
 | `Exited` | `reason` | The harness is gone |
 
+What changed in a workspace is not a report: the runtime looks at it itself at each turn's end, so even a harness that reports nothing
+of its files is covered, and a program that sends `changes`, which an earlier vocabulary had, gets `native` plus a gap.
+
 Never guess. Unknown is `None`, not zero, not an empty list, and not a plausible id. A frame you cannot read becomes `Native` plus a
 gap, which is what `unknown_frame(kind, raw)` returns, and never a log line. That holds for a frame of a known type with a shape you did
 not expect, whichever part of it would not read, and `UNREADABLE` names what reading one raises: one changed field in a harness's update

@@ -15,7 +15,7 @@ const X = {caps: null};
 X.unbuilt = {tasks: 'Not built yet: the tasks and board views are planned, with each task open, claimed and by whom ' +
     'under what lease, or done, and each board entry with its versions. This chat holds what its queue or board announced.',
   activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.',
-  review: 'Not built yet: reviewing what an agent changed is planned.',
+  review: 'Not built yet: diff review is planned. The terminal\'s /review lists what changed.',
   provenance: 'Not built yet: following a message into its provenance is planned.'};
 
 // Only an agent leaves evidence of what reached it, so only an agent can be seen as.

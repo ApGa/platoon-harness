@@ -12,6 +12,7 @@ from . import (
     delivery,
     lifecycle,
     messages,
+    repo,
     sessions,
     tasks,
     waits,
@@ -25,6 +26,7 @@ from .clients import Attention, Changes, Gaps
 from .common import BODY_REF, IN_A_RESULT, WAKING, Injection, Lines, Policy, lines_of, stream_of
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
+from .repo import Looks
 from .reports import (
     CUT_OFF,
     OWNER_STOP,
@@ -35,7 +37,6 @@ from .reports import (
     Attribution,
     Boundary,
     Capabilities,
-    Changed,
     ChildSeen,
     Compacted,
     Delta,
@@ -115,6 +116,7 @@ PRIMITIVES = (
     Extension("lease", ops=[tasks.expire_lease, tasks.leases_due]),
     Extension("approval", ops=[approvals.request, approvals.resolve], views=[Approvals]),
     Extension("blob", ops=[blobs.get, blobs.offer]),
+    Extension("repo", ops=[repo.report, repo.looks], views=[Looks]),
     Extension("attention", ops=[clients.attention_list], views=[Attention]),
     Extension("view", ops=[clients.watch], views=[Changes, Gaps]),
 )
@@ -140,7 +142,6 @@ __all__ = [
     "Boundary",
     "Budgets",
     "Capabilities",
-    "Changed",
     "Changes",
     "Channels",
     "ChildSeen",
@@ -160,6 +161,7 @@ __all__ = [
     "Item",
     "Kept",
     "Lines",
+    "Looks",
     "Mode",
     "ModelCall",
     "Native",

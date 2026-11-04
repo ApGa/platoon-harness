@@ -56,11 +56,11 @@ quits. In a form, Enter goes to the next field, and from the last sends it.
 
 | Part | What it answers |
 |---|---|
-| Header | Who is working, how many places need you, what is blocked or failed, what changed, which it says is not measured until the turn-end probe lands, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
+| Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
-| Inspector, `/inspector` | Why an agent waits, its harness, model and levels, what it spent with labels, its gaps, and what the runtime refused you |
-| Dock | Each place you must act, from the `attention` view, with its actions |
+| Inspector, `/inspector` | Why an agent waits, its harness, model and levels, its workspace, with its branch, the commit it started from and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
+| Dock | Each place you must act, from the `attention` view, with its actions. A conflict has none, and says where to resolve it |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
 
 The groups come from the roster's `group`, so every client says the same. Your unread counts and the mentions you have
@@ -104,6 +104,17 @@ or cancelling an agent, closing or cancelling the session, and every other comma
 `/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end an
 agent or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the
 command line prints any. A takeover says it is not built yet, as `/takeover` does.
+
+### What changed
+
+`/review`, or Alt+D, lists what changed, read-only, grouped by workspace: the commits made in an agent's workspace under that agent,
+newest first, with their short SHA, subject and lines added and removed, a dropped one marked; then that workspace's uncommitted paths,
+conflicted first, with their state and lines, `?` where nobody measured them, and how many more there are than the list holds; your
+checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout or in no workspace the session
+knows. A look after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on
+`repo/<name>` is marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is
+planned. A conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it or to tell the agent,
+since the runtime never resolves one.
 
 ### Size
 
@@ -192,7 +203,7 @@ before the session's. `^` is Ctrl.
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
-| `Alt+D` | `/review` | Review what changed, as diffs. Not built yet: the review screen is planned: what changed is measured once workspaces land |
+| `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |
@@ -261,7 +272,7 @@ before the session's. `^` is Ctrl.
 
 ## Not built yet
 
-Disabled where a control for it would be, or absent from the palette: a review screen of diffs, search in a transcript,
+Disabled where a control for it would be, or absent from the palette: diffs and review comments, search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, following a line into its provenance, an approval and who answered it in
 the transcript, forking a session, copying a selection from the transcript, themes and notifications.

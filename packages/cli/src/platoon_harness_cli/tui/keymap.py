@@ -154,14 +154,7 @@ KEYMAP: tuple[Key, ...] = (
         "workspace",
         planned="the tasks and board views are planned: a queue's or a board's channel shows its lines",
     ),
-    Key(
-        "alt+d",
-        "review",
-        "review",
-        "Review what changed, as diffs",
-        "workspace",
-        planned="the review screen is planned: what changed is measured once workspaces land",
-    ),
+    Key("alt+d", "review", "review", "List what changed: each workspace's commits and uncommitted paths", "workspace"),
     Key(
         "alt+m",
         "model",

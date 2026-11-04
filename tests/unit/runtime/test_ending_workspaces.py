@@ -8,14 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import Field
 
 from platoon_harness import Session, Team
-from platoon_harness.kernel import Args, Extension, Txn, op
 from platoon_harness.primitives import Workspace
 from platoon_harness.runtime import workspaces
 
-from .gitting import commit, git, repository
+from .gitting import commit, git, repository, working
 from .support import in_state, of_type, scripted, until
 from .test_workspaces import made, registration, repo_of, workspace_of
 
@@ -214,7 +212,7 @@ async def test_a_kept_workspace_is_named_with_its_host_size_and_reason_in_the_en
     assert kept["path"] == str(root) and kept["host"] == HOST and kept["branch"] == "platoon-harness/s/ada"
     assert kept["bytes"] > 0
     assert kept["why"] == ["1 uncommitted paths"]
-    assert kept["release"] == [f"git worktree unlock {root}", f"git worktree remove {root}"]
+    assert kept["release"] == [f"git -C {repo} worktree unlock {root}", f"git -C {repo} worktree remove {root}"]
     assert (root / "notes.txt").read_text() == "unfinished\n"
 
 
@@ -236,19 +234,6 @@ async def test_a_session_that_closes_keeps_the_workspaces_of_agents_that_never_e
 # The commits the journal recorded.
 
 
-class Recorded(Args):
-    sha: str = Field(pattern="^[0-9a-f]{40}$")
-
-
-@op("lookalike.record", runtime=True)
-def record(txn: Txn, a: Recorded) -> None:
-    """Record a commit as a look would, which this stands in for."""
-    txn.emit("repo.committed", "repo/repo", gist=a.sha[:12], data={"sha": a.sha})
-
-
-LOOKALIKE = Extension("lookalike", ops=[record])
-
-
 def bundled(repo: Path, folder: Path) -> set[str]:
     """The commits a bundle names, read in a clone of its own, after it gave that clone what it holds."""
     reader = folder.parent / f"{folder.name}-reader"
@@ -268,18 +253,16 @@ def pruned(repo: Path) -> None:
 
 
 async def test_a_commit_the_agent_rewrote_and_git_then_pruned_is_still_in_the_bundle(repo, tmp_path):
-    team = team_of().model_copy(update={"extensions": ("tests.unit.runtime.test_ending_workspaces:LOOKALIKE",)})
+    def amend(cwd: Path) -> None:
+        git("commit", "-q", "--amend", "-m", "second try", cwd=cwd)
+
+    team = team_of(harness=working(lambda cwd: commit(cwd, "work", message="first try"), amend))
     async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
-        await session.spawn("ada", "worker")
-        await in_state(session, "ada", "idle")
-        runtime = session._runtime
-        assert runtime is not None
-        root = Path(workspace_of(session, "ada").path)
-        first = commit(root, "work", message="first try")
-        await runtime.host.insist("lookalike.record", {"sha": first})
-        git("commit", "-q", "--amend", "-m", "second try", cwd=root)
-        second = git("rev-parse", "HEAD", cwd=root).strip()
-        await runtime.host.insist("lookalike.record", {"sha": second})
+        await session.spawn("ada", "worker", "work")
+        await until(lambda: of_type(session, "repo.committed"), session)
+        await session.send("@ada", "amend it")
+        await until(lambda: of_type(session, "repo.rewritten"), session)
+        first, second = (event.data["sha"] for event in await of_type(session, "repo.committed"))
         folder = session.folder
     async with Session.attach("s", root=tmp_path) as guest:
         stopped = (await of_type(guest, "session.stopped"))[-1]

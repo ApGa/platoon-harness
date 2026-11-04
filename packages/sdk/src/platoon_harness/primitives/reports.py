@@ -32,6 +32,7 @@ Gap = Literal[
     "hidden_call",
     "crash_window",
     "takeover",
+    "workspace_unobserved",
 ]
 
 
@@ -179,16 +180,6 @@ class Exited(Args):
     reason: str = "the harness exited"
 
 
-class Changed(Args):
-    """What the runtime's probe found at a turn's end."""
-
-    type: Literal["changes"] = "changes"
-    path: Annotated[str, Field(max_length=1024)]
-    added: int | None = None
-    removed: int | None = None
-    tests: str | None = None
-
-
 type Report = Annotated[
     Ready
     | TurnStarted
@@ -203,8 +194,7 @@ type Report = Annotated[
     | ChildSeen
     | GapReport
     | Native
-    | Exited
-    | Changed,
+    | Exited,
     Field(discriminator="type"),
 ]
 

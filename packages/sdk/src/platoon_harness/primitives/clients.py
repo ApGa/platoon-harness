@@ -17,7 +17,7 @@ from .tasks import Tasks
 from .waits import Waits
 
 WATCH_SPAN = 4096
-_MOOT_WITH_ITS_AGENT = ("approval", "uncertain", "failed", "hops", "budget")
+_MOOT_WITH_ITS_AGENT = ("approval", "uncertain", "failed", "hops", "budget", "conflict")
 
 Group = Literal["needs_you", "working", "blocked", "idle", "done", "failed"]
 """The navigator's groups: what a person must do about an agent, derived in the view so every client says the same."""
@@ -44,9 +44,10 @@ def _settle_actions(event: Event) -> list[dict[str, Any]]:
 
 
 class Attention(View):
-    """Where a human must act. A row closes in place, so a watcher hears that it went away."""
+    """Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
+    look found conflicted paths is kept, so that its row comes back after the next look that still finds them."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_attention(
         id TEXT PRIMARY KEY,
@@ -61,12 +62,31 @@ class Attention(View):
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_attention_open ON v_attention(open, since_seq);
     CREATE INDEX v_attention_seq ON v_attention(seq);
+    CREATE TABLE v_attention_conflicts(workspace TEXT PRIMARY KEY, gist TEXT NOT NULL) WITHOUT ROWID, STRICT;
     """
 
-    def _raise(self, id: str, kind: str, event: Event, actions: list[dict[str, Any]] | None = None) -> None:
+    def _raise(
+        self,
+        id: str,
+        kind: str,
+        event: Event,
+        actions: list[dict[str, Any]] | None = None,
+        *,
+        agent: str | None = None,
+        gist: str | None = None,
+    ) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO v_attention VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)",
-            (id, kind, event.agent, event.gist, event.seq, event.version, json.dumps(actions or []), event.seq),
+            (
+                id,
+                kind,
+                agent or event.agent,
+                gist or event.gist,
+                event.seq,
+                event.version,
+                json.dumps(actions or []),
+                event.seq,
+            ),
         )
 
     def _lower(self, event: Event, condition: str, *values: Any) -> None:
@@ -85,9 +105,11 @@ class Attention(View):
 
     @fold("agent.ended")
     def agent_gone(self, event: Event) -> None:
-        """What only that agent could have settled is moot. A final report nobody received waits for a human."""
+        """What only that agent could have settled is moot, a conflict among it, which the Ending names with the
+        workspace kept for it. A final report nobody received waits for a human."""
         marks = ", ".join("?" * len(_MOOT_WITH_ITS_AGENT))
         self._lower(event, f"agent = ? AND kind IN ({marks})", event.agent, *_MOOT_WITH_ITS_AGENT)
+        self.db.execute("DELETE FROM v_attention_conflicts WHERE workspace = ?", (f"@{event.agent}",))
         if event.data["status"] == "finished" and not event.data["heard"]:
             self._raise(event.stream, "mention", event)
 
@@ -105,6 +127,30 @@ class Attention(View):
     @fold("effect.finished", "effect.retried")
     def certain(self, event: Event) -> None:
         self._lower(event, "id = ?", f"effect/{event.data['id']}")
+
+    @fold("workspace.changed")
+    def conflicted(self, event: Event) -> None:
+        """A workspace's latest look found conflicted paths, or none. The shared workspace's row is open while its
+        latest look found some, and an agent's comes at the end of each look of its agent's that still finds them, so
+        it never comes for an agent that has ended, whose stop looked last."""
+        where = event.data["workspace"]
+        if event.data["conflicted"]:
+            self.db.execute("INSERT OR REPLACE INTO v_attention_conflicts VALUES (?, ?)", (where, event.gist))
+            if where == "shared":
+                self._raise("conflict/shared", "conflict", event)
+        else:
+            self.db.execute("DELETE FROM v_attention_conflicts WHERE workspace = ?", (where,))
+            self._lower(event, "id = ?", f"conflict/{where}")
+
+    @fold("effect.finished")
+    def looked(self, event: Event) -> None:
+        """An agent's conflict needs you again after each look that still finds it, while it rests on it."""
+        if event.data["kind"] != "probe":
+            return
+        where = f"@{event.agent}"
+        found = self.db.execute("SELECT gist FROM v_attention_conflicts WHERE workspace = ?", (where,)).fetchone()
+        if found is not None:
+            self._raise(f"conflict/{where}", "conflict", event, agent=event.agent, gist=found["gist"])
 
     @fold("effect.failed")
     def failed(self, event: Event) -> None:
@@ -141,8 +187,9 @@ class Attention(View):
 
     @fold("turn.started")
     def turn_started(self, event: Event) -> None:
-        turn = f"turn/{event.agent}"
-        self._lower(event, "id IN (?, ?) OR (agent = ? AND kind = 'failed')", f"wake/{event.agent}", turn, event.agent)
+        """An agent at work on its conflict is not resting on it."""
+        ids = (f"wake/{event.agent}", f"turn/{event.agent}", f"conflict/@{event.agent}")
+        self._lower(event, "id IN (?, ?, ?) OR (agent = ? AND kind = 'failed')", *ids, event.agent)
 
     def _row(self, row: Any) -> dict[str, Any]:
         return {**dict(row), "actions": json.loads(row["actions"]), "open": bool(row["open"])}
@@ -159,32 +206,77 @@ class Attention(View):
 
 
 class Changes(View):
-    """What changed, per agent and path, from a runtime probe at each turn end. `None` means not measured."""
+    """What changed, as looks found it, a row for each recorded commit, for each workspace's last reading and for each
+    path it holds uncommitted, keyed by `id`, each with the `seq` that last moved it, which a client compares with the
+    person's mark on `repo/<name>`. A newer reading replaces its workspace's paths whole, and a row closes in place, so
+    a watcher hears that it went away."""
 
+    version = 2
     schema = """
     CREATE TABLE v_changes(
-        agent TEXT NOT NULL,
-        path TEXT NOT NULL,
-        added INTEGER,
-        removed INTEGER,
-        tests TEXT,
-        seq INTEGER NOT NULL,
-        PRIMARY KEY (agent, path)
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        workspace TEXT,
+        row TEXT NOT NULL,
+        open INTEGER NOT NULL,
+        seq INTEGER NOT NULL
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_changes_seq ON v_changes(seq);
+    CREATE INDEX v_changes_workspace ON v_changes(workspace, kind);
     """
 
-    @fold("change.recorded")
-    def recorded(self, event: Event) -> None:
-        data = event.data
+    def _put(self, row: dict[str, Any], workspace: str | None, event: Event) -> None:
         self.db.execute(
-            "INSERT OR REPLACE INTO v_changes VALUES (?, ?, ?, ?, ?, ?)",
-            (event.agent, data["path"], data["added"], data["removed"], data["tests"], event.seq),
+            "INSERT OR REPLACE INTO v_changes VALUES (?, ?, ?, ?, 1, ?)",
+            (row["id"], row["kind"], workspace, json.dumps(row), event.seq),
         )
 
-    def since(self, after: int) -> list[dict[str, Any]]:
-        rows = self.db.execute("SELECT * FROM v_changes WHERE seq > ? ORDER BY seq", (after,))
-        return [{**dict(row), "since_mark": after} for row in rows]
+    @fold("repo.committed")
+    def committed(self, event: Event) -> None:
+        data = event.data
+        shown = {key: data[key] for key in ("made_in", "branch", "added", "removed", "files")}
+        row = {"id": f"commit/{data['sha']}", "kind": "commit", "commit": data["sha"], "gist": event.gist, **shown}
+        self._put({**row, "dropped": False}, None, event)
+
+    @fold("repo.rewritten")
+    def rewritten(self, event: Event) -> None:
+        for sha in event.data["dropped"]:
+            found = self.db.execute("SELECT row FROM v_changes WHERE id = ?", (f"commit/{sha}",)).fetchone()
+            if found is not None:
+                self._put({**json.loads(found["row"]), "dropped": True}, None, event)
+
+    @fold("workspace.changed")
+    def changed(self, event: Event) -> None:
+        """A path whose row says the same as before keeps the seq that last moved it, so it is not news again. A
+        reading that recorded no uncommitted state, as of your checkout when no role works in it, shows nothing."""
+        data, where = event.data, event.data["workspace"]
+        if data["paths"] is None:
+            return
+        shown = {key: data[key] for key in ("head", "branch", "under_way", "rebasing", "total", "conflicted")}
+        self._put({"id": f"workspace/{where}", "kind": "workspace", "workspace": where, **shown}, where, event)
+        held = {
+            row["id"]: row["row"]
+            for row in self.db.execute(
+                "SELECT id, row FROM v_changes WHERE workspace = ? AND kind = 'path' AND open = 1", (where,)
+            )
+        }
+        for path in data["paths"]:
+            row = {"id": f"path/{where}/{path['path']}", "kind": "path", "workspace": where, **path}
+            if held.pop(row["id"], None) != json.dumps(row):
+                self._put(row, where, event)
+        for gone in held:
+            self.db.execute("UPDATE v_changes SET open = 0, seq = ? WHERE id = ?", (event.seq, gone))
+
+    def _row(self, row: Any) -> dict[str, Any]:
+        return {**json.loads(row["row"]), "seq": row["seq"]}
+
+    def rows(self) -> list[dict[str, Any]]:
+        return [self._row(row) for row in self.db.execute("SELECT * FROM v_changes WHERE open = 1 ORDER BY seq")]
+
+    def since(self, after: int) -> tuple[list[dict[str, Any]], list[str]]:
+        """The rows that moved past `after`, and the keys of those that went away."""
+        rows = self.db.execute("SELECT * FROM v_changes WHERE seq > ? ORDER BY seq", (after,)).fetchall()
+        return [self._row(row) for row in rows if row["open"]], [row["id"] for row in rows if not row["open"]]
 
 
 class Gaps(View):
@@ -277,6 +369,7 @@ def _roster(txn: Txn) -> list[dict[str, Any]]:
                 "unread": deliveries.unread(agent.name),
                 "levels": agent.levels,
                 "usage": budget.usage_of(f"agent:{agent.name}"),
+                "workspace": agent.workspace and agent.workspace.model_dump(include={"mode", "path", "branch"}),
             }
         )
     return rows
@@ -298,7 +391,7 @@ class Watch(Args):
 def _snapshot(txn: Txn, name: str) -> list[dict[str, Any]]:
     if name == "roster":
         return _roster(txn)
-    return txn.view(Attention).rows() if name == "attention" else txn.view(Changes).since(0)
+    return txn.view(Attention).rows() if name == "attention" else txn.view(Changes).rows()
 
 
 def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], list[str]]:
@@ -307,7 +400,7 @@ def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], lis
     if name == "roster":
         return (_roster(txn) if txn.view(Stamps).head() > after else []), []
     if name == "changes":
-        return txn.view(Changes).since(after), []
+        return txn.view(Changes).since(after)
     rows = txn.view(Attention).since(after)
     return [row for row in rows if row["open"]], [row["id"] for row in rows if not row["open"]]
 

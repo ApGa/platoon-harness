@@ -12,7 +12,6 @@ from platoon_harness.primitives import (
     REPORTS,
     ApprovalRequested,
     Capabilities,
-    Changed,
     ChildSeen,
     Compacted,
     Delta,
@@ -64,7 +63,6 @@ EVERY_REPORT = [
     GapReport(plane="model", what="hidden_call"),
     Native(kind="frame", raw="???", cut=3),
     Exited(reason="gone"),
-    Changed(path="src/a.py", added=1, removed=2, tests="passed"),
 ]
 
 
