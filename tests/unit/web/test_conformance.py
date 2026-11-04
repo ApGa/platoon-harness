@@ -16,7 +16,7 @@ from .support import Browser, caught_up, scenario, served, team
 
 pytestmark = pytest.mark.timeout(60)
 
-MAPS = frozenset({"sent", "last_by", "positions", "fields"})
+MAPS = frozenset({"sent", "last_by", "positions", "fields", "window"})
 """Objects keyed by people or chats, whose keys are data and not shape."""
 OPTIONAL = frozenset(
     {
@@ -33,6 +33,8 @@ OPTIONAL = frozenset(
     }
 )
 """What a message holds only when it has one: either side may lack it, and where both hold it, it is held alike."""
+ACTIVITY = {"buckets": 10, "from": 0, "to": 2**32}
+"""Messages over time, and how many each chat had in a stretch that holds every one."""
 
 
 @pytest.fixture(autouse=True)
@@ -150,6 +152,8 @@ def swarmchat(folder: Path) -> dict[str, Any]:
             "view_thread": view("view_thread", {"id": plan["id"]}),
             "view_receipts": view("view_receipts", {"id": hello["id"]}),
             "view_search": view("view_search", {"text": "plan"}),
+            "view_posts": view("view_posts", {"chat": plan["chat"], "sort": "new"}),
+            "view_activity": view("view_activity", ACTIVITY),
             "view_as": view("view_as", {"user": "alice", "unread": True}),
             "view_knew": view("view_knew", {"id": plan["id"]}),
             "view_text": view("view_text", {"id": file}),
@@ -184,6 +188,8 @@ async def ours(root: Path) -> dict[str, Any]:
             "view_thread": await browser.view("view_thread", {"id": plan["id"]}),
             "view_receipts": await browser.view("view_receipts", {"id": hello["id"]}),
             "view_search": await browser.view("view_search", {"text": "plan"}),
+            "view_posts": await browser.view("view_posts", {"chat": general["id"], "sort": "new"}),
+            "view_activity": await browser.view("view_activity", ACTIVITY),
             "view_as": await browser.view("view_as", {"user": "lead", "unread": True}),
             "view_knew": await browser.view("view_knew", {"id": plan["id"]}),
             "view_text": await browser.view("view_text", {"id": plan["attachments"][0]["id"]}),

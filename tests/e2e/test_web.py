@@ -105,10 +105,6 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(chromium: Browser
     for reply in await replies.all():
         await expect(reply).to_be_disabled()
         await expect(reply).to_have_attribute("title", why)
-    for layout in ("board", "map"):
-        button = page.locator(f'#layouts [data-layout="{layout}"]')
-        await expect(button).to_be_disabled()
-        await expect(button).to_have_attribute("title", re.compile("^Not built yet: "))
 
     await page.goto(served["view"].partition("#")[0] + "#person=lead")
     acts = page.locator("[data-x-act]")

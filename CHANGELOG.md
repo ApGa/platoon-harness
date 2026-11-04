@@ -4,6 +4,11 @@
 
 ### Added
 
+- SwarmChat's Board and Map over a session: `view_posts` and `view_activity` answer from the projection in SwarmChat's shapes,
+  posts from a chat or from every channel and group, sorted new or active, and messages over time, by the journal's times. A
+  session's messages take no reactions, so a post's votes are null, hot and top are refused, and the page draws them and each
+  post's vote control disabled, saying why. A queue's or a board's chat draws Tasks or Entries disabled, as the tasks and board
+  views are planned. See `docs/web.md` and ADR 0035.
 - Acting from SwarmChat's page, on a control link, each act one op through `/x/command`: a composer at the foot of a chat that names
   its target, sends on Enter, starts a line on Shift+Enter and cuts a long text by the function the terminal cuts with, a reply in
   a thread citing the message's entry, a file as a message's body with the most a body may be said first and its progress shown,

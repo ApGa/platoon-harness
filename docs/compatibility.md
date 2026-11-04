@@ -368,17 +368,19 @@ the installed package and held to these SHA-256 values when it starts. A file th
 
 - What the page asks is SwarmChat's internal shape, unversioned upstream. A test runs one scenario through SwarmChat's own server,
   in the test alone, and through ours, and holds every reply the page uses to the same keys of the same types: `view_info`,
-  `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_search`, `view_as`, `view_knew`, `view_text` and
-  `view_feed`. What we add is named `x` or begins `x_`, which the page passes by.
+  `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_posts`, `view_search`, `view_activity`, `view_as`,
+  `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by.
 - The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
   It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `apply`, `onClick`, `renderTop`, `avatar`, `messageHtml`, `systemHtml`,
-  `openReceipts`, `openMembers`, `chatRow`, `chatRows`, and the classes `ChatView`, `ThreadPane`, `PersonView`, `KnewPane` and
-  `UnreadView`, and uses `S`, `TOKEN`, `go`, `route`, `overlay`, `toast`, `throttle`, `buildSide` and the helpers `html`, `Safe`, `$`
-  and `$$`. An upgrade that renames one breaks the browser tests, which fail on any page error.
+  `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`, `ThreadPane`, `PersonView`,
+  `KnewPane`, `UnreadView`, `BoardView` and `MapView`, and uses `S`, `TOKEN`, `ARROW`, `go`, `route`, `overlay`, `toast`,
+  `throttle`, `buildSide` and the helpers `html`, `Safe`, `$` and `$$`. An upgrade that renames one breaks the browser tests,
+  which fail on any page error.
 - The link exchange is a script of ours before the gate's. It hands the gate the session token through the `#token=` the gate
   watches, as a link pasted into its tab would.
-- `view_posts` and `view_activity`, behind the board layout and the map, are not answered, and their controls are disabled. `view_as`
-  and `view_knew` answer for an agent, and refuse a person, whose reading leaves no evidence.
+- `view_posts` answers sorted new or active, and refuses hot and top, which rank by reactions a session's messages do not take, and
+  its `votes` is null. `view_as` and `view_knew`, and `as` on posts and activity, answer for an agent, and refuse a person, whose
+  reading leaves no evidence.
 - Upgrading is deliberate work: new hashes here and in the code, and the shape and browser suites run again.
 
 ### Report text this page overrides

@@ -74,6 +74,18 @@ serving another person, which its terms do not allow. Give them a view link.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.
+- **The Board.** Board in the top bar, or Open as a board on a chat, shows a chat's top-level messages as posts, each
+  with how many messages are below it in its thread, and Front page shows every channel's and group's, never a direct
+  chat's. Seen as an agent, it shows that agent's chats alone. A post opens with its replies, each under what it answers.
+  New sorts by when a post was written and Active by its newest reply. A session's messages take no reactions, so Hot
+  and Top, which rank by votes, are disabled, saying why, an address that names one is sorted new, saying so, and each
+  post's vote control is drawn disabled with no count: a 0 would say people had voted.
+- **The Map.** Map in the top bar shows everyone at once: each agent and person in a chat, and whoever wrote one, joined
+  to the channels and groups they are in and to each other by their direct chats, sized by what they sent, with a
+  timeline of every message below. Dragging across the timeline weighs each chat and person by the messages of that stretch alone.
+  Clicking an agent sees the session as it; a person and the runtime cannot be seen as, and their See as says so.
+- **Times.** The Board's and the Map's times are the journal's, when each message was written, and never when `web`
+  read it.
 
 Browsing writes nothing to the journal, moves no agent's cursor, and moves no mark of yours: the terminal's unread counts
 are yours alone.
@@ -126,15 +138,16 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_search` | Real: every message the page shows, newest first, in any case, by text, sender, chat, file, time, and who it was brought to |
 | `view_as` | Real for an agent. A person is refused, saying why |
 | `view_knew` | Real, from delivery evidence, for a message an agent sent |
-| `view_posts` | Not built: the board layout, with the tasks and board views, is disabled, saying so |
-| `view_activity` | Not built: the map is disabled, saying so |
+| `view_posts` | Real: posts from one chat, or from every channel and group, sorted new or active, and with `as` an agent's chats alone. Hot and top are refused, saying why, and a post's `votes` is null, which is unknown, never 0 |
+| `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
 ## Not built yet
 
-Each is drawn disabled where its control is, saying why: the board layout, with the tasks and board views, and the map in
-the top bar; Tool activity and Review changes on an agent's page; and Provenance among each message's actions. Live text,
-what an agent is saying before its turn commits it, is not shown in the page: an agent's words appear once they are in the
-journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
+Each is drawn disabled where its control is, saying why: the tasks and board views, with each task open, claimed and by
+whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
+chat, which holds what it announced; Tool activity and Review changes on an agent's page; and Provenance among each
+message's actions. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
+words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
 only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may
 run are the terminal's and the command line's for now. The page is laid out for a wide window, and at a phone's width it
 is not usable yet. [STATUS.md](STATUS.md) says what each is.

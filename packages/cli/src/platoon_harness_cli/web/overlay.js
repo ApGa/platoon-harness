@@ -11,15 +11,18 @@
 // it may not. The feed keeps `live` current.
 const X = {caps: null};
 
-// What is not built over a session yet, and why: two of SwarmChat's layouts, and what the brief asks the page to show.
-X.unbuilt = {board: 'Not built yet: the board layout, and the tasks and board views, are planned.',
-  map: 'Not built yet: the map is planned.',
+// What is not built over a session yet, and why: what the brief asks the page to show.
+X.unbuilt = {tasks: 'Not built yet: the tasks and board views are planned, with each task open, claimed and by whom ' +
+    'under what lease, or done, and each board entry with its versions. This chat holds what its queue or board announced.',
   activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.',
   review: 'Not built yet: reviewing what an agent changed is planned.',
   provenance: 'Not built yet: following a message into its provenance is planned.'};
 
 // Only an agent leaves evidence of what reached it, so only an agent can be seen as.
 X.AS_AGENT = 'Only an agent leaves evidence of what reached it, so only an agent can be seen as.';
+
+// A session's messages take no reactions, so a post's votes are unknown, and nothing can be ranked by them.
+X.UNVOTED = 'A session\'s messages take no reactions, so there are no votes to count or to rank by.';
 
 // The acts of a person's page, each a label, the op it runs, and what it adds to the agent: an agent's own, and the
 // session's, on the person's own page.
@@ -69,16 +72,13 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-said:empty { display: none; }
 .pop .it.x-need { display: grid; gap: 6px; cursor: default; }
 .pop.x-ask { max-width: 380px; }
-.row.special.x-off, .pop .it.x-off { opacity: .55; cursor: not-allowed; }
+.row.special.x-off, .pop .it.x-off, .votes.x-off { opacity: .55; cursor: not-allowed; }
 button[disabled] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
 $('#login p').textContent = 'This page opens from a link that platoon-harness web says, or one a page acting for you ' +
   'made. Each link opens once, so ask for a new one.';
 $('#login input').placeholder = 'Session token';
-for (const b of $$('#layouts button')) {
-  if (X.unbuilt[b.dataset.layout]) { b.disabled = true; b.title = X.unbuilt[b.dataset.layout]; }
-}
 
 const baseApi = api;
 api = async (name, params) => {
@@ -112,12 +112,16 @@ setLive = state => {
     off: 'Lost web. Trying again.'}[state] || '';
 };
 
-// An address that names a layout not built, or someone who cannot be seen as, shows what can be shown, saying why.
+// An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
+// saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot.
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
-  if (X.unbuilt[r.layout]) { toast(X.unbuilt[r.layout]); r.layout = 'chat'; }
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
+  if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
+    if (r.sort) toast(X.UNVOTED);
+    r.sort = 'new';
+  }
   return r;
 };
 
@@ -527,7 +531,7 @@ ChatView = class extends ChatView {
   renderHead() {
     super.renderHead();
     const board = $('[data-goto="board"]', this.head);
-    if (board) { board.disabled = true; board.title = X.unbuilt.board; }
+    if (board) board.insertAdjacentHTML('beforebegin', X.tasksView(S.chats.get(this.id)).s);
   }
   divider() {
     const d = super.divider();
@@ -557,6 +561,35 @@ ThreadPane = class extends ThreadPane {
     const to = (S.chats.get(f.dataset.xChat) || {}).x_to;
     if (m) $('.x-to', f).innerHTML = html`Reply to <b>${name($('.name', m).dataset.person)}</b>${to ? html`, to <b>${to}</b>` : ''}`.s;
     X.paint(this.draft);
+  }
+};
+
+// A queue's or a board's own view, of its tasks or its entries, drawn disabled in its chat, saying why.
+X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)
+  ? html`<button class="btn" disabled title="${X.unbuilt.tasks}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
+  : html``;
+
+// Posts, with the sorts that rank by votes disabled, saying why, and a queue's or a board's own view beside them.
+BoardView = class extends BoardView {
+  constructor(main, chatId, sort) {
+    super(main, chatId, sort);
+    for (const b of $$('[data-sort="hot"], [data-sort="top"]', main)) { b.disabled = true; b.title = X.UNVOTED; }
+    $('.sorts', main).insertAdjacentHTML('afterend', X.tasksView(S.chats.get(chatId)).s);
+  }
+};
+
+// A post's votes are unknown, so its vote control is drawn disabled, saying why, with no count.
+const basePostHtml = postHtml;
+postHtml = (p, o) => new Safe(basePostHtml({...p, votes: 0}, o).s.replace(
+  html`<div class="votes" title="No reactions">${new Safe(ARROW)}<span>0</span></div>`.s,
+  () => html`<div class="votes x-off" aria-disabled="true" title="${X.UNVOTED}">${new Safe(ARROW)}</div>`.s));
+
+// The map's pane offers to see as whoever is under the mouse, and only an agent can be seen as.
+MapView = class extends MapView {
+  showPane() {
+    super.showPane();
+    const see = $('#pane [data-see-as]');
+    if (see && X.kind(see.dataset.seeAs) !== 'agent') { see.disabled = true; see.title = X.AS_AGENT; }
   }
 };
 

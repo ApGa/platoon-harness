@@ -1313,8 +1313,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one writer. A
   person acts there through `/x/command`: each act keeps its key until it is answered, across a lost connection, a reload or a new
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
-  `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) and
-  [ADR 0028](adr/0028-acting-from-the-page.md) its decisions.
+  `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md),
+  [ADR 0028](adr/0028-acting-from-the-page.md) and [ADR 0035](adr/0035-the-board-and-the-map-over-messages.md) its decisions.
 
 ## 13. Workspaces
 

@@ -33,7 +33,9 @@ VIEWS = (
     "view_messages",
     "view_thread",
     "view_receipts",
+    "view_posts",
     "view_search",
+    "view_activity",
     "view_as",
     "view_knew",
     "view_text",
@@ -328,13 +330,14 @@ async def test_every_view_the_page_reaches_answers_from_the_projection(root, clo
             "view_page": await browser.view("view_page"),
             "view_thread": await browser.view("view_thread", {"id": said["id"]}),
             "view_receipts": await browser.view("view_receipts", {"id": said["id"]}),
+            "view_posts": await browser.view("view_posts", {"chat": general, "sort": "active"}),
+            "view_activity": await browser.view("view_activity", {"buckets": 1}),
             "view_as": await browser.view("view_as", {"user": "lead", "unread": True}),
             "view_knew": await browser.view("view_knew", {"id": said["id"]}),
             "view_text": await browser.view("view_text", {"id": file}),
             "view_feed": await browser.view("view_feed", {"after": 0, "feed_id": snapshot["server"]["feed_id"]}),
         }
         download = await browser.request("POST", "/v1/view_download", {"id": file})
-        unbuilt = [await browser.request("POST", f"/v1/{name}", {}) for name in ("view_posts", "view_activity")]
 
     assert said["from"] == "lead" and said["x_ref"].startswith("channel/general@")
     assert "js" in answers["view_page"] and answers["view_thread"]["messages"][0]["depth"] == 0
@@ -344,8 +347,8 @@ async def test_every_view_the_page_reaches_answers_from_the_projection(root, clo
     assert answers["view_text"]["text"] and not answers["view_text"]["cut"]
     assert answers["view_feed"]["events"] and answers["view_feed"]["x"]["live"]
     assert download.status == 200 and json.loads(download.headers["x-attachment"])["id"] == file
-    assert [reply.status for reply in unbuilt] == [404, 404]
-    assert "not built yet" in unbuilt[0].json()["error"]
+    assert said["id"] in [post["id"] for post in answers["view_posts"]["posts"]]
+    assert answers["view_activity"]["counts"] == [sum(chat["messages"] for chat in snapshot["chats"])]
 
 
 async def test_a_person_is_no_agent_to_be_seen_as(web):

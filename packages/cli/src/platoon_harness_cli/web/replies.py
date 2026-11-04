@@ -17,6 +17,23 @@ PREVIEW = 160
 RECENT = 900.0
 LIMIT = 500
 FEED_LIMIT = 5000
+UNVOTED = "a session's messages take no reactions, so there are no votes to rank by: sort is new or active"
+_POSTS = """
+WITH RECURSIVE thread(chat, post, seq) AS (
+    SELECT chat, seq, seq FROM lines
+    WHERE kind = 'message' AND parent IS NULL AND chat IN (SELECT value FROM json_each(?))
+    UNION ALL
+    SELECT lines.chat, thread.post, lines.seq FROM lines
+    JOIN thread ON (lines.chat, lines.parent) = (thread.chat, thread.seq)
+),
+posts(chat, post, comments, newest) AS (SELECT chat, post, count(*) - 1, max(seq) FROM thread GROUP BY chat, post)
+SELECT post.*, posts.comments, newest.time AS active_at FROM posts
+JOIN lines AS post ON (post.chat, post.seq) = (posts.chat, posts.post)
+JOIN lines AS newest ON (newest.chat, newest.seq) = (posts.chat, posts.newest)
+ORDER BY {order} DESC, post.seq DESC, post.chat DESC LIMIT ? OFFSET ?
+"""
+"""Each top-level message of the chats named, with how many messages are below it in its thread and when the newest of
+them was written, or the post itself when none is."""
 
 Statuses = Mapping[str, str]
 """Each agent's status, as the roster says it now."""
@@ -52,6 +69,13 @@ def _epoch(at: Any) -> float:
         return datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
     except ValueError:
         raise Error(400, f"{at!r} is no time") from None
+
+
+def _seconds(params: Mapping[str, Any], key: str) -> float:
+    try:
+        return float(params[key])
+    except (TypeError, ValueError):
+        raise Error(400, f"{key} is a time in seconds since 1970") from None
 
 
 def _line(projection: Projection, id: Any) -> sqlite3.Row:
@@ -241,6 +265,33 @@ def receipts(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any
     }
 
 
+def posts(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Top-level messages as posts, from one chat or from every channel and group, newest first by when each was
+    written, `new`, or last answered, `active`, each with how many messages are below it in its thread. With `as`, only
+    the chats that agent is in. A session's messages take no reactions, so a post's votes are unknown, and hot and top,
+    which rank by votes, are refused."""
+    sort = params.get("sort") or "new"
+    if sort not in ("new", "active"):
+        raise Error(400, UNVOTED if sort in ("hot", "top") else "sort is new or active")
+    limit, offset = _int(params, "limit", 30, 200) or 1, _int(params, "offset", 0, 10**9)
+    db = projection.db
+    if params.get("chat"):
+        chats = [_chat_row(projection, params["chat"])["id"]]
+    else:
+        every = db.execute("SELECT * FROM chats ORDER BY id").fetchall()
+        chats = [chat["id"] for chat in every if _kind(chat, _members(projection, chat["id"])) != "direct"]
+    if params.get("as"):
+        user = _agent(projection, params["as"])
+        chats = [chat for chat in chats if user in _members(projection, chat)]
+    order = "post.time" if sort == "new" else "newest.time"
+    rows = db.execute(_POSTS.format(order=order), (json.dumps(chats), limit + 1, offset)).fetchall()
+    found = [
+        message(projection, row) | {"comments": row["comments"], "votes": None, "active_at": row["active_at"]}
+        for row in rows[:limit]
+    ]
+    return {"posts": found, "more": len(rows) > limit}
+
+
 def search(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
     """Messages, newest first, from every chat or only `chats`, or an agent's chats with `as`, narrowed by `from`,
     `mentions`, `files`, `after` and `before`, with `text` found in any case in the text a message shows. For the next
@@ -286,6 +337,41 @@ def search(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
                 break
     until = [found[-1]["time"], found[-1]["chat"], found[-1]["seq"]] if len(found) == limit else None
     return {"messages": [message(projection, row) for row in found], "until": until}
+
+
+def activity(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Messages over time, by the journal's times: how many fell in each of `buckets` stretches, from the first message
+    to the last, across every chat or the chats an agent is in, with `as`. With `from` and `to`, in seconds since 1970,
+    how many each chat had from the one through the other, and from whom."""
+    where, args = "kind = 'message'", []
+    if params.get("as"):
+        where += " AND chat IN (SELECT chat FROM members WHERE user = ?)"
+        args.append(_agent(projection, params["as"]))
+    db = projection.db
+    first, last = db.execute(f"SELECT min(time), max(time) FROM lines WHERE {where}", args).fetchone()
+    if first is None:
+        return {"start": None, "end": None, "width": None, "counts": [], "window": {}}
+    buckets = _int(params, "buckets", 200, 2000) or 1
+    width = max((last - first) / buckets, 0.001)
+    counts = [0] * buckets
+    for bucket, n in db.execute(
+        f"SELECT min(?, CAST((time - ?) / ? AS INTEGER)), count(*) FROM lines WHERE {where} GROUP BY 1",
+        (buckets - 1, first, width, *args),
+    ):
+        counts[bucket] = n
+    shown: dict[str, Any] = {"start": first, "end": last, "width": width, "counts": counts}
+    if params.get("from") is not None and params.get("to") is not None:
+        window: dict[str, dict[str, Any]] = {}
+        rows = db.execute(
+            f"SELECT chat, sender, count(*) FROM lines WHERE {where} AND time BETWEEN ? AND ? GROUP BY chat, sender",
+            (*args, _seconds(params, "from"), _seconds(params, "to")),
+        )
+        for chat, sender, n in rows:
+            counted = window.setdefault(chat, {"messages": 0, "sent": {}})
+            counted["messages"] += n
+            counted["sent"][sender] = n
+        shown["window"] = window
+    return shown
 
 
 def _agent(projection: Projection, id: Any) -> str:

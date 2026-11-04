@@ -35,10 +35,6 @@ TEXT_LIMIT = 5_000_000
 _KEY = re.compile(r"[0-9a-f]{32}")
 _PAGE = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
 _JSON = "Content-Type: application/json"
-_UNBUILT = {
-    "view_posts": "the board layout is not built yet: the tasks and board views are planned",
-    "view_activity": "the map is not built yet",
-}
 _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
 _SPENT = "this link was used already or has expired: ask for a new one"
 
@@ -171,8 +167,12 @@ class Web(Server[Request]):
                     return _json(replies.thread(projection, params))
                 case "view_receipts":
                     return _json(replies.receipts(projection, params))
+                case "view_posts":
+                    return _json(replies.posts(projection, params))
                 case "view_search":
                     return _json(replies.search(projection, params))
+                case "view_activity":
+                    return _json(replies.activity(projection, params))
                 case "view_as":
                     return _json(replies.seen_as(projection, params, await self._roster()))
                 case "view_knew":
@@ -181,7 +181,7 @@ class Web(Server[Request]):
                     return _json(await self._text(params))
                 case "view_download":
                     return await self._download(params)
-            raise replies.Error(404, _UNBUILT.get(name, f"There is no request named '{name}'."))
+            raise replies.Error(404, f"There is no request named '{name}'.")
         except replies.Error as error:
             raise Rejected(error.status, why=str(error)) from None
 

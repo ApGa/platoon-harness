@@ -37,6 +37,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0028](0028-acting-from-the-page.md) | Acting from the page | Each act keeps its key until answered, across a reload; one cut in Python for both clients; Needs you is the runtime's `attention`; asking first in the page |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | `tool_names` on `Capabilities`, `bare` for OpenHands, picks the surface our words and a tool's URL use |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | `platoon-harness-sdk[openhands]`, a worker per agent on the runtime's own interpreter that alone loads OpenHands, and an environment of its own as a wire command |
+| [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Posts and activity answer from the projection by the journal's times; votes are null, hot and top refused and drawn disabled; a queue's or a board's own view stays disabled, saying why |
 
 ## Adding or changing one
 
