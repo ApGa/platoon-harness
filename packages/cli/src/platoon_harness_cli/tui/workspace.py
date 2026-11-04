@@ -727,12 +727,12 @@ class Workspace(Screen[None]):
             if not await self.app.push_screen_wait(Confirm(question)):
                 return
         try:
-            gist, body = cut(text, file=self.attached is not None)
+            gist, body = cut(text, file=None if self.attached is None else self.attached[0])
         except ValueError as error:
             note(self, str(error), severity="warning")
             return
         if self.attached is not None:
-            gist, body = text or f"file {self.attached[0]}", self.attached[1]
+            body = self.attached[1]
         try:
             await live.session.send(target, gist, body=body)
         except Refused as refused:

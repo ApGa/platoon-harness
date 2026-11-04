@@ -505,15 +505,18 @@ async def test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it(web,
     assert (sent[0].gist, await session.get_body(sent[0].data["body"])) == (cut(text)[0], text.encode())
 
 
-async def test_a_long_message_beside_a_file_is_refused_with_no_event(web, session):
+@pytest.mark.parametrize(("gist", "file"), [("x" * 300, "notes.txt"), ("a file", None)])
+async def test_a_file_too_long_to_name_beside_its_words_or_named_by_nothing_is_refused_with_no_event(
+    web, session, gist, file
+):
     browser = await Browser(web).opened("control")
     stored = (await browser.request("POST", "/x/body", b"a file")).json()["ref"]
     head = await session.head()
-    args = {"to": "#general", "gist": "x" * 300, "body": stored}
+    command = {"op": "message.send", "args": {"to": "#general", "gist": gist, "body": stored}, "key": key(5)}
 
-    reply = await browser.request("POST", "/x/command", {"op": "message.send", "args": args, "key": key(5)})
+    reply = await browser.request("POST", "/x/command", command | {"file": file})
 
-    assert reply.status == 400 and "two bodies" in reply.json()["error"]
+    assert reply.status == 400
     assert await session.head() == head
 
 
@@ -521,11 +524,13 @@ async def test_a_body_is_stored_for_a_command_to_cite(web, session):
     browser = await Browser(web).opened("control")
 
     stored = (await browser.request("POST", "/x/body", b"the whole of it")).json()
-    command = {"op": "message.send", "args": {"to": "#general", "gist": "a file", "body": stored["ref"]}, "key": key(6)}
+    args = {"to": "#general", "gist": "a file", "body": stored["ref"]}
+    command = {"op": "message.send", "args": args, "key": key(6), "file": "whole.txt"}
     sent = (await browser.request("POST", "/x/command", command)).json()
 
     assert stored["ref"].startswith("sha256:") and sent["refusal"] is None
     assert await session.get_body(stored["ref"]) == b"the whole of it"
+    assert [event.gist for event in await of_type(session, "message.sent")] == ["a file (file whole.txt)"]
 
 
 @pytest.mark.parametrize("kind", ["view", "control"])

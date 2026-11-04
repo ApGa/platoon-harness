@@ -85,9 +85,10 @@ Enter sends to the target shown above it, and a person's message steers: it land
 has, unless the line is a typed command, which runs. `@agent` or `#channel` and a space at the start retargets it, and the
 target follows the focus pane while the draft is empty. Something that would go elsewhere than the target shown, such as a
 message that still begins with another address, is asked about first, and so is one that begins with `/` and is none of
-ours. `/file` attaches a file as the message's body. Up and Down on the first and last lines recall what you sent or
-ran, over an empty draft and never over one being written, which a recalled message is once you edit it. Ctrl+D on an
-empty composer detaches, and with a draft it says why it does not.
+ours. `/file` attaches a file as the message's body, and since a body keeps no name, the file's name follows your words
+in the gist. Up and Down on the first and last lines recall what you sent or ran, over an empty draft and never over one
+being written, which a recalled message is once you edit it. Ctrl+D on an empty composer detaches, and with a draft it
+says why it does not.
 
 ### Acting
 

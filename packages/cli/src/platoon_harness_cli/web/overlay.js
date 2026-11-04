@@ -162,12 +162,13 @@ X.send = async (key, command) => {
   }
 };
 
-// One act, kept until it is answered: its outcome, or null while it waits for a new link.
-X.act = async (op, args) => {
-  const key = X.key();
-  X.pending[key] = {op, args};
+// One act, kept until it is answered, with what `more` says beside its args: its outcome, or null while it waits for a
+// new link.
+X.act = async (op, args, more = {}) => {
+  const key = X.key(), command = {op, args, ...more};
+  X.pending[key] = command;
   X.keep();
-  const r = await X.send(key, {op, args});
+  const r = await X.send(key, command);
   if (r) { delete X.pending[key]; X.keep(); }
   return r;
 };
@@ -259,8 +260,9 @@ document.addEventListener('submit', e => {
   X.post(f);
 });
 
-// Send a draft: its file first, if it has one, saying how much has gone, then the message. Once it is sent, the
-// draft lets go of what it sent, and of nothing chosen since.
+// Send a draft: its file first, if it has one, saying how much has gone, then the message, whose gist web makes of the
+// text and the file's name as the terminal makes it. Once it is sent, the draft lets go of what it sent, and of nothing
+// chosen since.
 X.post = async f => {
   const draft = f.dataset.xDraft, d = X.draft(draft), text = d.text.trim(), file = d.file;
   if (d.sending || (!text && !file) || X.unsendable(f)) return;
@@ -268,12 +270,9 @@ X.post = async f => {
   if (f.dataset.xReplyTo) args.reply_to = f.dataset.xReplyTo;
   const show = said => { d.sending = said; X.paint(draft); };
   try {
-    if (file) {
-      args.gist = text || `file ${file.name}`;
-      args.body = await X.upload(file, share => show(`Sending ${file.name}: ${Math.round(100 * share)}%`));
-    }
+    if (file) args.body = await X.upload(file, share => show(`Sending ${file.name}: ${Math.round(100 * share)}%`));
     show('Sending…');
-    const r = await X.act('message.send', args);
+    const r = await X.act('message.send', args, file ? {file: file.name} : {});
     d.said = !r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : '';
     if (r && !r.refusal) {
       d.text = '';

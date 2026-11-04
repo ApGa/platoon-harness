@@ -242,6 +242,10 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- A file sent as a message's body lost its name whenever words went with it, in the terminal and on the page, since a body
+  keeps none, so the page showed every body as `body.txt`. The function both clients make a gist with names the file after
+  the words, `TEXT (file NAME)`, and refuses the two past 280 characters; the page sends the file's name beside the op's
+  args. Where no words went, the gist `file NAME` that ran past 280 was refused as a long text beside a file.
 - On SwarmChat's page, the people list showed `agent` beside every agent, where SwarmChat draws someone's first field, so
   who was working or held up needed a page per agent; it shows each agent's status there. Seeing as a person or the
   runtime was offered, and choosing one left the page half in a mode it had refused; the picker draws them disabled,

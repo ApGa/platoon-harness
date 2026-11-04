@@ -53,14 +53,21 @@ CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "sessio
 the session, or erases a body, which nothing takes back."""
 
 
-def cut(text: str, *, file: bool = False) -> tuple[str, str | None]:
+def cut(text: str, *, file: str | None = None) -> tuple[str, str | None]:
     """A person's text as a message's gist and body, in the terminal and in the browser alike: the text itself when it
-    fits in a gist, and otherwise its first characters and an ellipsis, with the whole as the body. A file is a body of
-    its own, so beside one a text too long for a gist is refused."""
+    fits in a gist, and otherwise its first characters and an ellipsis, with the whole as the body. A file, named by
+    `file`, is a body of its own and keeps no name, so beside one the gist is the text and the file's name, and must
+    fit."""
+    if file is not None:
+        gist = f"{text} (file {file})" if text else f"file {file}"
+        if len(gist) > GIST_LIMIT:
+            raise ValueError(
+                f"the words beside a file and its name are the gist, of at most {GIST_LIMIT} characters, and these "
+                f"make {len(gist)}: send long words alone, or name the file shorter"
+            )
+        return gist, None
     if len(text) <= GIST_LIMIT:
         return text, None
-    if file:
-        raise ValueError("a long message and a file are two bodies: send them one at a time")
     return f"{text[: GIST_LIMIT - 1]}…", text
 
 

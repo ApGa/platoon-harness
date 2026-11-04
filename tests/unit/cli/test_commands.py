@@ -186,7 +186,16 @@ def test_the_reference_is_made_from_the_definitions():
 def test_a_person_s_text_is_cut_into_a_gist_and_a_body_one_way():
     fits, long = "x" * GIST_LIMIT, "y" * (GIST_LIMIT + 1)
 
-    assert cut(fits) == (fits, None) and cut(fits, file=True) == (fits, None)
+    assert cut(fits) == (fits, None)
     assert cut(long) == ("y" * (GIST_LIMIT - 1) + "…", long)
-    with pytest.raises(ValueError, match="two bodies"):
-        cut(long, file=True)
+
+
+def test_a_file_sent_as_a_body_is_named_in_the_gist_since_a_body_keeps_no_name():
+    words = "x" * (GIST_LIMIT - len(" (file notes.txt)"))
+
+    assert cut("here they are", file="notes.txt") == ("here they are (file notes.txt)", None)
+    assert cut("", file="notes.txt") == ("file notes.txt", None)
+    assert cut(words, file="notes.txt") == (f"{words} (file notes.txt)", None)
+    for text, name in ((words + "x", "notes.txt"), ("", "n" * (GIST_LIMIT - len("file ") + 1))):
+        with pytest.raises(ValueError, match=f"of at most {GIST_LIMIT} characters, and these make {GIST_LIMIT + 1}"):
+            cut(text, file=name)

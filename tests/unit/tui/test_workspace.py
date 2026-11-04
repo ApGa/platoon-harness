@@ -488,7 +488,7 @@ async def test_the_composer_retargets_recalls_attaches_a_file_and_asks_before_se
         sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
         assert [(event.stream, event.gist) for event in sent] == [
             ("channel/notes", "for the channel"),
-            ("channel/notes", "@nobody look"),
+            ("channel/notes", "@nobody look (file spec.md)"),
         ]
         assert (await owner.get_body(sent[1].data["body"])) == attachment.read_bytes()
 

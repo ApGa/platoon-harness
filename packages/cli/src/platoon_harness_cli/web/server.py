@@ -280,7 +280,8 @@ class Web(Server[Request]):
         """One op, as `Session.submit` runs it, and its outcome, a refusal among them. `key` is 128 random bits the page
         made for one draft or press and keeps until the act is answered, under `web/`, so a retry is one operation from
         whichever link sends it, and no other client's key meets it. `expected_version` is the op's argument of that
-        name, and `via` is said here. A message's text too long for a gist is cut as the terminal cuts it."""
+        name, and `via` is said here. A message's text is made its gist as the terminal makes it: cut when it is too
+        long for one, and beside the name of the file that is its body, which `file` says."""
         op, args, key = params.get("op"), params.get("args", {}), params.get("key")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(key, str) or not _KEY.fullmatch(key):
             raise Rejected(400, why="a command is an op, its args, and a key of 32 lowercase hex the page made for it")
@@ -294,13 +295,17 @@ class Web(Server[Request]):
             args = {**args, "via": "browser"}
         key = f"web/{key}"
         if op == "message.send" and isinstance(gist := args.get("gist"), str):
+            file = params.get("file")
+            if not isinstance(file, str | None) or (file is None) != (args.get("body") is None):
+                raise Rejected(400, why="a body the page sends is a file, which `file` names")
             try:
-                gist, body = cut(gist, file=args.get("body") is not None)
+                gist, body = cut(gist, file=file)
             except ValueError as error:
                 raise Rejected(400, why=str(error)) from None
+            args = {**args, "gist": gist}
             if body is not None:
                 try:
-                    args = {**args, "gist": gist, "body": await self.session.put_body(body.encode())}
+                    args["body"] = await self.session.put_body(body.encode())
                 except Refused as refused:
                     return Outcome(op=op, key=key, args_hash="", refusal=refused.refusal).model_dump(mode="json")
         outcome = await self.session.submit(op, key=key, **args)

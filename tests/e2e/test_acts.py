@@ -118,12 +118,12 @@ async def test_a_file_goes_as_a_message_s_body_its_limit_said_before_it_is_sent(
         await page.locator(COMPOSER).press("Enter")
         await expect(page.locator("#main .x-why")).to_have_text(re.compile(r"^Sending notes\.md: \d+%$"))
         held.set()
-        await expect(said(page, "the notes")).to_have_count(1, timeout=SECONDS)
+        await expect(said(page, "the notes (file notes.md)")).to_have_count(1, timeout=SECONDS)
         sent = [event for event in await of_type(session, "message.sent") if event.actor == "human:you"]
         body = await session.get_body(sent[0].data["body"])
         await page.context.close()
 
-    assert [event.gist for event in sent] == ["the notes"] and body == notes
+    assert [event.gist for event in sent] == ["the notes (file notes.md)"] and body == notes
     assert errors == []
 
 
