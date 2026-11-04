@@ -20,7 +20,8 @@ from platoon_harness.config import Manifest
 from platoon_harness.kernel import GIST_LIMIT, Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
-from ..ops import Flag, described, flags, person_ops
+from ..ops import CONFIRMED, Flag, described, flags, person_ops
+from ..roster import detail_of, why_said
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
@@ -40,9 +41,6 @@ GROUPS = (
 GLYPHS = {group: (glyph, style) for group, _, glyph, style in GROUPS}
 UNREAD = 100
 """The most unread lines a badge counts: past it, it says `99+`."""
-CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"})
-"""The commands the palette asks once about: each ends an agent or the session, or erases a body, which nothing takes
-back."""
 UNBUILT = {"agent.takeover": "take_over"}
 """Commands whose purpose the TUI cannot carry out yet, by the key that says why: a takeover holds an agent's deliveries
 for a person to drive its own terminal, which is not built, so the palette says so rather than hold them."""
@@ -93,31 +91,6 @@ class Navigator(Rows):
     """The agents and channels, a row each, of which Enter shows the chosen one."""
 
     BINDINGS = bindings("panel")
-
-
-def _why(why: dict[str, Any] | None) -> str:
-    """What an agent waits on, in words, from the roster's typed `why`."""
-    if why is None:
-        return ""
-    match why["kind"]:
-        case "approval":
-            return "asks you to approve"
-        case "wait":
-            missing = ", ".join(why["missing"][:3]) + ("…" if len(why["missing"]) > 3 else "")
-            return f"waits {why['have']} of {why['need']}" + (f", for {missing}" if missing else "")
-        case "peer":
-            return f"waits on @{why['id']}"
-        case "budget":
-            return f"held by the budget: {why['code']}"
-        case "lease":
-            return f"holds {why['id']}"
-        case "timer":
-            return "a wake is due"
-        case "infra":
-            return why["detail"]
-        case "lost":
-            return f"lost: {why['reason']}"
-    return why["kind"]
 
 
 def _named(action: str) -> str:
@@ -490,7 +463,7 @@ class Workspace(Screen[None]):
     ) -> list[Row]:
         rows = []
         for row in sorted(under[parent], key=lambda found: found["agent"]):
-            detail = _why(row["why"]) if row["group"] in ("blocked", "needs_you", "failed") else row["activity"] or ""
+            detail = detail_of(row)
             stopped = f"turn {row['stopped']}" if row["stopped"] and row["group"] == "idle" else ""
             line = Content.assemble(
                 "  " * depth,
@@ -529,7 +502,7 @@ class Workspace(Screen[None]):
             SafeText(focus.title, "bold"),
             SafeText(f"  {row['role']} on {_harness(row)}", "dim"),
             SafeText(f"  {row['state']}", GLYPHS[row["group"]][1]),
-            SafeText(f"  {_why(row['why'])}"),
+            SafeText(f"  {why_said(row['why'])}"),
         )
 
     def _behind(self) -> Content:
@@ -552,7 +525,7 @@ class Workspace(Screen[None]):
             ),
         ]
         if row["why"] is not None:
-            lines.append(SafeText(f"why {_why(row['why'])}", "yellow"))
+            lines.append(SafeText(f"why {why_said(row['why'])}", "yellow"))
         if row["held_by"]:
             lines.append(SafeText(f"held by @{row['held_by']}"))
         for level, said in (row["levels"] or {}).items():

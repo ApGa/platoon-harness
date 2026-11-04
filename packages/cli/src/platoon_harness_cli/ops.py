@@ -48,6 +48,9 @@ def person_ops() -> dict[str, Op]:
 
 
 _PERSON = frozenset(person_ops())
+CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"})
+"""The ops a person is asked about once before they run, in the terminal and in the browser alike: each ends an agent or
+the session, or erases a body, which nothing takes back."""
 
 
 def command_of(op: str) -> str:
