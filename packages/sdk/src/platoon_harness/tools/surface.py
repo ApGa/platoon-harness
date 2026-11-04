@@ -7,7 +7,7 @@ from string import Formatter
 from typing import Any
 
 from platoon_harness.kernel import Kernel, Principal, Refusal, Refused, tool_name
-from platoon_harness.primitives import BODY_REF
+from platoon_harness.primitives import BODY_REF, Capabilities
 from platoon_harness.schema import nearest
 
 type Surface = Callable[[str], str]
@@ -118,12 +118,14 @@ def shell_name(op: str) -> str:
     return f"ph {op}"
 
 
-def surface_of(paths: Collection[str]) -> Surface | None:
-    """How a harness that reaches our tools by `paths` names them to its model: by MCP under `NAMESPACE`, by `ph`, or
-    not at all."""
-    if not paths:
+def surface_of(capabilities: Capabilities) -> Surface | None:
+    """How a harness names our tools to its model, from what it declares: by MCP, under `NAMESPACE` or by their own
+    names, by `ph`, or not at all."""
+    if not capabilities.tool_paths:
         return None
-    return shell_name if _MCP.isdisjoint(paths) else harness_name(NAMESPACE)
+    if _MCP.isdisjoint(capabilities.tool_paths):
+        return shell_name
+    return tool_name if capabilities.tool_names == "bare" else harness_name(NAMESPACE)
 
 
 def named_surface(name: str) -> Surface:

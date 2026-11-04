@@ -209,6 +209,19 @@ async def test_each_agent_gets_its_own_binding_instructions_preamble_and_ph(tmp_
     assert "wait" in ready.data["tools_visible"]
 
 
+async def test_a_harness_that_shows_our_tools_by_their_own_names_is_told_them_by_those(tmp_path, recording):
+    """OpenHands shows an MCP server's tools as the server lists them, so its words and its tool URL name none."""
+    bare = ScriptedDriver().describe().capabilities.model_copy(update={"tool_names": "bare"})
+    team = Team.model_validate({"roles": {"bob": {"harness": harness(lambda: recording([], capabilities=bare))}}})
+
+    async with Session.start(team, cwd=tmp_path, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        spec = recording.specs[0]
+
+    assert spec.tools is not None and spec.tools.url.endswith("?surface=mcp")
+    assert spec.instructions is not None and "`wait`" in spec.instructions and "mcp__ph__" not in spec.instructions
+
+
 async def test_a_role_has_the_last_word_in_its_agents_instructions(tmp_path, recording):
     """The preamble says how to end, and a role may say otherwise, so the role's words come after it."""
     team = solo_with(recording, instructions="Never call agent_finish.")

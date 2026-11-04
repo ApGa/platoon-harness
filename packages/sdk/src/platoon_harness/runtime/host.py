@@ -356,12 +356,12 @@ class Host:
         harness that reopens its own session keeps what it was told when that began, so it is handed that again."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
-        surface = surface_of(link.info.capabilities.tool_paths)
+        surface = surface_of(link.info.capabilities)
         principal = self._kernel.authenticate(admission.token.reveal())
         binding = None
         if surface is not None:
             link.held = held_tools(self._kernel, principal)
-            name = "ph" if surface is shell_name else f"mcp__{NAMESPACE}"
+            name = "ph" if surface is shell_name else "mcp" if surface is tool_name else f"mcp__{NAMESPACE}"
             binding = self._binding(folder, admission.token, surface=name)
         if resume is None:
             told = instructions(self._kernel, principal, surface, self._team.preamble_of(link.role), role.instructions)
@@ -406,7 +406,7 @@ class Host:
         """Hand entries over, and for a wake stay open until its turn begins, so `waking` always has an effect behind it
         and a crash cannot strand one. Past a time, or at an interrupt, the handover fails, which queues it again."""
         link, data = self._required(effect), effect.data
-        surface = surface_of(link.info.capabilities.tool_paths) or shell_name
+        surface = surface_of(link.info.capabilities) or shell_name
         delivery = Delivery(
             input=str(data["input"]),
             boundary=data["boundary"],

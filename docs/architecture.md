@@ -1021,6 +1021,7 @@ Absence means unsupported, as in ACP.
 | `resume` | Native resume available |
 | `boundaries` | Subset of `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
+| `tool_names` | `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`. Our words, a tool's URL and a handover name our tools as the model sees them |
 | `tool_timeout_s` | The harness's cap on one tool call |
 | `interrupt` | A turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
@@ -1086,8 +1087,8 @@ against the official client and against each real harness.
   each part of its body, and of its answer as it leaves, 10 s from the part before, so a slow link that keeps going is served and a
   client that stops is cut. Past 1,024 connections the server answers 503. `platoon_harness.http` is that code, which the browser's server
   shares.
-- `?surface=` on the URL names how tools read to a model: `ph`, or `mcp__<ns>` for a harness that shows them that way. It changes
-  descriptions and refusals, never what a token may do.
+- `?surface=` on the URL names how tools read to a model: `ph`, `mcp__<ns>` for a harness that shows them that way, or `mcp` for
+  one whose `tool_names` are `bare`, as OpenHands' are. It changes descriptions and refusals, never what a token may do.
 - `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
   which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
 - A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A list as long as a team, `peers` or

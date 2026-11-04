@@ -19,6 +19,7 @@ from platoon_harness.tools import (
     preamble,
     shell_name,
     slots,
+    surface_of,
     tool_name,
 )
 from platoon_harness.tools.surface import (
@@ -57,6 +58,21 @@ def test_each_surface_has_its_own_name_for_a_tool():
 )
 def test_a_client_names_its_surface(name, shown):
     assert named_surface(name)("task.claim") == shown
+
+
+@pytest.mark.parametrize(
+    ("declared", "shown"),
+    [
+        ({}, None),
+        ({"tool_paths": {"shell"}}, "ph task.claim"),
+        ({"tool_paths": {"mcp-http", "shell"}}, "mcp__ph__task_claim"),
+        ({"tool_paths": {"mcp-stdio"}, "tool_names": "bare"}, "task_claim"),
+    ],
+)
+def test_a_harness_names_our_tools_as_it_declares(declared, shown):
+    surface = surface_of(Capabilities(**declared))
+
+    assert (surface and surface("task.claim")) == shown
 
 
 @pytest.mark.parametrize("name", ["", "shell", "mcp__", "mcp__a b", "mcp__a/b"])

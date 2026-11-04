@@ -215,7 +215,7 @@ async def told(team: Team) -> dict[str, str | None]:
             name: instructions(
                 kernel,
                 agent,
-                surface_of(capabilities[name].tool_paths),
+                surface_of(capabilities[name]),
                 resolved.preamble_of(name),
                 resolved.roles[name].instructions,
             )

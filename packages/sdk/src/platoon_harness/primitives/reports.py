@@ -42,6 +42,7 @@ class Capabilities(Model):
     resume: bool = False
     boundaries: frozenset[Boundary] = frozenset()
     tool_paths: frozenset[Literal["mcp-http", "mcp-stdio", "shell"]] = frozenset()
+    tool_names: Literal["namespaced", "bare"] = "namespaced"
     tool_timeout_s: float | None = None
     interrupt: bool = False
     approvals: Literal["none", "gated", "native"] = "none"

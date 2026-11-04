@@ -104,6 +104,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `resume` | Native resume is available |
 | `boundaries` | Where a delivery can land: `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
+| `tool_names` | How it shows our MCP tools to its model: `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`, by their own names |
 | `tool_timeout_s` | The harness's cap on one tool call |
 | `interrupt` | Whether a turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |

@@ -136,8 +136,13 @@
   the palette and `q` quitting among them. `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep
   keys. ADR 0026.
 
+- `tool_names` on `Capabilities`: a harness that shows our MCP tools by their own names, as OpenHands does, says `bare`, and its
+  agents are told them by those names, in their instructions, handovers and refusals, through `?surface=mcp`.
+
 ### Changed
 
+- `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
+  `tool_names` too.
 - In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
   goes back to the composer and interrupts nothing. The footer names Esc by what it does from the part with focus, which is
   marked. Alt+Y, Alt+N, Alt+S and Alt+R are gone: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word
