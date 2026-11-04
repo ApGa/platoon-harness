@@ -57,7 +57,8 @@ These details differ from the design, each the smallest change that keeps its ru
   and `now`, and the probe's prompt is its `cause`, as `as`, `from` and `after` are taken words.
 - `under_way` names a `sequence` too, a cherry-pick or revert of several commits between its picks, which a stop already kept for.
 - A conflict row comes at the end of each probe that finds conflicts, the first among them, and never from a stop's look.
-- `repo.looks`, a runtime query, gives the host each workspace's last head and branch, since a daemon keeps nothing of its own.
+- The view of each workspace's last look is `Looks`, as `Repo` names the repository a session opens on, and `repo.looks`, a runtime
+  query, gives the host each workspace's last head and branch from it, since a daemon keeps nothing of its own.
 - `session.status` names the repository observed as `repo`, None when there is none, and a client says "not observed" from that.
 - A commit row has no `tests` until runtime tests exist.
 
@@ -96,4 +97,6 @@ These details differ from the design, each the smallest change that keeps its ru
 - `tests/unit/primitives/test_repo.py`: the probe at each turn end and resume, before a handover and keeping a session unsettled, the
   Ending's unobserved agents, envelopes with no agent, records once and only when they differ, the `changes` view and `seq`, and a
   conflict that needs you while its agent rests on it and again after the next look.
+- `tests/live/test_worktrees.py`, live: a real agent's commit in its worktree recorded as its own, with no agent in the envelope,
+  across a `kill -9` of its runtime and a resume, in run 62 on `claude-haiku-5-5` in 5 calls and run 63 on `gpt-6-luna` in 4.
 - Git 2.47.3 is the only version run.

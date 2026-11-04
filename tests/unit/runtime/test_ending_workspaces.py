@@ -1,7 +1,9 @@
 """An ended agent's worktree goes only when nothing would go with it, as git says, and a kept one is named with where it
 is, what it takes and why. The commits the journal recorded outlive git's pruning in a bundle of the session's."""
 
+import asyncio
 import os
+import shlex
 import socket
 import subprocess
 from pathlib import Path
@@ -316,3 +318,36 @@ def test_a_commit_git_no_longer_has_is_counted_missing(repo, tmp_path):
 
     assert written == {"file": None, "commits": 0, "missing": 1}
     assert not (folder / workspaces.BUNDLE).exists()
+
+
+def test_a_bundle_borrows_only_from_repositories_still_there(repo, tmp_path):
+    """A snapshot its stop removed held nothing your repository does not, so its going takes nothing from the bundle."""
+    work = commit(repo, "work")
+    record = repo_of(repo).model_copy(update={"head": git("rev-parse", "HEAD~1", cwd=repo).strip()})
+    folder = tmp_path / "session"
+    folder.mkdir()
+
+    written = workspaces.write_bundle(folder, record, [work], [str(tmp_path / "gone" / ".git")])
+
+    assert written == {"file": "commits.bundle", "commits": 1, "missing": 0}
+
+
+async def test_a_kept_worktree_s_release_commands_run_from_anywhere(repo, tmp_path):
+    async with Session.start(team_of(), name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker")
+        await in_state(session, "ada", "idle")
+        root = Path(workspace_of(session, "ada").path)
+        commit(root, "dropped")
+        git("reset", "-q", "--hard", "HEAD~1", cwd=root)
+        await session.cancel_agent("@ada")
+        await until(lambda: stops(session), session)
+        [kept] = (await session.ending()).workspaces
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+
+    for command in kept["release"]:
+        await asyncio.to_thread(subprocess.run, shlex.split(command), cwd=elsewhere, check=True)
+
+    assert kept["why"] == ["1 commits only it holds, in its HEAD, reflog or own refs"]
+    assert not root.exists()
+    assert git("worktree", "list", "--porcelain", cwd=repo).count("worktree ") == 1

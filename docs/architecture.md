@@ -1363,7 +1363,7 @@ another. The core gives the first three, on git and the filesystem alone, and re
   attribute, a sparse checkout, or an untracked repository inside the tree, each named. Submodules, uncommitted changes in your
   checkout where a worktree would not carry them, and a Codex role whose sandbox keeps `.git` read-only with approvals left to ask
   are warned of.
-- **Making one** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
+- **Making a worktree** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
   locked with our reason from its first write, and a fill. The effect is retried after a crash, each attempt adopts what an earlier
   one made, and one fails, naming it, on a branch, registration or folder the runtime did not make.
 - **The runtime's own git** goes through one runner, which runs no hook, no fsmonitor and no gc, and never changes what an agent made:
@@ -1372,8 +1372,8 @@ another. The core gives the first three, on git and the filesystem alone, and re
   status, ignored ones included, no operation under way, no index entry hidden from status, and every commit its HEAD, reflog and own
   refs hold its base or reachable from a ref of your repository; for a snapshot, every commit of all its refs, its stash and its
   reflogs. A kept worktree stays locked, a kept snapshot is made whole, packing what it borrowed into its own store, and either is
-  named with its host, path, size and reason on the agent's record and in the Ending. No branch is ever removed, and closing a session ends no agent, so it keeps the
-  workspaces of agents that never ended.
+  named with its host, path, size and reason on the agent's record and in the Ending. No branch is ever removed, and closing a
+  session ends no agent, so it keeps the workspaces of agents that never ended.
 - **The look.** Each turn's end and each resume request a `probe` of that agent's (§7), and its stop looks once more before it ends the
   workspace. Looks run one at a time and change no ref, index or file. Each takes the shared workspace's commits and then the agent's
   own workspace, reads HEAD once and uses that commit throughout, and records a status that names another HEAD as the gap
@@ -1390,7 +1390,7 @@ another. The core gives the first three, on git and the filesystem alone, and re
 - **Whose a commit is.** A commit is the agent's whose workspace's HEAD reflog records making it, an entry moving HEAD onto it at its
   own committer time, and nobody's when that workspace is the shared one, when none records it, or when two do. Git writes that entry
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
-  It reads records the agent's own git writes, so it is evidence at the workspace's assurance, never proof. See
+  It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof. See
   [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - **`Informed-By`** is the one way to declare a commit's semantic parents. A value of 4 to 40 hex digits naming one commit in the
   commit's own repository is resolved to its full SHA once, at the commit's first record; anything else, a ref among them, is kept as

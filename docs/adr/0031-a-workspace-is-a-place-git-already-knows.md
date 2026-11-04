@@ -115,4 +115,6 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
   the worktree for the file left uncommitted, in run 60 on `claude-haiku-5-5` in 4 calls and run 61 on `gpt-6-luna` in 4. In run
   59 the model ended its agent after the commit, so the kill cut its stop, which the next runtime retried and finished, removing
   the clean worktree and keeping its branch.
+- `tests/live/test_worktrees.py`, live, in a snapshot of a tree with uncommitted work: a real agent's commit there, recorded as its
+  own, and an end that kept the snapshot whole, in run 64 on `claude-haiku-5-5` in 2 calls and run 65 on `gpt-6-luna` in 2.
 - Git 2.47.3 is the only version run. [compatibility.md](../compatibility.md) has what each harness sees in a worktree.
