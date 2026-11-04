@@ -4,6 +4,13 @@
 
 ### Added
 
+- `platoon-harness web SESSION`: SwarmChat's pinned page over the session's journal, in a browser, as a guest on the owner's
+  control credential that starts and resumes nothing and follows the session across runtime restarts. A follower folds the journal
+  one way into `swarmchat.sqlite`, with ids a rebuild gives again, and serves the page's `view_*` replies from it, with "Delivered to"
+  from delivery evidence in place of "Read by". A view link and a control link, each opening once for a session token that expires;
+  `Host` and `Origin` checked; loopback unless `--host` names another address with TLS. `/x/command`, `/x/body` and `/x/link` take what
+  the page will send. The page reads in this stage, and every act is drawn disabled, saying why. See `docs/web.md` and ADR 0027.
+- `platoon_harness.runtime.control.BODY_LIMIT` and `platoon_harness.primitives.IN_A_RESULT` are public.
 - `platoon_harness.http`: the tool server's bounded HTTP, as a module of its own with public names. `Origin`, when a request has
   one, must now be the origin of its `Host`.
 - The session kernel: journal, writer thread, operations, grants, effects, timers, views, readers and daemons.

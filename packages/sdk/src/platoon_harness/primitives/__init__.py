@@ -22,7 +22,7 @@ from .boards import Boards
 from .budgets import Budgets
 from .channels import Channels, Groups, channel_grants
 from .clients import Attention, Changes, Gaps
-from .common import BODY_REF, WAKING, Injection, Lines, Policy, lines_of, stream_of
+from .common import BODY_REF, IN_A_RESULT, WAKING, Injection, Lines, Policy, lines_of, stream_of
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
 from .reports import (
@@ -122,6 +122,7 @@ PRIMITIVES = (
 __all__ = [
     "BODY_REF",
     "CUT_OFF",
+    "IN_A_RESULT",
     "OWNER_STOP",
     "PRIMITIVES",
     "RAW_LIMIT",

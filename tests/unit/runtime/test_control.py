@@ -401,7 +401,7 @@ async def test_a_body_crosses_both_ways(guest):
 
 
 async def test_a_body_too_big_for_a_line_is_refused_before_it_is_sent(guest, monkeypatch):
-    monkeypatch.setattr(control, "_BODY_LIMIT", 8)
+    monkeypatch.setattr(control, "BODY_LIMIT", 8)
 
     with pytest.raises(Refused) as refused:
         await guest.put_body(b"nine bytes")

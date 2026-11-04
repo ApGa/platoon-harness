@@ -118,6 +118,7 @@ Each law is a sentence, and each has a test of the same name.
   journal.sqlite      events and folds; WAL, synchronous=FULL
   annotations.sqlite  rewards, judgments, credit: no agent-reachable read opens it
   marks.sqlite        per-human unread positions: neither evidence nor view; losing it loses badges
+  swarmchat.sqlite    0600: the browser's projection, folded one way by `web`; dropping it costs a fold from the journal
   blobs/ab/<sha256>   bodies too large for the journal file
   manifest.json       resolved team, how it was started, component and protocol versions, topology hash; no secrets
   runtime.json        pid, start time, socket path, incarnation: left by a crash, so only `lock` proves it true
@@ -498,7 +499,7 @@ One definition reaches every surface.
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, but `wait` and the ops on a wait, as a wait parks a turn and a person has none. Its name is split at the dot, a flag per argument comes from its schema, a read runs on a view credential, and its help is the op's description, each op named as the command that runs it and each argument as its flag. An extension's op has no command yet |
-| Web | `POST /x/command {op, args, key, expected_version}` |
+| Web | `POST /x/command {op, args, key, expected_version}`: `expected_version` is the op's argument of that name, `via` is `browser`, and the key is the page's, under its credential's own name |
 | TUI | Palette entries for the commands a person may run, from the command line's definitions, worded as its help, with generated forms, as a read is what the views draw; the dock's actions come from `actions[]`, on the row the person chose; an interrupt the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
@@ -1081,7 +1082,8 @@ against the official client and against each real harness.
   that goes during a call drops the call, not what it asked for: a wait stays registered.
 - A request is bounded before it is believed: a head of 16 KiB, then `Host`, and `Origin`, which must be the origin of that `Host`, and
   the bearer, and only then a body of at most 1 MiB, with a length and no chunking. It has 10 s on the kernel's clock to arrive and its
-  answer 10 s to leave. Past 1,024 connections the server answers 503. `platoon_harness.http` is that code.
+  answer 10 s to leave. Past 1,024 connections the server answers 503. `platoon_harness.http` is that code, which the browser's server
+  shares.
 - `?surface=` on the URL names how tools read to a model: `ph`, or `mcp__<ns>` for a harness that shows them that way. It changes
   descriptions and refusals, never what a token may do.
 - `tools/call` answers with the result as JSON in the first content block. Later blocks carry a repeat's label and steer notices,
@@ -1266,7 +1268,8 @@ with the `delivery` it would land by now, so a client draws a chip and a queue l
 **Marks.** A person's mark is how far they have read a stream, a `seq` per stream, kept per principal in `marks.sqlite`, which
 `Session.marks` reads and `Session.mark` moves, only forward, on a live session or a closed one, with no runtime, and a view
 credential moves none. It is neither evidence nor a view, and no agent's cursor, so moving one writes no event and acknowledges no
-delivery, and losing the file, or failing to read or write it, loses only badges. It is the one file reading a session writes.
+delivery, and losing the file, or failing to read or write it, loses only badges. It is the one file reading a session writes,
+but for `web`'s projection, `swarmchat.sqlite`, which is folded from the journal and dropped at no cost but a fold.
 
 `activity` is the gist of the latest item, so it reads the running tool when a driver sends a `started` item. `stopped` says why the last
 turn did not stop on its own, until the next begins. `why` is typed: `Approval(id)`, `Wait(have, need, missing)`, `Budget(code)`, `Lease(id)`, `Peer(id)`, `Timer(at)`, `Infra(detail)`,
@@ -1289,11 +1292,17 @@ op references, each with whatever keeps a stale button from deciding anything, s
   terminal delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the
   only way, and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter.
   [tui.md](tui.md) is its guide.
-- **SwarmChat.** A follower folds the journal into its own rebuildable `swarmchat.sqlite` and serves the pinned, hash-checked
-  frontend assets, the `view_*` replies, an overlay, and one `/x/command` route into the same ops. Upstream's server never runs,
-  and nothing re-ingests the projection, so two authorities and echo loops have no path. Direct chats key on the unordered
-  participant pair, with both inboxes merged in journal order; channel chats key on the channel. One session per port avoids
-  the `localStorage` collision. "Read by" becomes "Delivered to".
+- **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
+  control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
+  the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
+  and nothing re-ingests it: two authorities and echo loops have no path, and upstream's server never runs. It serves the five page
+  files, held to their hashes, the `view_*` replies over that projection, an overlay, and `/x/command` into `Session.submit`, so the
+  kernel's grants decide what a person may do there as anywhere. Direct chats key on the unordered participant pair, with both inboxes
+  merged in journal order, and every agent has one with the person from its start; channel chats key on the channel. What a harness
+  says in a turn is its agent's message to the person; tools, thoughts, usage and live text never enter a chat. "Read by" becomes
+  "Delivered to", from delivery evidence alone, and browsing writes nothing and moves no cursor or mark. A view link and a control
+  link are two credentials of fixed class, one-time and exchanged for session tokens that expire. One session per port avoids the
+  `localStorage` collision. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) its decisions.
 
 ## 13. Workspaces
 
@@ -1353,7 +1362,7 @@ Threat tiers stay separate, in docs and in events.
 |---|---|---|
 | Model arguments | Hallucination, prompt injection through tool arguments | Closed by construction: laws 6 and 7, server-side authorization, strict decoding |
 | Untrusted content | Board contents, repository files, tool output, rendered Markdown | `SafeText` in the terminal; escaping and hash-only CSP in the browser. Content is data, never instructions |
-| Network | Browser and remote clients | Loopback by default. View and control tokens are separate classes. Links are one-time and exchanged for expiring tokens. Origin and Host allowlists. Remote exposure needs an explicit flag and TLS |
+| Network | Browser and remote clients | Loopback by default, and any other address needs `--host` and TLS, with a wildcard refused. View and control credentials are separate classes, fixed when minted. Links are one-time, in the fragment, and exchanged for session tokens that expire, of which `web` keeps hashes in memory. `Host` must name the authority served and a POST's `Origin` the page's own |
 | Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only OS isolation earns `isolated` |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 
@@ -1368,8 +1377,9 @@ Threat tiers stay separate, in docs and in events.
   `DriverInfo.login`, which comes from the harness's own status command, and a role with an auth profile is on no login. One agent alone is not
   refused, unless another role can spawn more. The manifest keeps the opt-in, and without it the runtime holds the same line later, on what each
   harness says then: a launch that would put an agent on a plan login beside a live one fails, as a human can spawn more than a team said, and a
-  resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. `web --remote`
-  refuses a second person on a plan-login session.
+  resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. A browser on
+  a control link acts as the session's person, and nothing tells a second person from the first, so a control link is the owner's to
+  use and a view link is what another gets. Refusing an address other than loopback to a session on a plan login is planned.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step when it comes from a project or team
   file: `--trust` on the command line, `trust_project` to `load_team`. The check reads where each value came from, since mappings merge

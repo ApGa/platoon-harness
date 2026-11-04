@@ -36,9 +36,10 @@ _CLIENT_LIMIT = 256
 _HELLO_SECONDS = 10.0
 _POLL_SECONDS = 25.0
 _PAGE_LIMIT = 256
-_BODY_LIMIT = LINE_LIMIT // 4 * 3 - 1024
+BODY_LIMIT = LINE_LIMIT // 4 * 3 - 1024
+"""The largest body this socket carries, as base64 in one line."""
 
-__all__ = ["PROTOCOL", "REFUSED", "Control", "History", "Link", "Local", "Remote"]
+__all__ = ["BODY_LIMIT", "PROTOCOL", "REFUSED", "Control", "History", "Link", "Local", "Remote"]
 
 
 class Link(Protocol):
@@ -279,8 +280,8 @@ class Remote:
         return Page.model_validate(await self._call("read", asked))
 
     async def put_body(self, body: bytes) -> str:
-        if len(body) > _BODY_LIMIT:
-            raise Refused("invalid", f"this socket carries bodies up to {_BODY_LIMIT} bytes")
+        if len(body) > BODY_LIMIT:
+            raise Refused("invalid", f"this socket carries bodies up to {BODY_LIMIT} bytes")
         return await self._call("put_body", {"body": _encoded(body)})
 
     async def get_body(self, sha256: str, limit: int | None = None) -> bytes:
@@ -351,7 +352,7 @@ class _Connection:
             case "put_body":
                 return await link.put_body(base64.b64decode(params["body"]))
             case "get_body":
-                limit = min(params.get("limit") or _BODY_LIMIT, _BODY_LIMIT)
+                limit = min(params.get("limit") or BODY_LIMIT, BODY_LIMIT)
                 return _encoded(await link.get_body(params["sha256"], limit))
             case "changed":
                 return await self._poll("head", link.changed(params["after"]))

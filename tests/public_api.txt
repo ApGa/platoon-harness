@@ -178,6 +178,7 @@ platoon_harness.primitives.Gap
 platoon_harness.primitives.GapReport
 platoon_harness.primitives.Gaps
 platoon_harness.primitives.Groups
+platoon_harness.primitives.IN_A_RESULT
 platoon_harness.primitives.Injection
 platoon_harness.primitives.InputDelivered
 platoon_harness.primitives.Item
@@ -236,6 +237,7 @@ platoon_harness.runtime.authority.AgentRef
 platoon_harness.runtime.authority.Authority
 platoon_harness.runtime.authority.LocalAuthority
 platoon_harness.runtime.authority.SpawnRequest
+platoon_harness.runtime.control.BODY_LIMIT
 platoon_harness.runtime.control.Control
 platoon_harness.runtime.control.History
 platoon_harness.runtime.control.Link

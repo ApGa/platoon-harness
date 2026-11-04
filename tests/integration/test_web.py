@@ -1,0 +1,184 @@
+"""`platoon-harness web`, run as a process of its own against a session served by another: it says its links, follows
+the session as its runtime goes and comes back, serves TLS when told to, and leaves nothing behind."""
+
+import asyncio
+import http.client
+import json
+import signal
+import ssl
+import subprocess
+from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
+
+import pytest
+
+from .cli import SECONDS, Cli, crew, finished, line_where, said, solo
+
+pytestmark = pytest.mark.timeout(120)
+
+
+@pytest.fixture
+async def cli(tmp_path: Path) -> AsyncIterator[Cli]:
+    made = Cli(tmp_path)
+    yield made
+    await asyncio.to_thread(made.end)
+
+
+async def links(process: asyncio.subprocess.Process) -> dict[str, str]:
+    """The links `web` says on stderr, by kind."""
+    assert process.stderr is not None
+    found: dict[str, str] = {}
+    async with asyncio.timeout(SECONDS):
+        while len(found) < 2 and (line := (await process.stderr.readline()).decode()):
+            for kind in ("view", "control"):
+                if f"{kind} link" in line:
+                    found[kind] = line.rpartition(" ")[2].strip()
+    return found
+
+
+def call(link: str, method: str, path: str, body: Any = None, token: str = "", context: Any = None) -> Any:
+    """One request as the page makes one, to the server `link` names."""
+    parts = urlsplit(link)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    connection = (
+        http.client.HTTPSConnection(parts.hostname, parts.port, timeout=SECONDS, context=context)
+        if parts.scheme == "https"
+        else http.client.HTTPConnection(parts.hostname, parts.port, timeout=SECONDS)
+    )
+    headers = {"Origin": origin, "Content-Type": "application/json"} if method == "POST" else {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    connection.request(method, path, None if body is None else json.dumps(body), headers)
+    reply = connection.getresponse()
+    data = reply.read()
+    connection.close()
+    return reply.status, json.loads(data) if reply.getheader("content-type") == "application/json" else data
+
+
+def opened(link: str, context: Any = None) -> str:
+    status, answer = call(link, "POST", "/x/exchange", {}, link.partition("#link=")[2], context)
+    assert status == 200, answer
+    return answer["token"]
+
+
+async def test_web_says_its_links_and_ends_cleanly_on_sigterm_or_ctrl_c_leaving_the_session_running(cli: Cli):
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        web = await cli.start("web", "s")
+        found = await links(web)
+        status, gate = await asyncio.to_thread(call, found["view"], "GET", "/view")
+        token = await asyncio.to_thread(opened, found["control"])
+        _, info = await asyncio.to_thread(call, found["control"], "POST", "/v1/view_info", {}, token)
+
+        web.send_signal(signum)
+        done = await finished(web)
+
+        assert done.code == 0, done.stderr
+        assert status == 200 and b"<form>" in gate
+        assert info["x"] | {"may": []} == {
+            "credential": "control",
+            "live": True,
+            "person": "you",
+            "session": "s",
+            "may": [],
+            "confirmed": info["x"]["confirmed"],
+            "cannot": None,
+        }
+    status = await cli.run("session", "status", "s")
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert json.loads(status.stdout)["state"] == "open"
+
+
+async def test_web_follows_its_session_as_its_runtime_goes_and_comes_back(cli: Cli):
+    team = cli.write("crew.toml", crew(worker="hanging"))
+    run = await cli.start("run", "go", "--team", team, "--trust", "--name", "s", "--json")
+    await line_where(run, [], "type", "task.claimed")
+    await cli.run("session", "stop", "s")
+    await finished(run)
+    web = await cli.start("web", "s")
+    found = await links(web)
+    token = await asyncio.to_thread(opened, found["control"])
+    _, before = await asyncio.to_thread(call, found["control"], "POST", "/v1/view_info", {}, token)
+
+    resumed = await cli.start("session", "resume", "s")
+    _, fed = await asyncio.to_thread(
+        call, found["control"], "POST", "/v1/view_feed", {"after": before["feed"], "timeout": 25}, token
+    )
+    await finished(resumed)
+    web.send_signal(signal.SIGTERM)
+    done = await finished(web)
+
+    assert before["x"]["live"] is False and "platoon-harness session resume s" in before["x"]["cannot"]
+    assert fed["events"], "nothing the resumed runtime did reached the page"
+    assert done.code == 0, done.stderr
+
+
+async def test_web_refuses_an_address_other_than_loopback_without_tls(cli: Cli):
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+
+    remote = await cli.run("web", "s", "--host", "192.0.2.7")
+    wildcard = await cli.run("web", "s", "--host", "0.0.0.0")
+    halves = await cli.run("web", "s", "--certificate", "cert.pem")
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert [remote.code, wildcard.code, halves.code] == [64, 64, 64]
+    assert "needs TLS" in remote.stderr and "names no one address" in wildcard.stderr
+
+
+async def test_web_on_no_such_session_is_refused(cli: Cli):
+    done = await cli.run("web", "nobody")
+
+    assert done.code == 1 and "nobody" in done.stderr
+
+
+async def test_web_serves_tls_with_the_certificate_it_is_given(cli: Cli, tmp_path: Path):
+    certificate, key = tmp_path / "cert.pem", tmp_path / "key.pem"
+    await asyncio.to_thread(
+        subprocess.run,
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            key,
+            "-out",
+            certificate,
+            "-days",
+            "1",
+            "-subj",
+            "/CN=127.0.0.1",
+            "-addext",
+            "subjectAltName=IP:127.0.0.1",
+        ],
+        check=True,
+        capture_output=True,
+        timeout=SECONDS,
+    )
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    web = await cli.start("web", "s", "--certificate", str(certificate), "--key", str(key))
+    found = await links(web)
+    context = ssl.create_default_context(cafile=certificate)
+
+    status, _ = await asyncio.to_thread(call, found["view"], "GET", "/view", context=context)
+    token = await asyncio.to_thread(opened, found["view"], context)
+    web.send_signal(signal.SIGTERM)
+    await finished(web)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert found["view"].startswith("https://127.0.0.1:") and status == 200 and len(token) == 64

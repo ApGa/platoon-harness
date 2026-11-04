@@ -75,6 +75,7 @@ For example:
 ## Table of Contents
 
 - [`attach`](#platoon-harness-attach)
+- [`web`](#platoon-harness-web)
 - [`run`](#platoon-harness-run)
 - [`serve`](#platoon-harness-serve)
 - [`events`](#platoon-harness-events)
@@ -158,6 +159,7 @@ For example:
 * [`serve`](#platoon-harness-serve): Start a session and keep its runtime in the foreground, with no client attached, for a supervisor.
 * [`session`](#platoon-harness-session): Sessions, from their folders, and what can be done to one as a whole.
 * [`team`](#platoon-harness-team): What a team allows and what its agents are told, before any cost.
+* [`web`](#platoon-harness-web): Open a session in the browser: SwarmChat's page, served over the session's journal.
 
 **Ops on a session**:
 
@@ -196,6 +198,40 @@ For example:
 **Arguments**:
 
 * `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+### platoon-harness web
+
+```console
+platoon-harness web [OPTIONS] SESSION
+```
+
+Open a session in the browser: SwarmChat's page, served over the session's journal.
+
+It says two links on stderr, each of which opens once, within ten minutes, for a session in the browser that lasts
+twelve hours: a view link, which shows the session and acts on nothing, and a control link, which acts as you,
+through the same ops as the terminal. A page that acts can make more links of either kind. Stopping `web` ends
+every browser's session, and leaving it changes nothing in the session, which runs on. It starts and resumes
+nothing: on a session no runtime holds, the page shows its history and names `session resume`, which can spend
+money. Ctrl+C or SIGTERM stops it.
+
+It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS.
+
+For example:
+
+    platoon-harness web fix-auth
+    platoon-harness web fix-auth --port 8484
+    platoon-harness web fix-auth --host 192.0.2.7 --certificate cert.pem --key key.pem
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--host`: The address or name to serve, which a browser's requests must name.
+* `--port`: The port to serve, or 0 for any free one, which stderr says.
+* `--certificate`: A certificate chain, in PEM, to serve TLS with.
+* `--key`: The certificate's private key, in PEM.
 
 ### platoon-harness run
 

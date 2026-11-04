@@ -65,7 +65,7 @@ quits. In a form, Enter goes to the next field, and from the last sends it.
 
 The groups come from the roster's `group`, so every client says the same. Your unread counts and the mentions you have
 read come from your marks in `marks.sqlite`: reading a channel to its newest line moves them, and moving them is no event
-and acknowledges nothing an agent was handed. It is the one file reading a session writes, history too. One that cannot be
+and acknowledges nothing an agent was handed. It is the one file the terminal writes reading a session, history too. One that cannot be
 read or written loses only badges, which is said once.
 
 ### The transcript
