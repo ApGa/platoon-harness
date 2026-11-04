@@ -1,8 +1,6 @@
 platoon_harness.annotations.Annotate
-platoon_harness.annotations.annotate
 platoon_harness.annotations.Annotation
 platoon_harness.annotations.ANNOTATIONS
-platoon_harness.annotations.annotations
 platoon_harness.annotations.Status
 platoon_harness.config.credentials
 platoon_harness.config.ENVIRONMENT_VARIABLE

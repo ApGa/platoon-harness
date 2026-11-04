@@ -208,8 +208,8 @@ class Kernel:
         """Why a read-only kernel cannot answer from its views, and the fix: a writer refolds them as it opens."""
         return (
             f"views behind this journal: {', '.join(stale)}. A writer refolds them as it opens, and writes no event: "
-            "once no runtime holds this folder, open it with `Kernel.open` and the extensions that hold them, then "
-            "close it"
+            "once no runtime holds this folder, `platoon-harness session refold` does that, as does opening it with "
+            "`Kernel.open` and the extensions that hold them, then closing it"
         )
 
     def _prepare_views(self, db: sqlite3.Connection) -> None:

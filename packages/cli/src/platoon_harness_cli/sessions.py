@@ -1,13 +1,15 @@
 """Sessions as folders: which there are, how one stands, and the owner's stop from another shell."""
 
+import asyncio
 import json
 import os
 import signal
 from typing import Any
 
 from platoon_harness import Refused, Session
-from platoon_harness.kernel import is_held
-from platoon_harness.runtime.paths import find_root, listing, read_running
+from platoon_harness.kernel import Kernel, is_held
+from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.runtime.paths import find_root, listing, read_running, session_folder
 
 from .ops import command_line
 from .output import note, refused, safe, say, shown
@@ -78,6 +80,29 @@ async def show(session: str, /) -> int:
             f"    {action['label']}: {command_line(session, action['op'], action['args'])}" for action in row["actions"]
         ]
     say(safe("\n".join(lines)))
+    return 0
+
+
+async def refold(session: str, /) -> int:
+    """Bring a session's views up to its journal while no runtime holds it, as a runtime does as it opens, writing no
+    event, so that its history and the provenance queries answer again after an upgrade changed a view.
+
+    Refused `unavailable` while a runtime holds the session, whose views are current.
+
+    For example:
+
+        platoon-harness session refold fix-auth
+
+    Parameters
+    ----------
+    session
+        A session, by name.
+    """
+    folder = session_folder(find_root(), session)
+    if not (folder / "journal.sqlite").exists():
+        raise Refused("unavailable", f"session {session} never opened, so it has no views")
+    await asyncio.to_thread(lambda: Kernel.open(folder, extensions=PRIMITIVES).close())
+    note(f"session {session}'s views are up to its journal")
     return 0
 
 

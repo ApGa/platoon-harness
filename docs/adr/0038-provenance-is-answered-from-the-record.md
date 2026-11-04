@@ -54,7 +54,8 @@ unknown as zero. [ADR 0010](0010-provenance.md) sketched `lineage` returning who
 - **Every answer says its `head` and whether it is `open`**, the turn its event was made in not yet ended, since a later report can
   still confirm an offer or join a call.
 - **A closed copy answers alike, or refuses naming its fix.** A read-only kernel folds nothing, so a query on a copy whose views are
-  behind its journal is refused `unavailable`, naming the views and saying that a writer refolds them as it opens and writes no event.
+  behind its journal is refused `unavailable`, naming the views and saying that a writer refolds them as it opens and writes no event,
+  which `platoon-harness session refold` does while no runtime holds the session.
 - **Git ancestry is `ancestry`, and a commit is its workspace's.** A commit's parents are ancestry, its `Informed-By` trailers that
   resolved are its declaration, and the two never merge. A commit's maker is the agent whose workspace's reflog made it, and nobody,
   `None`, when that was the shared one or no single workspace did.
@@ -83,6 +84,7 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
 | `NotSeen` from declared coverage, or from isolated assurance | A driver's word is no proof, and an isolated harness keeps a shell |
 | A test-only coverage check that makes `NotSeen` reachable | Speculation: the pure function is tested with proved coverage given directly |
 | Folding stale views into a temporary schema on each read-only open | A kernel feature with one user, costing a whole-journal pass per open |
+| Refolding a closed session's stale views whenever someone attaches to it | Reading history would write the journal file, and an archived session would change under whoever only looked |
 | One `provenance` extension holding the four queries and the views | An op's name is its extension's namespace, so it would rename the four commands; the primitives are one bundle, whose extensions already read each other's views, as `blob` reads `exposure`'s |
 | A look's prompt as the `cause` of every commit it found | A bystander's turn end reads as a contributor to a commit it never made |
 | Bounding a commit at the start of the turn its look followed | A commit can be older than that turn: one made on a branch and checked out later is first found then |
@@ -109,7 +111,8 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
   `test_exposure_agrees_with_a_brute_force_reading_of_the_journal`, a hypothesis property that also passed at 600 examples;
   `test_provenance_answers_alike_after_a_rebuild_and_on_a_closed_copy`; `test_a_closed_copy_with_stale_views_is_refused_naming_the_fix`;
   `test_not_seen_needs_proved_coverage_and_no_gap_below_the_bound`; `test_no_agent_answers_not_seen_at_m2`; and the rest named in
-  STATUS. `tests/integration/test_cli.py`, `test_provenance_of_a_closed_session_from_the_command_line_and_credit_beside_it`.
+  STATUS. `tests/integration/test_cli.py`, `test_provenance_of_a_closed_session_from_the_command_line_and_credit_beside_it` and
+  `test_a_closed_session_whose_views_an_upgrade_left_behind_answers_again_once_refolded`.
 - The review's probes: a worker's turn end that prompted a look counted as a cause of a commit it never made; a commit's answers
   carried the bound `commit` at the look; `lines_shown` was false where nothing was confirmed; and one event read again and
   again with a compaction after each answered in time and size that grew with the square of its turns, 99 s and 6.9 MB at 4,000.

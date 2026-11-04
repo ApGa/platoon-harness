@@ -22,6 +22,9 @@ read as a fact, and a reward nobody could score must never read as zero.
   head, so a statement names the exact trace it is about. A range or a body's hash is refused, as the queries refuse them.
 - **One way to write and read.** `Session.annotate` and `Session.annotations`, and the commands `platoon-harness annotate`, whose
   flags are made from the schema `Session.annotate` checks, as an op's are from its arguments, and `platoon-harness annotations`.
+  `platoon_harness.annotations` is the schema alone: the file is written and read inside `Session`, as `marks.sqlite` is, so no
+  statement reaches it unchecked against the journal.
+- **Readers never hold up a writer.** The file keeps a write-ahead log, and statements are found by target through an index.
 - **A second estimate goes beside the first.** The same statement again is answered with the first, and another under the same
   producer, version, params, target and kind is refused `conflict`, as a reused key is: a new version or other params write beside it.
 - **No estimator ships.** Credit is an annotation by a named producer at a version. The SDK writes and reads statements and makes none.
@@ -35,19 +38,25 @@ read as a fact, and a reward nobody could score must never read as zero.
 | Judged attribution and validated intervention as kinds now | Nobody asked for them yet, and folding them into `credit` would merge evidence types. They stay planned |
 | Replacing a statement under the same key | It silently changes what an estimator said. A new version writes beside it |
 | An estimator of our own, such as an even split over contributors | A heuristic with no reader, and an estimate presented by the harness itself reads as a fact |
+| A public function beside `Session.annotate` that writes the file | A statement about no event, at a head that never was, would read like any other |
+| A query of its own for an event's seq, which `annotate` alone would ask | A concept with one user: `lineage` names an event by its ref, in one bounded read |
 
 ## Consequences
 
 - An estimator reads a closed copy with the four queries, carries the `head` they answered at as its `head_seq`, and writes beside
   any other estimator's rows. A client shows a value only with its producer and version.
 - The second file travels with an export, as ADR 0011 said. Losing it loses statements about the record, never the record.
-- Each statement checks its target and evidence through `lineage`, one query a ref, which a closed copy with stale views refuses
-  until a writer has refolded them.
+- Each statement checks its target and evidence through `lineage`, one bounded query a distinct ref, which a closed copy with stale
+  views refuses until `platoon-harness session refold` has brought them up to its journal.
+- A read of every statement is one list, unpaged: the file is an estimator's, and nothing an agent can reach reads it.
 - Eligibility, attribution, the export and judged or validated evidence stay M3.
 
 ## Evidence
 
-- `tests/unit/runtime/test_annotations.py`; `tests/unit/primitives/test_provenance.py`, `test_provenance_reads_no_annotation`;
+- `tests/unit/runtime/test_annotations.py`, `test_annotations_have_one_checked_way_in` and
+  `test_annotations_are_found_by_target_and_never_hold_up_a_writer` among them, after a review wrote credit about `nothing@1`, with
+  evidence `ghost@3`, at a head of 10^12, through a module function beside `Session.annotate`;
+  `tests/unit/primitives/test_provenance.py`, `test_provenance_reads_no_annotation`;
   `tests/unit/cli/test_commands.py`, `test_annotate_is_made_from_the_schema_session_annotate_checks`;
   `tests/integration/test_cli.py`, `test_provenance_of_a_closed_session_from_the_command_line_and_credit_beside_it`.
 - [Architecture sections 4 and 11](../architecture.md).

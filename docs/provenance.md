@@ -73,18 +73,20 @@ an estimate is an annotation.
 ## Writing credit
 
 An estimator reads the record, then writes what it found beside the journal, in `annotations.sqlite`, with no runtime, on a live
-session or a closed one. Each statement names its producer and version, the events it is about and rests on, and the `head` it read
-at, which names the trace. A value is given when its status is `scored` and only then, so nothing unscored is zero. A second
-estimator, or a second version, writes beside the first. This one is a toy, labelled as one:
+session or a closed one. `Session.annotate` and the `annotate` command are the one way in, and each statement is checked against
+the journal: it names its producer and version, the events it is about and rests on, and the `head` it read at, which names the
+trace, and each of those events lies at or below that head. A value is given when its status is `scored` and only then, so nothing
+unscored is zero. A second estimator, or a second version, writes beside the first. This one is a toy, labelled as one, and its
+target is an event of each agent's own, the first the walk reached, never a spawn, which its spawner made:
 
 ```python
 async def even_split(session, outcome):
     """A toy estimator: an even share of an outcome for each agent the record ties to it, which is a heuristic."""
     found = await session.contributors(outcome)
-    agents = [row.maker for row in found.rows if row.maker and row.maker.startswith("agent:")]
-    for agent in agents:
+    agents = [row for row in found.rows if row.maker and row.maker.startswith("agent:")]
+    for row in agents:
         await session.annotate(
-            f"agent/{agent.removeprefix('agent:')}@1",
+            row.first,
             kind="credit",
             producer="even-split",
             producer_version="0",
@@ -108,10 +110,10 @@ Each query is a command of its name, and prints its answer as JSON:
 $ platoon-harness lineage fix-auth --ref task/tasks/1@3
 $ platoon-harness contributors fix-auth --ref task/tasks/1@3
 $ platoon-harness exposure fix-auth --agent @lead --ref task/tasks/1@3
-$ platoon-harness annotate fix-auth --target agent/w1@1 --kind credit --producer mine --producer-version 1 \
+$ platoon-harness annotate fix-auth --target task/tasks/1@3 --kind credit --producer mine --producer-version 1 \
     --scope local --status scored --value 0.5 --head-seq 812
-$ platoon-harness annotations fix-auth --target agent/w1@1
+$ platoon-harness annotations fix-auth --target task/tasks/1@3
 ```
 
-A closed copy written before these views existed refuses a query, naming the views behind its journal: open it once as its writer,
-with `Kernel.open` and the session's extensions, which refolds them and writes no event.
+A session closed before an upgrade changed a view refuses a query, naming the views behind its journal. `platoon-harness session
+refold fix-auth` brings them up to it while no runtime holds the session, as a runtime does as it opens, and writes no event.

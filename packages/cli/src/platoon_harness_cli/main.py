@@ -185,6 +185,7 @@ def build() -> App:
     session.command(sessions.show)
     session.command(sessions.stop)
     session.command(running.resume)
+    session.command(sessions.refold)
     app.command(session)
     app.command(teams.group)
     app.command(machine.init)

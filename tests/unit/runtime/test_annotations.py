@@ -1,11 +1,14 @@
 """Annotations: what an estimator says of the record, beside the journal and never in it (ADR 0011)."""
 
 import asyncio
+import contextlib
+import inspect
+import sqlite3
 
 import pytest
 
-from platoon_harness import Refused, Session
-from platoon_harness.annotations import ANNOTATIONS, Annotate, annotate, annotations
+from platoon_harness import Refused, Session, annotations
+from platoon_harness.annotations import ANNOTATIONS
 
 from .support import in_state, solo
 
@@ -110,8 +113,36 @@ async def test_a_view_credential_writes_no_annotation_and_reading_writes_nothing
 
 async def test_estimators_writing_one_statement_at_once_write_it_once(tmp_path):
     """Each holds the file from its look for the key to its write, so none finds free a key another is filling."""
-    statement = Annotate(target="agent/bob@1", status="unscored", head_seq=1, **CREDIT)  # type: ignore[arg-type]
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        head = await session.head()
 
-    written = await asyncio.gather(*(asyncio.to_thread(annotate, tmp_path, statement, float(n)) for n in range(16)))
+        written = await asyncio.gather(
+            *(session.annotate("agent/bob@1", status="unscored", head_seq=head, **CREDIT) for _ in range(16))
+        )
 
-    assert len({found.id for found in written}) == 1 and len(annotations(tmp_path)) == 1
+        assert len({found.id for found in written}) == 1 and len(await session.annotations()) == 1
+
+
+def test_annotations_have_one_checked_way_in():
+    """`Session.annotate` checks a statement against the journal, and the module beside it is a schema, no writer."""
+    defined = [
+        value for value in vars(annotations).values() if getattr(value, "__module__", "") == annotations.__name__
+    ]
+
+    assert annotations.__all__ == ["ANNOTATIONS", "Annotate", "Annotation", "Status"]
+    assert not [value for value in defined if inspect.isfunction(value)]
+
+
+async def test_annotations_are_found_by_target_and_never_hold_up_a_writer(tmp_path):
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.annotate("agent/bob@1", status="unscored", head_seq=await session.head(), **CREDIT)
+        with contextlib.closing(sqlite3.connect(session.folder / ANNOTATIONS)) as db:
+            mode = db.execute("PRAGMA journal_mode").fetchone()[0]
+            plan = db.execute(
+                "EXPLAIN QUERY PLAN SELECT * FROM annotations WHERE target = ? ORDER BY id", ("agent/bob@1",)
+            ).fetchall()
+
+    assert mode == "wal"
+    assert "USING INDEX annotations_target (target=?)" in plan[0][3]

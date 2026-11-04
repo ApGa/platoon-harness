@@ -100,5 +100,6 @@ $ platoon-harness serve --team crew.toml --name nightly
 ```
 
 `session stop` is the owner's stop from another shell, and keeps the session resumable. `session resume` restarts its harnesses,
-which can spend money, and owns it as `run` does. `serve` keeps a session's runtime in the foreground with no client attached, for a
+which can spend money, and owns it as `run` does. `session refold` brings a stopped session's views up to its journal, as a runtime
+does as it opens, and writes no event, for when an upgrade changed a view and its history refuses to answer. `serve` keeps a session's runtime in the foreground with no client attached, for a
 supervisor, and stops on `SIGTERM`.

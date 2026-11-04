@@ -13,6 +13,8 @@ on from what the journal holds.
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -27,8 +29,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from platoon_harness.annotations import Annotate, Annotation, Status, annotate
-from platoon_harness.annotations import annotations as annotations_of
+from platoon_harness.annotations import ANNOTATIONS, Annotate, Annotation, Status
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, first, is_held
 from platoon_harness.primitives import (
@@ -67,6 +68,24 @@ CREATE TABLE IF NOT EXISTS marks(
     person TEXT NOT NULL, stream TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (person, stream)
 ) WITHOUT ROWID, STRICT
 """
+_ANNOTATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS annotations(
+    id INTEGER PRIMARY KEY,
+    target TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    producer TEXT NOT NULL,
+    producer_version TEXT NOT NULL,
+    params_hash TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    status TEXT NOT NULL,
+    value REAL,
+    evidence TEXT NOT NULL,
+    head_seq INTEGER NOT NULL,
+    wall_time REAL NOT NULL,
+    UNIQUE (producer, producer_version, params_hash, target, kind)
+) STRICT
+"""
+_ANNOTATIONS_INDEX = "CREATE INDEX IF NOT EXISTS annotations_target ON annotations(target, id)"
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
 Span = str | float
@@ -850,12 +869,12 @@ class Session:
         for ref in dict.fromkeys((statement.target, *statement.evidence)):
             if (seq := (await self.lineage(ref)).event.seq) > head_seq:
                 raise Refused("invalid", f"{ref} is at {seq}, past head_seq {head_seq}, so it is no part of that trace")
-        return await asyncio.to_thread(annotate, self.folder, statement, self._current().clock.now())
+        return await asyncio.to_thread(_annotate, self.folder, statement, self._current().clock.now())
 
     async def annotations(self, target: str | None = None) -> list[Annotation]:
         """What estimators said of one event, or of every one, oldest first, each with its producer and version and
         never summed. Nothing an agent can reach reads these."""
-        return await asyncio.to_thread(annotations_of, self.folder, target)
+        return await asyncio.to_thread(_annotations_of, self.folder, target)
 
 
 def _marks_of(folder: Path, person: str) -> dict[str, int]:
@@ -884,6 +903,69 @@ def _mark(folder: Path, person: str, stream: str, seq: int) -> None:
             )
     except sqlite3.Error as error:
         raise Refused("unavailable", f"marks cannot be written: {error}") from None
+
+
+def _annotation(row: sqlite3.Row) -> Annotation:
+    return Annotation.model_validate({**dict(row), "evidence": json.loads(row["evidence"])})
+
+
+def _annotate(folder: Path, statement: Annotate, wall_time: float) -> Annotation:
+    """Write one statement beside a session's journal, with no runtime and no lock but the file's own, which it holds
+    from its look for the key to its write. The file keeps a write-ahead log, so a reader never holds a writer up. The
+    same statement again is answered with the first, and another under the same producer, version, params, target and
+    kind is refused `conflict`, naming the one there, as a key reused is."""
+    said = {
+        **statement.model_dump(include={"scope", "status", "value", "head_seq"}),
+        "evidence": json.dumps(statement.evidence),
+    }
+    params = json.dumps(statement.params, sort_keys=True, separators=(",", ":")).encode()
+    row = {**statement.model_dump(include={"target", "kind", "producer", "producer_version"}), **said}
+    row |= {"params_hash": hashlib.sha256(params).hexdigest(), "wall_time": wall_time}
+    try:
+        with contextlib.closing(sqlite3.connect(folder / ANNOTATIONS, timeout=_CLIENT_SECONDS * 5)) as db, db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(_ANNOTATIONS_TABLE)
+            db.execute(_ANNOTATIONS_INDEX)
+            found = db.execute(
+                """
+                SELECT * FROM annotations WHERE producer = :producer AND producer_version = :producer_version
+                    AND params_hash = :params_hash AND target = :target AND kind = :kind
+                """,
+                row,
+            ).fetchone()
+            if found is None:
+                columns = ", ".join(row)
+                found = db.execute(
+                    f"INSERT INTO annotations ({columns}) VALUES ({', '.join(f':{key}' for key in row)}) RETURNING *",
+                    row,
+                ).fetchone()
+            elif any(found[key] != value for key, value in said.items()):
+                raise Refused("conflict", f"annotation {found['id']} says otherwise under this producer and version")
+            return _annotation(found)
+    except sqlite3.Error as error:
+        raise Refused("unavailable", f"annotations cannot be written: {error}") from None
+
+
+def _annotations_of(folder: Path, target: str | None) -> list[Annotation]:
+    """The statements about one event, found by its index, or every one, oldest first. Reading writes nothing, so a
+    folder with none stays as it was."""
+    if not (folder / ANNOTATIONS).exists():
+        return []
+    try:
+        uri = f"{(folder / ANNOTATIONS).as_uri()}?mode=ro"
+        with contextlib.closing(sqlite3.connect(uri, uri=True, timeout=_CLIENT_SECONDS * 5)) as db:
+            db.row_factory = sqlite3.Row
+            if db.execute("SELECT 1 FROM sqlite_schema WHERE name = 'annotations'").fetchone() is None:
+                return []
+            if target is None:
+                rows = db.execute("SELECT * FROM annotations ORDER BY id")
+            else:
+                rows = db.execute("SELECT * FROM annotations WHERE target = ? ORDER BY id", (target,))
+            return [_annotation(row) for row in rows]
+    except sqlite3.Error as error:
+        raise Refused("unavailable", f"annotations cannot be read: {error}") from None
 
 
 def _unclaim(folder: Path) -> None:

@@ -15,13 +15,16 @@
   and whether its turn is `open`; each list in it is a page beside its true count; and it is the same after a rebuild and on a
   closed copy. A ranged citation's lines are shown true, or null when nothing confirmed shows them. A client's query runs off the
   runtime's event loop. No check proves coverage yet, so nothing answers `not_seen`. See ADR 0038.
+- `platoon-harness session refold`, which brings a session's views up to its journal while no runtime holds it, writing no event,
+  so its history and the queries answer again after an upgrade changed a view.
 - The views behind them: `Exposures`, `References` and `Calls`, and `Gaps` at version 2 as an index of each gap by where it began.
   `Stamps.event(seq)` gives the event a `cause` names.
 - Rewards and credit beside the journal, in `annotations.sqlite`: `Session.annotate` and the `annotate` command write one by a named
   producer at a version, about events at or below its `head_seq`, with a `scope`, a required `status` and a value only when scored,
-  on a live session or a closed one with no runtime, and `Session.annotations` and `annotations` read them. The same statement again
-  is answered with the first, and another under the same producer, version, params, target and kind is refused `conflict`. Nothing
-  an agent can reach opens the file, and no estimator ships. See ADR 0039.
+  on a live session or a closed one with no runtime, and `Session.annotations` and `annotations` read them: the one way in and out,
+  each statement checked against the journal. The same statement again is answered with the first, and another under the same
+  producer, version, params, target and kind is refused `conflict`. The file keeps a write-ahead log and an index on the target.
+  Nothing an agent can reach opens the file, and no estimator ships. See ADR 0039.
 - Refs on everything a model is shown. A ref is `stream@version`, with `#La-b` for lines of that event's body, and every result,
   handover, notice and refusal names what it shows by one: a message row says `body: true` and gives no hash, `rest` is an event
   ref with a range, and `blob.get` takes the ref of the event that carries a body. Every write of content returns the ref it made,
@@ -246,9 +249,11 @@
 ### Changed
 
 - A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
-  opens, and writes no event.
+  opens, and writes no event, which `platoon-harness session refold` does.
 - A look's commit and rewrite name no `cause`, as the turn end that prompted the look did not cause what git holds, so a bystander's
   turn end is no contributor to a commit in the shared workspace. Its reading and gap still name what prompted it.
+- `platoon_harness.annotations` is the schema alone: `annotate` and `annotations` there are gone, as `Session.annotate` is the one
+  way to write a statement, checked against the journal.
 - `maker` names a commit's maker as the agent whose workspace made it, and None when nobody's did, and `blob.get` reads whether its
   caller was handed an event from the `Exposures` view.
 - `agent.spawned`, at payload version 3, carries its spawner as its envelope agent, so a spawn is its spawner's, in its spawner's

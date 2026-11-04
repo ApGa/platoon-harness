@@ -85,6 +85,7 @@ For example:
     - [`show`](#platoon-harness-session-show)
     - [`stop`](#platoon-harness-session-stop)
     - [`resume`](#platoon-harness-session-resume)
+    - [`refold`](#platoon-harness-session-refold)
     - [`cancel`](#platoon-harness-session-cancel)
     - [`close`](#platoon-harness-session-close)
     - [`ending`](#platoon-harness-session-ending)
@@ -446,6 +447,24 @@ For example:
 
 * `--timeout`: How long to wait for it to settle, such as 90s, 30m or 2h.
 * `--json`: Print JSONL on stdout.
+
+#### platoon-harness session refold
+
+```console
+platoon-harness session refold SESSION
+```
+
+Bring a session's views up to its journal while no runtime holds it, as a runtime does as it opens, writing no event, so that its history and the provenance queries answer again after an upgrade changed a view.
+
+Refused `unavailable` while a runtime holds the session, whose views are current.
+
+For example:
+
+    platoon-harness session refold fix-auth
+
+**Arguments**:
+
+* `SESSION`: A session, by name. **[required]**
 
 #### platoon-harness session cancel
 

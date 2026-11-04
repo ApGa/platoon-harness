@@ -480,7 +480,8 @@ and opened read-only with `immutable=1`. Its agents' workspaces are not part of 
 your repository, so git in a copy would move the original's HEAD, and a copy leaves `agents/*/workspace` out. A reader holding the WAL stops that, and the close logs it. Estimators and exports use
 this form; a live journal is never read over a network filesystem. `Kernel.open(path, read_only=True)` picks between the two by
 whether `lock` is held or the WAL has content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it
-holds is behind the journal, naming the views and the fix: a writer refolds them as it opens, and writes no event. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
+holds is behind the journal, naming the views and the fix: a writer refolds them as it opens, and writes no event, which
+`platoon-harness session refold` does for a session no runtime holds. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
 refuses `unavailable` once a writer has touched the file.
 
 `filesystem(path)` says what holds a path, from `statfs(2)` so that links and bind mounts resolve, and from the mount table by
@@ -1341,8 +1342,9 @@ lineage.
 producer, version, params, target and kind. `kind` is `reward` or `credit`, and `scope` is `local` or `team`. `status` is required,
 `scored`, `invalid`, `error`, `cancelled` or `unscored`, and `value` is given when it is `scored` and only then, so nothing unscored is
 zero. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
-`annotate` command write one with no runtime and no lock but the file's own, on a live session or a closed one, and
-`Session.annotations` reads them. The same statement again is answered with the first, and another under the same key is refused
+`annotate` command write one, checked against the journal, with no runtime and no lock but the file's own, on a live session or a
+closed one, and `Session.annotations` reads them: the one way in and out. The file keeps a write-ahead log, so a reader never holds
+a writer up, and finds statements by target through an index. The same statement again is answered with the first, and another under the same key is refused
 `conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and the SDK makes no
 estimate of its own: credit is an annotation by a named producer, never a fact, and a client shows a value only with its producer and
 version, beside any other estimate of the same target, never summed. Judged attribution and validated intervention come at M3. See
@@ -1413,7 +1415,8 @@ as `team check`, `doctor` and a plan login refused headless say. Any other comma
 owner's shutdown, and says the session's name on stderr at once, so another shell can reach it. Whom the message is for it decides
 from the team before any cost. Ctrl+C or `SIGTERM`, at any point, cancels what is under way and the shutdown still runs, so a run ends
 `cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a supervisor. `events` follows a session and
-`session stop` sends it the owner's stop, and each command under Ops on a session runs one op there as a guest, a read on a view
+`session stop` sends it the owner's stop, `session refold` brings a session's views up to its journal while no runtime holds it,
+writing no event, and each command under Ops on a session runs one op there as a guest, a read on a view
 credential, derived from the op registry. `annotate` and `annotations` write and read `annotations.sqlite`, the first's flags made from
 the schema `Session.annotate` checks, as an op's are from its arguments. With `--json`, stdout holds one line per event the runtime it
 owns journals, from its `runtime.started`, in a shape versioned by its `format`, then the Ending, and nothing else; logs go to stderr.

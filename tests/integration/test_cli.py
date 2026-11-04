@@ -2,6 +2,7 @@
 against scripted harnesses on the real tool plane."""
 
 import asyncio
+import contextlib
 import fcntl
 import json
 import os
@@ -532,6 +533,24 @@ async def test_provenance_of_a_closed_session_from_the_command_line_and_credit_b
     assert [(row["producer"], row["value"]) for row in json.loads(listed.stdout)] == [("split", 1.0)]
     assert refused.code == 1 and "ask by task/tasks/1@3" in refused.stderr
     assert path.read_bytes() == before
+
+
+async def test_a_closed_session_whose_views_an_upgrade_left_behind_answers_again_once_refolded(cli: Cli):
+    team = cli.write("crew.toml", crew())
+    await cli.run("run", "go", "--team", team, "--trust", "--name", "s")
+    path = journal(cli, "s")
+    with contextlib.closing(sqlite3.connect(path)) as db, db:
+        db.execute("UPDATE v_folds SET version = 0 WHERE view = 'exposures'")
+        events = db.execute("SELECT count(*) FROM events").fetchone()
+
+    behind = await cli.run("lineage", "s", "--ref", "task/tasks/1@3")
+    refolded = await cli.run("session", "refold", "s")
+    traced = await cli.run("lineage", "s", "--ref", "task/tasks/1@3")
+
+    assert behind.code == 1 and "exposures" in behind.stderr and "platoon-harness session refold" in behind.stderr
+    assert (refolded.code, traced.code) == (0, 0)
+    with contextlib.closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT count(*) FROM events").fetchone() == events
 
 
 # Nothing waits on a person who is not there.

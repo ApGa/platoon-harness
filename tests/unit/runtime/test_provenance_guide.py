@@ -35,4 +35,4 @@ async def test_the_guide_s_code_runs_on_a_session(tmp_path):
         estimates = await namespace["even_split"](session, answer)
 
     assert cited == [("inbox/bob@1", "human:you", "seen")]
-    assert [(found.target, found.producer, found.value) for found in estimates] == [("agent/bob@1", "even-split", 1.0)]
+    assert [(found.target, found.producer, found.value) for found in estimates] == [(answer, "even-split", 1.0)]
