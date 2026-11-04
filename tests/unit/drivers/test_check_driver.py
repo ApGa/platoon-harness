@@ -543,8 +543,8 @@ async def test_a_harness_that_starts_with_access_and_no_model_fails(tmp_path):
 class Parent(ScriptedDriver):
     """A harness that has a native child, or says so."""
 
-    def __init__(self, seen: bool) -> None:
-        capabilities = Capabilities(persistent=True, native_children="observed", boundaries={"turn"})
+    def __init__(self, seen: bool, children: str = "observed") -> None:
+        capabilities = Capabilities(persistent=True, native_children=children, boundaries={"turn"})
         super().__init__(every_turn_asks_the_model(), capabilities=capabilities)
         self._seen = seen
 
@@ -575,8 +575,8 @@ async def test_a_child_nothing_starts_is_a_skip_and_no_pass(tmp_path):
 class Spawning(Parent):
     """A harness whose own tool for a child is shown once a role allows it, or always."""
 
-    def __init__(self, *, always: bool) -> None:
-        super().__init__(seen=False)
+    def __init__(self, *, always: bool, children: str = "observed") -> None:
+        super().__init__(seen=False, children=children)
         self._always = always
 
     async def _list_tools(self) -> tuple[str, ...]:
@@ -602,6 +602,13 @@ async def test_whether_a_harness_s_own_children_are_off_is_a_skip_with_nothing_t
     result = await check(lambda: Spawning(always=True), tmp_path)
 
     assert result.get("native_children_off_by_default").state == "skipped"
+
+
+async def test_an_opaque_child_is_no_child_seen_and_whether_children_are_off_is_still_checked(tmp_path):
+    result = await check(lambda: Spawning(always=False, children="opaque"), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_child_seen").reason == "its native children are opaque"
+    assert result.get("native_children_off_by_default").state == "passed"
 
 
 async def test_our_tool_goes_by_the_name_a_harness_s_model_knows_it_by(tmp_path):

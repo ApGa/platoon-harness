@@ -63,12 +63,14 @@ class Conformance(Checks):
 
 
 class Profile(Model):
-    """One agent as it runs: which driver at which harness version, on which login, and whether its tools were seen."""
+    """One agent as it runs: which driver at which harness version, on which login, whether its tools were seen, and
+    whether its role lets its harness start agents of its own."""
 
     driver: str
     version: str | None = None
     login: Login | None = None
     tools: Visibility = "unverified"
+    allow_native_children: bool = False
 
 
 class Level(Model):
@@ -181,7 +183,7 @@ def _trainable(capabilities: Capabilities, profile: Profile, conformance: Confor
         yield "unmet", f"exact data needs a gateway key, and this login is {profile.login or 'unknown'}"
     if capabilities.call_ids == "none":
         yield "unmet", "it cannot tie a model call to an agent"
-    if capabilities.native_children == "opaque":
+    if capabilities.native_children == "opaque" and profile.allow_native_children:
         yield "unmet", "its native children are opaque"
     if profile.tools == "hidden":
         yield "unmet", "our tools never reach the policy"

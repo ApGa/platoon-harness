@@ -1052,7 +1052,8 @@ Absence means unsupported, as in ACP.
 
 `levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each `met`,
 `unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent runs:
-its driver and observed harness version, its login, and whether its tools were seen. No driver can claim a level: the host commits
+its driver and observed harness version, its login, whether its tools were seen, and whether its role lets its harness start
+agents of its own, as opaque ones cost `trainable` only then. No driver can claim a level: the host commits
 all of this through `agent.start`, and a report has no field for it.
 
 ### 9.5 Mappings

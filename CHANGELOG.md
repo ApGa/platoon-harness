@@ -152,6 +152,9 @@
 
 - `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
   `tool_names` too.
+- A `Profile` says whether its role allows the harness's own agents, and opaque native children cost `trainable` only then.
+  `check_driver` skips `native_child_seen` for a harness whose native children are opaque, as none can show, and still checks that
+  they are off by default.
 - In the terminal UI, Esc interrupts the agent in view from the composer only: from the transcript, the dock or the navigator it
   goes back to the composer and interrupts nothing. The footer names Esc by what it does from the part with focus, which is
   marked. Alt+Y, Alt+N, Alt+S and Alt+R are gone: a terminal sends Alt and a letter as Esc then that letter, so Esc then a word

@@ -585,7 +585,11 @@ async def native_children_off_by_default(rig: _Rig) -> None:
     _expect(name in (await rig.call(next_call)).tools, f"the first request does not offer {name} once allowed")
 
 
-@_check(_parenting)
+def _seeing(capabilities: Capabilities) -> str | None:
+    return "its native children are opaque" if capabilities.native_children == "opaque" else _parenting(capabilities)
+
+
+@_check(_seeing)
 async def native_child_seen(rig: _Rig) -> None:
     if rig.options.child is None:
         raise _Skipped("nothing was given that makes this harness start a native child")

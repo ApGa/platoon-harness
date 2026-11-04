@@ -150,13 +150,20 @@ def test_only_a_gateway_key_is_trainable(login):
     assert (earned.operational.state, earned.observable.state) == ("met", "met")
 
 
-def test_opaque_children_and_no_call_ids_are_not_trainable():
+def test_opaque_children_a_role_allows_and_no_call_ids_are_not_trainable():
     opaque = CAPABILITIES.model_copy(update={"native_children": "opaque", "call_ids": "none"})
+    allowing = PROFILE.model_copy(update={"allow_native_children": True})
 
-    assert levels(opaque, PROFILE, conformance()).trainable.reasons == (
+    assert levels(opaque, allowing, conformance()).trainable.reasons == (
         "it cannot tie a model call to an agent",
         "its native children are opaque",
     )
+
+
+def test_opaque_children_a_role_keeps_off_cost_nothing():
+    opaque = CAPABILITIES.model_copy(update={"native_children": "opaque"})
+
+    assert levels(opaque, PROFILE, conformance()).trainable.state == "met"
 
 
 def test_tool_visibility_has_three_values():

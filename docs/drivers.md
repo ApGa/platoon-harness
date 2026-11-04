@@ -416,7 +416,7 @@ async def test_my_driver_conforms(tmp_path):
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |
 | `tool_item_carries_its_anchor` | A tool item's `native_id` equals the anchor its harness sent on the MCP call. Skipped for a harness that sends none |
 | `native_children_off_by_default` | The first request offers no tool for a native child, and with `spec.allow_native_children` it does. Needs `native_children`. Pass `child`, or it is skipped |
-| `native_child_seen` | A native child is reported. Needs `native_children`. Pass `child`, or it is skipped |
+| `native_child_seen` | A native child is reported. Needs `native_children` that are `observed`. Pass `child`, or it is skipped |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |

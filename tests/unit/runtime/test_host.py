@@ -425,8 +425,17 @@ async def test_capabilities_and_levels_reach_agent_started(tmp_path):
 
     assert started.data["declared"]["persistent"] is True
     assert started.data["verified"]["tools"] == "visible"
+    assert started.data["verified"]["allow_native_children"] is False
     assert started.data["levels"]["operational"]["state"] == "unverified"
     assert "no conformance result for scripted" in started.data["levels"]["operational"]["reasons"]
+
+
+async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_so(tmp_path):
+    async with Session.start(solo(allow_native_children=True), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["verified"]["allow_native_children"] is True
 
 
 async def test_a_workspace_nobody_built_yet_fails_loudly(tmp_path):

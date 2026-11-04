@@ -562,12 +562,13 @@ class Host:
         if pinned is not None and ready.effective_model not in (None, pinned):
             link.refuse(f"it runs {ready.effective_model}, and its role pins {pinned}")
             return
-        info = link.info
+        info, role = link.info, self._team.roles[link.role]
         profile = Profile(
             driver=info.name,
             version=ready.version,
-            login="key" if self._team.roles[link.role].auth else info.login,
+            login="key" if role.auth else info.login,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
+            allow_native_children=role.allow_native_children,
         )
         args = {
             "agent": link.agent,
