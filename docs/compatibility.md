@@ -285,7 +285,8 @@ by a driver landing; only the row below changes.
   tool's confirmation handler, which the tool alone would answer yes. No event of the child reached the parent's callbacks, and the
   parent's stats gained `task:<id>` with the child's 2 calls [L]. The child's terminal is tmux, which keeps its socket in the shared
   `tmux-<uid>` directory when `TMUX_TMPDIR` would make a path too long for a socket, so the worker gives it a short directory of the
-  agent's own [L].
+  agent's own, which a `tmux` the agent runs in its terminal uses too. `stop` takes it back, and a worker killed outright leaves it
+  empty beside the runtime's sockets [L].
 - Credentials: `env` in the agent's terminal showed `TMPDIR` and no key, endpoint or token, no file of the session held the key, and
   the workspace held nothing the SDK wrote [L]. In the home it is given the SDK makes `.openhands/profiles` and
   `.openhands/provider-connections`, and its terminal's bash writes `.bash_history`, as they would in the user's shell [L].
