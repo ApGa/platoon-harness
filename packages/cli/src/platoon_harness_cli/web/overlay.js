@@ -159,9 +159,10 @@ X.card = m => {
   return html`<div class="x-card" data-x-card="${a.id}"><span>${first(m.from)} asks you to approve this</span>${button('allow', 'Allow')}${button('deny', 'Deny')}</div>`;
 };
 
+// An agent's end, as the terminal says it: its report when it finished with one, and otherwise how it ended and why.
 const baseSystemHtml = systemHtml;
 systemHtml = e => e.kind !== 'ended' ? baseSystemHtml(e)
-  : html`<div class="sys" data-seq="${e.seq}"><span><b>${name(e.from)}</b> ended, ${e.x_end.status}${e.x_end.reason ? html`: ${e.x_end.reason}` : ''}</span><span class="stamp" title="${full(e.at)}">${clock(e.at)}</span></div>`;
+  : html`<div class="sys" data-seq="${e.seq}"><span>${['failed', 'lost'].includes(e.x_end.status) ? '✗' : '✓'} ${e.x_end.gist}</span><span class="stamp" title="${full(e.at)}">${clock(e.at)}</span></div>`;
 
 openReceipts = async function (anchor, id) {
   const box = document.createElement('div');

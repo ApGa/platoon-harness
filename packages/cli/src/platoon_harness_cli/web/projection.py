@@ -20,7 +20,7 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
-VERSION = 1
+VERSION = 2
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -135,9 +135,9 @@ def unshown(gist: str, refusal: Refusal) -> str:
 
 
 def shown(gist: str, body: bytes | Refusal | None) -> tuple[str, dict[str, Any] | None]:
-    """What a message shows, and the file it comes with. The body takes the gist's place when it is text that holds
-    the gist. Text past what a message shows is cut, saying so, and a body the message does not show whole comes as a
-    file, which SwarmChat's viewer opens whole."""
+    """What a message shows, and the file it comes with. The body takes the gist's place when it is text that begins or
+    ends with the gist, as a gist cut from it does. Text past what a message shows is cut, saying so, and a body the
+    message does not show whole comes as a file, which SwarmChat's viewer opens whole."""
     if body is None:
         return gist, None
     if isinstance(body, Refusal):
@@ -147,7 +147,8 @@ def shown(gist: str, body: bytes | Refusal | None) -> tuple[str, dict[str, Any] 
     except UnicodeDecodeError:
         return gist, {"name": "body", "size": len(body), "type": "application/octet-stream"}
     file = {"name": "body.txt", "size": len(body), "type": "text/plain", "text": preview(text)}
-    if gist.removesuffix("…") not in text:
+    stem = gist.removesuffix("…")
+    if not (text.startswith(stem) or text.endswith(stem)):
         return gist, file
     if len(text) <= SHOWN:
         return text, None
@@ -453,14 +454,13 @@ class Projection:
             self._card(id, state="moot")
 
     def _ended(self, event: Event, bodies: Bodies) -> None:
-        """An agent's end is one line in its chat with the person."""
+        """An agent's end is one line in its chat with the person, saying what the terminal says of it: its report when
+        it finished with one, and otherwise how it ended and why."""
         self._turn_over(event, bodies)
         if event.agent is not None:
             chat = self._direct(self.person, event.agent, event)
-            data = event.data
-            self._line(
-                chat, "ended", event.agent, event, extra={"x_end": {"status": data["status"], "reason": data["reason"]}}
-            )
+            end = {"status": event.data["status"], "gist": event.gist}
+            self._line(chat, "ended", event.agent, event, extra={"x_end": end})
 
     # Evidence.
 

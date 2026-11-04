@@ -40,16 +40,17 @@ serving another person, which its terms do not allow. Give them a view link.
 - **Chats.** A channel's chat for each topic, group, queue and board, and direct chats. Every agent has a direct chat with
   you from its start, and a direct chat between two agents merges both their inboxes, in the order the journal has them.
   A queue's or board's chat holds what it announced, as the terminal's channel lines do.
-- **Messages.** A message shows its gist, or its body when the body is text that holds the gist, as a message the terminal
-  sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is cut there, saying
-  so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole. A reply, or a
-  message in a thread, shows under what it answers when that is in the same chat.
+- **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
+  message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
+  cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.
+  A reply, or a message in a thread, shows under what it answers when that is in the same chat.
 - **What an agent says.** What its harness says in a turn is its message to you, in its chat with you. Thoughts, tool
   calls and their output, token counts and live text never enter a chat. Live text, as it streams, is not shown in this
   stage.
 - **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
   apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
-  it is doing. An agent's end is one line in its chat with you.
+  it is doing. An agent's end is one line in its chat with you, saying what the terminal says of it: its report when it
+  finished with one, and otherwise how it ended and why.
 - **Approvals.** An approval left for you is a card in the agent's chat with you, which says who decided it and through
   what, or that it went moot with the turn that asked.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a

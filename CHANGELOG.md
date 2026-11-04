@@ -224,6 +224,10 @@
 
 ### Fixed
 
+- The browser's projection showed a message's body in place of its words whenever the body held them anywhere, so a file whose
+  text held the message's words hid them. A body takes their place only when it begins or ends with the gist, as a cut gist does.
+  An agent's end line said only that it ended, so a lead's answer given as its finish report was not in the page; it says what the
+  terminal's says, the report among it. The projection is version 2, which `web` folds again from the journal when it starts.
 - The terminal UI, from its review:
   - Showing another agent or channel left the last one's lines under it, and each showing stacked them again.
   - The dock had two markers of where you were: Alt+A stuck on the second place, and Alt+Y could answer a place you had not

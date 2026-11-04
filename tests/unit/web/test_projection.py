@@ -118,13 +118,14 @@ async def test_an_approval_is_a_card_that_says_who_decided_and_through_what(root
     }
 
 
-async def test_an_agent_s_end_is_one_line_in_its_chat_with_the_person(root):
+async def test_an_agent_s_end_is_one_line_in_its_chat_with_the_person_saying_its_report(root):
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root) as web:
         await scenario(session)
         await caught_up(web, session)
         ended = rows(session.folder, "SELECT chat, extra FROM lines WHERE kind = 'ended'")
 
-    assert ended == [(hashed("s", "direct:w1 you"), json.dumps({"x_end": {"status": "finished", "reason": None}}))]
+    end = {"x_end": {"status": "finished", "gist": "w1 finished: w1 finished"}}
+    assert ended == [(hashed("s", "direct:w1 you"), json.dumps(end))]
 
 
 async def test_a_tombstoned_body_is_erased_from_the_projection_too(root):
@@ -182,17 +183,21 @@ async def test_feed_numbers_are_kept_across_a_restart_of_web(root):
     assert after and after[0]["n"] == first[-1]["n"] + 1
 
 
-def test_a_body_holding_its_gist_shows_in_its_place_and_one_too_long_is_cut_saying_so():
+def test_a_body_its_gist_was_cut_from_shows_in_its_place_and_one_too_long_is_cut_saying_so():
     whole = "line\n" * (SHOWN // 4)
     text, file = shown("line", whole.encode())
 
     assert text.endswith("the whole is attached.]") and len(text) < SHOWN + 100
     assert file is not None and file["size"] == len(whole) and file["text"]["more"]
     assert shown("hi there…", b"hi there, all of it") == ("hi there, all of it", None)
+    assert shown("all of it", b"hi there, all of it") == ("hi there, all of it", None)
 
 
-def test_a_body_that_does_not_hold_its_gist_comes_as_a_file_and_one_unread_says_why():
+def test_a_body_its_gist_was_not_cut_from_comes_as_a_file_and_one_unread_says_why():
     assert shown("the spec", b"something else")[1]["name"] == "body.txt"
+    notes = b"# Notes\na line of the notes\nand more"
+    text, file = shown("the notes", notes)
+    assert text == "the notes" and file is not None and file["size"] == len(notes)
     assert shown("bytes", b"\xff\xfe")[1] == {"name": "body", "size": 2, "type": "application/octet-stream"}
     text, file = shown("gone", Refusal(code="not_found", detail="this body was tombstoned"))
     assert text == "gone\n\n[Its body is not shown: this body was tombstoned.]" and file is None
