@@ -604,9 +604,10 @@ def _only_in_snapshot(root: Path, checkout: Path, base: str | None, branch: str 
 
 
 def _beyond(root: Path, held: Iterable[str], known: Iterable[str]) -> list[str]:
-    """The commits `held` reach and `known` do not, newest first. A commit this repository lacks excludes nothing."""
+    """The commits `held` reach and `known` do not, newest first, and a child before its parent however close their
+    times. A commit this repository lacks excludes nothing."""
     given = "".join(f"{sha}\n" for sha in held) + "".join(f"^{sha}\n" for sha in known)
-    return git("rev-list", "--ignore-missing", "--stdin", cwd=root, input=given).split()
+    return git("rev-list", "--topo-order", "--ignore-missing", "--stdin", cwd=root, input=given).split()
 
 
 def _shas(commits: Sequence[str]) -> str:
@@ -638,7 +639,8 @@ def _only_in_worktree(root: Path, checkout: Path, base: str | None) -> list[str]
         git("rev-parse", "--verify", "HEAD", cwd=root).strip(),
     }
     given = "".join(f"{sha}\n" for sha in held) + (f"^{base}\n" if base else "")
-    alone = git("rev-list", "--ignore-missing", "--stdin", "--not", "--glob=refs/*", cwd=checkout, input=given).split()
+    listed = ("rev-list", "--topo-order", "--ignore-missing", "--stdin", "--not", "--glob=refs/*")
+    alone = git(*listed, cwd=checkout, input=given).split()
     if not alone:
         return []
     return [f"{_some(len(alone), 'commit')} only it holds, in its HEAD, reflog or own refs: {_shas(alone)}"]
