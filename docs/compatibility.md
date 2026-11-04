@@ -17,7 +17,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 | Platoon | `efe3b277c82c`, 0.5.0 | MIT AND Apache-2.0 (tool parsers). Optional extension; keep its NOTICE if parser code is ever copied | Training authority through an extension, pinned `>=0.5,<0.6` | IMPLEMENTED: gateway, child mint, trajectories, env forks, extensions. EXPERIMENTAL: credit, policies, Responses and Messages dialects. DRAFT: `AgentGraph`, `RewardEvent`, attribution levels, native selectors, `bus` | The only exact identity for an external agent is one key per agent, from `POST /v1/platoon/agents` |
 | SwarmChat | `fb5aa6a05b40`, PyPI 0.1.0 | MIT. Its notice heads each of its scripts we serve. Exact pin, `swarmchat==0.1.0` in the CLI package | Second client: its five page files, each held to its SHA-256, over our own backend, from `platoon-harness web`, with an overlay of ours that acts through `/x/command`. Its server never runs | IMPLEMENTED: server, agent API and a read-only viewer. No composer exists or is documented. Nothing DRAFT | Messages have no idempotency key, no metadata and no caller ids, so a projection into its server cannot be idempotent |
 | Toad | `dd4f90e8b370`, 0.6.20 | AGPL-3.0. Ideas only: no code, no dependency. Its `textual-diff-view` is AGPL too | Interaction reference | IMPLEMENTED: own ACP v1 client. Nothing DRAFT | Copying is ruled out by license, not merely unnecessary |
-| OpenHands | SDK `988494576218`, wheels 1.59.0. CLI `283c6ac3610f`, `openhands` 1.16.0 | MIT. The SDK installs proprietary `lmnr-claude-code-proxy` 0.2.0: review before shipping in any image | Wire worker on SDK `arun()` in its own environment | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
+| OpenHands | SDK `988494576218`, wheels 1.59.0. CLI `283c6ac3610f`, `openhands` 1.16.0 | MIT. The SDK requires proprietary `lmnr-claude-code-proxy` 0.2.0 through `lmnr`: the worker runs without it, and the workspace lock excludes it | Wire worker `platoon-harness-openhands` on SDK `arun()` in its own environment | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
 | Codex | `05c08d765523`, CLI 0.164.0 probed (latest stable 0.166.0). Spike source read at tag commit `6aaac6948030` | Apache-2.0 with NOTICE. User-installed. Never read or copy `auth.json` | `codex app-server` over stdio, no `experimentalApi` | IMPLEMENTED in behavior, labelled Experimental upstream. `codex mcp-server` is removed. `turn/steer`, `thread/fork`, `thread/inject_items` are on the stable handshake | The model reaches MCP tools only from inside a Code Mode script, so `omit_tools_from: ["deferred"]` is required |
 | Claude Code | `f0b737f94f3b` (changelog and examples only), CLI 2.1.316 probed, Agent SDK `2146f9d89855` | Proprietary. Never bundle, vendor or patch. Agent SDK wheels bundle the CLI: no default dependency, no re-hosting | `claude -p` stream-json with the control protocol on the user's own binary | IMPLEMENTED. Undocumented: `--permission-prompt-tool stdio`, `command_lifecycle`. EXPERIMENTAL: agent teams, which do not run in `-p` | `ANTHROPIC_BASE_URL` alone keeps a saved login active, so it is never set without a gateway credential |
 | OpenCode | `ff90ed91607c`, 2.2.5 (`@opencode/cli`; `opencode-ai` stops at 1.19.5) | MIT. User-installed | Generic ACP driver first. An HTTP driver is a later option | IMPLEMENTED: `opencode acp`, `opencode serve`. Its `/api` spec calls itself experimental. `/api/experimental/*` is EXPERIMENTAL | With no model set, prompts go to a hosted free model, with no credentials configured |
@@ -57,8 +57,8 @@ Consequences:
   modern-only client cannot reach it. Neither real client needs that. Modern-only features (multi round-trip results,
   `subscriptions/listen`, tasks) carry no core semantics.
 - **Dependencies.** The core SDK depends on neither `mcp` nor `agent-client-protocol`. `openhands-sdk` 1.59.0 is unsatisfiable
-  with `mcp==2.3.0` or `agent-client-protocol==1.0.0rc3`, and unpinned it resolves silently to 1.49.1 and 1.44.1. Pin it with a
-  floor and keep it in its own environment.
+  with `mcp==2.3.0` or `agent-client-protocol==1.0.0rc3`, and unpinned it resolves silently to 1.49.1 and 1.44.1. The worker pins
+  it exactly, in an environment of its own, and the workspace's one lock holds it beside ours, as nothing of ours needs either.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, and recorded from `ready` on `agent.started` and `agent.resumed`. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
@@ -81,7 +81,7 @@ Unknown is not no. Reports label OpenCode and pi runs `[LIVE]` against a fake se
 | **claude** 2.1.316 | yes. `claude -p` stream-json, stdin held open. User installs and logs in [R] | yes. Subagents gave no partial events; `assistant` output tokens are a placeholder [R] | yes. HTTP MCP, needs `alwaysLoad` or tools defer. `system/init` does not prove visibility [R] [L] | yes. Stdin across turns [R]; absorbed at a tool boundary or next turn [L] | yes. Receipt in 22 ms; the aborted call's tokens go unrecorded [R] | yes. `can_use_tool`; `stdio` value is SDK-private; read-only commands skip it [R] [L] | yes. `--resume`, 1 cold trial; needs a persisted transcript [R] | partial. Observed, identity `inferred` [R]. Agent teams add no tool in `-p` [L] | partial. Base URL plus credential [L]. Non-Claude models unsupported upstream [S] | partial. `toolUseId` equals the model id [R]. Native: none. Gateway join exists but no call records [L] | **no.** Gateway run exits 1 with zero records; terms await an owner decision [L] |
 | **codex** 0.164.0 | yes. `codex app-server`, labelled Experimental upstream [R] | yes. `item/*`, deltas; `item/completed` is truth [R] | yes. Per thread, needs `omit_tools_from` and an approve mode [R] | yes. `turn/start`, `turn/steer` with `expectedTurnId`; next model call [R] | partial. `turn/interrupt` [R]; running children continue [L] | yes. Server requests [L]. Set `approvalsReviewer`; `accept` does not fix the outcome [R] [L] | yes. `thread/resume`, 1 cold trial; resend config [R] | partial. v1 and v2 observed, identity `inferred`, no `thread/started` for a child [L] | yes. `model_providers`, thread scoped; `responses` only [L] | partial. Thread and turn only on stable. `callId` joins to the `exec` script, not a call [R]. Exact per key at a gateway [L] | **no.** Identity passes, but MCP tools never reach the policy [L] |
 | **pi** 1.4.0 | yes. `pi --mode rpc`; Node >= 22.19 [L] | yes. `message_end` is authoritative; a stalled reader stalls pi [L] | yes. MCP with `exposure: direct`, on a stdio server, and over HTTP on our real tool server at 1.4.0 and 1.5.0 [L] | yes. `prompt`, `steer`, `follow_up`; turn boundaries [L] | yes. `abort`, then `agent_settled {aborted: true}` [L] | partial. None native. A probe gate worked; we would ship one. Not a security boundary [L] | yes. `--session <id>` with full history [L] | no. None by design; extensions can add them [S] | yes. `models.json`, one agent dir per agent [L] | partial. Agent level by key. `message_end` carries the model's `responseId` over RPC, at 1.4.0 and 1.5.0, on a fake model. No MCP anchor [L] | candidate. Full path passed on a minted key. Platoon has no pi spec [L] |
-| **openhands** SDK 1.59.0 | yes. SDK `Conversation` under `arun()`; import 8-11 s on network storage. The wire worker is planned [L] | yes. Needs `stream=True` and a token callback; children never stream [L] | yes. MCP per `Agent`, tool in the prompt, on a stdio server. HTTP with headers not probed. A failed start is silent [L] | yes. `send_message`, next model request; log order misleads [L] | yes. `interrupt()` abandons the call in 0.05 s; a gateway may have recorded it [L] | partial. Confirmation policies. No pending event; lone `finish` and `think` skip it [L] | yes. Same id, fresh `Agent`. Key resupplied; tools cannot be removed [L] | partial. `task`, opt-in. No child events reach the parent [L] | yes. `LLM(...)`; unrequested fields sent [L] | yes. `llm_response_id == call_id` per action on a scoped key. A native child is exact only with a keyed factory. Extra calls share the endpoint [L] | **yes, on a profile.** Exact records and datums on a minted child, SDK 1.59.0 and a scripted policy. Platoon's own 1.54.0 spec has no MCP, and its live test did not run. Condenser, delegation and long runs untested [L] |
+| **openhands** SDK 1.59.0 | yes. SDK `Conversation` under `arun()`; import 8-11 s on network storage, 10 s on local disk. The wire worker drives it [L] | yes. Needs `stream=True` and a token callback; children never stream [L] | yes. MCP per `Agent`, tool in the prompt, on a stdio server, our shim among them. HTTP with a bearer in `headers` worked on FakeTools in a probe. A failed start is silent [L] | yes. `send_message`, next model request; log order misleads [L] | yes. `interrupt()` abandons the call in 0.05 s; a gateway may have recorded it [L] | partial. Confirmation policies. No pending event; lone `finish` and `think` skip it [L] | yes. Same id, fresh `Agent`. Key resupplied; tools cannot be removed [L] | partial. `task`, opt-in. No child events reach the parent [L] | yes. `LLM(...)`; unrequested fields sent [L] | yes. `llm_response_id == call_id` per action on a scoped key. A native child is exact only with a keyed factory. Extra calls share the endpoint [L] | **yes, on a profile.** Exact records and datums on a minted child, SDK 1.59.0 and a scripted policy. Platoon's own 1.54.0 spec has no MCP, and its live test did not run. Condenser, delegation and long runs untested [L] |
 | **opencode** 2.2.5 via ACP | yes. `opencode acp`, private server per process [L] | partial. `session/update`; less detail than HTTP [L] | partial. `mcpServers` landed behind Code Mode, even with `codemode: false` in config [L] | partial. Turn boundary. A second prompt fails -32603 [L] | yes. `session/cancel`, stop reason `cancelled` [L] | partial. `session/request_permission`, only under an `ask` rule. No rule, no ask [L] | unverified. Advertised, not exercised over ACP [L] | partial. Child sessions seen on HTTP [L]; ACP updates need opt-in [S] | yes. `OPENCODE_CONFIG_CONTENT`; reaches the tool shell. Always pin a model [L] | partial. Session level by header, one credential per process; title calls unlabelled [L] | unknown. Untested through the gateway. Title calls would train as `policy` [U] |
 | **prime** 0.10.2 | unverified. Version and help ran; no model turn. Needs `uv` and Python [S] | unverified [S] | unverified. Through the Python REPL [S] | unverified. `steer`, `follow_up` on RPC [S] | unverified. Children and kernels must stop too [S] | no. None in the crates [S] | unverified. CLI only in source; ACP `load_session: false` [S] | unverified. `rlm.spawn`, reported by the harness [S] | unverified. `models.json` [S] | unknown. No parent header found; kernel calls unknown [U] | unknown. No live probe [U] |
 | **generic ACP**, protocol 1 | yes. Baseline required of every agent [S]; SDK checked on a fake agent [L] | partial. 14 stable update kinds; the SDK drops unknown ones [S] [L] | unverified. `mcpServers`, stdio mandatory. Visibility varies by agent [S] | unverified. Next turn. A second prompt mid-turn is undefined [S] | unverified. `session/cancel` is baseline. `openhands acp` maps it to `pause()` [S] | unverified. `session/request_permission` is a baseline client method. Whether an agent asks is per agent [S] | unverified. Only if advertised [S] | no. Stable has none; `subagent_update` is unstable [S] | no. `providers/*` is unstable [S] | no. `toolCallId` only [S] | no. Only through a gateway, per agent [S] |
@@ -97,7 +97,7 @@ by a driver landing; only the row below changes.
 | `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 25 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
 | `codex` | `codex app-server` over stdio | User's binary | implemented | 0.164.0 on FakeModel: 24 passed, 0 failed, 3 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s`, `coverage` or `sandboxes`). Operational and observable met |
 | `pi` | `pi --mode rpc` | User's install | implemented | 1.5.0 on FakeModel: 22 passed, 0 failed, 5 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_children_off_by_default` and `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met. No live model has run: pi has no login on the machine that ran this |
-| `openhands` | `WireDriver`, worker on SDK `arun()` | Own environment | planned | none |
+| `openhands` | `WireDriver`, worker `platoon-harness-openhands` on SDK `arun()` | Own environment | implemented | 1.59.0 on FakeModel: 22 passed, 0 failed, 5 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_children_off_by_default` and `native_child_seen`: a child has no identity to report, so no `child` is given, and `tests/integration/test_openhands.py` holds the default off and an allowed child to the runtime's approvals; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met; trainable unmet, as no gateway login has run and its own agents are opaque. No live model has run: no OpenHands login or provider key is on the machine that ran this |
 | ACP, covering `opencode` | Generic driver, protocol 1 | `[acp]` extra | planned | none |
 | `prime` | Decided after a live probe | User's install | planned | none |
 | `exec` | One-shot command, `ph` only | Nothing | planned | none |
@@ -253,10 +253,50 @@ by a driver landing; only the row below changes.
 
 - All loopback, against a scripted OpenAI-compatible server. No real model. The clone is ahead of the wheel, so unprobed citations need rechecking.
 - Critic probes: Platoon's runner on 1.59.0 gave 2 exact records with logprobs and 2 datums on the child. `arun()` with an MCP tool had `llm_response_id == call_id` for every action.
-- Platoon pins 1.54.0.post1 and overrides private methods, so the driver pin is open.
+- Platoon pins 1.54.0.post1 and overrides private methods. The driver pins 1.59.0 exactly and reaches no private name.
 - Undeclared tool arguments fail client-side here, unlike Codex and Claude Code. Server-side rejection stays mandatory.
 - `Agent()` alone has no condenser and ignores `AGENTS.md`.
 - The `openhands acp` path is a weaker row: CLI 1.16.0, SDK 1.28.1, no token streaming, no `usage_update`, no `session/resume`, and `session/cancel` maps to `pause()`. It is a generic ACP conformance target.
+- The driver, a wire worker on SDK and tools 1.59.0, on FakeModel, and no live model: nothing below is [R]. Its environment, built
+  from the workspace lock without `lmnr-claude-code-proxy`, is 498 MB on local disk, and loading the SDK took 10 s there, so `ready`
+  comes that much after a launch. `describe` loads nothing and answers in under a second [L].
+- Our tools come through the stdio shim, whose `_meta` holds a `platoon-harness/callId` per call beside the SDK's `progressToken`,
+  so two identical calls in a turn are two. They show by their own names. Across a tool call, a wake and a resume by a new process
+  the tool block and the system prompt held byte for byte, with our words once in each request, 25,817 bytes of tools [L].
+- The SDK readies an agent, and starts its MCP servers, on a message, a run or a tool, so the worker runs `think` at start. A server
+  that failed is a warning in its log, and the worker fails the start then. Called on the thread of the loop that serves the tools,
+  readying waits out the SDK's 30 s listing timeout: it blocks, so the worker calls it on a thread of its own [L].
+- What a request carried is in the SDK's completion log, which goes to a callback with `log_completions` and writes no file. A
+  message handed while a model call ran was in the next request, at `model_call` [L].
+- Confirmation: `ConfirmRisky` over an analyzer that calls our tools low and the rest unknown asks for every action but ours and a
+  lone `finish` or `think`. A message handed once `allow` came, before the next run, landed between the call and its result in the
+  next request, so the worker holds it until the result is in: then it landed one model call later [L]. `deny` reached the model as
+  `Action rejected: The runtime denied this.`, and the command never ran [L].
+- An interrupt during a stalled call ended the turn `interrupted` with `InterruptEvent`, and the next run sent the call again. Under a
+  `tokens` limit the cut turn was charged its estimate and the session went on [L]. A message the conversation took and no request
+  sent before the interrupt stays in it, so once the runtime offers it again the model hears it twice, which at-least-once allows [L].
+- Condensation with OpenHands' own default condenser: once its view held more than 80 events, after 40 `think` calls, it forgot
+  events by id, a set the worker puts in the conversation's order, with the summary, and its call is measured under the usage id
+  `condenser` [L].
+- Resume: the same id with a fresh agent kept the history. An id with no conversation on disk is started anew by the SDK, so the
+  worker refuses it. After a `kill -9` during a terminal command the action has no result, and the SDK would run it on the next run;
+  the worker rejects it first, the model is told, and the command ran once [L]. `reconcile` reads the user messages on disk [L].
+- Its own agents, allowed: `task` was offered, the call of it asked, and the child's terminal step asked the runtime through the task
+  tool's confirmation handler, which the tool alone would answer yes. No event of the child reached the parent's callbacks, and the
+  parent's stats gained `task:<id>` with the child's 2 calls [L]. The child's terminal is tmux, which keeps its socket in the shared
+  `tmux-<uid>` directory when `TMUX_TMPDIR` would make a path too long for a socket, so the worker gives it a short directory of the
+  agent's own [L].
+- Credentials: `env` in the agent's terminal showed `TMPDIR` and no key, endpoint or token, no file of the session held the key, and
+  the workspace held nothing the SDK wrote [L]. In the home it is given the SDK makes `.openhands/profiles` and
+  `.openhands/provider-connections`, and its terminal's bash writes `.bash_history`, as they would in the user's shell [L].
+- Project instructions: with `load_project_skills=True` a project's `AGENTS.md` reached the first request beside ours [L]. The SDK takes
+  the nearest folder above the workspace that holds a `.git` entry as the repository's root, and reads its instructions there too; one
+  it cannot read loses every project instruction, with a warning in the log alone [L].
+- `litellm`'s catalog says which models take `reasoning_effort`, and it drops the field for one that does not, so the worker refuses
+  an effort there. `num_retries` is 0.
+- From the command line: one `platoon-harness run` settled, and one stopped mid-turn by `session stop` was resumed by `session
+  resume`, took the cut-off notice and settled [L]. A scripted lead and an OpenHands agent exchanged messages through our tools, and
+  the session settled [L].
 
 **opencode, 2.2.5 via ACP.** [Report](research/adapter-others.md), [fixture](research/fixtures/opencode-sample.jsonl).
 
@@ -401,12 +441,13 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Hooks | Passthrough, restricted in training | No hooks as such: extensions on `tool_call`, which keep working beside our gate [L]. User extensions can add subagents or alter calls. Training plans `--no-extensions` plus an explicit `-e` list, a combination not probed. A known limit: `--mode rpc` shows no trust prompt, so `.pi/` resources load only under a saved decision or `defaultProjectTrust: "always"`, as they would for `pi -p`. Both ran. The driver passes neither `--approve` nor `--no-approve` [L] |
 | | Native subagents | None in core; an extension's cannot be turned off | A user's extension can add a tool for agents of its own. Nothing of ours turns it off, and its children go unseen [S] |
 | | Session compaction | Passthrough, exact | `compaction_end` names `firstKeptEntryId`, `get_entries` turns that into `forgotten`, and the summary is kept [L]. Purpose is on our `model.call` and unlabelled at a gateway |
-| `openhands` | Project instructions | Passthrough by choice | `Agent()` ignores them. `AgentContext(load_project_skills=True)` loads `.cursorrules`, `AGENTS.md`, `AGENT.md`, `CLAUDE.md`, `GEMINI.md`. On for everyday runs, off for training, recorded in resolved config |
-| | Native skills | Passthrough by choice | `.agents/skills`, `~/.openhands/skills`. User and public skills default off in the SDK. Public skills fetch from GitHub: off in CI |
+| `openhands` | Project instructions | Passthrough | `Agent()` ignores them, so the worker sets `AgentContext(load_project_skills=True)`, as OpenHands' CLI does, which loads `.cursorrules`, `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `GEMINI.md` from the workspace and the repository's root. A project's `AGENTS.md` reached the first request beside ours, which are `system_message_suffix` [L]. The choice is the driver's and no role's, so the resolved team holds nothing of it, and this table and `docs/drivers.md` record it. A training profile that turns it off arrives with M3 |
+| | Native skills | Project skills only | A project's `.agents/skills` load with its instructions. The user's own, in `~/.openhands/skills`, and public skills, which fetch from GitHub, stay off, as the SDK's defaults are, where OpenHands' CLI loads all three |
 | | Slash commands | Not determined | Found only in the CLI's TUI, which the worker does not run. `openhands acp` sends `available_commands_update`. The SDK path was not researched |
-| | Tool configuration | Namespaced by us | Per-`Agent` `mcp_config`. Tool names are **not** prefixed, so ours must not rely on a prefix. Whether they can collide with built-ins: not determined. Children inherit the parent's servers and token |
-| | Hooks | Passthrough by choice | `hook_config=` per conversation. `.openhands/hooks.json` is CLI only. A `Stop` hook can deny finishing and inject feedback. Not probed live |
-| | Session compaction | Passthrough, exact | `Condensation` names `forgotten_event_ids`, so `compacted{forgotten}` is exact. `Agent()` has no condenser by default. Through the gateway: untested |
+| | Tool configuration | Ours by their own names | Our server, through the stdio shim, is the agent's one `mcp_config` entry, as the SDK reads no user's server, and its tools show unprefixed, so `tool_names` is `bare` [L]. Whether one can collide with a built-in: not determined. A child inherits our server and calls it on its parent's token |
+| | Hooks | None | The SDK loads no hooks file, `.openhands/hooks.json` being the CLI's, and the worker passes no `hook_config`, so a user's hooks do not run. A `Stop` hook could deny finishing and inject feedback [S] |
+| | Native subagents | Off unless a role allows them | `task` and `delegate` are absent by default [L]. Allowed, `task` starts OpenHands' built-in kinds, each step asking the runtime through the task tool's confirmation handler [L]. A child is unseen: none of its events reaches the parent and no observation names it, so it is the gap `native_child_unattributed`, its spending its parent's at `tree` [L]. A project's agent file that says `permission_mode: never_confirm` makes a child that asks nothing, as the file is the user's, and an interrupt does not reach a child under way, as the task tool checks no cancellation [S] |
+| | Session compaction | Passthrough, exact | `Agent()` has no condenser, so the worker gives it OpenHands' default one, as its own default agent has, which forgets past 80 events. `Condensation` names `forgotten_event_ids`, so `compacted{forgotten}` is exact [L]. Through the gateway: untested |
 | `opencode` | Project instructions | Not determined | Not researched |
 | | Native skills | Not determined | Exists in its TUI. Reach over ACP was not researched |
 | | Slash commands | Not determined | Reach over ACP was not researched |
@@ -453,7 +494,7 @@ Milestone 1 closes.
 | `claude`, `codex` | User-installed binary |
 | `opencode` | `@opencode/cli`, platform binary, no Node at runtime. Check the major version: bins are `opencode` and `opencode2` |
 | `pi` | Node >= 22.19 |
-| `openhands` | Python 3.12+. The CLI needs `==3.12.*`. 387 MB venv for the SDK alone |
+| `openhands` | `platoon-harness-openhands`, a tool environment of its own: Python 3.12+, 387 MB for the SDK alone, 498 MB with its tools and without the proxy. The OpenHands CLI needs `==3.12.*` and is not used |
 | `prime` | Release tarball, `uv`, Python >= 3.11 kernel |
 | Codex sandbox on Linux | Bubblewrap and user namespaces. A bundled `bwrap` is the fallback. With user namespaces blocked, sandboxed commands cannot run (docs, not reproduced). Never fall back to `danger-full-access` silently |
 
@@ -523,7 +564,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 **Terms and licenses.**
 
 - OpenAI Terms clauses need review from a direct source.
-- `lmnr-claude-code-proxy` is proprietary and installed by default. Excluding it is untested.
+- `lmnr-claude-code-proxy` is proprietary and installed by default. The worker runs without it, and the workspace lock excludes it; `uv tool install --excludes` has not run, as the distribution is not published.
 - `claude-stream-sample.jsonl` holds short strings authored by a proprietary CLI. Review before the repository goes public.
 - Concurrency of one plan login across many processes is unknown for both Claude Code and Codex.
 
@@ -552,10 +593,10 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Successful compaction on OpenCode, so provenance across compaction is unconfirmed there. On pi it ran on FakeModel, on a low threshold: overflow recovery and a real summary have not run.
 - pi on anything real: a provider, an OAuth login, retries, `totalFromProvider`, parallel tool calls on a real model, and steering on a real stream. Nothing but FakeModel has met the driver.
 - OpenCode: `mcpServers` precedence, repeated prompt `id` retry semantics, and the empty experimental log replay.
-- Our HTTP tools server against OpenHands and OpenCode. Claude Code and Codex have met it, and so has pi, on a fake model. The other probes used stdio servers.
+- Our HTTP tools server against OpenCode, and against OpenHands through its driver, which takes the shim. Claude Code and Codex have met it, and so has pi, on a fake model, and OpenHands' MCP client with a bearer in `headers` on FakeTools.
 - Delivery through `claude-agent-acp` and `codex-acp` past `initialize`, including resume, permissions, `mcpServers`, `env` leak behavior and steering.
 - Whether adapter `toolCallId` equals the model tool id, and whether native-subagent MCP calls carry a usable anchor.
-- OpenHands: condenser, delegation and long runs through the gateway. `task` under `arun()` may delay `send_message`. Memory at 100 agents, given 210 MB RSS at import.
+- OpenHands: anything on a real model; condenser, delegation and long runs through the gateway. A step holds the conversation's lock while a tool runs, a child's `task` among them, so a handover waits for it and past a minute is offered again, which at-least-once allows. Memory at 100 agents, given 210 MB RSS at import, and one worker per agent.
 
 **Training path.**
 
@@ -563,7 +604,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - `rollout_isolation: process`, mint over a Unix socket, and mint through a sandbox route.
 - Prefix merging across compaction, and with a real model's renderer: both tool probes diverged under the toy tokenizer.
 - `platoon.sandbox`, `platoon.extensions` and `/v1/platoon/agents` carry no stated stability promise. Experimental credit APIs may change in a minor release.
-- The OpenHands pin: Platoon's 1.54.0.post1 or the probed 1.59.0.
+- The OpenHands pin: Platoon's 1.54.0.post1, where the driver pins 1.59.0.
 
 **Platform and scale.**
 

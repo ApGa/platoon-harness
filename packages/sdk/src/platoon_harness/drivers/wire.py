@@ -67,6 +67,11 @@ class WireDriver:
         self._peer: Peer | None = None
         self._log = LOG
 
+    @property
+    def command(self) -> tuple[str, ...]:
+        """The program this driver runs, with its arguments."""
+        return self._command
+
     def describe(self) -> DriverInfo:
         """Ask the program, which stays up only long enough to answer, so no harness starts. This blocks, as the method
         is synchronous, and the answer is kept."""

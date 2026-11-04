@@ -138,6 +138,15 @@
 
 - `tool_names` on `Capabilities`: a harness that shows our MCP tools by their own names, as OpenHands does, says `bare`, and its
   agents are told them by those names, in their instructions, handovers and refusals, through `?surface=mcp`.
+- The `openhands` harness: `platoon-harness-openhands`, a distribution of its own in `extensions/openhands`, is a wire worker per
+  agent on OpenHands SDK and tools 1.59.0, pinned exactly, in an environment of its own that the SDK and the command line never
+  import, and `harness = "openhands"` runs it from PATH. It drives one conversation through `arun()`, signs in with a key from the
+  role's auth profile alone, gives the agent OpenHands' coding tools and ours through the stdio shim, asks the runtime before every
+  action but ours, holds a delivery while an approval is open and until what it allowed has its result, says what a request carried
+  from the SDK's completion log, and keeps its own agents off unless a role allows them, when their steps ask the runtime too.
+  `check_driver` passes on the real SDK against FakeModel, and no live model has run. The workspace lock excludes the proprietary
+  `lmnr-claude-code-proxy`, which nothing the worker runs imports. `doctor` finds it by its worker, and `init` passes it over.
+  `WireDriver.command` says the program a wire driver runs.
 
 ### Changed
 

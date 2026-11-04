@@ -628,6 +628,18 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
     assert {component["name"] for component in report["installed"]["components"]} >= {"claude", "codex", "pi"}
 
 
+async def test_openhands_is_found_by_its_worker_and_init_passes_it_over_as_it_needs_an_auth_profile(cli: Cli):
+    """The OpenHands CLI is `openhands`, so the harness of that name runs a worker of its own name."""
+    fake_harnesses(cli, "platoon-harness-openhands", "openhands")
+
+    doctor = await cli.run("doctor", "--json")
+    init = await cli.run("init")
+
+    found = {harness["name"]: harness for harness in json.loads(doctor.stdout)["harnesses"]}
+    assert found["openhands"] == {"name": "openhands", "found": True, "version": "9.9.9 (fake)", "login": None}
+    assert init.code == 78 and "openhands" not in init.stderr
+
+
 async def test_doctor_with_no_harness_on_path_exits_78(cli: Cli):
     fake_harnesses(cli)
 

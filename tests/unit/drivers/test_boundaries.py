@@ -12,8 +12,10 @@ SDK = ROOT / "packages" / "sdk" / "src" / "platoon_harness"
 ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_harness"}
 PUBLIC = (
     *ROOT.glob("packages/*/src/**/*.py"),
+    *ROOT.glob("extensions/*/src/**/*.py"),
     *ROOT.glob("*.md"),
     *ROOT.glob("packages/*/README.md"),
+    *ROOT.glob("extensions/*/README.md"),
     *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
     *(ROOT / "tests" / "conformance").glob("*.py"),
 )
@@ -38,6 +40,15 @@ def roots_of(path: Path) -> set[str]:
 @pytest.mark.parametrize("path", sorted(SDK.rglob("*.py")), ids=lambda path: str(path.relative_to(SDK)))
 def test_the_sdk_imports_nothing_but_the_standard_library_and_pydantic(path):
     assert roots_of(path) <= ALLOWED
+
+
+def test_only_the_worker_imports_openhands():
+    """The OpenHands SDK lives in the worker's environment alone, so the SDK, the command line and the tests never
+    import it, nor the worker."""
+    ours = (*ROOT.glob("packages/*/src/**/*.py"), *ROOT.glob("tests/**/*.py"))
+    importers = [path for path in ours if roots_of(path) & {"openhands", "platoon_harness_openhands"}]
+
+    assert importers == []
 
 
 @pytest.mark.parametrize("path", PUBLIC, ids=lambda path: str(path.relative_to(ROOT)))

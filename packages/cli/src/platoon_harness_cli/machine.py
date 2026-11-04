@@ -12,6 +12,7 @@ from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
 from platoon_harness.drivers.process import status
+from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
 from platoon_harness.kernel import filesystem
 from platoon_harness.runtime.paths import HOME_VARIABLE, find_root, socket_path
@@ -28,8 +29,9 @@ _LABELS = {DRIVERS: "driver", EXTENSIONS: "extension"}
 
 
 def harnesses() -> list[tuple[str, Driver]]:
-    """Each installed driver that names a harness, which by the naming law is a command of that name. A driver that
-    needs a command of its own, as `exec` and `wire` do, names none."""
+    """Each installed driver that names a harness, which by the naming law is a command of that name, or runs a wire
+    program of its own, as `openhands` does. A driver that needs a command given it, as `exec` and `wire` do, names
+    none."""
     found = []
     for name in Installed(DRIVERS):
         try:
@@ -37,6 +39,11 @@ def harnesses() -> list[tuple[str, Driver]]:
         except TypeError:
             continue
     return found
+
+
+def _program(name: str, driver: Driver) -> str:
+    """The command a harness is found by on PATH."""
+    return driver.command[0] if isinstance(driver, WireDriver) else name
 
 
 def _first_line(command: list[str]) -> str | None:
@@ -49,9 +56,10 @@ def _first_line(command: list[str]) -> str | None:
 def _harness(name: str, driver: Driver) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
     command, which is all of what it said that is kept."""
-    if shutil.which(name) is None:
+    program = _program(name, driver)
+    if shutil.which(program) is None:
         return {"name": name, "found": False}
-    return {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
+    return {"name": name, "found": True, "version": _first_line([program, "--version"]), "login": _login(driver)}
 
 
 def _login(driver: Driver) -> str | None:
@@ -162,7 +170,8 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
 def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
-    A lead on the first, which starts workers on the second. It never overwrites one.
+    A lead on the first, which starts workers on the second. It never overwrites one. A harness behind a wire program,
+    as `openhands` is, is passed over: init writes no auth profile, and `openhands` needs one.
 
     For example:
 
@@ -170,9 +179,10 @@ def init() -> int:
         platoon-harness team show
         platoon-harness run "Fix the flaky test"
     """
-    found = [(name, driver) for name, driver in harnesses() if shutil.which(name)]
+    candidates = [(name, driver) for name, driver in harnesses() if not isinstance(driver, WireDriver)]
+    found = [(name, driver) for name, driver in candidates if shutil.which(name)]
     if not found:
-        names = ", ".join(name for name, _ in harnesses())
+        names = ", ".join(name for name, _ in candidates)
         raise ConfigError([Problem("harness", f"none is on PATH: install one of {names}")])
     lead, worker = found[0], found[min(1, len(found) - 1)]
     team = {

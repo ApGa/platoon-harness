@@ -614,7 +614,8 @@ platoon-harness init
 
 Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
-A lead on the first, which starts workers on the second. It never overwrites one.
+A lead on the first, which starts workers on the second. It never overwrites one. A harness behind a wire program,
+as `openhands` is, is passed over: init writes no auth profile, and `openhands` needs one.
 
 For example:
 

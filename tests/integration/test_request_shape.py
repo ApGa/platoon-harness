@@ -10,11 +10,13 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
+from platoon_harness.drivers.openhands import WORKER
 from platoon_harness.testing import FakeModel, ToolCall
 from platoon_harness.testing.model import Request
 
+from ..unit.runtime import support
 from ..unit.runtime.support import in_state, of_type, until
-from . import test_claude, test_codex, test_pi
+from . import test_claude, test_codex, test_openhands, test_pi
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
@@ -37,6 +39,8 @@ def wait_call(harness: str) -> ToolCall:
     arguments = {"from": ["@you"]}
     if harness == "codex":
         return ToolCall("wait", arguments, id="call_wait", namespace="mcp__ph")
+    if harness == "openhands":
+        return ToolCall("wait", arguments, id="call_wait")
     return ToolCall("mcp__ph__wait", arguments, id="toolu_wait")
 
 
@@ -44,13 +48,17 @@ TEAMS: dict[str, Callable[..., Team]] = {
     "claude": test_claude.keyed,
     "codex": test_codex.keyed,
     "pi": test_pi.keyed,
+    "openhands": test_openhands.keyed,
 }
+PROGRAMS = {"openhands": WORKER}
+"""The command a harness is found by, where it is not the harness's name."""
 
 
 @pytest.mark.parametrize("harness", TEAMS)
 async def test_the_tool_block_and_our_words_hold_still_across_a_wake_and_a_resume(harness, tmp_path, monkeypatch):
-    if shutil.which(harness) is None:
+    if shutil.which(PROGRAMS.get(harness, harness)) is None:
         pytest.skip(f"{harness} is not installed, so this met no real harness here")
+    monkeypatch.setattr(support, "SECONDS", test_openhands.TIMEOUT)  # The OpenHands worker loads its SDK first.
     replies = (wait_call(harness), "waiting for you", "woken", "resumed")
 
     async with FakeModel(*replies) as model:

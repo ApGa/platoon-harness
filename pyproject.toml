@@ -23,6 +23,7 @@ dev = [
 
 [tool.uv]
 package = false
+exclude-dependencies = ["lmnr-claude-code-proxy"]
 
 [tool.uv.workspace]
 members = ["packages/*", "extensions/*"]

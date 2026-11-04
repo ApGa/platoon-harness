@@ -1,8 +1,8 @@
 # Drivers
 
 A driver presents one harness session to the runtime through seven methods. One instance serves one agent. Drivers for
-`claude`, `codex` and `pi` ship with the SDK. This page is for everyone else: how to write a driver, in Python or
-any other language, and how to prove it works.
+`claude`, `codex` and `pi` ship with the SDK, and `openhands` is a wire worker of its own, [below](#openhands-a-wire-worker).
+This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
 
 There are three ways in, cheapest first.
 
@@ -286,6 +286,57 @@ Each report is a `report` notification whose params are the report, with its `ty
 - **Your own subprocesses are yours to end,** in `stop`. Stay in your process group, and the runtime can end them if you cannot.
   On Linux, what leaves the group is found by the `TMPDIR` it inherited, and ended too. A driver of your own that uses `Process` keeps its record in `spec.folder`, which
   on the wire is a folder of its own, so recovery finds both.
+
+## OpenHands: a wire worker
+
+`harness = "openhands"` runs `platoon-harness-openhands`, a wire program in an environment of its own, as the OpenHands SDK shares
+one with nothing else: `uv tool install platoon-harness-openhands` makes it, the runtime finds it on `PATH`, and `doctor` shows it
+with the version of the SDK it runs. The command is not `openhands`, which is the OpenHands CLI's. Each rule it keeps, in a sentence:
+
+- **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can
+  abandon a model call and a message can land while one runs.
+- **Sign-in** is a key alone: `OPENAI_API_KEY` from the role's auth profile, with `OPENAI_BASE_URL` for an endpoint other than
+  OpenAI's, and a role with none is refused, as is a ChatGPT subscription or an OpenHands Cloud login, which needs a person.
+- **The model** is the role's, sent as it is named through litellm's OpenAI provider in the Chat Completions dialect, and an effort
+  goes as `reasoning_effort`, refused for a model litellm's catalog says takes none, as litellm would drop it unsaid.
+- **No retries:** the SDK retries no model call, as a retry is a second call a gateway records, so a failed one ends the turn.
+- **No step cap:** the SDK's cap on the steps of a run is lifted, as a role's budget is what limits it.
+- **Credentials:** the key, the endpoint and our token leave the worker's environment once read, so its terminal cannot read them,
+  and `LITELLM_LOCAL_MODEL_COST_MAP` and `OPENHANDS_SUPPRESS_BANNER` keep it off the network and off stdout.
+- **Tools** are OpenHands' terminal, in a subprocess, its file editor and its task tracker, as its own CLI gives them, and ours
+  through the stdio shim, which gives each call an id of its own, so two identical calls in a turn are two calls. `tool_names` is
+  `bare`, as OpenHands shows a server's tools by their own names.
+- **`ready`** says the conversation's id, the SDK's version, the role's model and the tools the agent offers its model once readied,
+  and the start fails if none of ours is among them, as the SDK only warns of a server that failed.
+- **Instructions:** ours are `AgentContext.system_message_suffix`, the project's load with `load_project_skills=True`, as its own
+  CLI loads them, and a conversation keeps the system prompt it began with, so a resume hands it the same text for nothing.
+- **A delivery** begins a turn, or goes to the one under way and lands at a later model call, and `input.delivered` comes from the
+  request that carried it, which the SDK's completion log shows, and never from the order of its events.
+- **Approvals:** every action asks the runtime but a call of our tools and a lone `finish` or `think`, which the SDK never asks
+  about, and one approval covers what a step holds, as the SDK confirms a step whole; `deny` rejects it with `The runtime denied
+  this.`
+- **Held deliveries:** a delivery waits while an approval is open, as a message would supersede the action, and then until what
+  was allowed has its result, as a message must not come between a call and its result.
+- **An interrupt** abandons a model call in flight, which a gateway may have recorded all the same, and rejects an approval left
+  open, and its turn says its usage is a lower bound.
+- **A turn ends** when `arun()` returns with nothing it was handed left to run on: `stopped` when the agent finished,
+  `interrupted`, `stuck` when the SDK found it repeating itself, and otherwise the code of the SDK's error, such as
+  `MaxBudgetReached`.
+- **Items** come from actions, their observations and the agent's own messages: `finish` is its last message, `think` a thought,
+  and a message the SDK calls the user's is never read as anyone's, as the SDK writes such messages itself.
+- **A model call** is each one the SDK measured, by its response id, which items carry as `call_id`: its tokens are the provider's,
+  prompt and completion, dollars come only where litellm prices the model, as an estimate, and litellm's reasoning tokens, an
+  estimate too, are not reported.
+- **A condensation** is `compacted`, with the event ids it forgot in the conversation's order and its summary, and its call has the
+  purpose `condenser`, the usage id of the SDK's LLM that made it.
+- **Its own agents** are off unless a role allows them; allowed, OpenHands' `task` tool starts its built-in kinds, whose steps ask
+  the runtime as their parent's do, and a child, which has no identity we can see, is the gap `native_child_unattributed`, its
+  spending its parent's at the scope `tree`.
+- **A resume** reopens the conversation by its id with the key handed again and the same tools, a conversation that is not there is
+  refused, as the SDK would start one anew under that id, and an action a crash or a stop left with no result is rejected before
+  the next run, which would run it again.
+- **`stop`** ends the turn and closes the conversation, which ends its terminal and the shim, and then the group ends as any wire
+  program's does; a tmux that a child's terminal starts keeps its socket in a directory of the agent's beside the runtime's own.
 
 ## A Python package
 
