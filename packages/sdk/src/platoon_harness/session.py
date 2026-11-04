@@ -310,7 +310,8 @@ class Session:
 
     async def _over_link[T](self, call: Callable[[Link], Awaitable[T]]) -> T:
         """Run one call on the link. A runtime that went gives way to what attaching gives now, and the call goes again,
-        so a command keeps its key and stays one operation. A guest on history looks for a runtime each time."""
+        so a command keeps its key and stays one operation. A guest on history looks for a runtime each time. A failed
+        commit is said however the call ended: one under way when another's commit failed is refused by the writer."""
         link = self._current()
         if isinstance(link, History) and (is_held(self.folder) or link.stale()):
             link = await self._reattach(link)
@@ -319,6 +320,9 @@ class Session:
                 answered = await call(link)
             except Closed:
                 link = await self._reattach(link)
+            except Refused:
+                self._failed()
+                raise
             else:
                 self._failed()
                 return answered

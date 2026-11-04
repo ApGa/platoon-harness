@@ -858,6 +858,36 @@ async def test_a_failed_commit_ends_the_runtime_as_a_kill_would_and_a_resume_tel
     assert [event.gist.partition(".")[0] for event in told] == ["Your last turn was cut off by a crash"]
 
 
+async def test_a_call_under_way_when_another_s_commit_fails_raises_journal_error_not_the_writer_s_refusal(
+    tmp_path, monkeypatch
+):
+    """A call already past its owner's own check when another call's commit fails is refused by the dead writer, and
+    says the commit failed as every later call does, so whichever call hears of it first, the owner's run ends the same
+    way: `platoon-harness run` exits 74 and never 1."""
+    session = await Session.start(comes_back(), name="s", root=tmp_path)
+    await in_state(session, "bob", "idle")
+    runtime, link = session._runtime, session._link
+    assert runtime is not None and link is not None
+
+    def failing(db: sqlite3.Connection) -> int:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    stored = link.put_body
+
+    async def meanwhile(body: bytes) -> str:
+        runtime.kernel._writer._seal = failing
+        with pytest.raises(JournalError):
+            await session.send("@bob", "anyone there?")
+        return await stored(body)
+
+    monkeypatch.setattr(link, "put_body", meanwhile)
+    with pytest.raises(JournalError, match="a commit failed"):
+        await session.put_body(b"a body the dead writer refuses")
+    with pytest.raises(JournalError):
+        await asyncio.wait_for(runtime.run(), SECONDS)
+    await session.leave()
+
+
 async def test_a_crash_says_what_a_resumed_harness_may_also_show_and_does_not_contradict_it(tmp_path):
     await cut_off_by_a_crash(tmp_path, comes_back())
 
