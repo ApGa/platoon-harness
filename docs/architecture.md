@@ -1318,7 +1318,7 @@ await session.contributors("task/tasks/1@3")                                    
   call that chose it, with the tool item that joins them and how many of its agent's ops share that tool call; each citation, with the
   cited event's maker and the citer's `exposure` to it at the bound, and for a range whether those lines were shown, decided as
   exposure is: true when a confirmed offer showed them, false only beside `not_seen`, and null otherwise; a
-  commit's `Informed-By` values that name no recorded commit, as written; each cause; its previous version on its own stream, or a
+  commit's `Informed-By` values that cite nothing, neither a recorded commit nor an event, as written; each cause; its previous version on its own stream, or a
   commit's parents; its maker's declared coverage; and one page of what its maker was offered and the gaps in its record below the
   bound, newest first, with true totals.
 - **`uses(ref)`** is one hop forward, oldest first: what cites the event, what follows from it, its next version or the commits that name
@@ -1550,9 +1550,12 @@ another. The core gives the first three, on git and the filesystem alone, and re
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
   It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof. See
   [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
-- **`Informed-By`** is the one way to declare a commit's semantic parents. A value of 4 to 40 hex digits naming one commit in the
-  commit's own repository is resolved to its full SHA once, at the commit's first record; anything else, a ref among them, is kept as
-  written and unresolved. `based_on` cites the recorded commits a commit names.
+- **`Informed-By`** is the one way to declare what a commit rests on. A value of 4 to 40 hex digits naming one commit in the commit's
+  own repository is resolved to its full SHA once, at the commit's first record, and `based_on` cites that commit's record. A value
+  that is an event's ref, such as the board entry the commit implements, is cited too, once it is checked as any citation is (§7): it
+  names an event, and a range lines of its body. Anything else, a git ref among them, is kept as written and unresolved, and never
+  refused, since git already holds it. Whether the commit's maker was handed what it cites is its exposure's to say, bounded at the
+  look that recorded the commit, as for any citation.
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve

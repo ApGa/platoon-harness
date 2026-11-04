@@ -22,7 +22,10 @@ event's words, an announce of a board write or a child's report, is shown by the
 The eight writes of content take `based_on`: `message.send`, `board.post`, `board.revise`, `task.add`, `task.complete`,
 `task.fail`, `agent.spawn` and `agent.finish`. A citation must name an existing event, and a range lines of that event's body, or
 the whole write is refused, so a citation says whether the event it names exists, and never what that event holds. A citation of
-something its citer was never handed is kept, and `exposure` says so beside it. A commit cites through its `Informed-By` trailers.
+something its citer was never handed is kept, and `exposure` says so beside it. A commit cites through its `Informed-By` trailers:
+a commit by its SHA, and anything in the session by its ref, such as the board entry the commit implements, checked as any citation
+is, so the walk back from code reaches the messages and entries that informed it. A value that names neither stays as written, and
+lineage lists it as unresolved.
 Nothing asks agents to cite yet: that is the next stage, a sentence of the preamble's own.
 
 ## Asking the record

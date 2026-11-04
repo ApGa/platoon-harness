@@ -818,6 +818,29 @@ async def test_an_unresolvable_trailer_is_kept_and_labelled_never_in_based_on(ke
     assert found.cut == 17
 
 
+@pytest.mark.parametrize("repo", [REPO])
+async def test_an_informed_by_event_ref_is_a_declared_citation_checked_as_based_on_is(kernel):
+    """A commit cites the board entry it implements by its ref, so the walk back from the code reaches whoever wrote the
+    entry. A ref that names nothing or no lines of its body, or a body's hash, cites nothing and is never refused, as
+    git already holds it. Whether the commit's maker was handed what it cites is its exposure's to say, at the look."""
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "notes", kind="board")
+    post = {"board": "notes", "name": "spec", "gist": "the spec", "body": await stored(kernel, "one\ntwo\n")}
+    spec = result_of(await kernel.submit(bob, "board.post", post))["ref"]
+    written = [spec, f"{spec}#L2-2", "board/notes/spec@9", f"{spec}#L2-5", f"sha256:{'0' * 64}", "the spec"]
+    trailers = [{"written": value, "sha": None} for value in written]
+    refs = await committed(kernel, [commit(CHILD, [], "@alice", trailers)])
+
+    found = lineage(kernel, refs[CHILD])
+    reached = contributors(kernel, refs[CHILD])
+
+    assert of_type(kernel, "repo.committed")[-1].based_on == (spec, f"{spec}#L2-2")
+    assert [(edge.ref, edge.maker) for edge in found.declared] == [(spec, "agent:bob"), (f"{spec}#L2-2", "agent:bob")]
+    assert all(isinstance(edge.exposure, Unknown) and edge.exposure.handed == () for edge in found.declared)
+    assert [value.written for value in found.unresolved] == written[2:]
+    assert [(row.maker, row.kinds) for row in reached.rows] == [("agent:alice", ()), ("agent:bob", ("declared",))]
+
+
 async def test_a_compaction_marks_only_by_the_delivered_native_id(kernel):
     """A read's offer is confirmed by its tool item, whose id names no input a compaction can forget, so it is unsaid,
     though the compaction names that very id."""

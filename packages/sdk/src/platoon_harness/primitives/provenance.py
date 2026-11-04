@@ -572,8 +572,8 @@ class Step(Model):
 
 
 class Unresolved(Model):
-    """An `Informed-By` value of a commit as it was `written`, which named no commit the journal held when the commit
-    was recorded, with the commit git resolved it to, if any."""
+    """An `Informed-By` value of a commit as it was `written`, which named neither a commit the journal held nor an
+    event when the commit was recorded, with the commit git resolved it to, if any."""
 
     written: str
     sha: str | None
@@ -977,14 +977,15 @@ def _history(
 
 
 def _unresolved(txn: Txn, event: Event) -> tuple[Unresolved, ...]:
-    """A commit's `Informed-By` values that its `based_on` holds no record for."""
+    """A commit's `Informed-By` values its `based_on` cites nothing for: neither the record of the commit git resolved
+    one to nor the event it names."""
     if event.type != "repo.committed":
         return ()
     looks, cited = txn.view(Looks), set(event.based_on)
     return tuple(
         Unresolved(written=value["written"], sha=value["sha"])
         for value in event.data["informed_by"]
-        if value["sha"] is None or looks.ref(value["sha"]) not in cited
+        if (looks.ref(value["sha"]) if value["sha"] else value["written"]) not in cited
     )
 
 

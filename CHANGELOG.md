@@ -4,6 +4,10 @@
 
 ### Added
 
+- A commit's `Informed-By` trailer takes an event's ref, such as the board entry the commit implements: once checked as any
+  citation is, it joins the commit's `based_on` beside the commits its hex values name, so lineage shows it with the commit maker's
+  exposure and contributors walk from code to what informed it. A value that is neither stays as written and unresolved, never
+  refused. See ADR 0041.
 - Pi names what landed and which call made a tool call. The `pi` driver reports an input under the id of the entry pi wrote it
   down as, asked of `get_entries` from the last entry seen once the input's message has ended, and holds whatever pi says after the
   input until it has that id, so its reports keep pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi

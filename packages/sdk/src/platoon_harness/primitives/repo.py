@@ -10,7 +10,7 @@ from pydantic import Field
 
 from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Txn, View, fold, op
 
-from .common import BodyRef, Name
+from .common import BodyRef, Name, cited
 from .reports import record_gap
 from .sessions import SessionRecord
 
@@ -31,7 +31,8 @@ _NAMED = 3
 
 class Cited(Args):
     """One `Informed-By` value of a commit as it was `written`, cut to fit, and the commit it names, or None when it
-    names no one commit: only 4 to 40 hex digits naming one commit in the commit's own repository do."""
+    names no one commit: only 4 to 40 hex digits naming one commit in the commit's own repository do. A value that is an
+    event's ref names no commit, and its commit cites that event as any write of content cites one."""
 
     written: Annotated[str, Field(max_length=TEXT_LIMIT)]
     sha: Sha | None
@@ -170,11 +171,23 @@ def _said(where: str, reading: Reading) -> str:
     return f"{where} at {at}" + (f" on {reading.branch}" if reading.branch else "")
 
 
+def _citation(txn: Txn, looks: Looks, value: Cited) -> str | None:
+    """The ref an `Informed-By` value cites: a recorded commit's, by the commit git resolved it to, or an event's, by
+    its ref, checked as `based_on` is. Anything else cites nothing, and is never refused, since git already holds it."""
+    if value.sha is not None:
+        return looks.ref(value.sha)
+    try:
+        return cited(txn, [value.written])[0]
+    except Refused:
+        return None
+
+
 @op("repo.report", runtime=True)
 def report(txn: Txn, a: Report) -> None:
     """Record one page of a look, on `repo/<name>` with no agent in the envelope. A commit the journal holds is passed
     over, so a look repeated after a crash records nothing twice, a rewrite names only what the journal holds, and a
-    reading is recorded only when it differs from the workspace's last."""
+    reading is recorded only when it differs from the workspace's last. A commit's `based_on` is what its `Informed-By`
+    values cite, and the rest stay in `informed_by` alone."""
     repo = txn.view(SessionRecord).settings().repo
     if repo is None:
         raise Refused("unsupported", "this session observes no repository")
@@ -185,10 +198,10 @@ def report(txn: Txn, a: Report) -> None:
         return
     for commit in a.commits:
         if looks.ref(commit.sha) is None:
-            cited = [ref for found in commit.informed_by if found.sha and (ref := looks.ref(found.sha))]
+            citing = [ref for found in commit.informed_by if (ref := _citation(txn, looks, found))]
             gist = f"{commit.sha[:12]} {commit.subject}"[:GIST_LIMIT]
             data = commit.model_dump(mode="json", exclude={"subject"})
-            txn.emit("repo.committed", stream, gist=gist, based_on=list(dict.fromkeys(cited)), data=data)
+            txn.emit("repo.committed", stream, gist=gist, based_on=list(dict.fromkeys(citing)), data=data)
     if a.rewrite is not None and (dropped := [sha for sha in a.rewrite.dropped if looks.ref(sha)]):
         rewrite = a.rewrite.model_dump(mode="json", exclude={"dropped"})
         data = {"workspace": a.workspace, **rewrite, "dropped": dropped[:DROPPED_LIMIT], "dropped_total": len(dropped)}

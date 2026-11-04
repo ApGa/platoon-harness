@@ -429,6 +429,22 @@ async def test_a_turn_s_commits_are_recorded_after_it_ends_as_its_agent_s(repo, 
     assert {row["id"] for row in rows} == {f"commit/{found.data['sha']}", "workspace/@ada"}
 
 
+async def test_an_informed_by_value_naming_an_event_is_cited_by_the_commit_s_record(repo, tmp_path):
+    """A worker's commit cites the goal it was given, `agent/ada@1`, by its ref, which git cannot resolve and the record
+    can; a ref that names no event stays as it was written."""
+    team = team_of(harness=working(lambda cwd: commit(cwd, "work", cites="agent/ada@1,board/notes/plan@1")))
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "work")
+        await looked(session)
+        [found] = await committed(session)
+
+    assert found.based_on == ("agent/ada@1",)
+    assert found.data["informed_by"] == [
+        {"written": "agent/ada@1", "sha": None},
+        {"written": "board/notes/plan@1", "sha": None},
+    ]
+
+
 async def test_the_shared_workspace_s_uncommitted_state_is_recorded_only_when_a_role_works_in_it(repo, tmp_path):
     (repo / "yours.txt").write_text("your own edit\n")
     readings = {}
