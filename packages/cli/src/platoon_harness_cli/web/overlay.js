@@ -173,9 +173,16 @@ X.act = async (op, args, more = {}) => {
   return r;
 };
 
-// What a reload or a new link found unanswered, sent again under its key.
+// What a reload or a new link found unanswered, sent again under its key. A view link acts on nothing, so what waits
+// goes on waiting for a control link opened in this tab, rather than coming back refused when it may have been done.
 X.resend = () => {
-  for (const [key, command] of Object.entries(X.pending)) {
+  const waiting = Object.entries(X.pending);
+  if (waiting.length && X.caps.credential !== 'control') {
+    toast(`${plural(waiting.length, 'act')} not yet answered ${waiting.length === 1 ? 'waits' : 'wait'} for a control ` +
+      'link opened in this tab, as a view link acts on nothing.');
+    return;
+  }
+  for (const [key, command] of waiting) {
     X.send(key, command).then(r => {
       if (!r) return;
       delete X.pending[key]; X.keep();

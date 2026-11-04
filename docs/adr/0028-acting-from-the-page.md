@@ -14,7 +14,8 @@ request can reach `web` and its answer never reach the page.
 
 - **One key per act, kept until answered.** The page makes a key for each draft sent or button pressed, and keeps the act,
   with its key, in the tab's own storage until it is answered. Until then it sends it again, every two seconds, after a
-  lost connection, and when the page loads after a reload or from a new link in the same tab. `web` puts the key under
+  lost connection, and when the page loads after a reload or from a new control link in the same tab. A view link sends
+  none of it and says what waits, since it acts on nothing and its refusal would read as the act's. `web` puts the key under
   `web/` and nothing else, and the kernel answers a key it has seen with its first answer, so the retry is one operation
   whichever link sends it. A refusal is an answer, and so is a failure of `web`'s, which says whether the act took effect is
   unknown; a page whose session ended was answered nothing, so its act stays kept.

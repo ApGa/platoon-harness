@@ -95,11 +95,12 @@ not hold.
 these are the ops the terminal asks about too, one set both read, and nothing takes them back.
 
 **Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
-answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new link opened
-in the same tab, since it keeps unanswered acts in the tab's own storage, and `web` answers a key it has seen with its first
-answer, whichever link sends it. So a retry is one operation: one message, one decision. An act whose page's session ended
-before it was answered, as when `web` stops, says it was not answered, and goes again from the next link you open in that
-tab. `web` puts the key under `web/`, so no other client's meets it.
+answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new control
+link opened in the same tab, since it keeps unanswered acts in the tab's own storage, and `web` answers a key it has seen
+with its first answer, whichever link sends it. So a retry is one operation: one message, one decision. An act whose page's
+session ended before it was answered, as when `web` stops, says it was not answered, and goes again from the next control
+link you open in that tab. A view link opened there sends none of it, since it acts on nothing, and says what waits. `web`
+puts the key under `web/`, so no other client's meets it.
 
 **Refusals.** A refusal is an answer and is shown with its reason, never as success: under the composer, under a person's
 acts, or as a notice. An approval someone decided first says who and through what: `Already decided by you via tui.`

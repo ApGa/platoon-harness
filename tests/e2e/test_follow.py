@@ -147,6 +147,49 @@ async def test_an_act_answered_only_by_an_ended_session_goes_again_from_a_new_li
     assert errors == []
 
 
+async def test_a_view_link_sends_no_act_left_unanswered_and_says_it_waits_for_a_control_link(
+    chromium: Browser, root: Path
+):
+    """`web` acted and the page heard only that its session had ended. A view link opened over the page sends none of
+    it, since its refusal would read as the act's, and says it waits; a control link opened next sends it, once."""
+    team = solo(*[[Say("heard you")]] * 2)
+    async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "bob", "idle")
+        page, errors = await opened(chromium, web.link("control"), "status of 401")
+        await chat(page, "bob & you")
+
+        async def ended(route: Route) -> None:
+            await route.fetch()
+            await route.fulfill(status=401, json={"error": "this page's session has expired: open a new link"})
+
+        await page.route("**/x/command", ended)
+        await page.locator(COMPOSER).fill("only once")
+        await page.keyboard.press("Enter")
+        await expect(page.locator("#main .x-why")).to_have_text(re.compile("^Not answered"))
+        await page.unroute("**/x/command", ended)
+
+        commands: list[str] = []
+        page.on("request", lambda request: commands.append(request.url) if "/x/command" in request.url else None)
+        await page.goto(web.link("view"))
+        await expect(page.locator("#tip")).to_have_text(
+            "1 act not yet answered waits for a control link opened in this tab, as a view link acts on nothing.",
+            timeout=SECONDS,
+        )
+        from_the_view_link = list(commands)
+        kept = await page.evaluate("Object.keys(JSON.parse(sessionStorage.getItem('platoon-harness.acts')))")
+        await page.goto(web.link("control"))
+        await expect(page.locator("#tip")).to_have_text(
+            "message.send, sent before the page was reloaded: done.", timeout=SECONDS
+        )
+        sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
+        await page.context.close()
+
+    assert from_the_view_link == []
+    assert len(kept) == 1
+    assert sent == ["only once"]
+    assert errors == []
+
+
 async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknown(chromium: Browser, root: Path):
     """Sent again, an act `web` failed on would fail for ever, so the page keeps nothing and says what it knows."""
     failed = {"error": "Internal Server Error"}
