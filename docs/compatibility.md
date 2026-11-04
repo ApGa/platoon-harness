@@ -272,7 +272,8 @@ by a driver landing; only the row below changes.
   problem. A dry run of uv's resolver installing the extra brought in `lmnr-claude-code-proxy` 0.2.0, and with `--excludes` naming
   it did not.
 - A runtime on an interpreter that finds the SDK only on `PYTHONPATH`, as a module system, an install to a prefix or a checkout
-  would have it, described the worker and started it, which found the SDK there too [L].
+  would have it, described the worker and started it, which found the SDK there too [L]. The worker named as a wire command, as
+  for an environment of its own, ran a turn that called our tools by their own names [L].
 - Our tools come through the stdio shim, whose `_meta` holds a `platoon-harness/callId` per call beside the SDK's `progressToken`,
   so two identical calls in a turn are two. They show by their own names. Across a tool call, a wake and a resume by a new process
   the tool block and the system prompt held byte for byte, with our words once in each request, 25,817 bytes of tools [L].

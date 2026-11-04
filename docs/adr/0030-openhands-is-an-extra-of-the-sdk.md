@@ -60,7 +60,8 @@ owner chose otherwise: "I am actually ok with importing openhands sdk in our pac
   runtime on an interpreter that finds the SDK only on `PYTHONPATH`, and a start refused without the extra.
   `tests/unit/drivers/test_wire.py`: what a driver names reaches its program to describe it as to start it.
   `tests/integration/test_cli.py`: `doctor` with the extra, and, on an interpreter that finds none, `doctor` and a start naming it.
-- `tests/integration/test_openhands.py`, slow, on the real SDK against FakeModel, from the dev environment.
+- `tests/integration/test_openhands.py`, slow, on the real SDK against FakeModel, from the dev environment, the worker named as a wire
+  command among it.
 - By hand, in an environment of the SDK and the command line alone: `doctor` named its interpreter to install the extra for, `team
   check` found no problem, and a `run` failed its agent at start with the same words. A dry run of uv's resolver installing the extra
   brought in `lmnr-claude-code-proxy` 0.2.0, and with `--excludes` naming it did not.

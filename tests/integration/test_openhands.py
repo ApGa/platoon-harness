@@ -37,7 +37,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.process import Record
-from platoon_harness.team import AuthProfile
+from platoon_harness.team import AuthProfile, Command
 from platoon_harness.testing import (
     TOOL,
     Call,
@@ -149,7 +149,7 @@ def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role:
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OPENAI_BASE_URL", f"{model.url}/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "dummy-key")
-    bob = Role(harness="openhands", model=MODEL, auth="fake", **role)
+    bob = Role(**{"harness": "openhands", "model": MODEL, "auth": "fake", **role})
     return Team(roles={"bob": bob}, auth={"fake": AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY"))})
 
 
@@ -596,6 +596,29 @@ async def test_a_real_harness_calls_our_tools_parks_wakes_and_resumes_in_a_sessi
     assert model.calls[0].offers("wait")
     assert model.calls[-1].says("cinnabar")
     assert sum(event.data["tokens"] or 0 for event in usages) == len(model.calls) * SPENT
+
+
+async def test_the_worker_named_as_a_wire_command_runs_as_from_an_environment_of_its_own(tmp_path, monkeypatch):
+    """The dev environment's interpreter stands in for one of its own, named as drivers.md names it. The worker is then
+    a wire program like any other, and shows our tools by their own names all the same."""
+    worker = Command(command=(sys.executable, "-P", "-m", "platoon_harness.drivers.openhands"), mode="wire")
+
+    async with FakeModel(ToolCall("session_status", {}, id="call_status"), "fine") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, harness=worker)
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "how is the session?")
+            await until(lambda: of_type(session, "turn.ended"), session)
+            ended = await of_type(session, "turn.ended")
+            started = (await of_type(session, "agent.started"))[0]
+            items = [(event.gist, event.data["outcome"]) for event in await of_type(session, "item.recorded")]
+
+    assert [event.data["reason"] for event in ended] == ["stopped"]
+    verified = {"driver": "openhands", "version": PINNED, "login": "key", "tools": "visible"}
+    assert started.data["verified"] == {**verified, "allow_native_children": False}
+    assert ("session_status completed", "completed") in items
+    assert model.calls[0].offers("session_status") and "mcp__ph__" not in model.calls[0].message.body.decode()
 
 
 async def test_a_role_s_approval_policy_answers_openhands(tmp_path, monkeypatch):
