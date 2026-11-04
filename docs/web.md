@@ -18,7 +18,9 @@ Open a link in a browser. `web` is a guest of the session's runtime, on your own
 It starts and resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its history,
 says so at the top right, and names `platoon-harness session resume`. When a runtime takes the session up again, from any
 shell, the page follows it. Ctrl+C or `SIGTERM` stops `web`, which ends every browser's session and leaves the session
-itself as it was. It serves one session on one port, as the page keeps one session in the browser per address.
+itself as it was. It serves one session on one port, as the page keeps one session in the browser per address, and one
+`web` serves a session at a time, as one folds its projection: a second is refused, saying where the first serves, so
+stop that one for new links.
 
 ## The two links
 

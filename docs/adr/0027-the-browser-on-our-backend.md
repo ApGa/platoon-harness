@@ -18,7 +18,9 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   SHA-256 is held to an allowlist when `web` starts, and one that differs stops it, saying which, with exit 78.
 - **Process.** `web` is a guest on the owner's control credential, as every client of this user's is. It starts and
   resumes nothing. It follows the session as its runtime goes and comes back, and while no runtime holds it, it looks once
-  a second for one or for what one wrote and left, so a runtime that came and went between two looks is still folded.
+  a second for one or for what one wrote and left, so a runtime that came and went between two looks is still folded. One
+  `web` serves a session at a time: it holds `swarmchat.lock` beside the projection, which says where it serves, and a
+  second is refused with exit 64, saying so, since two would fold one file each its own way.
 - **Projection.** A follower folds the journal one way into `swarmchat.sqlite` in the session folder, 0600, a transaction
   an event. The fold is a function of the events and of the bodies they cite, which the follower reads first, so a rebuild
   gives every row again. A chat's id is 16 hex of a hash of the session's name and what the chat is: a channel's stream, or

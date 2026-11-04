@@ -122,6 +122,38 @@ async def test_web_follows_its_session_as_its_runtime_goes_and_comes_back(cli: C
     assert done.code == 0, done.stderr
 
 
+async def test_one_web_serves_a_session_and_a_second_is_refused_saying_where_the_first_is(cli: Cli):
+    """Two would fold one projection at once, each its own way, and one crashed on a line the other had written."""
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    web = await cli.start("web", "s")
+    found = await links(web)
+    token = await asyncio.to_thread(opened, found["control"])
+
+    _, info = await asyncio.to_thread(call, found["control"], "POST", "/v1/view_info", {}, token)
+    second = await cli.run("web", "s")
+    for n in range(2):
+        await cli.run("message", "send", "s", "--to", "@bob", "--gist", f"note {n}")
+    fed, after = [], info["feed"]
+    async with asyncio.timeout(SECONDS):
+        while len(fed) < 2:
+            params = {"after": after, "timeout": 25}
+            _, page = await asyncio.to_thread(call, found["control"], "POST", "/v1/view_feed", params, token)
+            fed += [event for event in page["events"] if event.get("message", {}).get("text", "").startswith("note")]
+            after = page["feed"]
+    _, notes = await asyncio.to_thread(call, found["control"], "POST", "/v1/view_search", {"text": "note"}, token)
+    web.send_signal(signal.SIGTERM)
+    done = await finished(web)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    authority = urlsplit(found["view"]).netloc
+    assert second.code == 64 and f"web serves session s already, at {authority} in process {web.pid}" in second.stderr
+    assert info["x"]["live"] is True and done.code == 0, done.stderr
+    assert sorted(message["text"] for message in notes["messages"]) == ["note 0", "note 1"]
+
+
 async def test_web_refuses_an_address_other_than_loopback_without_tls(cli: Cli):
     team = cli.write("solo.toml", solo("listening"))
     serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")

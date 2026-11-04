@@ -119,6 +119,7 @@ Each law is a sentence, and each has a test of the same name.
   annotations.sqlite  rewards, judgments, credit: no agent-reachable read opens it
   marks.sqlite        per-human unread positions: neither evidence nor view; losing it loses badges
   swarmchat.sqlite    0600: the browser's projection, folded one way by `web`; dropping it costs a fold from the journal
+  swarmchat.lock      flock: held by the one `web` serving the session, which says where it serves
   blobs/ab/<sha256>   bodies too large for the journal file
   manifest.json       resolved team, how it was started, component and protocol versions, topology hash; no secrets
   runtime.json        pid, start time, socket path, incarnation: left by a crash, so only `lock` proves it true

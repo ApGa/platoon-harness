@@ -8,6 +8,7 @@ import pytest
 
 from platoon_harness import Session
 from platoon_harness.kernel import Refusal
+from platoon_harness_cli.web import bodies
 from platoon_harness_cli.web import projection as projection_module
 from platoon_harness_cli.web.projection import FILE, SHOWN, Projection, hashed, shown
 
@@ -41,6 +42,19 @@ async def test_a_rebuild_from_nothing_equals_the_projection_folded_live(root):
 
     assert tables(again / FILE) == live
     assert len(live["lines"]) > 10 and len(live["feed"]) > 10
+
+
+async def test_an_event_folded_already_is_passed_over(root):
+    """A second follower of one projection, which one `web` per session prevents, would fold every event again."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session:
+        await scenario(session)
+        projection = await rebuilt(session, session.folder, await session.head())
+        once = tables(session.folder / FILE)
+        async for event in session.events():
+            projection.fold(event, await bodies(session, event))
+        projection.close()
+
+    assert tables(session.folder / FILE) == once
 
 
 async def test_a_chat_s_id_is_a_hash_of_the_session_and_what_the_chat_is(root):

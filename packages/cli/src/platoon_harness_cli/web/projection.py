@@ -229,7 +229,10 @@ class Projection:
         return [body] if body else []
 
     def fold(self, event: Event, bodies: Bodies) -> None:
-        """Fold one event, given what was read of the bodies it cites, in a transaction with how far this has got."""
+        """Fold one event, given what was read of the bodies it cites, in a transaction with how far this has got. An
+        event folded already is passed over, so folding it again changes nothing."""
+        if event.seq <= self.through:
+            return
         with self.db:
             if (fold := self._folds.get(event.type)) is not None:
                 fold(event, bodies)

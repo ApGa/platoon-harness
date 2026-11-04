@@ -242,6 +242,10 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- Two `web` processes on one session folded one projection, each from its own cursor, and the first to meet a line the other
+  had written crashed with a traceback, dropping every browser it served. One `web` serves a session at a time, holding
+  `swarmchat.lock` beside the projection, and a second exits 64, saying where the first serves. The fold passes over an event
+  it has folded already.
 - `web` spent a link before it believed the request to exchange it, so an exchange refused for its shape or cut off
   burned the link and gave nobody its token. A link is spent only by the answer that carries its token.
 - A request to the tool server or to `web` had 10 s to arrive whole, head and body, and its answer 10 s to leave, so a file
