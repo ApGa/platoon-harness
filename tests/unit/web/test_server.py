@@ -1,7 +1,9 @@
 """The page's server, route by route and refusal by refusal, over a session the test owns, on a real socket."""
 
 import asyncio
+import errno
 import json
+import socket
 import sqlite3
 from pathlib import Path
 
@@ -15,6 +17,8 @@ from platoon_harness_cli.web import LOOK
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
 from platoon_harness_cli.web.page import load
+from platoon_harness_cli.web.projection import Projection
+from platoon_harness_cli.web.server import Web
 
 from ..runtime.support import in_state, of_type, until
 from .support import QUIET, Browser, caught_up, scenario, served, team
@@ -172,6 +176,56 @@ async def test_localhost_is_this_server_too(web):
     )
 
     assert reply.status == 200
+
+
+async def test_every_address_a_name_has_is_served_on_the_one_port_said(session, clock):
+    """`localhost` names two addresses here, and a port left free on one would be anyone's to take."""
+    projection = Projection(session.folder, session.name, "you")
+    web = Web(session, projection, load(), clock, host="localhost")
+    await web.listen("localhost")
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo("localhost", web.port, type=socket.SOCK_STREAM)}
+        statuses = []
+        for address in sorted(addresses):
+            reader, writer = await asyncio.open_connection(address, web.port)
+            writer.write(f"GET /v1/health HTTP/1.1\r\nHost: localhost:{web.port}\r\n\r\n".encode())
+            statuses.append((await reader.read()).split(b" ")[1])
+            writer.close()
+    finally:
+        await web.stop()
+        projection.close()
+
+    assert statuses == [b"200"] * len(addresses)
+
+
+async def test_a_port_one_address_got_and_another_has_taken_is_left_for_one_free_on_both(session, clock, monkeypatch):
+    """On a busy host, the free port the first address got is often taken on the second."""
+    projection = Projection(session.folder, session.name, "you")
+    web = Web(session, projection, load(), clock, host="localhost")
+    start, calls = asyncio.start_server, []
+
+    async def busy(serve, address, port, **options):
+        if getattr(serve, "__self__", None) is web:
+            calls.append((address, port))
+            if len(calls) == 2:
+                raise OSError(errno.EADDRINUSE, "taken")
+        return await start(serve, address, port, **options)
+
+    monkeypatch.setattr(asyncio, "start_server", busy)
+    await web.listen("localhost")
+    port = web.port
+    await web.stop()
+    projection.close()
+
+    first, taken, again, last = calls
+    assert first[1] == again[1] == 0 and taken[1] != 0 and last[1] == port
+
+
+async def test_the_scheme_s_own_port_is_left_out_of_the_host_as_a_browser_leaves_it(web, monkeypatch):
+    monkeypatch.setattr(Web, "port", property(lambda self: 80))
+
+    assert web.authorities == ("127.0.0.1", "localhost")
+    assert web.link("view").startswith("http://127.0.0.1/view#link=")
 
 
 async def test_a_body_too_large_is_refused_before_it_is_read(web):

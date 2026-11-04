@@ -43,7 +43,8 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   overlay runs only after it. A session token is lowercase hex, lasts twelve hours, and only its hash is kept, in `web`'s
   memory. Time comes from the SDK's clock.
 - **Network.** Loopback by default. `--host` names any other address, or a name, which `Host` must then say, and needs
-  `--certificate` and `--key`; a wildcard is refused, as no browser names it. `Host` is checked on every request and `Origin`
+  `--certificate` and `--key`; a wildcard is refused, as no browser names it. Every address a name has is bound on one
+  port, so none is left for another program to take, and the scheme's own port is left out of the authority. `Host` is checked on every request and `Origin`
   on every POST. The bounds are the tool server's: its HTTP moved into `platoon_harness.http`, with public names, which both
   servers use. There `Origin`, when a request has one, must be the origin of the `Host` it names, for the tool server too,
   where before any loopback origin passed.

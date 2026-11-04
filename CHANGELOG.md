@@ -242,6 +242,10 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- `web --host localhost` bound `127.0.0.1` and `::1` on two ports and said one, leaving that port free on the other address
+  for any program on the machine to take, and be what a browser reached. `platoon_harness.http` binds every address a name has
+  on one port, trying again when a busy host has taken it on one of them. `web` on the scheme's own port, 80 or 443, refused
+  every request, as a browser leaves that port out of `Host` and `Origin`; it leaves it out of what it serves too.
 - The browser's projection showed a message's body in place of its words whenever the body held them anywhere, so a file whose
   text held the message's words hid them. A body takes their place only when it begins or ends with the gist, as a cut gist does.
   An agent's end line said only that it ended, so a lead's answer given as its finish report was not in the page; it says what the

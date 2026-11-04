@@ -77,10 +77,12 @@ class Web(Server[Request]):
 
     @property
     def authorities(self) -> tuple[str, ...]:
-        """What `Host` may say: the address served, and `localhost` beside a loopback one."""
+        """What `Host` may say: the address served, and `localhost` beside a loopback one, with the port, unless it is
+        the scheme's own, which a browser leaves out."""
         host = f"[{self._host}]" if ":" in self._host else self._host
         loopback = ("localhost",) if self._host in ("127.0.0.1", "::1") else ()
-        return tuple(f"{name}:{self.port}" for name in (host, *loopback))
+        port = "" if self.port == {"http": 80, "https": 443}[self._scheme] else f":{self.port}"
+        return tuple(f"{name}{port}" for name in (host, *loopback))
 
     def link(self, kind: Class, authority: str | None = None) -> str:
         """A one-time link of `kind` to the page."""

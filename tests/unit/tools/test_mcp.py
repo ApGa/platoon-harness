@@ -347,11 +347,11 @@ async def test_a_connection_that_starts_as_the_server_stops_is_turned_away(kerne
     server = ToolServer(kernel)
     await server.start()
     url = server.url
-    server._server, started = None, server._server
+    server._servers, started = [], server._servers
 
     assert (await exchange(url, b"")).status == 503
 
-    server._server = started
+    server._servers = started
     await server.stop()
 
 

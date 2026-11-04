@@ -5,6 +5,7 @@ import asyncio
 import http.client
 import json
 import signal
+import socket
 import ssl
 import subprocess
 from collections.abc import AsyncIterator
@@ -134,6 +135,31 @@ async def test_web_refuses_an_address_other_than_loopback_without_tls(cli: Cli):
 
     assert [remote.code, wildcard.code, halves.code] == [64, 64, 64]
     assert "needs TLS" in remote.stderr and "names no one address" in wildcard.stderr
+
+
+def health(address: str, authority: str) -> int:
+    """What `web` answers on one address for its health, asked as a browser that resolved the name to it would."""
+    with socket.create_connection((address, int(authority.rpartition(":")[2])), timeout=SECONDS) as connection:
+        connection.sendall(f"GET /v1/health HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode())
+        return int(connection.makefile("rb").readline().split()[1])
+
+
+async def test_web_serves_every_address_its_name_has_on_the_port_it_says(cli: Cli):
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    addresses = {info[4][0] for info in socket.getaddrinfo("localhost", 0, type=socket.SOCK_STREAM)}
+
+    web = await cli.start("web", "s", "--host", "localhost")
+    authority = urlsplit((await links(web))["view"]).netloc
+    statuses = [await asyncio.to_thread(health, address, authority) for address in sorted(addresses)]
+    web.send_signal(signal.SIGTERM)
+    done = await finished(web)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert authority.startswith("localhost:") and statuses == [200] * len(addresses)
+    assert done.code == 0, done.stderr
 
 
 async def test_web_on_no_such_session_is_refused(cli: Cli):

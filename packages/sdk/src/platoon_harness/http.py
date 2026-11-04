@@ -7,7 +7,9 @@ chunked. A request has `SECONDS` on the server's clock to arrive and its answer 
 
 import asyncio
 import contextlib
+import errno
 import logging
+import socket
 import ssl
 from collections.abc import Awaitable, Coroutine, Mapping
 from http import HTTPStatus
@@ -20,6 +22,7 @@ SECONDS = 10.0
 CONNECTIONS = 1024
 _ONCE = frozenset({"authorization", "content-length", "host", "origin"})
 _CHUNK = 64 * 1024
+_BINDS = 8
 
 log = logging.getLogger("platoon_harness.http")
 
@@ -149,29 +152,48 @@ class Server[R]:
     def __init__(self, clock: Clock, *, connections: int = CONNECTIONS) -> None:
         self.clock = clock
         self.connections = connections
-        self._server: asyncio.Server | None = None
+        self._servers: list[asyncio.Server] = []
         self._serving: set[asyncio.Task[None]] = set()
 
     async def listen(self, host: str, port: int = 0, *, tls: ssl.SSLContext | None = None) -> None:
-        """Bind `host` and `port`, 0 for any free one, and start answering, over TLS with a context."""
-        self._server = await asyncio.start_server(
-            self._serve, host, port, limit=HEAD_LIMIT, ssl=tls, ssl_handshake_timeout=SECONDS if tls else None
-        )
+        """Bind every address `host` names, all on `port`, or for 0 on one port free on each, which may take a few
+        tries, and start answering, over TLS with a context. A name such as `localhost` can name two addresses, and a
+        port left free on either is anyone's to take."""
+        found = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        addresses = list(dict.fromkeys(str(info[4][0]) for info in found))
+        for tries in reversed(range(_BINDS)):
+            try:
+                await self._bind(addresses, port, tls)
+                return
+            except OSError as error:
+                await self.stop()
+                if port or not tries or error.errno != errno.EADDRINUSE:
+                    raise
+
+    async def _bind(self, addresses: list[str], port: int, tls: ssl.SSLContext | None) -> None:
+        handshake = SECONDS if tls else None
+        for address in addresses:
+            server = await asyncio.start_server(
+                self._serve, address, port, limit=HEAD_LIMIT, ssl=tls, ssl_handshake_timeout=handshake
+            )
+            self._servers.append(server)
+            port = server.sockets[0].getsockname()[1]
 
     @property
     def port(self) -> int:
-        if self._server is None:
+        if not self._servers:
             raise RuntimeError("this server has not started")
-        return self._server.sockets[0].getsockname()[1]
+        return self._servers[0].sockets[0].getsockname()[1]
 
     async def stop(self) -> None:
         """Stop listening and drop every request under way."""
-        server, self._server = self._server, None
-        if server is not None:
+        servers, self._servers = self._servers, []
+        for server in servers:
             server.close()
-            for task in self._serving:
-                task.cancel()
-            await asyncio.gather(*self._serving, return_exceptions=True)
+        for task in self._serving:
+            task.cancel()
+        await asyncio.gather(*self._serving, return_exceptions=True)
+        for server in servers:
             await server.wait_closed()
 
     async def receive(self, head: Head, reader: asyncio.StreamReader) -> R:
@@ -203,7 +225,7 @@ class Server[R]:
             self._serving.discard(task)
 
     async def _reply(self, reader: asyncio.StreamReader) -> tuple[R | None, bytes]:
-        if self._server is None or len(self._serving) > self.connections:
+        if not self._servers or len(self._serving) > self.connections:
             return None, self.refuse(Rejected(503, why="too many connections are open: try again shortly"))
         try:
             request = await unless(self.clock.sleep(SECONDS), self._received(reader))

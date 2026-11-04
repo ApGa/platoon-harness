@@ -125,6 +125,9 @@ as a download and not drawn. [STATUS.md](STATUS.md) says what each is.
 
 - **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
   is refused without them. A wildcard such as `0.0.0.0` is refused, since a browser's requests must name the host served.
+  A name with several addresses, as `localhost` has, is served on one port at each, so no other program on the machine can
+  take that port on one of them and be what a browser reaches. A port that is the scheme's own, 80 or 443, is left out of
+  the address, as a browser leaves it out.
 - **What it believes.** Every request is bounded before it is believed, by the same code as the SDK's tool server: a head
   of at most 16 KiB, then `Host`, which must name the authority served, which defeats DNS rebinding, then on a POST
   `Origin`, which must be the page's own, then the bearer, and only then a body of a stated length, on a deadline, with a
