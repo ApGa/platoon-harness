@@ -15,8 +15,20 @@ def _bare(name: str) -> str:
     return name.removeprefix("@").removeprefix("agent:")
 
 
-Name = Annotated[str, Field(pattern=f"^{NAME}$", max_length=128)]
-AgentName = Annotated[str, Field(pattern=f"^(@|agent:)?{NAME}$", max_length=134), AfterValidator(_bare)]
+def _named(name: str) -> str:
+    if re.fullmatch(NAME, name) is None:
+        raise ValueError("a name has no `..`, and ends in neither `.` nor `.lock`")
+    return name
+
+
+_LETTERS = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"
+"""What a tool's schema shows of a name: its letters. Its rules for dots, which `_named` holds it to, would cost every
+request of every agent some 3.7 KB as a pattern."""
+
+Name = Annotated[str, Field(pattern=f"^{_LETTERS}$", max_length=128), AfterValidator(_named)]
+AgentName = Annotated[
+    str, Field(pattern=f"^(@|agent:)?{_LETTERS}$", max_length=134), AfterValidator(_bare), AfterValidator(_named)
+]
 Gist = Annotated[str, Field(max_length=GIST_LIMIT, description="What readers see first, at most 280 characters.")]
 BODY_REF = r"^sha256:[0-9a-f]{64}$"
 BodyRef = Annotated[str, Field(pattern=BODY_REF)]

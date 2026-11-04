@@ -7,7 +7,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
-NAME = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"
+_LETTER = "[A-Za-z0-9_-]"
+NAME = (
+    rf"[A-Za-z0-9_]{_LETTER}*(?:(?:\.{_LETTER}+)*\.(?:{_LETTER}{{1,3}}|{_LETTER}{{5,}}|[A-Za-km-z0-9_-]{_LETTER}{{3}}"
+    rf"|l[A-Za-np-z0-9_-]{_LETTER}{{2}}|lo[A-Zabd-z0-9_-]{_LETTER}|loc[A-Za-jl-z0-9_-]))?"
+)
+"""A name: words of letters, digits, `_` and `-` joined by single dots, starting with no `-`, whose last word after a
+dot is not `lock`. So every name is a path part and a git branch part. Lookarounds would say it shorter, and the engine
+that checks a schema's pattern has none."""
 ENROLLED_ID = rf"(agent|human|program|judge):{NAME}"
 NAME_LIMIT = 256
 GIST_LIMIT = 280

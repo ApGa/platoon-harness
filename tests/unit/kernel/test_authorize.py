@@ -1,10 +1,12 @@
 """`authorize`: grants, relations on the live graph, scopes and credentials."""
 
 import asyncio
+import re
+import subprocess
 
 import pytest
 
-from platoon_harness.kernel import Grants, Principal, Principals, Refused, hash_token
+from platoon_harness.kernel import NAME, Grants, Principal, Principals, Refused, hash_token
 
 from .support import ALICE, BOB, HUMAN, enroll, events_of, grant, refusal_of, refused_code, result_of
 
@@ -123,6 +125,26 @@ async def test_a_name_is_a_safe_path_part(kernel):
     for name in ("..", "-rf", "w\u0430"):
         outcome = await kernel.submit(kernel.runtime, "principal.add", {"id": f"agent:{name}"})
         assert refusal_of(outcome) == "invalid"
+
+
+NAMES = ("a", "worker-1", "v1.2.3", "x.lock.y", "x.locks", "x.loc", "lock", "a-", "_x", "9")
+NOT_NAMES = ("a..b", "a.", "x.lock", "a.b.lock", ".a", "-a", "a/b", "a@{1}", "a b", "w\u0430")
+
+
+def branch_part(name: str) -> bool:
+    branch = f"platoon-harness/{name}/{name}"
+    return subprocess.run(["git", "check-ref-format", "--branch", branch], capture_output=True).returncode == 0
+
+
+async def test_names_are_path_parts_and_branch_parts(kernel):
+    """One grammar for every principal and session, whatever mode a role's workspace takes, and git agrees with it."""
+    for name in NAMES:
+        assert re.fullmatch(NAME, name), name
+        assert await asyncio.to_thread(branch_part, name), name
+    for name in NOT_NAMES:
+        outcome = await kernel.submit(kernel.runtime, "principal.add", {"id": f"agent:{name}"})
+        assert refusal_of(outcome) == "invalid", name
+        assert re.fullmatch(NAME, name) is None
 
 
 async def test_a_credential_arrives_after_the_principal(kernel):

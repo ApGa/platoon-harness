@@ -85,6 +85,9 @@ Checked by a test and by the kernel. At load, an op may not be past tense and it
   `#` are version and range: `board/notes/spec@3#L10-40` is a **ref**, and a ref names immutable content.
 - A driver's name is the command you type: `claude`, not `claude-code`. A harness that is a library has no command, so its name
   is the harness's: `openhands`.
+- Every name, of a principal, a session or anything a team names, is a path part and a git branch part: letters, digits, `_` and
+  `-` joined by single dots, starting with no `-`, with no `..` and ending in neither `.` nor `.lock`. A tool's schema shows its
+  letters, and the op holds it to the rest.
 
 ## 3. Laws
 

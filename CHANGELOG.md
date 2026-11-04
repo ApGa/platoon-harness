@@ -162,6 +162,7 @@
 
 ### Changed
 
+- Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before.
 - `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
   `tool_names` too.
 - `doctor --json` gives each harness it did not find a `reason`, `not on PATH` for a command.
