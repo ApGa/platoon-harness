@@ -2,6 +2,7 @@
 
 import ast
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,12 +11,13 @@ import pytest
 ROOT = Path(__file__).parents[3]
 SDK = ROOT / "packages" / "sdk" / "src" / "platoon_harness"
 ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_harness"}
+OPENHANDS = {"openhands", "litellm"}
+"""What the SDK's `openhands` extra brings, which only the OpenHands worker loads, in its own process."""
+WORKER = SDK / "drivers" / "openhands" / "agent.py"
 PUBLIC = (
     *ROOT.glob("packages/*/src/**/*.py"),
-    *ROOT.glob("extensions/*/src/**/*.py"),
     *ROOT.glob("*.md"),
     *ROOT.glob("packages/*/README.md"),
-    *ROOT.glob("extensions/*/README.md"),
     *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
     *(ROOT / "tests" / "conformance").glob("*.py"),
 )
@@ -39,16 +41,45 @@ def roots_of(path: Path) -> set[str]:
 
 @pytest.mark.parametrize("path", sorted(SDK.rglob("*.py")), ids=lambda path: str(path.relative_to(SDK)))
 def test_the_sdk_imports_nothing_but_the_standard_library_and_pydantic(path):
-    assert roots_of(path) <= ALLOWED
+    """But for the OpenHands worker's own module, which imports what the `openhands` extra brings."""
+    assert roots_of(path) <= ALLOWED | (OPENHANDS if path == WORKER else set())
 
 
-def test_only_the_worker_imports_openhands():
-    """The OpenHands SDK lives in the worker's environment alone, so the SDK, the command line and the tests never
-    import it, nor the worker."""
+def test_only_the_openhands_worker_imports_openhands():
     ours = (*ROOT.glob("packages/*/src/**/*.py"), *ROOT.glob("tests/**/*.py"))
-    importers = [path for path in ours if roots_of(path) & {"openhands", "platoon_harness_openhands"}]
 
-    assert importers == []
+    assert [path for path in ours if roots_of(path) & OPENHANDS] == [WORKER]
+
+
+LOADED = """
+import importlib
+import pkgutil
+import sys
+
+import platoon_harness
+import platoon_harness_cli
+from platoon_harness.extensions import DRIVERS, Installed, load
+
+for package in (platoon_harness, platoon_harness_cli):
+    for module in pkgutil.walk_packages(package.__path__, f"{package.__name__}."):
+        if module.name != sys.argv[1] and not module.name.endswith(".__main__"):
+            importlib.import_module(module.name)
+for name in Installed(DRIVERS):
+    load(DRIVERS, name)
+print(sorted(name for name in sys.modules if name.partition(".")[0] in sys.argv[2:]))
+"""
+"""A program for a fresh interpreter: what of OpenHands is loaded once every module of the SDK and the command line is,
+but the worker's own, and every driver class."""
+
+
+def test_nothing_but_the_openhands_worker_loads_openhands():
+    """Importing the SDK, any module the runtime or a driver class imports, or the command line loads no OpenHands."""
+    worker = "platoon_harness.drivers.openhands.agent"
+    command = [sys.executable, "-P", "-c", LOADED, worker, *OPENHANDS]
+    done = subprocess.run(command, capture_output=True, text=True, timeout=120, check=False)
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["[]"]
 
 
 @pytest.mark.parametrize("path", PUBLIC, ids=lambda path: str(path.relative_to(ROOT)))

@@ -27,8 +27,9 @@ from openhands.tools.task_tracker import TaskTrackerTool
 from openhands.tools.terminal import TerminalTool
 
 from platoon_harness.config import Secret
-from platoon_harness.drivers import AgentSpec, DriverError
 from platoon_harness.tools import SHIM
+
+from .. import AgentSpec, DriverError
 
 Asked = Callable[[str, list[ActionEvent]], bool | None]
 """Whether a native child's step may run, or None to stop the child."""
@@ -154,6 +155,7 @@ def start(
         mcp_config=servers,
         agent_context=AgentContext(load_project_skills=True, system_message_suffix=spec.instructions),
         condenser=default_condenser(condensing),
+        critic=None,
     )
     conversation = LocalConversation(
         agent=agent,

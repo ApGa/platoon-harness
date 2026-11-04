@@ -20,6 +20,9 @@ classifiers = [
 ]
 dependencies = ["pydantic>=2.10,<3"]
 
+[project.optional-dependencies]
+openhands = ["openhands-sdk==1.59.0", "openhands-tools==1.59.0"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/platoon_harness"]
 

@@ -30,7 +30,8 @@ The owner asked for very good taste. In practice:
 `kernel` imports only the standard library and pydantic. `primitives`, `patterns`, drivers and extensions use only public kernel
 names. An AST test enforces this. If a primitive needs a private call, the kernel is wrong: fix the kernel.
 
-The SDK never imports the CLI, Textual, Platoon, Torch, Tinker or an agent implementation. A boundary test enforces this.
+The SDK never imports the CLI, Textual, Platoon, Torch, Tinker or an agent implementation. The one exception is OpenHands, the
+SDK's `openhands` extra, which only the OpenHands worker imports, in a process of its own. A boundary test enforces this.
 
 ## Engineering conventions
 

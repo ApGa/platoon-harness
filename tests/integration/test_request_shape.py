@@ -1,5 +1,6 @@
 """What each real harness sends a model across a tool call, a wake and a resume, on FakeModel. Free: dummy keys, an
-isolated home, and loopback only. Tool block stability is a measurement to take, so this states one."""
+isolated home, and loopback only. Tool block stability is a measurement to take, so this states one. Each skips where
+its binary is not installed. OpenHands is no binary, and the dev environment holds the SDK's `openhands` extra."""
 
 import hashlib
 import json
@@ -10,10 +11,8 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
-from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.testing import FakeModel, ToolCall
 from platoon_harness.testing.model import Request
-from platoon_harness_cli.machine import program
 
 from ..unit.runtime import support
 from ..unit.runtime.support import in_state, of_type, until
@@ -55,7 +54,7 @@ TEAMS: dict[str, Callable[..., Team]] = {
 
 @pytest.mark.parametrize("harness", TEAMS)
 async def test_the_tool_block_and_our_words_hold_still_across_a_wake_and_a_resume(harness, tmp_path, monkeypatch):
-    if shutil.which(program(harness, load(DRIVERS, harness)())) is None:
+    if harness != "openhands" and shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed, so this met no real harness here")
     monkeypatch.setattr(support, "SECONDS", test_openhands.TIMEOUT)  # The OpenHands worker loads its SDK first.
     replies = (wait_call(harness), "waiting for you", "woken", "resumed")

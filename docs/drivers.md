@@ -1,7 +1,8 @@
 # Drivers
 
 A driver presents one harness session to the runtime through seven methods. One instance serves one agent. Drivers for
-`claude`, `codex` and `pi` ship with the SDK, and `openhands` is a wire worker of its own, [below](#openhands-a-wire-worker).
+`claude`, `codex`, `pi` and `openhands` ship with the SDK, the last a wire worker whose OpenHands comes with the SDK's
+`openhands` extra, [below](#openhands-a-wire-worker).
 This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
 
 There are three ways in, cheapest first.
@@ -290,10 +291,39 @@ Each report is a `report` notification whose params are the report, with its `ty
 
 ## OpenHands: a wire worker
 
-`harness = "openhands"` runs `platoon-harness-openhands`, a wire program in an environment of its own, as the OpenHands SDK shares
-one with nothing else. It is not published: in a checkout of this repository, `UV_PROJECT_ENVIRONMENT=<folder> uv sync --package
-platoon-harness-openhands --frozen` builds it from the repository's lock, and with `<folder>/bin` on `PATH` the runtime finds it and
-`doctor` shows it with the version of the SDK it runs. The command is not `openhands`, which is the OpenHands CLI's. Each rule it
+`harness = "openhands"` runs a wire worker per agent, `python -P -m platoon_harness.drivers.openhands` on the runtime's own
+interpreter, so nothing is looked up on `PATH` and nothing else is installed. The worker alone loads OpenHands, which the SDK's
+`openhands` extra brings, pinning `openhands-sdk` and `openhands-tools` at 1.59.0 exactly:
+
+```console
+$ pip install 'platoon-harness-sdk[openhands]'
+```
+
+`doctor` shows it with the version of the OpenHands SDK it runs, or says it is not installed and how to install it, and without the
+extra an agent's start is refused in the same words. Nothing else changes: the SDK, the runtime and the command line never load it.
+
+**A proprietary dependency.** `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own
+terms ("All rights reserved"), so the extra installed from an index brings it in unless you exclude it. Nothing the worker runs
+imports it, as only `lmnr`'s instrumentation of the Claude Agent SDK does, and the worker runs without it: this repository's lock
+leaves it out with `exclude-dependencies`, so no test here has it. With uv, `--excludes` takes a file that names it:
+
+```console
+$ echo lmnr-claude-code-proxy > excludes.txt
+$ uv pip install 'platoon-harness-sdk[openhands]' --excludes excludes.txt
+```
+
+**An environment of its own.** OpenHands' pins share an environment with little, `mcp` 2.3.0 not among it. Where yours cannot hold
+them, install the SDK with the extra in an environment of its own, and name its interpreter and the module as a wire command:
+
+```toml
+[roles.worker]
+harness = { command = ["/opt/openhands/bin/python", "-P", "-m", "platoon_harness.drivers.openhands"], mode = "wire" }
+model = "gpt-5.4"
+auth = "openai"
+```
+
+The worker is then a wire program like any other: the shell's proxy variables and `SSL_CERT_FILE` reach it only where its auth
+profile names them, and a tmux its agents start keeps its socket in the directory every tmux of the user's shares. Each rule it
 keeps, in a sentence:
 
 - **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can

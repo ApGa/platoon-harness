@@ -36,6 +36,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | `web` is a guest that folds the journal one way into a projection of fixed ids, lets a browser in by a one-time link of a fixed class, and bounds every request as the tool server does |
 | [0028](0028-acting-from-the-page.md) | Acting from the page | Each act keeps its key until answered, across a reload; one cut in Python for both clients; Needs you is the runtime's `attention`; asking first in the page |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | `tool_names` on `Capabilities`, `bare` for OpenHands, picks the surface our words and a tool's URL use |
+| [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | `platoon-harness-sdk[openhands]`, a worker per agent on the runtime's own interpreter that alone loads OpenHands, and an environment of its own as a wire command |
 
 ## Adding or changing one
 

@@ -1,5 +1,6 @@
 """One `run` of the command line on each real harness, against FakeModel: a dummy key, an isolated home and loopback
-only, so it spends nothing. Each skips where its binary is not installed, and a skip proves nothing."""
+only, so it spends nothing. Each skips where its binary is not installed, and a skip proves nothing. OpenHands is no
+binary, and the dev environment holds the SDK's `openhands` extra."""
 
 import asyncio
 import shutil
@@ -8,9 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.testing import FakeModel, Stall, Text
-from platoon_harness_cli.machine import program
 
 from .cli import SECONDS, Cli, checked, finished
 
@@ -49,7 +48,7 @@ def keyed(cli: Cli, harness: str, model: FakeModel) -> str:
 
 @pytest.mark.parametrize("harness", sorted(KEYS))
 async def test_a_run_on_a_real_harness_settles_and_says_so_in_jsonl(cli: Cli, harness: str):
-    if shutil.which(program(harness, load(DRIVERS, harness)())) is None:
+    if harness != "openhands" and shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed, so the command line met no real {harness} here")
     async with FakeModel("Hello from the model.") as model:
         team = keyed(cli, harness, model)
@@ -68,7 +67,7 @@ async def test_a_run_on_a_real_harness_settles_and_says_so_in_jsonl(cli: Cli, ha
 async def test_a_run_stopped_mid_turn_resumes_on_a_real_harness(cli: Cli, harness: str):
     """`session stop` ends the run as its owner's stop, and `session resume` prints what its runtime does, from its
     start, until the harness has been told its turn was cut off and the session settles."""
-    if shutil.which(program(harness, load(DRIVERS, harness)())) is None:
+    if harness != "openhands" and shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed, so the command line met no real {harness} here")
     async with FakeModel([Stall(), Text("never heard")], "understood") as model:
         team = keyed(cli, harness, model)

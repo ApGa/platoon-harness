@@ -3,7 +3,3 @@ python-version = "3.12"
 
 [src]
 include = ["packages", "extensions"]
-
-[analysis]
-# The OpenHands SDK and its litellm live in the worker's own environment, which this one never holds.
-allowed-unresolved-imports = ["litellm.**", "openhands.**"]

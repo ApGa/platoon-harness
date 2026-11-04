@@ -631,9 +631,10 @@ platoon-harness doctor [OPTIONS]
 
 Say whether this machine can run sessions, and what it has.
 
-Each harness on PATH, with its version and the kind of its login, pi's Node, where sessions and sockets live, and
-what is installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the
-harness's own status command: no account name is kept, and no credential file is read.
+Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
+installed, and how to install it where not, pi's Node, where sessions and sockets live, and what is installed. It
+exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own status command:
+no account name is kept, and no credential file is read.
 
 For example:
 

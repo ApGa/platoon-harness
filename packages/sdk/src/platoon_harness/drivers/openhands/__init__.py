@@ -1,17 +1,18 @@
-"""The `openhands` driver: a wire worker per agent, in an environment of its own, as OpenHands shares one with nobody.
+"""The `openhands` driver: a wire worker per agent, which the runtime runs on its own interpreter as this package.
 
-The worker is `platoon-harness-openhands`, from the distribution of that name, on the runtime's `PATH`. It is not
-published, so a checkout of this repository builds it from the repository's lock.
+Only the worker loads OpenHands, which comes with the SDK's `openhands` extra, so importing this loads none of it.
 """
 
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
-from . import AgentSpec, DriverError, DriverInfo, Reporter
-from .wire import WireDriver
+from .. import AgentSpec, Reporter
+from ..wire import WireDriver
 
-WORKER = "platoon-harness-openhands"
+WORKER = (sys.executable, "-P", "-m", __name__)
+"""The worker's command: the runtime's own interpreter, with nothing of the workspace it runs in on its path."""
 _SIGN_IN = (
     "HTTPS_PROXY",
     "HTTP_PROXY",
@@ -32,16 +33,8 @@ class OpenHandsDriver(WireDriver):
     and its way out to the network from the shell, as it would there."""
 
     def __init__(self) -> None:
-        super().__init__([WORKER], _SIGN_IN)
+        super().__init__(WORKER, _SIGN_IN)
         self._tmux: Path | None = None
-
-    def describe(self) -> DriverInfo:
-        if shutil.which(WORKER) is None:
-            raise DriverError(
-                f"{WORKER} is not on PATH: in a checkout of platoon-harness, `UV_PROJECT_ENVIRONMENT=<folder> uv sync "
-                f"--package {WORKER} --frozen` builds it in a folder of its own, whose `bin` goes on PATH"
-            )
-        return super().describe()
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         """Start the worker with a directory of its own for the sockets of the tmux its agents start, short enough for

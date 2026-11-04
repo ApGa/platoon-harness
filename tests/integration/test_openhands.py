@@ -1,22 +1,17 @@
 """The `openhands` driver on the real OpenHands SDK against FakeModel. Free: a dummy key, an isolated home, and loopback
-only.
-
-The worker lives in an environment of its own, which these tests find on PATH as `platoon-harness-openhands`. Build it
-from the lock and put its `bin` on PATH:
-
-    UV_PROJECT_ENVIRONMENT=/somewhere/openhands uv sync --package platoon-harness-openhands --frozen
-    PATH=/somewhere/openhands/bin:$PATH uv run pytest -m slow tests/integration/test_openhands.py
+only. The dev environment holds the SDK's `openhands` extra, so these never skip.
 
 No live model has run through this driver: all of this is what the SDK did on FakeModel, but for one rule of the
-worker's turns, held on a stand-in of the SDK in the worker's own interpreter, as the tests import neither.
+worker's turns, held on a stand-in of the SDK in a process of its own, where it takes the place of the worker's module
+that loads the SDK.
 """
 
 import asyncio
 import json
 import os
-import shutil
 import signal
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +35,7 @@ from platoon_harness.drivers import (
     Usage,
 )
 from platoon_harness.drivers.levels import Conformance, Profile, levels
-from platoon_harness.drivers.openhands import WORKER, OpenHandsDriver
+from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.process import Record
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
@@ -75,9 +70,7 @@ SPENT = INPUT_TOKENS + OUTPUT_TOKENS
 
 @pytest.fixture(autouse=True)
 def worker(monkeypatch):
-    """The worker on PATH, given longer than a binary to come up, as it loads the SDK first."""
-    if shutil.which(WORKER) is None:
-        pytest.skip(f"{WORKER} is not on PATH, so this driver met no real OpenHands here")
+    """The worker, given longer than a binary to come up, as it loads the SDK first."""
     monkeypatch.setattr(support, "SECONDS", TIMEOUT)
 
 
@@ -358,8 +351,9 @@ from types import SimpleNamespace
 from platoon_harness.config import Secret
 from platoon_harness.drivers import AgentSpec, Delivery
 
-sys.modules["platoon_harness_openhands.agent"] = agent = SimpleNamespace(ready=lambda _: ((), ()), pending=lambda _: [])
-from platoon_harness_openhands.worker import Worker
+agent = SimpleNamespace(ready=lambda _: ((), ()), pending=lambda _: [])
+sys.modules["platoon_harness.drivers.openhands.agent"] = agent
+from platoon_harness.drivers.openhands.worker import Worker
 
 
 class Conversation:
@@ -428,15 +422,14 @@ async def main(folder):
 
 asyncio.run(main(Path(sys.argv[1])))
 """
-"""A program for the worker's own interpreter: whether a delivery that came that many turns of the loop after a turn's
-last run returned was run by a run after it."""
+"""A program for a process of its own: whether a delivery that came that many turns of the loop after a turn's last run
+returned was run by a run after it."""
 
 
 async def test_a_delivery_that_comes_as_a_turn_ends_is_run(tmp_path):
     """One that came in the last ticks of a turn reached the conversation after the turn read its status, and no run
     came after it."""
-    python = Path(str(shutil.which(WORKER))).with_name("python")
-    command = [str(python), "-I", "-c", LAST_TICKS, str(tmp_path)]
+    command = [sys.executable, "-I", "-c", LAST_TICKS, str(tmp_path)]
     done = await asyncio.to_thread(subprocess.run, command, capture_output=True, text=True, timeout=TIMEOUT)
 
     assert done.returncode == 0, done.stderr

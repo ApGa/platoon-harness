@@ -581,6 +581,31 @@ def fake_harnesses(cli: Cli, *names: str) -> None:
     cli.env["PATH"] = f"{folder}:/usr/bin:/bin"
 
 
+WITHOUT_OPENHANDS = """
+import importlib.metadata
+
+found = importlib.metadata.version
+
+
+def version(name):
+    if name.startswith("openhands-"):
+        raise importlib.metadata.PackageNotFoundError(name)
+    return found(name)
+
+
+importlib.metadata.version = version
+"""
+"""What an interpreter finds of the SDK's `openhands` extra where nobody installed it: no metadata of either package."""
+
+
+def without_openhands(cli: Cli) -> None:
+    """The command line, and what it runs with its environment, on an interpreter that finds no `openhands` extra."""
+    folder = cli.folder / "site"
+    folder.mkdir()
+    (folder / "sitecustomize.py").write_text(WITHOUT_OPENHANDS)
+    cli.env["PYTHONPATH"] = f"{folder}:{cli.env['PYTHONPATH']}"
+
+
 async def test_init_writes_a_starter_from_the_harnesses_found_and_never_overwrites(cli: Cli):
     fake_harnesses(cli, "claude", "codex")
 
@@ -628,20 +653,36 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
     assert {component["name"] for component in report["installed"]["components"]} >= {"claude", "codex", "pi"}
 
 
-async def test_openhands_is_found_by_its_worker_and_init_passes_it_over_as_a_wire_program(cli: Cli):
-    """The OpenHands CLI is `openhands`, so the harness of that name runs a worker of its own name."""
-    fake_harnesses(cli, "platoon-harness-openhands", "openhands")
+async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_a_wire_program(cli: Cli):
+    """The OpenHands CLI is `openhands`, a command of the harness's name that is not what runs it."""
+    fake_harnesses(cli, "openhands")
 
     doctor = await cli.run("doctor", "--json")
     init = await cli.run("init")
 
     found = {harness["name"]: harness for harness in json.loads(doctor.stdout)["harnesses"]}
-    assert found["openhands"] == {"name": "openhands", "found": True, "version": "9.9.9 (fake)", "login": None}
+    assert doctor.code == 0
+    assert found["openhands"] == {"name": "openhands", "found": True, "version": "1.59.0", "login": None}
     assert init.code == 78 and "openhands" not in init.stderr
 
 
-async def test_doctor_with_no_harness_on_path_exits_78(cli: Cli):
+async def test_doctor_without_the_openhands_extra_says_how_to_install_it(cli: Cli):
+    fake_harnesses(cli, "claude")
+    without_openhands(cli)
+
+    done = await cli.run("doctor")
+
+    assert done.code == 0
+    assert "claude     9.9.9 (fake), login unknown" in done.stdout
+    assert (
+        "openhands  openhands-sdk is not installed: install the openhands extra, as in "
+        "`pip install 'platoon-harness-sdk[openhands]'`"
+    ) in done.stdout
+
+
+async def test_doctor_with_no_harness_on_path_and_no_openhands_extra_exits_78(cli: Cli):
     fake_harnesses(cli)
+    without_openhands(cli)
 
     done = await cli.run("doctor")
 

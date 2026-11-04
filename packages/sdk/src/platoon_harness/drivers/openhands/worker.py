@@ -14,11 +14,15 @@ import os
 import tempfile
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 from uuid import uuid4
 
-from platoon_harness.drivers import (
+from platoon_harness.kernel import GIST_LIMIT
+from platoon_harness.tools import delivery_heading
+from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
+
+from .. import (
     AgentSpec,
     ApprovalRequested,
     Boundary,
@@ -43,13 +47,12 @@ from platoon_harness.drivers import (
     refuse_unset_model,
     unknown_frame,
 )
-from platoon_harness.drivers.env import Redactor, secrets_of
-from platoon_harness.kernel import GIST_LIMIT
-from platoon_harness.tools import delivery_heading
-from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
+from ..env import Redactor, secrets_of
 
 _NAME = "openhands"
-SDK = "openhands-sdk"
+_SDK = "openhands-sdk"
+_TOOLS = "openhands-tools"
+_INSTALL = "pip install 'platoon-harness-sdk[openhands]'"
 _KEY = "OPENAI_API_KEY"
 _URL = "OPENAI_BASE_URL"
 _TOOL_TIMEOUT_S = 300.0
@@ -81,7 +84,18 @@ _CAPABILITIES = Capabilities(
 
 log = logging.getLogger(__name__)
 
-__all__ = ["SDK", "Worker"]
+__all__ = ["Worker", "sdk_version"]
+
+
+def sdk_version() -> str:
+    """The version of the OpenHands SDK here, from its metadata, which loads nothing. Without it or its tools, which our
+    `openhands` extra brings, the worker cannot run, and this says how to install them."""
+    try:
+        sdk = version(_SDK)
+        version(_TOOLS)
+    except PackageNotFoundError as error:
+        raise DriverError(f"{error.name} is not installed: install the openhands extra, as in `{_INSTALL}`") from error
+    return sdk
 
 
 def _text(parts: Iterable[Any]) -> str:
@@ -129,6 +143,7 @@ class Worker:
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         """Open the conversation, ready its agent, and say so. The key, the endpoint and our token leave the worker's
         environment once read, so the agent's terminal cannot read them."""
+        sdk = sdk_version()
         refuse_unset_model(spec)
         if _KEY not in spec.access:
             raise DriverError(
@@ -166,8 +181,7 @@ class Worker:
             raise DriverError(
                 "our tools did not reach openhands: their server failed to start, as the agent's log says"
             )
-        native, sdk = str(conversation.id), version(SDK)
-        self._put(Ready(native=native, version=sdk, effective_model=spec.model, tools_visible=tools))
+        self._put(Ready(native=str(conversation.id), version=sdk, effective_model=spec.model, tools_visible=tools))
         if agent.pending(conversation):
             await asyncio.to_thread(conversation.reject_pending_actions, _LEFT)
         if spec.goal and spec.resume is None:

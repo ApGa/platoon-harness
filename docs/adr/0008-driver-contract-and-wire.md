@@ -1,6 +1,7 @@
 # 0008. Driver contract and JSON-RPC wire protocol
 
-**Status:** Accepted, 2026-11-02
+**Status:** Accepted, 2026-11-02. OpenHands in an environment of its own, and the lock and environment its consequences give it,
+are superseded by [0030](0030-openhands-is-an-extra-of-the-sdk.md).
 
 ## Context
 

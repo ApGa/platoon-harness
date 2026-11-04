@@ -11,7 +11,6 @@ resolution-markers = [
 members = [
     "platoon-harness",
     "platoon-harness-cli",
-    "platoon-harness-openhands",
     "platoon-harness-sdk",
 ]
 excludes = ["lmnr-claude-code-proxy"]
@@ -3062,6 +3061,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
+    { name = "platoon-harness-sdk", extra = ["openhands"] },
     { name = "playwright" },
     { name = "pre-commit" },
     { name = "pyte" },
@@ -3083,6 +3083,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6" },
+    { name = "platoon-harness-sdk", extras = ["openhands"], editable = "packages/sdk" },
     { name = "playwright", specifier = "==1.64.1" },
     { name = "pre-commit", specifier = ">=4" },
     { name = "pyte", specifier = ">=0.8" },
@@ -3117,23 +3118,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "platoon-harness-openhands"
-version = "0.1.0"
-source = { editable = "extensions/openhands" }
-dependencies = [
-    { name = "openhands-sdk" },
-    { name = "openhands-tools" },
-    { name = "platoon-harness-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "openhands-sdk", specifier = "==1.59.0" },
-    { name = "openhands-tools", specifier = "==1.59.0" },
-    { name = "platoon-harness-sdk", editable = "packages/sdk" },
-]
-
-[[package]]
 name = "platoon-harness-sdk"
 version = "0.1.0"
 source = { editable = "packages/sdk" }
@@ -3141,8 +3125,19 @@ dependencies = [
     { name = "pydantic" },
 ]
 
+[package.optional-dependencies]
+openhands = [
+    { name = "openhands-sdk" },
+    { name = "openhands-tools" },
+]
+
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.10,<3" }]
+requires-dist = [
+    { name = "openhands-sdk", marker = "extra == 'openhands'", specifier = "==1.59.0" },
+    { name = "openhands-tools", marker = "extra == 'openhands'", specifier = "==1.59.0" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+]
+provides-extras = ["openhands"]
 
 [[package]]
 name = "playwright"

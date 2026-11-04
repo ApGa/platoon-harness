@@ -11,7 +11,7 @@ from cyclopts import App
 from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
-from platoon_harness.drivers.process import status
+from platoon_harness.drivers.process import exit_reason, status
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
 from platoon_harness.kernel import filesystem
@@ -41,11 +41,6 @@ def harnesses() -> list[tuple[str, Driver]]:
     return found
 
 
-def program(name: str, driver: Driver) -> str:
-    """The command a harness is found by on PATH: its name, or the program its wire driver runs."""
-    return driver.command[0] if isinstance(driver, WireDriver) else name
-
-
 def _first_line(command: list[str]) -> str | None:
     done = status(command, os.environ)
     if done is None:
@@ -56,10 +51,23 @@ def _first_line(command: list[str]) -> str | None:
 def _harness(name: str, driver: Driver) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
     command, which is all of what it said that is kept."""
-    command = program(name, driver)
-    if shutil.which(command) is None:
+    if isinstance(driver, WireDriver):
+        return _wire_harness(name, driver)
+    if shutil.which(name) is None:
         return {"name": name, "found": False}
-    return {"name": name, "found": True, "version": _first_line([command, "--version"]), "login": _login(driver)}
+    return {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
+
+
+def _wire_harness(name: str, driver: WireDriver) -> dict[str, Any]:
+    """A harness behind a wire program of its own, as `openhands` is: there when the program says its version, and
+    otherwise not, for the reason the program gave."""
+    done = status([*driver.command, "--version"], os.environ)
+    if done is None:
+        return {"name": name, "found": False, "reason": "it said no version in time"}
+    said = (done.stderr if done.returncode else done.stdout).decode(errors="replace").strip()
+    if done.returncode:
+        return {"name": name, "found": False, "reason": said.rpartition("\n")[2] or exit_reason(done.returncode)}
+    return {"name": name, "found": True, "version": said.partition("\n")[0] or None, "login": _login(driver)}
 
 
 def _login(driver: Driver) -> str | None:
@@ -108,9 +116,10 @@ def _installed() -> dict[str, Any]:
 def doctor(*, json: bool = False) -> int:
     """Say whether this machine can run sessions, and what it has.
 
-    Each harness on PATH, with its version and the kind of its login, pi's Node, where sessions and sockets live, and
-    what is installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the
-    harness's own status command: no account name is kept, and no credential file is read.
+    Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
+    installed, and how to install it where not, pi's Node, where sessions and sockets live, and what is installed. It
+    exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own status command:
+    no account name is kept, and no credential file is read.
 
     For example:
 
@@ -151,7 +160,7 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
             login = f"{harness['login']} login" if harness["login"] else "login unknown"
             lines.append(f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}")
         else:
-            lines.append(f"{harness['name']:<10} not on PATH")
+            lines.append(f"{harness['name']:<10} {harness.get('reason', 'not on PATH')}")
     if (node := report["node"]) is not None:
         enough = "" if node["enough"] else f", and pi needs {'.'.join(map(str, _NODE))} or later"
         lines.append(f"{'node':<10} {node['version'] or 'not on PATH'}{enough}")
