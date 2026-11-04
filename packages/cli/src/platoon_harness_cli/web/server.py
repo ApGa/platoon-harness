@@ -40,17 +40,18 @@ _UNBUILT = {
     "view_activity": "the map is not built yet",
 }
 _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
+_SPENT = "this link was used already or has expired: ask for a new one"
 
 
 class Request(NamedTuple):
-    """A request that has been believed: its route, the authority it named, the credential it holds, its body, and the
-    session token a link was spent for."""
+    """A request that has been believed: its route, the authority it named, the session token's credential or the link
+    it would spend, and its body."""
 
     route: str
     authority: str
     held: Held | None = None
+    link: str | None = None
     body: bytes = b""
-    token: str | None = None
 
 
 class Web(Server[Request]):
@@ -105,17 +106,17 @@ class Web(Server[Request]):
             raise Rejected(404, why=f"there is no route {route}")
         if head.method != "POST":
             raise Rejected(405, "Allow: POST")
-        token, minted = bearer(head), None
+        token, link = bearer(head), None
         if route == "/x/exchange":
-            if (spent := self.credentials.exchange(token)) is None:
-                raise Rejected(401, why="this link was used already or has expired: ask for a new one")
-            minted, held = spent
+            if not self.credentials.opens(token):
+                raise Rejected(401, why=_SPENT)
+            held, link = None, token
         elif (held := self.credentials.check(token)) is None:
             raise Rejected(401, "WWW-Authenticate: Bearer", why="this page's session has expired: open a new link")
         elif route.startswith("/x/") and held.kind != "control":
             raise Rejected(403, why="a view link shows the session and acts on nothing")
         body = await self.body(head, reader, BODY_LIMIT if route == "/x/body" else JSON_LIMIT)
-        return Request(route, head.headers["host"], held, body, minted)
+        return Request(route, head.headers["host"], held, link, body)
 
     def refuse(self, rejected: Rejected) -> bytes:
         return response(rejected.status, json.dumps({"error": rejected.why}).encode(), _JSON, *_PAGE, *rejected.headers)
@@ -128,10 +129,13 @@ class Web(Server[Request]):
         if route == "/v1/health":
             limits = {"max_text": SHOWN, "max_attachment": BODY_LIMIT, "max_attachments": 1}
             return _json({"ok": True, "name": "platoon-harness", "version": __version__, "limits": limits})
+        if route == "/x/exchange":  # A link is spent only here, in the answer that carries its token.
+            if request.link is None or (spent := self.credentials.exchange(request.link)) is None:
+                raise Rejected(401, why=_SPENT)
+            token, held = spent
+            return _json({"token": token, "class": held.kind, "expires": held.expires})
         held = request.held
         assert held is not None
-        if route == "/x/exchange":
-            return _json({"token": request.token, "class": held.kind, "expires": held.expires})
         if route == "/x/body":
             return _json(await self._stored(request.body))
         params = _params(request.body)

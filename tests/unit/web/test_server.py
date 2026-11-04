@@ -105,6 +105,28 @@ async def test_a_link_opens_once_for_a_session_token_of_its_class(web):
     assert again.status == 401 and "used already" in again.json()["error"]
 
 
+async def test_a_link_is_spent_only_by_the_answer_that_carries_its_token(web):
+    """An exchange refused for its shape, or cut off before its body came, gave no token, so its link still opens."""
+    browser = Browser(web)
+    link = web.link("control")
+    secret = link.partition("#link=")[2]
+
+    unsized = await browser.request("POST", "/x/exchange", {}, token=secret, headers={"Content-Length": None})
+    reader, writer = await asyncio.open_connection("127.0.0.1", web.port)
+    writer.write(
+        f"POST /x/exchange HTTP/1.1\r\nHost: {browser.authority}\r\nOrigin: http://{browser.authority}\r\n"
+        f"Authorization: Bearer {secret}\r\nContent-Length: 2\r\n\r\n{{".encode()
+    )
+    writer.write_eof()
+    async with asyncio.timeout(10):
+        cut = await reader.read()
+    writer.close()
+    opened = await browser.exchange(link)
+
+    assert unsized.status == 411 and cut == b""
+    assert opened.status == 200 and opened.json()["class"] == "control"
+
+
 async def test_a_link_nobody_spent_expires(web, clock):
     link = web.link("control")
     clock.advance(LINK_SECONDS)

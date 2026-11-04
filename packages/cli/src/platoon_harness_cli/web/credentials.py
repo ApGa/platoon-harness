@@ -45,6 +45,11 @@ class Credentials:
         self._links[_hash(link)] = Held(kind, self._clock.now() + LINK_SECONDS)
         return link
 
+    def opens(self, link: str) -> bool:
+        """Whether a link would open now: minted here, unspent and unexpired. Asking spends nothing."""
+        held = self._links.get(_hash(link))
+        return held is not None and held.expires > self._clock.now()
+
     def exchange(self, link: str) -> tuple[str, Held] | None:
         """Spend a link for a session token of its class, or None for a link that is spent, expired or never was."""
         held = self._links.pop(_hash(link), None)

@@ -37,8 +37,8 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   says "Delivered to" from that alone. A person's reading is no evidence and is in no list. An agent's status is the
   roster's, read when the page asks, and the feed says to ask again after an event that begins, ends, parks, wakes, holds up
   or asks for its work, so the feed stays a function of the journal.
-- **Credentials.** Two classes, view and control, fixed when minted. A link is `/view#link=<hex>`, opens once, and expires
-  unspent after ten minutes. A script of ours, placed before SwarmChat's gate script, spends it at `/x/exchange` and hands
+- **Credentials.** Two classes, view and control, fixed when minted. A link is `/view#link=<hex>`, opens once, is spent
+  only by the answer that carries its token, and expires unspent after ten minutes. A script of ours, placed before SwarmChat's gate script, spends it at `/x/exchange` and hands
   the gate the session token through the address the gate watches, since the gate's first request needs the token and the
   overlay runs only after it. A session token is lowercase hex, lasts twelve hours, and only its hash is kept, in `web`'s
   memory. Time comes from the SDK's clock.
