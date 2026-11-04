@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import fcntl
 import os
+import socket
 import ssl
 from pathlib import Path
 
@@ -91,6 +92,12 @@ async def serve(
                 note(f"web: session {name} on {web.authorities[0]}. Each link opens once, within ten minutes")
                 note(f"web: view link, which shows the session and acts on nothing: {web.link('view')}")
                 note(f"web: control link, which acts as you: {web.link('control')}")
+                if tls is None:  # So it serves loopback, which another machine reaches only through a forward.
+                    target = f"[{host}]" if ":" in host else host
+                    note(
+                        f"web: from another machine, forward this port under the same number, which the page's "
+                        f"requests must name: ssh -N -L {web.port}:{target}:{web.port} {socket.gethostname()}"
+                    )
                 await first(follow(session, projection, web.moved, clock), stop.wait())
             finally:
                 await web.stop()

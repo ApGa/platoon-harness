@@ -12,7 +12,13 @@ $ platoon-harness web fix-auth
 platoon-harness: web: session fix-auth on 127.0.0.1:43117. Each link opens once, within ten minutes
 platoon-harness: web: view link, which shows the session and acts on nothing: http://127.0.0.1:43117/view#link=9f1c…
 platoon-harness: web: control link, which acts as you: http://127.0.0.1:43117/view#link=4b07…
+platoon-harness: web: from another machine, forward this port under the same number, which the page's requests must name: ssh -N -L 43117:127.0.0.1:43117 devbox
 ```
+
+From another machine, forward the port as that last line says, under the same number: the page's requests must name the
+port served, so through a forward to another number every one is refused. Where the browser reaches a machine that reaches
+this one, as an editor's port forwarding does, run that command on the machine in between. Each link opens the page; the
+address alone sends a browser there too.
 
 Open a link in a browser. `web` is a guest of the session's runtime, on your own control credential, as the terminal is.
 It starts and resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its history,

@@ -78,8 +78,10 @@ async def test_web_says_its_links_and_ends_cleanly_on_sigterm_or_ctrl_c_leaving_
 
         web.send_signal(signum)
         done = await finished(web)
+        port = urlsplit(found["view"]).port
 
         assert done.code == 0, done.stderr
+        assert f"ssh -N -L {port}:127.0.0.1:{port} {socket.gethostname()}" in done.stderr
         assert status == 200 and b"<form>" in gate
         assert info["x"] | {"may": []} == {
             "credential": "control",
@@ -236,8 +238,9 @@ async def test_web_serves_tls_with_the_certificate_it_is_given(cli: Cli, tmp_pat
     status, _ = await asyncio.to_thread(call, found["view"], "GET", "/view", context=context)
     token = await asyncio.to_thread(opened, found["view"], context)
     web.send_signal(signal.SIGTERM)
-    await finished(web)
+    done = await finished(web)
     await cli.run("session", "stop", "s")
     await finished(serving)
 
     assert found["view"].startswith("https://127.0.0.1:") and status == 200 and len(token) == 64
+    assert "ssh -N -L" not in done.stderr

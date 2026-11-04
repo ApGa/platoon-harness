@@ -242,6 +242,9 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- `web`'s bare address answered 404, where SwarmChat's own server sends a browser on to its page; ours now does too. And
+  `web` on loopback now says how to reach it from another machine: forward the port under the same number, since the
+  page's requests must name it.
 - An act left unanswered went again from a view link opened over the page, which refused it, so the page called refused an
   act that may have been done. A view link now sends none of it and says it waits for a control link opened in that tab.
 - ADR 0016 and the compatibility map said `web --remote` refuses a second person on a plan-login session, which no code did

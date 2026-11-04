@@ -80,6 +80,13 @@ async def test_the_gate_is_served_under_the_policy_and_kept_by_no_cache(web):
     assert (reply.headers["x-content-type-options"], reply.headers["referrer-policy"]) == ("nosniff", "no-referrer")
 
 
+async def test_the_root_sends_a_browser_on_to_the_page(web):
+    reply = await Browser(web).request("GET", "/")
+
+    assert reply.status == 302 and reply.headers["location"] == "/view"
+    assert reply.headers["cache-control"] == "no-store"
+
+
 async def test_health_answers_with_no_token(web):
     reply = await Browser(web).request("GET", "/v1/health")
 
@@ -176,7 +183,7 @@ async def test_a_view_credential_never_becomes_a_control_one(web):
 async def test_a_foreign_host_is_refused(web, host):
     browser = await Browser(web).opened("view")
 
-    for method, path in (("GET", "/view"), ("POST", "/v1/view_info")):
+    for method, path in (("GET", "/"), ("GET", "/view"), ("POST", "/v1/view_info")):
         reply = await browser.request(method, path, {}, headers={"Host": host})
         assert reply.status == 421, path
 

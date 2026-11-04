@@ -103,7 +103,8 @@ async def web(
     nothing: on a session no runtime holds, the page shows its history and names `session resume`, which can spend
     money. Ctrl+C or SIGTERM stops it.
 
-    It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS.
+    It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
+    loopback it also says how to reach it from another machine: forward its port under the same number.
 
     For example:
 

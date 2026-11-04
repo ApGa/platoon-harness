@@ -98,7 +98,7 @@ class Web(Server[Request]):
     async def receive(self, head: Head, reader: asyncio.StreamReader) -> Request:
         check_site(head, self.authorities, scheme=self._scheme, origin=head.method == "POST")
         route = head.path
-        if route in ("/view", "/v1/health"):
+        if route in ("/", "/view", "/v1/health"):
             if head.method != "GET":
                 raise Rejected(405, "Allow: GET")
             return Request(route, head.headers["host"])
@@ -123,6 +123,8 @@ class Web(Server[Request]):
 
     async def answer(self, request: Request) -> bytes:
         route = request.route
+        if route == "/":  # SwarmChat's own server sends a browser on to its page, and a link's fragment goes with it.
+            return response(302, b"", "Location: /view", *_PAGE)
         if route == "/view":
             html = ("Content-Type: text/html; charset=utf-8", f"Content-Security-Policy: {self.page.policy}")
             return response(200, self.page.gate, *html, *_PAGE)
