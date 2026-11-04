@@ -224,11 +224,13 @@ by a driver landing; only the row below changes.
 - All loopback: fake chat server, isolated `HOME`, on Node 26.13.0. No real model, in the research or through the driver: nothing below is [R].
 - `mcp__coord__ping` was in the first request. A tool turn made exactly 2 calls, with no title call.
 - Critic probe: real pi on a minted child key through the real gateway. Tool seen and called, exact tokens, 2 datums on the child.
-- `tools/call` `_meta` held only `progressToken`, so tool-to-call joins have no anchor.
+- `tools/call` `_meta` held only `progressToken`, and still does at 1.5.0, so pi's MCP client gives no anchor of its own. The `tool_call` hook
+  sees `toolCallId` after pi checked a call's arguments and before the tool runs, and what a tool is handed is a copy of them, so the
+  extension can put pi's id among ours' arguments without the transcript or the model's next request holding it [S].
 - `cacheWarming` defaults to `"streaming"`: set it `"off"` for trainable runs.
 - Split on LF only: U+2028 is legal inside JSON strings, so `str.splitlines` is unsafe.
 - How ours arrive: not through an agent directory of ours. A per-agent `PI_CODING_AGENT_DIR` would cost a user their login, settings and extensions, and the only way back would be to read or link `auth.json`, which is refused. `pi.registerMcpServer` from an extension loaded with `-e` is pi's documented path and writes nothing. It ran on 1.5.0 beside a user's agent directory: a key saved in `auth.json` paid the model, the default provider and model of `settings.json` held, and a user's extension's tool and a project's `AGENTS.md` reached the first request beside ours, with their files unchanged [L]. A login kept in `auth.json` was a key: an OAuth login has not been run.
-- The stdio shim's first run with pi: through that extension on the running interpreter, `exposure: direct`, our tool in the first request. Two identical `task_claim` calls in one turn were two claims, each under its own `platoon-harness/callId`, where over HTTP the second was a repeat [L].
+- The stdio shim's first run with pi: through that extension on the running interpreter, `exposure: direct`, our tool in the first request. Two identical `task_claim` calls in one turn were two claims, where over HTTP the second was a repeat [L]. Each now goes under pi's own id for it, `pi/toolCallId`, which the extension puts among its arguments as `_meta` and the shim moves to where MCP keeps it; the tool item pi reports holds that id, and `tool_item_carries_its_anchor` passes [L].
 - The `timeout` on a registered server is what cuts a tool call: at 1 s a tool that never answered failed with a timeout, and the turn went on. `tool_timeout_s` is that number, 600. Pi's default is 60 [L].
 - `--append-system-prompt` runs under `--mode rpc` and takes a file, once in each request. It also takes the place of a user's `APPEND_SYSTEM.md` [L], so it is not our path. Ours are a section of its own, set on `before_agent_start`, which stands beside that file, once in each request, across a tool call, a next turn and a resume [L]. It is what a launch hands it, a resume's too, so a resume is handed what it was told at launch [L].
 - `--session-id` keeps our id, with a warning on stderr at each launch. `--session` of an id it cannot find exits 1. Pi writes a session at its first prompt, so one that took no turn cannot resume, and the runtime starts such an agent anew, as on Claude Code and Codex [L].
@@ -245,6 +247,7 @@ by a driver landing; only the row below changes.
 - Approvals: `tool_execution_start` comes before the `tool_call` hook, so a tool item has started when its approval is asked. Our gate's `confirm` title is the tool call's id, which ties a verdict to its observed outcome. A refused call comes back `isError` and the model is told. An answer to an id nobody waits for is ignored. A `confirm` of the user's own extension is an approval too, and `select`, `input` and `editor`, which a verdict cannot answer, are cancelled with a gap, so a gate of theirs built on `select`, as pi's own example is, blocks [L].
 - The gate is ours, in the same process as the tools, and no security boundary. It lets our tools through, and `read`, `grep`, `find`, `ls` and what declares `readOnlyHint`, and asks for the rest.
 - `reconcile` looks for the delivery's heading in the user messages of `get_entries`, which is whole and on disk. A kill loses what was only queued, but recovery asks of an approval's id too, so a miss is `unknown` [L].
+- A landed input's entry: no frame names it. Pi writes a user message down as an entry once that message has ended, before it reads another command, so `get_entries` with `since`, the last entry seen, names it. The ids of a goal and of a handover that landed were the ids a compaction later named forgotten [L]. A fast model can answer before pi does, so the driver holds what pi says after an input until it is named [S].
 - `agent_settled` with `aborted` and no interrupt of ours, from pi or a user's extension, reads `aborted`, which wakes a parent as a turn gone wrong does [S].
 - A login's kind is `authType` from `pi auth check --provider <default> --json --no-refresh`, for the provider `settings.json` names, and with none it is unknown. `api_key` ran; `oauth` is read as a plan login on a stand-in alone. `print-api-key`, `print-bearer-token` and `--credentials` are never used [L].
 - No tool for agents of its own is in pi's core, so a role's `allow_native_children` changes nothing. An extension of the user's can add
@@ -254,7 +257,7 @@ by a driver landing; only the row below changes.
   `session resume`, took the cut-off notice and settled [L]. No live model has run it, as pi has no login here.
 - What a client reads: a follower of live text was shown the start of the message item it became, an interrupt under a stop below
   reached a child, and an interrupt during a call under a `tokens` limit charged the cut turn its estimate and the session went on
-  [L]. Pi's calls reach us through the shim, whose id is its own and no item's, so no tool item holds a spawn's anchor [L].
+  [L]. A spawn's anchor is pi's own id for the call that made it, which its tool item holds [L].
 
 **openhands, SDK 1.59.0.** [Report](research/adapter-openhands.md), [fixture](research/fixtures/openhands-events-sample.json).
 
@@ -511,14 +514,17 @@ timing.
 |---|---|---|---|---|---|---|
 | `claude` 2.1.316 | `command_lifecycle`, under the uuid5 of the input's id, which is its `native_id`; the goal at launch too [L] | The message id at `message_start` [L] | `claudecode/toolUseId`, which the tool item's `native_id` holds and equals the model's tool id [L] [R] | By the completed tool item that holds its result [L] | Nothing: `compaction_opaque`, so no handover is known forgotten [L] | `child.seen` with the tool call that started it [L] |
 | `codex` 0.164.0 | `userMessage`, under its `clientId`, with the item id as `native_id`; the goal at launch too [L] | None: it gives no id per model call [L] | `callId`, which the `mcpToolCall` item holds: under live Code Mode the `exec-<uuid>` of a script, which several calls can share [L] [R] | By the completed item, as returned to the script; one item confirms each read under a shared id [L] | Nothing it names [L] | `child.seen` for a thread it starts [L] |
-| `pi` 1.5.0 | `message_start`, matched by the input's text, with no `native_id`: whether pi gives a landed entry's id at `message_start` or through `get_entries` is unverified [L] | `responseId` at `message_end` [L] | The shim's own `platoon-harness/callId`, which no item holds [L] | Not yet: no item holds the shim's id, until the shim passes pi's own tool call id [L] | Entry ids from `get_entries`, which no delivered input carries yet [L] | None in core [L] |
+| `pi` 1.5.0 | `message_start`, matched by the input's text, with the id of the entry pi wrote it down as, from `get_entries`, as `native_id`; the goal at launch too [L] | `responseId` at `message_end` [L] | `pi/toolCallId`, pi's own id for the call, which the tool item's `native_id` holds and which reaches us through the shim [L] | By the completed tool item that holds its result [L] | Entry ids from `get_entries`, which a delivered input carries, so a handover is marked `forgot` or `kept` [L] | None in core [L] |
 | `openhands` 1.59.0 | `request`, read from the SDK's completion log, with no `native_id` [L] | `llm_response_id` [L] | The shim's own id, which no item holds [L] | Not yet, as for pi [L] | Event ids through `Condensation`, which no delivered input carries until the worker reports a message's id [L] | Opaque, a gap [L] |
 | `exec` | Never: the goal is in argv, which says nothing of whether it landed | None | `ph`'s own id, which nothing holds | Never | Nothing | None |
 
-What the queries make of it (architecture §11): a Claude Code tool call joins the model call that chose it, so an answer about an
-event it made is bounded at that call, `call`. A Codex tool call reaches its script's item and no call, and a pi, OpenHands or `exec`
-one reaches nothing, so theirs are bounded at the event's commit, `commit`, which can count a read the same model call chose as
-below. A compaction is `unsaid` on Claude Code and Codex, which name nothing they forgot, and for every read. Every harness here has a
+What the queries make of it (architecture §11): a Claude Code or pi tool call joins the model call that chose it, so an answer about
+an event it made is bounded at that call, `call`; pi's bound rests on `message_end` coming before that call's tool items, which it
+did on FakeModel. A Codex tool call reaches its script's item and no call, and an OpenHands or `exec` one reaches nothing, so theirs
+are bounded at the event's commit, `commit`, which can count a read the same model call chose as below. A compaction is `unsaid` on
+Claude Code and Codex, which name nothing they forgot, on OpenHands, whose delivered inputs carry no id, and for every read; on pi it
+is `forgot` or `kept` for a handover. Each of these ran on the real binary against FakeModel, a read then a cited write, in
+`tests/integration` [L]. Every harness here has a
 shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each.
 
 ### Workspaces

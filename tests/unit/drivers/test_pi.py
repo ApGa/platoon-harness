@@ -62,8 +62,10 @@ def message_end(*blocks: dict[str, Any], id: str | None = "resp_1", **fields: An
     return {"type": "message_end", "message": {**message, **({} if id is None else {"responseId": id}), **fields}}
 
 
-def user(text: str) -> dict[str, Any]:
-    return {"type": "message_start", "message": {"role": "user", "content": [said(text)]}}
+def user(text: str) -> list[dict[str, Any]]:
+    """A user message, as pi says one lands: its start, then its end, once it has written it down."""
+    message = {"role": "user", "content": [said(text)]}
+    return [{"type": "message_start", "message": message}, {"type": "message_end", "message": message}]
 
 
 def delta(text: str) -> dict[str, Any]:
@@ -608,7 +610,7 @@ async def test_a_credential_in_an_unknown_frame_is_masked(tmp_path, stand):
 
 
 async def test_a_delivery_lands_as_a_turn(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("New message"), message_end(), ENDED]])
+    stand.install(turns=[[BEGAN, *user("New message"), message_end(), ENDED]])
 
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await driver.deliver(delivery())
@@ -618,8 +620,50 @@ async def test_a_delivery_lands_as_a_turn(tmp_path, stand):
     assert stand.sent("prompt")[0]["message"] == "New message"
 
 
+async def test_a_delivery_lands_as_the_entry_pi_wrote_it_down_as(tmp_path, stand):
+    """Pi names an entry only when asked, so the driver asks for what is new since the last one it saw."""
+    stand.install(turns=[[BEGAN, *user("New message"), message_end(), ENDED], [*user("again"), ENDED]])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await driver.deliver(delivery())
+        await heard.until(TurnEnded)
+        await driver.deliver(delivery("42", text="again"))
+        await heard.until(InputDelivered, lambda delivered: delivered.input == "42")
+
+    assert [(landed.input, landed.native_id) for landed in heard.of(InputDelivered)] == [
+        ("41", "entry-1"),
+        ("42", "entry-2"),
+    ]
+    assert [frame.get("since") for frame in stand.sent("get_entries")] == [None, "entry-1"]
+
+
+async def test_what_pi_says_after_an_input_lands_waits_behind_it_in_pi_s_order(tmp_path, stand):
+    """The stand-in says the whole turn before it reads the driver's question, as a fast model can."""
+    call = message_end(calling(), id="resp_1")
+    stand.install(turns=[[BEGAN, *user("New message"), call, tool_began(), tool_ended(), ENDED]])
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await driver.deliver(delivery())
+        await heard.until(TurnEnded)
+
+    assert kinds(heard.reports[1:5]) == [TurnStarted, InputDelivered, ModelCall, Usage]
+    assert heard.of(InputDelivered)[0].native_id == "entry-1"
+
+
+@pytest.mark.parametrize("script", [{"refuses": {"get_entries": "no"}}, {"gone_at": "get_entries"}])
+async def test_an_input_whose_entry_pi_never_names_lands_with_no_id_in_its_place(tmp_path, stand, script):
+    stand.install(turns=[[BEGAN, *user("New message"), message_end(), ENDED]], **script)
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await driver.deliver(delivery())
+        await heard.until(ModelCall)
+
+    assert kinds(heard.reports[1:4]) == [TurnStarted, InputDelivered, ModelCall]
+    assert heard.of(InputDelivered)[0].native_id is None
+
+
 async def test_a_delivery_inside_a_turn_lands_before_the_next_model_call(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("the goal"), message_end()], [user("steered"), message_end(), ENDED]])
+    stand.install(turns=[[BEGAN, *user("the goal"), message_end()], [*user("steered"), message_end(), ENDED]])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await driver.deliver(delivery(boundary="model_call", text="steered"))
@@ -681,7 +725,7 @@ async def test_a_harness_that_stopped_reading_holds_up_a_delivery_and_no_stop(tm
 
 
 async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("the goal")]], after_abort=[ABORTED])
+    stand.install(turns=[[BEGAN, *user("the goal")]], after_abort=[ABORTED])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
@@ -693,7 +737,7 @@ async def test_an_interrupt_ends_the_turn_interrupted_and_says_what_was_queued(t
 
 
 async def test_what_an_interrupt_stranded_is_cleared_from_its_queue_for_the_runtime_to_offer_again(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("the goal")], []], after_abort=[ABORTED])
+    stand.install(turns=[[BEGAN, *user("the goal")], []], after_abort=[ABORTED])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
@@ -709,7 +753,7 @@ async def test_what_an_interrupt_stranded_is_cleared_from_its_queue_for_the_runt
 
 async def test_what_a_failed_turn_stranded_is_cleared_too(tmp_path, stand):
     failed = message_end(stopReason="error", errorMessage="boom")
-    stand.install(turns=[[BEGAN, user("the goal")], [failed, ENDED]])
+    stand.install(turns=[[BEGAN, *user("the goal")], [failed, ENDED]])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
@@ -721,7 +765,7 @@ async def test_what_a_failed_turn_stranded_is_cleared_too(tmp_path, stand):
 
 
 async def test_a_turn_that_ended_on_its_own_clears_nothing(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("the goal")], [user("queued"), message_end(), ENDED]])
+    stand.install(turns=[[BEGAN, *user("the goal")], [*user("queued"), message_end(), ENDED]])
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await heard.until(TurnStarted)
@@ -871,7 +915,7 @@ async def test_a_run_pi_aborted_with_nobody_interrupting_reads_as_aborted(tmp_pa
 
 
 async def test_an_interrupt_that_found_no_turn_labels_no_later_abort(tmp_path, stand):
-    stand.install(turns=[[BEGAN, user("go"), ABORTED]])
+    stand.install(turns=[[BEGAN, *user("go"), ABORTED]])
 
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await heard.until(Ready)

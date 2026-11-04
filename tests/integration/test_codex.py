@@ -715,6 +715,24 @@ async def test_a_read_is_confirmed_by_the_item_that_holds_its_result_and_the_lau
     assert (hows["wake"]["evidence"], hows["launch"]["evidence"]) == ("userMessage", "userMessage")
 
 
+async def test_a_cited_write_is_traced_to_its_item_and_no_model_call(tmp_path, monkeypatch):
+    """Codex's `callId` joins its tool item, which names no model call, so each answer about the write stops at its
+    commit, and the read before it was confirmed by its item, as returned to whatever made the call."""
+    replies = (tool("message_read", "call_read", after=0), tool("message_send", "call_send", **clients.CITING), "done")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        traced = await clients.a_read_then_a_cited_write(team, tmp_path)
+
+    clients.hold_their_bounds(traced, "commit")
+    made = traced.lineage.made
+    assert made.anchor is not None and made.anchor.key == "callId"
+    assert (made.item is not None, made.call) == (True, None)
+    assert [(edge.how, edge.confirmed and edge.confirmed.evidence) for edge in traced.exposure.edges] == [
+        ("wake", "userMessage"),
+        ("read", "tool_item"),
+    ]
+
+
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     async with FakeModel(clients.SAID) as model:

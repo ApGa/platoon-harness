@@ -95,9 +95,13 @@ nothing joins by order or timing:
   the model call that chose it. An answer about an event that call made then counts only what was confirmed before the call, on your
   agent's own report stream. With no `call_id` the bound is the event's commit, and the answer says `commit`.
 - A tool item whose `native_id` is the anchor the MCP call went under, and whose `outcome` is `completed`, confirms what that call's
-  result showed, and reaches the item. One that `failed` confirms nothing, as the result it would vouch for never landed.
+  result showed, and reaches the item. One that `failed` confirms nothing, as the result it would vouch for never landed. A harness
+  whose MCP client sends no id of its own can put it among a call's arguments as `_meta`, which the stdio shim moves to where MCP
+  keeps it, as the `pi` driver's extension does with pi's tool call id.
 - `InputDelivered.native_id`, the id your harness's compaction would name that input by, and `Compacted.forgotten` naming those ids,
-  let a compaction mark a handover `forgot` or `kept`. Otherwise it is `unsaid`, as a read always is.
+  let a compaction mark a handover `forgot` or `kept`. Otherwise it is `unsaid`, as a read always is. If your harness names that id
+  only after the input has landed, hold what it says after the input until you have it, so that your reports keep its order, as the
+  `pi` driver does with the entry pi wrote an input down as.
 - Every `GapReport` you send is a reason an answer is `unknown` from where it began, if content could come through it: `GAPS` says which.
 
 `Usage.tokens` counts every token of what the scope covers, input and output, with cached input included, as a provider's total does, so

@@ -1,12 +1,15 @@
-"""What the TUI and SwarmChat read, and the TUI itself, held on a real binary against FakeModel. Each scenario takes a
-team whose one role, `bob`, runs that binary, and each harness's test file runs it on its own."""
+"""What the TUI and SwarmChat read, the TUI itself and what the provenance queries answer, held on a real binary against
+FakeModel. Each scenario takes a team whose one role, `bob`, runs that binary, and each harness's test file runs it on
+its own."""
 
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import NamedTuple
 
 from platoon_harness import Session, Team
 from platoon_harness.kernel import Delta, Event
+from platoon_harness.primitives import Contributors, Exposure, Lineage, Seen, Uses
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
 from platoon_harness_cli.tui.app import TerminalUI
@@ -110,6 +113,50 @@ async def a_read_and_what_confirmed_it(team: Team, root: Path) -> tuple[Event, l
 
     read = next(offer for offer in offers if offer.data["how"] == "read")
     return read, confirmations
+
+
+CITED = "inbox/bob@1"
+CITING = {"to": "@you", "gist": "read it", "based_on": [CITED]}
+"""What `bob` sends once it has read its inbox: an answer citing the message that woke it."""
+
+
+class Traced(NamedTuple):
+    """What the four queries say of a cited write and of what it cites."""
+
+    lineage: Lineage
+    exposure: Exposure
+    uses: Uses
+    contributors: Contributors
+
+
+async def a_read_then_a_cited_write(team: Team, root: Path) -> Traced:
+    """`bob`, woken by a person's message, reads its inbox by our tool and answers citing that message: lineage and
+    contributors of the answer, bob's exposure to the message before it, and the message's uses."""
+    answering = Team.model_validate({**team.canonical(), "topology": {"edges": {"bob": ["human"]}}})
+    async with Session.start(answering, root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "read your inbox, then answer citing what you read")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        sent = next(event for event in await of_type(session, "message.sent") if event.actor == "agent:bob")
+        answer = f"{sent.stream}@{sent.version}"
+        return Traced(
+            await session.lineage(answer),
+            await session.exposure("@bob", CITED, before=answer),
+            await session.uses(CITED),
+            await session.contributors(answer),
+        )
+
+
+def hold_their_bounds(traced: Traced, bound: str) -> None:
+    """What every harness's answers say alike: the citation is the person's message, which bob was handed and took
+    below the bound, every answer is about a turn that has ended, and the walk back reaches bob and then the person."""
+    lineage, exposure, uses, contributors = traced
+    (declared,) = lineage.declared
+    assert (declared.ref, declared.maker, lineage.bound.by) == (CITED, "human:you", bound)
+    assert isinstance(declared.exposure, Seen) and isinstance(exposure, Seen) and exposure.bound == lineage.bound
+    assert {row.kind for row in uses.rows} == {"declared", "observed"} and uses.totals["declared"] == 1
+    assert [(row.maker, row.kinds) for row in contributors.rows] == [("agent:bob", ()), ("human:you", ("declared",))]
+    assert not (lineage.open or exposure.open or uses.open or contributors.open)
 
 
 async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:

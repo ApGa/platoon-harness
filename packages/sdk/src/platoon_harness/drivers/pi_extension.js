@@ -17,13 +17,17 @@ export default function (pi) {
     });
   }
 
+  const ours = (tool) => tool.startsWith(`mcp__${namespace}__`);
   const asks = (tool) => {
-    if (tool.startsWith(`mcp__${namespace}__`) || READS.has(tool)) return false;
+    if (ours(tool) || READS.has(tool)) return false;
     return !pi.getAllTools().find(({ name }) => name === tool)?.annotations?.readOnlyHint;
   };
 
+  // Pi's MCP client sends no id with a call, so a call of ours carries pi's own among its arguments, as `_meta`, which
+  // the shim moves to where MCP keeps it. Pi has checked the arguments by now, and a tool is handed a copy of them.
   // The title is the tool call's id, which is how the driver ties a verdict to what came of it.
   pi.on("tool_call", async ({ toolName, toolCallId, input }, ctx) => {
+    if (ours(toolName)) input._meta = { "pi/toolCallId": toolCallId };
     if (!asks(toolName)) return undefined;
     const said = `${toolName} ${JSON.stringify(input)}`;
     if (await ctx.ui.confirm(toolCallId, said, { signal: ctx.signal })) return undefined;

@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import json
 import sys
+from collections import deque
 from collections.abc import Coroutine, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,7 @@ from . import (
     ModelCall,
     Ready,
     Reconciled,
+    Report,
     Reporter,
     TurnEnded,
     TurnStarted,
@@ -42,6 +44,7 @@ from . import (
     refuse_other_effort,
     refuse_unset_model,
     text_of,
+    unknown_frame,
 )
 from .env import harness_env, inherited, private
 from .process import LOG, Process, status
@@ -181,7 +184,9 @@ class PiDriver:
     compaction and queued input can each follow an `agent_end`.
 
     Frames are translated on the read loop, which never waits, so the pipe drains. An agent is parked at turn end, which
-    is the runtime's to do.
+    is the runtime's to do. An input that lands is reported under the id of the entry pi wrote it down as, which pi
+    gives only when asked, once the message has ended, so whatever pi says after the input waits behind it: the reports
+    keep pi's order.
     """
 
     def __init__(self) -> None:
@@ -195,6 +200,11 @@ class PiDriver:
         self._opening = False
         self._failure: str | None = None
         self._inputs: dict[str, str] = {}
+        self._landed_as: dict[str, InputDelivered] = {}
+        self._written: list[str] = []
+        self._behind: deque[Report | str] = deque()
+        self._naming: str | None = None
+        self._last_entry: str | None = None
         self._calls: dict[str, str | None] = {}
         self._tools: dict[str, str] = {}
         self._asking: dict[str, str | None] = {}
@@ -245,7 +255,7 @@ class PiDriver:
             raise DriverError(f"{_PI} has no login for {provider}: sign in with `pi`, or give the role an auth profile")
         refuse_other_effort(spec, state.get("thinkingLevel"))
         effective = f"{provider}/{id}" if spec.model == f"{provider}/{id}" else id
-        self._process.put(Ready(native=self._native, version=version, effective_model=effective))
+        self._report(Ready(native=self._native, version=version, effective_model=effective))
 
     # What the harness is sent.
 
@@ -319,8 +329,23 @@ class PiDriver:
         self._later.add(task)
         task.add_done_callback(self._later.discard)
 
-    def _read(self, process: Process) -> Coroutine[Any, Any, None]:
-        return self._lines.run(process.stdout, self._heard)
+    async def _read(self, process: Process) -> None:
+        """Hear pi until it stops. An input it never named the entry of goes on with no id, before the exit after it."""
+        try:
+            await self._lines.run(process.stdout, self._heard)
+        finally:
+            self._written = list(self._landed_as)
+            self._named({})
+
+    def _report(self, *reports: Report) -> None:
+        """Pass reports on in pi's order: behind an input waiting for its entry's id, they wait too."""
+        if self._behind:
+            self._behind.extend(reports)
+        else:
+            self._process.put(*reports)
+
+    def _unknown(self, kind: str, raw: str) -> None:
+        self._report(*unknown_frame(self._process.reason(kind), self._process.redact(raw)))
 
     def _heard(self, line: bytes) -> None:
         """One line. Whatever cannot be read is an unknown frame, whichever part of it would not read."""
@@ -329,27 +354,31 @@ class PiDriver:
             frame = json.loads(line)
             self._take(frame)
         except UNREADABLE:
-            self._process.unknown(_kind(frame), line.decode(errors="replace"))
+            self._unknown(_kind(frame), line.decode(errors="replace"))
 
     def _take(self, frame: Any) -> None:
         match frame:
+            case {"type": "response", "id": str(id)} if id == self._naming:
+                self._named(frame)
             case {"type": "response", "id": str(id)}:
                 self._answered(id, frame)
             case {"type": "extension_ui_request", "method": "confirm", "id": id}:
                 self._asked(id, frame.get("title") or "", frame.get("message") or "")
             case {"type": "extension_ui_request", "method": method, "id": id} if method in _DIALOGS:
                 self._cancel(id)
-                self._process.unknown(f"extension_ui_request/{method}", json.dumps(frame))
+                self._unknown(f"extension_ui_request/{method}", json.dumps(frame))
             case {"type": "extension_ui_request", "method": "notify", "notifyType": "warning" | "error" as level}:
-                self._process.unknown("notify", f"{level}: {frame.get('message')}")
+                self._unknown("notify", f"{level}: {frame.get('message')}")
             case {"type": "agent_start"}:
                 self._begin()
             case {"type": "agent_settled"}:
                 self._ended(aborted=bool(frame.get("aborted")))
             case {"type": "message_start", "message": {"role": "user", "content": content}}:
                 self._landed(text_of(content))
+            case {"type": "message_end", "message": {"role": "user", "content": content}}:
+                self._written_down(text_of(content))
             case {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": text}}:
-                self._process.put(Delta(text=text))
+                self._report(Delta(text=text))
             case {"type": "message_end", "message": {"role": "assistant", "content": list(blocks)} as message}:
                 self._said(message, blocks)
             case {"type": "tool_execution_start", "toolCallId": id, "toolName": name}:
@@ -374,9 +403,7 @@ class PiDriver:
         """A `confirm` is an approval, the gate's or one a user's extension wants. Our gate's title is its tool call."""
         tool = title if title in self._tools else None
         self._asking[id] = tool
-        self._process.put(
-            ApprovalRequested(id=id, gist=self._process.gist(said if tool else f"{title} {said}".strip()))
-        )
+        self._report(ApprovalRequested(id=id, gist=self._process.gist(said if tool else f"{title} {said}".strip())))
 
     def _cancel(self, id: str) -> None:
         """Answer what nobody here can, since an extension is waiting on it."""
@@ -386,55 +413,92 @@ class PiDriver:
         if self._turn is None:
             self._turn = uuid4().hex
             self._opening = True
-            self._process.put(TurnStarted(turn=self._turn))
+            self._report(TurnStarted(turn=self._turn))
 
     def _landed(self, text: str) -> None:
-        """An input reached the context: as what began a turn, or inside one. No frame names it, so its text does."""
+        """An input reached the context: as what began a turn, or inside one. No frame names it, so its text does, and
+        it waits at its place, as its text, for the id of the entry pi writes it down as."""
         boundary: Boundary = "turn" if self._opening else "model_call"
         self._opening = False
         if (input := self._inputs.pop(text, None)) is not None:
-            self._process.put(InputDelivered(input=input, boundary=boundary, evidence="message_start"))
+            self._landed_as[text] = InputDelivered(input=input, boundary=boundary, evidence="message_start")
+            self._behind.append(text)
+
+    def _written_down(self, text: str) -> None:
+        """A user message has ended, and pi has written it down as an entry before it reads another command, so ask for
+        the entries since the last one seen. One ask is out at a time: pi answers after what it said before, so an
+        answer holds every entry whose message ended before it."""
+        if text not in self._landed_as:
+            return
+        self._written.append(text)
+        if self._naming is None:
+            self._naming = uuid4().hex
+            since = {} if self._last_entry is None else {"since": self._last_entry}
+            self._lines.write({"id": self._naming, "type": "get_entries", **since})
+
+    def _named(self, frame: Mapping[str, Any]) -> None:
+        """Say each written-down input landed as the entry that holds its text, or with no id where pi names none, and
+        pass on what waited behind them, up to an input still to be written down."""
+        self._naming, ids = None, {}
+        try:
+            entries = frame["data"]["entries"] if frame.get("success") else ()
+            if not frame.get("success"):
+                self._last_entry = None  # A cursor pi did not take names nothing, so the next ask starts over.
+            elif entries:
+                self._last_entry = entries[-1]["id"]
+            ids = {
+                text_of(entry["message"]["content"]): entry["id"]
+                for entry in entries
+                if entry["type"] == "message" and entry["message"]["role"] == "user"
+            }
+        finally:
+            for text in self._written:
+                landed = self._landed_as.pop(text).model_copy(update={"native_id": ids.get(text)})
+                self._behind[self._behind.index(text)] = landed
+            self._written.clear()
+            while self._behind:
+                head = self._behind[0]
+                if isinstance(head, str):
+                    break
+                self._behind.popleft()
+                self._process.put(head)
 
     def _said(self, message: Mapping[str, Any], blocks: Sequence[Any]) -> None:
         """A model call has ended. Only now is its id known, and a call the harness stopped hearing may have none."""
         call_id = message.get("responseId")
         failed = message.get("stopReason") == "error"
         self._failure = self._process.reason(str(message.get("errorMessage"))) if failed else None
-        self._process.put(ModelCall(call_id=call_id, model=message.get("model")))
+        self._report(ModelCall(call_id=call_id, model=message.get("model")))
         self._spent(message.get("usage") or {}, call_id)
         for block in blocks:
             match block:
                 case {"type": "text", "text": text}:
-                    self._process.put(Item(kind="message", gist=self._process.gist(text), body=text, call_id=call_id))
+                    self._report(Item(kind="message", gist=self._process.gist(text), body=text, call_id=call_id))
                 case {"type": "thinking", "thinking": text}:
                     if text:
-                        self._process.put(
-                            Item(kind="thought", gist=self._process.gist(text), body=text, call_id=call_id)
-                        )
+                        self._report(Item(kind="thought", gist=self._process.gist(text), body=text, call_id=call_id))
                 case {"type": "toolCall", "id": id}:
                     self._calls[id] = call_id
                 case _:
-                    self._process.unknown("assistant", json.dumps(block))
+                    self._unknown("assistant", json.dumps(block))
 
     def _spent(self, usage: Mapping[str, Any], call_id: str | None) -> None:
         """What a call spent. Zero tokens means nobody heard, and dollars with no price behind them are no measurement:
         `totalFromProvider` says the provider billed them, and otherwise pi worked them out."""
         tokens = usage.get("totalTokens") or None
-        self._process.put(
-            Usage(tokens=tokens, label="provider" if tokens else "unavailable", scope="call", call_id=call_id)
-        )
+        self._report(Usage(tokens=tokens, label="provider" if tokens else "unavailable", scope="call", call_id=call_id))
         cost = usage.get("cost") or {}
         billed = cost.get("totalFromProvider", False)
         if cost.get("total") or billed:
             usd, label = cost.get("total"), "provider" if billed else "estimated"
-            self._process.put(Usage(usd=usd, label=label, scope="call", call_id=call_id))
+            self._report(Usage(usd=usd, label=label, scope="call", call_id=call_id))
 
     def _tool_began(self, id: str, name: str, arguments: Any) -> None:
         self._tools[id] = name
         said = json.dumps(arguments)
         gist = self._process.gist(f"{name} {said}")
         call_id = self._calls.pop(id, None)
-        self._process.put(Item(kind="tool", phase="started", gist=gist, native_id=id, call_id=call_id, body=said))
+        self._report(Item(kind="tool", phase="started", gist=gist, native_id=id, call_id=call_id, body=said))
 
     def _tool_ended(self, id: str, result: Mapping[str, Any], failed: Any) -> None:
         """A tool's end. One an approval let through is that approval's observed outcome."""
@@ -449,11 +513,11 @@ class PiDriver:
             approval=approval,
             outcome=outcome,
         )
-        self._process.put(item)
+        self._report(item)
 
     def _compaction(self, result: Mapping[str, Any] | None) -> None:
         """One or two model calls whose usage comes as one, with no id. One that came to nothing says what it spent."""
-        self._process.put(ModelCall(purpose="compaction"))
+        self._report(ModelCall(purpose="compaction"))
         self._spent((result or {}).get("usage") or {}, None)
         if result is not None:
             self._soon(self._compacted(result))
@@ -464,7 +528,7 @@ class PiDriver:
         with contextlib.suppress(DriverError, *UNREADABLE):
             listing = await self._ask("get_entries")
             forgotten = _forgotten(listing["entries"], listing["leafId"], result["firstKeptEntryId"])
-        self._process.put(Compacted(forgotten=forgotten, summary=result.get("summary")))
+        self._report(Compacted(forgotten=forgotten, summary=result.get("summary")))
 
     def _ended(self, *, aborted: bool) -> None:
         """Pi will do nothing more on its own. Approvals of the turn go moot with it. No run takes what a turn that
@@ -473,7 +537,7 @@ class PiDriver:
             return
         cut = "interrupted" if self._interrupted else "aborted"  # Pi or an extension of the user's may abort a run.
         reason = cut if aborted else self._failure or "stopped"
-        self._process.put(TurnEnded(reason=reason))
+        self._report(TurnEnded(reason=reason))
         self._turn, self._failure, self._interrupted = None, None, False
         self._asking.clear()
         self._deciding.clear()

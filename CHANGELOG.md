@@ -4,6 +4,12 @@
 
 ### Added
 
+- Pi names what landed and which call made a tool call. The `pi` driver reports an input under the id of the entry pi wrote it
+  down as, asked of `get_entries` from the last entry seen once the input's message has ended, and holds whatever pi says after the
+  input until it has that id, so its reports keep pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi
+  extension puts pi's own id for a call of ours among its arguments as `_meta`, and the stdio shim moves a `_meta` it finds there to
+  where MCP keeps it, so the call goes under `pi/toolCallId`, a harness's anchor, which pi's tool item holds: a read through pi is
+  confirmed by that item, and a pi tool call joins the model call that chose it. See ADR 0040.
 - Provenance queries for people and programs, none an agent's tool: `exposure(agent, ref, before)` answers `seen`, with each offer
   its harness said it took and each compaction since marked `forgot`, `kept` or `unsaid`, `not_seen` or `unknown`, with every
   reason, and never a boolean; `lineage(ref)` is one hop back, with the model call that chose the event, each citation with its

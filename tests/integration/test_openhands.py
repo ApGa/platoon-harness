@@ -810,6 +810,23 @@ async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, mon
     assert (list(spawned.native), under) == (["platoon-harness/callId"], [])
 
 
+async def test_a_cited_write_is_traced_to_no_model_call_and_its_read_stays_unconfirmed(tmp_path, monkeypatch):
+    """OpenHands' calls reach us through the shim under its own id, which no item holds, so each answer about the write
+    stops at its commit, and only the handover that woke it is confirmed, by the request that carried it."""
+    replies = (ToolCall("message_read", {"after": 0}, id="call_read"), ToolCall("message_send", clients.CITING), "done")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        traced = await clients.a_read_then_a_cited_write(team, tmp_path)
+
+    clients.hold_their_bounds(traced, "commit")
+    made = traced.lineage.made
+    assert made.anchor is not None and made.anchor.key == "platoon-harness/callId"
+    assert (made.item, made.call) == (None, None)
+    assert [(edge.how, edge.confirmed and edge.confirmed.evidence) for edge in traced.exposure.edges] == [
+        ("wake", "request")
+    ]
+
+
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     async with FakeModel(clients.SAID) as model:

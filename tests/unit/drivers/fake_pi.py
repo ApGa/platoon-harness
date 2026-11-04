@@ -10,6 +10,7 @@ from pathlib import Path
 SCRIPT = Path(sys.argv[1])
 script = json.loads(SCRIPT.read_text())
 arguments = sys.argv[2:]
+entries = list(script.get("entries", []))  # What pi has written down, as it does each user message once it ends.
 
 
 def say(text: str) -> None:
@@ -20,6 +21,8 @@ def say(text: str) -> None:
 def play(frames: list) -> None:
     for frame in frames:
         say(frame if isinstance(frame, str) else json.dumps(frame))
+        if isinstance(frame, dict) and frame.get("type") == "message_end" and frame["message"]["role"] == "user":
+            entries.append({"type": "message", "id": f"entry-{len(entries) + 1}", "message": frame["message"]})
 
 
 def reply(id: str, command: str, data: object = None, error: str | None = None) -> None:
@@ -27,7 +30,13 @@ def reply(id: str, command: str, data: object = None, error: str | None = None) 
     say(json.dumps({**frame, "data": data} if error is None else {**frame, "error": error}))
 
 
-def answer(id: str, command: str) -> None:
+def since(after: str | None) -> list:
+    """The entries after one, or all of them."""
+    ids = [entry.get("id") for entry in entries if isinstance(entry, dict)]
+    return entries[ids.index(after) + 1 :] if after in ids else entries
+
+
+def answer(id: str, command: str, frame: dict) -> None:
     refused = script.get("refuses", {})
     if command in refused:
         reply(id, command, error=refused[command])
@@ -36,7 +45,7 @@ def answer(id: str, command: str) -> None:
     data = {
         "get_state": {"model": model, "thinkingLevel": script.get("thinking", "off"), "sessionId": "ignored"},
         "get_available_models": {"models": script.get("available", [model])},
-        "get_entries": {"entries": script.get("entries", []), "leafId": script.get("leaf")},
+        "get_entries": {"entries": since(frame.get("since")), "leafId": script.get("leaf")},
         "clear_queue": {"steering": [], "followUp": []},
     }.get(command)
     reply(id, command, data)
@@ -76,7 +85,9 @@ for line in sys.stdin:
         case {"type": command, "id": id}:
             if command == script.get("deaf_to"):
                 time.sleep(600)
-            answer(id, command)
+            if command == script.get("gone_at"):
+                sys.exit(1)
+            answer(id, command, frame)
             play(script.get(f"after_{command}", ()))
 if script.get("outlives_stdin"):
     while True:

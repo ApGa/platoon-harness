@@ -646,6 +646,25 @@ async def test_a_read_is_confirmed_by_the_tool_item_that_holds_its_result_and_th
     assert (hows["wake"]["evidence"], hows["launch"]["evidence"]) == ("command_lifecycle", "command_lifecycle")
 
 
+async def test_a_cited_write_is_traced_to_the_model_call_that_chose_it(tmp_path, monkeypatch):
+    """Claude Code's tool id joins its tool item and that item's call, so each answer about the write stops at that
+    call, and the read before it was confirmed by its own tool item below it."""
+    read = ToolCall("mcp__ph__message_read", {"after": 0}, id="toolu_read")
+    replies = (read, ToolCall("mcp__ph__message_send", clients.CITING, id="toolu_send"), "answered")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        traced = await clients.a_read_then_a_cited_write(team, tmp_path)
+
+    clients.hold_their_bounds(traced, "call")
+    made = traced.lineage.made
+    assert made.anchor is not None and (made.anchor.key, made.anchor.id) == ("claudecode/toolUseId", "toolu_send")
+    assert made.item is not None and made.call == traced.lineage.bound.call
+    assert [(edge.how, edge.confirmed and edge.confirmed.evidence) for edge in traced.exposure.edges] == [
+        ("wake", "command_lifecycle"),
+        ("read", "tool_item"),
+    ]
+
+
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     async with FakeModel(clients.SAID) as model:

@@ -35,6 +35,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
+from platoon_harness.primitives import Seen
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
     NAMESPACE,
@@ -142,7 +143,6 @@ async def test_the_pi_driver_conforms(tmp_path):
     assert (result.driver, result.version) == ("pi", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == {
-        "tool_item_carries_its_anchor",
         "native_children_off_by_default",
         "native_child_seen",
         "one_shot_exits",
@@ -284,7 +284,8 @@ async def test_an_effort_it_cannot_honor_is_refused(tmp_path, effort):
 
 
 async def test_two_identical_calls_in_a_turn_are_two_calls_through_the_shim(tmp_path, monkeypatch):
-    """Why our tools go through the shim: over HTTP pi sends no id, and the second claim was taken for a retry."""
+    """Why our tools go through the shim: over HTTP pi sends no id, and the second claim was taken for a retry. Through
+    the shim each call goes under pi's own id for it."""
     claim = tool("task_claim", "call_one", queue="tasks")
     again = tool("task_claim", "call_two", queue="tasks")
 
@@ -303,7 +304,7 @@ async def test_two_identical_calls_in_a_turn_are_two_calls_through_the_shim(tmp_
             started = (await of_type(session, "agent.started"))[0]
 
     assert len({event.stream for event in claimed}) == 2
-    assert all("platoon-harness/callId" in event.native for event in claimed)
+    assert [event.native for event in claimed] == [{"pi/toolCallId": "call_one"}, {"pi/toolCallId": "call_two"}]
     assert started.data["effective_model"] == MODEL
     assert started.data["declared"]["approvals"] == "gated"
 
@@ -758,6 +759,7 @@ async def test_a_compaction_reports_its_call_what_it_forgot_and_its_summary(tmp_
     users = [
         entry["id"] for entry in entries["entries"] if entry["type"] == "message" and entry["message"]["role"] == "user"
     ]
+    assert [delivered.native_id for delivered in heard.of(InputDelivered)] == users
     assert first_compaction.summary
     assert first_compaction.forgotten == (users[0],)
     assert users[1] in second_compaction.forgotten
@@ -851,25 +853,72 @@ async def test_an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(tmp
 
 
 async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, monkeypatch):
-    """Pi's calls reach us through the shim, whose id is its own and no item's, so no tool item holds the anchor."""
+    """Pi's calls reach us through the shim under pi's own id for each, which its tool item holds."""
     async with FakeModel(ToolCall("mcp__ph__agent_spawn", clients.SPAWN, id="call_spawn"), "spawned it") as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
-    assert (list(spawned.native), under) == (["platoon-harness/callId"], [])
+    assert spawned.native == {"pi/toolCallId": "call_spawn"}
+    assert under and {item.data["native_id"] for item in under} == {"call_spawn"}
 
 
-async def test_a_read_through_the_shim_stays_unconfirmed_and_the_launch_is_confirmed_by_the_first_input(
+async def test_a_read_is_confirmed_by_the_tool_item_that_holds_its_result_and_the_launch_by_the_first_input(
     tmp_path, monkeypatch
 ):
-    """Pi's calls reach us through the shim, whose id no item holds, so nothing of pi's says a read's result came."""
+    """Pi's own id for the call reaches us through the shim, and pi names the entry each input landed as."""
     async with FakeModel(ToolCall("mcp__ph__message_read", {"after": 0}, id="call_read"), "read it") as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         read, confirmations = await clients.a_read_and_what_confirmed_it(team, tmp_path)
 
-    assert list(read.native) == ["platoon-harness/callId"]
-    assert sorted(event.data["how"] for event in confirmations) == ["launch", "wake"]
-    assert {event.data["evidence"] for event in confirmations} == {"message_start"}
+    hows = {event.data["how"]: event.data for event in confirmations}
+    assert read.native == {"pi/toolCallId": "call_read"}
+    assert (hows["read"]["input"], hows["read"]["evidence"], hows["read"]["native_id"]) == (
+        read.seq,
+        "tool_item",
+        "call_read",
+    )
+    assert (hows["wake"]["evidence"], hows["launch"]["evidence"]) == ("message_start", "message_start")
+    assert (hows["wake"]["native_id"] is not None, hows["launch"]["native_id"]) == (True, None)
+
+
+async def test_a_cited_write_is_traced_to_the_model_call_that_chose_it(tmp_path, monkeypatch):
+    """Pi's own id for the call reaches us through the shim, and its tool item names the call that made it, so each
+    answer about the write stops at that call, and the read before it was confirmed by its own tool item below it."""
+    read = ToolCall("mcp__ph__message_read", {"after": 0}, id="call_read")
+    replies = (read, ToolCall("mcp__ph__message_send", clients.CITING, id="call_send"), "answered")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        traced = await clients.a_read_then_a_cited_write(team, tmp_path)
+
+    clients.hold_their_bounds(traced, "call")
+    made = traced.lineage.made
+    assert made.anchor is not None and (made.anchor.key, made.anchor.id) == ("pi/toolCallId", "call_send")
+    assert made.item is not None and made.call == traced.lineage.bound.call
+    assert [(edge.how, edge.confirmed and edge.confirmed.evidence) for edge in traced.exposure.edges] == [
+        ("wake", "message_start"),
+        ("read", "tool_item"),
+    ]
+
+
+async def test_a_handover_a_compaction_forgot_is_marked_forgot_by_the_entry_it_landed_as(tmp_path, monkeypatch):
+    """Pi names the entry an input landed as and the entries a compaction took out, so exposure says which handover
+    a compaction forgot, and still says it was seen."""
+    async with FakeModel("noted", "summary one", "summary two") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        settings = {"compaction": {"keepRecentTokens": 1, "reserveTokens": 99_990}}
+        (tmp_path / "home" / ".pi" / "agent").mkdir(parents=True)
+        (tmp_path / "home" / ".pi" / "agent" / "settings.json").write_text(json.dumps(settings))
+
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "remember this")
+            await until(lambda: of_type(session, "context.compacted"), session)
+            seen = await session.exposure("@bob", "inbox/bob@1")
+
+    assert isinstance(seen, Seen)
+    (edge,) = seen.edges
+    assert edge.how == "wake" and edge.confirmed is not None and edge.confirmed.native_id is not None
+    assert [mark.mark for mark in edge.compactions or ()] == ["forgot"]
 
 
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):

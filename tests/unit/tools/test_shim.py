@@ -153,6 +153,20 @@ async def test_an_id_the_harness_sent_goes_through(kernel, lead, worker):
     assert [event.native for event in sent] == [{"claudecode/toolUseId": "toolu_1"}]
 
 
+async def test_an_id_a_harness_put_among_the_arguments_goes_where_mcp_keeps_it(kernel, lead, worker):
+    """Pi's MCP client sends no `_meta`, so our extension puts pi's tool call id among the arguments, and the server,
+    which refuses an argument nobody declared, sees it where MCP keeps it."""
+    await start_turn(kernel, "w1")
+    arguments = {"to": "@lead", "gist": "words", "_meta": {"pi/toolCallId": "call_1"}}
+    params = {"name": "message_send", "arguments": arguments, "_meta": {"progressToken": 7}}
+
+    async with shim(worker[1]) as pipe:
+        answer = await pipe.request("tools/call", params)
+
+    assert answer["result"]["isError"] is False
+    assert of_type(kernel, "message.sent")[-1].native == {"pi/toolCallId": "call_1"}
+
+
 async def test_a_surface_in_the_url_goes_through(lead):
     client = Client(f"{lead[1].url}?surface=mcp__coord", lead[1].token)
 

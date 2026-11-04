@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 URL_VARIABLE = "PLATOON_HARNESS_URL"
 TOKEN_VARIABLE = "PLATOON_HARNESS_TOKEN"
 
-_ANCHORS = ("claudecode/toolUseId", "callId", "platoon-harness/callId")
+_ANCHORS = ("claudecode/toolUseId", "callId", "pi/toolCallId", "platoon-harness/callId")
 _UNCONFIGURED = 78
 
 _stdout = threading.Lock()
@@ -32,11 +32,17 @@ def _write(reply: bytes) -> None:
 
 
 def _anchored(message: Any) -> Any:
-    """Give a tool call an id if its harness gave none. Nothing here retries, and each line is one call, so a second
-    identical call in a turn must not be taken for a retry of the first."""
+    """Give a tool call the id its harness gave it, or one of its own. A harness whose MCP client keeps `_meta` to
+    itself puts it among the call's arguments, and it moves to where MCP keeps it, beside what the client put there.
+    Nothing here retries, and each line is one call, so a second identical call in a turn must not be taken for a
+    retry of the first."""
     params = message.get("params") if isinstance(message, dict) and message.get("method") == "tools/call" else None
     if isinstance(params, dict):
         meta = params.setdefault("_meta", {})
+        arguments = params.get("arguments")
+        if isinstance(meta, dict) and isinstance(arguments, dict) and isinstance(arguments.get("_meta"), dict):
+            for name, value in arguments.pop("_meta").items():
+                meta.setdefault(name, value)
         if isinstance(meta, dict) and not any(anchor in meta for anchor in _ANCHORS):
             meta["platoon-harness/callId"] = uuid.uuid4().hex
     return message
