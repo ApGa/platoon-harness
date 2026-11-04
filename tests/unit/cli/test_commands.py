@@ -13,13 +13,13 @@ import pytest
 from cyclopts import CycloptsError
 from rich.console import Console
 
-from platoon_harness.kernel import Event, registry
+from platoon_harness.kernel import GIST_LIMIT, Event, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.session import Reason
 from platoon_harness.tools.surface import body_fields
 from platoon_harness_cli.exits import ENDINGS, SHARED
 from platoon_harness_cli.main import build
-from platoon_harness_cli.ops import command_line, person_ops
+from platoon_harness_cli.ops import command_line, cut, person_ops
 from platoon_harness_cli.output import event_line, safe
 from platoon_harness_cli.reference import reference
 
@@ -181,3 +181,12 @@ def test_text_a_terminal_shows_escapes_what_could_take_it_over():
 def test_the_reference_is_made_from_the_definitions():
     """On a failure, run `uv run python -m platoon_harness_cli.reference > docs/cli.md`."""
     assert (Path(__file__).parents[3] / "docs" / "cli.md").read_text() == reference()
+
+
+def test_a_person_s_text_is_cut_into_a_gist_and_a_body_one_way():
+    fits, long = "x" * GIST_LIMIT, "y" * (GIST_LIMIT + 1)
+
+    assert cut(fits) == (fits, None) and cut(fits, file=True) == (fits, None)
+    assert cut(long) == ("y" * (GIST_LIMIT - 1) + "…", long)
+    with pytest.raises(ValueError, match="two bodies"):
+        cut(long, file=True)

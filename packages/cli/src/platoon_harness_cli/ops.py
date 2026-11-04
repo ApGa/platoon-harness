@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal
 from cyclopts import App, Parameter
 
 from platoon_harness import Session
-from platoon_harness.kernel import Op, Outcome, registry
+from platoon_harness.kernel import GIST_LIMIT, Op, Outcome, registry
 from platoon_harness.primitives import BODY_REF, PRIMITIVES
 from platoon_harness.tools import OP_NAMED, taught
 
@@ -51,6 +51,17 @@ _PERSON = frozenset(person_ops())
 CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"})
 """The ops a person is asked about once before they run, in the terminal and in the browser alike: each ends an agent or
 the session, or erases a body, which nothing takes back."""
+
+
+def cut(text: str, *, file: bool = False) -> tuple[str, str | None]:
+    """A person's text as a message's gist and body, in the terminal and in the browser alike: the text itself when it
+    fits in a gist, and otherwise its first characters and an ellipsis, with the whole as the body. A file is a body of
+    its own, so beside one a text too long for a gist is refused."""
+    if len(text) <= GIST_LIMIT:
+        return text, None
+    if file:
+        raise ValueError("a long message and a file are two bodies: send them one at a time")
+    return f"{text[: GIST_LIMIT - 1]}…", text
 
 
 def command_of(op: str) -> str:

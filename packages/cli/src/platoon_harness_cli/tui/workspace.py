@@ -17,10 +17,10 @@ from textual.widgets import Static
 
 from platoon_harness import Refused, Session
 from platoon_harness.config import Manifest
-from platoon_harness.kernel import GIST_LIMIT, Event, is_held
+from platoon_harness.kernel import Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
-from ..ops import CONFIRMED, Flag, described, flags, person_ops
+from ..ops import CONFIRMED, Flag, cut, described, flags, person_ops
 from ..roster import detail_of, why_said
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
@@ -726,14 +726,13 @@ class Workspace(Screen[None]):
             question = SafeText(f"This begins with {found[1]}, and goes to {target}, as shown. Send it to {target}?")
             if not await self.app.push_screen_wait(Confirm(question)):
                 return
-        if self.attached is not None and len(text) > GIST_LIMIT:
-            note(self, "a long message and a file are two bodies: send them one at a time", severity="warning")
+        try:
+            gist, body = cut(text, file=self.attached is not None)
+        except ValueError as error:
+            note(self, str(error), severity="warning")
             return
-        gist, body = text, None
         if self.attached is not None:
             gist, body = text or f"file {self.attached[0]}", self.attached[1]
-        elif len(text) > GIST_LIMIT:
-            gist, body = f"{text[: GIST_LIMIT - 1]}…", text
         try:
             await live.session.send(target, gist, body=body)
         except Refused as refused:
