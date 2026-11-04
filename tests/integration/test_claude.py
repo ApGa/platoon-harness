@@ -42,6 +42,7 @@ from platoon_harness.testing import (
     Text,
     ToolCall,
     check_driver,
+    goal,
 )
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE
@@ -306,7 +307,7 @@ async def test_a_resumed_session_keeps_the_instructions_it_began_with(tmp_path):
         await driver.stop(2.0)
 
         resumed, heard = ClaudeDriver(), Heard()
-        again = {"resume": native, "goal": "", "instructions": "BRAVO-TWO"}
+        again = {"resume": native, "goal": None, "instructions": "BRAVO-TWO"}
         await resumed.start(spec.model_copy(update=again), heard)
         await heard.until(Ready)
         await resumed.deliver(Delivery(input="41", boundary="turn", text="again", items=()))
@@ -508,7 +509,8 @@ def on_fake_model(tmp_path: Path, fake: FakeModel, **fields: Any) -> AgentSpec:
     work = tmp_path / "work"
     work.mkdir(exist_ok=True)
     spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
-    return AgentSpec.model_validate({**spec, "access": access(tmp_path / "home")(fake), **fields})
+    given = {**spec, "access": access(tmp_path / "home")(fake), **fields}
+    return AgentSpec.model_validate({**given, "goal": goal(given["goal"])})
 
 
 async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
@@ -625,6 +627,23 @@ async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, mon
         spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
     assert under and {item.data["native_id"] for item in under} == set(spawned.native.values())
+
+
+async def test_a_read_is_confirmed_by_the_tool_item_that_holds_its_result_and_the_launch_by_the_first_input(
+    tmp_path, monkeypatch
+):
+    async with FakeModel(ToolCall("mcp__ph__message_read", {"after": 0}, id="toolu_read"), "read it") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        read, confirmations = await clients.a_read_and_what_confirmed_it(team, tmp_path)
+
+    hows = {event.data["how"]: event.data for event in confirmations}
+    assert read.native == {"claudecode/toolUseId": "toolu_read"}
+    assert (hows["read"]["input"], hows["read"]["evidence"], hows["read"]["native_id"]) == (
+        read.seq,
+        "tool_item",
+        "toolu_read",
+    )
+    assert (hows["wake"]["evidence"], hows["launch"]["evidence"]) == ("command_lifecycle", "command_lifecycle")
 
 
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):

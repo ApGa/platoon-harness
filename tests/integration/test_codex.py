@@ -43,6 +43,7 @@ from platoon_harness.testing import (
     ToolCall,
     chat_access,
     check_driver,
+    goal,
 )
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE
@@ -141,7 +142,8 @@ def on_fake_model(tmp_path: Path, fake: FakeModel, *, settings: str = "", **fiel
     work = tmp_path / "work"
     work.mkdir(exist_ok=True)
     spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
-    return AgentSpec.model_validate({**spec, "access": access(tmp_path / "home", settings)(fake), **fields})
+    given = {**spec, "access": access(tmp_path / "home", settings)(fake), **fields}
+    return AgentSpec.model_validate({**given, "goal": goal(given["goal"])})
 
 
 def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role: Any) -> Team:
@@ -334,7 +336,7 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
         await first.start(spec, heard)
         native = (await heard.until(Ready)).native
         await first.deliver(delivery)
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         record = Record.read(spec.folder)
         assert record is not None
@@ -433,7 +435,7 @@ async def test_a_steer_during_a_model_call_is_in_the_next_one_within_the_turn(tm
         await asyncio.wait_for(model.call(0), TIMEOUT)
         await driver.deliver(steer)
         model.release()
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -541,7 +543,7 @@ async def test_a_resumed_session_keeps_the_instructions_and_the_setting_of_its_o
         await driver.stop(2.0)
 
         resumed, heard = CodexDriver(), Heard()
-        again = {"resume": native, "goal": "", "instructions": "BRAVO-TWO", "allow_native_children": True}
+        again = {"resume": native, "goal": None, "instructions": "BRAVO-TWO", "allow_native_children": True}
         await resumed.start(spec.model_copy(update=again), heard)
         await heard.until(Ready)
         await resumed.deliver(Delivery(input="41", boundary="turn", text="again", items=()))
@@ -694,6 +696,23 @@ async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, mon
         spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
     assert under and {item.data["native_id"] for item in under} == set(spawned.native.values())
+
+
+async def test_a_read_is_confirmed_by_the_item_that_holds_its_result_and_the_launch_by_the_first_input(
+    tmp_path, monkeypatch
+):
+    async with FakeModel(tool("message_read", "call_read", after=0), "read it") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        read, confirmations = await clients.a_read_and_what_confirmed_it(team, tmp_path)
+
+    hows = {event.data["how"]: event.data for event in confirmations}
+    anchor = read.native["callId"]
+    assert (hows["read"]["input"], hows["read"]["evidence"], hows["read"]["native_id"]) == (
+        read.seq,
+        "tool_item",
+        anchor,
+    )
+    assert (hows["wake"]["evidence"], hows["launch"]["evidence"]) == ("userMessage", "userMessage")
 
 
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):

@@ -278,12 +278,15 @@ class Host:
             self._tips = tips_of(self._kernel.get_body(repo.tips.removeprefix("sha256:")).decode())
         return self._tips
 
-    def _goal(self, data: Mapping[str, Any]) -> str:
+    def _goal(self, agent: str, data: Mapping[str, Any], offer: int) -> Delivery:
+        """A spawn's goal as its harness's first delivery, its gist and then its body, under the launch offer's id."""
         body = data["body"]
-        if body is None:
-            return data["goal"]
-        text = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT)
-        return "\n\n".join(filter(None, (data["goal"], text.decode(errors="replace"))))
+        text = data["goal"]
+        if body is not None:
+            said = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT).decode(errors="replace")
+            text = "\n\n".join(filter(None, (text, said)))
+        item = Offered(ref=f"agent/{agent}@1", gist=data["goal"], body=body is not None)
+        return Delivery(input=str(offer), boundary="turn", text=text, items=(item,))
 
     async def _launch(self, effect: Effect) -> None:
         data = effect.data
@@ -293,25 +296,33 @@ class Host:
         admission = self._admitted.pop(agent, None)
         if admission is None:  # It finished in a runtime that has gone, and what it gave went too.
             admission = await self.admit(SpawnRequest(agent=agent, role=role, resumed=True))
-        await self.connect(agent, role, admission, goal=self._goal(data))
+        await self.connect(agent, role, admission, goal=data if data["goal"] or data["body"] else None)
 
     async def connect(
-        self, agent: str, role: str, admission: Admission, *, goal: str = "", resume: str | None = None
+        self,
+        agent: str,
+        role: str,
+        admission: Admission,
+        *,
+        goal: Mapping[str, Any] | None = None,
+        resume: str | None = None,
     ) -> None:
-        """Bring a harness up on its own binding. A harness that never says it is ready is a failure, not a hang."""
+        """Bring a harness up on its own binding, with `goal`, a spawn's goal and body, as its first delivery, under
+        the id of the offer that launched it. A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
         workspace = self._workspace_of(agent)
         await asyncio.to_thread(present, workspace)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info)
         self._links[agent] = link
-        spec = self._spec(link, admission, goal, resume, Path(workspace.path))
+        spec = self._spec(link, admission, resume, Path(workspace.path))
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
 
         async def up() -> None:
-            await self._instructed(agent, spec.instructions)
-            await driver.start(spec, partial(self._heard, link))
+            offer = await self._instructed(agent, spec.instructions, goal=goal is not None, resumed=resume is not None)
+            handed = None if goal is None or offer is None else self._goal(agent, goal, offer)
+            await driver.start(spec.model_copy(update={"goal": handed}), partial(self._heard, link))
             await link.ready.wait()
             if link.refused is not None:
                 raise DriverError(link.refused)
@@ -328,11 +339,13 @@ class Host:
                 raise DriverError(link.redact(str(error))) from error
             raise
 
-    async def _instructed(self, agent: str, text: str | None) -> None:
-        """Journal what a harness is told, as the body it is, before it hears it."""
-        args = {"agent": agent, "body": await self._stored(text)}
+    async def _instructed(self, agent: str, text: str | None, *, goal: bool, resumed: bool) -> int | None:
+        """Journal what a harness is told, as the body it is, before it hears it, and what a fresh start offers it,
+        whose seq is the id its goal goes under."""
+        args = {"agent": agent, "body": await self._stored(text), "goal": goal, "resumed": resumed}
         if (recorded := await self.insist("agent.instruct", args)).refusal is not None:
             raise DriverError(f"what {agent} is told could not be journaled: {recorded.refusal.detail}")
+        return recorded.result
 
     async def _discard(self, link: DriverLink) -> None:
         self._links.pop(link.agent, None)
@@ -394,7 +407,7 @@ class Host:
             if record["state"] != "ended" and record["name"] != besides and await self._on_plan(record["role"])
         ]
 
-    def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None, cwd: Path) -> AgentSpec:
+    def _spec(self, link: DriverLink, admission: Admission, resume: str | None, cwd: Path) -> AgentSpec:
         """How an agent starts, in `cwd`, where its workspace is. Its instructions are the preamble and then the role's
         words, so a role has the last. A harness that reopens its own session keeps what it was told when that began,
         so it is handed that again."""
@@ -414,7 +427,6 @@ class Host:
         return AgentSpec(
             agent=link.agent,
             role=link.role,
-            goal=goal,
             cwd=cwd,
             folder=folder,
             model=role.model,

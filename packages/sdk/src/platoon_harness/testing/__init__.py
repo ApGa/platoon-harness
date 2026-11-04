@@ -1,6 +1,6 @@
 """What proves a driver or an extension: a deterministic harness, a loopback model, and named checks."""
 
-from .conformance import chat_access, check_driver
+from .conformance import chat_access, check_driver, goal
 from .extension import check_extension
 from .model import FakeModel, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
@@ -44,4 +44,5 @@ __all__ = [
     "check_driver",
     "check_extension",
     "every_turn_asks_the_model",
+    "goal",
 ]

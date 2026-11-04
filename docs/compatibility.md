@@ -499,6 +499,20 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Hooks | Not determined | No hook method appears in the surface the report lists |
 | | Session compaction | Passthrough, observed if sent | `compaction_update` and `compaction_summary_chunk` are stable updates. The SDK at 0.12.1 drops `compaction_update`, and the chunk was not tested, so raw capture matters |
 
+### Provenance per harness
+
+What each harness's own reports let the runtime confirm, and tie, of what an agent was handed (architecture §11). An offer is
+confirmed only by the harness's report: an `input.delivered` for an input, the goal at launch among them, or a completed tool item
+whose `native_id` is the anchor a read went under. Nothing joins by order or timing.
+
+| Harness | An input said to land | A model call's id | A tool call's anchor, and what holds it | A read confirmed | What a compaction names | Native children |
+|---|---|---|---|---|---|---|
+| `claude` 2.1.316 | `command_lifecycle`, under the uuid5 of the input's id, which is its `native_id`; the goal at launch too [L] | The message id at `message_start` [L] | `claudecode/toolUseId`, which the tool item's `native_id` holds and equals the model's tool id [L] [R] | By the completed tool item that holds its result [L] | Nothing: `compaction_opaque`, so no handover is known forgotten [L] | `child.seen` with the tool call that started it [L] |
+| `codex` 0.164.0 | `userMessage`, under its `clientId`, with the item id as `native_id`; the goal at launch too [L] | None: it gives no id per model call [L] | `callId`, which the `mcpToolCall` item holds: under live Code Mode the `exec-<uuid>` of a script, which several calls can share [L] [R] | By the completed item, as returned to the script; one item confirms each read under a shared id [L] | Nothing it names [L] | `child.seen` for a thread it starts [L] |
+| `pi` 1.5.0 | `message_start`, matched by the input's text, with no `native_id`: whether pi gives a landed entry's id at `message_start` or through `get_entries` is unverified [L] | `responseId` at `message_end` [L] | The shim's own `platoon-harness/callId`, which no item holds [L] | Not yet: no item holds the shim's id, until the shim passes pi's own tool call id [L] | Entry ids from `get_entries`, which no delivered input carries yet [L] | None in core [L] |
+| `openhands` 1.59.0 | `request`, read from the SDK's completion log, with no `native_id` [L] | `llm_response_id` [L] | The shim's own id, which no item holds [L] | Not yet, as for pi [L] | Event ids through `Condensation`, which no delivered input carries until the worker reports a message's id [L] | Opaque, a gap [L] |
+| `exec` | Never: the goal is in argv, which says nothing of whether it landed | None | `ph`'s own id, which nothing holds | Never | Nothing | None |
+
 ### Workspaces
 
 What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's

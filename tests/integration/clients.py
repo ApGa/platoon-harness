@@ -98,6 +98,20 @@ async def a_spawn_and_the_call_that_made_it(team: Team, root: Path) -> tuple[Eve
     return spawned, under
 
 
+async def a_read_and_what_confirmed_it(team: Team, root: Path) -> tuple[Event, list[Event]]:
+    """`bob`, woken by a person's message, reads its inbox by our tool: that read's offer, and every confirmation of an
+    offer to `bob`, which only its harness's own reports write."""
+    async with Session.start(team, root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "read your inbox")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        offers = await of_type(session, "context.offered")
+        confirmations = await of_type(session, "context.delivered")
+
+    read = next(offer for offer in offers if offer.data["how"] == "read")
+    return read, confirmations
+
+
 async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:
     """The TUI, as a guest over the socket: a message typed in its composer reaches the harness once, and the reply
     is drawn once, as a line of the transcript. Its caller points `PLATOON_HARNESS_HOME` at `root`."""

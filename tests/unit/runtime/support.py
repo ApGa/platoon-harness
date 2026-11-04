@@ -104,3 +104,8 @@ async def journal(session: Session, match: str | None = None) -> list[Any]:
 
 async def of_type(session: Session, *types: str) -> list[Any]:
     return [event for event in await journal(session) if event.type in types]
+
+
+async def offers(session: Session) -> list[Any]:
+    """What was offered past each launch: handovers, notices and reads, and not the launch's own offer."""
+    return [event for event in await of_type(session, "context.offered") if event.data["how"] != "launch"]

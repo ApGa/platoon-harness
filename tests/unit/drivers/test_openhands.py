@@ -43,7 +43,7 @@ async def main(work):
     driver = OpenHandsDriver()
     print(driver.describe().name)
     try:
-        await driver.start(AgentSpec(agent="ada", role="worker", goal="", cwd=work, folder=work / "ada"), heard)
+        await driver.start(AgentSpec(agent="ada", role="worker", cwd=work, folder=work / "ada"), heard)
     except DriverError as error:
         print(error)
     finally:

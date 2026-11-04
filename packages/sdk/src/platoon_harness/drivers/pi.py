@@ -217,8 +217,8 @@ class PiDriver:
         self._launched = await Process.launch(self._command(spec), spec, report, read=self._read, env=env)
         self._lines.open(self._launched.stdin)
         await self._handshake(spec, await asyncio.to_thread(_version, env))
-        if spec.goal and spec.resume is None:
-            await self._hand_over(spec.goal)
+        if spec.goal is not None and spec.resume is None:
+            await self.deliver(spec.goal)
 
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches. `--session-id` makes a session under an id we chose, so `native` is known before

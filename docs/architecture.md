@@ -587,7 +587,7 @@ Each statement here is a promise with a test.
   implicit topic, `channel/+<name>`. These streams hold entries and nothing else, so a version numbers an entry.
 - **Order.** Total per stream. Nothing is promised across streams.
 - **Delivery.** At-least-once to the driver, deduped by event id. Delivery states are `offered` (the runtime handed it
-  over), `delivered` (the driver confirmed injection; this is observed exposure), `acked` (the agent's next read or
+  over), `delivered` (its harness's own report said it took it; this is observed exposure), `acked` (the agent's next read or
   wait moved past it). None means understood. A handover that fails is queued again and offered under a new input, even past a
   newer offer: at-least-once allows the repeat, and the event id dedupes it. The next try waits twice as long as the last, from one
   second. Six in a row lose an agent out of a turn, with the reason; a working agent keeps its turn, and what is queued waits for
@@ -1009,8 +1009,9 @@ class Driver(Protocol):
 `AgentSpec` holds agent, role, goal, cwd, which is where the journal says its agent works, so no driver knows the mode, the agent's
 own folder, model, effort (a string handed to the harness as it stands), sandbox
 (one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
-again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a
-delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
+again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal,
+which is a `Delivery`, the first, under the id of the offer that launched it, sent as the driver sends any input, so its harness says
+it landed as it says any did. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
 such setting refuses an effort.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
@@ -1043,7 +1044,7 @@ path is real and exercised, and where OpenHands' pins cannot share an environmen
 wire command. See [ADR 0030](adr/0030-openhands-is-an-extra-of-the-sdk.md).
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":{"input":"7","boundary":"turn","text":"...","items":[{"ref":"agent/ada@1","gist":"...","sender":null,"body":false}],"behind":0},"access":["OPENAI_API_KEY"],"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.4.0","effective_model":"m","tools_visible":null}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"d41","boundary":"turn","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable"}]}}
@@ -1200,7 +1201,7 @@ told how to end can leave its parent waiting for ever, and an empty template is 
 of our tools is told `instructions` alone, so `team check` refuses a role's own template there and warns of its team's. The role's own
 `instructions` come last, so a role has the last word.
 
-`agent.instructed` journals the exact text the runtime adds to each harness, at a launch and at every resume, so a session's record
+`agent.instructed` journals the exact text the runtime adds to each harness, as its `body`, at a launch and at every resume, so a session's record
 shows what every agent was told, and on each real binary a test finds that text whole, once, in the first request, and in the first
 after a resume. The harness's own system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude
 Code's settings and `CLAUDE.md` files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role
@@ -1213,13 +1214,26 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
 - **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display.
-- **Context version.** Each agent has a stream `context/<agent>`. An offer or a compaction advances it, and every agent event
-  records it. So `context_version` is an **upper bound** on what an action could have known, `delivered` edges are a **lower
-  bound**, and the distance between them is measured uncertainty.
+- **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
+  said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
+  **upper bound** on what an action could have known, `delivered` edges are a **lower bound**, and what lies between them is
+  unconfirmed handovers.
+- **What a launch offers.** A fresh start's `agent.instruct` offers what that launch hands the harness, `context.offered{how:
+  launch, boundary: turn}`: the instructions, `agent/<x>@k`, and with a goal the goal, `agent/<x>@1`, its gist and its body. The
+  goal goes as the first delivery under that offer's id, and the first input its harness says it took, the goal itself or for an
+  idle start the first handover, confirms the launch. A native resume offers nothing, as its harness keeps what its session began
+  with, and a relaunch with no native session is a fresh start. `exec` puts the goal in argv, which confirms nothing.
+- **One way to confirm.** An offer is confirmed only by a `context.delivered`, payload 3, that the host writes from its harness's
+  own report, in that report's transaction: an `input.delivered`, whose `native_id` is the harness's id for the input, verbatim,
+  or a completed tool item whose `native_id` is the anchor an unconfirmed offer was made under, with the evidence `tool_item`. An
+  agent's read records its offer under its command's anchor, and the tool plane hands a steer notice and a body only it could read
+  under that anchor too, so the item that holds that call's result confirms each, an anchor several ops share confirming each
+  of them. A read moves its cursor when its result shows it, as a cursor says what was handed; a confirmation of it moves nothing
+  more. No offer is confirmed when its op commits.
 
 | Evidence | Representation | Sole writer | Means only |
 |---|---|---|---|
-| **Observed exposure** | `context.offered{items:[{ref, form, digest}], boundary, how}`, raised by `context.delivered` | Courier, and agent-read ops | This content was handed over, then confirmed injected |
+| **Observed exposure** | `context.offered{items:[{ref, form, digest}], boundary, how}`, payload 3, `how` one of `wake`, `steer`, `notice`, `read` and `launch`, raised by `context.delivered` | Offers: the courier's handovers and notices, the reader's own read ops, `blob.offer` and the launch offer, on the reader's own context stream. Confirmations: the host, from the harness's report alone | This content was handed over, then its harness said it took it |
 | **Declared dependency** | `based_on` on a write of content, each ref checked to name an event and its lines (§7), and a commit's `Informed-By` read into it | That write's maker | The agent claims it |
 | **Judged attribution** | Annotation: judge, version, evidence refs, value | A `judge` principal | A versioned opinion |
 | **Validated intervention** | Annotation: design, comparison, measured result | A `program` principal | One controlled comparison |

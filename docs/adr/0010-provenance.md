@@ -1,6 +1,7 @@
 # 0010. Provenance: backward references, bounds, evidence and gaps
 
-**Status:** Accepted, 2026-11-02
+**Status:** Accepted, 2026-11-02. Superseded in part by [0036](0036-one-ref-names-what-a-model-is-shown.md), on refs and
+citations, and [0037](0037-an-offer-is-confirmed-only-by-its-harness.md), on confirmations, the launch offer, calls and gaps.
 
 ## Context
 

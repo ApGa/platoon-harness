@@ -149,11 +149,12 @@ async def running(spec: AgentSpec) -> AsyncIterator[tuple[ClaudeDriver, Heard]]:
 
 
 async def played(stand: Stand, tmp_path: Path, *frames: Any) -> list[Any]:
-    """Every report of one turn on the goal, once it ended."""
+    """Every report of one turn on the goal, once it ended, after the goal said to have landed."""
     stand.install(turns=[[STARTED, *frames]])
     async with running(make_spec(tmp_path)) as (_, heard):
         await heard.until(TurnEnded)
-        return heard.reports[1:]
+        assert heard.reports[1].input == "launch"
+        return heard.reports[2:]
 
 
 def kinds(reports: list[Any]) -> list[type]:
@@ -777,7 +778,7 @@ async def test_a_delivery_in_a_turn_lands_at_a_tool_boundary(tmp_path, stand):
 
         await driver.deliver(delivery(boundary="tool"))
 
-        landed = await heard.until(InputDelivered)
+        landed = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
 
     assert landed.boundary == "tool"
@@ -853,7 +854,7 @@ async def test_an_interrupt_has_the_harness_drop_what_it_queued_since_the_runtim
         frame for frame in stand.heard if frame["type"] == "control_request" and "cancel_queued" in frame["request"]
     )
     assert asked["request"]["cancel_queued"] is True
-    assert not heard.of(InputDelivered)
+    assert [landed.input for landed in heard.of(InputDelivered)] == ["launch"]
 
 
 async def test_an_interrupt_as_a_handover_begins_a_turn_cuts_that_turn_and_says_so(tmp_path, stand):

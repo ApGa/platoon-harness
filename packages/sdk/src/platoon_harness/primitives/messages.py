@@ -93,10 +93,11 @@ class Cursor(NamedTuple):
 
 
 class Offered(NamedTuple):
-    """One offer: whose, how far it moves each cursor, whether a driver confirmed it landed, and what it carries into
-    the turn that hears it."""
+    """One offer: whose, how it was made, how far it moves each cursor, whether its harness said it took it, and what
+    it carries into the turn that hears it."""
 
     reader: str
+    how: str
     positions: dict[str, int]
     delivered: bool
     hops: int
@@ -106,7 +107,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 9
+    version = 10
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -139,6 +140,8 @@ class Deliveries(View):
     CREATE TABLE v_deliveries_offers(
         input INTEGER PRIMARY KEY,
         reader TEXT NOT NULL,
+        how TEXT NOT NULL,
+        anchor TEXT,
         positions TEXT NOT NULL,
         before TEXT NOT NULL,
         effect INTEGER,
@@ -148,6 +151,7 @@ class Deliveries(View):
         asked INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
+    CREATE INDEX v_deliveries_offers_anchor ON v_deliveries_offers(reader, anchor) WHERE delivered = 0;
     CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_quiet(agent TEXT PRIMARY KEY, upto INTEGER NOT NULL) WITHOUT ROWID, STRICT;
@@ -187,6 +191,8 @@ class Deliveries(View):
 
     @fold("context.offered")
     def offered(self, event: Event) -> None:
+        """An offer is kept with the anchor of the call it was made under, as the tool item that answers that call
+        confirms it. A launch hands over no entry, so it is heard as nothing."""
         data = event.data
         before = {stream: self.cursor(event.agent, stream).offered for stream in data["positions"]}
         in_a_result = data["how"] in IN_A_RESULT
@@ -199,19 +205,22 @@ class Deliveries(View):
             )
         self.db.execute(
             """
-            INSERT INTO v_deliveries_offers(input, reader, positions, before, delivered, hops, asked)
-            VALUES (?, ?, ?, ?, 0, ?, ?)
+            INSERT INTO v_deliveries_offers(input, reader, how, anchor, positions, before, delivered, hops, asked)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
             """,
             (
                 event.seq,
                 event.agent,
+                data["how"],
+                next(iter(event.native.values()), None),
                 json.dumps(data["positions"]),
                 json.dumps(before),
                 data["hops"],
                 data.get("asked", False),  # A v1 offer asked nothing.
             ),
         )
-        self._heard(event.agent, data["hops"])
+        if data["how"] != "launch":
+            self._heard(event.agent, data["hops"])
 
     def _heard(self, agent: str | None, hops: int) -> None:
         self.db.execute(
@@ -266,13 +275,17 @@ class Deliveries(View):
     @fold("context.delivered")
     def delivered(self, event: Event) -> None:
         """Its offer's hops count in the turn it landed in too, which for a steer can be the one after the offer's. A v1
-        landing carried none: its offer's counted alone."""
+        landing carried none: its offer's counted alone. An offer shown in a tool's result moved its cursors and counted
+        when it was shown, and a launch hands over no entry, so their confirmations move nothing else. One before v3
+        was always of a handover."""
+        self.db.execute("UPDATE v_deliveries_offers SET delivered = 1 WHERE input = ?", (event.data["input"],))
+        if event.data.get("how") in (*IN_A_RESULT, "launch"):
+            return
         for stream, seq in event.data["positions"].items():
             self.db.execute(
                 "UPDATE v_deliveries_cursors SET delivered = max(delivered, ?) WHERE reader = ? AND stream = ?",
                 (seq, event.agent, stream),
             )
-        self.db.execute("UPDATE v_deliveries_offers SET delivered = 1 WHERE input = ?", (event.data["input"],))
         self._heard(event.agent, event.data.get("hops", -1))
 
     @fold("message.acked")
@@ -462,7 +475,20 @@ class Deliveries(View):
         if row is None:
             return None
         positions = json.loads(row["positions"])
-        return Offered(row["reader"], positions, bool(row["delivered"]), row["hops"], bool(row["asked"]))
+        return Offered(row["reader"], row["how"], positions, bool(row["delivered"]), row["hops"], bool(row["asked"]))
+
+    def unconfirmed(self, reader: str, *, anchor: str | None = None, how: str | None = None) -> list[int]:
+        """The offers to `reader` its harness has not said it took, made under the call `anchor` names, or of one way,
+        oldest first."""
+        rows = self.db.execute(
+            """
+            SELECT input FROM v_deliveries_offers
+            WHERE reader = ?1 AND delivered = 0 AND (?2 IS NULL OR anchor = ?2) AND (?3 IS NULL OR how = ?3)
+            ORDER BY input
+            """,
+            (reader, anchor, how),
+        )
+        return [row["input"] for row in rows]
 
 
 class _Reach(NamedTuple):

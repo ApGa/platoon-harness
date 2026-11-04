@@ -618,8 +618,8 @@ async def test_what_an_interrupt_drops_is_the_runtime_s_to_offer_again(tmp_path,
         await heard.until(TurnEnded)
 
     sent = [frame["params"].get("clientUserMessageId") for frame in stand.heard if frame.get("method") == "turn/start"]
-    assert sent == [None, "41"]
-    assert not heard.of(InputDelivered)
+    assert sent == ["launch", "41"]
+    assert "41" not in [landed.input for landed in heard.of(InputDelivered)]
 
 
 def said(stand: Stand, *frames: Any) -> None:

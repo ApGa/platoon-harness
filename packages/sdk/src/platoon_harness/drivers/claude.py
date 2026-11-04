@@ -181,7 +181,7 @@ class ClaudeDriver:
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
-        if spec.goal.startswith("/"):
+        if spec.goal is not None and spec.goal.text.startswith("/"):
             raise DriverError("a goal that starts with `/` would run as a slash command: reword it")
         named = {*spec.env, *spec.access}
         if _GATEWAY_URL in named and not named.intersection(_GATEWAY_CREDENTIALS):
@@ -194,8 +194,8 @@ class ClaudeDriver:
         self._launched = await Process.launch(self._command(spec), spec, report, read=self._read, env=env)
         self._lines.open(self._launched.stdin)
         await self._handshake(spec)
-        if spec.goal and spec.resume is None:
-            await self._lines.send(self._user(spec.goal, str(uuid4())))
+        if spec.goal is not None and spec.resume is None:
+            await self.deliver(spec.goal)
 
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches: one path, and its files are written first. The server's token stays in the

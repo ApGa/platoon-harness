@@ -32,7 +32,9 @@ method promises:
 - **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer. `login` comes
   from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
   tell. `prepare` reads it to refuse several agents on one plan login.
-- **`start`** begins the first turn on `spec.goal`. With no goal, or given `spec.resume`, which reopens that native session, it waits
+- **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
+  `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
+  report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
   for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
@@ -64,8 +66,8 @@ method promises:
 | `TurnStarted` | `turn` | No two turns of one agent share a name, across a resume too: a tool call with no id of its own is keyed on it |
 | `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong, such as `aborted` for a turn the harness cut with nobody asking. An `interrupted` turn was someone's own doing, so it wakes nobody. `lost` and `stopped by its owner` are the runtime's own, and a driver that says one has sent an unknown frame. For a one-shot harness this is its end, and `stopped` means it finished |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
-| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item |
-| `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness. `evidence` names what showed it, and `native_id` is the harness's own id for what landed |
+| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item. A completed tool item whose `native_id` is the anchor a tool call went under, as Claude Code's `toolUseId` and Codex's `callId` are, confirms what the runtime showed in that call's result, so report it once the result is in |
+| `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness, the goal at launch among them: this is the one way an offer is confirmed. `evidence` names what showed it, and `native_id` is the harness's own id for what landed, verbatim, the one its compaction would name that input by, or None when it gives none |
 | `ApprovalRequested` | `id`, `gist` | The harness is waiting on a decision |
 | `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
 | `Usage` | `tokens`, `usd`, `label`, `scope`, `call_id` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable`. `call_id` names the call a `call` scope paid for |
@@ -203,8 +205,8 @@ class OneCall:
             raise DriverError("this harness has no effort to set")
         self.model, self.report = spec.model, report
         await report(Ready(version="1.0", effective_model=spec.model))
-        if spec.goal:
-            self.turn = asyncio.create_task(self.take_turn(spec.goal))
+        if spec.goal is not None:
+            await self.deliver(spec.goal)
 
     async def take_turn(self, prompt):
         self.turns += 1
@@ -259,9 +261,10 @@ That was one short process: `describe` runs your program, sends this one frame, 
 may start for it. Starting an agent is a new process.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"allow_native_children":false,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":{"input":"7","boundary":"turn","text":"...","items":[{"ref":"agent/ada@1","gist":"...","sender":null,"body":false}],"behind":0},"cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"allow_native_children":false,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
+< {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"7","boundary":"turn","evidence":"prompt"}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","text":"New messages (delivery 41):\n- inbox/ada@3 from @lead: Keep the API stable","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable","sender":"@lead","body":false}],"behind":0}}
 < {"jsonrpc":"2.0","id":2,"result":null}

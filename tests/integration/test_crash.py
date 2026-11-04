@@ -113,7 +113,8 @@ async def assert_what_a_crash_leaves(
     # An effect nobody can vouch for was surfaced, then settled by its policy: at-least-once, with a new input.
     assert uncertain_kinds(events) >= {"deliver"}
     await until(lambda: of_type(owner, "turn.started"), owner, lambda found: stuck_turn(found))
-    offers = [event for event in await of_type(owner, "context.offered") if event.agent == "stuck"]
+    offered = await of_type(owner, "context.offered")
+    offers = [event for event in offered if event.agent == "stuck" and event.data["how"] != "launch"]
     assert len(offers) == 2
     assert [item["ref"] for item in offers[0].data["items"]] == [item["ref"] for item in offers[1].data["items"]]
     assert offers[0].seq != offers[1].seq

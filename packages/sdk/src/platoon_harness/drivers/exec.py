@@ -47,13 +47,14 @@ class ExecDriver:
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None:
             raise DriverError("a one-shot harness cannot resume")
-        if not spec.goal:
+        if spec.goal is None:
             raise DriverError("a one-shot harness takes nothing after its goal: set `count = 0` and spawn it with one")
         if spec.effort is not None:
             raise DriverError("a one-shot command takes no effort from here: put it in the command")
-        if GOAL in self._command and spec.goal.startswith("-"):
+        goal = spec.goal.text  # In argv, which says nothing of whether it landed, so nothing confirms it.
+        if GOAL in self._command and goal.startswith("-"):
             raise DriverError("a goal that starts with `-` would reach this program as an option: reword it")
-        command = [part.replace(GOAL, spec.goal) for part in self._command]
+        command = [part.replace(GOAL, goal) for part in self._command]
         self._process = await Process.launch(command, spec, report, read=self._read)
 
     async def _read(self, process: Process) -> None:

@@ -757,7 +757,7 @@ LEFT_BEHIND = textwrap.dedent(
         return json.loads((folder / "proc.json").read_text())["pid"]
 
     async def main():
-        spec = AgentSpec(agent="a", role="r", goal="g", cwd=folder, folder=folder)
+        spec = AgentSpec(agent="a", role="r", cwd=folder, folder=folder)
         await Process.launch(["sleep", "100"], spec, report, read=read)
         await asyncio.sleep(0)
 

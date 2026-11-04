@@ -339,6 +339,7 @@ platoon_harness.testing.EndTurn
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.testing.Exit
 platoon_harness.testing.Fail
+platoon_harness.testing.goal
 platoon_harness.testing.FakeModel
 platoon_harness.testing.FakeTools
 platoon_harness.testing.Hang

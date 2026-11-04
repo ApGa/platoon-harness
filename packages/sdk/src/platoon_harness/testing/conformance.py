@@ -50,6 +50,7 @@ from .tools import TOOL, FakeTools
 _GRACE = 2.0
 _MODEL = "fake-model"
 _GOAL = "conformance goal: the first word is heliotrope"
+_LAUNCH = "launch"
 _GIST = "conformance delivery: the second word is cinnabar"
 _PREAMBLE = "conformance preamble: the third word is viridian"
 _EFFORT = "low"
@@ -85,6 +86,12 @@ def _expect(condition: Any, otherwise: str) -> None:
         raise _Failed(otherwise)
 
 
+def goal(text: str) -> Delivery | None:
+    """A goal as the runtime hands one to a harness on a fresh start: its first delivery, under the id of the offer that
+    launched it, which `input.delivered` echoes, or None for no goal."""
+    return Delivery(input=_LAUNCH, boundary="turn", text=text, items=()) if text else None
+
+
 def chat_access(model: FakeModel) -> dict[str, Secret]:
     """Model access for a harness that speaks Chat Completions, with a dummy key."""
     return {BASE_URL: Secret(f"{model.url}/v1"), API_KEY: Secret("dummy-key")}
@@ -111,20 +118,22 @@ class _Rig:
         self._arrived = asyncio.Event()
 
     def _spec(self, **changes: Any) -> AgentSpec:
+        """A spec with the conformance goal, or the one `goal` gives as text, as the runtime would hand it over, and
+        none on a resume, as the runtime gives none."""
         bin, cwd = self.folder / "bin", self.folder / "work"
         bin.mkdir(parents=True, exist_ok=True)
         cwd.mkdir(exist_ok=True)
         fields = {
             "agent": "conformance",
             "role": "worker",
-            "goal": _GOAL,
             "cwd": cwd,
             "folder": self.folder / "agent",
             "model": _MODEL,
             "tools": self.tools.binding(bin),
             "access": self.access(self.model),
         }
-        return AgentSpec.model_validate({**fields, **changes})
+        given = changes.get("goal", "" if changes.get("resume") else _GOAL)
+        return AgentSpec.model_validate({**fields, **changes} | {"goal": goal(given)})
 
     async def _report(self, report: Report) -> None:
         self.reports.append(report)
@@ -281,7 +290,11 @@ async def tool_in_first_request(rig: _Rig) -> None:
 
 @_check(_persistent)
 async def delivered_text_in_next_prompt(rig: _Rig) -> None:
+    """The goal a launch hands over is its first delivery, said to have landed under its launch offer's id, and each
+    later delivery is in the prompt after it lands."""
     await rig.start()
+    await rig.until(InputDelivered, lambda delivered: delivered.input == _LAUNCH)
+    _expect((await rig.call(0)).says(_GOAL), "the goal is not in the first prompt")
     await rig.until(TurnEnded)
     next_call = len(rig.model.calls)
 
@@ -514,7 +527,7 @@ async def steers_at_declared_boundary(rig: _Rig) -> None:
     await rig.deliver(boundary)
     rig.model.release()
 
-    delivered = await rig.until(InputDelivered)
+    delivered = await rig.until(InputDelivered, lambda delivered: delivered.input == "1")
     _expect(delivered.boundary == boundary, f"it landed at {delivered.boundary}, and {boundary} was asked for")
     _expect((await rig.call(1)).says(_GIST), "the steer is not in the next prompt")
 

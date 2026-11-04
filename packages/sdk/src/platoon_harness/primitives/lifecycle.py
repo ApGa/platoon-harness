@@ -33,11 +33,13 @@ from .common import (
     BasedOn,
     Body,
     BodyRef,
+    Exposed,
     Gist,
     Name,
     Paging,
     cited,
     event_at,
+    expose,
     name_of,
     paged,
 )
@@ -542,18 +544,27 @@ def start(txn: Txn, a: Start) -> None:
 class Instruct(Args):
     agent: Name
     body: BodyRef | None
+    goal: bool = False
+    resumed: bool = False
 
 
 @op("agent.instruct", on=lambda a: f"agent/{a.agent}", runtime=True)
-def instruct(txn: Txn, a: Instruct) -> None:
+def instruct(txn: Txn, a: Instruct) -> int | None:
     """Record the exact text the runtime adds to an agent's harness, as its `body`, at a launch and at every resume, or
-    that it adds none. The harness's own prompt and the user's own configuration are theirs, and neither is here."""
+    that it adds none. The harness's own prompt and the user's own configuration are theirs, and neither is here.
+
+    A fresh start also offers what it hands the harness: these instructions, and with `goal` its goal, `agent/<x>@1`,
+    gist and body. The offer's seq comes back as the id the goal goes under as the first delivery, and the first input
+    its harness says it took confirms it. A native resume offers nothing, as its harness keeps what its session began
+    with."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
+    if a.goal and a.resumed:
+        raise Refused("invalid", "a native resume hands over no goal")
     refs = [a.body] if a.body else ()
     data = {"body": a.body}
-    txn.emit(
+    told = txn.emit(
         "agent.instructed",
         f"agent/{agent.name}",
         gist=f"{agent.name} instructed",
@@ -562,6 +573,18 @@ def instruct(txn: Txn, a: Instruct) -> None:
         data=data,
         v=2,
     )
+    if a.resumed:
+        return None
+    spawn = f"agent/{agent.name}@1"
+    items = [Exposed.gist(spawn, agent.goal)] if a.goal and agent.goal else []
+    items += [Exposed(ref=spawn, form="body", digest=_digest(agent.goal_body))] if a.goal and agent.goal_body else []
+    items += [Exposed(ref=f"{told.stream}@{told.version}", form="body", digest=_digest(a.body))] if a.body else []
+    return expose(txn, agent.name, items, how="launch", boundary="turn") if items else None
+
+
+def _digest(body: str) -> str:
+    """A body shown whole, whose digest is its own hash."""
+    return body.removeprefix("sha256:")
 
 
 @op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)
@@ -675,6 +698,9 @@ def report(txn: Txn, a: AgentReport) -> None:
             data = item.model_dump(exclude={"type", "gist"})
             model = _model(item.call_id)
             txn.emit("item.recorded", f"turn/{name}", gist=item.gist, agent=name, refs=refs, data=data, model=model)
+            if item.kind == "tool" and item.phase == "completed" and item.native_id:
+                for offer in txn.view(Deliveries).unconfirmed(name, anchor=item.native_id):
+                    confirmed(txn, offer, "tool", "tool_item", item.native_id)
         case Usage() as usage:
             data = usage.model_dump(exclude={"type"})
             gist = f"usage: {usage.label}"
@@ -690,7 +716,10 @@ def report(txn: Txn, a: AgentReport) -> None:
         case InputDelivered() as delivered:
             if not delivered.input.isdecimal():
                 raise Refused("not_found", f"no offer {delivered.input}")
-            confirmed(txn, int(delivered.input), delivered.boundary, delivered.evidence, delivered.native_id)
+            input = int(delivered.input)
+            confirmed(txn, input, delivered.boundary, delivered.evidence, delivered.native_id)
+            for launch in txn.view(Deliveries).unconfirmed(name, how="launch"):  # Taken before any input it took.
+                confirmed(txn, launch, "turn", delivered.evidence)
         case ApprovalRequested(id=id, gist=gist):
             ask(txn, id, agent, gist)
         case ModelCall(call_id=call_id) as call:

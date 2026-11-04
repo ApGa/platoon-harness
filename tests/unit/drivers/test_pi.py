@@ -623,7 +623,7 @@ async def test_a_delivery_inside_a_turn_lands_before_the_next_model_call(tmp_pat
 
     async with running(make_spec(tmp_path, goal="the goal")) as (driver, heard):
         await driver.deliver(delivery(boundary="model_call", text="steered"))
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda delivered: delivered.input != "launch")
 
     assert delivered.boundary == "model_call"
     assert len(heard.of(TurnStarted)) == 1
@@ -704,7 +704,7 @@ async def test_what_an_interrupt_stranded_is_cleared_from_its_queue_for_the_runt
     types = [frame["type"] for frame in stand.heard]
     assert types.index("abort") < types.index("clear_queue")
     assert [frame["message"] for frame in stand.sent("prompt")] == ["the goal", "queued"]
-    assert not heard.of(InputDelivered)
+    assert [landed.input for landed in heard.of(InputDelivered)] == ["launch"]
 
 
 async def test_what_a_failed_turn_stranded_is_cleared_too(tmp_path, stand):

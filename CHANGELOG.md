@@ -17,6 +17,14 @@
   name an existing event, and a range lines of that event's text body, or the whole write is refused naming it. A body in `blobs/`
   keeps its range as given, and a citation of something its citer was never handed is kept as its claim. `cited` is the check, for
   an extension's own writes.
+- The launch offer: a fresh start's `agent.instruct` offers what that launch hands the harness, its instructions and its goal,
+  and the goal goes as the first delivery under that offer's id, so `AgentSpec.goal` is a `Delivery` and each driver sends it as
+  it sends any input. The first input a harness says it took confirms the launch. A native resume offers nothing.
+  `platoon_harness.testing.goal` makes one for a test, and the conformance check `delivered_text_in_next_prompt` holds a driver to
+  saying its goal landed under the launch's id. See ADR 0037.
+- A completed tool item whose `native_id` is the anchor a read went under confirms that read, with the evidence `tool_item`: an
+  offer is confirmed only from its harness's own report. The surface hands a steer notice and a body only it could read under
+  the call's anchor too.
 - `blob.get` reads the body of an event its caller was handed or made, and answers any other `not_found`, as a miss; a person or a
   program reads any. `blob.hash`, a runtime-only query, lets the tool plane read a body in `blobs/` without a model seeing its hash.
 - SwarmChat's Board and Map over a session: `view_posts` and `view_activity` answer from the projection in SwarmChat's shapes,
@@ -228,7 +236,8 @@
   writers and a mark for whether content could reach an agent through it. Every incident gap is one `gap.recorded`, payload 2,
   with `since` naming where one recorded in a turn began: `runtime.start` writes `crash_window` beside `turn.lost`, which at
   payload 2 names no gap, and `agent.takeover` records `takeover` where the hold begins, no longer at the release.
-  `exposure_unconfirmed`, which nothing wrote, has left the set. The wire protocol is 2.
+  `exposure_unconfirmed`, which nothing wrote, has left the set. The wire protocol is 2, which also hands a goal as a
+  `Delivery`. `context.delivered` is at payload 3 and says how its offer was made.
 - Tool descriptions describe and never ask: `based_on` reads "Refs this write rests on.", and `board.get` no longer says to cite.
   A refusal that said to store a body and cite its hash says to store a body.
 - The `changes` report has left the driver vocabulary, with `Changed` and `change.recorded`, as only the runtime observes a

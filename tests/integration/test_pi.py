@@ -46,6 +46,7 @@ from platoon_harness.testing import (
     ToolCall,
     chat_access,
     check_driver,
+    goal,
 )
 from platoon_harness.testing.loopback import answer
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
@@ -159,7 +160,8 @@ def on_fake_model(tmp_path: Path, fake: FakeModel, *, settings: Any = None, **fi
     home = tmp_path / "home"
     own_setup(home, fake, **(settings or {}))
     spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
-    return AgentSpec.model_validate({**spec, "access": {"HOME": Secret(str(home))}, "env": {OFFLINE: "1"}, **fields})
+    given = {**spec, "access": {"HOME": Secret(str(home))}, "env": {OFFLINE: "1"}, **fields}
+    return AgentSpec.model_validate({**given, "goal": goal(given["goal"])})
 
 
 def tool(name: str, id: str, **arguments: Any) -> ToolCall:
@@ -215,7 +217,13 @@ async def test_a_login_settings_and_extensions_of_the_user_s_stay_theirs(tmp_pat
 async def test_a_role_with_no_login_is_refused_and_says_how_to_sign_in(tmp_path):
     (tmp_path / "home").mkdir()
     (tmp_path / "work").mkdir()
-    fields = {"agent": "ada", "role": "worker", "goal": "go", "cwd": tmp_path / "work", "folder": tmp_path / "ada"}
+    fields = {
+        "agent": "ada",
+        "role": "worker",
+        "goal": goal("go"),
+        "cwd": tmp_path / "work",
+        "folder": tmp_path / "ada",
+    }
 
     for model in (None, "openai/gpt-5.4"):
         spec = AgentSpec(**fields, model=model, env={"HOME": str(tmp_path / "home"), OFFLINE: "1"})
@@ -544,7 +552,7 @@ async def test_a_steer_during_a_model_call_is_in_the_next_one_within_the_turn(tm
         await asyncio.wait_for(model.call(0), TIMEOUT)
         await driver.deliver(steer)
         model.release()
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -632,7 +640,7 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
         await first.start(spec, heard)
         native = (await heard.until(Ready)).native
         await first.deliver(landed)
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         record = Record.read(spec.folder)
         assert record is not None
@@ -814,7 +822,7 @@ async def test_a_resumed_session_takes_the_instructions_it_is_handed(tmp_path):
         await driver.stop(2.0)
 
         resumed, heard = PiDriver(), Heard()
-        again = {"resume": native, "goal": "", "instructions": "BRAVO-TWO"}
+        again = {"resume": native, "goal": None, "instructions": "BRAVO-TWO"}
         await resumed.start(spec.model_copy(update=again), heard)
         await heard.until(Ready)
         await resumed.deliver(Delivery(input="41", boundary="turn", text="again", items=()))
@@ -849,6 +857,19 @@ async def test_a_spawn_carries_the_anchor_of_the_call_that_made_it(tmp_path, mon
         spawned, under = await clients.a_spawn_and_the_call_that_made_it(team, tmp_path)
 
     assert (list(spawned.native), under) == (["platoon-harness/callId"], [])
+
+
+async def test_a_read_through_the_shim_stays_unconfirmed_and_the_launch_is_confirmed_by_the_first_input(
+    tmp_path, monkeypatch
+):
+    """Pi's calls reach us through the shim, whose id no item holds, so nothing of pi's says a read's result came."""
+    async with FakeModel(ToolCall("mcp__ph__message_read", {"after": 0}, id="call_read"), "read it") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        read, confirmations = await clients.a_read_and_what_confirmed_it(team, tmp_path)
+
+    assert list(read.native) == ["platoon-harness/callId"]
+    assert sorted(event.data["how"] for event in confirmations) == ["launch", "wake"]
+    assert {event.data["evidence"] for event in confirmations} == {"message_start"}
 
 
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):

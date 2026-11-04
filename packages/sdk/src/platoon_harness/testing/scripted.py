@@ -187,8 +187,9 @@ class ScriptedDriver:
 
     async def _run(self) -> None:
         try:
-            if self._spec.goal and self._spec.resume is None:
-                await self._turn(self._spec.goal)
+            if self._spec.goal is not None and self._spec.resume is None:
+                await self._land(self._spec.goal, "turn_start")
+                await self._turn()
             while self._capabilities.persistent:
                 delivery = await self._next_delivery()
                 await self._land(delivery, "turn_start")

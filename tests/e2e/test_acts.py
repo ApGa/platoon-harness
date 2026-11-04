@@ -60,7 +60,7 @@ async def test_a_person_s_message_from_the_browser_enters_a_wire_harness_s_input
     told = [message["content"] for message in transcript if message["role"] == "user"]
 
     assert [event.gist for event in sent] == ["Fix the flaky test"]
-    assert [event.agent for event in delivered] == ["bob"]
+    assert [(event.agent, event.data["how"]) for event in delivered] == [("bob", "wake"), ("bob", "launch")]
     assert sum("Fix the flaky test" in text for text in told) == 1
     assert errors == []
 

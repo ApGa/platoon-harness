@@ -49,6 +49,7 @@ from platoon_harness.testing import (
     ToolCall,
     chat_access,
     check_driver,
+    goal,
 )
 from platoon_harness.testing.loopback import Loopback, Message, answer
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
@@ -140,7 +141,8 @@ def on_fake_model(tmp_path: Path, fake: FakeModel, **fields: Any) -> AgentSpec:
     work.mkdir(exist_ok=True)
     given = access(tmp_path / "home")(fake)
     spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
-    return AgentSpec.model_validate({**spec, "access": given, **fields})
+    fields = {**spec, "access": given, **fields}
+    return AgentSpec.model_validate({**fields, "goal": goal(fields["goal"])})
 
 
 def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role: Any) -> Team:
@@ -168,7 +170,7 @@ class Allowing(Heard):
 
 async def test_a_role_with_no_key_is_refused_and_says_how_to_sign_in(tmp_path):
     (tmp_path / "work").mkdir()
-    spec = AgentSpec(agent="ada", role="worker", goal="go", cwd=tmp_path / "work", folder=tmp_path / "ada")
+    spec = AgentSpec(agent="ada", role="worker", goal=goal("go"), cwd=tmp_path / "work", folder=tmp_path / "ada")
     driver = OpenHandsDriver()
     with pytest.raises(DriverError, match="OPENAI_API_KEY"):
         await driver.start(spec.model_copy(update={"env": {"HOME": str(tmp_path / "home")}}), Heard())
@@ -264,7 +266,7 @@ async def test_a_message_waits_while_an_approval_is_open_and_lands_after_what_wa
         asked = await heard.until(ApprovalRequested)
         await driver.deliver(Delivery(input="41", boundary="model_call", text="the word is cinnabar", items=()))
         await driver.answer(asked.id, "allow")
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -289,7 +291,7 @@ async def test_a_message_during_a_model_call_that_asks_waits_for_the_runtime_s_a
         await asyncio.wait_for(model.call(0), TIMEOUT)
         await driver.deliver(Delivery(input="41", boundary="model_call", text="the word is cinnabar", items=()))
         model.release()
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
@@ -399,7 +401,7 @@ async def ran(ticks, folder):
     worker = Worker()
     conversation = Conversation(worker, ticks)
     agent.start = lambda *_, **__: conversation
-    spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": folder, "folder": folder / str(ticks), "model": "m"}
+    spec = {"agent": "ada", "role": "worker", "cwd": folder, "folder": folder / str(ticks), "model": "m"}
     heard = []
 
     async def report(said):
@@ -496,7 +498,7 @@ async def test_a_resumed_harness_knows_what_landed_after_a_kill(tmp_path):
         await first.start(spec, heard)
         native = (await heard.until(Ready)).native
         await first.deliver(landed)
-        delivered = await heard.until(InputDelivered)
+        delivered = await heard.until(InputDelivered, lambda landed: landed.input == "41")
         await heard.until(TurnEnded)
         record = Record.read(spec.folder)
         assert record is not None
@@ -567,7 +569,10 @@ async def test_a_person_s_message_reaches_the_request_that_carried_it(tmp_path, 
             started = (await of_type(session, "agent.started"))[0]
 
     assert model.calls[0].says("cinnabar")
-    assert [(event.data["boundary"], event.data["evidence"]) for event in delivered] == [("turn", "request")]
+    assert [(event.data["how"], event.data["boundary"], event.data["evidence"]) for event in delivered] == [
+        ("wake", "turn", "request"),
+        ("launch", "turn", "request"),
+    ]
     assert started.data["effective_model"] == MODEL and started.data["declared"]["approvals"] == "native"
     assert started.data["verified"]["tools"] == "visible"
 

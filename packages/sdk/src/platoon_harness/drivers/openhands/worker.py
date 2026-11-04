@@ -187,8 +187,8 @@ class Worker:
         self._put(Ready(native=str(conversation.id), version=sdk, effective_model=spec.model, tools_visible=tools))
         if agent.pending(conversation):
             await asyncio.to_thread(conversation.reject_pending_actions, _LEFT)
-        if spec.goal and spec.resume is None:
-            self._begin(spec.goal)
+        if spec.goal is not None and spec.resume is None:
+            await self.deliver(spec.goal)
 
     async def deliver(self, delivery: Delivery) -> None:
         """Take a delivery: it begins a turn, or goes to the one under way once its run pauses, landing at a later model
@@ -242,9 +242,7 @@ class Worker:
 
     # The turn.
 
-    def _begin(self, goal: str | None = None) -> None:
-        if goal is not None:
-            self._outbox.append(goal)
+    def _begin(self) -> None:
         self._interrupted = False
         self._turn = asyncio.create_task(self._take_turn())
 

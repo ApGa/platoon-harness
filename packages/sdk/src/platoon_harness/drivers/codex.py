@@ -276,8 +276,8 @@ class CodexDriver:
         env = harness_env(spec, *_SIGN_IN)
         self._launched = await Process.launch((_CODEX, "app-server"), spec, report, read=self._read, env=env)
         await self._handshake(spec)
-        if spec.goal and spec.resume is None:
-            await self._hand_over(spec.goal)
+        if spec.goal is not None and spec.resume is None:
+            await self.deliver(spec.goal)
 
     async def _handshake(self, spec: AgentSpec) -> None:
         """Open the thread, which answers with what `ready` needs and calls no model."""
@@ -318,11 +318,11 @@ class CodexDriver:
         except Closed as error:
             raise self._lost() from error
 
-    async def _hand_over(self, text: str, input: str | None = None) -> None:
+    async def _hand_over(self, text: str, input: str) -> None:
         """`turn/start` steers a turn under way and otherwise begins one, so no turn can end between a look and a send.
         A steer lands at the next model call."""
-        params = {"threadId": self._native, "input": [{"type": "text", "text": text}]}
-        await self._call("turn/start", params if input is None else {**params, "clientUserMessageId": input})
+        params = {"threadId": self._native, "input": [{"type": "text", "text": text}], "clientUserMessageId": input}
+        await self._call("turn/start", params)
 
     async def deliver(self, delivery: Delivery) -> None:
         self._unlanded.add(delivery.input)

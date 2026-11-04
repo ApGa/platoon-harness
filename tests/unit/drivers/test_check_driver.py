@@ -13,6 +13,7 @@ from platoon_harness.drivers import (
     ChildSeen,
     DriverError,
     Exited,
+    InputDelivered,
     Item,
     ModelCall,
     Ready,
@@ -24,7 +25,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.process import Process
 from platoon_harness.drivers.wire import WireDriver
-from platoon_harness.testing import TOOL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
+from platoon_harness.testing import TOOL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model, goal
 from platoon_harness.testing.conformance import _CHECKS
 from platoon_harness.testing.model import OUTPUT_TOKENS
 
@@ -176,17 +177,39 @@ async def test_a_delivery_that_never_reaches_the_prompt_fails(tmp_path):
     class Forgetful(Filtered):
         async def _land(self, delivery, evidence):
             await super()._land(delivery, evidence)
-            self._messages.pop()
+            if delivery.input != "launch":
+                self._messages.pop()
 
     result = await check(Forgetful, tmp_path)
 
     assert result.get("delivered_text_in_next_prompt").reason == "the delivered text is not in the next prompt"
 
 
+async def test_a_goal_that_never_reaches_the_first_prompt_fails(tmp_path):
+    class Forgetful(Filtered):
+        async def _land(self, delivery, evidence):
+            await super()._land(delivery, evidence)
+            if delivery.input == "launch":
+                self._messages.pop()
+
+    result = await check(Forgetful, tmp_path)
+
+    assert result.get("delivered_text_in_next_prompt").reason == "the goal is not in the first prompt"
+
+
+async def test_a_goal_never_said_to_have_landed_under_its_launch_offer_s_id_fails(tmp_path):
+    def unsaid(report):
+        return None if isinstance(report, InputDelivered) and report.input == "launch" else report
+
+    result = await check(lambda: Filtered(unsaid), tmp_path)
+
+    assert result.get("delivered_text_in_next_prompt").reason == "a `InputDelivered` report never came"
+
+
 async def test_a_turn_taken_on_no_goal_fails(tmp_path):
     class Restless(Filtered):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:
-            return await super().start(spec.model_copy(update={"goal": spec.goal or "carry on"}), report)
+            return await super().start(spec.model_copy(update={"goal": spec.goal or goal("carry on")}), report)
 
     result = await check(Restless, tmp_path)
 
@@ -435,7 +458,7 @@ async def test_a_preamble_sent_again_each_turn_fails(tmp_path):
 
     result = await check(Repeating, tmp_path)
 
-    assert result.get("preamble_once_per_request").reason == "the preamble came [1, 1, 2] times in its requests"
+    assert result.get("preamble_once_per_request").reason == "the preamble came [2, 2, 3] times in its requests"
 
 
 async def test_a_preamble_that_never_reaches_a_request_fails(tmp_path):

@@ -96,31 +96,6 @@ class ToolBinding(Model):
     bin: Path
 
 
-class AgentSpec(Model):
-    """One agent to start, or to resume from the native id in `resume`.
-
-    `folder` is the agent's own directory, for its record, log and native home. `access` maps variable names to model
-    access, URLs included, and reaches only the harness's environment. `effort` goes to the harness as it stands, and
-    `sandbox` is one of the values the driver declared. `allow_native_children` lets the harness start agents of its
-    own.
-    """
-
-    agent: str
-    role: str
-    goal: str
-    cwd: Path
-    folder: Path
-    model: str | None = None
-    effort: str | None = None
-    sandbox: str | None = None
-    allow_native_children: bool = False
-    tools: ToolBinding | None = None
-    access: Mapping[str, Secret] = {}
-    env: Mapping[str, str] = {}
-    instructions: str | None = None
-    resume: str | None = None
-
-
 class Offered(Model):
     """One entry handed over: its ref, who sent it, what a reader sees first, and whether it has a body, which
     `blob.get` reads by its ref."""
@@ -141,6 +116,30 @@ class Delivery(Model):
     text: str
     items: tuple[Offered, ...]
     behind: int = 0
+
+
+class AgentSpec(Model):
+    """One agent to start, or to resume from the native id in `resume`. `goal` is the first delivery of a fresh start,
+    under the id of the offer that launched it, so its harness says it landed as it says any input did, and None when
+    there is none, as on a resume. `folder` is the agent's own directory, for its record, log and native home. `access`
+    maps variable names to model access, URLs included, and reaches only the harness's environment. `effort` goes to the
+    harness as it stands, and `sandbox` is one of the values the driver declared. `allow_native_children` lets the
+    harness start agents of its own."""
+
+    agent: str
+    role: str
+    goal: Delivery | None = None
+    cwd: Path
+    folder: Path
+    model: str | None = None
+    effort: str | None = None
+    sandbox: str | None = None
+    allow_native_children: bool = False
+    tools: ToolBinding | None = None
+    access: Mapping[str, Secret] = {}
+    env: Mapping[str, str] = {}
+    instructions: str | None = None
+    resume: str | None = None
 
 
 @runtime_checkable

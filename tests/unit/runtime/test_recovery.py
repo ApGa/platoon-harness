@@ -32,7 +32,7 @@ from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
 from ...integration.scripts import ran_before
-from .support import SECONDS, harness, in_state, journal, of_type, rebuilt_equals_live, scripted, solo, until
+from .support import SECONDS, harness, in_state, journal, of_type, offers, rebuilt_equals_live, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -428,7 +428,7 @@ async def test_a_driver_that_cannot_say_counts_as_not_knowing(tmp_path):
     async with Session.resume("s", root=tmp_path) as session:
         await until(lambda: of_type(session, "context.delivered"), session)
 
-        assert len(await of_type(session, "context.offered")) == 2
+        assert len(await offers(session)) == 2
 
 
 @pytest.mark.parametrize("found", ["not_landed", "unknown"])
@@ -437,11 +437,11 @@ async def test_a_delivery_that_did_not_land_goes_again_under_a_new_input(tmp_pat
 
     async with Session.resume("s", root=tmp_path) as session:
         await until(lambda: of_type(session, "context.delivered"), session)
-        offers = await of_type(session, "context.offered")
+        offered = await offers(session)
 
-    assert len(offers) == 2
-    assert [item["ref"] for item in offers[0].data["items"]] == [item["ref"] for item in offers[1].data["items"]]
-    assert offers[0].seq != offers[1].seq
+    assert len(offered) == 2
+    assert [item["ref"] for item in offered[0].data["items"]] == [item["ref"] for item in offered[1].data["items"]]
+    assert offered[0].seq != offered[1].seq
 
 
 async def test_a_delivery_that_landed_but_began_no_turn_goes_again(tmp_path):
@@ -450,7 +450,7 @@ async def test_a_delivery_that_landed_but_began_no_turn_goes_again(tmp_path):
     async with Session.resume("s", root=tmp_path) as session:
         await until(lambda: of_type(session, "turn.started"), session)
 
-        assert len(await of_type(session, "context.offered")) == 2
+        assert len(await offers(session)) == 2
 
 
 async def test_a_delivery_that_landed_and_began_its_turn_counts_as_delivered(tmp_path):
@@ -475,7 +475,7 @@ async def test_a_delivery_that_landed_and_began_its_turn_counts_as_delivered(tmp
         finished = await until(lambda: of_type(session, "context.delivered"), session)
 
         assert finished[0].data["evidence"] == "reconcile"
-        assert len(await of_type(session, "context.offered")) == 1
+        assert len(await offers(session)) == 1
         assert (await of_type(session, "turn.lost"))[0].data is None
         assert [gap.data["what"] for gap in await of_type(session, "gap.recorded")] == ["crash_window"]
 
@@ -977,9 +977,9 @@ async def test_a_steer_the_harness_took_and_never_landed_survives_a_crash(tmp_pa
     await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
-        offers = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) > 2)
+        offered = await until(lambda: offers(session), session, lambda found: len(found) > 2)
 
-    assert "inbox/bob@2" in [item["ref"] for item in offers[-1].data["items"]]
+    assert "inbox/bob@2" in [item["ref"] for item in offered[-1].data["items"]]
 
 
 async def test_a_crash_after_a_turn_ended_gives_back_what_it_took_and_never_landed(tmp_path):
@@ -1001,10 +1001,10 @@ async def test_a_crash_after_a_turn_ended_gives_back_what_it_took_and_never_land
     await abandon(session)
 
     async with Session.resume("s", root=tmp_path) as session:
-        offers = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) > 2)
+        offered = await until(lambda: offers(session), session, lambda found: len(found) > 2)
         said = await until(lambda: of_type(session, "item.recorded"), session)
 
-    assert "inbox/bob@2" in [item["ref"] for item in offers[-1].data["items"]]
+    assert "inbox/bob@2" in [item["ref"] for item in offered[-1].data["items"]]
     assert said[-1].gist == "heard"
 
 
@@ -1026,12 +1026,12 @@ async def test_a_second_crash_before_the_next_turn_tells_it_again(tmp_path):
     async with Session.resume("s", root=tmp_path) as session:
         items = await until(lambda: of_type(session, "item.recorded"), session)
         told = await notices(session)
-        offers = await of_type(session, "context.offered")
+        offered = await offers(session)
 
     assert items[-1].gist == "I looked first"
     assert len({event.gist for event in told}) == 1 and len(told) == 2
     ref = f"{told[0].stream}@{told[0].version}"
-    assert len([offer for offer in offers if ref in [item["ref"] for item in offer.data["items"]]]) == 2
+    assert len([offer for offer in offered if ref in [item["ref"] for item in offer.data["items"]]]) == 2
 
 
 @pytest.mark.parametrize("reason", sorted(CUT_OFF))

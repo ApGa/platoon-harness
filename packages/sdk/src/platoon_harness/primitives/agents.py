@@ -247,8 +247,9 @@ class Agents(View):
     def handed(self, event: Event) -> None:
         """A parent's message asks once it lands in a turn: at once in a tool's result, and by a handover once the
         harness says it landed, which for a steer can be in the turn after the one it was offered in. A v1 offer or
-        landing asked nothing."""
-        lands = event.type == "context.delivered" or event.data["how"] in IN_A_RESULT
+        landing asked nothing, and a confirmation of what a result showed is no second landing."""
+        shown = event.data.get("how") in IN_A_RESULT
+        lands = shown if event.type == "context.offered" else not shown
         if lands and event.data.get("asked", False):
             self.db.execute("UPDATE v_agents SET asked = 1 WHERE name = ?", (event.agent,))
 

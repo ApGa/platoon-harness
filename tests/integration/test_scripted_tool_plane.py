@@ -11,7 +11,7 @@ from platoon_harness.drivers import AgentSpec, Exited, Ready, ToolBinding, TurnE
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.kernel import Kernel, ManualClock, hash_token
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.testing import Call, Say, ScriptedDriver
+from platoon_harness.testing import Call, Say, ScriptedDriver, goal
 from platoon_harness.tools import ToolServer
 
 from ..unit.drivers.support import Heard
@@ -46,7 +46,9 @@ async def server(kernel: Kernel) -> AsyncIterator[ToolServer]:
 
 def spec(tmp_path: Path, server: ToolServer) -> AgentSpec:
     binding = ToolBinding(url=server.url, token=Secret(TOKEN), namespace="ph", bin=tmp_path)
-    return AgentSpec(agent="bob", role="worker", goal="be bob", cwd=tmp_path, folder=tmp_path / "agent", tools=binding)
+    return AgentSpec(
+        agent="bob", role="worker", goal=goal("be bob"), cwd=tmp_path, folder=tmp_path / "agent", tools=binding
+    )
 
 
 async def test_a_scripted_call_reaches_a_real_op(tmp_path, kernel, server):

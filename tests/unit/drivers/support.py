@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness.drivers import AgentSpec, Report
+from platoon_harness.testing import goal
 
 
 class Heard:
@@ -35,14 +36,15 @@ class Heard:
 
 
 def make_spec(tmp_path: Path, **fields: Any) -> AgentSpec:
+    """A spec whose `goal`, given as text, is handed over as the runtime hands one."""
     return AgentSpec.model_validate(
         {
             "agent": "ada",
             "role": "worker",
-            "goal": "do the thing",
             "cwd": tmp_path,
             "folder": tmp_path / "agents" / "ada",
             **fields,
+            "goal": goal(fields.get("goal", "do the thing")),
         }
     )
 

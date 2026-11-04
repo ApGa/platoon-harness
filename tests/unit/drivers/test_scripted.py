@@ -65,7 +65,16 @@ async def test_say_streams_then_records(tmp_path):
     await heard.until(TurnEnded)
     await driver.stop(1)
 
-    assert [type(report) for report in heard.reports] == [Ready, TurnStarted, Delta, Item, TurnEnded, Exited]
+    assert [type(report) for report in heard.reports] == [
+        Ready,
+        InputDelivered,
+        TurnStarted,
+        Delta,
+        Item,
+        TurnEnded,
+        Exited,
+    ]
+    assert heard.of(InputDelivered)[0].input == "launch"
     assert (heard.of(Item)[0].kind, heard.of(Item)[0].body) == ("message", "hello there")
 
 
@@ -143,7 +152,7 @@ async def test_a_delivery_at_a_turn_boundary_waits_for_the_turn_to_end(tmp_path)
     await driver.stop(1)
 
     order = [type(report) for report in heard.reports]
-    assert order.index(TurnEnded) < order.index(InputDelivered)
+    assert order.index(TurnEnded) < len(order) - order[::-1].index(InputDelivered) - 1
 
 
 async def test_a_steer_lands_between_steps(tmp_path):
@@ -152,7 +161,7 @@ async def test_a_steer_lands_between_steps(tmp_path):
 
     await driver.deliver(delivery(boundary="tool"))
 
-    landed = await heard.until(InputDelivered)
+    landed = await heard.until(InputDelivered, lambda landed: landed.input != "launch")
     assert (landed.boundary, landed.evidence) == ("tool", "between_steps")
     await heard.until(Item)
     await driver.stop(1)
@@ -265,7 +274,7 @@ async def test_reconcile_tells_landed_from_waiting_from_unknown(tmp_path):
     driver, heard = await started(tmp_path, [EndTurn()], [Hang()])
     await heard.until(TurnEnded)
     await driver.deliver(delivery("landed"))
-    await heard.until(InputDelivered)
+    await heard.until(InputDelivered, lambda landed: landed.input == "landed")
     await driver.deliver(delivery("waiting"))
 
     assert await driver.reconcile("waiting") == "not_landed"

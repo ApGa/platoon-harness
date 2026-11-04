@@ -38,7 +38,7 @@ from platoon_harness.primitives import Verdict
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
-from .support import SECONDS, harness, in_state, journal, of_type, scripted, solo, until
+from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -543,7 +543,9 @@ async def test_a_goal_comes_with_its_body(tmp_path, recording):
         await session.spawn("ada", "bob", "the short of it", body="the long of it")
         await in_state(session, "ada", "idle", "running")
 
-    assert recording.specs[0].goal == "the short of it\n\nthe long of it"
+    goal = recording.specs[0].goal
+    assert goal is not None and goal.text == "the short of it\n\nthe long of it"
+    assert [(item.ref, item.gist, item.body) for item in goal.items] == [("agent/ada@1", "the short of it", True)]
 
 
 # Delivery.
@@ -588,7 +590,7 @@ async def test_a_delivery_with_no_harness_fails_and_is_offered_again(tmp_path):
 
         host._links["bob"] = link
         await until(lambda: of_type(session, "context.delivered"), session)
-        assert len(await of_type(session, "context.offered")) == 2
+        assert len(await offers(session)) == 2
 
 
 # Around a delivery that hangs.
@@ -673,10 +675,10 @@ async def test_deliveries_wait_while_a_takeover_holds_an_agent(tmp_path):
         await session.send("@bob", "while held")
 
         assert (await session.status("@bob"))["state"] == "held"
-        assert len(await of_type(session, "context.offered")) == 1
+        assert len(await offers(session)) == 1
 
         await session.release("@bob")
-        offered = await until(lambda: of_type(session, "context.offered"), session, lambda found: len(found) == 2)
+        offered = await until(lambda: offers(session), session, lambda found: len(found) == 2)
 
         assert offered[-1].data["items"][0]["ref"] == "inbox/bob@2"
 

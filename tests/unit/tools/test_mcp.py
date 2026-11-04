@@ -1211,3 +1211,27 @@ async def test_every_ref_a_model_is_shown_is_an_event_ref(kernel, server, lead, 
     assert any("change course" in text for text in texts), "a steer notice was carried"
     assert any("Refused invalid" in text for text in texts)
     assert value_of(shown[4])["entries"][0]["ref"] == "inbox/w1@1"
+
+
+async def test_a_notice_and_a_blob_offer_are_confirmed_by_the_tool_item_that_carried_them(kernel, server, lead):
+    """What the surface hands over beside a result, a steer notice and a body only it could read, goes under the call's
+    anchor, so the tool item that holds that call's result confirms it, as it confirms the read itself."""
+    _, client = await enrolled(kernel, server, "s1", role="steered", by=lead[0])
+    await lead[1].call("board_post", {"board": "notes", "name": "big", "gist": "big", "body": "line\n" * 20_000})
+    await start_turn(kernel, "s1")
+    await send(kernel, lead[0], "@s1", "change course")
+    head = kernel.head
+
+    result = await client.call("board_get", {"board": "notes", "name": "big"}, claudecode__toolUseId="toolu_9")
+    offered = of_type(kernel, "context.offered", after=head)
+    unconfirmed = of_type(kernel, "context.delivered", after=head)
+    item = {"type": "item", "kind": "tool", "phase": "completed", "gist": "board_get", "native_id": "toolu_9"}
+    result_of(await kernel.submit(kernel.runtime, "agent.report", {"agent": "s1", "report": item}))
+
+    assert "change course" in result["content"][-1]["text"]
+    assert sorted(offer.data["how"] for offer in offered) == ["notice", "read", "read"]
+    assert {offer.native["claudecode/toolUseId"] for offer in offered} == {"toolu_9"}
+    assert unconfirmed == []
+    confirmations = of_type(kernel, "context.delivered", after=head)
+    assert sorted(event.data["input"] for event in confirmations) == sorted(offer.seq for offer in offered)
+    assert {event.data["evidence"] for event in confirmations} == {"tool_item"}
