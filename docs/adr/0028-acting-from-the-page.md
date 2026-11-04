@@ -47,3 +47,4 @@ request can reach `web` and its answer never reach the page.
 
 - `tests/e2e/test_acts.py`, `test_guards.py`, `test_follow.py` and `test_harnesses.py`, in Chromium's headless shell.
 - `tests/unit/web/test_server.py`, `test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it`.
+- `tests/live/test_web.py`, live run 58, on a Claude Code lead and a Codex worker: see STATUS.
