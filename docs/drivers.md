@@ -281,7 +281,8 @@ Each report is a `report` notification whose params are the report, with its `ty
 - **Credentials never travel in a frame.** `spec.access` names variables, and their values are in your environment. So is the tool
   token, in `PLATOON_HARNESS_TOKEN`, with `PLATOON_HARNESS_URL` beside it. `ph` is on your `PATH`.
 - **Your environment is an allowlist:** `PATH`, `HOME`, a `TMPDIR` of your own, and what the spec names. Nothing else is inherited,
-  but what a driver in Python names in `WireDriver(command, inherited)`, as `openhands` names the proxy variables.
+  but what a driver in Python names in `WireDriver(command, inherited)`, as `openhands` names the proxy variables and what tells
+  Python where its modules are, to describe your program as to start it.
 - **A line is at most 16 MiB.** Past that the agent stops with a gap, since the line may have held an answer.
 - **Stdout is the protocol.** A line that is not a frame costs you a `native` frame and a gap, and an unknown report the same.
 - **Exit when stdin ends.** A program still there is sent `SIGTERM`, then `SIGKILL`.
@@ -292,20 +293,26 @@ Each report is a `report` notification whose params are the report, with its `ty
 ## OpenHands: a wire worker
 
 `harness = "openhands"` runs a wire worker per agent, `python -P -m platoon_harness.drivers.openhands` on the runtime's own
-interpreter, so nothing is looked up on `PATH` and nothing else is installed. The worker alone loads OpenHands, which the SDK's
-`openhands` extra brings, pinning `openhands-sdk` and `openhands-tools` at 1.59.0 exactly:
+interpreter, so nothing is looked up on `PATH` and nothing else is installed. It finds its modules where the runtime does, as
+`PYTHONPATH`, `PYTHONUSERBASE` and the rest of what tells Python where they are pass by name, and `-P` keeps the workspace it
+runs in off its path. The worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and
+`openhands-tools` at 1.59.0 exactly. Install it beside the SDK, for the interpreter that runs the runtime, which is the command
+line's when it starts a session:
 
 ```console
 $ pip install 'platoon-harness-sdk[openhands]'
+$ uv tool install platoon-harness-cli --with 'platoon-harness-sdk[openhands]'
 ```
 
-`doctor` shows it with the version of the OpenHands SDK it runs, or says it is not installed and how to install it, and without the
-extra an agent's start is refused in the same words. Nothing else changes: the SDK, the runtime and the command line never load it.
+`doctor` shows it with the version of the OpenHands SDK, from its metadata, and its login unknown, as OpenHands keeps none and
+only a role's auth profile gives it a key. Without the extra, `doctor` names the interpreter to install it for, and an agent's
+start is refused in the same words. Nothing else changes: the SDK, the runtime and the command line never load it.
 
 **A proprietary dependency.** `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own
 terms ("All rights reserved"), so the extra installed from an index brings it in unless you exclude it. Nothing the worker runs
 imports it, as only `lmnr`'s instrumentation of the Claude Agent SDK does, and the worker runs without it: this repository's lock
-leaves it out with `exclude-dependencies`, so no test here has it. With uv, `--excludes` takes a file that names it:
+leaves it out with `exclude-dependencies`, so no test here has it. With uv, `--excludes` takes a file that names it, and `uv tool
+install` takes it too:
 
 ```console
 $ echo lmnr-claude-code-proxy > excludes.txt
@@ -323,8 +330,8 @@ auth = "openai"
 ```
 
 The worker is then a wire program like any other: the shell's proxy variables and `SSL_CERT_FILE` reach it only where its auth
-profile names them, and a tmux its agents start keeps its socket in the directory every tmux of the user's shares. Each rule it
-keeps, in a sentence:
+profile names them, nothing that tells Python where modules are reaches it, so its interpreter finds its own, and a tmux its
+agents start keeps its socket in the directory every tmux of the user's shares. Each rule it keeps, in a sentence:
 
 - **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can
   abandon a model call.

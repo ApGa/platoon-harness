@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import tempfile
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -52,7 +53,6 @@ from ..env import Redactor, secrets_of
 _NAME = "openhands"
 _SDK = "openhands-sdk"
 _TOOLS = "openhands-tools"
-_INSTALL = "pip install 'platoon-harness-sdk[openhands]'"
 _KEY = "OPENAI_API_KEY"
 _URL = "OPENAI_BASE_URL"
 _TOOL_TIMEOUT_S = 300.0
@@ -89,12 +89,15 @@ __all__ = ["Worker", "sdk_version"]
 
 def sdk_version() -> str:
     """The version of the OpenHands SDK here, from its metadata, which loads nothing. Without it or its tools, which our
-    `openhands` extra brings, the worker cannot run, and this says how to install them."""
+    `openhands` extra brings, the worker cannot run, and this names the interpreter to install them for."""
     try:
         sdk = version(_SDK)
         version(_TOOLS)
     except PackageNotFoundError as error:
-        raise DriverError(f"{error.name} is not installed: install the openhands extra, as in `{_INSTALL}`") from error
+        raise DriverError(
+            f"{error.name} is not installed for {sys.executable}: install the SDK's `openhands` extra there, "
+            "`platoon-harness-sdk[openhands]`"
+        ) from error
     return sdk
 
 

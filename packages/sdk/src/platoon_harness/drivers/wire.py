@@ -59,7 +59,8 @@ def _from_frame(frame: Mapping[str, Any], environ: Mapping[str, str]) -> AgentSp
 
 class WireDriver:
     """The one adapter for a driver in another process. One instance runs one program for one agent, on the environment
-    every harness has and the variables of ours that `inherited` names, as a harness may need them to sign in."""
+    every harness has and the variables of ours that `inherited` names, such as what a harness needs to sign in, both to
+    describe it and to start it."""
 
     def __init__(self, command: Sequence[str], inherited: Sequence[str] = ()) -> None:
         self._command = tuple(command)
@@ -68,11 +69,6 @@ class WireDriver:
         self._process: Process | None = None
         self._peer: Peer | None = None
         self._log = LOG
-
-    @property
-    def command(self) -> tuple[str, ...]:
-        """The program this driver runs, with its arguments."""
-        return self._command
 
     def describe(self) -> DriverInfo:
         """Ask the program, which stays up only long enough to answer, so no harness starts. This blocks, as the method
@@ -90,7 +86,7 @@ class WireDriver:
                 self._command,
                 input=json.dumps(request).encode() + b"\n",
                 capture_output=True,
-                env=inherited(),
+                env=inherited(*self._inherited),
                 timeout=_DESCRIBE_TIMEOUT,
                 check=False,
             )

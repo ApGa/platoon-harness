@@ -6,6 +6,7 @@ import os
 import re
 import signal
 import stat
+import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
@@ -14,7 +15,7 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Driver, DriverError, Exited, openhands
-from platoon_harness.drivers.openhands import WORKER, OpenHandsDriver, worker
+from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import Record
 from platoon_harness.extensions import DRIVERS, load
 
@@ -22,7 +23,36 @@ from .support import Heard, make_spec
 
 pytestmark = pytest.mark.timeout(30)
 
-INSTALL = "pip install 'platoon-harness-sdk[openhands]'"
+KEYLESS = "openhands signs in with a key alone"
+"""How the worker refuses a start with no key, which it can say only once it has loaded."""
+
+ON_PYTHONPATH = """
+import asyncio
+import sys
+from pathlib import Path
+
+from platoon_harness.drivers import AgentSpec, DriverError
+from platoon_harness.drivers.openhands import OpenHandsDriver
+
+
+async def heard(report):
+    pass
+
+
+async def main(work):
+    driver = OpenHandsDriver()
+    print(driver.describe().name)
+    try:
+        await driver.start(AgentSpec(agent="ada", role="worker", goal="", cwd=work, folder=work / "ada"), heard)
+    except DriverError as error:
+        print(error)
+    finally:
+        await driver.stop(2.0)
+
+
+asyncio.run(main(Path(sys.argv[1])))
+"""
+"""A runtime's program: it describes the worker, and starts it with no key."""
 
 STAND_IN = """
 import json
@@ -54,16 +84,26 @@ def stand_in(tmp_path, monkeypatch):
     """A worker that says what environment it started in, in place of the real one."""
     program = tmp_path / "worker.py"
     program.write_text(STAND_IN)
-    monkeypatch.setattr(openhands, "WORKER", (sys.executable, str(program)))
+    monkeypatch.setattr(openhands, "_WORKER", (sys.executable, str(program)))
     return tmp_path / "worker.py.env"
 
 
-def test_the_openhands_harness_is_its_worker_on_the_runtime_s_own_interpreter():
+async def test_the_openhands_harness_is_its_worker_as_a_module_on_the_runtime_s_own_interpreter(tmp_path):
     driver = load(DRIVERS, "openhands")()
+    spec = make_spec(tmp_path, goal="")
+
+    try:
+        with pytest.raises(DriverError, match=KEYLESS):
+            await driver.start(spec, Heard())
+        record = Record.read(spec.folder)
+        assert record is not None
+        ran = Path(f"/proc/{record.pid}/cmdline").read_bytes().split(b"\0")[:-1]
+    finally:
+        await driver.stop(2.0)
 
     assert isinstance(driver, OpenHandsDriver) and isinstance(driver, Driver)
-    assert driver.command == WORKER == (sys.executable, "-P", "-m", "platoon_harness.drivers.openhands")
     assert driver.describe().name == "openhands"
+    assert ran == [os.fsencode(part) for part in (sys.executable, "-P", "-m", "platoon_harness.drivers.openhands")]
 
 
 async def test_no_module_of_the_workspace_it_runs_in_stands_in_for_one_of_the_worker_s(tmp_path):
@@ -73,14 +113,35 @@ async def test_no_module_of_the_workspace_it_runs_in_stands_in_for_one_of_the_wo
     driver = OpenHandsDriver()
 
     try:
-        with pytest.raises(DriverError, match="openhands signs in with a key alone"):
+        with pytest.raises(DriverError, match=KEYLESS):
             await driver.start(make_spec(tmp_path, goal=""), Heard())
     finally:
         await driver.stop(2.0)
 
 
+@pytest.mark.timeout(150)
+def test_a_runtime_that_finds_the_sdk_on_pythonpath_runs_a_worker_that_finds_it_there_too(tmp_path):
+    """As a module system, an install to a prefix or a checkout would have it, on an interpreter that finds none of the
+    SDK alone. The runtime's environment is the shell's, as a detached one's is."""
+    base = sys._base_executable
+    shell = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+    found = {**shell, "PYTHONPATH": os.pathsep.join(filter(None, sys.path))}
+
+    def run(*command: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(command, capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60, check=False)
+
+    alone = run(base, "-P", "-c", "import platoon_harness", env=shell)
+    done = run(base, "-P", "-c", ON_PYTHONPATH, str(tmp_path), env=found)
+
+    assert alone.returncode != 0
+    assert done.stdout.splitlines()[:1] == ["openhands"], done.stderr
+    assert done.stdout.splitlines()[1].startswith(KEYLESS), done.stdout
+
+
 @pytest.mark.parametrize("missing", ["openhands-sdk", "openhands-tools"])
-async def test_without_the_extra_the_worker_refuses_to_start_saying_how_to_install_it(tmp_path, monkeypatch, missing):
+async def test_without_the_extra_the_worker_refuses_to_start_naming_the_interpreter_to_install_it_for(
+    tmp_path, monkeypatch, missing
+):
     found = worker.version
 
     def version(name: str) -> str:
@@ -90,8 +151,9 @@ async def test_without_the_extra_the_worker_refuses_to_start_saying_how_to_insta
 
     monkeypatch.setattr(worker, "version", version)
     spec = make_spec(tmp_path, model="m", access={"OPENAI_API_KEY": Secret("k")})
+    said = f"{missing} is not installed for {sys.executable}: install the SDK's `openhands` extra there, "
 
-    with pytest.raises(DriverError, match=f"^{missing} is not installed: .*{re.escape(INSTALL)}"):
+    with pytest.raises(DriverError, match=f"^{re.escape(said)}`platoon-harness-sdk\\[openhands\\]`$"):
         await worker.Worker().start(spec, Heard())
 
 

@@ -9,7 +9,7 @@ $ platoon-harness doctor
 platoon-harness 0.1.0, SDK 0.1.0
 claude     2.1.316 (Claude Code), plan login
 codex      codex-cli 0.164.0, plan login
-openhands  openhands-sdk is not installed: install the openhands extra, as in `pip install 'platoon-harness-sdk[openhands]'`
+openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness-cli/bin/python: install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`
 pi         not on PATH
 root       ~/.local/state/platoon-harness, on xfs
 sockets    /run/user/1000/platoon-harness
@@ -18,8 +18,8 @@ usable
 ```
 
 It says each harness's version and the kind of its login, from the harness's own status command, and never an account. It exits 0
-when the machine can run sessions and 78 when it cannot. `openhands` is there once the SDK's `openhands` extra is installed, as
-[drivers.md](drivers.md#openhands-a-wire-worker) says.
+when the machine can run sessions and 78 when it cannot. `openhands` is there once the SDK's `openhands` extra is installed for
+the interpreter it names, as [drivers.md](drivers.md#openhands-a-wire-worker) says.
 
 ## Write a team
 

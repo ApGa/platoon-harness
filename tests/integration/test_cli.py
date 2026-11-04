@@ -5,6 +5,7 @@ import asyncio
 import fcntl
 import json
 import os
+import re
 import signal
 import sqlite3
 from collections.abc import AsyncIterator
@@ -648,12 +649,12 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
     assert done.code == 0 and report["usable"]
     found = {harness["name"]: harness for harness in report["harnesses"]}
     assert found["claude"] == {"name": "claude", "found": True, "version": "9.9.9 (fake)", "login": None}
-    assert found["pi"] == {"name": "pi", "found": False}
+    assert found["pi"] == {"name": "pi", "found": False, "reason": "not on PATH"}
     assert report["root"]["path"] == cli.env["PLATOON_HARNESS_HOME"]
     assert {component["name"] for component in report["installed"]["components"]} >= {"claude", "codex", "pi"}
 
 
-async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_a_wire_program(cli: Cli):
+async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_it_writes_no_auth_profile(cli: Cli):
     """The OpenHands CLI is `openhands`, a command of the harness's name that is not what runs it."""
     fake_harnesses(cli, "openhands")
 
@@ -666,18 +667,21 @@ async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_a_wire
     assert init.code == 78 and "openhands" not in init.stderr
 
 
-async def test_doctor_without_the_openhands_extra_says_how_to_install_it(cli: Cli):
+async def test_doctor_and_a_start_without_the_openhands_extra_name_one_interpreter_to_install_it_for(cli: Cli):
     fake_harnesses(cli, "claude")
     without_openhands(cli)
+    team = cli.write("solo.toml", '[roles.bob]\nharness = "openhands"\n')
 
-    done = await cli.run("doctor")
+    doctor = await cli.run("doctor")
+    run = await cli.run("run", "go", "--team", team, "--json")
 
-    assert done.code == 0
-    assert "claude     9.9.9 (fake), login unknown" in done.stdout
-    assert (
-        "openhands  openhands-sdk is not installed: install the openhands extra, as in "
-        "`pip install 'platoon-harness-sdk[openhands]'`"
-    ) in done.stdout
+    told = next(line for line in doctor.stdout.splitlines() if line.startswith("openhands "))
+    reason = run.lines()[-1]["agents"][0]["reason"]
+    interpreter = re.match(r"openhands +openhands-sdk is not installed for (.+?): ", told)
+    assert doctor.code == 0 and "claude     9.9.9 (fake), login unknown" in doctor.stdout
+    assert interpreter is not None and Path(interpreter[1]).is_file(), told
+    assert told.endswith("install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`")
+    assert (run.code, reason) == (1, f"its spawn failed: {told.removeprefix('openhands').lstrip()}")
 
 
 async def test_doctor_with_no_harness_on_path_and_no_openhands_extra_exits_78(cli: Cli):

@@ -981,11 +981,11 @@ which leaves the agent as it stood. A report cannot carry those, so a driver tha
 
 Another process or language speaks line-delimited JSON-RPC 2.0 on stdio, split on LF only, logs on stderr. `WireDriver(command)`
 is the only adapter, verbs equal the Python methods, and `protocol` is an integer refused when unknown. OpenHands runs this
-way, a worker per agent from the SDK's `openhands` extra on the runtime's own interpreter, as the session's one writer is no
-place for a library that takes seconds and some 200 MB to load, keeps one registry of agents a process, holds its lock while
-a tool runs and starts processes a group must own. So the custom-driver path is real and exercised, and where OpenHands'
-pins cannot share an environment, the worker runs from one of its own as a wire command. See
-[ADR 0030](adr/0030-openhands-is-an-extra-of-the-sdk.md).
+way, a worker per agent from the SDK's `openhands` extra on the runtime's own interpreter, finding its modules where the
+runtime does, as the session's one writer is no place for a library that takes seconds and some 200 MB to load, keeps one
+registry of agents a process, holds its lock while a tool runs and starts processes a group must own. So the custom-driver
+path is real and exercised, and where OpenHands' pins cannot share an environment, the worker runs from one of its own as a
+wire command. See [ADR 0030](adr/0030-openhands-is-an-extra-of-the-sdk.md).
 
 ```jsonc
 > {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
@@ -1399,7 +1399,8 @@ Threat tiers stay separate, in docs and in events.
 - **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same
   allowlist plus its token variable. Nothing is inherited by default, so variables that change a harness's behavior or leak a parent's
   identity cannot pass through. A role with no auth profile signs in as the harness does in the user's shell, so a driver adds by name what
-  stops that, such as where its login lives and a proxy. Provider keys stay in auth profiles.
+  stops that, such as where its login lives and a proxy. The OpenHands worker, which is the runtime's own Python, takes by name too what
+  tells Python where modules are, so it finds those the runtime found. Provider keys stay in auth profiles.
 
 ## 16. Observability
 

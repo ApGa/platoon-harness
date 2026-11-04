@@ -148,6 +148,29 @@ async def test_describe_starts_no_harness_and_is_asked_once(tmp_path):
     assert count.read_text() == "x"
 
 
+async def test_a_program_takes_what_its_driver_names_of_ours_to_describe_itself_as_to_start(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAMED", "named")
+    monkeypatch.setenv("UNNAMED", "unnamed")
+    seen = tmp_path / "seen.jsonl"
+    command = raw_program(
+        tmp_path,
+        f"""
+        for frame in frames():
+            with open({str(seen)!r}, "a") as file:
+                file.write(json.dumps([frame["method"], os.environ.get("NAMED"), os.environ.get("UNNAMED")]) + "\\n")
+            reply(frame, {{"protocol": 1, "name": "raw"}} if frame["method"] == "describe" else None)
+    """,
+    )
+    driver = WireDriver(command, ["NAMED"])
+
+    driver.describe()
+    await driver.start(make_spec(tmp_path), Heard())
+    await driver.stop(2)
+
+    lines = [json.loads(line) for line in seen.read_text().splitlines()]
+    assert lines == [["describe", "named", None], ["start", "named", None], ["stop", "named", None]]
+
+
 async def test_an_unknown_protocol_is_refused_both_ways(tmp_path):
     older = raw_program(
         tmp_path,

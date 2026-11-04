@@ -140,23 +140,24 @@
   agents are told them by those names, in their instructions, handovers and refusals, through `?surface=mcp`.
 - The `openhands` harness: a wire worker per agent on OpenHands SDK and tools 1.59.0, which the SDK's `openhands` extra,
   `platoon-harness-sdk[openhands]`, pins exactly, and which `harness = "openhands"` runs as `python -P -m
-  platoon_harness.drivers.openhands` on the runtime's own interpreter. Only the worker loads OpenHands, in its own process, and an
-  environment that cannot hold its pins runs the worker from one of its own as a wire command. ADR 0030. It drives one
-  conversation through `arun()`, signs in with a key from the role's auth profile alone, through the shell's proxies, gives the
-  agent OpenHands' coding tools and ours through the stdio shim, asks the runtime before every action but ours, hands a delivery to
-  the conversation only between runs with no action pending, pausing a run under way for it, leaves no action pending at a turn's
-  end, says what a request carried from the SDK's completion log, and keeps its own agents off unless a role allows them, when their
-  steps ask the runtime too and an interrupt stops them at their next ask. `check_driver` passes on the real SDK against FakeModel,
-  and no live model has run. The workspace lock excludes the proprietary `lmnr-claude-code-proxy`, which nothing the worker runs
-  imports, and which the extra installed from an index brings in unless excluded. `doctor` shows the version of the OpenHands SDK,
-  or says the extra is not installed and how to install it, a start without the extra is refused in the same words, and `init`
-  passes it over. `WireDriver.command` says the program a wire driver runs, and `WireDriver(command, inherited)` names what of the
-  runtime's environment it takes beside the allowlist.
+  platoon_harness.drivers.openhands` on the runtime's own interpreter, finding its modules where the runtime does, `PYTHONPATH`
+  among them. Only the worker loads OpenHands, in its own process, and an environment that cannot hold its pins runs the worker
+  from one of its own as a wire command. ADR 0030. It drives one conversation through `arun()`, signs in with a key from the
+  role's auth profile alone, through the shell's proxies, gives the agent OpenHands' coding tools and ours through the stdio shim,
+  asks the runtime before every action but ours, hands a delivery to the conversation only between runs with no action pending,
+  pausing a run under way for it, leaves no action pending at a turn's end, says what a request carried from the SDK's completion
+  log, and keeps its own agents off unless a role allows them, when their steps ask the runtime too and an interrupt stops them at
+  their next ask. `check_driver` passes on the real SDK against FakeModel, and no live model has run. The workspace lock excludes the proprietary `lmnr-claude-code-proxy`, which nothing the worker runs
+  imports, and which the extra installed from an index brings in unless excluded. `doctor` shows the version of the OpenHands SDK
+  from the extra's metadata, or names the interpreter to install the extra for, a start without the extra is refused in the same
+  words, and `init` passes it over. `WireDriver(command, inherited)` names what of the runtime's environment its program takes
+  beside the allowlist, to describe it as to start it.
 
 ### Changed
 
 - `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
   `tool_names` too.
+- `doctor --json` gives each harness it did not find a `reason`, `not on PATH` for a command.
 - A `Profile` says whether its role allows the harness's own agents, and opaque native children cost `trainable` only then.
   `check_driver` skips `native_child_seen` for a harness whose native children are opaque, as none can show, and still checks that
   they are off by default.

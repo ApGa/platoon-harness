@@ -11,8 +11,10 @@ from pathlib import Path
 from .. import AgentSpec, Reporter
 from ..wire import WireDriver
 
-WORKER = (sys.executable, "-P", "-m", __name__)
+_WORKER = (sys.executable, "-P", "-m", __name__)
 """The worker's command: the runtime's own interpreter, with nothing of the workspace it runs in on its path."""
+_IMPORTS = ("PYTHONHOME", "PYTHONPATH", "PYTHONPLATLIBDIR", "PYTHONNOUSERSITE", "PYTHONUSERBASE")
+"""What tells that interpreter where its modules are, so that the worker finds those the runtime found."""
 _SIGN_IN = (
     "HTTPS_PROXY",
     "HTTP_PROXY",
@@ -25,15 +27,16 @@ _SIGN_IN = (
     "SSL_CERT_FILE",
 )
 
-__all__ = ["WORKER", "OpenHandsDriver"]
+__all__ = ["OpenHandsDriver"]
 
 
 class OpenHandsDriver(WireDriver):
-    """One OpenHands agent, through the worker that drives its conversation. Its key comes from the role's auth profile,
-    and its way out to the network from the shell, as it would there."""
+    """One OpenHands agent, through the worker that drives its conversation. The worker finds its modules where the
+    runtime does, its key comes from the role's auth profile, and its way out to the network from the shell, as it
+    would there."""
 
     def __init__(self) -> None:
-        super().__init__(WORKER, _SIGN_IN)
+        super().__init__(_WORKER, (*_IMPORTS, *_SIGN_IN))
         self._tmux: Path | None = None
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:

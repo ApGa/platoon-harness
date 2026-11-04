@@ -69,7 +69,6 @@ platoon_harness.drivers.levels.Visibility
 platoon_harness.drivers.levels.levels
 platoon_harness.drivers.levels.tool_visibility
 platoon_harness.drivers.openhands.OpenHandsDriver
-platoon_harness.drivers.openhands.WORKER
 platoon_harness.drivers.pi.PiDriver
 platoon_harness.drivers.process.GroupState
 platoon_harness.drivers.process.LOG

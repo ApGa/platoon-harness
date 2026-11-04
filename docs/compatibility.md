@@ -268,8 +268,11 @@ by a driver landing; only the row below changes.
   worker alone, built from the workspace lock without `lmnr-claude-code-proxy`, was 498 MB on local disk, and loading the SDK took
   10 s there, so `ready` comes that much after a launch. `describe` loads nothing and answers in under a second [L].
 - Where the extra is missing, in an environment of the SDK and the command line alone, `doctor` said `openhands-sdk` is not
-  installed and how to install it, and an agent's start was refused in the same words, while `team check` found no problem. A dry
-  run of uv's resolver installing the extra brought in `lmnr-claude-code-proxy` 0.2.0, and with `--excludes` naming it did not.
+  installed for that environment's interpreter, and an agent's start was refused in the same words, while `team check` found no
+  problem. A dry run of uv's resolver installing the extra brought in `lmnr-claude-code-proxy` 0.2.0, and with `--excludes` naming
+  it did not.
+- A runtime on an interpreter that finds the SDK only on `PYTHONPATH`, as a module system, an install to a prefix or a checkout
+  would have it, described the worker and started it, which found the SDK there too [L].
 - Our tools come through the stdio shim, whose `_meta` holds a `platoon-harness/callId` per call beside the SDK's `progressToken`,
   so two identical calls in a turn are two. They show by their own names. Across a tool call, a wake and a resume by a new process
   the tool block and the system prompt held byte for byte, with our words once in each request, 25,817 bytes of tools [L].

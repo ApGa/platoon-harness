@@ -615,7 +615,7 @@ platoon-harness init
 Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
 A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile, so it
-passes over a harness behind a wire program, as `openhands` is, since nothing tells it how one signs in.
+passes over `openhands`, which signs in only with a key from one.
 
 For example:
 
@@ -632,9 +632,9 @@ platoon-harness doctor [OPTIONS]
 Say whether this machine can run sessions, and what it has.
 
 Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
-installed, and how to install it where not, pi's Node, where sessions and sockets live, and what is installed. It
-exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own status command:
-no account name is kept, and no credential file is read.
+installed, and where not the interpreter to install it for, pi's Node, where sessions and sockets live, and what is
+installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own
+status command: no account name is kept, and no credential file is read.
 
 For example:
 

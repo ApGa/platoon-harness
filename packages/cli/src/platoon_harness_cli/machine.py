@@ -11,8 +11,8 @@ from cyclopts import App
 from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
-from platoon_harness.drivers.process import exit_reason, status
-from platoon_harness.drivers.wire import WireDriver
+from platoon_harness.drivers.openhands import OpenHandsDriver, worker
+from platoon_harness.drivers.process import status
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
 from platoon_harness.kernel import filesystem
 from platoon_harness.runtime.paths import HOME_VARIABLE, find_root, socket_path
@@ -29,9 +29,8 @@ _LABELS = {DRIVERS: "driver", EXTENSIONS: "extension"}
 
 
 def harnesses() -> list[tuple[str, Driver]]:
-    """Each installed driver that names a harness, which by the naming law is a command of that name, or runs a wire
-    program of its own, as `openhands` does. A driver that needs a command given it, as `exec` and `wire` do, names
-    none."""
+    """Each installed driver that names a harness, which by the naming law is a command of that name, or a library, as
+    `openhands` is. A driver that needs a command of its own, as `exec` and `wire` do, names none."""
     found = []
     for name in Installed(DRIVERS):
         try:
@@ -50,24 +49,21 @@ def _first_line(command: list[str]) -> str | None:
 
 def _harness(name: str, driver: Driver) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
-    command, which is all of what it said that is kept."""
-    if isinstance(driver, WireDriver):
-        return _wire_harness(name, driver)
+    command, which is all of what it said that is kept, or why it is not here."""
+    if isinstance(driver, OpenHandsDriver):
+        return _openhands(name)
     if shutil.which(name) is None:
-        return {"name": name, "found": False}
+        return {"name": name, "found": False, "reason": "not on PATH"}
     return {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
 
 
-def _wire_harness(name: str, driver: WireDriver) -> dict[str, Any]:
-    """A harness behind a wire program of its own, as `openhands` is: there when the program says its version, and
-    otherwise not, for the reason the program gave."""
-    done = status([*driver.command, "--version"], os.environ)
-    if done is None:
-        return {"name": name, "found": False, "reason": "it said no version in time"}
-    said = (done.stderr if done.returncode else done.stdout).decode(errors="replace").strip()
-    if done.returncode:
-        return {"name": name, "found": False, "reason": said.rpartition("\n")[2] or exit_reason(done.returncode)}
-    return {"name": name, "found": True, "version": said.partition("\n")[0] or None, "login": _login(driver)}
+def _openhands(name: str) -> dict[str, Any]:
+    """OpenHands, from the metadata of the SDK's `openhands` extra on this interpreter, which is the worker's. Its login
+    is unknown, as it keeps none, and only a role's auth profile gives it a key."""
+    try:
+        return {"name": name, "found": True, "version": worker.sdk_version(), "login": None}
+    except DriverError as error:
+        return {"name": name, "found": False, "reason": str(error)}
 
 
 def _login(driver: Driver) -> str | None:
@@ -117,9 +113,9 @@ def doctor(*, json: bool = False) -> int:
     """Say whether this machine can run sessions, and what it has.
 
     Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
-    installed, and how to install it where not, pi's Node, where sessions and sockets live, and what is installed. It
-    exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own status command:
-    no account name is kept, and no credential file is read.
+    installed, and where not the interpreter to install it for, pi's Node, where sessions and sockets live, and what is
+    installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own
+    status command: no account name is kept, and no credential file is read.
 
     For example:
 
@@ -160,7 +156,7 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
             login = f"{harness['login']} login" if harness["login"] else "login unknown"
             lines.append(f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}")
         else:
-            lines.append(f"{harness['name']:<10} {harness.get('reason', 'not on PATH')}")
+            lines.append(f"{harness['name']:<10} {harness['reason']}")
     if (node := report["node"]) is not None:
         enough = "" if node["enough"] else f", and pi needs {'.'.join(map(str, _NODE))} or later"
         lines.append(f"{'node':<10} {node['version'] or 'not on PATH'}{enough}")
@@ -180,7 +176,7 @@ def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
     A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile, so it
-    passes over a harness behind a wire program, as `openhands` is, since nothing tells it how one signs in.
+    passes over `openhands`, which signs in only with a key from one.
 
     For example:
 
@@ -188,7 +184,7 @@ def init() -> int:
         platoon-harness team show
         platoon-harness run "Fix the flaky test"
     """
-    candidates = [(name, driver) for name, driver in harnesses() if not isinstance(driver, WireDriver)]
+    candidates = [(name, driver) for name, driver in harnesses() if not isinstance(driver, OpenHandsDriver)]
     found = [(name, driver) for name, driver in candidates if shutil.which(name)]
     if not found:
         names = ", ".join(name for name, _ in candidates)
