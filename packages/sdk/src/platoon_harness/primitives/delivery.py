@@ -177,8 +177,8 @@ def pending(txn: Txn, a: Pending) -> int:
 
 def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None, native_id: str | None = None) -> None:
     """Record that a harness said it took an offer, which is observed exposure, from its own report and nothing else:
-    an input it said it delivered, or the tool item that held a read's result. It carries how the offer was made, and
-    its hops and ask, which count in the turn it landed in. A repeat changes nothing."""
+    an input it said it delivered, or the tool item that came back `completed` with a read's result. It carries how the
+    offer was made, and its hops and ask, which count in the turn it landed in. A repeat changes nothing."""
     found = txn.view(Deliveries).offer(input)
     if found is None:
         raise Refused("not_found", f"no offer {input}")

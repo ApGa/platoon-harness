@@ -59,6 +59,19 @@ async def test_a_harness_that_exits_in_a_turn_leaves_a_gap_naming_where_it_began
     assert of_type(kernel, "gap.recorded")[-1].data["since"] == began
 
 
+async def test_a_crash_window_outside_a_turn_begins_at_the_work_it_could_not_prove(kernel):
+    """An admission in flight when the runtime died is uncertain, and the gap said of it begins at its request."""
+    spawn = {"name": "bob", "child_role": "worker", "goal": "be bob"}
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawn))
+    admit = result_of(kernel.query(kernel.runtime, "effect.ready", {}))[0]
+    result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": admit["id"]}))
+    result_of(await kernel.submit(kernel.runtime, "runtime.start", {"drift": []}))
+
+    await report(kernel, "bob", "gap", what="crash_window")
+
+    assert admit["kind"] == "admit" and of_type(kernel, "gap.recorded")[-1].data["since"] == admit["id"]
+
+
 async def test_a_takeover_records_its_gap_where_the_hold_begins(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
 

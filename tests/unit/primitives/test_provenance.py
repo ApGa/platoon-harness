@@ -89,7 +89,9 @@ async def call(kernel: Kernel, agent: str, call_id: str, *anchors: str) -> None:
 async def done(kernel: Kernel, agent: str, *anchors: str) -> None:
     """Each tool item completed, which holds its call's result."""
     for anchor in anchors:
-        await report(kernel, agent, "item", kind="tool", phase="completed", gist="a tool", native_id=anchor)
+        await report(
+            kernel, agent, "item", kind="tool", phase="completed", gist="a tool", native_id=anchor, outcome="completed"
+        )
 
 
 async def scenario(kernel: Kernel) -> dict[str, str]:

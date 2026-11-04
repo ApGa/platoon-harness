@@ -502,8 +502,10 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 ### Provenance per harness
 
 What each harness's own reports let the runtime confirm, and tie, of what an agent was handed (architecture §11). An offer is
-confirmed only by the harness's report: an `input.delivered` for an input, the goal at launch among them, or a completed tool item
-whose `native_id` is the anchor a read went under. Nothing joins by order or timing.
+confirmed only by the harness's report: an `input.delivered` for an input, the goal at launch among them, or a tool item that came
+back `completed`, whose `native_id` is the anchor a read went under. One that `failed`, as an `is_error` result, an interrupted call
+and a lost reply do, confirms nothing, so a steer notice that rode on one of our refusals stays unconfirmed. Nothing joins by order or
+timing.
 
 | Harness | An input said to land | A model call's id | A tool call's anchor, and what holds it | A read confirmed | What a compaction names | Native children |
 |---|---|---|---|---|---|---|

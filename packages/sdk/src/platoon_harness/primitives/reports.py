@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import Field, TypeAdapter
 
-from platoon_harness.kernel import Args, Stamps, Txn
+from platoon_harness.kernel import Args, Effects, Stamps, Txn
 from platoon_harness.schema import Model
 
 from .budgets import Label
@@ -60,11 +60,18 @@ GAPS: Mapping[Gap, Kind] = {
 def record_gap(
     txn: Txn, agent: str, what: Gap, *, gist: str | None = None, cause: Sequence[int] = (), **more: Any
 ) -> None:
-    """Record one incident gap on its agent's stream, on its own plane. One recorded in a turn of the agent's, which
-    `crash_window` alone can be about, names in `since` where that turn began."""
-    since = txn.view(Stamps).began(agent) if what == "crash_window" else None
+    """Record one incident gap on its agent's stream, on its own plane. A `crash_window`, the one recorded after the
+    fact, names in `since` where the work it could not prove began: the start of the agent's turn it cut, or else the
+    request of the agent's oldest uncertain effect, and with neither it stands where it is."""
+    since = _unproven(txn, agent) if what == "crash_window" else None
     data = {"plane": GAPS[what].plane, "what": what, "since": since, **more}
     txn.emit("gap.recorded", f"agent/{agent}", gist=gist or f"gap: {what}", agent=agent, cause=cause, data=data, v=2)
+
+
+def _unproven(txn: Txn, agent: str) -> int | None:
+    if (began := txn.view(Stamps).began(agent)) is not None:
+        return began
+    return min((effect.id for effect in txn.view(Effects).in_state("uncertain") if effect.agent == agent), default=None)
 
 
 class Capabilities(Model):

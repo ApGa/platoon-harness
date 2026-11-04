@@ -220,7 +220,7 @@ async def test_a_workspace_asked_for_before_retries_is_made_again(tmp_path, monk
 # Launch.
 
 
-async def test_a_launch_in_flight_ends_the_agent_with_a_gap(tmp_path):
+async def test_a_launch_in_flight_ends_the_agent_with_a_gap_that_begins_at_its_request(tmp_path):
     class NeverUp(ScriptedDriver):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:
             await asyncio.Event().wait()
@@ -233,9 +233,11 @@ async def test_a_launch_in_flight_ends_the_agent_with_a_gap(tmp_path):
     async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "bob", "ended")
         ending = await session.ending()
+        [launch] = [event for event in await of_type(session, "effect.requested") if event.data["kind"] == "launch"]
+        [gap] = await of_type(session, "gap.recorded")
 
     assert ending.agents[0]["status"] == "failed"
-    assert any(row["what"] == "crash_window" for row in ending.gaps)
+    assert (gap.data["what"], gap.data["since"]) == ("crash_window", launch.seq)
 
 
 async def test_a_harness_that_said_ready_before_the_crash_has_its_launch_finished(tmp_path):
@@ -474,8 +476,10 @@ async def test_a_delivery_that_landed_and_began_its_turn_counts_as_delivered(tmp
         await in_state(session, "bob", "idle")
         finished = await until(lambda: of_type(session, "context.delivered"), session)
 
+        handed = [item["ref"] for offer in await offers(session) for item in offer.data["items"]]
+
         assert finished[0].data["evidence"] == "reconcile"
-        assert len(await offers(session)) == 1
+        assert handed.count("inbox/bob@1") == 1  # The notice of the cut turn may follow, in a handover of its own.
         assert (await of_type(session, "turn.lost"))[0].data is None
         assert [gap.data["what"] for gap in await of_type(session, "gap.recorded")] == ["crash_window"]
 

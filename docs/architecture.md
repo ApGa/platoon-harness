@@ -1221,11 +1221,14 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 - **What a launch offers.** A fresh start's `agent.instruct` offers what that launch hands the harness, `context.offered{how:
   launch, boundary: turn}`: the instructions, `agent/<x>@k`, and with a goal the goal, `agent/<x>@1`, its gist and its body. The
   goal goes as the first delivery under that offer's id, and the first input its harness says it took, the goal itself or for an
-  idle start the first handover, confirms the launch. A native resume offers nothing, as its harness keeps what its session began
-  with, and a relaunch with no native session is a fresh start. `exec` puts the goal in argv, which confirms nothing.
+  idle start the first handover, confirms the launch: that harness's own, the agent's latest, and never one before it, as each launch
+  and resume is instructed and an instruct closes the launch before it, whose process has gone. A native resume offers nothing, as
+  its harness keeps what its session began with, and a relaunch with no native session is a fresh start. `exec` puts the goal in
+  argv, which confirms nothing.
 - **One way to confirm.** An offer is confirmed only by a `context.delivered`, payload 3, that the host writes from its harness's
   own report, in that report's transaction: an `input.delivered`, whose `native_id` is the harness's id for the input, verbatim,
-  or a completed tool item whose `native_id` is the anchor an unconfirmed offer was made under, with the evidence `tool_item`. An
+  or a tool item that came back `completed`, whose `native_id` is the anchor an unconfirmed offer was made under, with the evidence
+  `tool_item`. One that `failed`, for an error, an interrupt or a reply lost after the read committed, confirms nothing. An
   agent's read records its offer under its command's anchor, and the tool plane hands a steer notice and a body only it could read
   under that anchor too, so the item that holds that call's result confirms each, an anchor several ops share confirming each
   of them. A read moves its cursor when its result shows it, as a cursor says what was handed; a confirmation of it moves nothing
@@ -1267,8 +1270,9 @@ writers, and whether content could reach an agent through it unseen:
 | `takeover` | control | the runtime, where a person's hold begins | yes |
 | `workspace_unobserved` | control | the runtime, for a look that could not read a workspace | yes |
 
-`since` names where a gap recorded after the fact began: a `crash_window` recorded in a turn, by `runtime.start` beside its
-`turn.lost` or when a harness exits, names that turn's `turn.started`. Any other is where it stands.
+`since` names where a gap recorded after the fact began: a `crash_window` names where the work it could not prove began, the
+`turn.started` of the turn it cut, by `runtime.start` beside its `turn.lost` or when a harness exits, or outside a turn the request of
+the agent's oldest uncertain effect, as for an admission or a launch a crash left in flight. Any other is where it stands.
 
 **Views.** Three folds index the references events already hold, and the graph is still not stored. `Exposures` holds each item an
 offer named, by the event it names, with how it was offered and the tool call it came under, each confirmation, each compaction and

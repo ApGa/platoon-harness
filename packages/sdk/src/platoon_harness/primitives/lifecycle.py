@@ -555,8 +555,8 @@ def instruct(txn: Txn, a: Instruct) -> int | None:
 
     A fresh start also offers what it hands the harness: these instructions, and with `goal` its goal, `agent/<x>@1`,
     gist and body. The offer's seq comes back as the id the goal goes under as the first delivery, and the first input
-    its harness says it took confirms it. A native resume offers nothing, as its harness keeps what its session began
-    with."""
+    that harness says it took confirms it, never one a later launch's harness took. A native resume offers nothing, as
+    its harness keeps what its session began with."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
@@ -698,8 +698,8 @@ def report(txn: Txn, a: AgentReport) -> None:
             data = item.model_dump(exclude={"type", "gist"})
             model = _model(item.call_id)
             txn.emit("item.recorded", f"turn/{name}", gist=item.gist, agent=name, refs=refs, data=data, model=model)
-            if item.kind == "tool" and item.phase == "completed" and item.native_id:
-                for offer in txn.view(Deliveries).unconfirmed(name, anchor=item.native_id):
+            if item.kind == "tool" and item.phase == item.outcome == "completed" and item.native_id:
+                for offer in txn.view(Deliveries).unconfirmed(name, item.native_id):
                     confirmed(txn, offer, "tool", "tool_item", item.native_id)
         case Usage() as usage:
             data = usage.model_dump(exclude={"type"})
@@ -718,7 +718,7 @@ def report(txn: Txn, a: AgentReport) -> None:
                 raise Refused("not_found", f"no offer {delivered.input}")
             input = int(delivered.input)
             confirmed(txn, input, delivered.boundary, delivered.evidence, delivered.native_id)
-            for launch in txn.view(Deliveries).unconfirmed(name, how="launch"):  # Taken before any input it took.
+            if (launch := txn.view(Deliveries).launch(name)) is not None:  # Taken before any input it took.
                 confirmed(txn, launch, "turn", delivered.evidence)
         case ApprovalRequested(id=id, gist=gist):
             ask(txn, id, agent, gist)

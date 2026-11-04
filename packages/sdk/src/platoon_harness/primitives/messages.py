@@ -107,7 +107,7 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 10
+    version = 11
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -155,6 +155,7 @@ class Deliveries(View):
     CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_quiet(agent TEXT PRIMARY KEY, upto INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_launch(agent TEXT PRIMARY KEY, input INTEGER NOT NULL) WITHOUT ROWID, STRICT;
     """
 
     @fold("message.sent")
@@ -219,8 +220,16 @@ class Deliveries(View):
                 data.get("asked", False),  # A v1 offer asked nothing.
             ),
         )
-        if data["how"] != "launch":
+        if data["how"] == "launch":
+            self.db.execute("INSERT OR REPLACE INTO v_deliveries_launch VALUES (?, ?)", (event.agent, event.seq))
+        else:
             self._heard(event.agent, data["hops"])
+
+    @fold("agent.instructed")
+    def instructed(self, event: Event) -> None:
+        """Each launch and each resume is instructed, so a launch offer made before is a process's that has gone, and no
+        input to the one that follows can confirm it."""
+        self.db.execute("DELETE FROM v_deliveries_launch WHERE agent = ?", (event.agent,))
 
     def _heard(self, agent: str | None, hops: int) -> None:
         self.db.execute(
@@ -279,6 +288,7 @@ class Deliveries(View):
         when it was shown, and a launch hands over no entry, so their confirmations move nothing else. One before v3
         was always of a handover."""
         self.db.execute("UPDATE v_deliveries_offers SET delivered = 1 WHERE input = ?", (event.data["input"],))
+        self.db.execute("DELETE FROM v_deliveries_launch WHERE input = ?", (event.data["input"],))
         if event.data.get("how") in (*IN_A_RESULT, "launch"):
             return
         for stream, seq in event.data["positions"].items():
@@ -477,18 +487,19 @@ class Deliveries(View):
         positions = json.loads(row["positions"])
         return Offered(row["reader"], row["how"], positions, bool(row["delivered"]), row["hops"], bool(row["asked"]))
 
-    def unconfirmed(self, reader: str, *, anchor: str | None = None, how: str | None = None) -> list[int]:
-        """The offers to `reader` its harness has not said it took, made under the call `anchor` names, or of one way,
-        oldest first."""
+    def unconfirmed(self, reader: str, anchor: str) -> list[int]:
+        """The offers to `reader` made under the call `anchor` names that its harness has not said it took, oldest
+        first."""
         rows = self.db.execute(
-            """
-            SELECT input FROM v_deliveries_offers
-            WHERE reader = ?1 AND delivered = 0 AND (?2 IS NULL OR anchor = ?2) AND (?3 IS NULL OR how = ?3)
-            ORDER BY input
-            """,
-            (reader, anchor, how),
+            "SELECT input FROM v_deliveries_offers WHERE reader = ? AND anchor = ? AND delivered = 0 ORDER BY input",
+            (reader, anchor),
         )
         return [row["input"] for row in rows]
+
+    def launch(self, reader: str) -> int | None:
+        """The offer that launched the harness `reader` runs now, while its harness has not said it took any input."""
+        row = self.db.execute("SELECT input FROM v_deliveries_launch WHERE agent = ?", (reader,)).fetchone()
+        return None if row is None else row["input"]
 
 
 class _Reach(NamedTuple):

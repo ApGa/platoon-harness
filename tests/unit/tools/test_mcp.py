@@ -1225,7 +1225,14 @@ async def test_a_notice_and_a_blob_offer_are_confirmed_by_the_tool_item_that_car
     result = await client.call("board_get", {"board": "notes", "name": "big"}, claudecode__toolUseId="toolu_9")
     offered = of_type(kernel, "context.offered", after=head)
     unconfirmed = of_type(kernel, "context.delivered", after=head)
-    item = {"type": "item", "kind": "tool", "phase": "completed", "gist": "board_get", "native_id": "toolu_9"}
+    item = {
+        "type": "item",
+        "kind": "tool",
+        "phase": "completed",
+        "gist": "board_get",
+        "native_id": "toolu_9",
+        "outcome": "completed",
+    }
     result_of(await kernel.submit(kernel.runtime, "agent.report", {"agent": "s1", "report": item}))
 
     assert "change course" in result["content"][-1]["text"]

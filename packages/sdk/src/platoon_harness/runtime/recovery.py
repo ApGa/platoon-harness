@@ -107,20 +107,22 @@ async def _reconcile_answer(host: Host, effect: Effect) -> None:
 
 
 async def _reconcile(host: Host, effect: Effect, agents: dict[str, dict[str, Any]]) -> None:
+    """An admission or a launch in flight is a crash window, said while its effect is uncertain, so the gap begins at
+    that effect's request."""
     agent = agents.get(effect.agent or "")
     match effect.kind:
         case "admit":
-            await _fail(host, effect, "it was in flight when the runtime died, and an admission is never retried")
             if agent is not None:
-                await _say(host, agent["name"], GapReport(what="crash_window"))
+                await _say(host, agent["name"], _CRASH)
+            await _fail(host, effect, "it was in flight when the runtime died, and an admission is never retried")
         case "workspace":  # Asked before a workspace was retried, so the shared one, and made again.
             await _finish(host, effect, await host.workspace(effect))
         case "launch" if agent is not None and agent["state"] != "spawning":
             await _finish(host, effect)
         case "launch":
-            await _fail(host, effect, "its harness was launching when the runtime died, and has no id to resume by")
             if agent is not None:
                 await _say(host, agent["name"], _CRASH)
+            await _fail(host, effect, "its harness was launching when the runtime died, and has no id to resume by")
         case "deliver":
             await _reconcile_delivery(host, effect, agent)
         case "answer":
