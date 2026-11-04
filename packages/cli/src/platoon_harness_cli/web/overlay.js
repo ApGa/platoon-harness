@@ -122,48 +122,61 @@ apply = events => {
 // ---------------------------------------------------------------------- acting
 
 // Each act is one op, sent to /x/command under a key the page makes once, for one draft or press, and keeps until the
-// act is answered. Until then it is kept in this tab's storage and sent again, after a lost connection or a reload, and
-// the server answers a key it has seen with its first answer, so the act is one operation. A refusal is an answer.
+// act is answered. Until then it is kept in this tab's storage and sent again, after a lost connection, a reload, or a
+// new link opened in this tab, and web answers a key it has seen with its first answer, whichever link sends it, so the
+// act is one operation. A refusal is an answer.
 X.ACTS = 'platoon-harness.acts';
 X.pending = (() => { try { return JSON.parse(sessionStorage.getItem(X.ACTS)) || {}; } catch (_) { return {}; } })();
 X.keep = () => { try { sessionStorage.setItem(X.ACTS, JSON.stringify(X.pending)); } catch (_) { /* kept in memory */ } };
 X.key = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+X.UNANSWERED = 'Not answered: this page\'s session ended first. Open a new link in this tab, and it goes again under ' +
+  'its key, so it takes effect once.';
 
-// Send one command until it is answered, and give its outcome: the op's result, or its refusal, which a request the
-// server would not take is too.
+// Send one command until it is answered, and give its outcome: the op's result, or its refusal, which a request web
+// would not take is too, and one web failed on says that whether it took effect is unknown. A request that reached
+// nothing, or that web was too busy for, goes again. A page whose session has ended is answered nothing: null.
 X.send = async (key, command) => {
   for (;;) {
     let r = null;
     try {
       r = await fetch('/x/command', {method: 'POST', body: JSON.stringify({...command, key}),
         headers: {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}});
-    } catch (_) { /* not answered: sent again below */ }
-    if (r && r.status < 500) {
-      const p = await r.json().catch(() => ({error: `the server answered ${r.status}`}));
-      if (r.status === 401) login(p.error);
-      return r.ok ? p : {refusal: {code: 'refused', detail: p.error}};
+    } catch (_) { /* reached nothing: sent again below */ }
+    if (r && r.status !== 503) {
+      const p = await r.json().catch(() => ({error: `web answered ${r.status}`}));
+      if (r.status === 401) { login(p.error); return null; }
+      if (r.ok) return p;
+      return {refusal: r.status < 500 ? {code: 'refused', detail: p.error}
+        : {code: 'failed', detail: `web failed on it (${r.status}): whether it took effect is unknown`}};
     }
     setLive('off');
     await sleep(2000);
   }
 };
 
+// One act, kept until it is answered: its outcome, or null while it waits for a new link.
 X.act = async (op, args) => {
   const key = X.key();
   X.pending[key] = {op, args};
   X.keep();
-  try { return await X.send(key, {op, args}); } finally { delete X.pending[key]; X.keep(); }
+  const r = await X.send(key, {op, args});
+  if (r) { delete X.pending[key]; X.keep(); }
+  return r;
 };
 
-// What a reload left unanswered, sent again under its key.
+// What a reload or a new link found unanswered, sent again under its key.
 X.resend = () => {
   for (const [key, command] of Object.entries(X.pending)) {
     X.send(key, command).then(r => {
+      if (!r) return;
       delete X.pending[key]; X.keep();
       toast(`${command.op}, sent before the page was reloaded: ${r.refusal ? X.refused(r.refusal) : 'done'}.`);
     });
   }
 };
+
+// A link opened over this page is the gate's to spend, so the page loads again for it.
+addEventListener('hashchange', () => { if (/(^#|&)link=/.test(location.hash)) location.reload(); });
 
 // A refusal as a person reads it. A decision someone made first says who made it and through what.
 X.refused = refusal => {
@@ -253,8 +266,8 @@ X.post = async f => {
     }
     show('Sending…');
     const r = await X.act('message.send', args);
-    d.said = r.refusal ? X.refused(r.refusal) : '';
-    if (!r.refusal) {
+    d.said = !r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : '';
+    if (r && !r.refusal) {
       d.text = '';
       if (d.file === file) d.file = null;
       const t = $(`.x-composer[data-x-draft="${CSS.escape(draft)}"] textarea`);
@@ -293,7 +306,7 @@ X.needed = throttle(async () => {
   if (X.cannot('attention.list')) X.needs = null;
   else {
     const r = await X.send(X.key(), {op: 'attention.list', args: {}});
-    X.needs = r.refusal ? null : r.result.filter(row => row.kind !== 'mention');
+    X.needs = !r || r.refusal ? null : r.result.filter(row => row.kind !== 'mention');
   }
   buildSide();
   if (X.needsBox && X.needsBox.isConnected) X.drawNeeds(X.needsBox);
@@ -530,7 +543,7 @@ X.lifecycle = async el => {
   el.disabled = true;
   const r = await X.act(op, agent ? {agent, ...more} : {});
   el.disabled = false;
-  said.textContent = r.refusal ? `${what}: ${X.refused(r.refusal)}`
+  said.textContent = !r ? X.UNANSWERED : r.refusal ? `${what}: ${X.refused(r.refusal)}`
     : op === 'agent.interrupt' ? `Stopped the turns of ${r.result.stopped.join(', ')}. It stops turns, not waits: one parked on a wait is left to it.`
       : `${what}: done.`;
 };
@@ -539,6 +552,7 @@ X.decide = async el => {
   const card = el.closest('[data-x-card]');
   for (const b of $$('button', card)) b.disabled = true;
   const r = await X.act('approval.resolve', {id: el.dataset.xApproval, verdict: el.dataset.xDecide, expected_version: +el.dataset.xVersion});
+  if (!r) return toast(X.UNANSWERED);
   if (r.refusal) toast(X.refused(r.refusal));
   if (r.refusal && card.isConnected && !X.cannot('approval.resolve')) for (const b of $$('button', card)) b.disabled = false;
 };
@@ -549,7 +563,7 @@ X.action = async el => {
   el.disabled = true;
   const action = row.actions[+el.dataset.xAction];
   const r = await X.act(action.op, action.args);
-  toast(r.refusal ? X.refused(r.refusal) : `${action.label}: ${row.gist}`);
+  toast(!r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : `${action.label}: ${row.gist}`);
   X.needed();
 };
 

@@ -36,8 +36,15 @@ def _int(params: Mapping[str, Any], key: str, default: int, most: int) -> int:
         return default
     try:
         return max(0, min(most, int(value)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise Error(400, f"{key} is a whole number") from None
+
+
+def _names(params: Mapping[str, Any], key: str) -> list[str]:
+    value = params.get(key) or []
+    if not (isinstance(value, list) and all(isinstance(name, str) for name in value)):
+        raise Error(400, f"{key} is a list of names")
+    return value
 
 
 def _epoch(at: Any) -> float:
@@ -240,15 +247,15 @@ def search(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
     page, pass the reply's `until`."""
     limit = _int(params, "limit", 50, LIMIT) or 1
     where, args = ["kind = 'message'"], []
-    if params.get("chats"):
-        where.append(f"chat IN ({', '.join('?' * len(params['chats']))})")
-        args += [str(chat) for chat in params["chats"]]
+    if chats := _names(params, "chats"):
+        where.append(f"chat IN ({', '.join('?' * len(chats))})")
+        args += chats
     if params.get("as"):
         where.append("chat IN (SELECT chat FROM members WHERE user = ?)")
         args.append(str(params["as"]))
-    if params.get("from"):
-        where.append(f"sender IN ({', '.join('?' * len(params['from']))})")
-        args += [str(sender) for sender in params["from"]]
+    if senders := _names(params, "from"):
+        where.append(f"sender IN ({', '.join('?' * len(senders))})")
+        args += senders
     if params.get("mentions"):
         where.append("EXISTS (SELECT 1 FROM json_each(extra, '$.mentions') WHERE value = ?)")
         args.append(str(params["mentions"]))
@@ -263,10 +270,10 @@ def search(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
     if params.get("until"):
         try:
             time, chat, seq = params["until"]
-        except (TypeError, ValueError):
+            args += [float(time), str(chat), int(seq)]
+        except (TypeError, ValueError, OverflowError):
             raise Error(400, "until is the one a reply gave") from None
         where.append("(time, chat, seq) < (?, ?, ?)")
-        args += [float(time), str(chat), int(seq)]
     text = str(params.get("text") or "").strip().casefold()
     found = []
     rows = projection.db.execute(

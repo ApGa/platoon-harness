@@ -32,7 +32,7 @@ HOLDING = 64
 """The most requests the feed holds at once. One past it is refused, and the page asks again a little later."""
 TEXT_LIMIT = 5_000_000
 """The most of a text file the viewer is given, as SwarmChat's own server gives it."""
-_KEY = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_KEY = re.compile(r"[0-9a-f]{32}")
 _PAGE = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
 _JSON = "Content-Type: application/json"
 _UNBUILT = {
@@ -134,7 +134,7 @@ class Web(Server[Request]):
             return _json(await self._stored(request.body))
         params = _params(request.body)
         if route == "/x/command":
-            return _json(await self._command(params, held))
+            return _json(await self._command(params))
         if route == "/x/link":
             kind = params.get("class")
             if kind not in ("view", "control"):
@@ -228,7 +228,7 @@ class Web(Server[Request]):
         projection = self.projection
         try:
             after, timeout = int(params.get("after") or 0), float(params.get("timeout", HOLD))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             raise Rejected(400, why="after is a feed number and timeout is in seconds") from None
         if params.get("feed_id") not in (None, projection.feed_id) or after > projection.count:
             return {"feed": projection.count, "events": [], "reset": True}
@@ -270,14 +270,14 @@ class Web(Server[Request]):
 
     # The page's acts.
 
-    async def _command(self, params: dict[str, Any], held: Held) -> dict[str, Any]:
-        """One op, as `Session.submit` runs it, and its outcome, a refusal among them. `key` is the page's for one draft
-        or press, kept until it is answered, under this credential's own name, so a retry is one operation and no
-        other client's key meets it. `expected_version` is the op's argument of that name, and `via` is said here. A
-        message's text too long for a gist is cut as the terminal cuts it."""
+    async def _command(self, params: dict[str, Any]) -> dict[str, Any]:
+        """One op, as `Session.submit` runs it, and its outcome, a refusal among them. `key` is 128 random bits the page
+        made for one draft or press and keeps until the act is answered, under `web/`, so a retry is one operation from
+        whichever link sends it, and no other client's key meets it. `expected_version` is the op's argument of that
+        name, and `via` is said here. A message's text too long for a gist is cut as the terminal cuts it."""
         op, args, key = params.get("op"), params.get("args", {}), params.get("key")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(key, str) or not _KEY.fullmatch(key):
-            raise Rejected(400, why="a command is an op, its args, and a key of at most 64 letters, digits, - and _")
+            raise Rejected(400, why="a command is an op, its args, and a key of 32 lowercase hex the page made for it")
         if "key" in args or "via" in args:
             raise Rejected(400, why="key and via are said beside an op's args, and via by this server")
         if (version := params.get("expected_version")) is not None:
@@ -286,7 +286,7 @@ class Web(Server[Request]):
             args = {**args, "expected_version": version}
         if (operation := person_ops().get(op)) is not None and "via" in operation.input.model_fields:
             args = {**args, "via": "browser"}
-        key = f"web/{held.id}/{key}"
+        key = f"web/{key}"
         if op == "message.send" and isinstance(gist := args.get("gist"), str):
             try:
                 gist, body = cut(gist, file=args.get("body") is not None)
@@ -313,10 +313,12 @@ def _json(value: Any) -> bytes:
 
 
 def _params(body: bytes) -> dict[str, Any]:
+    """A request's JSON object, Unicode throughout: JSON can escape half of a character, which no text holds."""
     try:
         params = json.loads(body or b"{}")
-    except ValueError:
-        raise Rejected(400, why="the body is JSON") from None
+        json.dumps(params, ensure_ascii=False).encode()
+    except (ValueError, RecursionError):
+        raise Rejected(400, why="the body is JSON, of Unicode text") from None
     if not isinstance(params, dict):
         raise Rejected(400, why="the body is a JSON object")
     return params

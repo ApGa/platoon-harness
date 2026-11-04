@@ -111,6 +111,68 @@ async def test_an_act_through_an_offline_window_a_lost_answer_and_a_reload_is_on
     assert errors == []
 
 
+async def test_an_act_answered_only_by_an_ended_session_goes_again_from_a_new_link_as_one_operation(
+    chromium: Browser, root: Path
+):
+    """`web` acted and the page heard only that its session had ended, as when `web` stops after acting: the act stays
+    kept, unanswered, and a new link opened over the page sends it again under its own key."""
+    team = solo(*[[Say("heard you")]] * 2)
+    async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "bob", "idle")
+        page, errors = await opened(chromium, web.link("control"), "status of 401")
+        await chat(page, "bob & you")
+
+        async def ended(route: Route) -> None:
+            await route.fetch()
+            await route.fulfill(status=401, json={"error": "this page's session has expired: open a new link"})
+
+        await page.route("**/x/command", ended)
+        await page.locator(COMPOSER).fill("only once")
+        await page.keyboard.press("Enter")
+        await expect(page.locator("#login")).to_have_class(re.compile(r"\bon\b"), timeout=SECONDS)
+        await expect(page.locator("#main .x-why")).to_have_text(re.compile("^Not answered"))
+        kept = await page.evaluate("Object.values(JSON.parse(sessionStorage.getItem('platoon-harness.acts')))")
+        await page.unroute("**/x/command", ended)
+        await page.goto(web.link("control"))
+        await expect(page.locator("#tip")).to_have_text(
+            "message.send, sent before the page was reloaded: done.", timeout=SECONDS
+        )
+        await chat(page, "bob & you")
+        await expect(said(page, "only once")).to_have_count(1)
+        sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
+        await page.context.close()
+
+    assert kept == [{"op": "message.send", "args": {"to": "@bob", "gist": "only once"}}]
+    assert sent == ["only once"]
+    assert errors == []
+
+
+async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknown(chromium: Browser, root: Path):
+    """Sent again, an act `web` failed on would fail for ever, so the page keeps nothing and says what it knows."""
+    failed = {"error": "Internal Server Error"}
+    async with (
+        Session.start(solo([Say("heard you")]), name="s", root=root, cwd=root) as session,
+        serving("s", root) as web,
+    ):
+        await in_state(session, "bob", "idle")
+        page, errors = await opened(chromium, web.link("control"), "status of 500")
+        await chat(page, "bob & you")
+        await page.route("**/x/command", lambda route: route.fulfill(status=500, json=failed))
+
+        await page.locator(COMPOSER).fill("met a failure")
+        await page.keyboard.press("Enter")
+
+        await expect(page.locator("#main .x-why")).to_have_text(
+            "failed: web failed on it (500): whether it took effect is unknown", timeout=SECONDS
+        )
+        kept = await page.evaluate("sessionStorage.getItem('platoon-harness.acts')")
+        await expect(page.locator(COMPOSER)).to_have_value("met a failure")
+        await page.context.close()
+
+    assert kept == "{}"
+    assert errors == []
+
+
 async def test_browsing_writes_nothing_moves_no_cursor_or_mark_and_receipts_say_delivered(
     chromium: Browser, root: Path
 ):

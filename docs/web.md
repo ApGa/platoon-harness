@@ -86,10 +86,12 @@ not hold.
 **Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run:
 these are the ops the terminal asks about too, one set both read, and nothing takes them back.
 
-**Once.** The page makes a key for each draft sent or button pressed, and keeps it until the act is answered. Until then it
-sends the act again, after a lost connection and after a reload of the page, since it keeps unanswered acts in the tab's
-own storage, and `web` answers a key it has seen with its first answer. So a retry is one operation: one message, one
-decision. The key is the page's, under its credential's own name, so no other browser's or client's meets it.
+**Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
+answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new link opened
+in the same tab, since it keeps unanswered acts in the tab's own storage, and `web` answers a key it has seen with its first
+answer, whichever link sends it. So a retry is one operation: one message, one decision. An act whose page's session ended
+before it was answered, as when `web` stops, says it was not answered, and goes again from the next link you open in that
+tab. `web` puts the key under `web/`, so no other client's meets it.
 
 **Refusals.** A refusal is an answer and is shown with its reason, never as success: under the composer, under a person's
 acts, or as a notice. An approval someone decided first says who and through what: `Already decided by you via tui.`

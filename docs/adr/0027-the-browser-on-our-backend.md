@@ -49,8 +49,8 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   where before any loopback origin passed.
 - **Commands.** `/x/command {op, args, key, expected_version}` runs `Session.submit`, and the kernel's grants decide.
   `expected_version` is the op's argument of that name, `via` is `browser` on an op that takes one and refused from the
-  page, and the key is the page's for one draft or press, under its credential's own name, so a retry is one operation and
-  no other client's key meets it. The ops asked about before they run are one set, `CONFIRMED`, which the terminal and the
+  page, and the key is the page's for one draft or press, 128 random bits under `web/`, so a retry is one operation and no
+  other client's key meets it. The ops asked about before they run are one set, `CONFIRMED`, which the terminal and the
   page both read.
 - **SwarmChat's requests.** Every `view_*` the page reaches answers from the projection or is disabled with its reason:
   search is real, over what the page shows; seeing as an agent and what had reached an agent are real, from delivery

@@ -235,6 +235,13 @@
 
 ### Fixed
 
+- From SwarmChat's page, an act whose answer was lost went again under a new key after a new link, since `web` put the key
+  under the link's session token, and so ran twice; and one `web` took whose page then heard its session had ended was shown as
+  refused. The key is the page's own, 32 lowercase hex under `web/`, whichever link sends it; an act a page's ended session left
+  unanswered says so, stays kept, and goes again from a new link opened over the page, which loads it again for the gate. A
+  failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
+  503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
+  refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
 - The browser's projection showed a message's body in place of its words whenever the body held them anywhere, so a file whose
   text held the message's words hid them. A body takes their place only when it begins or ends with the gist, as a cut gist does.
   An agent's end line said only that it ended, so a lead's answer given as its finish report was not in the page; it says what the

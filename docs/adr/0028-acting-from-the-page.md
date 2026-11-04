@@ -14,8 +14,10 @@ request can reach `web` and its answer never reach the page.
 
 - **One key per act, kept until answered.** The page makes a key for each draft sent or button pressed, and keeps the act,
   with its key, in the tab's own storage until it is answered. Until then it sends it again, every two seconds, after a
-  lost connection, and when the page loads after a reload. `web` puts the key under the credential's own name, and the
-  kernel answers a key it has seen with its first answer, so the retry is one operation. A refusal is an answer.
+  lost connection, and when the page loads after a reload or from a new link in the same tab. `web` puts the key under
+  `web/` and nothing else, and the kernel answers a key it has seen with its first answer, so the retry is one operation
+  whichever link sends it. A refusal is an answer, and so is a failure of `web`'s, which says whether the act took effect is
+  unknown; a page whose session ended was answered nothing, so its act stays kept.
 - **One cut, in Python.** `cut(text)` in the CLI's `ops` module makes a person's text a gist and a body, and the terminal
   and `web` both call it: the page sends what was typed as the gist, and `web` cuts it there, before `Session.submit`. A long
   text beside a file is refused by the same function, with the terminal's words, before anything is journaled.

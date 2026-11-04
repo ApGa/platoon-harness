@@ -120,12 +120,12 @@ async def test_a_sender_cannot_be_chosen_from_the_page_since_identity_comes_from
         page, errors = await opened(chromium, web.link("control"))
         await chat(page, "bob & you")
         forged = []
-        for field in ("sender", "actor", "from"):
+        for n, field in enumerate(("sender", "actor", "from")):
             args = {"to": "@bob", "gist": "as someone else", field: "@bob"}
             script = """async command => (await fetch('/x/command', {method: 'POST', body: JSON.stringify(command),
                 headers: {'Authorization': 'Bearer ' + localStorage.getItem('swarmchat.view.token'),
                           'Content-Type': 'application/json'}})).json()"""
-            forged.append(await page.evaluate(script, {"op": "message.send", "args": args, "key": f"forged-{field}"}))
+            forged.append(await page.evaluate(script, {"op": "message.send", "args": args, "key": f"{n:032x}"}))
         await page.locator(COMPOSER).fill("as myself")
         await page.keyboard.press("Enter")
         await expect(said(page, "as myself")).to_have_count(1, timeout=SECONDS)

@@ -20,12 +20,10 @@ _BYTES = 32
 
 
 class Held(NamedTuple):
-    """A credential, by the hash of its token: its class, when it stops opening anything, and `id`, which names what
-    it does, so that no two clients' commands meet."""
+    """A credential, by the hash of its token: its class, and when it stops opening anything."""
 
     kind: Class
     expires: float
-    id: str
 
 
 def _hash(token: str) -> str:
@@ -44,7 +42,7 @@ class Credentials:
         """A link of `kind`, which opens once, within `LINK_SECONDS`."""
         self._forget()
         link = secrets.token_hex(_BYTES)
-        self._links[_hash(link)] = Held(kind, self._clock.now() + LINK_SECONDS, "")
+        self._links[_hash(link)] = Held(kind, self._clock.now() + LINK_SECONDS)
         return link
 
     def exchange(self, link: str) -> tuple[str, Held] | None:
@@ -53,7 +51,7 @@ class Credentials:
         if held is None or held.expires <= self._clock.now():
             return None
         token = secrets.token_hex(_BYTES)
-        session = Held(held.kind, self._clock.now() + SESSION_SECONDS, _hash(token)[:16])
+        session = Held(held.kind, self._clock.now() + SESSION_SECONDS)
         self._sessions[_hash(token)] = session
         return token, session
 

@@ -37,6 +37,11 @@ VIEWS = (
 )
 
 
+def key(n: int) -> str:
+    """A key as the page makes one for an act: 32 lowercase hex."""
+    return f"{n:032x}"
+
+
 @pytest.fixture(autouse=True)
 def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
@@ -252,7 +257,7 @@ async def test_a_command_runs_one_op_through_the_session(web, session):
     browser = await Browser(web).opened("control")
 
     reply = await browser.request(
-        "POST", "/x/command", {"op": "message.send", "args": {"to": "#general", "gist": "hi"}, "key": "draft-1"}
+        "POST", "/x/command", {"op": "message.send", "args": {"to": "#general", "gist": "hi"}, "key": key(1)}
     )
 
     outcome = reply.json()
@@ -263,7 +268,7 @@ async def test_a_command_runs_one_op_through_the_session(web, session):
 
 async def test_a_command_retried_under_its_key_is_one_operation(web, session):
     browser = await Browser(web).opened("control")
-    command = {"op": "message.send", "args": {"to": "#general", "gist": "once"}, "key": "draft-2"}
+    command = {"op": "message.send", "args": {"to": "#general", "gist": "once"}, "key": key(2)}
 
     first = (await browser.request("POST", "/x/command", command)).json()
     again = (await browser.request("POST", "/x/command", command)).json()
@@ -272,24 +277,27 @@ async def test_a_command_retried_under_its_key_is_one_operation(web, session):
     assert len(await of_type(session, "message.sent")) == 1
 
 
-async def test_two_browsers_keys_never_meet(web, session):
+async def test_an_act_s_key_is_its_own_whichever_link_sends_it(web, session):
+    """A new link is a new session token, and an act a page kept goes again from it under its key."""
     one, other = await Browser(web).opened("control"), await Browser(web).opened("control")
-    command = {"op": "message.send", "args": {"to": "#general", "gist": "each"}, "key": "same"}
+    command = {"op": "message.send", "args": {"to": "#general", "gist": "once"}, "key": key(3)}
 
-    await one.request("POST", "/x/command", command)
-    await other.request("POST", "/x/command", command)
+    first = (await one.request("POST", "/x/command", command)).json()
+    again = (await other.request("POST", "/x/command", command)).json()
 
-    assert len(await of_type(session, "message.sent")) == 2
+    assert first["key"] == f"web/{key(3)}" and again == first
+    assert len(await of_type(session, "message.sent")) == 1
 
 
 @pytest.mark.parametrize(
     "command",
     [
         {"op": "message.send", "args": {"to": "#general", "gist": "x"}},
-        {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": "a key with spaces"},
-        {"op": "message.send", "args": [], "key": "k"},
-        {"op": "approval.resolve", "args": {"id": "a", "verdict": "allow", "via": "tui"}, "key": "k"},
-        {"op": "approval.resolve", "args": {"id": "a", "expected_version": 1}, "expected_version": 1, "key": "k"},
+        {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": "draft-1"},
+        {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": "A" * 32},
+        {"op": "message.send", "args": [], "key": key(1)},
+        {"op": "approval.resolve", "args": {"id": "a", "verdict": "allow", "via": "tui"}, "key": key(1)},
+        {"op": "approval.resolve", "args": {"id": "a", "expected_version": 1}, "expected_version": 1, "key": key(1)},
     ],
 )
 async def test_a_command_not_as_the_page_sends_one_is_refused(web, session, command):
@@ -300,10 +308,44 @@ async def test_a_command_not_as_the_page_sends_one_is_refused(web, session, comm
     assert await session.head() == head
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"op": "message.send", "args": {"to": "#general", "gist": "half \\ud800 of a character' + b"!" * 300 + b'"}}',
+        b"[" * 100_000 + b"]" * 100_000,
+    ],
+)
+async def test_a_body_that_is_not_json_of_unicode_text_is_refused_with_no_event(web, session, body):
+    browser = await Browser(web).opened("control")
+    head = await session.head()
+
+    reply = await browser.request("POST", "/x/command", body)
+
+    assert reply.status == 400 and "Unicode" in reply.json()["error"]
+    assert await session.head() == head
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        b'{"chats": 5}',
+        b'{"from": [7]}',
+        b'{"until": ["x", "c", 1]}',
+        b'{"until": [1.0, "c", "x"]}',
+        b'{"until": [1.0, "c", 1e400]}',
+        b'{"limit": 1e400}',
+    ],
+)
+async def test_a_search_the_page_could_not_have_made_is_refused_as_such(web, params):
+    reply = await (await Browser(web).opened("view")).request("POST", "/v1/view_search", params)
+
+    assert reply.status == 400
+
+
 async def test_the_kernel_decides_what_a_person_may_run(web):
     browser = await Browser(web).opened("control")
 
-    reply = await browser.request("POST", "/x/command", {"op": "agent.start", "args": {}, "key": "k"})
+    reply = await browser.request("POST", "/x/command", {"op": "agent.start", "args": {}, "key": key(1)})
 
     assert reply.status == 200 and reply.json()["refusal"]["code"] in ("not_permitted", "invalid")
 
@@ -320,8 +362,8 @@ async def test_an_approval_takes_its_version_and_says_browser_and_the_loser_hear
             args = {"id": approval["id"], "verdict": "allow"}
             command = {"op": "approval.resolve", "args": args, "expected_version": approval["version"]}
 
-            won = (await one.request("POST", "/x/command", command | {"key": "press-1"})).json()
-            lost = (await other.request("POST", "/x/command", command | {"key": "press-2"})).json()
+            won = (await one.request("POST", "/x/command", command | {"key": key(1)})).json()
+            lost = (await other.request("POST", "/x/command", command | {"key": key(2)})).json()
             resolved = await of_type(session, "approval.resolved")
 
     assert won["refusal"] is None
@@ -333,7 +375,7 @@ async def test_an_approval_takes_its_version_and_says_browser_and_the_loser_hear
 async def test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it(web, session):
     browser = await Browser(web).opened("control")
     text = "a long line " * 40
-    command = {"op": "message.send", "args": {"to": "#general", "gist": text}, "key": "long"}
+    command = {"op": "message.send", "args": {"to": "#general", "gist": text}, "key": key(4)}
 
     first = (await browser.request("POST", "/x/command", command)).json()
     again = (await browser.request("POST", "/x/command", command)).json()
@@ -349,7 +391,7 @@ async def test_a_long_message_beside_a_file_is_refused_with_no_event(web, sessio
     head = await session.head()
     args = {"to": "#general", "gist": "x" * 300, "body": stored}
 
-    reply = await browser.request("POST", "/x/command", {"op": "message.send", "args": args, "key": "both"})
+    reply = await browser.request("POST", "/x/command", {"op": "message.send", "args": args, "key": key(5)})
 
     assert reply.status == 400 and "two bodies" in reply.json()["error"]
     assert await session.head() == head
@@ -359,7 +401,7 @@ async def test_a_body_is_stored_for_a_command_to_cite(web, session):
     browser = await Browser(web).opened("control")
 
     stored = (await browser.request("POST", "/x/body", b"the whole of it")).json()
-    command = {"op": "message.send", "args": {"to": "#general", "gist": "a file", "body": stored["ref"]}, "key": "f"}
+    command = {"op": "message.send", "args": {"to": "#general", "gist": "a file", "body": stored["ref"]}, "key": key(6)}
     sent = (await browser.request("POST", "/x/command", command)).json()
 
     assert stored["ref"].startswith("sha256:") and sent["refusal"] is None
@@ -428,7 +470,7 @@ async def test_on_history_the_page_may_do_nothing_and_names_the_command_that_res
     async with Session.attach("s", root=root) as history, served(history, root, clock) as web:
         browser = await Browser(web).opened("control")
         info = await browser.view("view_info")
-        command = {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": "k"}
+        command = {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": key(1)}
         refused = (await browser.request("POST", "/x/command", command)).json()["refusal"]
 
     assert info["read_only"] is True and info["x"]["live"] is False and info["x"]["may"] == []
