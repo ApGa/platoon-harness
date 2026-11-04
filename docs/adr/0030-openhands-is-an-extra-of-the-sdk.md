@@ -7,7 +7,7 @@
 [ADR 0008](0008-driver-contract-and-wire.md) ran OpenHands through the wire in an environment of its own, as `openhands-sdk` 1.59.0
 cannot share one with `mcp` 2.3.0 or ACP 1.0.0rc3. Its worker became a distribution apart, `platoon-harness-openhands` in
 `extensions/openhands`, which the runtime found on `PATH`. Nothing was published, so the one install that ran was a second
-environment built from a checkout's lock, which every user and every slow run had to build, and a run that had not skipped. The
+environment built from a checkout's lock, which every user and every slow run had to build, and a run without one skipped. The
 worker's command needed a case of its own in the naming law, and the workspace's one lock held OpenHands' pins all the same. The
 owner chose otherwise: "I am actually ok with importing openhands sdk in our package, making it an optional/extra dependency."
 
@@ -40,7 +40,7 @@ owner chose otherwise: "I am actually ok with importing openhands sdk in our pac
 
 - The dev environment installs the extra, so the OpenHands tests run in every full slow run, and none of them skips.
 - An environment with the extra holds OpenHands' pins: our lock moved `filelock` to 3.32.7, and the `[acp]` extra, when it lands,
-  cannot share an environment with this one.
+  cannot share an environment with this one. `litellm`, which the worker imports too, floats in the range `openhands-sdk` asks.
 - `ty` checks the worker against the real SDK, so its allowance for unresolved `openhands` and `litellm` is gone.
 - Run as a plain wire command, the worker gets what any wire program gets: the shell's proxy variables only where an auth profile
   names them, and the socket directory every tmux of the user's shares.

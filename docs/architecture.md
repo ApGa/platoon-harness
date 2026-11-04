@@ -1072,7 +1072,7 @@ all of this through `agent.start`, and a report has no field for it.
 ## 10. Tool plane
 
 The SDK ships a tiny tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, plus a stdlib stdio
-shim for harnesses without HTTP. It is ours rather than the `mcp` package because that package cannot share an environment
+shim for harnesses without HTTP. It is ours rather than the `mcp` package because `mcp` 2.3.0 cannot share an environment
 with `platoon[ors]` or OpenHands, and because we need strict argument refusal and token-only identity. It is contract-tested
 against the official client and against each real harness.
 
