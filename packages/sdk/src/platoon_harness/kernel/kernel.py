@@ -44,6 +44,7 @@ from .model import (
     NAME_LIMIT,
     Delta,
     Event,
+    JournalError,
     Outcome,
     Page,
     Principal,
@@ -409,7 +410,7 @@ class Kernel:
     def _reading(self) -> Generator[sqlite3.Connection]:
         """A connection inside one short read transaction."""
         if self.closed:
-            raise Refused("unavailable", "the kernel is closed")
+            raise Refused("unavailable", "the kernel is closed" if self.failure is None else str(self.failure))
         if self._frozen is not None and fingerprint(self._folder) != self._frozen:
             raise Refused("unavailable", "a writer changed this journal; open it again")
         try:
@@ -600,13 +601,17 @@ class Kernel:
         return self._pulse.closed
 
     @property
+    def failure(self) -> JournalError | None:
+        """Why this kernel took nothing more: a commit that failed, which closed it as a kill would."""
+        return None if self._writer is None else self._writer.failure
+
+    @property
     def read_only(self) -> bool:
         return self._writer is None
 
     def close(self) -> None:
-        """Finish queued commands, checkpoint the WAL to empty, and let go of the lock."""
-        if self.closed:
-            return
+        """Finish queued commands, checkpoint the WAL to empty, and let go of the lock. One a failed commit closed lets
+        go of it too, and closing again does nothing."""
         self._pulse.close()
         for ring in tuple(self._rings.values()):
             ring.close()

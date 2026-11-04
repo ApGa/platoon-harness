@@ -69,25 +69,26 @@ async def test_a_refiring_after_a_crash_runs_the_op_once(kernel, clock):
     assert [event.type for event in events_of(kernel, after=head)] == ["timer.cleared"]
 
 
-async def test_a_firing_lost_to_a_failed_commit_stays_set(kernel, clock):
+async def test_a_firing_lost_to_a_failed_commit_stays_set_for_the_next_kernel(folder, clock):
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
     await remind(kernel, 1000.0, "ring")
-    writer = kernel._writer
-    seal, faults = writer._seal, [sqlite3.OperationalError("disk I/O error")]
 
     def failing(db):
-        if faults:
-            raise faults.pop()
-        return seal(db)
+        raise sqlite3.OperationalError("disk I/O error")
 
-    writer._seal = failing
+    kernel._writer._seal = failing
 
     assert await fire_timers(kernel) == 1001.0
+    assert kernel.failure is not None
+    kernel.close()
 
-    assert pending(kernel) == ["ring"]
-    assert reminders(kernel) == []
-    assert await fire_timers(kernel) is None
-    assert reminders(kernel) == ["ring"]
-    assert pending(kernel) == []
+    again = Kernel.open(folder, clock=clock, extensions=[notes])
+    assert pending(again) == ["ring"]
+    assert reminders(again) == []
+    assert await fire_timers(again) is None
+    assert reminders(again) == ["ring"]
+    assert pending(again) == []
+    again.close()
 
 
 async def test_a_busy_firing_stays_set_until_told_when_to_retry(kernel, clock, gate):

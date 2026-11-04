@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .journal import Checkpointer, scrub_wal, truncate_wal
-from .model import Refused
+from .model import JournalError, Refused
 from .pulse import Pulse, settle
 
 log = logging.getLogger("platoon_harness.kernel")
@@ -36,7 +36,9 @@ class _Job:
 class Writer:
     """Holds the journal for writing: the one connection, the lock and the checkpoints.
 
-    Drains jobs into transactions of up to BATCH_LIMIT, so one fsync covers a whole batch.
+    Drains jobs into transactions of up to BATCH_LIMIT, so one fsync covers a whole batch. A batch that fails ends the
+    writing, as a kill would: `failure` says why, every later job is refused with it, and the pulse closes, so that
+    whoever waits on the journal learns it at once.
     """
 
     def __init__(
@@ -58,6 +60,7 @@ class Writer:
         self._inflight: Counter[str] = Counter()
         self._batch_seconds = 0.001
         self._stopping = False
+        self.failure: JournalError | None = None
         self._checkpointer = Checkpointer(path)
         self._thread = threading.Thread(target=self._run, name="journal-writer", daemon=True)
         self._thread.start()
@@ -73,6 +76,8 @@ class Writer:
         owner = job.owner
         reserved = owner == "runtime"
         with self._lock:
+            if self.failure is not None:
+                raise Refused("unavailable", str(self.failure))
             if self._stopping:
                 raise Refused("unavailable", "the kernel is closing")
             limit = SESSION_LIMIT + RUNTIME_RESERVE if reserved else SESSION_LIMIT
@@ -97,14 +102,17 @@ class Writer:
             raise Refused("busy", "a reader is holding the WAL", retry_after=1.0)
 
     def stop(self) -> None:
-        """Finish everything queued, checkpoint the WAL to empty, and let go of the journal."""
+        """Finish everything queued, checkpoint the WAL to empty, and let go of the journal. After a failed batch the
+        WAL stays as a kill would leave it. Stopping again does nothing."""
         with self._lock:
+            if self._stopping:
+                return
             self._stopping = True
             self._jobs.put(None)
         self._thread.join()
         self._checkpointer.stop()
         try:
-            if not truncate_wal(self._db):
+            if self.failure is None and not truncate_wal(self._db):
                 log.warning("%s keeps a WAL: a reader held it, so the folder is not portable yet", self._path)
         finally:
             self._db.close()
@@ -127,9 +135,13 @@ class Writer:
                     running = False
                     break
                 jobs.append(job)
-            self._commit(jobs)
+            if self.failure is None:
+                self._commit(jobs)
+            else:
+                self._answer(jobs, [Refused("unavailable", str(self.failure))] * len(jobs), None)
 
     def _commit(self, jobs: list[_Job]) -> None:
+        """One batch, in one transaction. One that fails is no command's own, and what it left is unknown."""
         db = self._db
         started = time.perf_counter()
         results: list[Any] = []
@@ -145,14 +157,21 @@ class Writer:
             log.exception("batch of %d failed", len(jobs))
             self._roll_back()
             results = [Refused("unavailable", f"journal: {error}")] * len(jobs)
-        # Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending
-        # live text an item replaced, is done before a follower on its loop looks.
+            with self._lock:
+                self.failure = JournalError(f"{self._path}: a commit failed, so nothing more is recorded: {error}")
+        self._answer(jobs, results, head)
+        self._batch_seconds = time.perf_counter() - started
+        if self.failure is not None:
+            self._pulse.close()
+
+    def _answer(self, jobs: list[_Job], results: list[Any], head: int | None) -> None:
+        """Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending
+        live text an item replaced, is done before a follower on its loop looks."""
         woken = () if head is None else self._pulse.advance(head)
         acks = zip((job.future for job in jobs), results, strict=True)
         settle([*acks, *((waiter, None) for waiter in woken)])
         for job in jobs:
             self._done(job)
-        self._batch_seconds = time.perf_counter() - started
 
     def _attempt(self, job: _Job) -> Any:
         """A refusal is the job's own. Anything else takes the batch with it."""

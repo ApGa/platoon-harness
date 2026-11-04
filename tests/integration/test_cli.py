@@ -73,6 +73,22 @@ async def test_each_way_a_run_ends_has_its_exit_code(
     assert (done.lines()[-1]["reason"], done.code) == (reason, code), done.stderr
 
 
+async def test_a_failed_commit_ends_a_run_with_74_naming_the_journal_and_a_resume_goes_on(cli: Cli):
+    team = cli.write("solo.toml", solo("breaking"))
+
+    done = await cli.run("run", "go", "--team", team, "--trust", "--name", "s", "--json")
+
+    assert done.code == 74, done.stderr
+    assert "journal.sqlite: a commit failed, so nothing more is recorded: disk I/O error" in done.stderr
+    assert "ending" not in [line.get("type") for line in done.lines()]
+    assert "session.stopped" not in types_of(done.lines())
+    resumed = await cli.run("session", "resume", "s", "--json")
+    lines = resumed.lines()
+    assert (resumed.code, lines[-1]["reason"]) == (0, "settled"), resumed.stderr
+    told = [line["gist"] for line in lines if line.get("type") == "message.sent"]
+    assert told[0].startswith("Your last turn was cut off by a crash")
+
+
 async def test_a_session_cancelled_from_another_process_ends_its_run_with_130(cli: Cli):
     team = cli.write("solo.toml", solo("listening"))
     run = await cli.start("run", "go", "--team", team, "--trust", "--name", "s", "--json")

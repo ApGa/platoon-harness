@@ -11,7 +11,20 @@ from .effects import Effect, Effects
 from .extension import Extension
 from .journal import Filesystem, filesystem, is_held
 from .kernel import Kernel, registry
-from .model import GIST_LIMIT, NAME, Delta, Event, ModelRef, Outcome, Page, Principal, Refusal, Refused, hash_token
+from .model import (
+    GIST_LIMIT,
+    NAME,
+    Delta,
+    Event,
+    JournalError,
+    ModelRef,
+    Outcome,
+    Page,
+    Principal,
+    Refusal,
+    Refused,
+    hash_token,
+)
 from .naming import tool_name
 from .op import Args, Op, op
 from .pulse import first
@@ -33,6 +46,7 @@ __all__ = [
     "Filesystem",
     "Grant",
     "Grants",
+    "JournalError",
     "Kernel",
     "ManualClock",
     "ModelRef",

@@ -86,13 +86,16 @@ class Runtime:
                 pid=os.getpid(), started=self.kernel.clock.now(), socket=str(self.control.path), incarnation=incarnation
             )
             write_private(self.folder / RUNNING, running.model_dump_json())
-        except BaseException:
+        except BaseException as error:
+            failure = self.kernel.failure
             if incarnation is None:
                 self.host.closing()
                 await self.host.close(GRACE)
                 await self._close()
             else:  # This incarnation has begun in the journal, so it ends there as an owner's does.
                 await self.stop()
+            if failure is not None and failure is not error:
+                raise failure from error
             raise
 
     async def _issue_credentials(self) -> None:
@@ -111,9 +114,12 @@ class Runtime:
         self._stop_asked.set()
 
     async def run(self) -> None:
-        """Serve until asked to stop, or until the session has drained: nothing is left for a detached runtime to do."""
+        """Serve until asked to stop, or until the session has drained: nothing is left for a detached runtime to do. A
+        commit that fails ends it with `JournalError`, as nothing more can be recorded."""
         kernel = self.kernel
         while not self._stop_asked.is_set():
+            if kernel.failure is not None:
+                raise kernel.failure
             head = kernel.head
             status = kernel.query(kernel.runtime, "session.status", {}).result
             if status["state"] != "open" and status["settled"]:
@@ -121,9 +127,12 @@ class Runtime:
             await first(kernel.changed(head), self._stop_asked.wait())
 
     def _records(self) -> list[dict[str, Any]]:
-        return self.kernel.query(self.kernel.runtime, "agent.records", {}).result
+        """Every agent's record, or none once the kernel has closed, as a failed commit closes it."""
+        return self.kernel.query(self.kernel.runtime, "agent.records", {}).result or []
 
     async def stop(self, grace: float = GRACE) -> None:
+        """The owner's shutdown. After a failed commit only the process trees end, and nothing is recorded, as after a
+        kill: the next runtime finds the turns that were open and tells their agents they were cut off."""
         if self._stopped:
             return
         self._stopped = True
@@ -131,13 +140,15 @@ class Runtime:
         limit = grace + _SUBMIT_SECONDS
         host.closing()
         try:
-            await first(self._interrupt_turns(grace), kernel.clock.sleep(limit))
+            if not kernel.closed:
+                await first(self._interrupt_turns(grace), kernel.clock.sleep(limit))
         finally:
             try:
                 await self._end_daemons()
                 await host.close(grace)
-                bundle = await host.bundle()
-                await first(self._hand_back(bundle), kernel.clock.sleep(limit))
+                if not kernel.closed:
+                    bundle = await host.bundle()
+                    await first(self._hand_back(bundle), kernel.clock.sleep(limit))
             finally:
                 await self._close()
         log.info("session %s stopped", self.folder.name)

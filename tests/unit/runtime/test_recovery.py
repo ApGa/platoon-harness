@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Refused, Session, Team, __version__
+from platoon_harness import JournalError, Refused, Session, Team, __version__
 from platoon_harness.drivers import (
     AgentSpec,
     Capabilities,
@@ -819,6 +819,38 @@ async def test_an_agent_whose_turn_was_lost_is_told_and_woken_on_resume(tmp_path
 
     assert items[-1].gist == "I looked first"
     assert [(event.stream, event.data["sender"]) for event in told] == [("inbox/bob", "runtime")]
+
+
+async def test_a_failed_commit_ends_the_runtime_as_a_kill_would_and_a_resume_tells_its_turn_it_was_cut_off(tmp_path):
+    session = await Session.start(comes_back(), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await in_state(session, "bob", "running")
+    runtime = session._runtime
+    assert runtime is not None
+    head = runtime.kernel.head
+
+    def failing(db: sqlite3.Connection) -> int:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    runtime.kernel._writer._seal = failing
+    with pytest.raises(JournalError, match="a commit failed"):
+        await session.send("@bob", "anyone there?")
+    with pytest.raises(JournalError, match="disk I/O error"):
+        await asyncio.wait_for(runtime.run(), SECONDS)
+    with pytest.raises(JournalError):
+        await session.status()
+    await session.leave()
+
+    assert not is_held(tmp_path / "sessions" / "s")
+    async with Session.attach("s", root=tmp_path) as history:
+        left = await journal(history)
+    assert left[-1].seq == head
+    assert "session.stopped" not in [event.type for event in left]
+    async with Session.resume("s", root=tmp_path) as session:
+        items = await until(lambda: of_type(session, "item.recorded"), session)
+        told = await notices(session)
+    assert items[-1].gist == "I looked first"
+    assert [event.gist.partition(".")[0] for event in told] == ["Your last turn was cut off by a crash"]
 
 
 async def test_a_crash_says_what_a_resumed_harness_may_also_show_and_does_not_contradict_it(tmp_path):

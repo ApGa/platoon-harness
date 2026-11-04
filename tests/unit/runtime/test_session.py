@@ -148,6 +148,7 @@ def test_what_a_user_needs_is_at_the_top():
     assert set(platoon_harness.__all__) == {
         "ConfigError",
         "Ending",
+        "JournalError",
         "Refused",
         "Role",
         "Session",

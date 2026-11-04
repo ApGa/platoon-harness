@@ -105,6 +105,7 @@ platoon_harness.http.response
 platoon_harness.http.SECONDS
 platoon_harness.http.Server
 platoon_harness.http.unless
+platoon_harness.JournalError
 platoon_harness.kernel.Args
 platoon_harness.kernel.Clock
 platoon_harness.kernel.Daemon
@@ -122,6 +123,7 @@ platoon_harness.kernel.Grant
 platoon_harness.kernel.Grants
 platoon_harness.kernel.hash_token
 platoon_harness.kernel.is_held
+platoon_harness.kernel.JournalError
 platoon_harness.kernel.Kernel
 platoon_harness.kernel.ManualClock
 platoon_harness.kernel.ModelRef

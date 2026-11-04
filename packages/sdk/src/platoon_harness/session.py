@@ -6,7 +6,9 @@
     print(ending.agents[0]["report"]["gist"])
 
 The owner's leaving stops the agents and keeps the folder. A guest's leaving only disconnects. `submit` returns the
-kernel's `Outcome` and never raises a refusal; every typed method returns the result and raises `Refused`.
+kernel's `Outcome` and never raises a refusal; every typed method returns the result and raises `Refused`. A commit that
+fails ends an owner's runtime, as a kill would, and from then on every call raises `JournalError`: `Session.resume` goes
+on from what the journal holds.
 """
 
 import asyncio
@@ -259,7 +261,13 @@ class Session:
                 self._link = await self._attached()
             return self._current()
 
+    def _failed(self) -> None:
+        """An owner whose runtime a failed commit ended has nothing worth asking, and says why."""
+        if self._runtime is not None and (failure := self._runtime.kernel.failure) is not None:
+            raise failure
+
     def _current(self) -> Link:
+        self._failed()
         if self._link is None:
             detail = "not started: `await` it or use `async with`" if self._enter else "this session was left"
             raise Refused("unavailable", detail)
@@ -273,9 +281,12 @@ class Session:
             link = await self._reattach(link)
         for _ in range(_ATTEMPTS):
             try:
-                return await call(link)
+                answered = await call(link)
             except Closed:
                 link = await self._reattach(link)
+            else:
+                self._failed()
+                return answered
         raise Refused("unavailable", f"the runtime of session {self.name} keeps going away")
 
     @property

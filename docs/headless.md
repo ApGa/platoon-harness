@@ -49,6 +49,8 @@ platoon-harness: session 20261103-101500-1a2b3c4d: follow it with `platoon-harne
 ran out, 3 it timed out, 4 it needs a person, 130 cancelled. Ctrl+C runs the owner's shutdown, which keeps the session resumable.
 What it cannot run as given exits 64 before any cost: a `--to` naming no agent the session starts, or a name that is taken.
 Several agents on one plan login need `--plan-login`, which says this is your own work; without it the run exits 78 and says so.
+A commit to the session's journal that fails, as on a full disk, ends the run with exit 74, naming the journal, as a kill would:
+`platoon-harness session resume` goes on from what the journal holds.
 
 In CI, give the prompt on stdin, answer approvals by a stated policy, bound the wait, and read JSONL:
 

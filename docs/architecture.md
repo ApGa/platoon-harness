@@ -210,7 +210,7 @@ answers only a command its journal answered under the same key, as any retry is 
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence that
 no op reads, and a client draws by. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
-`push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed`, `failure` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
 `is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, `first(work, *rivals)`
 races awaitables and drops what lost, which is how anything here sleeps on two things, and `registry(extensions)` is the op table a
 kernel holding them has, its own ops among them, which a surface derives from before any session exists.
@@ -246,7 +246,10 @@ through `submit` too, so no second path exists.
    caller text cannot grow the journal.
 4. **Commit.** One fsync per batch. Only then does the head move and are futures resolved, and only then are followers woken,
    so whoever is acked finds their write under `head`, and what it does on its ack is done before a follower on its loop looks. If the commit fails, the batch's outcome is unknown, since its bytes may have landed all the same: each command
-   gets `unavailable` and should retry under its key, which answers from the journal if they did.
+   gets `unavailable`, and the kernel takes nothing more, as after a kill. Every later command is refused `unavailable` with what
+   the journal said, the kernel closes, so whatever waits on it wakes, `Kernel.failure` holds a `JournalError` saying why, and the
+   runtime ends (§5.4). A retry under the same key on the next runtime answers from the journal if the bytes landed. There is no
+   count of failures to allow, since no failed commit that a second try would pass has been seen.
 
 ### 5.2 Tables
 
@@ -331,6 +334,9 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
   sets a timer for it, and `effect.finish` clears that timer.
+- **A failed commit** ends the runtime as a kill would: `Runtime.run` raises the kernel's `JournalError`, an owner's `Session`
+  raises it from every call, and the owner's shutdown ends the process trees and records nothing, so the turns that were open
+  stay open in the journal and the next runtime finds them as it finds a crash's.
 - **Recovery** is one function: take `lock`, write `runtime.started`, then per agent **reap, resume,
   reconcile, dispatch**. Every `started` row becomes `effect.uncertain` and its declared policy applies: `retry`,
   `reconcile` or `surface`. `reconcile` needs a live link, so it runs after resume, and it is `unknown` when resume is
@@ -373,7 +379,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 characters. The clock daemon sleeps on the injected `Clock` until the next is due, submits `op` as `runtime` under `key`, then
 submits `timer.clear`. A crash between the two fires again under the same key, which answers from the journal, so the op runs once.
 A refused firing is still cleared and stays journaled. A firing that left no event, because the writer was busy or its commit
-failed, stays set and is tried again. Any op can emit `timer.set`, and `timer.cleared` to cancel.
+failed, stays set and is tried again, after a failed commit by the next runtime. Any op can emit `timer.set`, and `timer.cleared` to cancel.
 
 ### 5.5 Views
 
@@ -1262,7 +1268,9 @@ timeout. A harness that never ends its turn can hang it too, which is what a wal
 
 `platoon-harness run` and `session resume` exit with these. Every command exits 64 for a command line that cannot run as it was
 given, which for those two is any refusal before the session is theirs, such as a name that is taken or no session of that name, so
-neither exits 1 for one. Every command exits 78 for a configuration error: a team, a root or a machine that cannot be used as it is,
+neither exits 1 for one. `run`, `serve` and `session resume` exit 74 when a commit to the journal fails, which ends the runtime as a
+kill would (§5.4), naming the journal and what it said: 74 is sysexits' input/output error, and `session resume` goes on from what
+the journal holds. Every command exits 78 for a configuration error: a team, a root or a machine that cannot be used as it is,
 as `team check`, `doctor` and a plan login refused headless say. Any other command exits 1 when it is refused, as `ph` does.
 
 **The command line** is a client like any other, a thin one: `run` is `Session.start`, a person's message and `settled()`, then the

@@ -1,8 +1,10 @@
 """One team's harnesses, scripted: in-process, or `scripts.py <name>` as a wire program of its own."""
 
 import asyncio
+import gc
 import itertools
 import json
+import sqlite3
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,6 +14,7 @@ from platoon_harness import Team
 from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Delta, DriverInfo, Item, Reporter
 from platoon_harness.drivers.wire import serve
 from platoon_harness.kernel import GIST_LIMIT
+from platoon_harness.kernel.writer import Writer
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 PROGRAM = str(Path(__file__))
@@ -153,6 +156,21 @@ class Deaf(ScriptedDriver):
         return None
 
 
+class Breaking(Resumable):
+    """Its first turn makes the next commit of the runtime it runs in fail, as on a disk that has gone, and hangs. Once
+    back it behaves."""
+
+    async def _walk(self, steps: Any) -> str:
+        if not self.back:
+            writer = next(found for found in gc.get_objects() if isinstance(found, Writer))
+            writer._seal = _gone
+        return await super()._walk(steps)
+
+
+def _gone(db: Any) -> int:
+    raise sqlite3.OperationalError("disk I/O error")
+
+
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
@@ -175,6 +193,7 @@ HARNESSES = {
     "planned": lambda: OnAPlan(itertools.repeat([Say("done")])),
     "hostile": lambda: ScriptedDriver([[Say(HOSTILE)]]),
     "streaming": lambda: Streaming(itertools.repeat([Say("")])),
+    "breaking": lambda: Breaking([[Say("on it"), Hang()]], [[Say("back")]]),
 }
 
 

@@ -3,7 +3,7 @@
 import asyncio
 import sqlite3
 
-from platoon_harness.kernel import Args, Extension, Kernel, Principal, Txn, op
+from platoon_harness.kernel import Args, Extension, JournalError, Kernel, Principal, Txn, op
 from platoon_harness.kernel.writer import BATCH_LIMIT, PRINCIPAL_LIMIT, RUNTIME_RESERVE, SESSION_LIMIT
 
 from .support import HUMAN, enroll, events_of, grant, notes, refusal_of, result_of
@@ -36,7 +36,8 @@ async def test_a_batch_is_one_transaction_of_at_most_64_commands(kernel, gate):
     assert sizes == [1, BATCH_LIMIT, BATCH_LIMIT, 150 - 2 * BATCH_LIMIT]
 
 
-async def test_a_commit_failure_acks_nothing_and_commands_can_retry(kernel, gate):
+async def test_a_failed_commit_ends_the_writer_as_a_kill_would_and_a_retry_answers_from_the_next(folder, clock, gate):
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, gate.extension()])
     held = await hold_writer(kernel, gate)
     seal = kernel._writer._seal
     faults = iter([None, OSError("disk gone")])
@@ -54,11 +55,23 @@ async def test_a_commit_failure_acks_nothing_and_commands_can_retry(kernel, gate
     await held
 
     assert refusal_of(await task) == "unavailable"
-    assert result_of(await kernel.submit(kernel.runtime, "note.add", {}, key="k"))
-    assert [event.type for event in events_of(kernel)].count("note.added") == 1
+    later = await kernel.submit(kernel.runtime, "note.add", {}, key="k")
+    assert refusal_of(later) == "unavailable"
+    assert "a commit failed" in later.refusal.detail and "journal.sqlite" in later.refusal.detail
+    assert isinstance(kernel.failure, JournalError) and "disk gone" in str(kernel.failure)
+    assert kernel.closed
+    assert not await kernel._pulse.wait(kernel.head)
+    kernel.close()
+    kernel.close()
+
+    again = Kernel.open(folder, clock=clock, extensions=[notes, gate.extension()])
+    assert again.failure is None
+    assert result_of(await again.submit(again.runtime, "note.add", {}, key="k"))
+    assert [event.type for event in events_of(again)].count("note.added") == 1
+    again.close()
 
 
-async def test_a_failed_rollback_still_answers_and_the_journal_stays_loud(folder, clock):
+async def test_a_failed_rollback_still_answers_and_ends_the_writer_loudly(folder, clock):
     class Broken:
         """A connection on a disk that has gone: nothing can be committed or rolled back."""
 
@@ -79,10 +92,10 @@ async def test_a_failed_rollback_still_answers_and_the_journal_stays_loud(folder
 
     assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {})) == "unavailable"
     assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {})) == "unavailable"
+    assert "disk I/O error on COMMIT" in str(kernel.failure)
 
     kernel._writer._db = real
     real.execute("ROLLBACK")
-    assert result_of(await kernel.submit(kernel.runtime, "note.add", {}))
     kernel.close()
 
 

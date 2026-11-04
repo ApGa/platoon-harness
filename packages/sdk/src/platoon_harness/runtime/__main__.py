@@ -11,6 +11,8 @@ import signal
 import sys
 from pathlib import Path
 
+from platoon_harness.kernel import JournalError
+
 from . import Runtime
 from .paths import open_log
 
@@ -33,14 +35,21 @@ async def _serve(folder: Path) -> None:
     for signum in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(signum, runtime.ask_to_stop)
     await runtime.start()
-    await runtime.run()
-    await runtime.stop()
+    try:
+        await runtime.run()
+    finally:
+        await runtime.stop()
 
 
 def main() -> None:
+    """Exit 74 when a commit fails, which ends the runtime as a kill would, as the command line's owners do."""
     folder = Path(sys.argv[1])
     _detach(folder)
-    asyncio.run(_serve(folder))
+    try:
+        asyncio.run(_serve(folder))
+    except JournalError as error:
+        logging.getLogger("platoon_harness.runtime").error("%s", error)
+        sys.exit(os.EX_IOERR)
 
 
 if __name__ == "__main__":

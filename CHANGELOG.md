@@ -314,6 +314,11 @@
 
 ### Fixed
 
+- A commit that failed went on for ever: each batch answered `unavailable` and the runtime kept running, recording nothing. Now one
+  failed commit ends the runtime as a kill would. The kernel takes nothing more and closes, `Kernel.failure` holds a `JournalError`
+  naming the journal, `Runtime.run` and an owner's `Session` raise it, the owner's shutdown ends the process trees and records
+  nothing, and `run`, `serve` and `session resume` exit 74. A resume finds the turns that were open and tells them they were cut
+  off, and a retry under its key answers from the journal if the batch landed.
 - From SwarmChat's page, an act whose answer was lost went again under a new key after a new link, since `web` put the key
   under the link's session token, and so ran twice; and one `web` took whose page then heard its session had ended was shown as
   refused. The key is the page's own, 32 lowercase hex under `web/`, whichever link sends it; an act a page's ended session left

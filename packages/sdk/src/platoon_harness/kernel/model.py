@@ -93,6 +93,11 @@ class Refused(Exception):
         return refused
 
 
+class JournalError(Exception):
+    """A commit failed, so the kernel took nothing more, as after a kill. What the batch left is unknown: a resume
+    recovers the session, and a retry under its key answers from the journal if it landed."""
+
+
 class Outcome(BaseModel, frozen=True):
     """How a command or query ended. `seq` is that of the event carrying it, if it has one."""
 

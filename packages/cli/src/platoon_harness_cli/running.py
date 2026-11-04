@@ -191,7 +191,8 @@ async def run(
 
     It exits with how the session ended: 0 settled, 1 an agent failed, 2 the budget ran out, 3 timed out, 4 it needs a
     person, and 130 cancelled, by Ctrl+C or `session stop` too. Ctrl+C runs the owner's shutdown first, which keeps the
-    session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost.
+    session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost, and a
+    commit to its journal that fails ends it with exit 74, as a kill would, leaving it to `session resume`.
 
     The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
     on that harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it
@@ -280,8 +281,8 @@ async def serve(
     """Start a session and keep its runtime in the foreground, with no client attached, for a supervisor.
 
     Clients attach as guests by its name, which is on stderr. SIGTERM, or Ctrl+C, runs the owner's shutdown, which
-    keeps it resumable. It exits 0 once that is done or once the session has closed and drained, and 78 when the team
-    cannot run.
+    keeps it resumable. It exits 0 once that is done or once the session has closed and drained, 74 when a commit to its
+    journal fails, which ends it as a kill would, and 78 when the team cannot run.
 
     For example:
 
@@ -312,8 +313,10 @@ async def serve(
             f"serving session {name}: `platoon-harness session stop {name}` stops it, and "
             f"`platoon-harness session resume {name}` restarts it"
         )
-        await runtime.run()
-        await runtime.stop()
+        try:
+            await runtime.run()
+        finally:
+            await runtime.stop()
     return 0
 
 
