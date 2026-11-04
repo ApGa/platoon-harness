@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 import pytest
-from playwright.async_api import Browser, expect
+from playwright.async_api import Browser, Route, expect
 
 from platoon_harness import Session, Team
 from platoon_harness.runtime.control import BODY_LIMIT
@@ -164,9 +164,12 @@ async def asked(session: Session) -> dict:
     return (await until(session.approvals, session))[0]
 
 
+@pytest.mark.parametrize("winner", ["tui", "browser"])
 async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_takes_effect_once(
-    chromium: Browser, root: Path
+    chromium: Browser, root: Path, winner: str
 ):
+    """The loser's answer is held on its way until the winner's is in, so both are under way at once whatever the host's
+    load: a press raced against the feed can find its place already gone, and then sends nothing."""
     team = solo([Ask("Ship the fix?"), Say("shipped")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await asked(session)
@@ -175,30 +178,50 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
         await expect(page.locator("[data-x-needs] .badge")).to_have_text("1", timeout=SECONDS)
         allow = page.locator('[data-x-decide="allow"]')
         await expect(allow).to_be_enabled(timeout=SECONDS)
+        sent, answered = asyncio.Event(), asyncio.Event()
+
+        async def held(route: Route) -> None:
+            if winner == "tui" and json.loads(route.request.post_data or "{}").get("op") == "approval.resolve":
+                sent.set()
+                await answered.wait()
+            await route.continue_()
+
+        await page.route("**/x/command", held)
         app = TerminalUI("s")
         async with app.run_test(size=(120, 30)) as pilot:
             await drawn(pilot, lambda text: "⚠ approval" in text)
-            await pilot.press("alt+a", *"/yes")
-
-            await asyncio.gather(pilot.press("enter"), allow.evaluate("button => button.click()"))
-
-            resolved = await until(lambda: of_type(session, "approval.resolved"), session)
-            winner = resolved[0].data["via"]
-            await expect(page.locator(".x-card.x-done")).to_have_text(f"Allowed by you via {winner}", timeout=SECONDS)
             live = workspace(app).live
             assert live is not None
-            await drawn(pilot, lambda text: all(row["kind"] != "approval" for row in live.attention.values()))
+            submit = live.session.submit
+
+            async def slow(op: str, **args):
+                if winner == "browser" and op == "approval.resolve":
+                    sent.set()
+                    await answered.wait()
+                return await submit(op, **args)
+
+            live.session.submit = slow
+            first, then = (allow.click, lambda: pilot.press("alt+a", *"/yes", "enter"))[:: 1 if winner == "tui" else -1]
+            await first()
+            await asyncio.wait_for(sent.wait(), SECONDS / 1000)
+            await then()
+
+            await until(lambda: of_type(session, "approval.resolved"), session)
+            answered.set()
             if winner == "tui":
                 await expect(page.locator("#tip")).to_have_text("Already decided by you via tui.", timeout=SECONDS)
             else:
-                await drawn(pilot, lambda text: "Already decided, resolved, by human:you via browser" in text)
+                told = "Already decided, resolved, by human:you via browser"
+                await drawn(pilot, lambda _: any(notice.message == told for notice in app._notifications))
+            await expect(page.locator(".x-card.x-done")).to_have_text(f"Allowed by you via {winner}", timeout=SECONDS)
+            await drawn(pilot, lambda text: all(row["kind"] != "approval" for row in live.attention.values()))
         await expect(page.locator("[data-x-needs] .badge")).to_have_count(0, timeout=SECONDS)
         await until(lambda: of_type(session, "turn.ended"), session)
         resolved = await of_type(session, "approval.resolved")
         refused = [event for event in await of_type(session, "op.refused") if event.outcome.op == "approval.resolve"]
         await page.context.close()
 
-    assert len(resolved) == 1 and resolved[0].data["verdict"] == "allow"
+    assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", winner)]
     assert len(refused) == 1 and refused[0].outcome.refusal.code == "conflict"
     assert errors == []
 
@@ -235,17 +258,31 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
 
 
 async def test_an_approval_answered_from_two_browsers_at_once_takes_effect_once(chromium: Browser, root: Path):
+    """Each answer is held on its way until both are, so both reach web at once, whatever the host's load."""
     team = solo([Ask("Ship the fix?"), Say("shipped")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await asked(session)
         pages = [await opened(chromium, web.link("control")) for _ in range(2)]
-        for page, _ in pages:
+        sent, both = [asyncio.Event() for _ in pages], asyncio.Event()
+
+        def holding(here: asyncio.Event):
+            async def held(route: Route) -> None:
+                if json.loads(route.request.post_data or "{}").get("op") == "approval.resolve":
+                    here.set()
+                    await both.wait()
+                await route.continue_()
+
+            return held
+
+        for (page, _), here in zip(pages, sent, strict=True):
             await chat(page, "bob & you")
             await expect(page.locator('[data-x-decide="deny"]')).to_be_enabled(timeout=SECONDS)
+            await page.route("**/x/command", holding(here))
 
-        await asyncio.gather(
-            *(page.locator('[data-x-decide="deny"]').evaluate("button => button.click()") for page, _ in pages)
-        )
+        for page, _ in pages:
+            await page.locator('[data-x-decide="deny"]').click()
+        await asyncio.wait_for(asyncio.gather(*(here.wait() for here in sent)), SECONDS / 1000)
+        both.set()
 
         for page, _ in pages:
             await expect(page.locator(".x-card.x-done")).to_have_text("Denied by you via browser", timeout=SECONDS)
