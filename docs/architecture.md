@@ -1022,7 +1022,7 @@ Absence means unsupported, as in ACP.
 | `resume` | Native resume available |
 | `boundaries` | Subset of `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
-| `tool_names` | `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`. Our words, a tool's URL and a handover name our tools as the model sees them |
+| `tool_names` | `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`. Our words, a tool's URL and a handover name our tools as the model sees them: [ADR 0028](adr/0028-a-harness-names-our-tools-as-it-shows-them.md) |
 | `tool_timeout_s` | The harness's cap on one tool call |
 | `interrupt` | A turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
