@@ -20,7 +20,7 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
-VERSION = 2
+VERSION = 3
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -198,6 +198,7 @@ class Projection:
             "item.recorded": self._said,
             "approval.requested": self._asked,
             "approval.resolved": self._decided,
+            "turn.started": self._began,
             "turn.ended": self._turn_over,
             "turn.lost": self._turn_over,
             "agent.ended": self._ended,
@@ -269,7 +270,8 @@ class Projection:
         self._user(name, kind, role=event.data.get("role"))
 
     def _spawned(self, event: Event, bodies: Bodies) -> None:
-        """An agent's direct chat with the person begins with it. A goal is what its spawner asked of it."""
+        """An agent's direct chat with the person begins with it. A goal is what its spawner asked of it, which awaits
+        the agent's first turn."""
         data, name = event.data, event.data["name"]
         harness = data["harness"]
         said = harness.rpartition(":")[2] if isinstance(harness, str) else harness.get("mode", "program")
@@ -278,16 +280,25 @@ class Projection:
         if data["goal"] or data.get("body"):
             spawner = name_of(event.actor)
             chat = self._direct(spawner, name, event)
-            self._message(chat, spawner, event, data["goal"], data.get("body"), bodies)
+            seq = self._message(chat, spawner, event, data["goal"], data.get("body"), bodies, stream=event.stream)
+            self.db.execute("INSERT INTO deliveries VALUES (?, ?, ?, NULL, NULL)", (chat, seq, name))
 
     # Chats.
 
     def _chat(
-        self, key: str, kind: str, name: str | None, about: str, address: str | None, event: Event, members: list[str]
+        self,
+        key: str,
+        kind: str,
+        name: str | None,
+        about: str,
+        address: str | None,
+        event: Event,
+        members: list[str],
+        creator: str | None = None,
     ) -> str:
-        """The chat `key` names, made with its first line if it is new, by whoever's event made it."""
+        """The chat `key` names, made with its first line if it is new, by `creator` or else the event's actor."""
         id = hashed(self.session, key)
-        creator = name_of(event.actor)
+        creator = creator or name_of(event.actor)
         if self.db.execute("SELECT 1 FROM chats WHERE id = ?", (id,)).fetchone() is None:
             self._known(creator)
             row = (id, key, kind, name, about, address, creator, iso(event.wall_time), 0)
@@ -306,11 +317,14 @@ class Projection:
 
     def _direct(self, one: str, other: str, event: Event) -> str:
         """The direct chat of two people, whichever wrote first. A person's message goes to the agent in one with them,
-        and one between two agents takes none from the person."""
+        and one between two agents takes none from the person. The person's chat with an agent, which it has from its
+        start, is the runtime's: nobody in it made it."""
         pair = sorted({one, other})
         agent = next((name for name in pair if name != self.person), None)
-        address = f"@{agent}" if self.person in pair and agent not in (None, "runtime") else None
-        return self._chat(f"direct:{' '.join(pair)}", "direct", None, "", address, event, pair)
+        mine = self.person in pair
+        address = f"@{agent}" if mine and agent not in (None, "runtime") else None
+        key = f"direct:{' '.join(pair)}"
+        return self._chat(key, "direct", None, "", address, event, pair, "runtime" if mine else None)
 
     def _channel(self, stream: str, event: Event, kind: str | None = None) -> str:
         """A channel's chat, in which the person may always read. A person's message goes to a topic or a group."""
@@ -470,11 +484,18 @@ class Projection:
     def _delivered(self, event: Event, bodies: Bodies) -> None:
         """What a handover landed, or a tool's result showed, was delivered to that agent. Nothing a person reads is
         evidence, so it is never here."""
-        if event.type == "context.offered" and event.data["how"] not in IN_A_RESULT:
-            return
+        if event.type != "context.offered" or event.data["how"] in IN_A_RESULT:
+            self._reached(event, event.data.get("positions") or {})
+
+    def _began(self, event: Event, bodies: Bodies) -> None:
+        """A goal reached its agent when the agent's first turn began, which is the turn a goal begins."""
+        self._reached(event, {f"agent/{event.agent}": event.seq})
+
+    def _reached(self, event: Event, positions: Mapping[str, int]) -> None:
+        """Each line awaiting `event`'s agent on a stream of `positions`, through the seq given, was delivered by it."""
         reader, at = event.agent, iso(event.wall_time)
         touched: set[str] = set()
-        for stream, upto in sorted((event.data.get("positions") or {}).items()):
+        for stream, upto in sorted(positions.items()):
             found = self.db.execute(
                 """
                 UPDATE deliveries SET event = ?, at = ? WHERE reader = ? AND event IS NULL

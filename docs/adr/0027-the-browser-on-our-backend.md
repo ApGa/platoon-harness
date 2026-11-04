@@ -30,13 +30,14 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   the projection's version, whose change drops the file and folds again, which the page hears as a reset.
 - **What a chat holds.** A person's and an agent's messages, a runtime's reports about an agent in the chat of its parent and
   that agent, an agent's goal in the chat of its spawner and itself, and what its harness says in a turn as its message in
-  its chat with the person, since a harness says it to whoever runs it. Thoughts, tools, usage and live text never. A
-  message shows its body in place of its gist when the body is text that holds the gist, cut at 20,000 characters, saying
-  so, and a body it does not show whole comes as a file. An approval left to ask is a card, which goes moot with its turn as
+  its chat with the person, since a harness says it to whoever runs it. Thoughts, tools, usage and live text never. Each
+  agent's chat with the person is the runtime's, which made it at the agent's start. A message shows its body in place of
+  its gist when the body is text that begins or ends with the gist, as a gist cut from it does, cut at 20,000 characters,
+  saying so, and a body it does not show whole comes as a file. An approval left to ask is a card, which goes moot with its turn as
   the runtime's own view has it. An agent's end is one line. A body erased in the journal is erased here: its text and file
   go, the database deletes securely, and its log is truncated at once.
-- **Evidence.** A message was delivered to an agent when a handover landed it or a tool's result showed it, and the page
-  says "Delivered to" from that alone. A person's reading is no evidence and is in no list. An agent's status is the
+- **Evidence.** A message was delivered to an agent when a handover landed it or a tool's result showed it, and a goal when
+  the agent's first turn began on it, and the page says "Delivered to" from that alone. A person's reading is no evidence and is in no list. An agent's status is the
   roster's, read when the page asks, and the feed says to ask again after an event that begins, ends, parks, wakes, holds up
   or asks for its work, so the feed stays a function of the journal.
 - **Credentials.** Two classes, view and control, fixed when minted. A link is `/view#link=<hex>`, opens once, is spent

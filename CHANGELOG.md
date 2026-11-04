@@ -242,6 +242,9 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- The page said a spawn's goal was "Delivered to 0 of 0 agents it was for", and that the spawner made each agent's chat with
+  the person, which nobody in it did. A goal reached its agent when the agent's first turn began on it, and the runtime makes
+  that chat. The projection is version 3, which `web` folds again from the journal when it starts.
 - A file sent as a message's body lost its name whenever words went with it, in the terminal and on the page, since a body
   keeps none, so the page showed every body as `body.txt`. The function both clients make a gist with names the file after
   the words, `TEXT (file NAME)`, and refuses the two past 280 characters; the page sends the file's name beside the op's

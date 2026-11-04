@@ -1302,11 +1302,12 @@ op references, each with whatever keeps a stale button from deciding anything, s
   kernel's grants decide what a person may do there as anywhere. Direct chats key on the unordered participant pair, with both inboxes
   merged in journal order, and every agent has one with the person from its start; channel chats key on the channel. What a harness
   says in a turn is its agent's message to the person; tools, thoughts, usage and live text never enter a chat. "Read by" becomes
-  "Delivered to", from delivery evidence alone, and browsing writes nothing and moves no cursor or mark. A view link and a control
-  link are two credentials of fixed class, one-time and exchanged for session tokens that expire. One session per port avoids the
-  `localStorage` collision. A person acts there through `/x/command`: each act keeps its key until it is answered, across a lost
-  connection, a reload or a new link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person
-  is the runtime's `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) and
+  "Delivered to", from delivery evidence alone, a goal's being the turn that began on it, and browsing writes nothing and moves no
+  cursor or mark. A view link and a control link are two credentials of fixed class, one-time and exchanged for session tokens that
+  expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one writer. A
+  person acts there through `/x/command`: each act keeps its key until it is answered, across a lost connection, a reload or a new
+  link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
+  `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) and
   [ADR 0028](adr/0028-acting-from-the-page.md) its decisions.
 
 ## 13. Workspaces

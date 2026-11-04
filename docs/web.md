@@ -41,7 +41,8 @@ serving another person, which its terms do not allow. Give them a view link.
 ## What the page shows
 
 - **Chats.** A channel's chat for each topic, group, queue and board, and direct chats. Every agent has a direct chat with
-  you from its start, and a direct chat between two agents merges both their inboxes, in the order the journal has them.
+  you from its start, which the page says the runtime made, and a direct chat between two agents merges both their inboxes,
+  in the order the journal has them. An agent's goal is the first message in its chat with whoever started it.
   A queue's or board's chat holds what it announced, as the terminal's channel lines do.
 - **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
   message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
@@ -58,7 +59,8 @@ serving another person, which its terms do not allow. Give them a view link.
 - **Approvals.** An approval left for you is a card under its question in the agent's chat with you, which says who
   decided it and through what, or that it went moot with the turn that asked.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a
-  handover landed it in, or a tool's result showed it to, which is evidence, and when. It never says one understood it. A
+  handover landed it in, or a tool's result showed it to, which is evidence, and when; a goal reached its agent when the
+  agent's first turn began on it. It never says one understood it. A
   person's reading leaves no evidence, so a person is in neither list. "What had reached" an agent, beside a message it
   sent, says how much of each of its chats had been delivered to it then.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to

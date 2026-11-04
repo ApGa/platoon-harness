@@ -112,6 +112,32 @@ async def test_a_message_is_delivered_by_evidence_alone_and_a_person_s_reading_i
     assert "you" not in readers, "a person's reading is no evidence"
 
 
+async def test_a_goal_reached_its_agent_when_its_first_turn_began(root):
+    """A goal is no inbox entry a handover lands: the agent's first turn begins on it."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root) as web:
+        await scenario(session)
+        await caught_up(web, session)
+        goal = rows(
+            session.folder,
+            "SELECT d.reader, d.event FROM deliveries AS d JOIN lines AS l ON (l.chat, l.seq) = (d.chat, d.seq) "
+            "WHERE l.gist = 'take work from the queue'",
+        )
+        began = next(event.seq for event in await of_type(session, "turn.started") if event.agent == "w1")
+
+    assert goal == [("w1", began)]
+
+
+async def test_an_agent_s_chat_with_the_person_is_the_runtime_s_and_no_spawner_s(root):
+    """Every agent has it from its start, and nobody in it made it."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root) as web:
+        await scenario(session)
+        await caught_up(web, session)
+        made = dict(rows(session.folder, "SELECT key, created_by FROM chats WHERE key LIKE 'direct:%'"))
+
+    assert made["direct:w1 you"] == made["direct:lead you"] == "runtime"
+    assert made["direct:lead w1"] == "lead"
+
+
 async def test_an_approval_is_a_card_that_says_who_decided_and_through_what(root):
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root) as web:
         await scenario(session)
