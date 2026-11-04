@@ -142,6 +142,22 @@ def test_a_session_is_found_by_name_or_refused(tmp_path):
     assert refused.value.refusal.code == "not_found"
 
 
+@pytest.mark.parametrize("name", ["run.", "x.lock", "a..b"])
+def test_a_session_named_before_the_grammar_is_said_to_need_another_name(tmp_path, name):
+    folder = tmp_path / "sessions" / name
+    folder.mkdir(parents=True)
+    (folder / MANIFEST).write_text("{}")
+
+    with pytest.raises(Refused) as refused:
+        session_folder(tmp_path, name)
+
+    assert refused.value.refusal.code == "invalid"
+    assert refused.value.refusal.detail == (
+        f"{name} no longer names a session, since a name may not hold `..` or end in `.` or `.lock`: rename its "
+        f"folder {folder} while no runtime holds it"
+    )
+
+
 def test_an_agent_has_a_folder_under_its_session(tmp_path):
     assert agent_folder(tmp_path, "ada") == tmp_path / "agents" / "ada"
 

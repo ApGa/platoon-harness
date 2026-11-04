@@ -9,9 +9,11 @@ effort. Every session has a `Budget`, so that a runaway stops itself, and every 
 import asyncio
 import fcntl
 import os
+import shlex
 import shutil
 import signal
 import socket
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -64,7 +66,8 @@ async def test_an_agent_commits_in_its_worktree_is_killed_and_resumes_there(harn
     """Budget: at most 10 model calls, counted from the journal: a commit in one turn, then, after a `kill -9` of its
     runtime and a resume, a file in the next. Its worktree is the same folder throughout, its commit is on its branch,
     the look after its turn records that commit as its own, with no agent in the envelope, and its end keeps the
-    worktree, with the file it left uncommitted, named in the Ending and seen by the stop's look."""
+    worktree, with the file it left uncommitted, named in the Ending with no command to let it go, and seen by the
+    stop's look."""
     if shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed")
     work, root = seeded(tmp_path / "work"), tmp_path / "root"
@@ -104,7 +107,12 @@ async def test_an_agent_commits_in_its_worktree_is_killed_and_resumes_there(harn
     assert git(work, "log", "-1", "--format=%s", "platoon-harness/wt/bob").strip() == "here"
     assert git(work, "status", "--porcelain") == ""
     [kept] = ending.workspaces
-    assert (kept["path"], kept["host"], kept["why"]) == (str(folder), socket.gethostname(), ["1 uncommitted paths"])
+    assert (kept["path"], kept["host"], kept["why"]) == (
+        str(folder),
+        socket.gethostname(),
+        ["1 uncommitted path: again.txt"],
+    )
+    assert kept["release"] == []
     [made] = committed
     assert made.data["sha"] == git(work, "rev-parse", "platoon-harness/wt/bob").strip()
     assert (made.data["made_in"], made.agent, made.turn) == ("@bob", None, None)
@@ -117,7 +125,8 @@ async def test_an_agent_commits_in_its_worktree_is_killed_and_resumes_there(harn
 async def test_an_agent_commits_in_its_snapshot_and_its_end_keeps_it_whole(harness, tmp_path):
     """Budget: at most 6 model calls, counted from the journal: one turn that commits in a snapshot of a tree with
     uncommitted work. The snapshot holds that work, the look records the commit as the agent's, and its end keeps the
-    snapshot, whose commit only it holds, made whole, with the commands that fetch it and let it go."""
+    snapshot, whose commit only its branch holds, made whole, with the commands that fetch it and let it go, which then
+    leave that commit in your repository and the snapshot gone."""
     if shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed")
     work, root = seeded(tmp_path / "work"), tmp_path / "root"
@@ -143,6 +152,10 @@ async def test_an_agent_commits_in_its_snapshot_and_its_end_keeps_it_whole(harne
     assert git(folder, "log", "-1", "--format=%s").strip() == "here"
     [made] = committed
     assert (made.data["made_in"], made.data["sha"]) == ("@bob", git(folder, "rev-parse", "HEAD").strip())
-    assert kept["why"] == ["1 commits only it holds, in its refs, stash or reflogs"]
+    assert kept["why"] == ["1 commit only its branch holds"]
     assert not (folder / ".git" / "objects" / "info" / "alternates").exists()
     assert git(work, "status", "--porcelain") == "?? uncommitted.txt\n"
+    for command in kept["release"]:
+        await asyncio.to_thread(subprocess.run, shlex.split(command), cwd=tmp_path, check=True, capture_output=True)
+    assert git(work, "log", "-1", "--format=%s", "platoon-harness/snap/bob").strip() == "here"
+    assert not folder.exists()

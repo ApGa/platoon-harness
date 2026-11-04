@@ -2,6 +2,7 @@
 where its git would see another tree, built aside and adopted after a crash, and ended without loss."""
 
 import os
+import shlex
 import socket
 import subprocess
 from pathlib import Path
@@ -196,7 +197,7 @@ def test_a_snapshot_is_refused_where_its_git_would_see_another_tree(repo, tmp_pa
     found = problems_of(snapshot_team(), repo, tmp_path / "home")
 
     assert found["error"] == [
-        "roles.bob.workspace: `snapshot` cannot hold 1 files a filter cleans and smudges, key.secret, as only your "
+        "roles.bob.workspace: `snapshot` cannot hold 1 file a filter cleans and smudges, key.secret, as only your "
         "config runs that filter: use `worktree`",
         "roles.bob.workspace: `snapshot` would hold the whole of your sparse checkout: use `worktree`",
         "roles.bob.workspace: `snapshot` would leave out the untracked repositories vendor/lib/: use `worktree`",
@@ -207,6 +208,60 @@ def test_a_snapshot_carries_uncommitted_changes_so_none_is_warned_of(repo, tmp_p
     (repo / "README").write_text("edited\n")
 
     assert problems_of(snapshot_team(), repo, tmp_path / "home") == {}
+
+
+def conflicted(repo: Path) -> None:
+    """Your checkout stopped on a merge's conflict in README."""
+    git("checkout", "-q", "-b", "other", cwd=repo)
+    commit(repo, "README", "other\n")
+    git("checkout", "-q", "main", cwd=repo)
+    commit(repo, "README", "main\n")
+    with pytest.raises(subprocess.CalledProcessError):
+        git("merge", "-q", "other", cwd=repo)
+
+
+def test_a_snapshot_of_a_checkout_mid_merge_is_refused_before_any_cost(repo, tmp_path):
+    conflicted(repo)
+
+    found = problems_of(snapshot_team(), repo, tmp_path / "home")
+
+    assert found["error"] == [
+        "roles.bob.workspace: `snapshot` would take a merge under way and 1 conflicted path in your checkout as "
+        "settled: finish or abort it first, or use `worktree`"
+    ]
+
+
+def test_a_snapshot_made_while_your_checkout_is_mid_merge_is_refused_and_leaves_nothing(repo, tmp_path):
+    conflicted(repo)
+
+    with pytest.raises(workspaces.GitError, match="would take a merge under way"):
+        snapshot(repo, tmp_path / "ada")
+
+    assert not (tmp_path / "ada").exists()
+
+
+def test_a_snapshot_of_a_split_index_writes_nothing_into_your_git_directory(repo, tmp_path):
+    git("config", "core.splitIndex", "true", cwd=repo)
+    git("update-index", "--split-index", cwd=repo)
+    (repo / "README").write_text("edited\n")
+    before = sorted(os.listdir(repo / ".git"))
+
+    root = Path(snapshot(repo, tmp_path / "ada").path)
+
+    assert sorted(os.listdir(repo / ".git")) == before
+    assert shown(root, "README") == "edited\n"
+    assert git("status", "--porcelain", cwd=root) == ""
+
+
+def test_a_snapshot_with_nowhere_to_work_leaves_nothing(repo, tmp_path):
+    (repo / "empty").mkdir()
+
+    with pytest.raises(workspaces.GitError, match="empty/ holds nothing tracked or unignored at"):
+        workspaces.make_snapshot(
+            repo_of(repo / "empty"), tmp_path / "ada", "platoon-harness/s/ada", tips(repo), "s/ada"
+        )
+
+    assert sorted(os.listdir(tmp_path / "ada")) == []
 
 
 # Made in steps, and adopted.
@@ -266,8 +321,10 @@ def test_a_look_in_one_snapshot_ignores_commits_only_another_holds(repo, tmp_pat
 # Ending one.
 
 
-def end(repo: Path, tmp_path: Path, made: Workspace, left: tuple[str, ...] = ()) -> dict[str, Any]:
-    return workspaces.end_snapshot(made, tmp_path / "ada", repo, left)
+def end(
+    repo: Path, tmp_path: Path, made: Workspace, left: tuple[str, ...] = (), retried: bool = False
+) -> dict[str, Any]:
+    return workspaces.end_snapshot(made, tmp_path / "ada", repo, left, retried=retried)
 
 
 def test_an_ended_agent_s_clean_snapshot_is_removed(repo, tmp_path):
@@ -284,7 +341,7 @@ def test_a_snapshot_its_agent_committed_in_is_kept_and_made_whole(repo, tmp_path
 
     kept = end(repo, tmp_path, made)["kept"]
 
-    assert kept["why"] == ["1 commits only it holds, in its refs, stash or reflogs"]
+    assert kept["why"] == ["1 commit only its branch holds"]
     assert (kept["path"], kept["host"], kept["branch"]) == (str(root), HOST, "platoon-harness/s/ada")
     assert not (root / ".git" / "objects" / "info" / "alternates").exists()
     git("fsck", "--connectivity-only", "--no-dangling", cwd=root)
@@ -305,10 +362,13 @@ def test_a_kept_snapshot_survives_its_origin_pruning(repo, tmp_path):
 def test_a_snapshot_with_a_ref_of_its_own_is_kept(repo, tmp_path):
     made = snapshot(repo, tmp_path / "ada")
     root = Path(made.path)
-    git("tag", "scratch", commit(root, "scratch"), cwd=root)
+    scratch = commit(root, "scratch")
+    git("tag", "scratch", scratch, cwd=root)
     git("reset", "-q", "--hard", "HEAD~1", cwd=root)
 
-    assert end(repo, tmp_path, made)["kept"]["why"] == ["1 commits only it holds, in its refs, stash or reflogs"]
+    assert end(repo, tmp_path, made)["kept"]["why"] == [
+        f"1 commit only it holds, in its other refs, stash or reflogs: {scratch[:12]}"
+    ]
 
 
 def test_a_snapshot_with_a_stash_is_kept(repo, tmp_path):
@@ -316,8 +376,14 @@ def test_a_snapshot_with_a_stash_is_kept(repo, tmp_path):
     root = Path(made.path)
     (root / "README").write_text("stashed\n")
     git("stash", "-q", cwd=root)
+    stashed = git("rev-list", "refs/stash", f"^{made.base}", cwd=root).split()
 
-    assert end(repo, tmp_path, made)["kept"]["why"] == ["2 commits only it holds, in its refs, stash or reflogs"]
+    kept = end(repo, tmp_path, made)["kept"]
+
+    assert kept["why"] == [
+        f"2 commits only it holds, in its other refs, stash or reflogs: {', '.join(sha[:12] for sha in stashed)}"
+    ]
+    assert kept["release"] == []
 
 
 def test_a_snapshot_whose_commits_were_fetched_is_removed(repo, tmp_path):
@@ -339,7 +405,8 @@ def test_a_snapshot_with_uncommitted_work_is_kept_as_it_was(repo, tmp_path):
     kept = end(repo, tmp_path, made)["kept"]
     again = end(repo, tmp_path, made)["kept"]
 
-    assert kept["why"] == again["why"] == ["1 uncommitted paths"]
+    assert kept["why"] == again["why"] == ["1 uncommitted path: notes.txt"]
+    assert kept["release"] == []
     assert (root / "notes.txt").read_text() == "unfinished\n"
 
 
@@ -349,6 +416,66 @@ def test_a_snapshot_stop_cut_after_its_rename_finishes_its_removal(repo, tmp_pat
 
     assert end(repo, tmp_path, made) == {"removed": True, "kept": None}
     assert not (tmp_path / "ada" / "workspace.gone").exists()
+
+
+def test_a_snapshot_whose_folder_went_is_named_unless_its_own_stop_removed_it(repo, tmp_path):
+    made = snapshot(repo, tmp_path / "ada")
+    Path(made.path).rename(tmp_path / "moved aside")
+
+    first = end(repo, tmp_path, made)
+    retried = end(repo, tmp_path, made, retried=True)
+
+    assert first["kept"]["why"] == ["its folder has gone, which only its stop removes"]
+    assert (first["kept"]["bytes"], first["kept"]["release"]) == (None, [])
+    assert retried == {"removed": True, "kept": None}
+
+
+def test_a_kept_snapshot_s_release_commands_keep_what_it_was_kept_for(repo, tmp_path, monkeypatch):
+    """Run as a person would paste them, from another folder, where every path has a space in it."""
+    repo = repository(tmp_path / "my repo", monkeypatch)
+    made = workspaces.make_snapshot(
+        repo_of(repo), tmp_path / "my home" / "ada", "platoon-harness/s/ada", tips(repo), "s/ada"
+    )
+    root = Path(made.path)
+    work = commit(root, "work")
+    commit(root, ".gitignore", "*.log\n")
+    (root / "run.log").write_text("noise\n")
+    elsewhere = tmp_path / "else where"
+    elsewhere.mkdir()
+
+    kept = workspaces.end_snapshot(made, tmp_path / "my home" / "ada", repo, (), retried=False)["kept"]
+    for command in kept["release"]:
+        subprocess.run(shlex.split(command), cwd=elsewhere, check=True, capture_output=True)
+
+    assert kept["why"] == ["2 commits only its branch holds", "ignored: run.log"]
+    assert not root.exists() and (tmp_path / "my home").exists()
+    assert has(repo, work)
+    assert git("log", "-1", "--format=%s", "platoon-harness/s/ada", cwd=repo).strip() == "add .gitignore"
+
+
+def uncommitted(root: Path) -> None:
+    (root / "notes.txt").write_text("unfinished\n")
+
+
+def stashed(root: Path) -> None:
+    (root / "notes.txt").write_text("stash me\n")
+    git("stash", "-q", "-u", cwd=root)
+
+
+def branched(root: Path) -> None:
+    git("checkout", "-q", "-b", "side", cwd=root)
+    commit(root, "side")
+
+
+@pytest.mark.parametrize("work", [uncommitted, stashed, branched])
+def test_a_snapshot_kept_for_work_no_command_keeps_is_given_no_release(repo, tmp_path, work):
+    made = snapshot(repo, tmp_path / "ada")
+    work(Path(made.path))
+
+    kept = end(repo, tmp_path, made)["kept"]
+
+    assert kept["release"] == [] and kept["why"]
+    assert Path(made.path).exists()
 
 
 # Through a session.
@@ -377,7 +504,7 @@ async def test_a_snapshot_agent_s_commits_are_its_own_and_its_end_keeps_them(rep
     assert found.data["made_in"] == "@ada" and found.data["parents"] == [workspace["base"]]
     assert (root / "README").read_text() == "edited, uncommitted\n"
     kept = next(left for left in ending.workspaces if left["agent"] == "ada")
-    assert kept["why"] == ["1 commits only it holds, in its refs, stash or reflogs"]
+    assert kept["why"] == ["1 commit only its branch holds"]
     assert kept["release"] == [
         f"git -C {repo} fetch {root} platoon-harness/s/ada:platoon-harness/s/ada",
         f"rm -rf {root}",

@@ -60,12 +60,14 @@ settled
 
 Stdout then holds one JSON line per journal event and one for the ending, and nothing else; notes and logs go to stderr. Nothing
 prompts. Without `--approvals`, an approval that would ask with nobody attached to answer ends the run at once with exit 4. A Codex
-role in a worktree is one such: its sandbox keeps `.git` read-only, so its first commit asks, and `team check` says so before any
-cost, with the three ways out.
+role in a worktree or a snapshot is one such: its sandbox keeps `.git` read-only, so its first commit asks, and `team check` says so
+before any cost, with the three ways out; under `--approvals deny` it says each commit will be refused.
 
-The ending's `workspaces` names each agent's worktree its end did not take, with its host, path, branch, size and why, such as
-`1 uncommitted paths` or `ignored: .venv/`, and the commands that let it go once nothing in it is wanted. Its `unobserved` names each
-agent whose last look never finished, as when a session is cancelled before its stops ran, so what that agent last changed was not
+The ending's `workspaces` names each agent's worktree or snapshot its end did not take, with its host, path, branch, size and why,
+such as `1 uncommitted path: notes.md` or `ignored: .venv/`, and a `release`, the commands that let it go, only where they lose nothing
+it was kept for but the ignored files it names: a worktree's unlock and remove, or a snapshot's fetch of its branch into your
+repository and the removal of its folder. Where `release` is empty, `why` says what to save first. Its `unobserved` names each agent
+whose last look never finished, as when a session is cancelled before its stops ran, so what that agent last changed was not
 recorded. See [workspaces.md](workspaces.md).
 
 ## From another shell

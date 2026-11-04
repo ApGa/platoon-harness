@@ -296,6 +296,7 @@ platoon_harness.runtime.workspaces.operations
 platoon_harness.runtime.workspaces.present
 platoon_harness.runtime.workspaces.problems
 platoon_harness.runtime.workspaces.read_repo
+platoon_harness.runtime.workspaces.STATUS
 platoon_harness.runtime.workspaces.status_of
 platoon_harness.runtime.workspaces.UNDER_WAY
 platoon_harness.runtime.workspaces.write_bundle

@@ -31,13 +31,16 @@ class Workspace(BaseModel, frozen=True):
 
 class Kept(BaseModel, frozen=True):
     """A workspace its agent's stop left in place, on `host` at `path`, on `branch`, taking `bytes` on disk, and `why`:
-    what removing it would lose, or why that could not be told."""
+    what removing it would lose, or why that could not be told. `release` is the commands that let it go and lose
+    nothing it was kept for but the ignored files `why` names, and is empty when no commands would: then `why` says
+    what to save first."""
 
     path: str
     host: str | None
     branch: str | None
     bytes: int | None
     why: tuple[str, ...]
+    release: tuple[str, ...] = ()
 
 
 class Agent(BaseModel, frozen=True):

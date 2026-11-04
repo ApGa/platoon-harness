@@ -61,8 +61,8 @@ class Ending(BaseModel, frozen=True):
     """What a session came to. `reason` is what an exit code is made from. Each of `agents` has its last `report`, a
     `gist` and the ref of any `body`, or None if it said nothing. `usage` keeps its labels: a unit nobody measured has
     no amount, which is not zero. Each of `workspaces` is one an agent's end did not take, with where it is, what it
-    takes on disk, why it stayed and the commands that let it go. `unobserved` names the agents whose last look never
-    finished, so what they last changed was not recorded."""
+    takes on disk, why it stayed and, where some lose nothing it stayed for, the commands that let it go. `unobserved`
+    names the agents whose last look never finished, so what they last changed was not recorded."""
 
     state: str
     reason: Reason

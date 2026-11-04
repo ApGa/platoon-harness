@@ -490,7 +490,7 @@ async def test_an_ended_agent_s_stop_looks_before_it_ends_its_workspace(repo, tm
         ending = await session.ending()
 
     assert [path["path"] for path in changed[-1].data["paths"]] == ["late.txt"]
-    assert ending.workspaces[0]["why"] == ["1 uncommitted paths"]
+    assert ending.workspaces[0]["why"] == ["1 uncommitted path: late.txt"]
 
 
 async def test_a_turn_the_owner_s_stop_cut_off_is_looked_at_on_resume(repo, tmp_path):

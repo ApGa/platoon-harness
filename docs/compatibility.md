@@ -440,55 +440,6 @@ Rules that hold on every harness:
   message, and asks first about one that begins with `/`, since a harness may still read it as its own command, which nothing here
   claims yet. Its own commands are in its palette.
 - **Hooks.** Displayed, not reimplemented.
-
-### Workspaces
-
-What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's
-own git relies on or works around. Git 2.47.3 is the only version run; [V] verified here, [S] read in source, [U] unverified.
-
-| Harness | In a worktree |
-|---|---|
-| Claude Code 2.1.316 | Offers `EnterWorktree` and `ExitWorktree` in its first request, which the driver turns off on every launch, and takes `--worktree`, which nothing passes [V]. Reads the tracked `CLAUDE.md` and skills there; an untracked `CLAUDE.local.md` is absent [V], and `.claude/settings.local.json` and untracked skills are too [U]. Its auto memory is keyed on the repository, so every worktree of one shares it, a channel no topology binds [V]. It commits there and resumes in the same folder on FakeModel and on a real model [V]. After a commit on a real model it sent `system/vcs_state_changed`, a frame the driver does not know, journaled as `native` plus the gap `unknown_update` in runs 59, 60, 62 and 64 [V], in a snapshot too |
-| Codex 0.164.0 | `thread/start` and `thread/resume` name the thread's `cwd`, which the driver holds to `spec.cwd` [V]. Reads `AGENTS.md` at the worktree's root, its project root [V]. Under `workspace-write` and `read-only` its sandbox keeps `.git` and the resolved git directory read-only, so each commit outside the session's checkout, and in it too, escalates to one approval that runs outside the sandbox [V]. Escalated and allowed, it committed in a worktree and resumed there on FakeModel [V]. Project trust taken from the main checkout for a new worktree path [U] |
-| pi 1.5.0 | Sessions are keyed on the folder, which never changes, so a resume never meets its prompt to fork into another [S]. It commits there and resumes in the same folder on FakeModel [V]. `.pi/` resources load only under a trusted path, which a session folder usually is not, so they are silently absent [S, from 1.4.0] |
-| OpenHands 1.59.0 | `workspace=spec.cwd`, and skills are read at the worktree's root [S] |
-
-A Codex role in a worktree has three postures, which `team check` names before any cost when its sandbox keeps `.git` read-only and
-its approvals are left to ask: `sandbox = "danger-full-access"`, where commits work and its commands run with no sandbox;
-`approvals = "allow"`, where the sandbox stays and each escalation is allowed by policy; or `ask`, where a person approves each commit,
-so a headless run ends `needs_human` at its first.
-
-Git, as the runtime's own git meets it [V]:
-
-- `rev-parse --git-path=X` prints `--git-path=X` back, unresolved, where `--git-path X` resolves it.
-- `worktree add --lock --reason` writes the reason into its `locked` file from the first write, with a newline after it. A
-  registration git never wrote `gitdir` into is invisible to `worktree list` and, locked, never pruned. One missing `commondir` or
-  `HEAD` is listed, detached at zeros, and `worktree remove -f -f` refuses it as no `.git` file; `worktree add -f -f`, once its folder
-  is empty, takes it back.
-- A locked worktree survives `prune` with its folder gone and refuses `remove`, and `unlock` works with the folder gone.
-- `rev-list --all` takes every worktree's HEAD, so a commit only a worktree's detached HEAD holds reads as reachable; `--glob='refs/*'`
-  in the session's checkout takes refs alone.
-- `worktree remove` deletes ignored files without asking, and refuses one with submodules.
-- `worktree add` with LFS files and no LFS filter checks out their pointers, silently.
-- Commit, amend, a merge `git merge` makes, cherry-pick, revert and each pick of a rebase write a HEAD reflog entry whose time is the new
-  commit's committer time, under a set `GIT_COMMITTER_DATE` too; a fast-forward, a reset and a rebase's start onto existing commits
-  write one at the time they ran. Reflog times have one-second resolution. A HEAD reflog the runtime made goes on taking an agent's
-  entries under `core.logAllRefUpdates=false`.
-- `rev-list --ignore-missing` passes over a missing negative only when it comes before `--stdin`.
-- `rev-parse` resolves `HEAD`, `main` and `main@{1.year.ago}` as readily as a hex prefix, and a ref named in hex digits before an object
-  with that prefix, so a look resolves an `Informed-By` value with `rev-parse --disambiguate`, which names objects alone.
-- `log --numstat -z` puts a renamed file's two paths in entries of their own after its counts, and says `-` for a binary file's.
-- `git add -A` and `write-tree` run in your checkout with `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY` and
-  `GIT_ALTERNATE_OBJECT_DIRECTORIES` pointed at a snapshot capture its tree under your config, change neither your index, refs nor
-  object store, and write only what is new into the snapshot's store; a blob only staged in yours is not copied, and the snapshot's
-  own pack is what keeps it once you unstage it and prune.
-- `repack -a -d` in a repository with alternates packs what it borrowed too, so removing `objects/info/alternates` after it leaves
-  it whole.
-- `ls-files --others --exclude-standard` names an untracked repository inside the tree as `dir/`, where `status` names only its
-  untracked parent folder; `check-attr -z --stdin filter` gives each tracked file's filter, `unspecified` for none.
-- A fetch from a snapshot with no branch to land on writes only `FETCH_HEAD`, so its commits stay unreachable from your refs.
-- `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
-- `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36, by git's release notes.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as
   bodies. If what was forgotten is unknown, that is a `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
   cursors are server-held, and a fence defaults to the caller's live lease. A notice carried on a tool result can still be lost to
@@ -547,6 +498,68 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Tool configuration | Per agent | `mcpServers`, re-supplied on resume with a fresh token. Name prefixing is per agent |
 | | Hooks | Not determined | No hook method appears in the surface the report lists |
 | | Session compaction | Passthrough, observed if sent | `compaction_update` and `compaction_summary_chunk` are stable updates. The SDK at 0.12.1 drops `compaction_update`, and the chunk was not tested, so raw capture matters |
+
+### Workspaces
+
+What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's
+own git relies on or works around. Git 2.47.3 is the only version run; [V] verified here, [S] read in source, [U] unverified. In a
+snapshot each sees the same, but that the repository's own `.git/hooks` are new and empty there, while a `core.hooksPath` your global
+or system config sets still runs for an agent's commits [V].
+
+| Harness | In a worktree |
+|---|---|
+| Claude Code 2.1.316 | Offers `EnterWorktree` and `ExitWorktree` in its first request, which the driver turns off on every launch, and takes `--worktree`, which nothing passes [V]. Reads the tracked `CLAUDE.md` and skills there; an untracked `CLAUDE.local.md` is absent [V], and `.claude/settings.local.json` and untracked skills are too [U]. Its auto memory is keyed on the repository, so every worktree of one shares it, a channel no topology binds [V]. It commits there and resumes in the same folder on FakeModel and on a real model [V]. After a commit on a real model it sent `system/vcs_state_changed`, a frame the driver does not know, journaled as `native` plus the gap `unknown_update` in runs 59, 60, 62 and 64 [V], in a snapshot too |
+| Codex 0.164.0 | `thread/start` and `thread/resume` name the thread's `cwd`, which the driver holds to `spec.cwd` [V]. Reads `AGENTS.md` at the worktree's root, its project root [V]. Under `workspace-write` and `read-only` its sandbox keeps `.git` and the resolved git directory read-only, so each commit outside the session's checkout, and in it too, escalates to one approval that runs outside the sandbox [V]. Escalated and allowed, it committed in a worktree and resumed there on FakeModel [V]. Project trust taken from the main checkout for a new worktree path [U] |
+| pi 1.5.0 | Sessions are keyed on the folder, which never changes, so a resume never meets its prompt to fork into another [S]. It commits there and resumes in the same folder on FakeModel [V]. `.pi/` resources load only under a trusted path, which a session folder usually is not, so they are silently absent [S, from 1.4.0] |
+| OpenHands 1.59.0 | `workspace=spec.cwd`, and skills are read at the worktree's root [S] |
+
+A Codex role in a worktree or a snapshot has three postures, which `team check` names before any cost when its sandbox keeps `.git`
+read-only and its approvals are left to ask: `sandbox = "danger-full-access"`, where commits work and its commands run with no
+sandbox; `approvals = "allow"`, where the sandbox stays and each escalation is allowed by policy; or `ask`, where a person approves
+each commit, so a headless run ends `needs_human` at its first. Under `approvals = "deny"` it warns that each commit is refused.
+
+Git, as the runtime's own git meets it [V]:
+
+- `rev-parse --git-path=X` prints `--git-path=X` back, unresolved, where `--git-path X` resolves it.
+- `worktree add --lock --reason` writes the reason into its `locked` file from the first write, with a newline after it. A
+  registration git never wrote `gitdir` into is invisible to `worktree list` and, locked, never pruned. One missing `commondir` or
+  `HEAD` is listed, detached at zeros, and `worktree remove -f -f` refuses it as no `.git` file; `worktree add -f -f`, once its folder
+  is empty, takes it back.
+- A locked worktree survives `prune` with its folder gone and refuses `remove`, and `unlock` works with the folder gone.
+- `rev-list --all` takes every worktree's HEAD, so a commit only a worktree's detached HEAD holds reads as reachable; `--glob='refs/*'`
+  in the session's checkout takes refs alone.
+- `worktree remove` deletes ignored files without asking, and refuses one with submodules. It judges a worktree clean by `status` as
+  your config has it, so under `status.showUntrackedFiles=no` it removed one holding an untracked file; the runtime's own status
+  names `--untracked-files=normal` and `--ignore-submodules=none`, so no config hides a path from a look or a stop.
+- In a sparse checkout `worktree add` copies your patterns, so a new worktree's paths outside them are `skip-worktree` and absent
+  from its tree, which loses nothing when it goes.
+- `worktree add` with LFS files and no LFS filter checks out their pointers, silently.
+- Commit, amend, a merge `git merge` makes, cherry-pick, revert and each pick of a rebase write a HEAD reflog entry whose time is the new
+  commit's committer time, under a set `GIT_COMMITTER_DATE` too; a fast-forward, a reset and a rebase's start onto existing commits
+  write one at the time they ran. Reflog times have one-second resolution. A HEAD reflog the runtime made goes on taking an agent's
+  entries under `core.logAllRefUpdates=false`.
+- `rev-list --ignore-missing` passes over a missing negative only when it comes before `--stdin`.
+- `rev-parse` resolves `HEAD`, `main` and `main@{1.year.ago}` as readily as a hex prefix, and a ref named in hex digits before an object
+  with that prefix, so a look resolves an `Informed-By` value with `rev-parse --disambiguate`, which names objects alone.
+- `log --numstat -z` puts a renamed file's two paths in entries of their own after its counts, and says `-` for a binary file's.
+- `git add -A` and `write-tree` run in your checkout with `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY` and
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES` pointed at a snapshot capture its tree under your config, change neither your index, refs nor
+  object store, and write only what is new into the snapshot's store; a blob only staged in yours is not copied, and the snapshot's
+  own pack is what keeps it once you unstage it and prune.
+- `repack -a -d` in a repository with alternates packs what it borrowed too, so removing `objects/info/alternates` after it leaves
+  it whole.
+- `ls-files --others --exclude-standard` names an untracked repository inside the tree as `dir/`, where `status` names only its
+  untracked parent folder; `check-attr -z --stdin filter` gives each tracked file's filter, `unspecified` for none.
+- A fetch from a snapshot with no branch to land on writes only `FETCH_HEAD`, so its commits stay unreachable from your refs.
+- `git add -A` on a copy of an index with unmerged entries marks them resolved, so a capture of a checkout mid-merge would hold
+  the conflict markers as settled, which is why a snapshot is refused there.
+- With `core.splitIndex`, a capture writing a copy of your index put a new `sharedindex.*` into your git directory and left the
+  copy unreadable in the snapshot; with `core.splitIndex=false` in its environment it writes the copy whole.
+- `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
+
+By git's release notes, not run: `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36 [S].
+Git other than 2.47.3, macOS, a case-insensitive filesystem and a repository past 100,000 files or on Lustre are [U], as section 8
+says.
 
 ## 6. Supported platforms
 

@@ -6,6 +6,7 @@ Every git call goes through the one runner, which runs no hook, no fsmonitor and
 
 import os
 import re
+import shlex
 import shutil
 import socket
 import tempfile
@@ -41,6 +42,14 @@ _RUNTIME = MappingProxyType(
     }
 )
 """Who makes a snapshot's capture commit, which is the runtime's own act."""
+_WHOLE = MappingProxyType(
+    {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.splitIndex", "GIT_CONFIG_VALUE_0": "false"}
+)
+"""What has a capture write its index whole, so that a split index of yours puts no shared index into your git
+directory."""
+STATUS = ("status", "--porcelain=v2", "-z", "--untracked-files=normal", "--ignore-submodules=none")
+"""How the runtime asks for a work tree's status, whatever your config says of untracked files and submodules, so that
+a look and a stop read the same paths."""
 UNDER_WAY = MappingProxyType(
     {
         "MERGE_HEAD": "merge",
@@ -61,6 +70,7 @@ __all__ = [
     "BRANCHES",
     "BUNDLE",
     "NOT_YET",
+    "STATUS",
     "UNDER_WAY",
     "branch_of",
     "end_snapshot",
@@ -88,6 +98,15 @@ def _lines(text: str) -> list[str]:
 def _listed(names: Sequence[str]) -> str:
     more = f" and {len(names) - _NAMED} more" if len(names) > _NAMED else ""
     return ", ".join(names[:_NAMED]) + more
+
+
+def _some(count: int, what: str) -> str:
+    return f"{count} {what}{'' if count == 1 else 's'}"
+
+
+def _command(*words: str) -> str:
+    """A command as a shell reads it, each word quoted where it needs to be."""
+    return shlex.join(words)
 
 
 # What a session opens on.
@@ -140,6 +159,10 @@ def problems(team: Team, *, cwd: Path, folder: Path, session: str | None, approv
     found += _inside(top, folder)
     if on_git:
         found += _repository(top, session, worktrees="worktree" in modes.values())
+        prefix = git("rev-parse", "--show-prefix", cwd=cwd).strip()
+        found += [
+            Problem(f"roles.{name}.workspace", what) for name in on_git if (what := _nowhere(top, prefix, modes[name]))
+        ]
     snapshots = sorted(name for name, mode in modes.items() if mode == "snapshot")
     if snapshots:
         found += [Problem(f"roles.{name}.workspace", what) for what in _seen_otherwise(top) for name in snapshots]
@@ -147,17 +170,26 @@ def problems(team: Team, *, cwd: Path, folder: Path, session: str | None, approv
 
 
 def _postures(team: Team, approvals: Policy | None) -> Iterable[Problem]:
-    """Codex keeps `.git` read-only under its sandboxes, so each commit in a workspace of its own waits on an approval,
-    which a headless run has nobody to give."""
+    """Codex keeps `.git` read-only under its sandboxes, so each commit in a workspace of its own escalates, which a
+    headless run has nobody to approve, and `deny` refuses."""
     for name, role in team.roles.items():
-        sandboxed, asking = role.sandbox != _CODEX_FREE, (approvals or role.approvals) == "ask"
-        if role.driver == "codex" and role.workspace in ("worktree", "snapshot") and sandboxed and asking:
-            yours = " and, unless your codex config says otherwise, under yours" if role.sandbox is None else ""
+        policy = approvals or role.approvals
+        if role.driver != "codex" or role.workspace not in ("worktree", "snapshot") or role.sandbox == _CODEX_FREE:
+            continue
+        yours = "" if role.sandbox else f", as under the sandbox your Codex config sets unless it is `{_CODEX_FREE}`"
+        kept = f"codex keeps `.git` read-only under `workspace-write` and `read-only`{yours}, so each commit in its "
+        if policy == "ask":
             what = (
-                f"codex keeps `.git` read-only under `workspace-write` and `read-only`{yours}, so each commit in its "
-                "workspace waits on an approval, and a headless run ends `needs_human` at the first. Choose one: "
-                f'`sandbox = "{_CODEX_FREE}"` runs its commands with no sandbox, `approvals = "allow"` keeps the '
+                f"{kept}workspace waits on an approval, and a headless run ends `needs_human` at the first. Choose "
+                f'one: `sandbox = "{_CODEX_FREE}"` runs its commands with no sandbox, `approvals = "allow"` keeps the '
                 "sandbox and allows each escalation, or keep `ask` and approve each commit yourself"
+            )
+            yield Problem(f"roles.{name}.sandbox", what, "warning")
+        elif policy == "deny":
+            what = (
+                f'{kept}workspace is refused under `approvals = "deny"`. Choose one: `sandbox = "{_CODEX_FREE}"` '
+                'runs its commands with no sandbox, or `approvals = "allow"` keeps the sandbox and allows each '
+                "escalation"
             )
             yield Problem(f"roles.{name}.sandbox", what, "warning")
 
@@ -192,37 +224,79 @@ def _repository(top: Path, session: str | None, *, worktrees: bool) -> list[Prob
     filters = ("filter.lfs.process", "filter.lfs.smudge")
     if lfs and not any(git("config", "--get", name, cwd=top, ok=(0, 1)).strip() for name in filters):
         what = (
-            f"{len(lfs)} files are tracked by LFS and no LFS filter is configured, so a workspace would hold their "
+            f"{_some(len(lfs), 'file')} tracked by LFS and no LFS filter configured, so a workspace would hold their "
             "pointers: install git-lfs and run `git lfs install`"
         )
         found.append(Problem("cwd", what))
     refs = git("for-each-ref", "--format=%(refname:short)", f"refs/heads/{BRANCHES}", cwd=top).split()
     ours = f"{BRANCHES}/{session}"
     if taken := [ref for ref in refs if ref == BRANCHES or (session and (ref == ours or ref.startswith(f"{ours}/")))]:
-        commands = "; ".join(f"`git branch -D {ref}`" for ref in taken)
-        what = f"a workspace's branch would collide with {_listed(taken)}: once nothing on them is wanted, {commands}"
+        what = (
+            f"a workspace's branch would collide with {_listed(taken)}: give the session another name, or, once "
+            f"nothing on them is wanted, {_unbranched(top, taken)}"
+        )
         found.append(Problem("cwd", what))
     submodules = [line for line in _lines(git("ls-files", "-s", "-z", cwd=top)) if line.startswith("160000 ")]
     if submodules:
-        what = f"{len(submodules)} submodules stay uninitialized in each workspace"
+        what = f"each workspace leaves {_some(len(submodules), 'submodule')} uninitialized"
         found.append(Problem("cwd", what, "warning"))
-    if worktrees and (changed := _lines(git("status", "--porcelain", "-z", cwd=top))):
-        what = f"your checkout has {len(changed)} uncommitted paths, which a worktree does not carry: commit them first"
+    if worktrees and (changed := [path for _, _, path in status_of(git(*STATUS, cwd=top))]):
+        what = (
+            f"your checkout has {_some(len(changed), 'uncommitted path')}, {_listed(changed)}, which a worktree does "
+            "not carry: commit them first, or use `snapshot`, which carries them"
+        )
         found.append(Problem("cwd", what, "warning"))
     return found
 
 
+def _unbranched(top: Path, branches: Sequence[str]) -> str:
+    """The commands that delete `branches`, each after the release of a worktree that has it checked out. `-d` refuses
+    a branch whose commits are merged nowhere."""
+    held = {entry.get("branch"): (path, entry) for path, entry in _worktrees(top).items()}
+    commands = []
+    for branch in branches:
+        if (found := held.get(f"refs/heads/{branch}")) is not None:
+            path, entry = found
+            commands += [_command("git", "worktree", "unlock", path)] if "locked" in entry else []
+            commands.append(_command("git", "worktree", "remove", path))
+        commands.append(_command("git", "branch", "-d", branch))
+    return "; ".join(f"`{command}`" for command in commands)
+
+
+def _nowhere(top: Path, prefix: str, mode: str) -> str | None:
+    """Why the session's subfolder would be missing from a workspace in `mode`, if it would: a worktree holds what your
+    HEAD does, and a snapshot what is tracked or untracked and not ignored."""
+    if not prefix or not git("rev-parse", "-q", "--verify", "HEAD^{commit}", cwd=top, ok=(0, 1)).strip():
+        return None
+    if mode == "worktree":
+        if git("cat-file", "-t", f"HEAD:{prefix}", cwd=top, ok=(0, 128)).strip() == "tree":
+            return None
+        return f"{prefix} holds nothing committed, so a worktree's agent would have nowhere to work: commit there first"
+    if _lines(git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", prefix, cwd=top)):
+        return None
+    return f"{prefix} holds nothing tracked or unignored, so a snapshot's agent would have nowhere to work"
+
+
 def _seen_otherwise(top: Path) -> list[str]:
     """What git in a snapshot would see otherwise than git in your checkout, each in words: a tracked file a filter
-    cleans and smudges, which only your config can run, a sparse checkout, which a snapshot holds whole, and an
-    untracked repository inside the tree, which a capture leaves out."""
+    cleans and smudges, which only your config can run, a sparse checkout, which a snapshot holds whole, an untracked
+    repository inside the tree, which a capture leaves out, and an operation under way or a conflict, which a capture
+    would take as settled."""
     found = []
+    unsettled = [f"a {kind} under way" for kind in dict.fromkeys(UNDER_WAY[name] for name in operations(top))]
+    if conflicted := {entry.partition("\t")[2] for entry in _lines(git("ls-files", "-u", "-z", cwd=top))}:
+        unsettled.append(_some(len(conflicted), "conflicted path"))
+    if unsettled:
+        found.append(
+            f"`snapshot` would take {' and '.join(unsettled)} in your checkout as settled: finish or abort it first, "
+            "or use `worktree`"
+        )
     named = git("check-attr", "-z", "--stdin", "filter", cwd=top, input=git("ls-files", "-z", cwd=top)).split("\0")
     filtered = [named[at] for at in range(0, len(named) - 2, 3) if named[at + 2] not in ("unspecified", "unset")]
     if filtered:
         found.append(
-            f"`snapshot` cannot hold {len(filtered)} files a filter cleans and smudges, {_listed(filtered)}, as only "
-            "your config runs that filter: use `worktree`"
+            f"`snapshot` cannot hold {_some(len(filtered), 'file')} a filter cleans and smudges, "
+            f"{_listed(filtered)}, as only your config runs that filter: use `worktree`"
         )
     if git("config", "--type=bool", "--get", "core.sparseCheckout", cwd=top, ok=(0, 1)).strip() == "true":
         found.append("`snapshot` would hold the whole of your sparse checkout: use `worktree`")
@@ -257,7 +331,8 @@ def make_worktree(repo: Repo, folder: Path, branch: str, effect: int) -> Workspa
     keeps a fact of: the branch, made with a reflog naming `effect`; the registration, locked from its start with our
     reason; and the fill. An attempt adopts what an earlier one of the same effect made, and fails, naming it, on a
     branch, registration or folder the runtime did not make. No agent has run in it, which is what lets a fill reset
-    it, and a half-written registration be made again."""
+    it, a half-written registration be made again, and a fill that failed take its worktree back. A branch is made only
+    where the session's subfolder is committed, so a spawn with nowhere to work makes nothing."""
     checkout, root = Path(repo.top), (folder / "workspace").resolve()
     ref, reason = f"refs/heads/{branch}", _reason(root)
     worktrees = _worktrees(checkout)
@@ -271,16 +346,21 @@ def make_worktree(repo: Repo, folder: Path, branch: str, effect: int) -> Workspa
             _forget_unseen(checkout, reason)
         else:
             _empty(root)
-        _branch(checkout, branch, f"platoon-harness: made by effect {effect}", worktrees)
+        _branch(checkout, branch, repo.prefix, f"platoon-harness: made by effect {effect}", worktrees)
         forced = () if entry is None else ("-f", "-f")  # Git takes back its own half-written registration then.
         git("worktree", "add", *forced, "--no-checkout", "--lock", "--reason", reason, str(root), branch, cwd=checkout)
-    lock = git("rev-parse", "--path-format=absolute", "--git-path", "index.lock", cwd=root).strip()
-    Path(lock).unlink(missing_ok=True)
-    git("reset", "--hard", "-q", cwd=root)
+    try:
+        lock = git("rev-parse", "--path-format=absolute", "--git-path", "index.lock", cwd=root).strip()
+        Path(lock).unlink(missing_ok=True)
+        git("reset", "--hard", "-q", cwd=root)
+    except GitError as error:
+        try:
+            git("worktree", "remove", "-f", "-f", str(root), cwd=checkout)
+        except GitError as stuck:
+            raise GitError(f"{error}, and its worktree {root} could not be taken back: {stuck}") from None
+        raise GitError(f"{error}: its worktree is taken back, and its branch {branch} stays") from None
     base = git("rev-parse", "--verify", f"{ref}^{{commit}}", cwd=checkout).strip()
     path = root / repo.prefix
-    if not path.is_dir():
-        raise GitError(f"{repo.prefix} holds nothing committed at {base[:12]}, so its agent has nowhere to work")
     host = socket.gethostname()
     return Workspace(mode="worktree", path=str(path), host=host, branch=branch, base=base, repository=repo.repository)
 
@@ -302,19 +382,21 @@ def _empty(root: Path) -> None:
     (root / ".git").unlink(missing_ok=True)
 
 
-def _branch(checkout: Path, branch: str, made: str, worktrees: Mapping[str, Mapping[str, str]]) -> None:
-    """Make the branch at your checkout's HEAD, or adopt ours: checked out nowhere, with one reflog entry, ours."""
+def _branch(checkout: Path, branch: str, prefix: str, made: str, worktrees: Mapping[str, Mapping[str, str]]) -> None:
+    """Make the branch at your checkout's HEAD, where `prefix` must be committed, or adopt ours: checked out nowhere,
+    with one reflog entry, ours."""
     ref = f"refs/heads/{branch}"
     if not git("rev-parse", "-q", "--verify", ref, cwd=checkout, ok=(0, 1)).strip():
         head = git("rev-parse", "--verify", "HEAD^{commit}", cwd=checkout).strip()
+        if git("cat-file", "-t", f"{head}:{prefix}", cwd=checkout, ok=(0, 128)).strip() != "tree":
+            raise GitError(f"{prefix} holds nothing committed at {head[:12]}, so its agent has nowhere to work")
         git("update-ref", "--create-reflog", "-m", made, ref, head, "", cwd=checkout)
         return
     moved = git("log", "-g", "--format=%gs", ref, cwd=checkout).splitlines() != [made]
     if moved or any(entry.get("branch") == ref for entry in worktrees.values()):
         what = "which the runtime did not make" if moved else "which is checked out elsewhere"
-        raise GitError(
-            f"a branch {branch} is in the way, {what}: `git branch -D {branch}` once nothing on it is wanted"
-        )
+        commands = _unbranched(checkout, [branch])
+        raise GitError(f"a branch {branch} is in the way, {what}: once nothing on it is wanted, {commands}")
 
 
 def present(workspace: Workspace) -> None:
@@ -339,8 +421,9 @@ def make_snapshot(repo: Repo, folder: Path, branch: str, tips: Sequence[str], ma
     git sees it now, uncommitted and untracked work included, as your HEAD or one runtime commit over it, captured
     under your repository's own config, reading your objects through alternates and holding in its own store every
     object the session's `tips` at open did not reach. It has no remote. It is built aside and renamed into place last,
-    so it is whole or absent: an attempt adopts a whole one, and takes back a part, which only the runtime writes.
-    `made_for` names the session and the agent in its capture commit's message."""
+    so it is whole or absent: an attempt adopts a whole one, and takes back a part, which only the runtime writes, as
+    does one that fails. What `team check` refuses for a snapshot is refused again here, since your checkout may have
+    changed since. `made_for` names the session and the agent in its capture commit's message."""
     checkout, root, part = Path(repo.top), folder / "workspace", folder / "workspace.part"
     objects = git("rev-parse", "--path-format=absolute", "--git-path", "objects", cwd=checkout).strip()
     if root.exists():
@@ -350,12 +433,16 @@ def make_snapshot(repo: Repo, folder: Path, branch: str, tips: Sequence[str], ma
     else:
         if part.exists():
             shutil.rmtree(part)
-        _build(checkout, part, branch, tips, objects, made_for)
+        if refused := _seen_otherwise(checkout):
+            raise GitError("; ".join(refused))
+        try:
+            _build(checkout, part, branch, repo.prefix, tips, objects, made_for)
+        except (GitError, OSError):
+            shutil.rmtree(part, ignore_errors=True)
+            raise
         part.rename(root)
     base = git("rev-parse", "--verify", "HEAD^{commit}", cwd=root).strip()
     path = root / repo.prefix
-    if not path.is_dir():
-        raise GitError(f"{repo.prefix} holds nothing at {base[:12]}, so its agent has nowhere to work")
     repository = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=root).strip()
     host = socket.gethostname()
     return Workspace(
@@ -363,11 +450,14 @@ def make_snapshot(repo: Repo, folder: Path, branch: str, tips: Sequence[str], ma
     )
 
 
-def _build(checkout: Path, part: Path, branch: str, tips: Sequence[str], objects: str, made_for: str) -> None:
+def _build(
+    checkout: Path, part: Path, branch: str, prefix: str, tips: Sequence[str], objects: str, made_for: str
+) -> None:
     """Build a snapshot in `part`: its repository, borrowing `objects`, with what your checkout's git resolves for who
     commits and how files are read and written, and your local excludes and attributes; then the capture, made in your
-    checkout under its own config, into a copy of its index and into the part's own store; then its own pack of what
-    the capture reaches that `tips` do not, and the fill."""
+    checkout under its own config, into a copy of its index, written whole, and into the part's own store, which must
+    hold the session's subfolder `prefix`; then its own pack of what the capture reaches that `tips` do not, and the
+    fill."""
     part.parent.mkdir(parents=True, exist_ok=True)
     git("init", "-q", str(part), cwd=part.parent)
     store = Path(git("rev-parse", "--path-format=absolute", "--git-path", "objects", cwd=part).strip())
@@ -386,6 +476,7 @@ def _build(checkout: Path, part: Path, branch: str, tips: Sequence[str], objects
         "GIT_INDEX_FILE": str(index),
         "GIT_OBJECT_DIRECTORY": str(store),
         "GIT_ALTERNATE_OBJECT_DIRECTORIES": objects,
+        **_WHOLE,
     }
     git("add", "-A", cwd=checkout, env=captured)
     tree = git("write-tree", cwd=checkout, env=captured).strip()
@@ -396,6 +487,8 @@ def _build(checkout: Path, part: Path, branch: str, tips: Sequence[str], objects
             "snapshot was made, its uncommitted and untracked work included."
         )
         base = git("commit-tree", tree, "-p", head, "-m", message, cwd=checkout, env={**captured, **_RUNTIME}).strip()
+    if git("cat-file", "-t", f"{base}:{prefix}", cwd=part, ok=(0, 128)).strip() != "tree":
+        raise GitError(f"{prefix} holds nothing tracked or unignored at {base[:12]}, so its agent has nowhere to work")
     given = f"{base}\n" + "".join(f"^{tip}\n" for tip in tips)
     if listed := git("rev-list", "--objects", "--ignore-missing", "--stdin", cwd=part, input=given):
         git("pack-objects", "-q", str(store / "pack" / "pack"), cwd=part, input=listed)
@@ -410,48 +503,70 @@ def _build(checkout: Path, part: Path, branch: str, tips: Sequence[str], objects
 def end_worktree(workspace: Workspace, folder: Path, checkout: Path, left: Sequence[str]) -> dict[str, Any]:
     """Remove an ended agent's worktree only when nothing would go with it, as git says: its processes gone, which
     `left` says were not, no path in its status, ignored ones included, no operation under way, no index entry hidden
-    from status, and no commit its own HEAD, reflog or refs hold that is not its base or reachable from a ref of your
-    repository. Otherwise it stays, locked, and is named with why. Its branch always stays."""
+    from status while its file is there, and no commit its own HEAD, reflog or refs hold that is not its base or
+    reachable from a ref of your repository. Otherwise it stays, locked, and is named with why. Its branch always
+    stays. Each step is safe to repeat, so a stop retried after a crash finishes what the last one began."""
     root = (folder / "workspace").resolve()
-    reason = _reason(root)
+    entry = _worktrees(checkout).get(str(root))
+    ignored: list[str] = []
     if not root.exists():
-        if str(root) not in _worktrees(checkout):
+        if entry is None:
             return {"removed": True, "kept": None}  # An earlier stop removed it.
         why = ["its folder has gone, and git still holds its reflog: `git worktree prune` forgets it once unlocked"]
     else:
         try:
+            lost, ignored = _losses(root)
             alone = _only_in_worktree(root, checkout, workspace.base)
-            why = [*(["a process of its may still run"] if left else []), *_losses(root), *alone]
+            why = [*(["a process of its may still run"] if left else []), *lost, *alone]
         except GitError as error:
             why = [f"could not be read: {error}"]
-    if not why:
-        git("worktree", "unlock", str(root), cwd=checkout)
+    if not why and not ignored:
+        if entry is not None and "locked" in entry:  # A stop cut after its unlock finds it unlocked.
+            git("worktree", "unlock", str(root), cwd=checkout)
         try:
             git("worktree", "remove", str(root), cwd=checkout)
             return {"removed": True, "kept": None}
         except GitError as error:
-            git("worktree", "lock", "--reason", reason, str(root), cwd=checkout)
+            git("worktree", "lock", "--reason", _reason(root), str(root), cwd=checkout)
             why = [f"git would not remove it: {error}"]
-    kept = Kept(path=str(root), host=socket.gethostname(), branch=workspace.branch, bytes=_bytes(root), why=tuple(why))
+    me = ("git", "-C", str(checkout), "worktree")
+    release = () if why else (_command(*me, "unlock", str(root)), _command(*me, "remove", str(root)))
+    return _kept(workspace, root, [*why, *ignored], release)
+
+
+def _kept(workspace: Workspace, root: Path, why: Sequence[str], release: Sequence[str]) -> dict[str, Any]:
+    """What a stop says of a workspace it left in place."""
+    size = _bytes(root) if root.exists() else None
+    host = socket.gethostname()
+    kept = Kept(path=str(root), host=host, branch=workspace.branch, bytes=size, why=tuple(why), release=tuple(release))
     return {"removed": False, "kept": kept.model_dump(mode="json")}
 
 
-def end_snapshot(workspace: Workspace, folder: Path, checkout: Path, left: Sequence[str]) -> dict[str, Any]:
+def end_snapshot(
+    workspace: Workspace, folder: Path, checkout: Path, left: Sequence[str], *, retried: bool
+) -> dict[str, Any]:
     """Remove an ended agent's snapshot only when nothing would go with it, as git says, by the rule a worktree's end
     follows, where the commits it alone holds are those of all its refs, its stash and its reflogs: it is renamed aside
-    first, so a crash part of the way leaves it whole or going. Otherwise it stays, made whole, so that your
+    first, so a crash part of the way leaves it whole or going, and its folder gone is taken as removed only where
+    that began or this stop is `retried`, since only a stop removes it. Otherwise it stays, made whole, so that your
     repository's pruning cannot take what it borrowed."""
     root, gone = folder / "workspace", folder / "workspace.gone"
-    if gone.exists():
+    began = gone.exists()
+    if began:
         shutil.rmtree(gone)
     if not root.exists():
-        return {"removed": True, "kept": None}  # An earlier stop removed it.
+        if began or retried:
+            return {"removed": True, "kept": None}  # An earlier attempt of this stop removed it.
+        return _kept(workspace, root, ["its folder has gone, which only its stop removes"], ())
+    ignored: list[str] = []
+    carried: list[str] = []
     try:
-        alone = _only_in_snapshot(root, checkout, workspace.base)
-        why = [*(["a process of its may still run"] if left else []), *_losses(root), *alone]
+        lost, ignored = _losses(root)
+        carried, elsewhere = _only_in_snapshot(root, checkout, workspace.base, workspace.branch)
+        why = [*(["a process of its may still run"] if left else []), *lost, *elsewhere]
     except GitError as error:
         why = [f"could not be read: {error}"]
-    if not why:
+    if not why and not carried and not ignored:
         root.rename(gone)
         shutil.rmtree(gone)
         return {"removed": True, "kept": None}
@@ -461,13 +576,16 @@ def end_snapshot(workspace: Workspace, folder: Path, checkout: Path, left: Seque
     if alternates.exists():
         git("repack", "-a", "-d", "-q", cwd=root)
         alternates.unlink()
-    kept = Kept(path=str(root), host=socket.gethostname(), branch=workspace.branch, bytes=_bytes(root), why=tuple(why))
-    return {"removed": False, "kept": kept.model_dump(mode="json")}
+    branch = workspace.branch or ""
+    fetch = [_command("git", "-C", str(checkout), "fetch", str(root), f"{branch}:{branch}")] if carried else []
+    release = () if why else (*fetch, _command("rm", "-rf", str(root)))
+    return _kept(workspace, root, [*why, *carried, *ignored], release)
 
 
-def _only_in_snapshot(root: Path, checkout: Path, base: str | None) -> list[str]:
+def _only_in_snapshot(root: Path, checkout: Path, base: str | None, branch: str | None) -> tuple[list[str], list[str]]:
     """The commits a snapshot's refs, stash and reflogs hold that are neither its base nor reachable from a ref of your
-    repository, in words, if any. They are read in the snapshot, which sees your commits through its alternates."""
+    repository, in words: those its branch holds, which a fetch of it makes yours, and the rest, named. They are read
+    in the snapshot, which sees your commits through its alternates."""
     refs = ("for-each-ref", "--format=%(objecttype) %(objectname)")
     yours = [line.split()[1] for line in git(*refs, cwd=checkout).splitlines() if line.split()[0] in ("commit", "tag")]
     held = {
@@ -475,32 +593,45 @@ def _only_in_snapshot(root: Path, checkout: Path, base: str | None) -> list[str]
         *(line.split()[1] for line in git(*refs, cwd=root).splitlines() if line.split()[0] in ("commit", "tag")),
         git("rev-parse", "--verify", "HEAD", cwd=root).strip(),
     }
-    given = "".join(f"{sha}\n" for sha in held) + "".join(f"^{sha}\n" for sha in (*filter(None, (base,)), *yours))
-    alone = git("rev-list", "--ignore-missing", "--stdin", cwd=root, input=given).split()
-    return [f"{len(alone)} commits only it holds, in its refs, stash or reflogs"] if alone else []
+    known = [*filter(None, (base,)), *yours]
+    alone = _beyond(root, held, known)
+    tip = git("rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}", cwd=root, ok=(0, 1)).strip()
+    elsewhere = _beyond(root, held, [*known, tip]) if alone and tip else alone
+    carried = len(alone) - len(elsewhere)
+    on_branch = [f"{_some(carried, 'commit')} only its branch holds"] if carried else []
+    rest = f"{_some(len(elsewhere), 'commit')} only it holds, in its other refs, stash or reflogs: {_shas(elsewhere)}"
+    return on_branch, [rest] if elsewhere else []
 
 
-def _losses(root: Path) -> list[str]:
-    """What removing a workspace would lose that is not committed, each in words."""
+def _beyond(root: Path, held: Iterable[str], known: Iterable[str]) -> list[str]:
+    """The commits `held` reach and `known` do not, newest first. A commit this repository lacks excludes nothing."""
+    given = "".join(f"{sha}\n" for sha in held) + "".join(f"^{sha}\n" for sha in known)
+    return git("rev-list", "--ignore-missing", "--stdin", cwd=root, input=given).split()
+
+
+def _shas(commits: Sequence[str]) -> str:
+    return _listed([sha[:12] for sha in commits])
+
+
+def _losses(root: Path) -> tuple[list[str], list[str]]:
+    """What removing a workspace would lose that is not committed, each in words: what may be work, then its ignored
+    files, apart, which a release may drop since they are named."""
     found = []
-    entries = status_of(git("status", "--porcelain=v2", "--ignored", "-z", cwd=root))
-    uncommitted = [path for kind, _, path in entries if kind != "!"]
-    ignored = [path for kind, _, path in entries if kind == "!"]
-    if uncommitted:
-        found.append(f"{len(uncommitted)} uncommitted paths")
-    if ignored:
-        found.append(f"ignored: {_listed(ignored)}")
+    entries = status_of(git(*STATUS, "--ignored", cwd=root))
+    if uncommitted := [path for kind, _, path in entries if kind != "!"]:
+        found.append(f"{_some(len(uncommitted), 'uncommitted path')}: {_listed(uncommitted)}")
     kinds = {UNDER_WAY[name] for name in operations(root)}
     found += sorted(f"a {'sequence of picks' if kind == 'sequence' else kind} under way" for kind in kinds)
-    hidden = [entry for entry in _lines(git("ls-files", "-v", "-z", cwd=root)) if entry[0].islower() or entry[0] == "S"]
-    if hidden:
-        found.append(f"{len(hidden)} index entries hidden from status")
-    return found
+    flagged = [(entry[0], entry[2:]) for entry in _lines(git("ls-files", "-v", "-z", cwd=root))]
+    if hidden := [path for flag, path in flagged if (flag.islower() or flag == "S") and os.path.lexists(root / path)]:
+        found.append(f"{_some(len(hidden), 'path')} hidden from status: {_listed(hidden)}")
+    ignored = [path for kind, _, path in entries if kind == "!"]
+    return found, [f"ignored: {_listed(ignored)}"] if ignored else []
 
 
 def _only_in_worktree(root: Path, checkout: Path, base: str | None) -> list[str]:
     """The commits a worktree's own HEAD, reflog and refs hold that are neither its base nor reachable from a ref of
-    your repository, in words, if any."""
+    your repository, named, if any."""
     held = {
         *git("log", "-g", "--format=%H", "HEAD", cwd=root).split(),
         *git("for-each-ref", "--format=%(objectname)", "refs/worktree", "refs/bisect", cwd=root).split(),
@@ -508,7 +639,9 @@ def _only_in_worktree(root: Path, checkout: Path, base: str | None) -> list[str]
     }
     given = "".join(f"{sha}\n" for sha in held) + (f"^{base}\n" if base else "")
     alone = git("rev-list", "--ignore-missing", "--stdin", "--not", "--glob=refs/*", cwd=checkout, input=given).split()
-    return [f"{len(alone)} commits only it holds, in its HEAD, reflog or own refs"] if alone else []
+    if not alone:
+        return []
+    return [f"{_some(len(alone), 'commit')} only it holds, in its HEAD, reflog or own refs: {_shas(alone)}"]
 
 
 def operations(root: Path) -> dict[str, Path]:

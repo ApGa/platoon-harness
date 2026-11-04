@@ -27,18 +27,22 @@
 - `workspace = "snapshot"`: a repository of its own in the session folder holding your tree as your git sees it, uncommitted and
   untracked work included, captured in your checkout under its own config into the snapshot's own store and index, reading your
   objects through alternates and holding in its own pack what your refs did not reach, with your identity and file-reading values
-  and no remote. It is built aside and renamed into place last, so a retry adopts it; refused before any cost for filtered tracked
-  files, a sparse checkout or an untracked repository inside the tree; ended by the same lossless rule, a kept one made whole.
+  and no remote. It is built aside and renamed into place last, so a retry adopts it; refused before any cost, and again when made,
+  for filtered tracked files, a sparse checkout, an untracked repository inside the tree, or an operation under way or a conflict in
+  your checkout; ended by the same lossless rule, a kept one made whole. A split index of yours is written whole into it.
 - `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
   `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
   a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume
   whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/workspaces.md` and ADR 0031.
 - Refused before any cost: a git mode outside a work tree, in a bare repository or one with no commit, on git older than 2.36, with
-  LFS files and no filter, or where a session's branches exist; a session folder unignored in its repository's work tree, in every
-  mode. Warned of: submodules, uncommitted changes, and a Codex role in a worktree whose commits would each wait on an approval,
-  naming its three postures.
-- An ended agent's worktree removed only when git says nothing would go with it, and otherwise kept, locked, and named in the
-  Ending's `workspaces` with its host, path, branch, size, why and the commands that let it go.
+  LFS files and no filter, from a subfolder the workspace would not hold, or where a session's branches exist, naming another session
+  name first; a session folder unignored in its repository's work tree, in every mode. Warned of: submodules, uncommitted changes,
+  named, and a Codex role in a worktree or a snapshot whose commits would each wait on an approval, naming its three postures, or be
+  refused under `approvals = "deny"`.
+- An ended agent's worktree removed only when git says nothing would go with it, whatever your status config says, and otherwise
+  kept, locked, and named in the Ending's `workspaces` with its host, path, branch, size and why, naming what it found, and a
+  `release` of quoted commands only where they lose nothing it was kept for but the ignored files it names. A stop a crash cut
+  finishes when it is retried.
 - `commits.bundle` in the session folder at each stop, holding every commit the journal recorded past the session's starting HEAD,
   recorded on `session.stopped`, with nothing written into your repository.
 - The repository a session opens on, in `session.opened`, with every ref and its tip at open as a body.
@@ -198,7 +202,8 @@
 
 - The `changes` report has left the driver vocabulary, with `Changed` and `change.recorded`, as only the runtime observes a
   workspace. The `changes` view's rows lost `agent`, `tests` and `since_mark`: a client compares `seq` with the person's mark.
-- Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before.
+- Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before, and a session folder
+  named so is refused as no longer valid, naming the folder to rename while no runtime holds it.
 - A relative program in a `command` harness resolves against the session's cwd, for the harness and for `describe` alike.
 - Claude Code's `EnterWorktree` and `ExitWorktree` are off on every launch, and a Codex thread naming a `cwd` other than its
   workspace is refused. See ADR 0033.

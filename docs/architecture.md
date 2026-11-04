@@ -1357,23 +1357,27 @@ another. The core gives the first three, on git and the filesystem alone, and re
 - **The repository** is read at open into `session.opened`: its name, its work tree's top, the session's prefix, HEAD, branch, the git
   directory and, as a body, every ref and its tip. A resume's reading never replaces it.
 - **Before any cost**, a git mode is refused when the cwd is in no git work tree, the repository is bare or has no commit, git is older
-  than 2.36, LFS files have no LFS filter, or a branch exists at `platoon-harness`, at `platoon-harness/<session>` or under it, each
-  named with the command that deletes it. A session whose folder lies unignored in its repository's work tree is refused in every mode.
-  A snapshot is refused too where git in it would see your tree otherwise than git in your checkout: a tracked file with a `filter`
-  attribute, a sparse checkout, or an untracked repository inside the tree, each named. Submodules, uncommitted changes in your
-  checkout where a worktree would not carry them, and a Codex role whose sandbox keeps `.git` read-only with approvals left to ask
-  are warned of.
+  than 2.36, LFS files have no LFS filter, the session's subfolder would be missing from the workspace, or a branch exists at
+  `platoon-harness`, at `platoon-harness/<session>` or under it, each named with what lets it go. A session whose folder lies
+  unignored in its repository's work tree is refused in every mode. A snapshot is refused too where git in it would see your tree
+  otherwise than git in your checkout: a tracked file with a `filter` attribute, a sparse checkout, an untracked repository inside the
+  tree, or an operation under way or a conflicted path, which a capture would take as settled, each named, and again when it is made.
+  Submodules, uncommitted changes in your checkout where a worktree would not carry them, and a Codex role whose sandbox keeps `.git`
+  read-only with approvals left to ask, or set to deny, are warned of.
 - **Making a worktree** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
   locked with our reason from its first write, and a fill. The effect is retried after a crash, each attempt adopts what an earlier
   one made, and one fails, naming it, on a branch, registration or folder the runtime did not make.
 - **The runtime's own git** goes through one runner, which runs no hook, no fsmonitor and no gc, and never changes what an agent made:
   no `-B`, no `--force` or `reset` in a tree an agent has run in, no `prune`, and no `update-ref` of a branch an agent has.
 - **Ending one.** An agent's stop removes its worktree only when nothing would go with it: its processes proved gone, no path in its
-  status, ignored ones included, no operation under way, no index entry hidden from status, and every commit its HEAD, reflog and own
-  refs hold its base or reachable from a ref of your repository; for a snapshot, every commit of all its refs, its stash and its
-  reflogs. A kept worktree stays locked, a kept snapshot is made whole, packing what it borrowed into its own store, and either is
-  named with its host, path, size and reason on the agent's record and in the Ending. No branch is ever removed, and closing a
-  session ends no agent, so it keeps the workspaces of agents that never ended.
+  status, whatever your config says of untracked files and submodules, ignored ones included, no operation under way, no index entry
+  hidden from status while its file is in the tree, and every commit its HEAD, reflog and own refs hold its base or reachable from a
+  ref of your repository; for a snapshot, every commit of all its refs, its stash and its reflogs. A kept worktree stays locked, a kept
+  snapshot is made whole, packing what it borrowed into its own store, and either is named with its host, path, size and reasons,
+  each naming what it found, on the agent's record and in the Ending. Its `release` is the commands that let it go, quoted, given only
+  when they lose nothing it was kept for but the ignored files it names, and empty otherwise. No branch is ever removed, and closing a
+  session ends no agent, so it keeps the workspaces of agents that never ended, with no `release`. Each step of a stop is safe to
+  repeat, so a stop a crash cut finishes when it is retried.
 - **The look.** Each turn's end and each resume request a `probe` of that agent's (§7), and its stop looks once more before it ends the
   workspace. Looks run one at a time and change no ref, index or file. Each takes the shared workspace's commits and then the agent's
   own workspace, reads HEAD once and uses that commit throughout, and records a status that names another HEAD as the gap

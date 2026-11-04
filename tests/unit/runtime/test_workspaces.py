@@ -2,6 +2,7 @@
 a crash, and ended only when nothing would go with them."""
 
 import os
+import shlex
 import shutil
 import socket
 import stat
@@ -98,7 +99,7 @@ def test_lfs_files_without_an_lfs_filter_are_refused_before_any_cost(repo, tmp_p
 
     found = problems_of(workspace_team(), repo, tmp_path / "home")
 
-    assert any("1 files are tracked by LFS and no LFS filter is configured" in what for what in found["error"])
+    assert any("1 file tracked by LFS and no LFS filter configured" in what for what in found["error"])
 
 
 def test_a_session_whose_branches_exist_is_refused_before_any_cost(repo, tmp_path):
@@ -109,10 +110,27 @@ def test_a_session_whose_branches_exist_is_refused_before_any_cost(repo, tmp_pat
     other = problems_of(workspace_team(), repo, tmp_path / "home", name="fresh")
 
     assert found["error"] == [
-        "cwd: a workspace's branch would collide with platoon-harness/s/bob: once nothing on them is wanted, "
-        "`git branch -D platoon-harness/s/bob`"
+        "cwd: a workspace's branch would collide with platoon-harness/s/bob: give the session another name, or, once "
+        "nothing on them is wanted, `git branch -d platoon-harness/s/bob`"
     ]
     assert "error" not in other
+
+
+def test_a_reused_name_s_refusal_names_the_kept_worktree_that_holds_its_branch(repo, tmp_path):
+    root = tmp_path / "kept place"
+    git("worktree", "add", "-q", "--lock", "-b", "platoon-harness/s/bob", str(root), cwd=repo)
+
+    [refused] = problems_of(workspace_team(), repo, tmp_path / "home")["error"]
+    commands = refused.split("wanted, ")[1].split("; ")
+
+    assert commands == [
+        f"`git worktree unlock '{root}'`",
+        f"`git worktree remove '{root}'`",
+        "`git branch -d platoon-harness/s/bob`",
+    ]
+    for command in commands:
+        git(*shlex.split(command.strip("`"))[1:], cwd=repo)
+    assert "error" not in problems_of(workspace_team(), repo, tmp_path / "home")
 
 
 def test_a_branch_at_the_top_of_every_session_s_is_refused_for_all(repo, tmp_path):
@@ -120,7 +138,7 @@ def test_a_branch_at_the_top_of_every_session_s_is_refused_for_all(repo, tmp_pat
 
     found = problems_of(workspace_team(), repo, tmp_path / "home", name=None)
 
-    assert "`git branch -D platoon-harness`" in found["error"][0]
+    assert "`git branch -d platoon-harness`" in found["error"][0]
 
 
 @pytest.mark.parametrize("mode", ["shared", "worktree"])
@@ -148,9 +166,19 @@ def test_submodules_and_uncommitted_changes_are_warned_of_before_any_cost(repo, 
 
     assert "error" not in found
     assert found["warning"] == [
-        "cwd: 1 submodules stay uninitialized in each workspace",
-        "cwd: your checkout has 1 uncommitted paths, which a worktree does not carry: commit them first",
+        "cwd: each workspace leaves 1 submodule uninitialized",
+        "cwd: your checkout has 1 uncommitted path, README, which a worktree does not carry: commit them first, or use "
+        "`snapshot`, which carries them",
     ]
+
+
+def test_uncommitted_changes_are_warned_of_whatever_status_config_says(repo, tmp_path):
+    git("config", "status.showUntrackedFiles", "no", cwd=repo)
+    (repo / "notes.md").write_text("mine\n")
+
+    found = problems_of(workspace_team(), repo, tmp_path / "home")
+
+    assert "1 uncommitted path, notes.md," in found["warning"][0]
 
 
 def test_a_mode_that_cannot_be_given_is_refused_before_any_cost(repo, tmp_path):
@@ -198,6 +226,23 @@ def test_a_codex_role_that_cannot_commit_in_its_workspace_is_warned_before_any_c
         )
         for choice in ('`sandbox = "danger-full-access"`', '`approvals = "allow"`', "keep `ask`", "`needs_human`"):
             assert choice in said[0]
+
+
+@pytest.mark.parametrize("approvals", [None, "deny"])
+def test_a_codex_role_whose_commits_would_be_refused_is_warned_before_any_cost(repo, tmp_path, approvals):
+    role = {**CODEX, "sandbox": "workspace-write"} | ({} if approvals else {"approvals": "deny"})
+    team = Team.model_validate({"roles": {"bob": role}})
+
+    found = [
+        str(problem)
+        for problem in workspaces.problems(team, cwd=repo, folder=tmp_path, session="s", approvals=approvals)
+    ]
+
+    assert found == [
+        "roles.bob.sandbox: codex keeps `.git` read-only under `workspace-write` and `read-only`, so each commit in "
+        'its workspace is refused under `approvals = "deny"`. Choose one: `sandbox = "danger-full-access"` runs its '
+        'commands with no sandbox, or `approvals = "allow"` keeps the sandbox and allows each escalation'
+    ]
 
 
 # The repository a session opens on.
@@ -301,15 +346,70 @@ async def test_an_agent_works_in_the_session_s_subfolder_of_its_workspace(repo, 
     assert [spec.cwd for spec in recording.specs] == [root / "src"]
 
 
-async def test_a_subfolder_nothing_is_committed_in_fails_the_spawn_saying_so(repo, tmp_path):
+def test_a_subfolder_nothing_is_committed_in_is_refused_before_any_cost(repo, tmp_path):
     (repo / "notes").mkdir()
     (repo / "notes" / "draft").write_text("unsaved\n")
-    async with Session.start(workspace_team(), name="s", root=tmp_path, cwd=repo / "notes") as session:
-        await in_state(session, "bob", "ended")
-        failed = (await of_type(session, "effect.failed"))[0]
+    (repo / "empty").mkdir()
 
-    assert failed.data["kind"] == "workspace"
-    assert failed.data["error"].startswith("notes/ holds nothing committed at")
+    worktree = problems_of(workspace_team(), repo / "notes", tmp_path / "home")
+    snapshot = problems_of(workspace_team(workspace="snapshot"), repo / "notes", tmp_path / "home")
+    nothing = problems_of(workspace_team(workspace="snapshot"), repo / "empty", tmp_path / "home")
+
+    assert worktree["error"] == [
+        "roles.bob.workspace: notes/ holds nothing committed, so a worktree's agent would have nowhere to work: commit "
+        "there first"
+    ]
+    assert "error" not in snapshot
+    assert nothing["error"] == [
+        "roles.bob.workspace: empty/ holds nothing tracked or unignored, so a snapshot's agent would have nowhere "
+        "to work"
+    ]
+
+
+async def test_a_spawn_with_nowhere_to_work_makes_nothing(repo, tmp_path):
+    """The subfolder went from your HEAD after the session opened: the spawn fails before it makes a branch."""
+    team = Team.model_validate(
+        {
+            "roles": {
+                "lead": {"harness": scripted()},
+                "worker": {"harness": scripted(), "workspace": "worktree", "count": 0},
+            }
+        }
+    )
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo / "src") as session:
+        await in_state(session, "lead", "idle")
+        git("rm", "-q", "-r", "src", cwd=repo)
+        git("commit", "-q", "-m", "no src", cwd=repo)
+        await session.spawn("ada", "worker")
+        await in_state(session, "ada", "ended")
+        failed = (await of_type(session, "effect.failed"))[0]
+        ending = await session.ending()
+
+    assert failed.data["error"].startswith("src/ holds nothing committed at")
+    assert git("branch", "--list", "platoon-harness/*", cwd=repo) == ""
+    assert git("worktree", "list", "--porcelain", cwd=repo).count("worktree ") == 1
+    assert ending.workspaces == ()
+
+
+def test_a_fill_that_fails_takes_its_worktree_back(repo, tmp_path, monkeypatch):
+    real = workspaces.git
+
+    def failing(*args: str, **options: Any) -> str:
+        if args[:2] == ("reset", "--hard"):
+            raise GitError("git reset failed: No space left on device")
+        return real(*args, **options)
+
+    monkeypatch.setattr(workspaces, "git", failing)
+    with pytest.raises(GitError) as refused:
+        made(repo, tmp_path / "ada")
+
+    root = (tmp_path / "ada" / "workspace").resolve()
+    assert str(refused.value) == (
+        "git reset failed: No space left on device: its worktree is taken back, and its branch platoon-harness/s/ada "
+        "stays"
+    )
+    assert registration(repo, root) == "" and not root.exists()
+    assert "error" not in problems_of(workspace_team(), repo, tmp_path / "home", name="other")
 
 
 async def test_the_workspace_effect_records_the_mode_that_ran(repo, tmp_path):
@@ -344,14 +444,14 @@ async def test_a_branch_made_mid_session_by_something_else_fails_the_spawn_namin
 
     assert status["status"] == "failed"
     assert failed.data["error"] == (
-        "a branch platoon-harness/s/ada is in the way, which the runtime did not make: "
-        "`git branch -D platoon-harness/s/ada` once nothing on it is wanted"
+        "a branch platoon-harness/s/ada is in the way, which the runtime did not make: once nothing on it is wanted, "
+        "`git branch -d platoon-harness/s/ada`"
     )
 
 
 def test_a_crash_after_the_branch_is_made_is_adopted(repo, tmp_path):
     reason = "platoon-harness: made by effect 7"
-    workspaces._branch(repo, "platoon-harness/s/ada", reason, {})
+    workspaces._branch(repo, "platoon-harness/s/ada", "", reason, {})
 
     workspace = made(repo, tmp_path / "ada")
 
@@ -361,7 +461,7 @@ def test_a_crash_after_the_branch_is_made_is_adopted(repo, tmp_path):
 
 
 def test_a_branch_that_moved_is_never_adopted(repo, tmp_path):
-    workspaces._branch(repo, "platoon-harness/s/ada", "platoon-harness: made by effect 7", {})
+    workspaces._branch(repo, "platoon-harness/s/ada", "", "platoon-harness: made by effect 7", {})
     git("branch", "-f", "platoon-harness/s/ada", commit(repo, "moved"), cwd=repo)
 
     with pytest.raises(GitError) as refused:
@@ -372,7 +472,7 @@ def test_a_branch_that_moved_is_never_adopted(repo, tmp_path):
 
 
 def test_a_branch_another_effect_made_is_never_adopted(repo, tmp_path):
-    workspaces._branch(repo, "platoon-harness/s/ada", "platoon-harness: made by effect 6", {})
+    workspaces._branch(repo, "platoon-harness/s/ada", "", "platoon-harness: made by effect 6", {})
 
     with pytest.raises(GitError):
         made(repo, tmp_path / "ada")
@@ -388,7 +488,7 @@ def half_registered(repo: Path, folder: Path, *kept: str) -> Path:
     writes into it, in the order it writes them, and the folder's `.git` once `gitdir` is there."""
     root = (folder / "workspace").resolve()
     reason = workspaces._reason(root)
-    workspaces._branch(repo, "platoon-harness/s/ada", "platoon-harness: made by effect 7", {})
+    workspaces._branch(repo, "platoon-harness/s/ada", "", "platoon-harness: made by effect 7", {})
     git(
         "worktree",
         "add",
@@ -427,7 +527,7 @@ def test_a_crash_mid_registration_is_made_again(repo, tmp_path, kept):
 def test_a_crash_mid_fill_is_finished(repo, tmp_path):
     root = (tmp_path / "ada" / "workspace").resolve()
     reason = workspaces._reason(root)
-    workspaces._branch(repo, "platoon-harness/s/ada", "platoon-harness: made by effect 7", {})
+    workspaces._branch(repo, "platoon-harness/s/ada", "", "platoon-harness: made by effect 7", {})
     git(
         "worktree",
         "add",

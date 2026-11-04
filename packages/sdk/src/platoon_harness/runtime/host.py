@@ -562,8 +562,9 @@ class Host:
         """End what an ended agent left, look once more at what it left, then end its workspace, if nothing would go
         with it. With no link, a crash may have left it, and `reap` proves what is ours. A link stays until its harness
         has stopped, so a shutdown that cuts this short can still stop it. Each step is safe to repeat, so a repeat
-        finishes what the last one began, and a workspace an earlier one removed is not looked for."""
-        name = effect.data["agent"]
+        finishes what the last one began, and a workspace gone at a repeat, which an earlier attempt may have removed,
+        is not looked for. The authority hears how the agent ended even when ending its workspace fails."""
+        name, retried = effect.data["agent"], effect.attempts > 0
         folder = agent_folder(self._folder, name)
         link = self.link(name)
         if link is None:
@@ -573,17 +574,26 @@ class Host:
             left = await self._end(link, GRACE)
             self._links.pop(name, None)
         record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
-        if record["workspace"] is not None:
-            places = [where for where in self._places(name) if where == "shared" or self._root(where).exists()]
-            await self._look(name, effect.data.get("cause"), places)
-        ended = {"removed": False, "kept": None}
-        if record["workspace"] is not None and (mode := record["workspace"]["mode"]) != "shared":
-            workspace, repo = Workspace.model_validate(record["workspace"]), self._repo()
-            assert repo is not None
-            ending = end_worktree if mode == "worktree" else end_snapshot
-            ended = await asyncio.to_thread(ending, workspace, folder, Path(repo.top), left)
-        outcome = AgentOutcome(status=record["status"])
-        await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
+        ended: dict[str, Any] = {"removed": False, "kept": None}
+        try:
+            if record["workspace"] is not None:
+                places = [
+                    where
+                    for where in self._places(name)
+                    if where == "shared" or not retried or self._root(where).exists()
+                ]
+                await self._look(name, effect.data.get("cause"), places)
+            if record["workspace"] is not None and (mode := record["workspace"]["mode"]) != "shared":
+                workspace, repo = Workspace.model_validate(record["workspace"]), self._repo()
+                assert repo is not None
+                top = Path(repo.top)
+                if mode == "worktree":
+                    ended = await asyncio.to_thread(end_worktree, workspace, folder, top, left)
+                else:
+                    ended = await asyncio.to_thread(end_snapshot, workspace, folder, top, left, retried=retried)
+        finally:
+            outcome = AgentOutcome(status=record["status"])
+            await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
         return ended
 
     async def bundle(self) -> dict[str, Any] | None:

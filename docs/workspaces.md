@@ -45,27 +45,36 @@ At the same place, `agents/<agent>/workspace`, as a repository of its own on the
 lives in that repository and not in yours. Its first commit is your HEAD when nothing differs, and otherwise one commit over it by
 `platoon-harness <runtime@platoon-harness.invalid>` holding your tree as your git saw it: what `git add -A` would stage, under your own
 config, so your excludes and attributes apply and your ignored files, such as a `.venv`, stay out. It takes your `user.name` and
-`user.email`, so an agent commits there as it would in a worktree, and how your git reads and writes files. Your hooks do not run
-there, since it is a repository of its own. It reads your objects through alternates and holds in its own pack everything else it
-needs, so your unstaging and pruning cannot take from it what it holds.
+`user.email`, so an agent commits there as it would in a worktree, and how your git reads and writes files. Your repository's own
+`.git/hooks` do not run there, since it is a repository of its own, while a `core.hooksPath` your global or system config sets still
+does. It reads your objects through alternates and holds in its own pack everything else it needs, so your unstaging and pruning
+cannot take from it what it holds. A split index of yours is written whole into it, and nothing is written into your git directory.
 
 ## Before any cost
 
 `team check`, `run` and `Session.start` refuse, with exit 78 on the command line, each of these, every one named:
 
 - A git mode where the cwd is in no git work tree, the repository is bare or has no commit, or git is older than 2.36.
+- A git mode where the session's folder in your repository would be missing from the workspace: for a worktree, one that holds
+  nothing committed at your HEAD; for a snapshot, one that holds nothing tracked or unignored.
 - LFS-tracked files with no LFS filter configured, which a worktree would hold as their pointers.
-- A branch at `platoon-harness`, at `platoon-harness/<session>` or under it, with the `git branch -D` that deletes each once nothing on
-  it is wanted. Branches outlive their sessions on purpose, so a reused session name meets its own old ones.
+- A branch at `platoon-harness`, at `platoon-harness/<session>` or under it. Branches outlive their sessions on purpose, so a reused
+  session name meets its own old ones: give the session another name, or run the commands the refusal names once nothing on them is
+  wanted, the release of a kept worktree that has one checked out first, then `git branch -d`, which refuses a branch whose commits
+  are merged nowhere.
 - In every mode, a session folder that lies inside your repository's work tree and is not ignored there, since an agent's `git add -A`
   would commit its credentials.
 
 A snapshot is refused besides where git in it would see your tree otherwise than your own git: a tracked file with a `filter`
-attribute, LFS and git-crypt among them, since only your config runs that filter; a sparse checkout, which it would hold whole; and an
-untracked repository inside your tree, which a capture leaves out. Use `worktree` for these.
+attribute, LFS and git-crypt among them, since only your config runs that filter; a sparse checkout, which it would hold whole; an
+untracked repository inside your tree, which a capture leaves out; and a merge, rebase, cherry-pick, revert or bisect under way in
+your checkout, or a conflicted path, which a capture would take as settled. Use `worktree` for these, or finish what is under way.
+These are checked again when each snapshot is made, since your checkout may have changed since the session opened, and a snapshot
+refused then, or one whose build fails, leaves nothing behind.
 
-And warn of submodules, which stay uninitialized in each workspace, of uncommitted changes in your checkout, which a worktree does not
-carry, and of a Codex role whose commits would each wait on an approval, below.
+And warn of submodules, which stay uninitialized in each workspace, of uncommitted changes in your checkout, named, which a worktree
+does not carry and a snapshot does, and of a Codex role whose commits would each wait on an approval, or be refused under
+`approvals = "deny"`, below.
 
 ## What each harness sees there
 
@@ -78,7 +87,7 @@ Claude Code's own worktree tools are off on every launch ([ADR 0033](adr/0033-a-
 agent makes with git from a shell is its own affair, and outside what the runtime records.
 
 **Codex** keeps `.git` read-only under its `workspace-write` and `read-only` sandboxes, so each commit asks for an approval that runs
-outside the sandbox. Choose one of three postures for a Codex role in a worktree:
+outside the sandbox. Choose one of three postures for a Codex role in a worktree or a snapshot:
 
 | Posture | Says | What it means |
 |---|---|---|
@@ -88,33 +97,44 @@ outside the sandbox. Choose one of three postures for a Codex role in a worktree
 
 ## When a workspace goes
 
-At its agent's end, its stop removes the worktree only when nothing would go with it, as git says:
+At its agent's end, its stop removes the worktree only when nothing would go with it, as git says, whatever your config says of
+untracked files or submodules:
 
 - its processes are proved gone;
 - its status shows no path, ignored ones included;
 - no merge, rebase, cherry-pick, revert or bisect is under way;
-- no index entry is hidden from status by `skip-worktree` or `assume-unchanged`;
+- no index entry is hidden from status by `skip-worktree` or `assume-unchanged` while its file is in the tree, as one a sparse
+  checkout leaves out is not;
 - every commit its HEAD, its reflog or its own refs hold is its base, or reachable from a ref of your repository. Its branch is one, so
   committed work on its branch never keeps a worktree.
 
 Then it is unlocked and removed with plain `git worktree remove`. Otherwise it stays, locked, and the Ending's `workspaces` names it with
-its host, path, branch, size on disk and why, such as `1 uncommitted paths`, `ignored: .venv/, __pycache__/`, `a rebase under way` or
-`2 commits only it holds, in its HEAD, reflog or own refs`, and the commands that let it go. No branch is ever removed. Closing a
-session ends no agent, so it keeps the workspaces of agents that never ended, named `its agent has not ended`.
+its host, path, branch, size on disk and why, each reason naming what it found, such as `1 uncommitted path: notes.md`,
+`ignored: .venv/, __pycache__/`, `a rebase under way` or `2 commits only it holds, in its HEAD, reflog or own refs: 2a190b2d1e6b,
+99d5b8af9412`. No branch is ever removed. Each step of a stop is safe to repeat, so one a crash cut finishes when the session resumes.
 
-To let a kept worktree go, once nothing in it is wanted:
+Its `release` is the commands that let it go, given only when they lose nothing it was kept for but the ignored files its `why` names.
+For a worktree kept for its ignored files alone, they are:
 
 ```console
-$ git worktree unlock ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
-$ git worktree remove ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
+$ git -C ~/src/app worktree unlock ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
+$ git -C ~/src/app worktree remove ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
 ```
 
-`remove` refuses one with uncommitted or untracked files until you say `--force`. Once a session folder is deleted, `git worktree
-unlock <path>` and then `git worktree prune` forget its worktrees, and `git branch -D` deletes their branches.
+`remove` deletes the ignored files without asking. For any other reason `release` is empty, since `remove` would succeed on a clean
+tree and drop a commit only the worktree's reflog holds, and `why` says what to save first: commit or discard its paths, finish or
+abort what is under way, and keep a commit it names with `git branch <name> <sha>`. Then the two commands above let it go. A path with
+a space in it is quoted, so each command pastes as it stands. Once a session folder is deleted, `git worktree unlock <path>` and then
+`git worktree prune` forget its worktrees, and `git branch -d` deletes their branches.
+
+Closing a session ends no agent, so it keeps the workspaces of agents that never ended, named `its agent has not ended`, and an agent
+whose stop did not finish is named `its stop has not finished`. Neither has a `release`, since no stop has looked at what letting it go
+would lose: end the agent, or resume the session, first.
 
 A snapshot goes by the same rule, where the commits it alone holds are those of all its refs, its stash and its reflogs that are
 neither its base nor reachable from a ref of yours. A kept one is made whole: what it borrowed from your repository is packed into
-its own, and its alternates are removed, so it no longer depends on yours. To keep its work and let it go:
+its own, and its alternates are removed, so it no longer depends on yours. When what it holds alone is commits its branch holds, and
+ignored files, its `release` fetches the branch into your repository, which makes those commits yours, then deletes the folder:
 
 ```console
 $ git -C ~/src/app fetch ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace \
@@ -122,8 +142,10 @@ $ git -C ~/src/app fetch ~/.local/state/platoon-harness/sessions/fix-auth/agents
 $ rm -rf ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
 ```
 
-A fetch with a branch to land on, as here, is what makes a snapshot's commits yours, and so a snapshot removable; a fetch with none
-writes only `FETCH_HEAD`.
+A snapshot that holds uncommitted paths, a stash, a commit on another branch or one only its reflogs hold gets no `release`, as the
+fetch would leave them behind and the removal take them: `why` names them, and `git -C <path> stash list` and `git -C <path> branch`
+show them. A fetch with a branch to land on, as here, is what makes a snapshot's commits yours; a fetch with none writes only
+`FETCH_HEAD`.
 
 ## What a look sees
 
@@ -148,6 +170,8 @@ in the browser, until its agent's next turn. What a look cannot see:
 - a one-turn agent's work, until its turn has ended;
 - commits on a branch no workspace has at HEAD;
 - a worktree an agent makes with git, which is outside every look;
+- a commit made and undone within one turn, as by an amend or a reset before the turn ended, which only the workspace's reflog
+  holds, so the bundle below does not keep it, though its stop keeps the workspace for it;
 - who made a commit when the agent's git did not move HEAD onto it, as `commit-tree` with `update-ref` does not, or when two
   workspaces made the same commit in one second. Attribution reads what the agent's own git wrote, so it is evidence, never proof.
 
@@ -156,7 +180,7 @@ gap `workspace_unobserved` and nothing else, and the Ending names each agent who
 
 ## Taking an agent's work
 
-An agent's commits are on its branch in your repository, so you merge, rebase or cherry-pick them as you would anyone's:
+A worktree agent's commits are on its branch in your repository, so you merge, rebase or cherry-pick them as you would anyone's:
 
 ```console
 $ git log main..platoon-harness/fix-auth/ada
@@ -168,8 +192,8 @@ The runtime never merges, rebases or resolves a conflict, and never moves a bran
 ## What the journal recorded
 
 When a session stops or closes, the runtime writes `commits.bundle` into the session folder, holding every commit the journal recorded
-past the session's starting HEAD, and replaces the last one, keeping what it held. So a commit an agent amended or rebased away, which
-git would prune after a while, can be fetched back:
+past the session's starting HEAD, and replaces the last one, keeping what it held. So a commit an agent amended or rebased away after a
+look recorded it, which git would prune after a while, can be fetched back:
 
 ```console
 $ git bundle list-heads ~/.local/state/platoon-harness/sessions/fix-auth/commits.bundle

@@ -1,5 +1,6 @@
 """SIGKILL at each step of making a worktree or a snapshot, then a resume: the workspace is retried and adopts what the
-last attempt made, and its agent starts once, in it, with nothing half made left behind, in your repository or by it."""
+last attempt made, and its agent starts once, in it, with nothing half made left behind, in your repository or by it.
+Then at each step of ending one: the stop is retried and finishes what the last attempt began."""
 
 import asyncio
 import os
@@ -11,7 +12,7 @@ from platoon_harness import Session, Team
 from platoon_harness.runtime.opening import prepare
 
 from ..unit.runtime.gitting import git, repository
-from ..unit.runtime.support import journal, rebuilt_equals_live
+from ..unit.runtime.support import in_state, journal, rebuilt_equals_live
 from .scripts import wire
 from .test_kill_matrix import attached, died, killable
 
@@ -35,6 +36,15 @@ SNAPSHOT_STEPS = [
     ("git:pack-objects", "after"),
     ("git:reset", "after"),
     ("effect.finish:workspace", "before"),
+]
+
+
+ENDING_STEPS = [
+    ("worktree", "git:worktree unlock", "after"),
+    ("worktree", "git:worktree remove", "before"),
+    ("worktree", "git:worktree remove", "after"),
+    ("worktree", "effect.finish:stop", "before"),
+    ("snapshot", "effect.finish:stop", "before"),
 ]
 
 
@@ -98,3 +108,59 @@ async def test_a_kill_at_each_step_of_making_a_snapshot_is_adopted_on_resume(tmp
     assert git("symbolic-ref", "HEAD", cwd=root).strip() == "refs/heads/platoon-harness/s/ada"
     assert git("status", "--porcelain", cwd=root) == ""
     assert (git("for-each-ref", cwd=repo), (repo / ".git" / "index").read_bytes()) == (refs, index)
+
+
+async def ended_through_a_kill(tmp_path: Path, repo: Path, mode: str, point: str, when: str, leave: str = "") -> tuple:
+    """A session whose runtime kills itself at `point` while it ends ada's workspace, holding `leave` uncommitted if
+    that names a file, then resumes and settles."""
+    folder = await asyncio.to_thread(prepare, team(mode), name="s", root=tmp_path, cwd=repo)
+    runtime = killable(folder, point, when, 1)
+    try:
+        guest = await attached(folder, tmp_path)
+        await guest.submit("agent.spawn", name="ada", child_role="ada", goal="the important thing")
+        await in_state(guest, "ada", "idle")
+        if leave:
+            (folder / "agents" / "ada" / "workspace" / leave).write_text("an agent's work\n")
+        await guest.cancel_agent("@ada")
+        await died(runtime)
+        await guest.leave()
+    finally:
+        runtime.kill()
+        runtime.wait()
+    async with Session.resume("s", root=tmp_path) as owner:
+        ending = await owner.settled(timeout="20s")
+        events = await journal(owner)
+    await rebuilt_equals_live(folder)
+    stops = [
+        event for event in events if event.type in ("effect.finished", "effect.failed") and event.data["kind"] == "stop"
+    ]
+    assert [event.type for event in stops] == ["effect.finished"], stops
+    return folder, ending
+
+
+@pytest.mark.parametrize(("mode", "point", "when"), ENDING_STEPS)
+async def test_a_kill_at_each_step_of_ending_a_workspace_is_finished_on_resume(
+    tmp_path, monkeypatch, mode, point, when
+):
+    repo = repository(tmp_path / "repo", monkeypatch)
+    folder, ending = await ended_through_a_kill(tmp_path, repo, mode, point, when)
+
+    assert ending.workspaces == () and ending.unobserved == ()
+    assert (
+        sorted(path.name for path in (folder / "agents" / "ada").iterdir() if path.name.startswith("workspace")) == []
+    )
+    assert git("worktree", "list", "--porcelain", cwd=repo).count("worktree ") == 1
+    if mode == "worktree":
+        assert git("rev-parse", "--verify", "platoon-harness/s/ada", cwd=repo)
+
+
+async def test_a_kill_while_a_kept_snapshot_is_made_whole_is_finished_on_resume(tmp_path, monkeypatch):
+    repo = repository(tmp_path / "repo", monkeypatch)
+    folder, ending = await ended_through_a_kill(tmp_path, repo, "snapshot", "git:repack", "after", leave="notes.txt")
+
+    root = folder / "agents" / "ada" / "workspace"
+    [kept] = ending.workspaces
+    assert kept["why"] == ["1 uncommitted path: notes.txt"] and kept["release"] == []
+    assert (root / "notes.txt").read_text() == "an agent's work\n"
+    assert not (root / ".git" / "objects" / "info" / "alternates").exists()
+    git("fsck", "--connectivity-only", "--no-dangling", cwd=root)

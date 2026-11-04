@@ -114,8 +114,16 @@ def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
 
 
 def session_folder(root: Path, name: str) -> Path:
-    """The folder of an existing session, or refuse."""
+    """The folder of an existing session, or refuse. One made before names were held to git's grammar is named as no
+    longer valid, with the way to rename it."""
     folder = sessions_of(root) / name
+    one_part = name not in (".", "..") and "/" not in name
+    if re.fullmatch(NAME, name) is None and one_part and (folder / MANIFEST).exists():
+        what = (
+            f"{name} no longer names a session, since a name may not hold `..` or end in `.` or `.lock`: rename its "
+            f"folder {folder} while no runtime holds it"
+        )
+        raise Refused("invalid", what)
     if re.fullmatch(NAME, name) is None or not (folder / MANIFEST).exists():
         raise Refused("not_found", f"no session {name} under {root}")
     return folder

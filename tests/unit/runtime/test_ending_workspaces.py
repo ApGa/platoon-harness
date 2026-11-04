@@ -1,7 +1,6 @@
 """An ended agent's worktree goes only when nothing would go with it, as git says, and a kept one is named with where it
 is, what it takes and why. The commits the journal recorded outlive git's pruning in a bundle of the session's."""
 
-import asyncio
 import os
 import shlex
 import socket
@@ -13,7 +12,7 @@ import pytest
 
 from platoon_harness import Session, Team
 from platoon_harness.primitives import Workspace
-from platoon_harness.runtime import workspaces
+from platoon_harness.runtime import LocalAuthority, host, workspaces
 
 from .gitting import commit, git, repository, working
 from .support import in_state, of_type, scripted, until
@@ -70,27 +69,57 @@ def test_a_worktree_with_an_ignored_file_is_kept_and_named(repo, tmp_path, works
     assert (root / ".venv" / "pyvenv.cfg").exists()
 
 
+def test_a_worktree_kept_for_its_ignored_files_alone_is_released_by_its_commands_from_anywhere(tmp_path, monkeypatch):
+    """Run as a person would paste them, from another folder, where every path has a space in it."""
+    repo = repository(tmp_path / "my repo", monkeypatch)
+    folder = tmp_path / "my home" / "ada"
+    workspace = made(repo, folder)
+    root = Path(workspace.path)
+    work = commit(root, ".gitignore", "*.log\n")
+    (root / "run.log").write_text("noise\n")
+    elsewhere = tmp_path / "else where"
+    elsewhere.mkdir()
+
+    kept = workspaces.end_worktree(workspace, folder, repo, ())["kept"]
+    for command in kept["release"]:
+        subprocess.run(shlex.split(command), cwd=elsewhere, check=True, capture_output=True)
+
+    assert kept["why"] == ["ignored: run.log"]
+    assert not root.exists() and folder.exists()
+    assert registration(repo, root) == ""
+    assert git("rev-parse", "platoon-harness/s/ada", cwd=repo).strip() == work
+
+
 def test_a_worktree_on_a_detached_head_with_new_commits_is_kept(repo, tmp_path, workspace, root):
     git("checkout", "-q", "--detach", cwd=root)
-    commit(root, "one")
-    commit(root, "two")
+    one = commit(root, "one")
+    two = commit(root, "two")
 
-    assert kept_for(end(repo, tmp_path, workspace)) == ["2 commits only it holds, in its HEAD, reflog or own refs"]
+    assert kept_for(end(repo, tmp_path, workspace)) == [
+        f"2 commits only it holds, in its HEAD, reflog or own refs: {two[:12]}, {one[:12]}"
+    ]
 
 
-def test_a_commit_only_a_workspace_s_reflog_holds_keeps_it(repo, tmp_path, workspace, root):
-    commit(root, "dropped")
+def test_a_commit_only_a_workspace_s_reflog_holds_keeps_it_named_and_with_no_release(repo, tmp_path, workspace, root):
+    """`git worktree remove` would succeed on its clean tree and drop the commit, so no release is offered."""
+    dropped = commit(root, "dropped")
     git("reset", "-q", "--hard", "HEAD~1", cwd=root)
 
-    assert kept_for(end(repo, tmp_path, workspace)) == ["1 commits only it holds, in its HEAD, reflog or own refs"]
+    kept = end(repo, tmp_path, workspace)["kept"]
+
+    assert kept["why"] == [f"1 commit only it holds, in its HEAD, reflog or own refs: {dropped[:12]}"]
+    assert kept["release"] == []
 
 
 def test_a_ref_only_a_worktree_holds_keeps_it(repo, tmp_path, workspace, root):
     git("checkout", "-q", "--detach", cwd=root)
-    git("update-ref", "refs/worktree/scratch", commit(root, "scratch"), cwd=root)
+    scratch = commit(root, "scratch")
+    git("update-ref", "refs/worktree/scratch", scratch, cwd=root)
     git("checkout", "-q", "platoon-harness/s/ada", cwd=root)
 
-    assert kept_for(end(repo, tmp_path, workspace)) == ["1 commits only it holds, in its HEAD, reflog or own refs"]
+    assert kept_for(end(repo, tmp_path, workspace)) == [
+        f"1 commit only it holds, in its HEAD, reflog or own refs: {scratch[:12]}"
+    ]
 
 
 def test_a_worktree_mid_rebase_is_kept(repo, tmp_path, workspace, root):
@@ -104,15 +133,25 @@ def test_a_worktree_mid_rebase_is_kept(repo, tmp_path, workspace, root):
     why = kept_for(end(repo, tmp_path, workspace))
 
     assert "a rebase under way" in why
-    assert "1 uncommitted paths" in why
+    assert "1 uncommitted path: README" in why
 
 
 def test_a_skip_worktree_edit_keeps_its_worktree(repo, tmp_path, workspace, root):
     git("update-index", "--skip-worktree", "README", cwd=root)
     (root / "README").write_text("hidden from status\n")
 
-    assert kept_for(end(repo, tmp_path, workspace)) == ["1 index entries hidden from status"]
+    assert kept_for(end(repo, tmp_path, workspace)) == ["1 path hidden from status: README"]
     assert (root / "README").read_text() == "hidden from status\n"
+
+
+def test_an_untouched_worktree_of_a_sparse_checkout_is_removed(repo, tmp_path):
+    """Sparse checkout hides what it leaves out of the tree, and a path that is not there holds nothing to lose."""
+    (repo / "docs").mkdir()
+    commit(repo, "docs/a.md")
+    git("sparse-checkout", "set", "src", cwd=repo)
+    workspace = made(repo, tmp_path / "ada")
+
+    assert end(repo, tmp_path, workspace) == {"removed": True, "kept": None}
 
 
 def test_a_workspace_whose_processes_may_run_on_is_kept(repo, tmp_path, workspace, root):
@@ -127,10 +166,33 @@ def test_uncommitted_work_is_never_discarded(repo, tmp_path, workspace, root):
     git("add", "new.txt", cwd=root)
     (root / "untracked.txt").write_text("loose\n")
 
-    assert kept_for(end(repo, tmp_path, workspace)) == ["3 uncommitted paths"]
+    assert kept_for(end(repo, tmp_path, workspace)) == ["3 uncommitted paths: README, new.txt, untracked.txt"]
     assert (root / "README").read_text() == "edited\n"
     assert (root / "new.txt").read_text() == "new\n"
     assert (root / "untracked.txt").read_text() == "loose\n"
+
+
+@pytest.mark.parametrize("mode", ["worktree", "snapshot"])
+def test_uncommitted_work_is_never_discarded_whatever_status_config_says(repo, tmp_path, mode):
+    """Git's own `worktree remove` would discard it under these settings, as its check reads status as configured."""
+    for setting in ("status.showUntrackedFiles=no", "diff.ignoreSubmodules=all"):
+        git("config", "--global", *setting.split("="), cwd=repo)
+    folder = tmp_path / "ada"
+    if mode == "worktree":
+        workspace = made(repo, folder)
+    else:
+        branch = "platoon-harness/s/ada"
+        workspace = workspaces.make_snapshot(repo_of(repo), folder, branch, [], "s/ada")
+    root = Path(workspace.path)
+    (root / "notes.md").write_text("an agent's uncommitted work\n")
+
+    if mode == "worktree":
+        result = workspaces.end_worktree(workspace, folder, repo, ())
+    else:
+        result = workspaces.end_snapshot(workspace, folder, repo, (), retried=False)
+
+    assert kept_for(result) == ["1 uncommitted path: notes.md"]
+    assert (root / "notes.md").read_text() == "an agent's uncommitted work\n"
 
 
 def test_a_kept_worktree_stays_locked(repo, tmp_path, workspace, root):
@@ -152,7 +214,7 @@ def test_a_kept_worktree_is_named_with_its_host_size_and_branch(repo, tmp_path, 
     assert kept["host"] == HOST
     assert kept["branch"] == "platoon-harness/s/ada"
     assert kept["bytes"] >= 64 * 1024
-    assert kept["why"] == ["1 uncommitted paths"]
+    assert kept["why"] == ["1 uncommitted path: big"]
 
 
 def test_a_repeated_stop_removes_nothing_twice(repo, tmp_path, workspace, root):
@@ -161,6 +223,13 @@ def test_a_repeated_stop_removes_nothing_twice(repo, tmp_path, workspace, root):
 
     assert first == again == {"removed": True, "kept": None}
     assert git("rev-parse", "platoon-harness/s/ada", cwd=repo)
+
+
+def test_a_stop_retried_after_its_unlock_finishes_the_removal(repo, tmp_path, workspace, root):
+    git("worktree", "unlock", str(root), cwd=repo)  # What the attempt a crash cut did.
+
+    assert end(repo, tmp_path, workspace) == {"removed": True, "kept": None}
+    assert registration(repo, root) == ""
 
 
 def test_a_worktree_whose_folder_went_is_named_and_left_registered(repo, tmp_path, workspace, root):
@@ -213,8 +282,8 @@ async def test_a_kept_workspace_is_named_with_its_host_size_and_reason_in_the_en
     assert kept["agent"] == "ada" and kept["mode"] == "worktree"
     assert kept["path"] == str(root) and kept["host"] == HOST and kept["branch"] == "platoon-harness/s/ada"
     assert kept["bytes"] > 0
-    assert kept["why"] == ["1 uncommitted paths"]
-    assert kept["release"] == [f"git -C {repo} worktree unlock {root}", f"git -C {repo} worktree remove {root}"]
+    assert kept["why"] == ["1 uncommitted path: notes.txt"]
+    assert kept["release"] == []
     assert (root / "notes.txt").read_text() == "unfinished\n"
 
 
@@ -229,8 +298,35 @@ async def test_a_session_that_closes_keeps_the_workspaces_of_agents_that_never_e
     assert ending.state == "closing"
     assert kept["path"] == str(root)
     assert kept["why"] == ["its agent has not ended"]
-    assert kept["bytes"] is None
+    assert (kept["bytes"], kept["release"]) == (None, [])
     assert root.exists()
+
+
+async def test_a_stop_that_fails_still_tells_the_authority_and_its_workspace_is_named(repo, tmp_path, monkeypatch):
+    heard = []
+
+    class Hearing(LocalAuthority):
+        async def finish(self, agent, outcome) -> None:
+            heard.append((agent.agent, outcome.status))
+
+    def failing(*args: Any) -> dict[str, Any]:
+        raise workspaces.GitError("git worktree failed: the disk went away")
+
+    monkeypatch.setattr(host, "end_worktree", failing)
+    team = team_of()
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo, authority=Hearing(team)) as session:
+        await session.spawn("ada", "worker")
+        await in_state(session, "ada", "idle")
+        await session.cancel_agent("@ada")
+        await until(lambda: failed_stops(session), session)
+        [kept] = (await session.ending()).workspaces
+
+    assert heard == [("ada", "cancelled")]
+    assert kept["why"] == ["its stop has not finished"] and kept["release"] == []
+
+
+async def failed_stops(session: Session) -> list[Any]:
+    return [event for event in await of_type(session, "effect.failed") if event.data["kind"] == "stop"]
 
 
 # The commits the journal recorded.
@@ -330,24 +426,3 @@ def test_a_bundle_borrows_only_from_repositories_still_there(repo, tmp_path):
     written = workspaces.write_bundle(folder, record, [work], [str(tmp_path / "gone" / ".git")])
 
     assert written == {"file": "commits.bundle", "commits": 1, "missing": 0}
-
-
-async def test_a_kept_worktree_s_release_commands_run_from_anywhere(repo, tmp_path):
-    async with Session.start(team_of(), name="s", root=tmp_path, cwd=repo) as session:
-        await session.spawn("ada", "worker")
-        await in_state(session, "ada", "idle")
-        root = Path(workspace_of(session, "ada").path)
-        commit(root, "dropped")
-        git("reset", "-q", "--hard", "HEAD~1", cwd=root)
-        await session.cancel_agent("@ada")
-        await until(lambda: stops(session), session)
-        [kept] = (await session.ending()).workspaces
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-
-    for command in kept["release"]:
-        await asyncio.to_thread(subprocess.run, shlex.split(command), cwd=elsewhere, check=True)
-
-    assert kept["why"] == ["1 commits only it holds, in its HEAD, reflog or own refs"]
-    assert not root.exists()
-    assert git("worktree", "list", "--porcelain", cwd=repo).count("worktree ") == 1

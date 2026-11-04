@@ -20,7 +20,7 @@ from platoon_harness.kernel import (
     op,
 )
 
-from .agents import Agent, Agents
+from .agents import Agent, Agents, Kept
 from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
@@ -806,26 +806,19 @@ def _came_to(txn: Txn, state: str) -> str:
 
 
 def _left(agent: Agent, repo: Repo) -> dict[str, Any] | None:
-    """A workspace an agent's end did not take, as the Ending names it, with the commands that let it go, for a person
-    to run in your checkout once nothing in it is wanted: a worktree is unlocked and removed, and a snapshot's commits
-    are fetched into your repository before its folder is deleted. Its folder is where the agent works, less the
-    session's subfolder."""
+    """A workspace an agent's end did not take, as the Ending names it: as its stop kept it, with the commands that let
+    it go when there are any, or, while no stop has finished, where it is, with no command, since nobody has looked at
+    what letting it go would lose. Its folder is where the agent works, less the session's subfolder."""
     workspace = agent.workspace
     if workspace is None or workspace.mode == "shared" or agent.removed:
         return None
-    if agent.kept is not None:
-        left = agent.kept.model_dump()
-    else:
+    kept = agent.kept
+    if kept is None:
         folder = PurePath(workspace.path)
         folder = folder.parents[len(PurePath(repo.prefix).parts) - 1] if repo.prefix else folder
-        why = "its stop never finished" if agent.ended else "its agent has not ended"
-        left = {"path": str(folder), "host": workspace.host, "branch": workspace.branch, "bytes": None, "why": [why]}
-    path, git = left["path"], f"git -C {repo.top}"
-    if workspace.mode == "worktree":
-        release = [f"{git} worktree unlock {path}", f"{git} worktree remove {path}"]
-    else:
-        release = [f"{git} fetch {path} {workspace.branch}:{workspace.branch}", f"rm -rf {path}"]
-    return {"agent": agent.name, "mode": workspace.mode, **left, "release": release}
+        why = "its stop has not finished" if agent.ended else "its agent has not ended"
+        kept = Kept(path=str(folder), host=workspace.host, branch=workspace.branch, bytes=None, why=(why,))
+    return {"agent": agent.name, "mode": workspace.mode, **kept.model_dump(mode="json")}
 
 
 def _unobserved(txn: Txn, agent: Agent) -> bool:
