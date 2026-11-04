@@ -453,7 +453,7 @@ async def test_my_driver_conforms(tmp_path):
 | `effort_honored_or_refused` | An effort reaches the first request as it was given, or `start` refuses it. Needs a dialect |
 | `unset_model_refused` | With access given and no model, `start` refuses. Needs a dialect |
 | `tool_in_first_request` | Our tool is in the first model request. Needs an MCP path |
-| `delivered_text_in_next_prompt` | A delivery's text is in the next prompt, and `input.delivered` came. Needs a persistent session and a `turn` boundary |
+| `delivered_text_in_next_prompt` | The goal, the first delivery, is in the first prompt and said to have landed under its launch offer's id, and a later delivery's text is in the next prompt once `input.delivered` came. Needs a persistent session and a `turn` boundary |
 | `turn_end_reported` | A turn starts and ends |
 | `no_goal_takes_no_turn` | With no goal it waits, and its first prompt is what it was sent. Needs a persistent session and a `turn` boundary |
 | `interrupt` | A stalled turn ends `interrupted`, and the agent lives on. Needs `interrupt` |
