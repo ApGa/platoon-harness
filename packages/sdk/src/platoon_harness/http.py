@@ -1,8 +1,9 @@
 """HTTP/1.1 as the SDK's servers speak it: one request per connection, each bounded before it is believed.
 
 A head of at most 16 KiB comes first, then whatever names who is asking, and only then a body of a stated length, never
-chunked. A request has `SECONDS` on the server's clock to arrive and its answer as long again to leave, and past
-`CONNECTIONS` open at once the server answers 503. So an idle client holds no task, socket or state here.
+chunked. A head has `SECONDS` on the server's clock to arrive, and then each part of a body, and of an answer as it
+leaves, has as long from the part before: a client that keeps going is served however slow its link, and one that stops
+is cut. Past `CONNECTIONS` open at once the server answers 503. So an idle client holds no task, socket or state here.
 """
 
 import asyncio
@@ -36,7 +37,6 @@ __all__ = [
     "Server",
     "bearer",
     "check_site",
-    "length",
     "response",
     "unless",
 ]
@@ -100,7 +100,7 @@ def _parsed(head: bytes) -> Head:
     return Head(words[0], path, query, headers)
 
 
-def length(head: Head, limit: int) -> int:
+def _length(head: Head, limit: int) -> int:
     """The length of a request's body, which it must state, up to `limit`."""
     value = head.headers.get("content-length")
     if value is None or "transfer-encoding" in head.headers:
@@ -137,17 +137,10 @@ async def _hung_up(reader: asyncio.StreamReader) -> None:
             pass
 
 
-async def _send(writer: asyncio.StreamWriter, reply: bytes) -> None:
-    writer.write(reply)
-    await writer.drain()
-    writer.close()
-    await writer.wait_closed()
-
-
 class Server[R]:
-    """One request per connection. A subclass says how a request is `received` once its head is in, within the
-    deadline, how it is `answered`, unless the client goes first, how a refusal is said, and what follows once an answer
-    has left, which is when anyone is told of it."""
+    """One request per connection. A subclass says how a request is `received` once its head is in, reading any body
+    with `body`, how it is `answered`, unless the client goes first, how a refusal is said, and what follows once an
+    answer has left, which is when anyone is told of it."""
 
     def __init__(self, clock: Clock, *, connections: int = CONNECTIONS) -> None:
         self.clock = clock
@@ -200,6 +193,16 @@ class Server[R]:
         """Check a request whose head is in, and read the rest of it."""
         raise NotImplementedError
 
+    async def body(self, head: Head, reader: asyncio.StreamReader, limit: int) -> bytes:
+        """A request's body, whose length it must state, up to `limit`, each part of it within `SECONDS` of the last."""
+        parts, left = [], _length(head, limit)
+        while left:
+            if not (part := await unless(self.clock.sleep(SECONDS), reader.read(min(left, _CHUNK)))):
+                raise asyncio.IncompleteReadError(b"".join(parts), left)
+            parts.append(part)
+            left -= len(part)
+        return b"".join(parts)
+
     async def answer(self, request: R) -> bytes:
         raise NotImplementedError
 
@@ -215,7 +218,7 @@ class Server[R]:
         self._serving.add(task)
         try:
             request, reply = await self._reply(reader)
-            await unless(self.clock.sleep(SECONDS), _send(writer, reply))
+            await self._send(writer, reply)
             if request is not None:
                 await self.sent(request)
         except (Cut, ConnectionError, ssl.SSLError, asyncio.IncompleteReadError):
@@ -228,7 +231,8 @@ class Server[R]:
         if not self._servers or len(self._serving) > self.connections:
             return None, self.refuse(Rejected(503, why="too many connections are open: try again shortly"))
         try:
-            request = await unless(self.clock.sleep(SECONDS), self._received(reader))
+            head = await unless(self.clock.sleep(SECONDS), self._head(reader))
+            request = await self.receive(head, reader)
             return request, await unless(_hung_up(reader), self.answer(request))
         except Rejected as rejected:
             return None, self.refuse(rejected)
@@ -238,9 +242,16 @@ class Server[R]:
             log.exception("a request failed")
             return None, self.refuse(Rejected(500))
 
-    async def _received(self, reader: asyncio.StreamReader) -> R:
+    async def _head(self, reader: asyncio.StreamReader) -> Head:
         try:
-            head = await reader.readuntil(b"\r\n\r\n")
+            return _parsed(await reader.readuntil(b"\r\n\r\n"))
         except asyncio.LimitOverrunError:
             raise Rejected(431) from None
-        return await self.receive(_parsed(head), reader)
+
+    async def _send(self, writer: asyncio.StreamWriter, reply: bytes) -> None:
+        """Send an answer, each part of it taken within `SECONDS` of the last, and close."""
+        for start in range(0, len(reply), _CHUNK):
+            writer.write(reply[start : start + _CHUNK])
+            await unless(self.clock.sleep(SECONDS), writer.drain())
+        writer.close()
+        await unless(self.clock.sleep(SECONDS), writer.wait_closed())

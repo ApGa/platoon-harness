@@ -130,9 +130,10 @@ as a download and not drawn. [STATUS.md](STATUS.md) says what each is.
   the address, as a browser leaves it out.
 - **What it believes.** Every request is bounded before it is believed, by the same code as the SDK's tool server: a head
   of at most 16 KiB, then `Host`, which must name the authority served, which defeats DNS rebinding, then on a POST
-  `Origin`, which must be the page's own, then the bearer, and only then a body of a stated length, on a deadline, with a
-  cap on connections and on the requests the feed holds at once. A page on another origin is refused before its bearer is
-  read, and a name rebound to this machine is refused by its `Host`.
+  `Origin`, which must be the page's own, then the bearer, and only then a body of a stated length, each part of it within
+  10 s of the last, so a large file crosses a slow link and a client that stops is cut, with a cap on connections and on
+  the requests the feed holds at once. A page on another origin is refused before its bearer is read, and a name rebound
+  to this machine is refused by its `Host`.
 - **What it runs.** SwarmChat's five page files are read from the installed package, `swarmchat==0.1.0`, and each is held to
   its SHA-256: a file that differs stops `web` before anything is served, saying which. Its own server never runs. The page
   runs under SwarmChat's own policy, scripts by hash alone, with the hashes made for what is served, and every answer says

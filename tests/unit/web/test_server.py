@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import Session
+from platoon_harness.http import SECONDS
 from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness_cli.ops import cut
@@ -217,7 +218,7 @@ async def test_a_port_one_address_got_and_another_has_taken_is_left_for_one_free
     await web.stop()
     projection.close()
 
-    first, taken, again, last = calls
+    first, taken, *_, again, last = calls
     assert first[1] == again[1] == 0 and taken[1] != 0 and last[1] == port
 
 
@@ -236,6 +237,49 @@ async def test_a_body_too_large_is_refused_before_it_is_read(web):
     reply = await browser.send(head.encode())
 
     assert reply.status == 413
+
+
+async def test_a_body_that_keeps_coming_is_read_however_long_it_takes(web, session, clock):
+    """Each part of a body has `SECONDS` from the part before, so a large file can cross a slow link."""
+    browser = await Browser(web).opened("control")
+    data = bytes(range(256)) * 1200
+    head = f"POST /x/body HTTP/1.1\r\nHost: {browser.authority}\r\nOrigin: http://{browser.authority}\r\n"
+    head += f"Authorization: Bearer {browser.token}\r\nContent-Length: {len(data)}\r\n\r\n"
+    reader, writer = await asyncio.open_connection("127.0.0.1", web.port)
+    writer.write(head.encode())
+    for start in range(0, len(data), 100_000):
+        writer.write(data[start : start + 100_000])
+        await writer.drain()
+        await clock.slept_until(clock.now() + SECONDS)
+        clock.advance(SECONDS - 1)
+    async with asyncio.timeout(10):
+        reply = await reader.read()
+    writer.close()
+
+    status, _, body = reply.partition(b"\r\n\r\n")
+    assert status.startswith(b"HTTP/1.1 200") and clock.now() - 1_000_000.0 > SECONDS
+    assert await session.get_body(json.loads(body)["ref"], limit=BODY_LIMIT) == data
+
+
+async def test_a_body_that_stops_is_cut_once_nothing_has_come_for_the_deadline(web, clock):
+    """The clock moves between parts, so that the wait for each is told apart from the one before."""
+    browser = await Browser(web).opened("control")
+    head = f"POST /x/body HTTP/1.1\r\nHost: {browser.authority}\r\nOrigin: http://{browser.authority}\r\n"
+    head += f"Authorization: Bearer {browser.token}\r\nContent-Length: 100\r\n\r\n"
+    reader, writer = await asyncio.open_connection("127.0.0.1", web.port)
+    start = clock.now()
+    for n, part in enumerate((head.encode(), b"x" * 50)):
+        await clock.slept_until(start + n + SECONDS)
+        clock.advance(1)
+        writer.write(part)
+        await writer.drain()
+    await clock.slept_until(start + 2 + SECONDS)
+
+    clock.advance(SECONDS)
+
+    async with asyncio.timeout(10):
+        assert await reader.read() == b""
+    writer.close()
 
 
 async def test_every_view_the_page_reaches_answers_from_the_projection(root, clock):

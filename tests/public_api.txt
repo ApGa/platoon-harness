@@ -107,7 +107,6 @@ platoon_harness.http.SECONDS
 platoon_harness.http.Server
 platoon_harness.http.bearer
 platoon_harness.http.check_site
-platoon_harness.http.length
 platoon_harness.http.response
 platoon_harness.http.unless
 platoon_harness.kernel.Args

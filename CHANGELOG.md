@@ -242,6 +242,10 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- A request to the tool server or to `web` had 10 s to arrive whole, head and body, and its answer 10 s to leave, so a file
+  near the 12 MB a body may be could not cross a link slower than about 10 Mbit/s, and the page said only that it did not
+  reach `web`. A head still has 10 s, and each part of a body or an answer has 10 s from the part before.
+  `platoon_harness.http.length` is gone: `Server.body` reads a body on that rule.
 - `web --host localhost` bound `127.0.0.1` and `::1` on two ports and said one, leaving that port free on the other address
   for any program on the machine to take, and be what a browser reached. `platoon_harness.http` binds every address a name has
   on one port, trying again when a busy host has taken it on one of them. `web` on the scheme's own port, 80 or 443, refused

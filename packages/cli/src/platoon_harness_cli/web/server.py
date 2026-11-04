@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 from platoon_harness import Refused, Session
-from platoon_harness.http import Head, Rejected, Server, bearer, check_site, length, response
+from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
 from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
@@ -114,7 +114,7 @@ class Web(Server[Request]):
             raise Rejected(401, "WWW-Authenticate: Bearer", why="this page's session has expired: open a new link")
         elif route.startswith("/x/") and held.kind != "control":
             raise Rejected(403, why="a view link shows the session and acts on nothing")
-        body = await reader.readexactly(length(head, BODY_LIMIT if route == "/x/body" else JSON_LIMIT))
+        body = await self.body(head, reader, BODY_LIMIT if route == "/x/body" else JSON_LIMIT)
         return Request(route, head.headers["host"], held, body, minted)
 
     def refuse(self, rejected: Rejected) -> bytes:

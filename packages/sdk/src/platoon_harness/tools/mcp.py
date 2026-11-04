@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness.http import Head, Rejected, Server, bearer, check_site, length, response
+from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
 from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, tool_name
 from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.rpc import strict_loads
@@ -133,7 +133,7 @@ class ToolServer(Server[_Request]):
             surface = named_surface(parse_qs(head.query).get("surface", ["mcp"])[0])
         except ValueError:
             raise Rejected(400) from None
-        return _Request(principal, surface, await reader.readexactly(length(head, _REQUEST_LIMIT)), [])
+        return _Request(principal, surface, await self.body(head, reader, _REQUEST_LIMIT), [])
 
     def refuse(self, rejected: Rejected) -> bytes:
         return response(rejected.status, b"", _JSON, *rejected.headers)

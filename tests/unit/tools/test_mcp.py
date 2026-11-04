@@ -8,7 +8,7 @@ from typing import Annotated
 import pytest
 from pydantic import Field
 
-from platoon_harness import __version__, http
+from platoon_harness import __version__
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Refusal, Refused, Txn, op
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools import ToolServer
@@ -258,11 +258,16 @@ async def test_a_slow_client_is_dropped_at_the_deadline(server, lead, clock):
 
 
 async def test_a_client_that_stops_mid_body_is_dropped_at_the_deadline(server, lead, clock):
+    """Each part has the deadline from the part before, so the clock moves between parts to tell their waits apart."""
+    head, _, _ = request(server.url, b"x" * 100, token=lead[1].token).partition(b"\r\n\r\n")
     reader, writer = await connect(server.url)
-    data = request(server.url, b"x" * 100, token=lead[1].token)
-    writer.write(data[:-50])
-    await writer.drain()
-    await slept_until(clock, clock.now() + 10.0)
+    start = clock.now()
+    for n, part in enumerate((head + b"\r\n\r\n", b"x" * 50)):
+        await slept_until(clock, start + n + 10.0)
+        clock.advance(1.0)
+        writer.write(part)
+        await writer.drain()
+    await slept_until(clock, start + 12.0)
 
     clock.advance(10.0)
 
@@ -1092,10 +1097,10 @@ async def test_a_held_wait_closes_once_its_answer_has_left(kernel, server, lead,
 
 
 async def test_an_answer_that_cannot_be_sent_costs_no_wake(kernel, server, lead, worker, clock, monkeypatch):
-    async def lost(writer: asyncio.StreamWriter, reply: bytes) -> None:
+    async def lost(self: ToolServer, writer: asyncio.StreamWriter, reply: bytes) -> None:
         raise ConnectionResetError
 
-    monkeypatch.setattr(http, "_send", lost)
+    monkeypatch.setattr(ToolServer, "_send", lost)
     await start_turn(kernel, "w1")
     message = tool_call("wait", {"from": ["lead"], "hold": 20.0})
     _, writer = await connect(server.url)

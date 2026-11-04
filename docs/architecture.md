@@ -1081,8 +1081,9 @@ against the official client and against each real harness.
 - One request per connection, answered with `Connection: close`, so an idle client holds no task, socket or state here. A client
   that goes during a call drops the call, not what it asked for: a wait stays registered.
 - A request is bounded before it is believed: a head of 16 KiB, then `Host`, and `Origin`, which must be the origin of that `Host`, and
-  the bearer, and only then a body of at most 1 MiB, with a length and no chunking. It has 10 s on the kernel's clock to arrive and its
-  answer 10 s to leave. Past 1,024 connections the server answers 503. `platoon_harness.http` is that code, which the browser's server
+  the bearer, and only then a body of at most 1 MiB, with a length and no chunking. Its head has 10 s on the kernel's clock to arrive, and
+  each part of its body, and of its answer as it leaves, 10 s from the part before, so a slow link that keeps going is served and a
+  client that stops is cut. Past 1,024 connections the server answers 503. `platoon_harness.http` is that code, which the browser's server
   shares.
 - `?surface=` on the URL names how tools read to a model: `ph`, or `mcp__<ns>` for a harness that shows them that way. It changes
   descriptions and refusals, never what a token may do.
