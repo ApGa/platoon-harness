@@ -10,6 +10,7 @@ from platoon_harness.primitives import PRIMITIVES
 from .support import (
     agent,
     channel,
+    confirm,
     cursor,
     enroll,
     events_of,
@@ -123,7 +124,7 @@ async def test_an_entry_is_a_capped_gist_plus_an_optional_body(kernel):
 
     assert refusal(too_long).code == "invalid"
     entry = (await read(kernel, bob, "@bob"))["entries"][0]
-    assert entry["gist"] == "short" and entry["body"] == f"sha256:{body}" and "text" not in entry
+    assert entry["gist"] == "short" and entry["body"] is True and "text" not in entry
 
 
 async def test_a_body_is_cited_only_if_it_exists(kernel):
@@ -160,7 +161,7 @@ async def test_a_new_entry_is_queued_then_offered_delivered_and_acked(kernel):
     offered = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
     assert cursor(kernel, "bob", "inbox/bob").state_of(seq) == "offered"
 
-    result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": offered["input"], "boundary": "turn"}))
+    await confirm(kernel, "bob", offered["input"])
     assert cursor(kernel, "bob", "inbox/bob").state_of(seq) == "delivered"
 
     await read(kernel, bob, "@bob")
@@ -184,13 +185,15 @@ async def test_redelivery_is_deduped_by_event_id(kernel):
     head = kernel.head
 
     for _ in range(2):
-        result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": offered["input"]}))
+        await confirm(kernel, "bob", offered["input"])
 
     assert len(of_type(kernel, "context.delivered", after=head)) == 1
 
 
 async def test_a_confirmation_of_nothing_is_refused(kernel):
-    outcome = await kernel.submit(kernel.runtime, "delivery.confirm", {"input": 999})
+    await spawn(kernel, "bob")
+    delivered = {"type": "input.delivered", "input": "999", "boundary": "turn"}
+    outcome = await kernel.submit(kernel.runtime, "agent.report", {"agent": "bob", "report": delivered})
 
     assert refusal(outcome).code == "not_found"
 
@@ -283,7 +286,7 @@ async def test_a_confirmed_handover_can_be_acked(kernel):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     sent = await send(kernel, alice, "@bob", "seen")
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
-    result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": handed["input"]}))
+    await confirm(kernel, "bob", handed["input"])
 
     await read(kernel, bob, "@bob")
 
@@ -306,7 +309,7 @@ async def test_a_sender_filter_takes_any_spelling_and_finds_a_childs_report(kern
         assert gists(await read(kernel, lead, "@lead", sender=spelling, after=0)) == ["my report"]
 
 
-async def test_a_body_that_fits_no_result_leaves_its_hash(kernel):
+async def test_a_body_that_fits_no_result_is_left_for_a_surface_to_fetch_by_the_entry_s_ref(kernel):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     body = await kernel.put_body(b"x\n" * 5000)
     await send(kernel, alice, "@bob", "see the body", body=f"sha256:{body}")
@@ -314,7 +317,8 @@ async def test_a_body_that_fits_no_result_leaves_its_hash(kernel):
     page = await read(kernel, bob, "@bob", bodies=True)
 
     assert gists(page) == ["see the body"] and page["behind"] == 0
-    assert page["entries"][0]["body"] == f"sha256:{body}" and page["entries"][0]["text"] is None
+    entry = page["entries"][0]
+    assert (entry["ref"], entry["body"], entry["text"]) == ("inbox/bob@1", True, None)
 
 
 async def test_a_filtered_read_can_page_past_its_scan_window(kernel):
@@ -337,7 +341,7 @@ async def test_a_confirmed_handover_drains_an_inbox_whose_agent_never_reads(kern
     await send(kernel, alice, "@bob", "one")
     await send(kernel, alice, "@bob", "two")
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
-    result_of(await kernel.submit(kernel.runtime, "delivery.confirm", {"input": handed["input"]}))
+    await confirm(kernel, "bob", handed["input"])
 
     assert (await send(kernel, alice, "@bob", "three"))["audience"] == 1
 

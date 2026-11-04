@@ -155,6 +155,7 @@ platoon_harness.primitives.Approvals
 platoon_harness.primitives.Attention
 platoon_harness.primitives.Attribution
 platoon_harness.primitives.Boards
+platoon_harness.primitives.body_of
 platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boundary
 platoon_harness.primitives.Budgets
@@ -163,6 +164,7 @@ platoon_harness.primitives.Changes
 platoon_harness.primitives.channel_grants
 platoon_harness.primitives.Channels
 platoon_harness.primitives.ChildSeen
+platoon_harness.primitives.cited
 platoon_harness.primitives.Compacted
 platoon_harness.primitives.Condition
 platoon_harness.primitives.Cursor
@@ -184,6 +186,7 @@ platoon_harness.primitives.Kept
 platoon_harness.primitives.Lines
 platoon_harness.primitives.lines_of
 platoon_harness.primitives.Looks
+platoon_harness.primitives.maker
 platoon_harness.primitives.Mode
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
@@ -193,6 +196,7 @@ platoon_harness.primitives.Plane
 platoon_harness.primitives.Policy
 platoon_harness.primitives.PRIMITIVES
 platoon_harness.primitives.RAW_LIMIT
+platoon_harness.primitives.REF
 platoon_harness.primitives.Ready
 platoon_harness.primitives.Repo
 platoon_harness.primitives.Report

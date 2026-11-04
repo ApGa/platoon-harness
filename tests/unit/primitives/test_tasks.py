@@ -339,8 +339,15 @@ async def test_a_workers_result_can_be_read_back_and_reading_it_is_evidence(kern
 
     listed = result_of(await kernel.submit(lead, "task.list", {"queue": "work"}))["tasks"][0]
 
-    assert (listed["result"], listed["result_body"]) == ("the answer is 42", f"sha256:{body}")
-    assert "task/work/1@3" in of_type(kernel, "context.offered")[-1].data["items"][1]["ref"]
+    assert (listed["ref"], listed["result"], listed["result_ref"], listed["result_body"]) == (
+        "task/work/1@1",
+        "the answer is 42",
+        "task/work/1@3",
+        True,
+    )
+    assert of_type(kernel, "context.offered")[-1].data["items"][1]["ref"] == "task/work/1@3"
+    read_back = result_of(await kernel.submit(lead, "blob.get", {"ref": listed["result_ref"]}))
+    assert read_back["text"] == "the working"
 
 
 async def test_a_list_of_no_queue_is_refused_even_for_a_human(kernel, ada):

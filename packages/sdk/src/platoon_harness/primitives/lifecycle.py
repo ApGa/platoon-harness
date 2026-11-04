@@ -1,5 +1,6 @@
 """Agents and sessions, from spawn to the one ended transition."""
 
+from collections.abc import Sequence
 from pathlib import PurePath
 from typing import Annotated, Any, Literal
 
@@ -9,6 +10,7 @@ from platoon_harness.kernel import (
     GIST_LIMIT,
     Args,
     Effects,
+    Event,
     Grants,
     ModelRef,
     Principals,
@@ -25,7 +27,20 @@ from .approvals import Approvals, ask
 from .budgets import Budgets, reconcile, reserve
 from .channels import Channels, regroup
 from .clients import Gaps
-from .common import DIGEST_ITEMS, AgentName, Body, BodyRef, Gist, Name, Paging, name_of, paged
+from .common import (
+    DIGEST_ITEMS,
+    AgentName,
+    BasedOn,
+    Body,
+    BodyRef,
+    Gist,
+    Name,
+    Paging,
+    cited,
+    event_at,
+    name_of,
+    paged,
+)
 from .delivery import confirmed, work
 from .messages import Deliveries, post
 from .reports import (
@@ -118,24 +133,36 @@ def _refuse_over_working(txn: Txn, agent: Agent) -> None:
         )
 
 
+def _hearer(txn: Txn, agent: Agent) -> str | None:
+    """The spawning parent, while it is there to hear a report."""
+    parent = None if agent.parent is None else txn.view(Principals).get(agent.parent)
+    return None if parent is None or parent.state != "live" else parent.id
+
+
 def _monitor(
     txn: Txn,
     agent: Agent,
+    carries: Event,
     gist: str | None = None,
     body: str | None = None,
     *,
     wake: bool | None = None,
     answers: bool = True,
-) -> bool:
+    follows: int = -1,
+) -> None:
     """Post final text to the spawning parent as the runtime, so a worker reports back even if its tools are hidden.
-    Returns whether a parent was there to hear it."""
-    parent = None if agent.parent is None else txn.view(Principals).get(agent.parent)
-    if parent is None or parent.state != "live":
-        return False
+    It is shown by the ref of `carries`, the event whose words it repeats. `follows` is the hops the agent had heard,
+    which its end has forgotten."""
+    if (parent := _hearer(txn, agent)) is None:
+        return
     text = gist or agent.final_gist or f"{agent.name} ended its turn with no final text."
     body = body or agent.final_body
-    post(txn, _inbox_of(parent.id), text, body=body, subject=agent.name, wake=wake, answers=answers)
-    return True
+    inbox = _inbox_of(parent)
+    post(txn, inbox, text, body=body, carries=carries, subject=agent.name, wake=wake, answers=answers, follows=follows)
+
+
+def _said(txn: Txn, ref: str | None) -> Event | None:
+    return None if ref is None else event_at(txn, ref)
 
 
 def _others_at_work(txn: Txn, agent: Agent) -> bool:
@@ -170,9 +197,11 @@ def end(
     reason: str | None = None,
     gist: str | None = None,
     body: str | None = None,
-) -> None:
+    based_on: Sequence[str] = (),
+) -> Event:
     """The ended transition: one event every view folds, then what no fold may do. Any open turn ends with it, whoever
-    spawned the agent hears how it ended, and what it had still to start never does. Only a turn is charged."""
+    spawned the agent hears how it ended, by the ref of what said it, and what it had still to start never does. Only a
+    turn is charged. A finish's report is the agent's, so `based_on` is its claim."""
     name = agent.name
     owned = txn.view(Tasks).owned(agent.id)
     if txn.view(Stamps).turn(name) is not None or txn.view(Budgets).turn_usage(name):
@@ -182,15 +211,28 @@ def end(
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
     body = body or agent.final_body
     wake = False if txn.me.id == agent.parent else _wakes(txn, agent, ended=True, badly=status != "finished")
-    heard = _monitor(txn, agent, report, body, wake=wake)
+    follows = txn.view(Deliveries).heard(name)
     ended = txn.emit(
         "agent.ended",
         f"agent/{name}",
         gist=(f"{name} finished: {report}" if status == "finished" and report else ending)[:GIST_LIMIT],
         agent=name,
+        based_on=based_on,
         refs=[body] if body else (),
-        data={"status": status, "reason": reason, "report": report, "body": body, "heard": heard},
+        data={
+            "status": status,
+            "reason": reason,
+            "report": report,
+            "body": body,
+            "heard": _hearer(txn, agent) is not None,
+        },
     )
+    carries = ended
+    if status == "finished" and agent.finishing and (gist or body):
+        carries = _said(txn, agent.finish_ref) or ended
+    elif status == "finished" and gist is None:
+        carries = _said(txn, agent.final_ref) or ended
+    _monitor(txn, agent, carries, report, body, wake=wake, follows=follows)
     if txn.view(Stamps).turn(name) is not None:
         txn.emit("turn.ended", f"turn/{name}", gist=f"turn ended: {status}", agent=name, data={"reason": status})
     if agent.finishing:
@@ -211,6 +253,7 @@ def end(
         else:  # One with every turn whole is no failure, and is not dropped from training as a cancelled one is.
             status = "cancelled" if cancelled or child.name in at_work else "retired"
             end(txn, child, status, reason=f"parent {name} ended")
+    return ended
 
 
 class Spawn(Args):
@@ -225,6 +268,7 @@ class Spawn(Args):
             "does not."
         ),
     ] = None
+    based_on: BasedOn = ()
 
 
 def _admit(txn: Txn, depth: int, parent: str | None) -> None:
@@ -247,10 +291,10 @@ def _admit(txn: Txn, depth: int, parent: str | None) -> None:
 def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     """Start a new agent in a role you may spawn. Put anything longer than `goal` in `body`. With neither it starts idle
     and takes no turn until a message wakes it. What it says at the end of a turn comes back to you, and so does how it
-    ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your
-    reach, `over_budget` when the budget cannot cover another agent, and `conflict` when the name is taken, the
-    session is closing or its spawner finished: use another name, or stop. `not_found` when no such role exists.
-    `unsupported` for `stays` on a harness that cannot stay."""
+    ends, so a parent can simply wait. Refused `not_permitted` for a role or limit outside your reach, `over_budget`
+    when the budget cannot cover another agent, and `conflict` when the name is taken, the session is closing or its
+    spawner finished: use another name, or stop. `not_found` when no such role exists. `unsupported` for `stays` on a
+    harness that cannot stay."""
     session = txn.view(SessionRecord)
     if not session.accepting():
         raise Refused("conflict", f"the session is {session.state()}")
@@ -272,11 +316,11 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         )
     _admit(txn, depth, parent)
     reserve(txn, a.name, a.child_role, turn=bool(a.goal or a.body), agents=1.0)
-    txn.emit(
+    spawned = txn.emit(  # A spawn is its spawner's, in its spawner's turn, and the child's own events are its own.
         "agent.spawned",
         f"agent/{a.name}",
         gist=f"{a.name} spawned as {a.child_role}"[:GIST_LIMIT],
-        agent=a.name,
+        based_on=cited(txn, a.based_on),
         refs=[a.body] if a.body else (),
         data={
             "name": a.name,
@@ -292,7 +336,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
         },
-        v=2,
+        v=3,
     )
     principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
     txn.emit(
@@ -309,13 +353,14 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         "workspace", {**spec, "workspace": role.workspace}, on_uncertain="retry", agent=a.name, after=admit
     )
     txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name, after=workspace)
-    spawned = {"agent": f"@{a.name}", "state": "spawning", "stays": stays}
-    return {**spawned, "next": _STAYS} if stays else spawned
+    result = {"agent": f"@{a.name}", "ref": f"{spawned.stream}@{spawned.version}", "state": "spawning", "stays": stays}
+    return {**result, "next": _STAYS} if stays else result
 
 
 class Finish(Args):
     gist: Annotated[Gist, Field(description="Your final report, at most 280 characters.")] = ""
     body: Body = None
+    based_on: BasedOn = ()
 
 
 def _finish_key(name: str) -> str:
@@ -327,26 +372,30 @@ def _conclude(txn: Txn, agent: Agent) -> None:
 
 
 @op("agent.finish", on=lambda a: None, tool=True, agent=True)
-def finish(txn: Txn, a: Finish) -> None:
+def finish(txn: Txn, a: Finish) -> dict[str, Any]:
     """End your own work for good, as this turn ends, so end your turn now. `gist` and `body` are your final report:
-    your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and
-    a turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while
-    children that would end with you are working. Call `wait` with `agents` for them, or with `from` for one that
-    stays. `agent.cancel` stops one now."""
+    your spawner receives them, and the session keeps them either way. Your tools stop working when the turn ends, and a
+    turn still going a minute from now is cut off. Refused `conflict` when you have finished already, and while children
+    that would end with you are working. Call `wait` with `agents` for them, or with `from` for one that stays.
+    `agent.cancel` stops one now."""
     agent = _live(txn, txn.me.name)
     if agent.finishing:
         raise Refused("conflict", f"{agent.name} has finished: end your turn")
     _refuse_over_working(txn, agent)
+    based_on = cited(txn, a.based_on)
     if txn.view(Stamps).turn(agent.name) is None:
-        end(txn, agent, "finished", gist=a.gist or None, body=a.body)
-        return
+        ended = end(txn, agent, "finished", gist=a.gist or None, body=a.body, based_on=based_on)
+        return {"ref": f"{ended.stream}@{ended.version}"}
     data = {"gist": a.gist, "body": a.body}
     stream = f"agent/{agent.name}"
     refs = [a.body] if a.body else ()
-    txn.emit("agent.finished", stream, gist=f"{agent.name} finishing", agent=agent.name, refs=refs, data=data)
+    finished = txn.emit(
+        "agent.finished", stream, gist=f"{agent.name} finishing", based_on=based_on, refs=refs, data=data
+    )
     key = _finish_key(agent.name)
     timer = Timer(due=txn.now + _FINISH_SECONDS, op="agent.conclude", args={"agent": agent.name}, key=key)
     txn.emit("timer.set", f"timer/{key}", gist=f"timer {key} set", data=timer)
+    return {"ref": f"{finished.stream}@{finished.version}"}
 
 
 class Named(Args):
@@ -496,18 +545,18 @@ def start(txn: Txn, a: Start) -> None:
 
 class Instruct(Args):
     agent: Name
-    instructions: BodyRef | None
+    body: BodyRef | None
 
 
 @op("agent.instruct", on=lambda a: f"agent/{a.agent}", runtime=True)
 def instruct(txn: Txn, a: Instruct) -> None:
-    """Record the exact text the runtime adds to an agent's harness, at a launch and at every resume, or that it adds
-    none. The harness's own prompt and the user's own configuration are theirs, and neither is here."""
+    """Record the exact text the runtime adds to an agent's harness, as its `body`, at a launch and at every resume, or
+    that it adds none. The harness's own prompt and the user's own configuration are theirs, and neither is here."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
-    refs = [a.instructions] if a.instructions else ()
-    data = {"instructions": a.instructions}
+    refs = [a.body] if a.body else ()
+    data = {"body": a.body}
     txn.emit(
         "agent.instructed",
         f"agent/{agent.name}",
@@ -515,6 +564,7 @@ def instruct(txn: Txn, a: Instruct) -> None:
         agent=agent.name,
         refs=refs,
         data=data,
+        v=2,
     )
 
 
@@ -527,8 +577,15 @@ def retell(txn: Txn, a: Named) -> None:
     if agent is None or agent.ended:
         return
     inbox = f"inbox/{agent.name}"
-    if agent.unbegun:
-        post(txn, inbox, agent.goal, body=agent.goal_body, wake=True)
+    if agent.unbegun:  # The goal is the spawn's, and is shown by its ref.
+        post(
+            txn,
+            inbox,
+            agent.goal,
+            body=agent.goal_body,
+            carries=txn.view(Stamps).at(f"agent/{agent.name}", 1),
+            wake=True,
+        )
     elif cause := CUT_OFF.get(agent.stopped or ""):
         post(txn, inbox, _NOTICE.format(cause=cause), wake=True)
 
@@ -538,17 +595,19 @@ class AgentReport(Args):
     report: Report
 
 
-def _report_turn(txn: Txn, agent: Agent, reason: str) -> None:
-    """Tell the parent how a turn went. One that did not stop on its own says so, or it reads as a final answer, and one
-    stopped on purpose wakes nobody and answers nothing yet."""
+def _report_turn(txn: Txn, agent: Agent, reason: str, ended: Event, follows: int) -> None:
+    """Tell the parent how a turn went, by the ref of its last message, or of its end when it said nothing. One that
+    did not stop on its own says so, or it reads as a final answer, and one stopped on purpose wakes nobody and answers
+    nothing yet."""
+    carries = _said(txn, agent.final_ref) or ended
     if reason == "stopped":
-        _monitor(txn, agent, wake=_wakes(txn, agent))
+        _monitor(txn, agent, carries, wake=_wakes(txn, agent), follows=follows)
     else:
         said = f": {agent.final_gist}" if agent.final_gist else ""
         gist = f"{agent.name} turn {reason}{said}"[:GIST_LIMIT]
         on_purpose = reason in _ON_PURPOSE
         wake = False if on_purpose else _wakes(txn, agent, badly=True)
-        _monitor(txn, agent, gist, wake=wake, answers=not on_purpose)
+        _monitor(txn, agent, carries, gist, wake=wake, answers=not on_purpose, follows=follows)
 
 
 def _look(txn: Txn, agent: str, cause: int) -> None:
@@ -573,10 +632,11 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
         end(txn, agent, "finished" if finished else "failed", reason=None if finished else reason)
         return
     parked = bool(txn.view(Waits).open_for(agent.id))
-    if not parked and agent.state != "held":
-        _report_turn(txn, agent, reason)
+    follows = txn.view(Deliveries).heard(name)
     gist = f"turn ended: {reason}"[:GIST_LIMIT]
     ended = txn.emit("turn.ended", f"turn/{name}", gist=gist, agent=name, data={"reason": reason})
+    if not parked and agent.state != "held":
+        _report_turn(txn, agent, reason, ended, follows)
     _look(txn, name, ended.seq)
     reconcile(txn, name, agent.role)
     if parked and agent.state != "held":

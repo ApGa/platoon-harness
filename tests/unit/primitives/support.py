@@ -67,6 +67,11 @@ async def report(kernel: Kernel, name: str, type: str, /, **fields: Any) -> None
     result_of(await kernel.submit(kernel.runtime, "agent.report", {"agent": name, "report": {"type": type, **fields}}))
 
 
+async def confirm(kernel: Kernel, name: str, input: int, **fields: Any) -> None:
+    """Say, as a driver would, that a harness took an offer in."""
+    await report(kernel, name, "input.delivered", input=str(input), boundary="turn", **fields)
+
+
 async def start_turn(kernel: Kernel, name: str, turn: str = "t1") -> None:
     await report(kernel, name, "turn.started", turn=turn)
 

@@ -1011,7 +1011,7 @@ async def test_spawning_a_child_that_stays_says_so_and_how_to_end_it(kernel):
 
     assert stays["stays"] is True and "end of each of its turns" in stays["next"]
     assert "`agent.retire`" in stays["next"] and "`agent.cancel`" in stays["next"] and "finish" in stays["next"]
-    assert goes == {"agent": "@cat", "state": "spawning", "stays": False}
+    assert goes == {"agent": "@cat", "ref": "agent/cat@1", "state": "spawning", "stays": False}
 
 
 @pytest.mark.parametrize("limits", [{"max_children": 1}])
@@ -2403,89 +2403,6 @@ async def test_closing_no_episode_is_refused(kernel, ada):
     assert refusal(await kernel.submit(ada, "episode.close", {})).code == "conflict"
 
 
-async def test_a_blob_can_be_read(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"a stored thing")
-
-    read_back = result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}"}))
-
-    assert read_back["text"] == "a stored thing"
-    assert of_type(kernel, "context.offered")[-1].data["items"][0]["form"] == "body"
-
-
-async def test_a_blob_that_was_never_stored_is_not_found(kernel):
-    bob = await spawn(kernel, "bob")
-
-    assert refusal(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{'0' * 64}"})).code == "not_found"
-
-
-async def test_a_blob_comes_back_cut_with_a_ref_to_the_rest(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"a line of a long body\n" * 2000)
-
-    first = result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}"}))
-    last = int(first["ref"].rpartition("-")[2])
-
-    assert first["ref"].startswith(f"sha256:{sha}#L1-")
-    assert first["lines"] == 2000
-    assert first["rest"] == f"sha256:{sha}#L{last + 1}-2000"
-    assert result_of(await kernel.submit(bob, "blob.get", {"ref": first["rest"]}))["rest"] is not None
-
-
-async def test_the_exposure_of_a_cut_blob_names_the_lines_shown(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"one\ntwo\nthree\n")
-
-    result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}#L2-2"}))
-
-    assert of_type(kernel, "context.offered")[-1].data["items"][0]["ref"] == f"sha256:{sha}#L2-2"
-
-
-async def test_a_blob_range_past_the_end_says_how_many_lines_there_are(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"one\ntwo\n")
-
-    assert refusal(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}#L9-10"})).detail["lines"] == 2
-
-
-async def test_an_empty_blob_is_text(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"")
-
-    assert result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}"}))["text"] == ""
-
-
-async def test_a_blob_held_outside_the_journal_comes_back_for_a_surface_to_fetch(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"x" * (70 * 1024))
-    head = kernel.head
-
-    assert result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}"})) == {
-        "ref": f"sha256:{sha}",
-        "text": None,
-    }
-    assert of_type(kernel, "context.offered", after=head) == []
-
-
-async def test_a_surface_records_what_it_showed_of_a_body(kernel):
-    await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"x" * (70 * 1024))
-    offer = {"agent": "bob", "ref": f"sha256:{sha}#L1-3", "digest": "0" * 64}
-
-    result_of(await kernel.submit(kernel.runtime, "blob.offer", offer))
-
-    offered = of_type(kernel, "context.offered")[-1]
-    assert offered.data["how"] == "read"
-    assert offered.data["items"] == [{"ref": offer["ref"], "form": "body", "digest": offer["digest"]}]
-
-
-async def test_only_the_runtime_records_what_a_surface_showed(kernel):
-    bob = await spawn(kernel, "bob")
-    offer = {"agent": "bob", "ref": f"sha256:{'0' * 64}", "digest": "0" * 64}
-
-    assert refusal(await kernel.submit(bob, "blob.offer", offer)).code == "not_permitted"
-
-
 async def test_agent_status_names_the_open_turn(kernel):
     await spawn(kernel, "bob")
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["turn"] is None
@@ -2493,13 +2410,6 @@ async def test_agent_status_names_the_open_turn(kernel):
     await start_turn(kernel, "bob", "t7")
 
     assert result_of(kernel.query(kernel.runtime, "agent.status", {"agent": "bob"}))["turn"] == "t7"
-
-
-async def test_a_blob_too_long_for_a_result_comes_back_without_text(kernel):
-    bob = await spawn(kernel, "bob")
-    sha = await kernel.put_body(b"x" * (20 * 1024))
-
-    assert result_of(await kernel.submit(bob, "blob.get", {"ref": f"sha256:{sha}"}))["text"] is None
 
 
 async def test_a_program_principal_may_spawn_with_itself_as_parent(kernel):

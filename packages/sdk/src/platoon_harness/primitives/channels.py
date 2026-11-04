@@ -73,7 +73,8 @@ class Channels(View):
 
     @fold("agent.spawned")
     def inbox(self, event: Event) -> None:
-        stream = f"inbox/{event.agent}"
+        """A spawn is its spawner's event, so the child is the one it names."""
+        stream = f"inbox/{event.data['name']}"
         settings = Channel(
             stream=stream, kind="inbox", delivery=event.data["delivery"], depth=event.data["inbox_depth"]
         )

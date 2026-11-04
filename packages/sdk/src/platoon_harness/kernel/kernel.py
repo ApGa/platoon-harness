@@ -312,7 +312,7 @@ class Kernel:
             txn = Txn(db, me, now, self._apply, command.native)
             result = jsonable(operation.fn(txn, args))
             if len(canonical(result).encode()) > DATA_LIMIT:
-                raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
+                raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes: store a body")
             outcome = txn._finish(command.answered(result))
         except BaseException as error:
             db.execute("ROLLBACK TO command")

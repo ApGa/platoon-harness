@@ -267,7 +267,7 @@ async def test_a_long_prompt_from_a_file_goes_whole_as_the_body(cli: Cli):
 
     events = checked(done)
     sent = next(event for event in events if event["type"] == "message.sent")
-    body = await cli.run("blob", "get", "s", "--ref", sent["data"]["body"])
+    body = await cli.run("blob", "get", "s", "--ref", f"{sent['stream']}@{sent['version']}")
     assert len(sent["gist"]) == 280 and sent["gist"].endswith("…")
     assert json.loads(body.stdout)["text"] == ("Fix the flaky test. " * 40).strip()
 

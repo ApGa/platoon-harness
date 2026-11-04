@@ -24,6 +24,7 @@ from .common import (
     Seq,
     address,
     checked_after,
+    cited,
     decoded,
     expose_read,
     fitted,
@@ -34,7 +35,6 @@ from .common import (
 from .sessions import SessionRecord
 
 _SCAN_LIMIT = 4096
-_VERSION_DIGITS = 18
 _QUEUED = """
     FROM v_deliveries_cursors AS c
     JOIN v_deliveries_audience AS a ON a.reader = c.reader AND a.stream = c.stream AND a.seq > c.offered
@@ -52,10 +52,12 @@ def _delivery(entry: str, audience: str, reader: str) -> str:
 
 
 class Entry(BaseModel, frozen=True):
-    """One message as readers get it. `sender` is an address to reply to, or `runtime`."""
+    """One message on `stream`. `ref` is what readers are shown it by: its own, or that of the event whose words it
+    carries. `sender` is an address to reply to, or `runtime`, and `body` the hash of any body, which no reader sees."""
 
     seq: int
     ref: str
+    stream: str
     sender: str
     gist: str
     body: str | None = None
@@ -63,6 +65,10 @@ class Entry(BaseModel, frozen=True):
     reply_to: str | None = None
     hops: int = 0
     subject: str | None = None
+
+    def shown(self) -> dict[str, Any]:
+        """The entry as a reader gets it, saying whether it has a body, which `blob.get` reads by its ref."""
+        return {**self.model_dump(exclude={"stream"}), "body": self.body is not None}
 
 
 class Cursor(NamedTuple):
@@ -100,19 +106,20 @@ class Offered(NamedTuple):
 class Deliveries(View):
     """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
 
-    version = 8
+    version = 9
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
         stream TEXT NOT NULL,
         version INTEGER NOT NULL,
+        ref TEXT NOT NULL,
         delivery TEXT NOT NULL,
         due REAL NOT NULL,
         entry TEXT NOT NULL,
         answers INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX v_deliveries_stream ON v_deliveries(stream, seq);
-    CREATE UNIQUE INDEX v_deliveries_ref ON v_deliveries(stream, version);
+    CREATE INDEX v_deliveries_ref ON v_deliveries(ref, seq);
     CREATE TABLE v_deliveries_audience(
         reader TEXT NOT NULL,
         stream TEXT NOT NULL,
@@ -149,20 +156,22 @@ class Deliveries(View):
     @fold("message.sent")
     def sent(self, event: Event) -> None:
         """A report answers unless an interrupt or the owner's stop cut its turn. A v1 report answered whatever it
-        said."""
+        said. An entry before v3 carried nothing, so it is shown by its own ref."""
         data = event.data
         entry = Entry(
             seq=event.seq,
-            ref=f"{event.stream}@{event.version}",
+            ref=data.get("carries") or f"{event.stream}@{event.version}",
+            stream=event.stream,
             gist=event.gist,
             **{field: data[field] for field in ("sender", "body", "thread", "reply_to", "hops", "subject")},
         )
         self.db.execute(
-            "INSERT INTO v_deliveries VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO v_deliveries VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 event.seq,
                 event.stream,
                 event.version,
+                entry.ref,
                 data["delivery"],
                 event.wall_time + data["coalesce"],
                 entry.model_dump_json(),
@@ -284,11 +293,16 @@ class Deliveries(View):
 
     @fold("wake.restored")
     def restored(self, event: Event) -> None:
-        for ref in event.data["entries"]:
-            stream, _, version = ref.partition("@")
-            self.db.execute(
-                "UPDATE v_deliveries SET delivery = 'wake' WHERE stream = ? AND version = ?", (stream, int(version))
-            )
+        """Entries are named by seq, since one carrying another event's words is shown by that event's ref. A v1
+        restore named each by its own ref."""
+        for named in event.data["entries"]:
+            if event.v >= 2:
+                self.db.execute("UPDATE v_deliveries SET delivery = 'wake' WHERE seq = ?", (named,))
+            else:
+                stream, _, version = named.partition("@")
+                self.db.execute(
+                    "UPDATE v_deliveries SET delivery = 'wake' WHERE stream = ? AND version = ?", (stream, int(version))
+                )
 
     @fold("wake.quieted")
     def quieted(self, event: Event) -> None:
@@ -330,11 +344,10 @@ class Deliveries(View):
             )
         return (Entry.model_validate_json(row["entry"]) for row in rows)
 
-    def at(self, stream: str, version: int) -> Entry | None:
-        row = self.db.execute(
-            "SELECT entry FROM v_deliveries WHERE stream = ? AND version = ?", (stream, version)
-        ).fetchone()
-        return None if row is None else Entry.model_validate_json(row["entry"])
+    def shown_by(self, ref: str) -> list[Entry]:
+        """The entries readers were shown by `ref`, newest first. A goal told again after each of two crashes is two."""
+        rows = self.db.execute("SELECT entry FROM v_deliveries WHERE ref = ? ORDER BY seq DESC", (ref,))
+        return [Entry.model_validate_json(row["entry"]) for row in rows]
 
     def addressed(self, reader: str, stream: str, seq: int) -> bool:
         """Whether an entry's recorded audience held this reader."""
@@ -417,12 +430,12 @@ class Deliveries(View):
             """,
             (reader, limit),
         )
-        return [{**Entry.model_validate_json(row["entry"]).model_dump(), "delivery": row["delivery"]} for row in rows]
+        return [{**Entry.model_validate_json(row["entry"]).shown(), "delivery": row["delivery"]} for row in rows]
 
     def stops(self, reader: str, shown: Sequence[Entry], *, whole: bool = False) -> dict[str, int]:
         """How far each cursor may move for `shown`: up to the first entry left out, and never past it."""
         offered = {entry.seq for entry in shown}
-        streams = {entry.ref.partition("@")[0] for entry in shown}
+        streams = {entry.stream for entry in shown}
         positions = {}
         for stream in streams:
             for entry in self.entries(stream, reader, self.cursor(reader, stream).offered, whole=whole):
@@ -495,7 +508,7 @@ def chain_of(txn: Txn, reader: str, entries: Sequence[Entry]) -> dict[str, Any]:
     parent = None if agent is None or agent.parent is None else address(agent.parent)
     inbox = f"inbox/{reader}"
     offered = txn.view(Deliveries).cursor(reader, inbox).offered
-    new = [entry for entry in entries if entry.seq > offered and entry.ref.startswith(f"{inbox}@")]
+    new = [entry for entry in entries if entry.seq > offered and entry.stream == inbox]
     return {
         "hops": max((entry.hops for entry in entries), default=0),
         "asked": any(entry.sender == parent for entry in new),
@@ -520,6 +533,7 @@ def post(
     thread: str | None = None,
     reply_to: str | None = None,
     cause: Sequence[int] = (),
+    carries: Event | None = None,
     based_on: Sequence[str] = (),
     subject: str | None = None,
     wake: bool | None = None,
@@ -529,7 +543,9 @@ def post(
     """Journal one entry for its audience. A person's message to an agent steers, whatever the reader's setting. The
     runtime posts here too: a report about a `subject`, which wakes its reader only while that agent was asked
     something, and `answers` it, or to `wake` the reader regardless, or with False to leave it for the reader's next
-    turn. `follows` is the hops of what a post follows when no `cause` can say so, as for a wait's notice."""
+    turn. `carries` is the event whose words the entry repeats, which is its cause and the ref it is shown by. `follows`
+    is the hops of what a post follows when no `cause` can say so, as for a wait's notice."""
+    cause = (*cause, *(() if carries is None else (carries.seq,)))
     channel, readers, generation, human = _audience(txn, stream)
     by_runtime = subject is not None or wake is not None
     if txn.me.kind == "human" and channel.kind == "inbox" and not by_runtime:
@@ -570,12 +586,13 @@ def post(
             "delivery": "next-turn" if setting in WAKING and not wakes else setting,
             "coalesce": channel.coalesce,
             "mention": human,
+            "carries": None if carries is None else f"{carries.stream}@{carries.version}",
         },
-        v=2,
+        v=3,
     )
     if wants and past_hops:
         for reader in audience:
-            _past_hops(txn, reader, hops, f"{event.stream}@{event.version}")
+            _past_hops(txn, reader, hops, event.data["carries"] or f"{event.stream}@{event.version}")
     return event
 
 
@@ -589,21 +606,22 @@ def restore_wakes(txn: Txn, reader: str, entries: Sequence[Entry]) -> None:
     """Let entries a wait held back from waking their reader wake it now, as any wake does, within `max_hops`. Each is
     a wake of its own, so one the reader reads first wakes nobody."""
     max_hops = txn.view(SessionRecord).settings().limits.max_hops
-    within = [entry.ref for entry in entries if max_hops is None or entry.hops <= max_hops]
+    within = [entry.seq for entry in entries if max_hops is None or entry.hops <= max_hops]
     for entry in entries:
-        if entry.ref not in within:
+        if entry.seq not in within:
             _past_hops(txn, reader, entry.hops, entry.ref)
     if within:
         data = {"entries": within}
         gist = f"wake of {reader} restored"
-        txn.emit("wake.restored", f"wake/{reader}", gist=gist, agent=reader, refs=within, data=data, runtime=True)
+        txn.emit("wake.restored", f"wake/{reader}", gist=gist, agent=reader, data=data, runtime=True, v=2)
 
 
-def announce(txn: Txn, channel: Channel, gist: str, cause: int) -> None:
-    """Tell a queue's or board's readers of a write as an entry, so `delivery` works as it does on a topic. It announces
-    work and never assigns it. `pull` wants no telling, and an entry nobody takes would pile up unread."""
+def announce(txn: Txn, channel: Channel, gist: str, write: Event) -> None:
+    """Tell a queue's or board's readers of a write as an entry, shown by the write's own ref, so `delivery` works as
+    it does on a topic. It announces work and never assigns it. `pull` wants no telling, and an entry nobody takes
+    would pile up unread."""
     if channel.delivery != "pull":
-        post(txn, channel.stream, gist[:GIST_LIMIT], cause=[cause])
+        post(txn, channel.stream, gist[:GIST_LIMIT], carries=write)
 
 
 class Send(Args):
@@ -622,17 +640,16 @@ def _reads_whole(txn: Txn, stream: str) -> bool:
 
 
 def _replied(txn: Txn, ref: str) -> Entry:
-    """The entry `ref` names, if the caller may read it. A miss and a denial answer alike, so a ref is no oracle."""
-    stream, _, version = ref.partition("@")
+    """The entry readers were shown by `ref`, if the caller may read it. A miss and a denial answer alike, so a ref is
+    no oracle."""
     deliveries = txn.view(Deliveries)
-    entry = deliveries.at(stream, int(version)) if version.isdecimal() and len(version) <= _VERSION_DIGITS else None
-    readable = entry is not None and (
-        txn.view(Grants).permits(txn.me, "message.read", stream)
-        and (_reads_whole(txn, stream) or deliveries.addressed(txn.me.name, stream, entry.seq))
-    )
-    if entry is None or not readable:
-        raise Refused("not_found", f"no message {ref}")
-    return entry
+    for entry in deliveries.shown_by(ref):
+        stream = entry.stream
+        if txn.view(Grants).permits(txn.me, "message.read", stream) and (
+            _reads_whole(txn, stream) or deliveries.addressed(txn.me.name, stream, entry.seq)
+        ):
+            return entry
+    raise Refused("not_found", f"no message {ref}")
 
 
 @op("message.send", on=lambda a: stream_of(a.to), tool=True)
@@ -653,7 +670,8 @@ def send(txn: Txn, a: Send) -> dict[str, Any]:
         thread = thread or replied.thread or replied.ref
         cause = (replied.seq,)
     stream = stream_of(a.to)
-    event = post(txn, stream, a.gist, body=a.body, thread=thread, reply_to=a.reply_to, cause=cause, based_on=a.based_on)
+    based_on = cited(txn, a.based_on)
+    event = post(txn, stream, a.gist, body=a.body, thread=thread, reply_to=a.reply_to, cause=cause, based_on=based_on)
     data = event.data
     return {
         "ref": f"{stream}@{event.version}",
@@ -691,26 +709,26 @@ class _Shown(NamedTuple):
 
 
 def _show(txn: Txn, entry: Entry, *, bodies: bool) -> _Shown:
-    row = entry.model_dump()
-    exposed = [Exposed.of(entry.ref, "gist", entry.gist)]
+    row = entry.shown()
+    exposed = [Exposed.gist(entry.ref, entry.gist)]
     if bodies and entry.body is not None:
         row["text"] = None  # A surface fetches what an op may not read.
         data = inline_body(txn, entry.body)
         text = None if data is None else decoded(data)
         if data is not None and text is not None and size_of({**row, "text": text}) <= RESULT_LIMIT:
             row["text"] = text
-            exposed.append(Exposed.of(entry.body, "body", data))
+            exposed.append(Exposed.of(entry.ref, "body", data))
     return _Shown(entry, row, exposed)
 
 
 @op("message.read", on=lambda a: None, exposes=True, tool=True)
 def read(txn: Txn, a: Read) -> dict[str, Any]:
-    """Read your inbox, or `#channel` or `+group`, past `after`, a `cursor` from an earlier read, which an agent's
-    read acks. Left out, an agent reads on from where it left off. `sender` and `thread` filter, and a filtered read
-    leaves unread what it skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut,
-    with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `blob.get`. `behind`
-    counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list`
-    to see yours. `invalid` for an `after` past every event: leave it out."""
+    """Read your inbox, or `#channel` or `+group`, past `after`, a `cursor` from an earlier read, which an agent's read
+    acks. Left out, an agent reads on from where it left off. `sender` and `thread` filter, and a filtered read leaves
+    unread what it skipped. `bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest`
+    a ref, and past what one result holds `text` is null. Pass `rest` or the entry's `ref` to `blob.get`. `behind`
+    counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `channel.list` to
+    see yours. `invalid` for an `after` past every event: leave it out."""
     stream = stream_of(a.channel) if a.channel else f"inbox/{txn.me.name}"
     txn.view(Grants).authorize(txn.me, read, stream)
     deliveries = txn.view(Deliveries)

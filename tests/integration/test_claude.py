@@ -157,7 +157,7 @@ async def test_what_the_journal_says_a_harness_was_told_is_what_it_sent_its_mode
             await session.send("@bob", "go")
             await until(lambda: of_type(session, "turn.ended"), session)
             instructed = await of_type(session, "agent.instructed")
-            told = (await session.get_body(instructed[0].data["instructions"])).decode()
+            told = (await session.get_body(instructed[0].data["body"])).decode()
 
     assert told.endswith("A team of one.\n\nBegin every reply with the word kestrel, then use `mcp__ph__peers`.")
     assert sum(text.count(told) for text in strings(model.calls[0].json)) == 1
@@ -180,7 +180,7 @@ async def test_what_the_journal_says_a_resumed_harness_was_told_is_what_it_sent_
             await session.send("@bob", "again")
             await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 2)
             instructed = await of_type(session, "agent.instructed")
-            told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+            told = [(await session.get_body(event.data["body"])).decode() for event in instructed]
 
     assert len(told) == 2 and told[0] == told[1] and "news" not in told[1]
     assert sum(text.count(told[1]) for text in strings(model.calls[-1].json)) == 1

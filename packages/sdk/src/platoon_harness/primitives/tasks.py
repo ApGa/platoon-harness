@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from platoon_harness.kernel import Args, Event, Refused, Timer, Txn, View, fold, op
 
 from .channels import Channel, Channels
-from .common import DIGEST_ITEMS, BasedOn, Body, Exposed, Gist, Name, Seq, address, expose_read, fitted
+from .common import DIGEST_ITEMS, BasedOn, Body, Exposed, Gist, Name, Seq, address, cited, expose_read, fitted
 from .messages import announce
 
 TaskState = Literal["open", "claimed", "done", "failed", "dead"]
@@ -15,7 +15,8 @@ TaskState = Literal["open", "claimed", "done", "failed", "dead"]
 
 class Task(BaseModel, frozen=True):
     """One task. `fence` and `lease_until` belong to its latest claim. A failed task may be claimed again. `result` is
-    what its latest attempt reported."""
+    what its latest attempt reported, and `result_ref` the ref of that report. `body` and `result_body` are hashes,
+    which no reader sees."""
 
     queue: str
     id: str
@@ -36,9 +37,17 @@ class Task(BaseModel, frozen=True):
     def stream(self) -> str:
         return f"task/{self.queue}/{self.id}"
 
+    @property
+    def ref(self) -> str:
+        """The task as a ref: its `task.added`."""
+        return f"{self.stream}@1"
+
     def shown(self) -> dict[str, Any]:
+        """The task as a reader gets it, by its ref, saying whether it and its result have a body, which `blob.get`
+        reads by `ref` and `result_ref`."""
         owner = None if self.owner is None else address(self.owner)
-        return {**self.model_dump(exclude={"result_ref"}), "owner": owner}
+        flags = {"body": self.body is not None, "result_body": self.result_body is not None}
+        return {**self.model_dump(), "ref": self.ref, "owner": owner, **flags}
 
     def live(self, now: float) -> bool:
         """Whether its lease holds by this clock. Time passing is enough: no event need have said so."""
@@ -219,9 +228,10 @@ def add(txn: Txn, a: Add) -> dict[str, Any]:
     id = str(txn.view(Tasks).count(a.queue) + 1)
     data = {"queue": a.queue, "task": id, "body": a.body}
     refs = [a.body] if a.body else ()
-    event = txn.emit("task.added", f"task/{a.queue}/{id}", gist=a.gist, based_on=a.based_on, refs=refs, data=data)
-    announce(txn, channel, a.gist, event.seq)
-    return {"task": id}
+    based_on = cited(txn, a.based_on)
+    event = txn.emit("task.added", f"task/{a.queue}/{id}", gist=a.gist, based_on=based_on, refs=refs, data=data)
+    announce(txn, channel, a.gist, event)
+    return {"task": id, "ref": f"{event.stream}@{event.version}"}
 
 
 class Claim(Args):
@@ -257,18 +267,19 @@ def claim(txn: Txn, a: Claim) -> dict[str, Any]:
     until = _lease_until(txn.now, txn.now, channel)
     data = _note(task, lease_until=until)
     event = txn.emit("task.claimed", task.stream, gist=f"task {task.id} claimed", data=data)
-    expose_read(txn, [Exposed.of(f"{task.stream}@1", "gist", task.gist)])
+    expose_read(txn, [Exposed.gist(task.ref, task.gist)])
     _arm(txn, task.id, a.queue, event.seq, until, event.seq)
-    return {
+    claimed = {
         "queue": a.queue,
         "task": task.id,
+        "ref": task.ref,
         "fence": event.seq,
         "lease_until": until,
         "gist": task.gist,
-        "body": task.body,
-        "text": None,  # A surface fetches what an op may not read.
+        "body": task.body is not None,
         "attempt": task.attempts + 1,
     }
+    return claimed if task.body is None else {**claimed, "text": None}  # A surface fetches what an op may not read.
 
 
 def _lease_until(now: float, claimed_at: float, channel: Channel) -> float:
@@ -334,30 +345,34 @@ class Finish(Held):
     based_on: BasedOn = ()
 
 
-def _report(txn: Txn, a: Finish, event_type: str, outcome: str) -> Task:
-    """Settle the caller's lease with its result. A failure says what it rests on as much as a success does."""
+def _report(txn: Txn, a: Finish, event_type: str, outcome: str) -> tuple[Task, str]:
+    """Settle the caller's lease with its result, and give the result's ref. A failure says what it rests on as much as
+    a success does."""
     task = _caller_lease(txn, a)
     assert task.fence is not None
     data = _note(task, fence=task.fence, body=a.body)
     gist = a.gist or f"task {task.id} {outcome}"
     refs = [a.body] if a.body else ()
-    txn.emit(event_type, task.stream, gist=gist, cause=[task.fence], based_on=a.based_on, refs=refs, data=data)
-    return task
+    based_on = cited(txn, a.based_on)
+    event = txn.emit(event_type, task.stream, gist=gist, cause=[task.fence], based_on=based_on, refs=refs, data=data)
+    return task, f"{event.stream}@{event.version}"
 
 
 @op("task.complete", on=lambda a: f"queue/{a.queue}", tool=True)
-def complete(txn: Txn, a: Finish) -> None:
+def complete(txn: Txn, a: Finish) -> dict[str, Any]:
     """Finish your task, with `gist` and `body` as its result. `task.list` shows it. Refused `stale_fence` once the
     lease has expired, even if nobody else took the task: your work may be lost, so check the task and claim it again if
     it is open. `invalid` when you hold several: name `task`."""
-    _report(txn, a, "task.completed", "completed")
+    return {"ref": _report(txn, a, "task.completed", "completed")[1]}
 
 
 @op("task.fail", on=lambda a: f"queue/{a.queue}", tool=True)
-def fail(txn: Txn, a: Finish) -> None:
+def fail(txn: Txn, a: Finish) -> dict[str, Any]:
     """Report that this attempt failed, and why. Someone may claim the task again until `max_attempts`, when it is dead
     and shown to a human. Refused `stale_fence` once your lease has expired: the task has moved on without you."""
-    bury_if_spent(txn, _report(txn, a, "task.failed", "failed"), _queue(txn, a.queue))
+    task, ref = _report(txn, a, "task.failed", "failed")
+    bury_if_spent(txn, task, _queue(txn, a.queue))
+    return {"ref": ref}
 
 
 class Fence(Args):
@@ -407,8 +422,8 @@ def list_tasks(txn: Txn, a: ListTasks) -> dict[str, Any]:
     _queue(txn, a.queue)
     rows, total = txn.view(Tasks).listed(a.queue, a.state, a.after, a.limit)
     tasks = fitted(rows, show=Task.shown)
-    exposed = [Exposed.of(f"{task.stream}@1", "gist", task.gist) for task in tasks]
-    exposed += [Exposed.of(task.result_ref, "gist", task.result) for task in tasks if task.result_ref and task.result]
+    exposed = [Exposed.gist(task.ref, task.gist) for task in tasks]
+    exposed += [Exposed.gist(task.result_ref, task.result) for task in tasks if task.result_ref and task.result]
     expose_read(txn, exposed)
     more = len(tasks) < len(rows) or len(rows) == a.limit
     return {

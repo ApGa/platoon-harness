@@ -23,7 +23,20 @@ from .boards import Boards
 from .budgets import Budgets
 from .channels import Channels, Groups, channel_grants
 from .clients import Attention, Changes, Gaps
-from .common import BODY_REF, IN_A_RESULT, WAKING, Injection, Lines, Policy, lines_of, stream_of
+from .common import (
+    BODY_REF,
+    IN_A_RESULT,
+    REF,
+    WAKING,
+    Injection,
+    Lines,
+    Policy,
+    body_of,
+    cited,
+    lines_of,
+    maker,
+    stream_of,
+)
 from .delivery import courier
 from .messages import Cursor, Deliveries, Entry
 from .repo import Looks
@@ -103,7 +116,7 @@ PRIMITIVES = (
     Extension("message", ops=[messages.send, messages.read], views=[Deliveries]),
     Extension(
         "delivery",
-        ops=[delivery.offer, delivery.pending, delivery.confirm, delivery.delivery_ready],
+        ops=[delivery.offer, delivery.pending, delivery.delivery_ready],
         daemons=[courier],
     ),
     Extension("wait", ops=[waits.wait_for, waits.cancel, waits.release, waits.progress_of], views=[Waits]),
@@ -115,7 +128,7 @@ PRIMITIVES = (
     ),
     Extension("lease", ops=[tasks.expire_lease, tasks.leases_due]),
     Extension("approval", ops=[approvals.request, approvals.resolve], views=[Approvals]),
-    Extension("blob", ops=[blobs.get, blobs.offer]),
+    Extension("blob", ops=[blobs.get, blobs.hash_of, blobs.offer]),
     Extension("repo", ops=[repo.report, repo.looks], views=[Looks]),
     Extension("attention", ops=[clients.attention_list], views=[Attention]),
     Extension("view", ops=[clients.watch], views=[Changes, Gaps]),
@@ -128,6 +141,7 @@ __all__ = [
     "OWNER_STOP",
     "PRIMITIVES",
     "RAW_LIMIT",
+    "REF",
     "REPORTS",
     "SHORT_LIMIT",
     "WAKING",
@@ -181,9 +195,12 @@ __all__ = [
     "Waits",
     "Why",
     "Workspace",
+    "body_of",
     "channel_grants",
+    "cited",
     "hold_open",
     "lines_of",
+    "maker",
     "on",
     "stream_of",
 ]

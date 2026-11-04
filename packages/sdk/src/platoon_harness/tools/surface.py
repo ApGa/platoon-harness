@@ -333,11 +333,12 @@ def refusal_text(refusal: Refusal, surface: Surface, ops: Collection[str], held:
 
 
 def _entries(handed: dict[str, Any], teach: Callable[[str], str]) -> list[str]:
-    """Each entry handed over, by the ref that dedupes a repeat, then how to read what did not come with it."""
+    """Each entry handed over, by the ref of what it carries, which dedupes a repeat, then how to read what did not
+    come with it."""
     lines = []
     for item in handed["items"]:
         lines.append(f"- {item['ref']} from {item['sender']}: {item['gist']}")
-        if item["body"] and (reading := teach(f"Its body is {item['body']}: pass that as `ref` to `blob.get`.")):
+        if item["body"] and (reading := teach("It has a body: pass its ref as `ref` to `blob.get`.")):
             lines.append(f"  {reading}")
     if handed["behind"] and (behind := teach(f"{handed['behind']} more are waiting: call `message.read`.")):
         lines.append(behind)

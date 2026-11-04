@@ -327,12 +327,15 @@ class Transcript(ScrollView, can_focus=True):
         """The line an event makes here, or None: for one a transcript leaves out, and for another agent's own but a
         spawn of this agent's and the end of a child of its."""
         focus = self.focus_on
+        if event.type == "agent.spawned" and focus is not None and focus.agent is not None:
+            child = event.data.get("name")
+            if event.data.get("parent") == f"agent:{focus.agent}":
+                self._children.add(child or "")
+                return Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
+            return line_of(event) if child == focus.agent else None
         theirs = focus is not None and focus.agent is not None and event.agent not in (focus.agent, None)
         if not (theirs and event.stream.startswith("agent/")):
             return line_of(event)
-        if event.type == "agent.spawned" and focus is not None and event.data.get("parent") == f"agent:{focus.agent}":
-            self._children.add(event.agent or "")
-            return Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
         return line_of(event) if event.type == "agent.ended" and event.agent in self._children else None
 
     def _block(self, event: Event) -> Block | None:

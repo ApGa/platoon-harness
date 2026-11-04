@@ -263,7 +263,7 @@ may start for it. Starting an agent is a new process.
 < {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}
-> {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","text":"New messages (delivery 41):\n- inbox/ada@3 from @lead: Keep the API stable","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable","sender":"@lead","body":null}],"behind":0}}
+> {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"41","boundary":"turn","text":"New messages (delivery 41):\n- inbox/ada@3 from @lead: Keep the API stable","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable","sender":"@lead","body":false}],"behind":0}}
 < {"jsonrpc":"2.0","id":2,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"41","boundary":"turn","evidence":"message_start"}}
 > {"jsonrpc":"2.0","id":3,"method":"stop","params":{"grace":5.0}}

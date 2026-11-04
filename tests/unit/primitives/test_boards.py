@@ -204,14 +204,14 @@ async def test_a_read_of_no_board_is_refused_even_for_a_human(kernel, ada):
     assert refusal(await kernel.submit(ada, "board.get", {"board": "nots", "name": "x"})).code == "not_found"
 
 
-async def test_a_body_in_blobs_comes_back_as_its_hash(kernel, notes):
+async def test_a_body_in_blobs_comes_back_for_a_surface_to_fetch_by_the_object_s_ref(kernel, notes):
     bob = await spawn(kernel, "bob")
     body = await body_of(kernel, "x" * (70 * 1024))
     result_of(await kernel.submit(bob, "board.post", post(body=body)))
 
     got = result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
 
-    assert got["body"] == body and got["text"] is None
+    assert (got["ref"], got["body"], got["text"]) == ("board/notes/spec@1", True, None)
     assert [item["form"] for item in of_type(kernel, "context.offered")[-1].data["items"]] == ["gist"]
 
 
@@ -224,7 +224,7 @@ async def test_a_redacted_body_stops_at_commit(kernel, notes):
 
     got = result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec"}))
 
-    assert got["body"] == body and got["text"] is None
+    assert got["body"] is True and got["text"] is None
 
 
 async def test_an_agents_get_is_a_command_and_a_humans_is_a_query(kernel, notes, ada):

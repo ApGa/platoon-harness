@@ -82,7 +82,8 @@ Checked by a test and by the kernel. At load, an op may not be past tense and it
 - `interrupt` stops a turn. `cancel` ends an agent. `session.close` drains; `session.cancel` stops now.
 - `timeout` is a duration. `deadline` is a time.
 - `@agent`, `#channel` and `+group` are the one address grammar. A leading sigil is an address; infix `@` and
-  `#` are version and range: `board/notes/spec@3#L10-40` is a **ref**, and a ref names immutable content.
+  `#` are version and range: `board/notes/spec@3#L10-40` is a **ref**, and a ref names immutable content. Every event has one,
+  `stream@version`, with `#La-b` naming lines of that event's body, and it is the one form a citation takes.
 - A driver's name is the command you type: `claude`, not `claude-code`. A harness that is a library has no command, so its name
   is the harness's: `openhands`.
 - Every name, of a principal, a session or anything a team names, is a path part and a git branch part: letters, digits, `_` and
@@ -287,7 +288,7 @@ class Event(BaseModel, frozen=True):
     topology_rev: int
     correlation: str | None          # what larger piece of work this belongs to
     cause: tuple[int, ...]           # seqs this directly followed from
-    based_on: tuple[str, ...]        # declared refs, as claimed
+    based_on: tuple[str, ...]        # event refs its maker declared, as claimed
     native: Mapping[str, str]        # backend ids, with source and harness version
     model: ModelRef | None           # policy, version, call_id, tool_call_id, token span: only when real
     wall_time: float                 # for humans; never orders anything
@@ -309,8 +310,13 @@ such as the monitor; it can name nobody else. The kernel takes the rest from che
   refuses a second `conflict`. A boundary event that does not name what it opens is `invalid`.
 
 `refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
-refuses. A ref is `stream@version`, or `sha256:<hash>` for a body, either with an optional `#range`. `cause`, `based_on`, `native` and
+refuses. A ref is `stream@version`, with an optional `#range`. Data names a body by `sha256:<hash>`, which `refs` may hold too, and
+`based_on` holds event refs alone. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
 `correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
+
+An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A write of content an agent makes
+carries that agent as its envelope agent, so its turn and context version are its maker's: `agent.spawned`, at payload version 3,
+names its spawner and not the child it starts.
 
 ### 5.4 Effects
 
@@ -546,15 +552,18 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `lineage` `exposure` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `delivery.confirm` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
 Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
 requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
 body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
-comes back as its hash beside a null `text`, for the surface to fetch, and `blob.offer` records what the surface showed. A hash is
-a capability: `blob.get` checks no stream, so whoever holds a hash may read that body. A ref names where content is, and that it exists is no secret: `based_on` is checked to exist and nothing more.
+comes back as a null `text` beside the ref of the event that carries it, for the surface to fetch through `blob.hash`, and
+`blob.offer` records what the surface showed. Hashes stay in event data and the kernel's body API, and no result a model sees holds
+one. `blob.get` reads the body of an event its caller was handed or made, and answers any other `not_found`, as it does a ref that
+names nothing, so a ref is no oracle. A person or a program may read any, as a query. Grants authorize the op, and the op's own
+check decides what it shows.
 
 ### Library tier
 
@@ -591,8 +600,14 @@ Each statement here is a promise with a test.
   reads from `after`.
 - **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience, and a sender
   is not in its own. Late joiners see history only if the channel says `history = "full"`.
-- **Entries** are a capped `gist` plus an optional body. A digest shows gists. Exposure of a gist is recorded separately
-  from exposure of a body.
+- **Entries** are a capped `gist` plus an optional body, which a row says it has with `body: true` and `blob.get` reads by the
+  entry's ref. A digest shows gists. Exposure of a gist is recorded separately from exposure of a body, and each names the event
+  it showed by its ref, a body's with the lines shown.
+- **A carried message is shown by what it carries.** An entry that repeats another event's words, an announce of a board or queue
+  write, the monitor's report of a child or a goal told again, names that event as its `cause` and is shown and handed over by its
+  ref, so one act has one ref. Its data names the ref as `carries`, as a fold sees one event. A report repeats the child's
+  `agent.finished`, its turn's last message, or else its `turn.ended` or `agent.ended`, and a goal told again its `agent.spawned`.
+  `reply_to` finds an entry by the ref it was shown by, and a message's cause is the entry it replies to or what it carries.
 
 **Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so an agent cannot buy a wake,
 and an agent creating a channel stops at `next-turn`. A person's message to an agent steers, whatever its reader's setting, so a
@@ -643,7 +658,7 @@ Objects have stable names and immutable versions (`board/<board>/<name>`). A rea
 `wait` counts only versions it has not seen. `board.post` makes version 1, and on a taken name
 conflicts as a stale `board.revise` does. `board.revise` requires `expected_version`; a
 conflict returns the current version and silently overwrites nothing. `board.get` returns a ref naming exactly what it gave, so
-a body too long for one result comes back cut, with `rest`, a ref that `blob.get` reads on from. `board.query` is structured; results carry exact
+a body too long for one result comes back cut, with `rest`, a ref with a range of the object's version, that `blob.get` reads on from. `board.query` is structured; results carry exact
 refs, the true total and a cursor. Text search uses SQLite FTS5 when present, over names, gists and fields and never bodies: a
 fold cannot read a body, and a tombstoned body must leave nothing behind. Without FTS5 it is refused `unsupported`. Semantic
 search is an extension. A board object version with a body is also how artifacts are stored.
@@ -660,10 +675,27 @@ One stream per task. States: `open → claimed → done | failed | dead`. A `fai
 - **Renewal.** The host renews from observed harness activity up to `lease_max`. `task.renew` stays for programs.
 - **Retries.** `max_attempts`, then `dead`, shown in attention. Each claim spends an attempt, and `task.release` returns it.
 - **Results.** What `task.complete` or `task.fail` reports stays on the task, and `task.list` shows it, as evidence for an agent.
+  A task goes by the ref of its `task.added`, which `task.add`, `task.claim` and `task.list` give, and a result by `result_ref`,
+  the ref `task.complete` and `task.fail` return.
 - **`delivery`** works on a queue or board as on a topic. Unless it is `pull`, each `task.add`, `board.post` or `board.revise` posts
   one entry on `queue/<name>` or `board/<name>`, for whoever holds `task.claim` or `board.get`, so `coalesce`, hops and attention
   come with it. It announces work and never assigns it.
 - Exclusive ownership is **not** exactly-once execution. External effects cannot be fenced by us, and the docs say so.
+
+### Refs and citations
+
+- **Every result names what it shows by a ref.** A write of content returns the ref it made: `message.send`, `board.post`,
+  `board.revise`, `task.add`, `task.complete`, `task.fail`, `agent.spawn` and `agent.finish`, whose ref is the event that holds
+  its report, `agent.finished` in a turn and `agent.ended` out of one. Every handover, notice and refusal names events the same
+  way, and none holds a body's hash.
+- **Every write of content takes `based_on`,** those eight, and a person's, a program's and the runtime's writes meet the same
+  check as an agent's. A citation must name an existing event, and a range lines of that event's text body, or the whole write is
+  refused naming the ref: `not_found` for a missing event, and `invalid` for a body's hash, a malformed range, lines past the end,
+  or a range on an event that has no body or no text. A body in `blobs/`, which an op cannot read, keeps its range as given.
+  `cited` is that check, for an extension's own writes too.
+- **A citation is its citer's claim,** recorded as given, and never merged with exposure, ancestry or credit. One of something its
+  citer was never handed is kept: whether it was handed, and for a range whether those lines were shown, is exposure's to say.
+  A commit cites through its `Informed-By` trailers (§13).
 
 ### Wait
 
@@ -709,7 +741,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   and a message can go ahead of it. The host then gives it a credential with `principal.issue`, because a token never enters the
   journal, and an agent that has ended cannot be given one. A spawn past `max_children` is refused, saying that ending a child makes room.
   Its command's `native` holds the anchor of the call that made it, which that call's tool item holds as its `native_id`, so a
-  client can join a child to its call, and in journal order a spawn falls inside the turn of its spawner's that made it.
+  client can join a child to its call. A spawn is its spawner's, so `agent.spawned` carries the spawner's turn and context version,
+  and the child's ref, `agent/<name>@1`, is what the spawn returns.
 - **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. The
   runtime keeps every agent alike, so it changes only what the agent is told, a spawn's result, and who may wait on its end. It is
   resolved once, at the spawn: what `agent.spawn` said, else what its role says, else true for an agent the session started and false
@@ -986,8 +1019,8 @@ workspace is the runtime's own look, so no driver reports it (§13). Unknown fra
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
 and `summary` go the same way, since either can pass what an event holds. `forgotten` holds native ids, and with `None` the runtime
 records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
-agent's surface, with each entry's ref and sender, the ref of any body, and the input id. So a wire program in any language has it
-for nothing, and `items` is there for one that wants more.
+agent's surface, with each entry's ref and sender, whether it has a body, which `blob.get` reads by that ref, and the input id. So a
+wire program in any language has it for nothing, and `items` is there for one that wants more.
 
 The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
 `agent.start` with the declared capabilities, the verified result and the levels, as `resumed` when it comes from a resumed harness,
@@ -1114,9 +1147,10 @@ against the official client and against each real harness.
   which `delivery.pending` asks about first, so a call with no notice to carry journals nothing. `ph` sends those to stderr.
 - A result holds at most 32 KiB of what an op returned and what the surface read, plus notices. A list as long as a team, `peers` or
   `channel.list`, goes a page at a time, since a refusal would leave a model no other way to find anyone. So only an extension's query
-  can answer past that, and it is refused `unsupported` with its size, and nothing runs. A row with a null `text` beside a
-  body's ref is a body its op could not read: the surface reads up to 16 MiB of it, shows the lines that fit, says in `rest` where
-  the rest is, and journals what it showed with `blob.offer` before the text leaves. `text` stays null for a binary, redacted or
+  can answer past that, and it is refused `unsupported` with its size, and nothing runs. A row with a null `text` beside its ref
+  is a body its op could not read: the surface reads up to 16 MiB of it, shows the lines that fit, says in `rest` where the rest is,
+  and journals what it showed with `blob.offer`, under the anchor of the call it answers, before the text leaves. A steer notice is
+  handed over under that anchor too. `text` stays null for a binary, redacted or
   larger body, or one line too long to show.
 - `hold` runs `hold_open` as the runtime, which is right: a held call must close its wait with `wait.release`, a runtime-only op, and
   a role's `tools` can leave out `wait.progress`. Nothing a client sends reaches it: its id comes from the `wait` the agent was
@@ -1180,7 +1214,7 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 | Evidence | Representation | Sole writer | Means only |
 |---|---|---|---|
 | **Observed exposure** | `context.offered{items:[{ref, form, digest}], boundary, how}`, raised by `context.delivered` | Courier, and agent-read ops | This content was handed over, then confirmed injected |
-| **Declared dependency** | `based_on`, `informed_by` on a write, checked to exist | That op's actor | The agent claims it |
+| **Declared dependency** | `based_on` on a write of content, each ref checked to name an event and its lines (§7), and a commit's `Informed-By` read into it | That write's maker | The agent claims it |
 | **Judged attribution** | Annotation: judge, version, evidence refs, value | A `judge` principal | A versioned opinion |
 | **Validated intervention** | Annotation: design, comparison, measured result | A `program` principal | One controlled comparison |
 
@@ -1475,7 +1509,8 @@ Threat tiers stay separate, in docs and in events.
 | Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only OS isolation earns `isolated` |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 
-- **Bodies.** A body's hash is a capability, and a low-entropy body can be guessed: bodies are for content, not for secrets.
+- **Bodies.** A body's hash is a capability to whoever reads the journal, a person or a program, and a low-entropy body can be
+  guessed: bodies are for content, not for secrets. An agent reads a body only by the ref of an event it was handed or made.
 - **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
   No model-access credential reaches a log, event, artifact, export or resolved config.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an

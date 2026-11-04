@@ -245,7 +245,7 @@ async def test_what_a_harness_is_told_is_journaled_at_launch_and_at_every_resume
     async with Session.resume("told", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         instructed = await of_type(session, "agent.instructed")
-        told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+        told = [(await session.get_body(event.data["body"])).decode() for event in instructed]
 
     assert len(told) == 2 and told == [spec.instructions for spec in recording.specs]
 
@@ -264,7 +264,7 @@ async def test_a_harness_that_reopens_its_session_is_handed_what_it_was_told_whe
     async with Session.resume("told", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         instructed = [event for event in await of_type(session, "agent.instructed") if event.agent == "bob"]
-        told = [(await session.get_body(event.data["instructions"])).decode() for event in instructed]
+        told = [(await session.get_body(event.data["body"])).decode() for event in instructed]
 
     launched, resumed = [spec for spec in recording.specs if spec.agent == "bob"]
     assert resumed.resume is not None and "You can message: @you." in told[0]
@@ -296,7 +296,7 @@ async def test_nothing_told_is_journaled_as_nothing(tmp_path, recording):
         await in_state(session, "bob", "idle")
         instructed = await of_type(session, "agent.instructed")
 
-    assert [event.data["instructions"] for event in instructed] == [None]
+    assert [event.data["body"] for event in instructed] == [None]
 
 
 async def test_a_role_s_preamble_is_told_in_place_of_its_team_s_and_its_words_come_last(tmp_path, recording):
@@ -556,16 +556,16 @@ async def test_a_message_reaches_a_harness_as_text_with_the_ref_and_the_input(tm
         await in_state(session, "bob", "idle")
         sent = await session.send("@bob", "read this", body="the whole of it")
         await until(recorded(recording), session)
-        body = next(event.data["body"] for event in await of_type(session, "message.sent"))
 
     delivery = recording.deliveries[0]
     assert delivery.text.splitlines() == [
         f"New messages (delivery {delivery.input}):",
         f"- {sent['ref']} from @you: read this",
-        f"  Its body is {body}: pass that as `ref` to `mcp__ph__blob_get`.",
+        "  It has a body: pass its ref as `ref` to `mcp__ph__blob_get`.",
     ]
     assert delivery.items[0].sender == "@you"
-    assert delivery.items[0].body == body
+    assert delivery.items[0].body is True
+    assert "sha256:" not in delivery.text
 
 
 async def test_what_a_delivery_landed_on_is_confirmed_as_exposure(tmp_path):
@@ -1327,7 +1327,7 @@ async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_p
 
     async with Session.start(team, authority=Keyed(team), root=tmp_path) as session:
         items = await until(lambda: of_type(session, "item.recorded"), session)
-        body = await session.blob(items[0].data["body"])
+        body = await session.blob(f"{items[0].stream}@{items[0].version}")
 
     assert items[0].gist == "my key is ***"
     assert body["text"] == "***\n"

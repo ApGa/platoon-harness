@@ -47,13 +47,14 @@ class Agent(BaseModel, frozen=True):
     """One agent. `parent` is the spawner's principal id, and `None` once adopted by the session. `stays` says it is
     told to stay after its task for the next message. `asked` says its parent is owed an answer: the spawn asks, and so
     does each new message from the parent once it lands in a turn, until a report answers. `native` is the id its
-    harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `finishing`
-    says it called `agent.finish` in a turn that has not ended. `stopped` says why its last turn did not stop on its
-    own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers
-    failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last interrupt of it or owner's
-    stop, and a handover asked for before it is no failure of its harness's. `instructions` is the body of what its
-    harness was told last, or None for nothing. `workspace` is where it works, once made, and `removed` or `kept` say
-    what its stop did with it."""
+    harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `final_ref` is
+    the ref of what said its last words: its turn's last message, or a finished agent's end. `finishing` says it called
+    `agent.finish` in a turn that has not ended, and `finish_ref` is that call's `agent.finished`. `stopped` says why
+    its last turn did not stop on its own, until the next begins. `failure` is what the last effect to fail for it said,
+    `failures` counts handovers failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last
+    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `instructions`
+    is the body of what its harness was told last, or None for nothing. `workspace` is where it works, once made, and
+    `removed` or `kept` say what its stop did with it."""
 
     name: str
     role: str
@@ -79,9 +80,11 @@ class Agent(BaseModel, frozen=True):
     activity: str | None
     final_gist: str | None
     final_body: str | None
+    final_ref: str | None
     finishing: bool
     finish_gist: str | None
     finish_body: str | None
+    finish_ref: str | None
     stopped: str | None
     failure: str | None
     failures: int
@@ -110,7 +113,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 10
+    version = 11
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -137,9 +140,11 @@ class Agents(View):
         activity TEXT,
         final_gist TEXT,
         final_body TEXT,
+        final_ref TEXT,
         finishing INTEGER NOT NULL DEFAULT 0,
         finish_gist TEXT,
         finish_body TEXT,
+        finish_ref TEXT,
         stopped TEXT,
         failure TEXT,
         failures INTEGER NOT NULL DEFAULT 0,
@@ -202,9 +207,9 @@ class Agents(View):
 
     @fold("agent.instructed")
     def instructed(self, event: Event) -> None:
-        self.db.execute(
-            "UPDATE v_agents SET instructions = ? WHERE name = ?", (event.data["instructions"], event.agent)
-        )
+        """A v1 record named its text `instructions`."""
+        told = event.data["body"] if event.v >= 2 else event.data["instructions"]
+        self.db.execute("UPDATE v_agents SET instructions = ? WHERE name = ?", (told, event.agent))
 
     def _move(self, event: Event, state: str, *only: str) -> None:
         marks = ", ".join("?" * len(only))
@@ -220,7 +225,8 @@ class Agents(View):
         self._move(event, "running", "idle", "waking", "waiting")
         self._reachable(event)
         self.db.execute(
-            "UPDATE v_agents SET unbegun = 0, final_gist = NULL, final_body = NULL, stopped = NULL WHERE name = ?",
+            "UPDATE v_agents SET unbegun = 0, final_gist = NULL, final_body = NULL, final_ref = NULL, stopped = NULL "
+            "WHERE name = ?",
             (event.agent,),
         )
 
@@ -322,8 +328,8 @@ class Agents(View):
     @fold("agent.finished")
     def finishing(self, event: Event) -> None:
         self.db.execute(
-            "UPDATE v_agents SET finishing = 1, finish_gist = ?, finish_body = ? WHERE name = ?",
-            (event.data["gist"], event.data["body"], event.agent),
+            "UPDATE v_agents SET finishing = 1, finish_gist = ?, finish_body = ?, finish_ref = ? WHERE name = ?",
+            (event.data["gist"], event.data["body"], f"{event.stream}@{event.version}", event.agent),
         )
 
     @fold("agent.ended")
@@ -338,8 +344,8 @@ class Agents(View):
         )
         if data["status"] == "finished":
             self.db.execute(
-                "UPDATE v_agents SET final_gist = ?, final_body = ? WHERE name = ?",
-                (data["report"], data["body"], event.agent),
+                "UPDATE v_agents SET final_gist = ?, final_body = ?, final_ref = ? WHERE name = ?",
+                (data["report"], data["body"], f"{event.stream}@{event.version}", event.agent),
             )
 
     @fold("item.recorded")
@@ -347,8 +353,8 @@ class Agents(View):
         self.db.execute("UPDATE v_agents SET activity = ? WHERE name = ?", (event.gist, event.agent))
         if event.data["kind"] == "message":
             self.db.execute(
-                "UPDATE v_agents SET final_gist = ?, final_body = ? WHERE name = ?",
-                (event.gist, event.data["body"], event.agent),
+                "UPDATE v_agents SET final_gist = ?, final_body = ?, final_ref = ? WHERE name = ?",
+                (event.gist, event.data["body"], f"{event.stream}@{event.version}", event.agent),
             )
 
     def _load(self, row: Any) -> Agent:

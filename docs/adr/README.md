@@ -41,6 +41,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | A look after each turn, one at a time, recording on `repo/<name>` with no agent in the envelope; a commit is its maker's by the HEAD reflog entry at its committer time; `Informed-By` resolved from hex alone; conflicts surfaced and never resolved |
 | [0033](0033-a-harness-s-own-worktrees-are-off.md) | A harness's own worktrees are off | Claude Code's `EnterWorktree` and `ExitWorktree` off on every launch, and a Codex thread held to `spec.cwd` |
 | [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Posts and activity answer from the projection by the journal's times; votes are null, hot and top refused and drawn disabled; a queue's or a board's own view stays disabled, saying why |
+| [0036](0036-one-ref-names-what-a-model-is-shown.md) | One ref names what a model is shown, and a citation is checked and kept as a claim | `stream@version` with `#La-b` in every result, a carried message shown by what it carries, `based_on` on all eight writes of content checked to name events and lines, a spawn its spawner's, and `blob.get` reading what its caller was handed or made |
 
 ## Adding or changing one
 

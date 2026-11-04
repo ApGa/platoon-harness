@@ -647,19 +647,19 @@ async def test_a_body_that_is_a_ref_is_cited_and_not_stored_again(tmp_path):
         assert (await of_type(session, "message.sent"))[-1].data["body"] == ref
 
 
-async def test_a_body_has_one_spelling_everywhere(tmp_path):
+async def test_a_body_is_its_hash_to_the_body_api_and_read_by_the_ref_of_its_event(tmp_path):
     async with Session.start(worker_team(), root=tmp_path) as session:
-        ref = await session.put_body(b"the real content\n")
-        await session.board_post("notes", "a", "gist", body=ref)
+        body = await session.put_body(b"the real content\n")
+        posted = await session.board_post("notes", "a", "gist", body=body)
 
         got = await session.board_get("notes", "a")
 
-        assert got["body"] == ref and got["text"] == "the real content\n"
-        assert await session.get_body(got["body"]) == b"the real content\n"
-        assert (await session.blob(ref))["text"] == "the real content\n"
-        await session.tombstone(got["body"])
+        assert (got["ref"], got["body"], got["text"]) == (posted["ref"], True, "the real content\n")
+        assert await session.get_body(body) == b"the real content\n"
+        assert (await session.blob(posted["ref"]))["text"] == "the real content\n"
+        await session.tombstone(body)
         with pytest.raises(Refused):
-            await session.get_body(ref)
+            await session.get_body(body)
 
 
 async def test_lifecycle_through_the_facade(tmp_path):
@@ -695,14 +695,17 @@ async def test_channels_and_budgets_through_the_facade(tmp_path):
 
 async def test_a_body_can_be_read_and_redacted(tmp_path):
     async with Session.start(solo(), root=tmp_path) as session:
-        ref = await session.put_body(b"line\n")
+        body = await session.put_body(b"line\n")
+        sent = await session.send("@bob", "read this", body=body)
 
-        assert (await session.blob(ref))["text"] == "line\n"
+        assert (await session.blob(sent["ref"]))["text"] == "line\n"
 
-        await session.tombstone(ref)
+        await session.tombstone(body)
 
         with pytest.raises(Refused):
-            await session.get_body(ref)
+            await session.get_body(body)
+        with pytest.raises(Refused):
+            await session.blob(sent["ref"])
 
 
 async def test_a_wait_for_every_agent_says_how_it_closed(tmp_path):

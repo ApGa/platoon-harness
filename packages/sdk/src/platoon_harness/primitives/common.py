@@ -2,13 +2,13 @@
 
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from hashlib import sha256
 from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Refused, Stamps, Tombstones, Txn
+from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Tombstones, Txn
 
 
 def _bare(name: str) -> str:
@@ -34,7 +34,7 @@ BODY_REF = r"^sha256:[0-9a-f]{64}$"
 BodyRef = Annotated[str, Field(pattern=BODY_REF)]
 Body = Annotated[BodyRef | None, Field(description="Anything longer than the gist.")]
 Seq = Annotated[int, Field(ge=0, lt=2**63)]
-BasedOn = Annotated[tuple[str, ...], Field(description="Refs this rests on, such as a `ref` you read.")]
+BasedOn = Annotated[tuple[str, ...], Field(description="Refs this write rests on.")]
 Injection = Literal["pull", "next-turn", "wake", "steer"]
 Policy = Literal["ask", "deny", "allow"]
 
@@ -47,9 +47,78 @@ RESULT_LIMIT = (
 )  # The kernel refuses a command's result past 16 KiB; this leaves room for what frames the rows.
 
 LINE_RANGE = r"L([1-9]\d*)-([1-9]\d*)"
+REF = rf"^[^\s@#]+@[1-9]\d{{0,17}}(#{LINE_RANGE})?$"
+"""A ref, `stream@version`, with `#La-b` naming lines of that event's body: the one form a citation takes."""
+_REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>[1-9]\d{0,17})(?:#(?P<span>.*))?", re.DOTALL)
+_GIVEN = "cite a `ref` you were given, or leave it out"
 
 _ADDRESS = re.compile(rf"([@#+])({NAME})")
 _STREAMS = {"@": "inbox/", "#": "channel/", "+": "channel/+"}
+
+
+def maker(event: Event) -> str:
+    """Whose an event is: its actor, and for an event the runtime writes, the agent it is about."""
+    return f"agent:{event.agent}" if event.actor == "runtime" and event.agent is not None else event.actor
+
+
+def body_of(event: Event) -> str | None:
+    """The body an event carries: the one its data names `body`. An event that names none has none to read on in."""
+    body = event.data.get("body") if isinstance(event.data, dict) else None
+    return body if isinstance(body, str) else None
+
+
+def event_at(txn: Txn, ref: str) -> Event | None:
+    """The event a ref names, whatever lines it names of it, or None."""
+    match = _REF.fullmatch(ref)
+    return None if match is None else txn.view(Stamps).at(match["stream"], int(match["version"]))
+
+
+def cited(txn: Txn, refs: Iterable[str]) -> tuple[str, ...]:
+    """`based_on` as its citer gave it, once each ref names an event and each range lines of that event's text body,
+    or a refusal of the whole write naming the first that does not. A body in `blobs/`, which an op cannot read, keeps
+    its range as given. Whether the citer was handed what it cites is exposure's to say, so that is not checked here."""
+    refs = tuple(refs)
+    for ref in refs:
+        named = ref[:80]
+        if ref.startswith("sha256:"):
+            raise Refused("invalid", f"a body's hash is no ref: {_GIVEN}, which names the event that carries it")
+        match = _REF.fullmatch(ref)
+        if match is None:
+            raise Refused("invalid", f"{named!r} is no ref, which is `stream@version` with `#La-b` for lines: {_GIVEN}")
+        event = txn.view(Stamps).at(match["stream"], int(match["version"]))
+        if event is None:
+            raise Refused("not_found", f"nothing is {named}: {_GIVEN}")
+        if match["span"] is not None:
+            _cited_lines(txn, named, event, match["span"])
+    return refs
+
+
+def _cited_lines(txn: Txn, ref: str, event: Event, span: str) -> None:
+    lines = re.fullmatch(LINE_RANGE, span)
+    if lines is None or int(lines[1]) > int(lines[2]):
+        raise Refused("invalid", f"{ref} names no lines, as a range is `#La-b` from a first line to a later one")
+    body = body_of(event)
+    if body is None:
+        raise Refused("invalid", f"{ref} names lines of an event that has no body: cite it whole")
+    data = inline_body(txn, body)
+    if data is None:
+        return  # In `blobs/`, which an op cannot read.
+    text = decoded(data)
+    if text is None:
+        raise Refused("invalid", f"{ref} names lines of a body that is not text: cite it whole")
+    if int(lines[2]) > (total := len(text.splitlines())):
+        raise Refused("invalid", {"lines": total, "detail": f"{ref} names lines past the end of its body"})
+
+
+def handed(txn: Txn, agent: str, ref: str) -> bool:
+    """Whether an event was offered to an agent: an item of an offer on its context stream names it, whatever it
+    showed of it."""
+    for offer in txn.view(Stamps).events(f"context/{agent}"):
+        if offer.type == "context.offered" and any(
+            item["ref"].partition("#")[0] == ref for item in offer.data["items"]
+        ):
+            return True
+    return False
 
 
 def stream_of(address: str) -> str:
@@ -173,6 +242,12 @@ class Exposed(BaseModel, frozen=True):
         text = content if isinstance(content, bytes) else content.encode()
         return cls(ref=ref, form=form, digest=sha256(text).hexdigest())
 
+    @classmethod
+    def gist(cls, ref: str, gist: str, fields: Mapping[str, Any] | None = None) -> "Exposed":
+        """A gist shown, and any fields shown beside it, which its digest covers too."""
+        shown = json.dumps([gist, fields], ensure_ascii=False, sort_keys=True) if fields else gist
+        return cls.of(ref, "gist", shown)
+
 
 def expose(
     txn: Txn,
@@ -185,8 +260,9 @@ def expose(
     hops: int = 0,
     asked: bool = False,
 ) -> int:
-    """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input.
-    `asked` says a message from its parent, never offered to it before, is among what was offered."""
+    """Record what an agent was offered on `context/<agent>` and return the offer's seq, which names its input. Each
+    item names an event by its ref. `asked` says a message from its parent, never offered to it before, is among what
+    was offered."""
     event = txn.emit(
         "context.offered",
         f"context/{agent}",
@@ -201,7 +277,7 @@ def expose(
             "hops": hops,
             "asked": asked,
         },
-        v=2,
+        v=3,
     )
     return event.seq
 

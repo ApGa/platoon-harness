@@ -74,6 +74,11 @@ class Stamps(View):
         """
         return stream_version(self.db, stream)
 
+    def at(self, stream: str, version: int) -> Event | None:
+        """The event a ref names, by its stream and version, or None. Read it before emitting, too."""
+        row = self.db.execute("SELECT * FROM events WHERE stream = ? AND version = ?", (stream, version)).fetchone()
+        return None if row is None else decode(row)
+
     def events(self, stream: str | None = None, *, after: int = 0) -> Iterator[Event]:
         """The events past `after`, oldest first, on one stream or all of them. Read it before emitting, too."""
         if stream is None:
@@ -155,6 +160,9 @@ class Txn:
         for earlier in cause:
             if not 0 < earlier < seq:
                 raise Refused("not_found", f"cause {earlier} does not point backward")
+        for ref in based_on:
+            if _BODY_REF.fullmatch(ref):
+                raise Refused("invalid", "a body's hash is no ref: cite the event that carries it")
         for ref in (*based_on, *refs):
             self._check_ref(ref)
 
@@ -245,7 +253,7 @@ class Txn:
         except ValueError as error:
             raise Refused("invalid", f"data is not JSON: {error}") from None
         if size > DATA_LIMIT:
-            raise Refused("invalid", f"data exceeds {DATA_LIMIT} bytes; store a body and cite its hash")
+            raise Refused("invalid", f"data exceeds {DATA_LIMIT} bytes: store a body")
         return text
 
     def _version_of(self, name: str, stream: str, version: int) -> int:

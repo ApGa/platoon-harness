@@ -6,7 +6,7 @@ from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, 
 
 from .agents import Agent, Agents
 from .budgets import reserve
-from .common import Exposed, Name, Seq, expose, fitted
+from .common import Exposed, Name, expose, fitted
 from .messages import Deliveries, Entry, chain_of
 from .sessions import SessionRecord
 from .waits import WaitRecord, Waits, out_of_turn
@@ -102,13 +102,13 @@ class Offer(Args):
 def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how: str) -> dict[str, Any] | None:
     deliveries = txn.view(Deliveries)
     queued, total = deliveries.queued(agent, modes)
-    shown: list[Entry] = fitted(queued, show=Entry.model_dump)
+    shown: list[Entry] = fitted(queued, show=Entry.shown)
     if not shown:
         return None
     input = expose(
         txn,
         agent,
-        [Exposed.of(entry.ref, "gist", entry.gist) for entry in shown],
+        [Exposed.gist(entry.ref, entry.gist) for entry in shown],
         how=how,
         boundary=boundary,
         positions=deliveries.stops(agent, shown),
@@ -117,7 +117,7 @@ def _hand_over(txn: Txn, agent: str, modes: tuple[str, ...], boundary: str, how:
     return {
         "input": input,
         "boundary": boundary,
-        "items": [entry.model_dump(include={"ref", "gist", "sender", "body"}) for entry in shown],
+        "items": [{key: entry.shown()[key] for key in ("ref", "gist", "sender", "body")} for entry in shown],
         "behind": total - len(shown),
     }
 
@@ -200,18 +200,6 @@ def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None, 
             cause=[input],
             v=2,
         )
-
-
-class Confirm(Args):
-    input: Seq
-    boundary: str | None = None
-    evidence: str | None = None
-
-
-@op("delivery.confirm", on=lambda a: f"input/{a.input}", runtime=True)
-def confirm(txn: Txn, a: Confirm) -> None:
-    """Record that a driver saw an offer injected."""
-    confirmed(txn, a.input, a.boundary, a.evidence)
 
 
 @op("delivery.ready", query=True, runtime=True)

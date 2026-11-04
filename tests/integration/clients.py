@@ -91,7 +91,7 @@ async def a_spawn_and_the_call_that_made_it(team: Team, root: Path) -> tuple[Eve
         await in_state(session, "bob", "idle")
         await session.send("@bob", "go")
         await until(lambda: of_type(session, "turn.ended"), session)
-        spawned = next(event for event in await of_type(session, "agent.spawned") if event.agent == "w")
+        spawned = next(event for event in await of_type(session, "agent.spawned") if event.data["name"] == "w")
         tools = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "tool"]
 
     under = [item for item in tools if item.agent == "bob" and item.data["native_id"] in spawned.native.values()]

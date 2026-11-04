@@ -9,10 +9,11 @@ import pytest
 from pydantic import Field
 
 from platoon_harness import __version__
-from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Refusal, Refused, Txn, op
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Principal, Refusal, Refused, Txn, op
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.tools import ToolServer
+from platoon_harness.tools import ToolServer, delivery_text
 from platoon_harness.tools import mcp as tool_server
+from platoon_harness.tools.surface import harness_name
 
 from ..primitives.support import end_turn, events_of, grant, of_type, result_of, send, spawn, start_turn
 from .support import Client, connect, drained, enrolled, exchange, request, slept_until, text_of, tool_call, value_of
@@ -714,11 +715,11 @@ async def test_a_claim_shows_its_task_body_as_text(kernel, lead, worker):
 
     claimed = value_of(await worker[1].call("task_claim", {"queue": "tasks"}))
 
-    assert claimed["text"] == "what to do"
+    assert (claimed["ref"], claimed["body"], claimed["text"]) == ("task/tasks/1@1", True, "what to do")
     offered = [
         event for event in of_type(kernel, "context.offered", after=head) if event.data["items"][0]["form"] == "body"
     ]
-    assert offered[0].data["items"][0]["ref"] == claimed["body"]
+    assert offered[0].data["items"][0]["ref"] == "task/tasks/1@1"
 
 
 async def test_a_body_in_blobs_is_fetched_so_a_model_sees_text(kernel, tmp_path, lead):
@@ -741,7 +742,7 @@ async def test_what_the_surface_fetched_is_recorded_as_exposure(kernel, lead):
 
     items = [item for event in of_type(kernel, "context.offered", after=head) for item in event.data["items"]]
     assert [item["form"] for item in items] == ["gist", "body"]
-    assert items[1]["ref"].startswith(shown["body"] + "#L1-")
+    assert items[1]["ref"].startswith(shown["ref"] + "#L1-")
 
 
 async def test_a_long_body_is_cut_with_a_ref_saying_where_the_rest_is(kernel, lead):
@@ -752,7 +753,7 @@ async def test_a_long_body_is_cut_with_a_ref_saying_where_the_rest_is(kernel, le
 
     assert len(text_of(result).encode()) <= tool_server._RESULT_LIMIT
     shown = value_of(result)
-    assert shown["rest"].startswith(shown["body"] + "#L")
+    assert shown["rest"].startswith(shown["ref"] + "#L")
     assert shown["lines"] == 40_000
 
 
@@ -807,34 +808,41 @@ async def test_a_read_without_bodies_fetches_none(kernel, lead, worker):
     assert "text" not in read["entries"][0]
 
 
-async def test_a_binary_body_stays_null(kernel, lead):
-    sha256 = await kernel.put_body(b"\xff\xfe" * 100)
+async def posted(kernel: Kernel, lead: tuple[Principal, Client], data: bytes) -> tuple[str, str]:
+    """A board object of `lead`'s whose body is `data`, by its ref, and that body's hash."""
+    sha256 = await kernel.put_body(data)
+    post = {"board": "notes", "name": "it", "gist": "it", "body": f"sha256:{sha256}"}
+    return result_of(await kernel.submit(lead[0], "board.post", post))["ref"], sha256
 
-    shown = value_of(await lead[1].call("blob_get", {"ref": f"sha256:{sha256}"}))
+
+async def test_a_binary_body_stays_null(kernel, lead):
+    ref, _ = await posted(kernel, lead, b"\xff\xfe" * 100)
+
+    shown = value_of(await lead[1].call("blob_get", {"ref": ref}))
 
     assert shown["text"] is None
 
 
 async def test_a_redacted_body_stays_null(kernel, lead):
-    sha256 = await kernel.put_body(b"x" * 100_000)
+    ref, sha256 = await posted(kernel, lead, b"x" * 100_000)
     result_of(await kernel.submit(kernel.runtime, "body.tombstone", {"sha256": sha256}))
 
-    result = await lead[1].call("blob_get", {"ref": f"sha256:{sha256}"})
+    result = await lead[1].call("blob_get", {"ref": ref})
 
     assert result["isError"] and "not_found" in text_of(result)
 
 
 async def test_a_body_too_large_to_read_stays_null(kernel, lead, monkeypatch):
     monkeypatch.setattr(tool_server, "_BODY_READ_LIMIT", 70_000)
-    sha256 = await kernel.put_body(b"x" * 100_000)
+    ref, _ = await posted(kernel, lead, b"x" * 100_000)
 
-    assert value_of(await lead[1].call("blob_get", {"ref": f"sha256:{sha256}"}))["text"] is None
+    assert value_of(await lead[1].call("blob_get", {"ref": ref}))["text"] is None
 
 
 async def test_one_line_too_long_for_a_result_stays_null_and_says_how_many(kernel, lead):
-    sha256 = await kernel.put_body(b"x" * 100_000)
+    ref, _ = await posted(kernel, lead, b"x" * 100_000)
 
-    assert value_of(await lead[1].call("blob_get", {"ref": f"sha256:{sha256}"}))["text"] is None
+    assert value_of(await lead[1].call("blob_get", {"ref": ref}))["text"] is None
 
 
 async def test_a_result_with_no_body_is_left_alone(lead):
@@ -1160,3 +1168,46 @@ async def test_a_refusal_names_only_tools_the_token_holds(kernel, server, lead):
     result = await client.call("message_send", {"to": "@nobody", "gist": "hello"})
 
     assert result["isError"] and "agent_list" not in text_of(result) and "channel_list" not in text_of(result)
+
+
+# What a model is shown names everything by an event's ref.
+
+
+@pytest.mark.parametrize("surface", ["mcp", "mcp__ph", "ph"])
+async def test_every_ref_a_model_is_shown_is_an_event_ref(kernel, server, lead, worker, surface):
+    """Results, refusals, notices and handovers, on each surface, hold no body's hash: a body is read by the ref of the
+    event that carries it."""
+    as_surface = [Client(f"{server.url}?surface={surface}", client.token) for client in (lead[1], worker[1])]
+    boss, w1 = as_surface
+    _, steered = await enrolled(kernel, server, "s1", role="steered", by=lead[0])
+    steered = Client(f"{server.url}?surface={surface}", steered.token)
+    long = "".join(f"line {number}\n" for number in range(20_000))
+    hash_of_body = f"sha256:{await kernel.put_body(b'held apart')}"
+    shown: list[dict] = [
+        await boss.call("board_post", {"board": "notes", "name": "spec", "gist": "v1", "body": long}),
+        await boss.call("message_send", {"to": "@w1", "gist": "read this", "body": "short words"}),
+        await boss.call("task_add", {"queue": "tasks", "gist": "do it", "body": "how to do it"}),
+    ]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "w1"}))
+    await start_turn(kernel, "s1")
+    await send(kernel, lead[0], "@s1", "change course", body=f"sha256:{await kernel.put_body(b'the new course')}")
+    shown += [
+        await steered.call("peers"),
+        await w1.call("message_read", {"bodies": True, "after": 0}),
+        await w1.call("board_get", {"board": "notes", "name": "spec"}),
+        await w1.call("board_query", {"board": "notes"}),
+        await w1.call("task_claim", {"queue": "tasks"}),
+        await w1.call("task_list", {"queue": "tasks"}),
+        await w1.call("task_complete", {"queue": "tasks", "gist": "done", "body": "what was done"}),
+        await w1.call("message_send", {"to": "@lead", "gist": "x", "based_on": [hash_of_body]}),
+        await w1.call("blob_get", {"ref": hash_of_body}),
+    ]
+    rest = value_of(shown[5])["rest"]
+    shown.append(await w1.call("blob_get", {"ref": rest}))
+
+    texts = [block["text"] for result in shown for block in result["content"]]
+    words = delivery_text(handed, harness_name("ph"), kernel.ops, kernel.ops)
+    assert [text for text in [*texts, words] if "sha256:" in text] == []
+    assert any("change course" in text for text in texts), "a steer notice was carried"
+    assert any("Refused invalid" in text for text in texts)
+    assert value_of(shown[4])["entries"][0]["ref"] == "inbox/w1@1"

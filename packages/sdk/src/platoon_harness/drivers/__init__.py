@@ -122,12 +122,13 @@ class AgentSpec(Model):
 
 
 class Offered(Model):
-    """One entry handed over: its ref, who sent it, what a reader sees first, and the ref of any body."""
+    """One entry handed over: its ref, who sent it, what a reader sees first, and whether it has a body, which
+    `blob.get` reads by its ref."""
 
     ref: str
     gist: str
     sender: str | None = None
-    body: str | None = None
+    body: bool = False
 
 
 class Delivery(Model):

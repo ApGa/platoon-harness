@@ -4,6 +4,21 @@
 
 ### Added
 
+- Refs on everything a model is shown. A ref is `stream@version`, with `#La-b` for lines of that event's body, and every result,
+  handover, notice and refusal names what it shows by one: a message row says `body: true` and gives no hash, `rest` is an event
+  ref with a range, and `blob.get` takes the ref of the event that carries a body. Every write of content returns the ref it made,
+  `task.claim` and `task.list` name a task by its `task.added` ref and a result by `result_ref`, and `agent.spawn` returns
+  `agent/<name>@1`. See ADR 0036.
+- A message that repeats another event's words is shown and handed over by that event's ref, and names it as its cause: a board's
+  or queue's announce by the write, a child's report by its `agent.finished`, its turn's last message, or else its end, and a goal
+  told again by its spawn. `reply_to` finds an entry by the ref it was shown by. `message.sent` is at payload version 3, and its
+  data names that ref as `carries`.
+- `based_on` on `agent.spawn` and `agent.finish`, so all eight writes of content take it, and every citation is checked: a ref must
+  name an existing event, and a range lines of that event's text body, or the whole write is refused naming it. A body in `blobs/`
+  keeps its range as given, and a citation of something its citer was never handed is kept as its claim. `cited` is the check, for
+  an extension's own writes.
+- `blob.get` reads the body of an event its caller was handed or made, and answers any other `not_found`, as a miss; a person or a
+  program reads any. `blob.hash`, a runtime-only query, lets the tool plane read a body in `blobs/` without a model seeing its hash.
 - SwarmChat's Board and Map over a session: `view_posts` and `view_activity` answer from the projection in SwarmChat's shapes,
   posts from a chat or from every channel and group, sorted new or active, and messages over time, by the journal's times. A
   session's messages take no reactions, so a post's votes are null, hot and top are refused, and the page draws them and each
@@ -202,6 +217,13 @@
 
 ### Changed
 
+- `agent.spawned`, at payload version 3, carries its spawner as its envelope agent, so a spawn is its spawner's, in its spawner's
+  turn and context version, and the `Channels` fold reads the child from `data.name`. `agent.instructed`, at version 2, names its
+  text `body`, as every content event does, and `agent.instruct` takes `body`. `context.offered` is at version 3, its items naming
+  events by their refs. `Offered.body` says whether an entry has a body. SwarmChat's projection is version 5, naming a carried
+  message by what it carries.
+- Tool descriptions describe and never ask: `based_on` reads "Refs this write rests on.", and `board.get` no longer says to cite.
+  A refusal that said to store a body and cite its hash says to store a body.
 - The `changes` report has left the driver vocabulary, with `Changed` and `change.recorded`, as only the runtime observes a
   workspace. The `changes` view's rows lost `agent`, `tests` and `since_mark`: a client compares `seq` with the person's mark.
 - Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before, and a session folder
@@ -311,6 +333,11 @@
   more. `Kernel.end_delta(agent, seq)` ends it. A tail holds 256 KiB, where a ring held 256 frames. bug-clients-2, -4 and -5.
 - The writer resolves a batch's acks before it wakes followers, so what a caller does on its ack comes before a follower on its loop
   looks.
+
+### Removed
+
+- `delivery.confirm`, which only tests used: a driver's `input.delivered`, through `agent.report`, is the one way to confirm a
+  handover.
 
 ### Fixed
 

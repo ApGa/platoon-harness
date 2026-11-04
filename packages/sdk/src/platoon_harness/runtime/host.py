@@ -330,7 +330,7 @@ class Host:
 
     async def _instructed(self, agent: str, text: str | None) -> None:
         """Journal what a harness is told, as the body it is, before it hears it."""
-        args = {"agent": agent, "instructions": await self._stored(text)}
+        args = {"agent": agent, "body": await self._stored(text)}
         if (recorded := await self.insist("agent.instruct", args)).refusal is not None:
             raise DriverError(f"what {agent} is told could not be journaled: {recorded.refusal.detail}")
 

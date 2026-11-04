@@ -808,6 +808,7 @@ For example:
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--stays, --no-stays`: Whether it stays after its task for the next message. Left out, its role decides, else it does not.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent status
@@ -937,9 +938,9 @@ The `blob` ops, each on one session, with the arguments an agent's `ph blob.<op>
 platoon-harness blob get --ref STR SESSION
 ```
 
-Read a stored body's text: pass a `body` or `rest` from any result as `--ref`.
+Read the body an event carries: pass its `--ref`, or a `rest`, from any result.
 
-A long body comes back cut: `lines` says how many exist and `rest` is the ref to read on with. `text` is null for a binary body. Refused `not_found` when it does not exist or was redacted. `invalid`, with `lines`, for a range past the end.
+An agent reads what it was handed or wrote. A long body comes back cut: `lines` says how many exist and `rest` is the ref to read on with. `text` is null for a binary body. Refused `not_found` when there is no such body to read, or it was redacted. `invalid`, with `lines`, for a range past the end.
 
 For example:
 
@@ -951,7 +952,7 @@ For example:
 
 **Parameters**:
 
-* `--ref`: A `body` or `rest` from a result. **[required]**
+* `--ref`: A `--ref` or `rest` from a result. **[required]**
 
 ### platoon-harness board
 
@@ -965,7 +966,7 @@ platoon-harness board get --board STR --name STR [OPTIONS] SESSION
 
 Read one object, its latest version or `--version`, and of a text body the lines of `--range`, written `L10-40`.
 
-A long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `platoon-harness blob get` to read on. Cite `ref`. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the board, object or version does not exist.
+A long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `platoon-harness blob get` to read on. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the board, object or version does not exist.
 
 For example:
 
@@ -1008,7 +1009,7 @@ For example:
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--fields`: Short JSON values. `platoon-harness board query` can match them with `where`. As JSON.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness board query
@@ -1066,7 +1067,7 @@ For example:
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--fields`: Short JSON values. `platoon-harness board query` can match them with `where`. As JSON.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--expected-version`: The version you read. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
@@ -1283,7 +1284,7 @@ platoon-harness message read [OPTIONS] SESSION
 
 Read your inbox, or `#channel` or `+group`, past `--after`, a `cursor` from an earlier read, which an agent's read acks.
 
-Left out, an agent reads on from where it left off. `--sender` and `--thread` filter, and a filtered read leaves unread what it skipped. `--bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or `body` to `platoon-harness blob get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `platoon-harness channel list` to see yours. `invalid` for an `--after` past every event: leave it out.
+Left out, an agent reads on from where it left off. `--sender` and `--thread` filter, and a filtered read leaves unread what it skipped. `--bodies` adds body `text`, recorded apart from gists; a long one comes back cut, with `rest` a ref, and past what one result holds `text` is null. Pass `rest` or the entry's `ref` to `platoon-harness blob get`. `behind` counts what is left, up to 4096. Refused `not_permitted` when you do not read this channel. Call `platoon-harness channel list` to see yours. `invalid` for an `--after` past every event: leave it out.
 
 For example:
 
@@ -1328,7 +1329,7 @@ For example:
 * `--body-file`: A file whose bytes are the body.
 * `--thread`: A thread id. `--reply-to` sets it for you.
 * `--reply-to`: The `ref` of the entry you answer.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness ops
@@ -1401,7 +1402,7 @@ For example:
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness task claim
@@ -1454,7 +1455,7 @@ For example:
 * `--gist`: The result, at most 280 characters. `platoon-harness task list` shows it.
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness task fail
@@ -1483,7 +1484,7 @@ For example:
 * `--gist`: The result, at most 280 characters. `platoon-harness task list` shows it.
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
-* `--based-on`: Refs this rests on, such as a `ref` you read.
+* `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness task list

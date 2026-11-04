@@ -20,6 +20,7 @@ from .common import (
     Name,
     Seq,
     address,
+    cited,
     decoded,
     expose_read,
     fitted,
@@ -158,16 +159,16 @@ class Revise(Post):
 def _write(txn: Txn, event_type: str, a: Post) -> dict[str, Any]:
     channel = _board(txn, a.board)
     if size_of(a.fields) > _FIELDS_LIMIT:
-        raise Refused("invalid", f"fields exceed {_FIELDS_LIMIT} bytes; store a body and cite its hash")
+        raise Refused("invalid", f"fields exceed {_FIELDS_LIMIT} bytes: put the rest in `body`")
     event = txn.emit(
         event_type,
         f"board/{a.board}/{a.name}",
         gist=a.gist,
-        based_on=a.based_on,
+        based_on=cited(txn, a.based_on),
         refs=[a.body] if a.body else (),
         data={"board": a.board, "name": a.name, "body": a.body, "fields": a.fields},
     )
-    announce(txn, channel, f"{a.name}: {a.gist}", event.seq)
+    announce(txn, channel, f"{a.name}: {a.gist}", event)
     return {"ref": f"{event.stream}@{event.version}", "version": event.version}
 
 
@@ -204,28 +205,29 @@ class Get(Args):
 @op("board.get", on=lambda a: f"board/{a.board}/{a.name}", exposes=True, tool=True)
 def get(txn: Txn, a: Get) -> dict[str, Any]:
     """Read one object, its latest version or `version`, and of a text body the lines of `range`, written `L10-40`. A
-    long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `blob.get` to read on. Cite
-    `ref`. `text` is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when
-    the board, object or version does not exist."""
+    long body comes back cut: `lines` says how many exist and `rest` is a ref. Pass it to `blob.get` to read on. `text`
+    is null for a binary body. Refused `invalid`, with `lines`, for a range past the end. `not_found` when the board,
+    object or version does not exist."""
     _board(txn, a.board)
     row = txn.view(Boards).get(a.board, a.name, a.version)
     if row is None:
         raise Refused("not_found", f"no such version of {a.name} on {a.board}")
     ref = _ref(row)
+    fields = json.loads(row["fields"])
     shown = {
         "ref": ref,
         "version": row["version"],
         "gist": row["gist"],
-        "fields": json.loads(row["fields"]),
-        "body": row["body"],
+        "fields": fields,
+        "body": row["body"] is not None,
     }
-    exposed = [Exposed.of(ref, "gist", row["gist"])]
+    exposed = [Exposed.gist(ref, row["gist"], fields)]
     if row["body"] is not None:
         shown["text"] = None  # A surface fetches what an op may not read.
         data = inline_body(txn, row["body"])
         text = None if data is None else decoded(data)
         if text is not None:
-            cut = lines_of(row["body"], text, a.range, RESULT_LIMIT - size_of(shown))
+            cut = lines_of(ref, text, a.range, RESULT_LIMIT - size_of(shown))
             shown |= cut.shown()
             if cut.text is not None:
                 ref = shown["ref"] = f"{ref}{cut.span}"
@@ -280,7 +282,8 @@ def query(txn: Txn, a: Query) -> dict[str, Any]:
 
     kept = fitted(rows, show=shown)
     positions = {f"board/{a.board}/{row['name']}": row["seq"] for row in kept}
-    expose_read(txn, [Exposed.of(_ref(row), "gist", row["gist"]) for row in kept], positions=positions)
+    exposed = [Exposed.gist(_ref(row), row["gist"], json.loads(row["fields"])) for row in kept]
+    expose_read(txn, exposed, positions=positions)
     more = len(kept) < len(rows) or len(rows) == a.limit
     return {
         "results": [shown(row) for row in kept],

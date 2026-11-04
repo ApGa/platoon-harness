@@ -344,13 +344,21 @@ class Session:
     # Lifecycle.
 
     async def spawn(
-        self, name: str, role: str, goal: str = "", *, body: str | bytes | None = None, stays: bool | None = None
+        self,
+        name: str,
+        role: str,
+        goal: str = "",
+        *,
+        body: str | bytes | None = None,
+        stays: bool | None = None,
+        based_on: Sequence[str] = (),
     ) -> dict[str, Any]:
-        """Start an agent in a role. With no `goal` and no `body` it starts idle until a message wakes it. `stays` says
-        whether it is told to stay after its task for the next message, rather than to finish: left out, its role
-        decides, else it does not."""
+        """Start an agent in a role, and give its `ref`. With no `goal` and no `body` it starts idle until a message
+        wakes it. `stays` says whether it is told to stay after its task for the next message, rather than to finish:
+        left out, its role decides, else it does not."""
+        stored = await self._stored(body)
         return await self._do(
-            "agent.spawn", name=name, child_role=role, goal=goal, body=await self._stored(body), stays=stays
+            "agent.spawn", name=name, child_role=role, goal=goal, body=stored, stays=stays, based_on=based_on
         )
 
     async def status(self, agent: str | None = None) -> dict[str, Any]:
@@ -763,7 +771,7 @@ class Session:
         return await self._over_link(lambda link: link.get_body(ref.removeprefix("sha256:"), limit))
 
     async def blob(self, ref: str) -> dict[str, Any]:
-        """A stored body's text, by a `body` or `rest` from any result."""
+        """The text of the body an event carries, by the event's ref or a `rest` from any result."""
         return await self._ask("blob.get", ref=ref)
 
     async def tombstone(self, ref: str) -> None:

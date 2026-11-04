@@ -73,7 +73,7 @@ async def test_a_team_s_template_is_what_its_agent_is_told_and_acts_on(harness, 
     async with Session.start(team, root=tmp_path / "root", cwd=seeded(tmp_path / "work"), plan_login=True) as session:
         events, used = await ran(session, "What is two plus two? Reply in one short sentence.")
         instructed = next(event for event in events if event.type == "agent.instructed")
-        told = (await session.get_body(instructed.data["instructions"])).decode()
+        told = (await session.get_body(instructed.data["body"])).decode()
 
     words = [event.gist for event in events if event.type == "item.recorded" and event.data["kind"] == "message"]
     print("words:", words)

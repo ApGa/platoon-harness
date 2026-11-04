@@ -20,7 +20,7 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
-VERSION = 4
+VERSION = 5
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -419,7 +419,7 @@ class Projection:
             data["body"],
             bodies,
             stream=stream,
-            ref=f"{stream}@{event.version}",
+            ref=data.get("carries") or f"{stream}@{event.version}",
             parent=self._parent(chat, data.get("reply_to"), data.get("thread")),
             extra={"mentions": [name_of(mention)]} if mention else None,
         )

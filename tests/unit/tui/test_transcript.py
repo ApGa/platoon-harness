@@ -147,8 +147,17 @@ def test_an_agent_s_focus_reads_every_agent_s_stream_however_many_children_it_ha
 async def test_a_lead_draws_its_own_children_and_no_one_else_s():
     journal = Journal(
         [
-            event(1, "agent/mine", "agent.spawned", "mine spawned", {"parent": "agent:lead"}, agent="mine"),
-            event(2, "agent/theirs", "agent.spawned", "theirs spawned", {"parent": "agent:other"}, agent="theirs"),
+            event(
+                1, "agent/mine", "agent.spawned", "mine spawned", {"parent": "agent:lead", "name": "mine"}, agent="lead"
+            ),
+            event(
+                2,
+                "agent/theirs",
+                "agent.spawned",
+                "theirs spawned",
+                {"parent": "agent:other", "name": "theirs"},
+                agent="other",
+            ),
             event(3, "agent/theirs", "agent.ended", "theirs finished", {"status": "finished"}, agent="theirs"),
             event(4, "agent/mine", "agent.ended", "mine finished", {"status": "finished"}, agent="mine"),
             event(5, "agent/before", "agent.ended", "before finished", {"status": "finished"}, agent="before"),

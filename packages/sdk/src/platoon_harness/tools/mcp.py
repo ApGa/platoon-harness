@@ -70,10 +70,9 @@ def _rows(result: Any) -> Iterator[dict[str, Any]]:
 
 
 def _unread(row: dict[str, Any]) -> str | None:
-    """The body an op could not read, which it marks by leaving `text` null beside the body's ref."""
-    ref = row.get("body") or row.get("ref")
-    unread = "text" in row and row["text"] is None and isinstance(ref, str) and ref.startswith("sha256:")
-    return ref if unread else None
+    """The ref of the event whose body an op could not read, which it marks by leaving `text` null beside the ref."""
+    ref = row.get("ref")
+    return ref if "text" in row and row["text"] is None and isinstance(ref, str) else None
 
 
 def _size(value: Any) -> int:
@@ -223,7 +222,7 @@ class ToolServer(Server[_Request]):
         try:
             outcome = await self._run(request.principal, tool, arguments, key, native)
             if outcome.refusal is None:
-                finished = await self._finish(request, tool, arguments, outcome.result)
+                finished = await self._finish(request, tool, arguments, outcome.result, native)
                 outcome = outcome.model_copy(update={"result": finished})
         except Refused as refused:
             outcome = Outcome(op=tool.op.name, args_hash="", refusal=refused.refusal)
@@ -234,7 +233,7 @@ class ToolServer(Server[_Request]):
             blocks = [refusal_text(outcome.refusal, request.surface, kernel.ops, held)]
         if native is None and outcome.seq is not None and outcome.seq <= head:
             blocks.append(_REPEATED)
-        if (notices := await self._notices(request)) is not None:
+        if (notices := await self._notices(request, native)) is not None:
             blocks.append(notices)
         content = [{"type": "text", "text": block} for block in blocks]
         return {"content": content, "isError": outcome.refusal is not None}
@@ -273,7 +272,7 @@ class ToolServer(Server[_Request]):
                 stored[field] = f"sha256:{await self._kernel.put_body(data)}"
         return stored
 
-    async def _finish(self, request: _Request, tool: _Tool, arguments: dict[str, Any], result: Any) -> Any:
+    async def _finish(self, request: _Request, tool: _Tool, arguments: dict[str, Any], result: Any, native: Any) -> Any:
         """Do what only this layer can do with a result: hold a wait open, read what no op may, and say what to do
         `next` in the words of its surface, as a refusal says it."""
         if tool.op.name == "wait" and result["state"] == "pending":
@@ -281,43 +280,49 @@ class ToolServer(Server[_Request]):
             if held["state"] == "released":
                 request.told.append(held["id"])
             return held
-        await self._fill(request.principal, result, arguments)
+        await self._fill(request.principal, result, arguments, native)
         if isinstance(result, dict) and isinstance(step := result.get("next"), str):
             kernel = self._kernel
             result["next"] = taught(step, request.surface, kernel.ops, held_tools(kernel, request.principal))
         return result
 
-    async def _fill(self, principal: Principal, result: Any, arguments: dict[str, Any]) -> None:
-        """Add the bodies an op could not read, as far as one result has room."""
+    async def _fill(self, principal: Principal, result: Any, arguments: dict[str, Any], native: Any) -> None:
+        """Add the bodies an op could not read, as far as one result has room. A row that is the body itself, with no
+        `body` of its own to say it has one, then names the lines it shows."""
+        kernel = self._kernel
         room = _RESULT_LIMIT - _size(result)
         for row in _rows(result):
             ref = _unread(row)
             if ref is None or room <= 0:
                 continue
-            body, _, span = ref.partition("#")
+            event, _, span = ref.partition("#")
+            body = kernel.query(kernel.runtime, "blob.hash", {"ref": event})
+            if body.refusal is not None:
+                continue
             try:
-                text = self._kernel.get_body(body.removeprefix("sha256:"), limit=_BODY_READ_LIMIT).decode()
+                text = kernel.get_body(body.result.removeprefix("sha256:"), limit=_BODY_READ_LIMIT).decode()
             except (Refused, UnicodeDecodeError):
                 continue  # Binary, redacted or too large: `text` stays null, which is true.
-            cut = lines_of(body, text, span or arguments.get("range"), room)
-            if cut.text is None or await self._offered(principal, f"{body}{cut.span}", cut.text):
+            cut = lines_of(event, text, span or arguments.get("range"), room)
+            if cut.text is None or await self._offered(principal, f"{event}{cut.span}", cut.text, native):
                 row |= cut.shown()
                 room -= _size(cut.text)
-                if row.get("ref") == ref:
-                    row["ref"] = f"{body}{cut.span}"
+                if "body" not in row:
+                    row["ref"] = f"{event}{cut.span}"
 
-    async def _offered(self, principal: Principal, ref: str, text: str) -> bool:
-        """Record what is about to be shown, because an agent's read is evidence and an ack follows its commit."""
+    async def _offered(self, principal: Principal, ref: str, text: str, native: Any) -> bool:
+        """Record what is about to be shown, under the call that shows it, because an agent's read is evidence and an
+        ack follows its commit."""
         if principal.kind != "agent":
             return True
         kernel = self._kernel
         digest = hashlib.sha256(text.encode()).hexdigest()
         offer = {"agent": principal.name, "ref": ref, "digest": digest}
-        return (await kernel.submit(kernel.runtime, "blob.offer", offer)).refusal is None
+        return (await kernel.submit(kernel.runtime, "blob.offer", offer, native=native)).refusal is None
 
-    async def _notices(self, request: _Request) -> str | None:
-        """Hand over pending steer notices, which gives a tool boundary on any harness whose tools are visible. Asking
-        first means a call with nothing to carry journals nothing."""
+    async def _notices(self, request: _Request, native: Any) -> str | None:
+        """Hand over pending steer notices, under the call whose result carries them, which gives a tool boundary on
+        any harness whose tools are visible. Asking first means a call with nothing to carry journals nothing."""
         kernel = self._kernel
         principal = request.principal
         if principal.kind != "agent":
@@ -325,7 +330,8 @@ class ToolServer(Server[_Request]):
         agent = {"agent": principal.name}
         if not kernel.query(kernel.runtime, "delivery.pending", agent).result:
             return None
-        handed = (await kernel.submit(kernel.runtime, "delivery.offer", {**agent, "boundary": "tool"})).result
+        offer = {**agent, "boundary": "tool"}
+        handed = (await kernel.submit(kernel.runtime, "delivery.offer", offer, native=native)).result
         return (
             None if handed is None else notices_text(handed, request.surface, kernel.ops, held_tools(kernel, principal))
         )
