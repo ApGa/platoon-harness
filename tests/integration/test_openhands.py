@@ -7,7 +7,8 @@ from the lock and put its `bin` on PATH:
     UV_PROJECT_ENVIRONMENT=/somewhere/openhands uv sync --package platoon-harness-openhands --frozen
     PATH=/somewhere/openhands/bin:$PATH uv run pytest -m slow tests/integration/test_openhands.py
 
-No live model has run through this driver: all of this is what the SDK did on FakeModel.
+No live model has run through this driver: all of this is what the SDK did on FakeModel, but for one rule of the
+worker's turns, held on a stand-in of the SDK in the worker's own interpreter, as the tests import neither.
 """
 
 import asyncio
@@ -345,6 +346,101 @@ async def test_an_interrupt_while_an_approval_is_open_cuts_off_no_call_and_the_a
 
     assert cut.reason == "interrupted" and not heard.of(GapReport)
     assert not (spec.cwd / "ran").exists() and model.calls[-1].says("The turn ended before this ran.")
+
+
+LAST_TICKS = """
+import asyncio
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+from platoon_harness.config import Secret
+from platoon_harness.drivers import AgentSpec, Delivery
+
+sys.modules["platoon_harness_openhands.agent"] = agent = SimpleNamespace(ready=lambda _: ((), ()), pending=lambda _: [])
+from platoon_harness_openhands.worker import Worker
+
+
+class Conversation:
+    '''Of a conversation, what the worker touches: a run that finishes at once, a message that makes a finished one idle
+    again, and, after the first run, a delivery `ticks` turns of the loop later.'''
+
+    def __init__(self, worker, ticks):
+        self.state = SimpleNamespace(execution_status=SimpleNamespace(value="idle"), events=[], active_branch=list)
+        self.conversation_stats = SimpleNamespace(usage_to_metrics={})
+        self.id, self.sent, self.ran_late = "c", [], asyncio.Event()
+        self._worker, self._ticks = worker, ticks
+
+    def send_message(self, text):
+        self.sent.append(text)
+        if self.state.execution_status.value == "finished":
+            self.state.execution_status.value = "idle"
+
+    async def arun(self):
+        if "late" in self.sent:
+            self.ran_late.set()
+        self.state.execution_status.value = "finished"
+        if self.sent == ["first"]:
+            self._later(self._ticks)
+
+    def _later(self, ticks):
+        if ticks:
+            asyncio.get_running_loop().call_soon(self._later, ticks - 1)
+        else:
+            late = Delivery(input="42", boundary="model_call", text="late", items=())
+            asyncio.ensure_future(self._worker.deliver(late))
+
+    def pause(self):
+        pass
+
+    def interrupt(self):
+        pass
+
+    def close(self):
+        pass
+
+
+async def ran(ticks, folder):
+    worker = Worker()
+    conversation = Conversation(worker, ticks)
+    agent.start = lambda *_, **__: conversation
+    spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": folder, "folder": folder / str(ticks), "model": "m"}
+    heard = []
+
+    async def report(said):
+        heard.append(said)
+
+    await worker.start(AgentSpec.model_validate({**spec, "access": {"OPENAI_API_KEY": Secret("k")}}), report)
+    await worker.deliver(Delivery(input="41", boundary="turn", text="first", items=()))
+    try:
+        await asyncio.wait_for(conversation.ran_late.wait(), 5)
+    except TimeoutError:
+        return False
+    finally:
+        await worker.stop(1.0)
+    return True
+
+
+async def main(folder):
+    print(json.dumps({ticks: await ran(ticks, folder) for ticks in range(8)}))
+
+
+asyncio.run(main(Path(sys.argv[1])))
+"""
+"""A program for the worker's own interpreter: whether a delivery that came that many turns of the loop after a turn's
+last run returned was run by a run after it."""
+
+
+async def test_a_delivery_that_comes_as_a_turn_ends_is_run(tmp_path):
+    """One that came in the last ticks of a turn reached the conversation after the turn read its status, and no run
+    came after it."""
+    python = Path(str(shutil.which(WORKER))).with_name("python")
+    command = [str(python), "-I", "-c", LAST_TICKS, str(tmp_path)]
+    done = await asyncio.to_thread(subprocess.run, command, capture_output=True, text=True, timeout=TIMEOUT)
+
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout.splitlines()[-1]) == {str(ticks): True for ticks in range(8)}
 
 
 async def test_a_failed_model_call_is_not_retried_and_ends_the_turn_with_the_sdk_s_error(tmp_path):

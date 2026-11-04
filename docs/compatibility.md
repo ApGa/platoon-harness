@@ -278,7 +278,9 @@ by a driver landing; only the row below changes.
   message handed once `allow` came, before the next run, landed between the call and its result in the next request [L]. So one
   that comes while a run goes on asks the run to pause, which the SDK does after the step under way: the message then landed after
   the command's result, which one approval allowed [L]. One that waited through an approval missed the call right after the result
-  in the run measured, as the run that runs what was allowed may hear the pause only during that call [L].
+  in the run measured, as the run that runs what was allowed may hear the pause only during that call [L]. One handed in the
+  last ticks of a turn had reached the conversation with no run after it; now a run runs it at whichever of the first eight turns
+  of the loop it comes, on a stand-in of the SDK [L].
 - An interrupt during a stalled call ended the turn `interrupted` with `InterruptEvent`, and the next run sent the call again. Under a
   `tokens` limit the cut turn was charged its estimate and the session went on [L]. A steer it cut off had waited in the worker, and
   the runtime's next offer of it reached the model once [L]. A message handed between runs that only a call an interrupt cut carried
