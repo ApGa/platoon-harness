@@ -502,7 +502,7 @@ async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_p
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
-    assert child.attribution == "inferred"
+    assert set(child.model_dump(exclude={"type"})) == {"native", "parent"}
     assert len(heard.of(TurnEnded)) == 1
     usages = heard.of(Usage)
     assert {usage.scope for usage in usages} == {"call", "tree"}

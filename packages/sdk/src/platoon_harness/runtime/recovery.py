@@ -19,7 +19,7 @@ from .git import GitError
 from .host import GRACE, Host
 from .paths import agent_folder
 
-_CRASH = GapReport(plane="control", what="crash_window")
+_CRASH = GapReport(what="crash_window")
 
 log = logging.getLogger("platoon_harness.runtime")
 
@@ -112,7 +112,7 @@ async def _reconcile(host: Host, effect: Effect, agents: dict[str, dict[str, Any
         case "admit":
             await _fail(host, effect, "it was in flight when the runtime died, and an admission is never retried")
             if agent is not None:
-                await _say(host, agent["name"], GapReport(plane="model", what="crash_window"))
+                await _say(host, agent["name"], GapReport(what="crash_window"))
         case "workspace":  # Asked before a workspace was retried, so the shared one, and made again.
             await _finish(host, effect, await host.workspace(effect))
         case "launch" if agent is not None and agent["state"] != "spawning":

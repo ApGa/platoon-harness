@@ -293,7 +293,7 @@ def test_the_manifest_records_what_reproduces_a_session():
     assert Team.loads(manifest.team) == team
     assert manifest.topology_hash == team.topology.hash
     assert manifest.sdk_version == __version__
-    assert (manifest.team_schema, manifest.wire_protocol) == (1, 1)
+    assert (manifest.team_schema, manifest.wire_protocol) == (1, 2)
     assert [(component.group, component.name) for component in manifest.components] == [
         (DRIVERS, "a_kit:Driver"),
         (EXTENSIONS, "a_kit:extension"),

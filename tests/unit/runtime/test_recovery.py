@@ -131,7 +131,7 @@ async def test_an_admit_in_flight_is_never_retried_and_the_spawn_fails_with_a_ga
     assert len(calls) == 1
     assert (ending.agents[0]["status"], ending.reason) == ("failed", "agent_failed")
     assert "never retried" in failed[0].data["error"]
-    assert ending.gaps == ({"agent": "bob", "what": "crash_window", "plane": "model", "count": 1},)
+    assert ending.gaps == ({"agent": "bob", "what": "crash_window", "plane": "control", "count": 1},)
 
 
 async def test_an_admission_that_finished_is_asked_for_again_as_a_resume_and_the_spawn_goes_on(tmp_path):
@@ -476,7 +476,8 @@ async def test_a_delivery_that_landed_and_began_its_turn_counts_as_delivered(tmp
 
         assert finished[0].data["evidence"] == "reconcile"
         assert len(await of_type(session, "context.offered")) == 1
-        assert (await of_type(session, "turn.lost"))[0].data == {"gap": "crash_window"}
+        assert (await of_type(session, "turn.lost"))[0].data is None
+        assert [gap.data["what"] for gap in await of_type(session, "gap.recorded")] == ["crash_window"]
 
 
 # Answer.

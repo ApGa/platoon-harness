@@ -52,7 +52,7 @@ RAW = """
 DESCRIBING = """
     for frame in frames():
         if frame["method"] == "describe":
-            reply(frame, {"protocol": 1, "name": "raw"})
+            reply(frame, {"protocol": 2, "name": "raw"})
         elif frame["method"] == "start":
             reply(frame, {"native": "n"})
             break
@@ -138,7 +138,7 @@ async def test_describe_starts_no_harness_and_is_asked_once(tmp_path):
         f"""
         open({str(count)!r}, "a").write("x")
         for frame in frames():
-            reply(frame, {{"protocol": 1, "name": "raw", "capabilities": {{"persistent": True}}}})
+            reply(frame, {{"protocol": 2, "name": "raw", "capabilities": {{"persistent": True}}}})
     """,
     )
     driver = WireDriver(command)
@@ -158,7 +158,7 @@ async def test_a_program_takes_what_its_driver_names_of_ours_to_describe_itself_
         for frame in frames():
             with open({str(seen)!r}, "a") as file:
                 file.write(json.dumps([frame["method"], os.environ.get("NAMED"), os.environ.get("UNNAMED")]) + "\\n")
-            reply(frame, {{"protocol": 1, "name": "raw"}} if frame["method"] == "describe" else None)
+            reply(frame, {{"protocol": 2, "name": "raw"}} if frame["method"] == "describe" else None)
     """,
     )
     driver = WireDriver(command, ["NAMED"])
@@ -233,7 +233,7 @@ async def test_a_file_python_cannot_find_says_so(tmp_path):
 @pytest.mark.parametrize(
     "answer",
     [
-        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': {'protocol': 1, 'name': 5}}), flush=True)",
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': {'protocol': 2, 'name': 5}}), flush=True)",
         "print(json.dumps([1, 2]), flush=True)",
         "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'error': 'no'}), flush=True)",
         "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': 'yes'}), flush=True)",
@@ -273,7 +273,7 @@ async def test_an_unknown_frame_is_native_plus_a_gap(tmp_path, frame):
     driver, heard = await started(tmp_path, command)
 
     native = await heard.until(Native)
-    await heard.until(GapReport, lambda gap: (gap.plane, gap.what) == ("control", "unknown_update"))
+    await heard.until(GapReport, lambda gap: gap.what == "unknown_update")
     await driver.stop(2)
 
     assert native.kind == "frame"

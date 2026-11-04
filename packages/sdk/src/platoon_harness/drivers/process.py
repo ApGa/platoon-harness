@@ -477,7 +477,7 @@ class Process:
         if not self._sealed:
             self._sealed = True
             self._enqueue(Native(kind="stream", raw=self.redact(why)[:RAW_LIMIT]))
-            self._enqueue(GapReport(plane="control", what="stream_lost"))
+            self._enqueue(GapReport(what="stream_lost"))
             self._stop_soon(_LOST_GRACE)
 
     def _read_ended(self, reading: asyncio.Task[None]) -> None:
@@ -576,7 +576,7 @@ class Process:
                 async with asyncio.timeout(grace):
                     await self.exited()
         if self._record.state() != "gone" and not await _termed(self._record.pid, grace):
-            self._enqueue(GapReport(plane="control", what="crash_window"))
+            self._enqueue(GapReport(what="crash_window"))
             await _killed(self._record.pid)
         await _end_marked((self._folder,), max(deadline - loop.time(), 0.0))
         (self._folder / RECORD).unlink(missing_ok=True)

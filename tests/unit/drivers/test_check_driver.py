@@ -552,7 +552,7 @@ class Parent(ScriptedDriver):
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         await super().start(spec, report)
         if self._seen:
-            await report(ChildSeen(native="child-1", attribution="inferred"))
+            await report(ChildSeen(native="child-1"))
 
 
 async def test_a_child_that_is_reported_passes(tmp_path):

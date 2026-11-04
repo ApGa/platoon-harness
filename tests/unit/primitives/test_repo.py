@@ -225,6 +225,7 @@ async def test_a_look_that_fails_records_workspace_unobserved_and_no_change(kern
     assert gap.data == {
         "plane": "control",
         "what": "workspace_unobserved",
+        "since": None,
         "why": "git status failed: index is corrupt",
     }
     assert [event for event in events_of(kernel) if event.stream == "repo/app"] == []

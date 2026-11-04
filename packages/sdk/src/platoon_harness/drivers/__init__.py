@@ -181,10 +181,6 @@ def text_of(content: str | Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(block["text"] for block in content if "text" in block)
 
 
-def unknown_frame(
-    kind: str, raw: str, plane: Literal["control", "tool", "model"] = "control"
-) -> tuple[Native, GapReport]:
+def unknown_frame(kind: str, raw: str) -> tuple[Native, GapReport]:
     """What a frame nobody's vocabulary covers becomes: the frame, as far as it fits, and the gap it leaves."""
-    return Native(kind=kind, raw=raw[:RAW_LIMIT], cut=max(len(raw) - RAW_LIMIT, 0)), GapReport(
-        plane=plane, what="unknown_update"
-    )
+    return Native(kind=kind, raw=raw[:RAW_LIMIT], cut=max(len(raw) - RAW_LIMIT, 0)), GapReport(what="unknown_update")

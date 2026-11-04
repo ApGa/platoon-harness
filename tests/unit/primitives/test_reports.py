@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from platoon_harness import drivers, team
+from platoon_harness.kernel import ModelRef
 from platoon_harness.primitives import (
     RAW_LIMIT,
     REPORTS,
@@ -59,8 +60,8 @@ EVERY_REPORT = [
     ModelCall(call_id="c1", model="m", purpose="compaction"),
     Usage(tokens=14, usd=0.5, label="provider", scope="tree", call_id="c1"),
     Compacted(forgotten=("e1", "e2"), summary="what it kept"),
-    ChildSeen(native="thread-2", parent="thread-1", attribution="inferred"),
-    GapReport(plane="model", what="hidden_call"),
+    ChildSeen(native="thread-2", parent="thread-1"),
+    GapReport(what="hidden_call"),
     Native(kind="frame", raw="???", cut=3),
     Exited(reason="gone"),
 ]
@@ -89,9 +90,10 @@ def test_the_vocabulary_is_written_in_the_architecture_in_full():
         '{"type": "ready", "levels": {"trainable": true}}',
         '{"type": "ready", "persistent": true}',
         '{"type": "usage"}',
-        '{"type": "gap", "plane": "nowhere", "what": "stream_lost"}',
-        '{"type": "gap", "plane": "control", "what": "a word nobody knows"}',
-        '{"type": "child.seen", "native": "c", "attribution": "guessed"}',
+        '{"type": "gap", "plane": "control", "what": "stream_lost"}',
+        '{"type": "gap", "what": "a word nobody knows"}',
+        '{"type": "gap", "what": "exposure_unconfirmed"}',
+        '{"type": "child.seen", "native": "c", "attribution": "inferred"}',
         '{"text": "no type"}',
     ],
 )
@@ -214,6 +216,28 @@ async def test_a_model_call_with_an_id_stamps_the_envelope(kernel):
     assert event.data == {"call_id": "c1", "model": "m", "purpose": None}
 
 
+def test_model_ref_names_only_the_call():
+    assert set(ModelRef.model_fields) == {"call_id"}
+    with pytest.raises(ValueError):
+        ModelRef()
+
+
+def test_an_old_model_ref_row_reads_unchanged():
+    written = {"policy": None, "version": None, "call_id": "msg_1", "tool_call_id": None, "token_span": None}
+
+    assert ModelRef.model_validate(written) == ModelRef(call_id="msg_1")
+
+
+async def test_model_called_carries_its_harness_s_id_verbatim_or_none(kernel):
+    await spawn(kernel, "bob")
+
+    await report(kernel, "bob", "model.call", call_id="msg_01AbC/=")
+    await report(kernel, "bob", "model.call")
+
+    named, unnamed = of_type(kernel, "model.called")[-2:]
+    assert (named.model, unnamed.model) == (ModelRef(call_id="msg_01AbC/="), None)
+
+
 async def test_a_model_call_with_no_id_fabricates_none(kernel):
     await spawn(kernel, "bob")
 
@@ -322,13 +346,14 @@ async def test_usage_keeps_its_scope_and_label(kernel):
     assert (data["scope"], data["label"]) == ("tree", "lower_bound")
 
 
-async def test_a_native_child_is_recorded_and_stays_on_its_parent(kernel):
+async def test_child_seen_claims_no_attribution(kernel):
     await spawn(kernel, "bob")
 
-    await report(kernel, "bob", "child.seen", native="thread-2", parent="thread-1", attribution="inferred")
+    await report(kernel, "bob", "child.seen", native="thread-2", parent="thread-1")
 
     event = of_type(kernel, "child.seen")[-1]
-    assert event.data == {"native": "thread-2", "parent": "thread-1", "attribution": "inferred"}
+    assert set(ChildSeen.model_fields) == {"type", "native", "parent"}
+    assert event.data == {"native": "thread-2", "parent": "thread-1"}
     assert [row["agent"] for row in result_of(kernel.query(agent("bob"), "agent.list", {}))] == ["bob"]
 
 
@@ -336,7 +361,7 @@ async def test_a_native_frame_is_recorded_as_it_came(kernel):
     await spawn(kernel, "bob")
 
     await report(kernel, "bob", "native", kind="frame", raw="{]", cut=0)
-    await report(kernel, "bob", "gap", plane="control", what="unknown_update")
+    await report(kernel, "bob", "gap", what="unknown_update")
 
     assert of_type(kernel, "native.recorded")[-1].data == {"kind": "frame", "raw": "{]", "cut": 0}
-    assert of_type(kernel, "gap.recorded")[-1].data == {"plane": "control", "what": "unknown_update"}
+    assert of_type(kernel, "gap.recorded")[-1].data == {"plane": "control", "what": "unknown_update", "since": None}

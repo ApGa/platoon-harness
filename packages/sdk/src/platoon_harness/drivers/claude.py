@@ -386,8 +386,8 @@ class ClaudeDriver:
                 "tool_use_id": parent,
             }:
                 self._process.put(
-                    ChildSeen(native=id, parent=parent, attribution="inferred"),
-                    GapReport(plane="model", what="native_child_unattributed"),
+                    ChildSeen(native=id, parent=parent),
+                    GapReport(what="native_child_unattributed"),
                 )
             case _ if _kind(frame) not in _SAYS_NOTHING:
                 self._process.unknown(_kind(frame), line.decode(errors="replace"))
@@ -503,7 +503,7 @@ class ClaudeDriver:
         it said, what the calls said is a lower bound on the turn."""
         if spent is None:
             self._process.put(Usage(label="lower_bound", scope="tree"))
-            self._process.put(GapReport(plane="model", what="usage_lower_bound"))
+            self._process.put(GapReport(what="usage_lower_bound"))
             return
         if (tokens := _tree_tokens(spent) - self._counted) > 0:
             self._process.put(Usage(tokens=tokens, label="provider", scope="tree"))

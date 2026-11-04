@@ -171,7 +171,7 @@ async def test_a_stop_that_came_to_sigkill_says_so(tmp_path):
 
     await process.stop(0.05)
 
-    assert GapReport(plane="control", what="crash_window") in heard.reports
+    assert GapReport(what="crash_window") in heard.reports
 
 
 async def test_a_stop_that_term_answered_leaves_no_gap(tmp_path):
@@ -311,7 +311,7 @@ async def test_a_harness_whose_main_thread_exited_runs_until_sigkill(tmp_path):
 
         await process.stop(0.05)
 
-        assert GapReport(plane="control", what="crash_window") in heard.reports
+        assert GapReport(what="crash_window") in heard.reports
         assert group_of(leader) is None
     finally:
         with contextlib.suppress(ProcessLookupError):

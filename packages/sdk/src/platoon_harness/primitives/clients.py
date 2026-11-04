@@ -305,7 +305,9 @@ class Gaps(View):
 
     @fold("turn.lost")
     def turn_lost(self, event: Event) -> None:
-        self._count(event.agent, event.data["gap"], "control")
+        """A v1 lost turn named its gap itself. From v2 it is a `gap.recorded` beside it."""
+        if event.v < 2:
+            self._count(event.agent, event.data["gap"], "control")
 
     def rows(self) -> list[dict[str, Any]]:
         return [dict(row) for row in self.db.execute("SELECT * FROM v_gaps ORDER BY agent, what")]

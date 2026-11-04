@@ -343,7 +343,7 @@ class Worker:
         litellm's estimate, where it prices the model."""
         self._spent()
         if self._cut or reason not in _ENDS:
-            self._put(Usage(label="unavailable", scope="call"), GapReport(plane="model", what="usage_lower_bound"))
+            self._put(Usage(label="unavailable", scope="call"), GapReport(what="usage_lower_bound"))
         if reason != "stopped":
             self._unheard.clear()
             self._outbox.clear()
@@ -398,7 +398,7 @@ class Worker:
                     Usage(tokens=tokens, label="provider", scope="call", call_id=id),
                 )
             if child and calls:
-                self._put(GapReport(plane="model", what="native_child_unattributed"))
+                self._put(GapReport(what="native_child_unattributed"))
 
     def _spoke(self, chunk: Any) -> None:
         for choice in chunk.choices:

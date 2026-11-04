@@ -750,7 +750,7 @@ async def test_an_ended_agent_can_still_be_named_in_evidence(kernel, ada):
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "bob"}))
 
     await report(kernel, "bob", "native", kind="unproven_group", raw="group 7")
-    await report(kernel, "bob", "gap", plane="control", what="crash_window")
+    await report(kernel, "bob", "gap", what="crash_window")
 
     assert of_type(kernel, "native.recorded")[-1].data["raw"] == "group 7"
     assert of_type(kernel, "gap.recorded")[-1].agent == "bob"
@@ -2608,8 +2608,8 @@ async def test_cancelling_outranks_everything(kernel):
 
 async def test_gaps_are_counted_by_agent_and_kind_and_a_lost_turn_is_one(kernel):
     await spawn(kernel, "bob")
-    await report(kernel, "bob", "gap", plane="model", what="hidden_call")
-    await report(kernel, "bob", "gap", plane="model", what="hidden_call")
+    await report(kernel, "bob", "gap", what="hidden_call")
+    await report(kernel, "bob", "gap", what="hidden_call")
     await start_turn(kernel, "bob")
 
     await kernel.recover()

@@ -458,8 +458,8 @@ class CodexDriver:
         elif thread not in self._children:
             self._children.add(thread)
             self._process.put(
-                ChildSeen(native=thread, attribution="inferred"),
-                GapReport(plane="model", what="native_child_unattributed"),
+                ChildSeen(native=thread),
+                GapReport(what="native_child_unattributed"),
             )
 
     def _landed(self, item: Mapping[str, Any]) -> None:
@@ -527,7 +527,7 @@ class CodexDriver:
         on its side reports no usage for it, which leaves a call nobody saw."""
         self._compacting = False
         if not self._measured:
-            self._process.put(ModelCall(purpose="compaction"), GapReport(plane="model", what="hidden_call"))
+            self._process.put(ModelCall(purpose="compaction"), GapReport(what="hidden_call"))
         self._process.put(Compacted())
 
     def _used(self, thread: str, total: int) -> None:
@@ -552,9 +552,7 @@ class CodexDriver:
         if thread == self._native:
             self._ending = self._reason(turn)
             if self._ending != "stopped":  # One cut short may have taken a call with it, of which Codex says nothing.
-                self._process.put(
-                    Usage(label="unavailable", scope="call"), GapReport(plane="model", what="usage_lower_bound")
-                )
+                self._process.put(Usage(label="unavailable", scope="call"), GapReport(what="usage_lower_bound"))
         if self._turns:
             return
         reason = "interrupted" if self._interrupted and self._ending == "stopped" else self._ending

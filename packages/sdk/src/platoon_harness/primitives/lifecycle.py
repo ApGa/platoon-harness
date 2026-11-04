@@ -57,12 +57,12 @@ from .reports import (
     Item,
     ModelCall,
     Native,
-    Plane,
     Ready,
     Report,
     TurnEnded,
     TurnStarted,
     Usage,
+    record_gap,
 )
 from .sessions import Repo, SessionRecord
 from .tasks import Tasks, bury_if_spent
@@ -474,7 +474,8 @@ def retire(txn: Txn, a: Named) -> None:
 
 @op("agent.takeover", on=lambda a: f"agent/{a.agent}")
 def takeover(txn: Txn, a: Named) -> None:
-    """Hold an agent's deliveries so a human can drive its native session. Refused `unsupported` with no resume."""
+    """Hold an agent's deliveries so a human can drive its native session, which records the gap from here. Refused
+    `unsupported` with no resume."""
     if txn.me.kind != "human":
         raise Refused("not_permitted", "only a human takes over an agent")
     agent = _live(txn, a.agent)
@@ -491,28 +492,23 @@ def takeover(txn: Txn, a: Named) -> None:
         agent=agent.name,
         data={"by": txn.me.id},
     )
+    record_gap(txn, agent.name, "takeover")
 
 
 @op("agent.release", on=lambda a: f"agent/{a.agent}")
 def release(txn: Txn, a: Named) -> None:
-    """Return a held agent to the runtime and record the gap. Refused `conflict` when it is not held."""
+    """Return a held agent to the runtime. Refused `conflict` when it is not held."""
     agent = _live(txn, a.agent)
     if agent.state != "held":
         raise Refused("conflict", f"{agent.name} is not held")
     state = "idle" if txn.view(Stamps).turn(agent.name) is None else "running"
     data = {"state": state}
     txn.emit("agent.released", f"agent/{agent.name}", gist=f"{agent.name} released", agent=agent.name, data=data)
-    _gap(txn, agent.name, "control", "takeover")
 
 
 def _model(call_id: str | None) -> ModelRef | None:
     """The model call behind an event, only when a harness named a real one."""
     return ModelRef(call_id=call_id) if call_id else None
-
-
-def _gap(txn: Txn, agent: str, plane: Plane, what: str) -> None:
-    data = {"plane": plane, "what": what}
-    txn.emit("gap.recorded", f"agent/{agent}", gist=f"gap: {what}", agent=agent, data=data)
 
 
 class Start(Args):
@@ -659,7 +655,7 @@ def report(txn: Txn, a: AgentReport) -> None:
                 _conclude(txn, agent)
             elif not agent.ended:
                 if txn.view(Stamps).turn(name) is not None:  # What it was doing is unknown, and a tool may run on.
-                    _gap(txn, name, "control", "crash_window")
+                    record_gap(txn, name, "crash_window")
                 end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)
@@ -667,8 +663,8 @@ def report(txn: Txn, a: AgentReport) -> None:
             data = native.model_dump(exclude={"type"})
             gist = f"unknown {native.kind}"[:GIST_LIMIT]
             txn.emit("native.recorded", f"agent/{name}", gist=gist, agent=name, data=data)
-        case GapReport(plane=plane, what=what):
-            _gap(txn, name, plane, what)
+        case GapReport(what=what):
+            record_gap(txn, name, what)
         case _ if agent.ended:
             raise Refused("conflict", f"{name} has ended: {agent.status}")
         case TurnStarted(turn=turn):
@@ -690,7 +686,7 @@ def report(txn: Txn, a: AgentReport) -> None:
             refs = [ref for ref in (forgotten, summary) if isinstance(ref, str)]
             txn.emit("context.compacted", f"context/{name}", gist=f"{name} compacted", agent=name, refs=refs, data=data)
             if forgotten is None:
-                _gap(txn, name, "control", "compaction_opaque")
+                record_gap(txn, name, "compaction_opaque")
         case InputDelivered() as delivered:
             if not delivered.input.isdecimal():
                 raise Refused("not_found", f"no offer {delivered.input}")

@@ -742,7 +742,7 @@ For example:
 platoon-harness agent release --agent STR [OPTIONS] SESSION
 ```
 
-Return a held agent to the runtime and record the gap.
+Return a held agent to the runtime.
 
 Refused `conflict` when it is not held.
 
@@ -839,7 +839,7 @@ For example:
 platoon-harness agent takeover --agent STR [OPTIONS] SESSION
 ```
 
-Hold an agent's deliveries so a human can drive its native session.
+Hold an agent's deliveries so a human can drive its native session, which records the gap from here.
 
 Refused `unsupported` with no resume.
 

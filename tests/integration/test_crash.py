@@ -93,7 +93,9 @@ async def assert_what_a_crash_leaves(
 
     # The turn in flight is lost with a gap, and was shown until its agent was back in a turn.
     lost = {event.agent: event for event in events if event.type == "turn.lost"}
-    assert lost["w1"].data == {"gap": "crash_window"}
+    gaps = {event.agent: event for event in events if event.type == "gap.recorded"}
+    assert lost["w1"].data is None
+    assert gaps["w1"].data["what"] == "crash_window" and gaps["w1"].seq < lost["w1"].seq
     attention = await owner._ask("view.watch", name="attention", after=0)
     assert "turn/w1" in {row["id"] for row in attention["rows"]} | {*attention["removed"]}
 

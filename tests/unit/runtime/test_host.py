@@ -822,7 +822,7 @@ async def test_every_word_of_the_vocabulary_has_somewhere_to_go(tmp_path):
     said: list[Report] = [
         TurnStarted(turn="t1"),
         Usage(tokens=7, label="provider"),
-        GapReport(plane="model", what="hidden_call"),
+        GapReport(what="hidden_call"),
         Item(kind="tool", gist="ran it"),
         TurnEnded(reason="stopped"),
     ]

@@ -11,6 +11,7 @@ from pydantic import Field
 from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Txn, View, fold, op
 
 from .common import BodyRef, Name
+from .reports import record_gap
 from .sessions import SessionRecord
 
 Sha = Annotated[str, Field(pattern=r"^([0-9a-f]{40}|[0-9a-f]{64})$")]
@@ -177,9 +178,8 @@ def report(txn: Txn, a: Report) -> None:
         raise Refused("unsupported", "this session observes no repository")
     stream, looks, cause = f"repo/{repo.name}", txn.view(Looks), () if a.cause is None else (a.cause,)
     if a.unobserved is not None:
-        data = {"plane": "control", "what": "workspace_unobserved", "why": a.unobserved[:_WHY_LIMIT]}
         gist = f"gap: workspace_unobserved, {a.workspace}"
-        txn.emit("gap.recorded", f"agent/{a.agent}", gist=gist, agent=a.agent, cause=cause, data=data)
+        record_gap(txn, a.agent, "workspace_unobserved", gist=gist, cause=cause, why=a.unobserved[:_WHY_LIMIT])
         return
     for commit in a.commits:
         if looks.ref(commit.sha) is None:

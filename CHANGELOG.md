@@ -222,6 +222,13 @@
   text `body`, as every content event does, and `agent.instruct` takes `body`. `context.offered` is at version 3, its items naming
   events by their refs. `Offered.body` says whether an entry has a body. SwarmChat's projection is version 5, naming a carried
   message by what it carries.
+- `ModelRef` holds `call_id` alone, the id a harness gave its call, verbatim: `policy`, `version`, `tool_call_id` and `token_span`,
+  which nothing wrote, are gone, and an old row reads as its call. `ChildSeen` claims no `attribution`, as only the record can
+  say how well a call is tied to an agent. A `GapReport` names only `what`, as each gap of the closed set, `GAPS`, has a plane,
+  writers and a mark for whether content could reach an agent through it. Every incident gap is one `gap.recorded`, payload 2,
+  with `since` naming where one recorded in a turn began: `runtime.start` writes `crash_window` beside `turn.lost`, which at
+  payload 2 names no gap, and `agent.takeover` records `takeover` where the hold begins, no longer at the release.
+  `exposure_unconfirmed`, which nothing wrote, has left the set. The wire protocol is 2.
 - Tool descriptions describe and never ask: `based_on` reads "Refs this write rests on.", and `board.get` no longer says to cite.
   A refusal that said to store a body and cite its hash says to store a body.
 - The `changes` report has left the driver vocabulary, with `Changed` and `change.recorded`, as only the runtime observes a

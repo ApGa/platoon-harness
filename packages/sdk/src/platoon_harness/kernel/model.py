@@ -110,13 +110,11 @@ class Outcome(BaseModel, frozen=True):
 
 
 class ModelRef(BaseModel, frozen=True):
-    """The model call behind an event. Present only when real."""
+    """The model call behind an event, by the id its harness gave it, verbatim. Present only when real. Its policy,
+    version and tokens are the gateway's to know, so none is here. It stays a type of one field, as the envelope's
+    `model` is a column of every journal."""
 
-    policy: str | None = None
-    version: str | None = None
-    call_id: str | None = None
-    tool_call_id: str | None = None
-    token_span: tuple[int, int] | None = None
+    call_id: str
 
 
 class Event(BaseModel, frozen=True):

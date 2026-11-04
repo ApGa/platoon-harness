@@ -17,7 +17,7 @@ from platoon_harness.version import __version__
 ENVIRONMENT_VARIABLE = "PLATOON_HARNESS_CONFIG"
 PROJECT_FILE = "platoon-harness.toml"
 TEAM_SCHEMA = 1
-WIRE_PROTOCOL = 1
+WIRE_PROTOCOL = 2
 
 __all__ = [
     "ENVIRONMENT_VARIABLE",

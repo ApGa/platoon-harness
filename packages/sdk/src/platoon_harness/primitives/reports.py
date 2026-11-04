@@ -1,11 +1,11 @@
 """What a driver says of a harness: its capabilities, and one closed vocabulary of reports, in Python or on the wire."""
 
-from collections.abc import Mapping
-from typing import Annotated, Literal
+from collections.abc import Mapping, Sequence
+from typing import Annotated, Any, Literal, NamedTuple
 
 from pydantic import Field, TypeAdapter
 
-from platoon_harness.kernel import Args
+from platoon_harness.kernel import Args, Stamps, Txn
 from platoon_harness.schema import Model
 
 from .budgets import Label
@@ -20,12 +20,10 @@ CUT_OFF = {"lost": "a crash", OWNER_STOP: "the owner stopping the session"}
 Short = Annotated[str, Field(max_length=SHORT_LIMIT)]
 Boundary = Literal["turn", "tool", "model_call"]
 Plane = Literal["control", "tool", "model"]
-Attribution = Literal["exact", "declared", "inferred", "forked"]
 Surface = Literal["prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external"]
 Gap = Literal[
     "stream_lost",
     "compaction_opaque",
-    "exposure_unconfirmed",
     "native_child_unattributed",
     "usage_lower_bound",
     "unknown_update",
@@ -34,6 +32,39 @@ Gap = Literal[
     "takeover",
     "workspace_unobserved",
 ]
+
+
+class Kind(NamedTuple):
+    """What a gap of the closed set is: the plane it lies on, who records it, and whether content could reach an agent
+    through it unseen, which is what makes it a reason that what an agent saw is unknown."""
+
+    plane: Plane
+    writers: tuple[Literal["driver", "runtime"], ...]
+    carries: bool
+
+
+GAPS: Mapping[Gap, Kind] = {
+    "stream_lost": Kind("control", ("driver",), carries=True),
+    "compaction_opaque": Kind("control", ("runtime",), carries=False),
+    "native_child_unattributed": Kind("model", ("driver",), carries=True),
+    "usage_lower_bound": Kind("model", ("driver",), carries=False),
+    "unknown_update": Kind("control", ("driver", "runtime"), carries=True),
+    "hidden_call": Kind("model", ("driver",), carries=True),
+    "crash_window": Kind("control", ("driver", "runtime"), carries=True),
+    "takeover": Kind("control", ("runtime",), carries=True),
+    "workspace_unobserved": Kind("control", ("runtime",), carries=True),
+}
+"""Every gap a `gap.recorded` can name, and what each is."""
+
+
+def record_gap(
+    txn: Txn, agent: str, what: Gap, *, gist: str | None = None, cause: Sequence[int] = (), **more: Any
+) -> None:
+    """Record one incident gap on its agent's stream, on its own plane. One recorded in a turn of the agent's, which
+    `crash_window` alone can be about, names in `since` where that turn began."""
+    since = txn.view(Stamps).began(agent) if what == "crash_window" else None
+    data = {"plane": GAPS[what].plane, "what": what, "since": since, **more}
+    txn.emit("gap.recorded", f"agent/{agent}", gist=gist or f"gap: {what}", agent=agent, cause=cause, data=data, v=2)
 
 
 class Capabilities(Model):
@@ -152,17 +183,19 @@ class Compacted(Args):
 
 
 class ChildSeen(Args):
-    """A native child the harness made on its own, which stays on its parent's credential."""
+    """A native child the harness made on its own, which stays on its parent's credential: its native id, and the tool
+    call of its parent's that started it. How well a call is tied to an agent is the record's to say, so no driver
+    claims it."""
 
     type: Literal["child.seen"] = "child.seen"
     native: str
     parent: str | None = None
-    attribution: Attribution
 
 
 class GapReport(Args):
+    """A gap a driver saw. Its plane is the gap's own."""
+
     type: Literal["gap"] = "gap"
-    plane: Plane
     what: Gap
 
 

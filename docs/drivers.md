@@ -70,8 +70,8 @@ method promises:
 | `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
 | `Usage` | `tokens`, `usd`, `label`, `scope`, `call_id` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable`. `call_id` names the call a `call` scope paid for |
 | `Compacted` | `forgotten`, `summary` | Context was compacted. `forgotten` holds the native ids of what left it, and `summary` the text that took its place |
-| `ChildSeen` | `native`, `parent`, `attribution` | A native child it made on its own |
-| `GapReport` | `plane`, `what` | Something went unseen, from a closed list |
+| `ChildSeen` | `native`, `parent` | A native child it made on its own, and the tool call that started it. It claims no attribution: how well a call is tied to an agent is the record's to say |
+| `GapReport` | `what` | Something went unseen, from a closed list, `GAPS`, which gives each its plane |
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
 | `Exited` | `reason` | The harness is gone |
 
@@ -251,15 +251,15 @@ serve(OneCall())
 The verbs equal the Python methods. A session reads like this, with `>` for what the runtime writes and `<` for what you write.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"describe","params":{"protocol":1}}
-< {"jsonrpc":"2.0","id":1,"result":{"protocol":1,"name":"mine","login":null,"capabilities":{"persistent":true,"boundaries":["turn"]}}}
+> {"jsonrpc":"2.0","id":1,"method":"describe","params":{"protocol":2}}
+< {"jsonrpc":"2.0","id":1,"result":{"protocol":2,"name":"mine","login":null,"capabilities":{"persistent":true,"boundaries":["turn"]}}}
 ```
 
 That was one short process: `describe` runs your program, sends this one frame, closes stdin and expects you to exit, so no harness
 may start for it. Starting an agent is a new process.
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"allow_native_children":false,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":"...","cwd":"...","folder":"...","model":"m","effort":null,"sandbox":null,"allow_native_children":false,"tools":{"url":"...","namespace":"ph","bin":"..."},"access":["OPENAI_API_KEY"],"env":{},"instructions":null,"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.0","effective_model":"m","tools_visible":null}}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"turn.started","turn":"1"}}

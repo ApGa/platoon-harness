@@ -64,6 +64,16 @@ class Stamps(View):
         rows = self.db.execute("SELECT scope, value FROM v_stamps WHERE scope GLOB 'turn/*'")
         return {row["scope"].removeprefix("turn/"): row["value"] for row in rows}
 
+    def began(self, agent: str | None) -> int | None:
+        """The seq of the `turn.started` that opened an agent's open turn, or None while it has none."""
+        if self.turn(agent) is None:
+            return None
+        row = self.db.execute(
+            "SELECT seq FROM events WHERE stream = ? AND type = 'turn.started' ORDER BY version DESC LIMIT 1",
+            (f"turn/{agent}",),
+        ).fetchone()
+        return None if row is None else row["seq"]
+
     def episode(self) -> str | None:
         return self._get("episode")
 

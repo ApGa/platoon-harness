@@ -42,12 +42,12 @@ from .messages import Cursor, Deliveries, Entry
 from .repo import Looks
 from .reports import (
     CUT_OFF,
+    GAPS,
     OWNER_STOP,
     RAW_LIMIT,
     REPORTS,
     SHORT_LIMIT,
     ApprovalRequested,
-    Attribution,
     Boundary,
     Capabilities,
     ChildSeen,
@@ -137,6 +137,7 @@ PRIMITIVES = (
 __all__ = [
     "BODY_REF",
     "CUT_OFF",
+    "GAPS",
     "IN_A_RESULT",
     "OWNER_STOP",
     "PRIMITIVES",
@@ -151,7 +152,6 @@ __all__ = [
     "ApprovalRequested",
     "Approvals",
     "Attention",
-    "Attribution",
     "Boards",
     "Boundary",
     "Budgets",

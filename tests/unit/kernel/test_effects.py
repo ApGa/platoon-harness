@@ -269,8 +269,11 @@ async def test_recovery_loses_a_turn_in_flight(kernel):
 
     await kernel.recover()
 
-    lost = events_of(kernel)[-1]
-    assert (lost.type, lost.agent, lost.turn, lost.data) == ("turn.lost", "alice", "t1", {"gap": "crash_window"})
+    began = next(event.seq for event in events_of(kernel) if event.type == "turn.started")
+    gap, lost = events_of(kernel)[-2:]
+    assert (lost.type, lost.agent, lost.turn, lost.v, lost.data) == ("turn.lost", "alice", "t1", 2, None)
+    assert (gap.type, gap.stream, gap.data["what"]) == ("gap.recorded", "agent/alice", "crash_window")
+    assert gap.data["since"] == began
     after = {"type": "agent.reported", "stream": "agent/alice", "agent": "alice"}
     assert result_of(await kernel.submit(kernel.runtime, "note.mark", after))["turn"] is None
 

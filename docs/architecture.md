@@ -290,12 +290,15 @@ class Event(BaseModel, frozen=True):
     cause: tuple[int, ...]           # seqs this directly followed from
     based_on: tuple[str, ...]        # event refs its maker declared, as claimed
     native: Mapping[str, str]        # backend ids, with source and harness version
-    model: ModelRef | None           # policy, version, call_id, tool_call_id, token span: only when real
+    model: ModelRef | None           # the call's id as its harness gave it, only when real
     wall_time: float                 # for humans; never orders anything
     gist: str                        # at most 280 chars; what any client can show for any event
     data: Any                        # JSON, at most 16 KiB; larger content goes by body hash
     outcome: Outcome | None          # on a command's last event: op, key, args_hash, result or refusal
 ```
+
+`ModelRef` holds `call_id` alone, verbatim: a call's policy, version and tokens are the gateway's to know, and nothing here
+writes them. It stays a type, since `model` is a column of every journal's `events`.
 
 A payload changes shape only with its `v`, and a fold that reads a field an older payload lacks fills it with what held when that
 payload was written, so a journal from before the change folds as it was meant.
@@ -349,7 +352,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   unavailable. A turn in flight becomes `turn.lost` plus a gap, because its tool effects are unknown and never re-run.
   `retry` appends `effect.retried`, which returns the effect to `requested`. `reconcile` and `surface` stay `uncertain` until
   `effect.finish` or `effect.fail`, or until a person says with `effect.settle`, which the row in `attention` offers.
-  `Kernel.recover()` does the journal's part of this, including `turn.lost`, whose data names the gap `crash_window`; the
+  `Kernel.recover()` does the journal's part of this, including `turn.lost` and beside it the gap `crash_window`, which names in
+  `since` the `turn.started` of the turn it cut; the
   incarnation is the version of `runtime.started` on the stream `runtime`.
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 - **A kind of an extension's own.** The host starts only the kinds in this table, and recovery settles only those. An extension that
@@ -802,8 +806,8 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   before its children, so that no report goes to a parent ending with it.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While it is at work, in a turn or
   on its way to one, it is refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
-- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session; `agent.release` returns it, to its
-  open turn if it has one, and records a gap. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
+- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session, which records the gap `takeover` where
+  the hold begins; `agent.release` returns it, to its open turn if it has one. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
 
 ### Completion
 
@@ -1014,7 +1018,9 @@ effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `d
 `item{kind: message|thought|tool|patch, phase: started|completed, native_id, call_id, gist, body, approval, outcome}`,
 `input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist}`, `model.call{call_id, model, purpose}`,
 `usage{tokens, usd, label, scope: call|turn|tree, call_id}`, `compacted{forgotten, summary}`,
-`child.seen{native, parent, attribution}`, `gap{plane, what}`, `native{kind, raw, cut}` and `exited{reason}`. What changed in a
+`child.seen{native, parent}`, `gap{what}`, `native{kind, raw, cut}` and `exited{reason}`. A driver claims no attribution: `child.seen`
+names the native child and the tool call that started it, and how well a call is tied to an agent is the record's to say. A gap's
+plane is its own. What changed in a
 workspace is the runtime's own look, so no driver reports it (§13). Unknown frames become `native` plus a gap, never a log line. A
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
 and `summary` go the same way, since either can pass what an event holds. `forgotten` holds native ids, and with `None` the runtime
@@ -1037,7 +1043,7 @@ path is real and exercised, and where OpenHands' pins cannot share an environmen
 wire command. See [ADR 0030](adr/0030-openhands-is-an-extra-of-the-sdk.md).
 
 ```jsonc
-> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":1,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
+> {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":"...","access":["OPENAI_API_KEY"],"resume":null}}}
 < {"jsonrpc":"2.0","id":1,"result":null}
 < {"jsonrpc":"2.0","method":"report","params":{"type":"ready","native":"s-9","version":"1.4.0","effective_model":"m","tools_visible":null}}
 > {"jsonrpc":"2.0","id":2,"method":"deliver","params":{"input":"d41","boundary":"turn","items":[{"ref":"inbox/ada@3","gist":"Keep the API stable"}]}}
@@ -1226,13 +1232,29 @@ says why an edge is believed; **attribution** (`exact`, `declared`, `inferred`, 
 an agent, tracking a Platoon draft in our own versioned enum; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
 
-**Late joins.** A `model.called`, and an `item` or a `usage` that names its call, carry that `call_id` on the envelope, and nothing else
-does. A tool op can commit before the model call that caused it is reported. `call.joined` is a new event citing both, with its quality (`anchor`,
-`response_id`, `turn`), for that late case alone. Tools link to a model call only through a real anchor.
+**Calls.** A `model.called`, and an `item` or a `usage` that names its call, carry that `call_id` on the envelope, verbatim as the
+harness gave it, and nothing else does. A tool links to a model call only through ids both records hold: the op's anchor equal to a
+tool item's `native_id`, and that item's `call_id`. That join is an equality of ids already held, so a tool op that commits before
+its call is reported needs no event of its own, and nothing joins by order or timing.
 
 **Coverage.** Standing gaps come from `coverage` at `agent.started`: any harness with a shell is blind to `shell_reads` for life.
-Incident gaps are events of a closed set: `stream_lost`, `compaction_opaque`, `exposure_unconfirmed`, `native_child_unattributed`,
-`usage_lower_bound`, `unknown_update`, `hidden_call`, `crash_window`, `takeover`, `workspace_unobserved`.
+Incident gaps are each one `gap.recorded{plane, what, since}`, of a closed set that `GAPS` holds with each member's plane, its
+writers, and whether content could reach an agent through it unseen:
+
+| Gap | Plane | Writer | Content could come through |
+|---|---|---|---|
+| `stream_lost` | control | a driver whose report stream dies | yes |
+| `compaction_opaque` | control | the runtime, for a compaction that names nothing it forgot | no |
+| `native_child_unattributed` | model | a driver, for a native child | yes |
+| `usage_lower_bound` | model | a driver, for usage that is a floor | no |
+| `unknown_update` | control | a driver or the host, for a frame nobody's vocabulary covers | yes |
+| `hidden_call` | model | a driver, for a call the harness made out of sight | yes |
+| `crash_window` | control | the runtime, for a turn a crash or an exit cut, and a driver whose stop came to `SIGKILL` | yes |
+| `takeover` | control | the runtime, where a person's hold begins | yes |
+| `workspace_unobserved` | control | the runtime, for a look that could not read a workspace | yes |
+
+`since` names where a gap recorded after the fact began: a `crash_window` recorded in a turn, by `runtime.start` beside its
+`turn.lost` or when a harness exits, names that turn's `turn.started`. Any other is where it stands.
 
 ```python
 await session.exposure(agent, ref, before=event)   # Seen(edge) | NotSeen(coverage) | Unknown(gaps), never a boolean

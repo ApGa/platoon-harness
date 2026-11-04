@@ -522,7 +522,7 @@ async def test_a_child_s_spend_is_what_the_calls_left_out(tmp_path, stand):
 async def test_tokens_nobody_reported_are_a_gap_and_no_guess(tmp_path, stand):
     reports = await played(stand, tmp_path, {"type": "result", "subtype": "success", "is_error": False})
 
-    assert GapReport(plane="model", what="usage_lower_bound") in reports
+    assert GapReport(what="usage_lower_bound") in reports
     assert [report for report in reports if isinstance(report, Usage)] == [Usage(label="lower_bound", scope="tree")]
 
 
@@ -610,8 +610,8 @@ async def test_a_native_child_is_seen_under_the_call_that_started_it(tmp_path, s
 
     reports = await played(stand, tmp_path, started, result())
 
-    assert ChildSeen(native="a1", parent="toolu_child", attribution="inferred") in reports
-    assert GapReport(plane="model", what="native_child_unattributed") in reports
+    assert ChildSeen(native="a1", parent="toolu_child") in reports
+    assert GapReport(what="native_child_unattributed") in reports
 
 
 async def test_a_child_that_could_outlive_its_turn_is_labelled(tmp_path, stand):
@@ -657,7 +657,7 @@ async def test_an_unknown_frame_is_native_plus_a_gap(tmp_path, stand):
 
     natives = [report for report in reports if isinstance(report, Native)]
     assert [native.kind for native in natives] == ["nobody knows", "frame"]
-    assert reports.count(GapReport(plane="control", what="unknown_update")) == 2
+    assert reports.count(GapReport(what="unknown_update")) == 2
 
 
 async def test_a_frame_of_a_known_type_that_does_not_read_is_native_too(tmp_path, stand):

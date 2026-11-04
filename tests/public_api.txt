@@ -153,7 +153,6 @@ platoon_harness.primitives.Approval
 platoon_harness.primitives.ApprovalRequested
 platoon_harness.primitives.Approvals
 platoon_harness.primitives.Attention
-platoon_harness.primitives.Attribution
 platoon_harness.primitives.Boards
 platoon_harness.primitives.body_of
 platoon_harness.primitives.BODY_REF
@@ -173,6 +172,7 @@ platoon_harness.primitives.Deliveries
 platoon_harness.primitives.Delta
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
+platoon_harness.primitives.GAPS
 platoon_harness.primitives.Gap
 platoon_harness.primitives.GapReport
 platoon_harness.primitives.Gaps

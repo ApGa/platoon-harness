@@ -267,13 +267,17 @@ def expire_effect(txn: Txn, a: EffectAttempt) -> None:
 def start_runtime(txn: Txn, a: Incarnation) -> int:
     """Begin an incarnation, and return its number, which is this event's stream version.
 
-    Started effects become uncertain, and a turn in flight is lost: its tool effects are unknown and never re-run.
+    Started effects become uncertain, and a turn in flight is lost: its tool effects are unknown and never re-run. Each
+    lost turn leaves the gap `crash_window`, which began where that turn did.
     """
     gist = "; ".join(("runtime started", *a.drift))[:GIST_LIMIT]
     incarnation = txn.emit("runtime.started", "runtime", gist=gist, data={"drift": a.drift}).version
     for effect in txn.view(Effects).in_state("started"):
         _cancel_timeout(txn, effect)
         _mark_uncertain(txn, effect, "the runtime restarted")
-    for agent, turn in txn.view(Stamps).open_turns().items():
-        txn.emit("turn.lost", f"turn/{agent}", gist=f"turn {turn} lost", agent=agent, data={"gap": "crash_window"})
+    stamps = txn.view(Stamps)
+    for agent, turn in stamps.open_turns().items():
+        gap = {"plane": "control", "what": "crash_window", "since": stamps.began(agent)}
+        txn.emit("gap.recorded", f"agent/{agent}", gist="gap: crash_window", agent=agent, data=gap, v=2)
+        txn.emit("turn.lost", f"turn/{agent}", gist=f"turn {turn} lost", agent=agent, v=2)
     return incarnation

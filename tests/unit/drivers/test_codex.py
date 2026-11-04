@@ -528,7 +528,7 @@ async def test_a_compaction_that_reports_no_usage_is_a_hidden_call(tmp_path, sta
     reports = await played(stand, tmp_path, started("contextCompaction", "k1"), completed("contextCompaction", "k1"))
 
     assert [call.purpose for call in reports if isinstance(call, ModelCall)] == ["compaction"]
-    assert GapReport(plane="model", what="hidden_call") in reports
+    assert GapReport(what="hidden_call") in reports
 
 
 # A delivery.
@@ -604,7 +604,7 @@ async def test_an_interrupt_ends_the_turn_and_lives_on(tmp_path, stand):
 
     assert stand.asked("turn/interrupt") == {"threadId": "thread-1", "turnId": "turn-1"}
     assert turn.reason == "interrupted"
-    assert GapReport(plane="model", what="usage_lower_bound") in heard.reports
+    assert GapReport(what="usage_lower_bound") in heard.reports
     assert Usage(label="unavailable", scope="call") in heard.reports
 
 
@@ -864,10 +864,8 @@ async def test_a_child_is_seen_once_inferred_and_its_work_stays_its_own(tmp_path
         ended(turn="child-2", thread=CHILD),
     )
 
-    assert [child for child in reports if isinstance(child, ChildSeen)] == [
-        ChildSeen(native=CHILD, attribution="inferred")
-    ]
-    assert GapReport(plane="model", what="native_child_unattributed") in reports
+    assert [child for child in reports if isinstance(child, ChildSeen)] == [ChildSeen(native=CHILD)]
+    assert GapReport(what="native_child_unattributed") in reports
     assert not [report for report in reports if isinstance(report, Item | Delta)]
 
 
@@ -940,7 +938,7 @@ async def test_a_failed_turn_says_why_with_secrets_masked_and_a_gap(tmp_path, st
         turn = await heard.until(TurnEnded)
 
     assert turn.reason == "401 for ***"
-    assert GapReport(plane="model", what="usage_lower_bound") in heard.reports
+    assert GapReport(what="usage_lower_bound") in heard.reports
 
 
 async def test_an_unknown_notification_is_native_plus_a_gap(tmp_path, stand):
@@ -948,7 +946,7 @@ async def test_an_unknown_notification_is_native_plus_a_gap(tmp_path, stand):
 
     native = next(report for report in reports if isinstance(report, Native))
     assert "model/rerouted" in native.raw
-    assert GapReport(plane="control", what="unknown_update") in reports
+    assert GapReport(what="unknown_update") in reports
 
 
 async def test_an_unknown_item_is_native_plus_a_gap(tmp_path, stand):
