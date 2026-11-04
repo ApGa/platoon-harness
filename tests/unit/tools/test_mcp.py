@@ -8,7 +8,7 @@ from typing import Annotated
 import pytest
 from pydantic import Field
 
-from platoon_harness import __version__
+from platoon_harness import __version__, http
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Outcome, Refusal, Refused, Txn, op
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools import ToolServer
@@ -296,7 +296,7 @@ async def test_an_idle_client_costs_nothing(kernel, server, lead):
 
 
 async def test_connections_past_the_limit_are_refused(server, clock, monkeypatch):
-    monkeypatch.setattr(tool_server, "_CONNECTION_LIMIT", 1)
+    monkeypatch.setattr(server, "connections", 1)
     _, held = await connect(server.url)
     await slept_until(clock, 1010.0)
 
@@ -333,7 +333,7 @@ async def test_a_fault_in_the_server_is_a_500_and_the_server_lives(kernel, serve
         reply = await lead[1].post(INITIALIZE)
 
     assert reply.status == 500
-    assert "a tool request failed" in caplog.text
+    assert "a request failed" in caplog.text
     assert (await lead[1].post(INITIALIZE)).status == 200
 
 
@@ -1095,7 +1095,7 @@ async def test_an_answer_that_cannot_be_sent_costs_no_wake(kernel, server, lead,
     async def lost(writer: asyncio.StreamWriter, reply: bytes) -> None:
         raise ConnectionResetError
 
-    monkeypatch.setattr(tool_server, "_send", lost)
+    monkeypatch.setattr(http, "_send", lost)
     await start_turn(kernel, "w1")
     message = tool_call("wait", {"from": ["lead"], "hold": 20.0})
     _, writer = await connect(server.url)

@@ -1,23 +1,19 @@
 """The tools-only MCP server: Streamable HTTP on loopback, JSON replies, no sessions, one request per connection."""
 
 import asyncio
-import contextlib
 import hashlib
 import json
-import logging
-from collections.abc import Awaitable, Coroutine, Iterator, Mapping
-from http import HTTPStatus
+from collections.abc import Iterator, Mapping
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
-from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, first, tool_name
+from platoon_harness.http import Head, Rejected, Server, bearer, check_site, length, response
+from platoon_harness.kernel import Kernel, Op, Outcome, Principal, Refusal, Refused, tool_name
 from platoon_harness.primitives import hold_open, lines_of
 from platoon_harness.rpc import strict_loads
 from platoon_harness.version import __version__
 
 from .surface import Surface, body_fields, held_tools, list_tools, named_surface, notices_text, refusal_text, taught
-
-log = logging.getLogger("platoon_harness.tools")
 
 _HOST = "127.0.0.1"
 _PATH = "/mcp"
@@ -25,91 +21,15 @@ _REVISIONS = ("2025-11-25", "2025-06-18")
 HARNESS_ANCHORS = ("claudecode/toolUseId", "callId")
 _ANCHORS = (*HARNESS_ANCHORS, "platoon-harness/callId")
 _ANCHOR_LIMIT = 256
-_ONCE = frozenset({"authorization", "content-length", "host", "origin"})
-_HEAD_LIMIT = 16 * 1024
 _REQUEST_LIMIT = 1024 * 1024
-_CONNECTION_LIMIT = 1024
-_IO_SECONDS = 10.0
 _RESULT_LIMIT = 32 * 1024
 _BODY_READ_LIMIT = 16 * 1024 * 1024
-_CHUNK = 64 * 1024
+_JSON = "Content-Type: application/json"
 _REPEATED = "This call repeats an earlier one of this turn exactly, so this is that call's answer and nothing ran."
-
-
-def _response(status: int, body: bytes = b"", *headers: str) -> bytes:
-    lines = (
-        f"HTTP/1.1 {status} {HTTPStatus(status).phrase}",
-        "Content-Type: application/json",
-        f"Content-Length: {len(body)}",
-        "Connection: close",
-        *headers,
-    )
-    return "\r\n".join((*lines, "", "")).encode() + body
-
-
-class _Rejected(Exception):
-    """A request refused at the HTTP layer."""
-
-    def __init__(self, status: int, *headers: str) -> None:
-        super().__init__(status)
-        self.reply = _response(status, b"", *headers)
-
-
-class _Cut(Exception):
-    """What was being awaited lost its race, and has been dropped."""
 
 
 class _BadParams(Exception):
     """JSON-RPC -32602."""
-
-
-async def _unless[T](rival: Awaitable[Any], work: Coroutine[Any, Any, T]) -> T:
-    """`work`'s result, unless `rival` finishes first, which drops the work and raises `_Cut`."""
-    task = asyncio.ensure_future(work)
-    if not await first(task, rival):
-        raise _Cut
-    return task.result()
-
-
-async def _hung_up(reader: asyncio.StreamReader) -> None:
-    """Return when the client goes. Anything else it sends is thrown away, so it cannot pile up here."""
-    with contextlib.suppress(ConnectionError):
-        while await reader.read(_CHUNK):
-            pass
-
-
-async def _send(writer: asyncio.StreamWriter, reply: bytes) -> None:
-    writer.write(reply)
-    await writer.drain()
-    writer.close()
-    await writer.wait_closed()
-
-
-def _parsed_head(head: bytes) -> tuple[str, str, dict[str, str]]:
-    """The method, target and headers of a request. A header that decides anything may appear once."""
-    first, *lines = head[: -len(b"\r\n\r\n")].decode("latin-1").split("\r\n")
-    request = first.split(" ")
-    if len(request) != 3 or not request[2].startswith("HTTP/1."):
-        raise _Rejected(400)
-    headers: dict[str, str] = {}
-    for line in lines:
-        name, colon, value = line.partition(":")
-        name = name.lower()
-        if not colon or not name or " " in name or (name in _ONCE and name in headers):
-            raise _Rejected(400)
-        headers[name] = value.strip()
-    return request[0], request[1], headers
-
-
-def _length(headers: Mapping[str, str]) -> int:
-    value = headers.get("content-length")
-    if value is None or "transfer-encoding" in headers:
-        raise _Rejected(411)
-    if not (value.isascii() and value.isdecimal()):
-        raise _Rejected(400)
-    if len(value) > len(str(_REQUEST_LIMIT)) or int(value) > _REQUEST_LIMIT:
-        raise _Rejected(413)
-    return int(value)
 
 
 def _anchor(meta: Any) -> dict[str, str] | None:
@@ -176,125 +96,74 @@ class _Request(NamedTuple):
     told: list[int]
 
 
-class ToolServer:
+class ToolServer(Server[_Request]):
     """A kernel's tool ops over loopback HTTP. Everything is per request, from a bearer token, so an idle client holds
     nothing here: not a session, not a task, not a socket."""
 
     def __init__(self, kernel: Kernel) -> None:
+        super().__init__(kernel.clock)
         self._kernel = kernel
         self._tools = {
             tool_name(operation.name): _Tool(operation, body_fields(operation.input.model_json_schema()))
             for operation in kernel.ops.values()
             if operation.tool
         }
-        self._server: asyncio.Server | None = None
-        self._port = 0
-        self._serving: set[asyncio.Task[None]] = set()
 
     async def start(self) -> None:
-        """Bind a free port on loopback and start answering."""
-        self._server = await asyncio.start_server(self._serve, _HOST, 0, limit=_HEAD_LIMIT)
-        self._port = self._server.sockets[0].getsockname()[1]
+        """Bind a free port on loopback and start answering. Stopping drops every open call, and waits stay
+        registered: they live in the service, not in a call."""
+        await self.listen(_HOST)
 
     @property
     def url(self) -> str:
         """Where to reach this server. A client may add `?surface=` for how tools are named to its model."""
-        if self._server is None:
-            raise RuntimeError("the tool server has not started")
-        return f"http://{_HOST}:{self._port}{_PATH}"
-
-    async def stop(self) -> None:
-        """Stop listening and drop every open call. Waits stay registered: they live in the service, not in a call."""
-        server, self._server = self._server, None
-        if server is not None:
-            server.close()
-            for task in self._serving:
-                task.cancel()
-            await asyncio.gather(*self._serving, return_exceptions=True)
-            await server.wait_closed()
+        return f"http://{_HOST}:{self.port}{_PATH}"
 
     # HTTP.
 
-    async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        task = asyncio.current_task()
-        assert task is not None
-        self._serving.add(task)
-        kernel, told = self._kernel, []
+    async def receive(self, head: Head, reader: asyncio.StreamReader) -> _Request:
+        """Nothing past the head is read for a client that has not proved who it is."""
+        if head.path != _PATH:
+            raise Rejected(404)
+        check_site(head, (f"{_HOST}:{self.port}", f"localhost:{self.port}"))
+        principal = self._identify(head)
+        if head.method != "POST":
+            raise Rejected(405, "Allow: POST")
         try:
-            reply = await self._reply(reader, told)
-            await _unless(kernel.clock.sleep(_IO_SECONDS), _send(writer, reply))
-            for id in told:  # Only now is anyone told. A wait left open closes with its turn, and wakes its agent.
-                await kernel.submit(kernel.runtime, "wait.release", {"id": id, "told": True})
-        except (_Cut, ConnectionError, asyncio.IncompleteReadError):
-            pass  # A client that stalled or left is owed nothing.
-        finally:
-            writer.transport.abort()
-            self._serving.discard(task)
-
-    async def _reply(self, reader: asyncio.StreamReader, told: list[int]) -> bytes:
-        if self._server is None or len(self._serving) > _CONNECTION_LIMIT:
-            return _response(503)
-        try:
-            request = await _unless(self._kernel.clock.sleep(_IO_SECONDS), self._receive(reader, told))
-            return await _unless(_hung_up(reader), self._answer(request))
-        except _Rejected as rejected:
-            return rejected.reply
-        except (_Cut, ConnectionError, asyncio.IncompleteReadError):
-            raise
-        except Exception:
-            log.exception("a tool request failed")
-            return _response(500)
-
-    async def _receive(self, reader: asyncio.StreamReader, told: list[int]) -> _Request:
-        """Read one request. Nothing past the head is read for a client that has not proved who it is."""
-        try:
-            head = await reader.readuntil(b"\r\n\r\n")
-        except asyncio.LimitOverrunError:
-            raise _Rejected(431) from None
-        method, target, headers = _parsed_head(head)
-        path, _, query = target.partition("?")
-        if path != _PATH:
-            raise _Rejected(404)
-        self._check_site(headers)
-        principal = self._identify(headers)
-        if method != "POST":
-            raise _Rejected(405, "Allow: POST")
-        try:
-            surface = named_surface(parse_qs(query).get("surface", ["mcp"])[0])
+            surface = named_surface(parse_qs(head.query).get("surface", ["mcp"])[0])
         except ValueError:
-            raise _Rejected(400) from None
-        return _Request(principal, surface, await reader.readexactly(_length(headers)), told)
+            raise Rejected(400) from None
+        return _Request(principal, surface, await reader.readexactly(length(head, _REQUEST_LIMIT)), [])
 
-    def _check_site(self, headers: Mapping[str, str]) -> None:
-        """Refuse what a browser could be tricked into sending: only this address may be named."""
-        sites = (f"{_HOST}:{self._port}", f"localhost:{self._port}")
-        if headers.get("host") not in sites:
-            raise _Rejected(421)
-        if "origin" in headers and headers["origin"] not in tuple(f"http://{site}" for site in sites):
-            raise _Rejected(403)
+    def refuse(self, rejected: Rejected) -> bytes:
+        return response(rejected.status, b"", _JSON, *rejected.headers)
 
-    def _identify(self, headers: Mapping[str, str]) -> Principal:
+    async def sent(self, request: _Request) -> None:
+        """Only now is anyone told. A wait left open closes with its turn, and wakes its agent."""
+        kernel = self._kernel
+        for id in request.told:
+            await kernel.submit(kernel.runtime, "wait.release", {"id": id, "told": True})
+
+    def _identify(self, head: Head) -> Principal:
         """Identity comes from the token alone, never from `clientInfo`, `_meta` or arguments."""
-        scheme, _, token = headers.get("authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise _Rejected(401, "WWW-Authenticate: Bearer")
+        token = bearer(head)
         try:
-            return self._kernel.authenticate(token.strip())
+            return self._kernel.authenticate(token)
         except Refused as refused:
             if refused.refusal.code == "unavailable":
-                raise _Rejected(503) from None
-            raise _Rejected(401, "WWW-Authenticate: Bearer") from None
+                raise Rejected(503) from None
+            raise Rejected(401, "WWW-Authenticate: Bearer") from None
 
     # JSON-RPC.
 
-    async def _answer(self, request: _Request) -> bytes:
+    async def answer(self, request: _Request) -> bytes:
         try:
             message = strict_loads(request.body)
         except (ValueError, RecursionError):
             reply = _failure(None, -32700, "Parse error")
         else:
             reply = await self._handle(message, request)
-        return _response(202) if reply is None else _response(200, json.dumps(reply).encode())
+        return response(202, b"", _JSON) if reply is None else response(200, json.dumps(reply).encode(), _JSON)
 
     async def _handle(self, message: Any, request: _Request) -> dict[str, Any] | None:
         """Answer one message. A batch is refused, and a notification has no answer."""

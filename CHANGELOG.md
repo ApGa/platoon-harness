@@ -4,6 +4,8 @@
 
 ### Added
 
+- `platoon_harness.http`: the tool server's bounded HTTP, as a module of its own with public names. `Origin`, when a request has
+  one, must now be the origin of its `Host`.
 - The session kernel: journal, writer thread, operations, grants, effects, timers, views, readers and daemons.
 - The core primitives as extensions on the public kernel: messages and channels, context, wait, boards, leased queues,
   lifecycle and completion, approvals, budgets, and the `roster`, `attention` and `changes` views.
