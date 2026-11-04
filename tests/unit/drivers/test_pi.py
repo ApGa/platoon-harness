@@ -650,9 +650,22 @@ async def test_what_pi_says_after_an_input_lands_waits_behind_it_in_pi_s_order(t
     assert heard.of(InputDelivered)[0].native_id == "entry-1"
 
 
-@pytest.mark.parametrize("script", [{"refuses": {"get_entries": "no"}}, {"gone_at": "get_entries"}])
-async def test_an_input_whose_entry_pi_never_names_lands_with_no_id_in_its_place(tmp_path, stand, script):
-    stand.install(turns=[[BEGAN, *user("New message"), message_end(), ENDED]], **script)
+def replaced(text: str) -> list[dict[str, Any]]:
+    """A user message whose end an extension of the user's replaced, so pi writes down other text than it began with."""
+    started, _ = user(text)
+    return [started, user("what an extension made of it")[1]]
+
+
+@pytest.mark.parametrize(
+    ("frames", "script"),
+    [
+        (user("New message"), {"refuses": {"get_entries": "no"}}),
+        (user("New message"), {"gone_at": "get_entries"}),
+        (replaced("New message"), {}),
+    ],
+)
+async def test_an_input_whose_entry_pi_never_names_lands_with_no_id_in_its_place(tmp_path, stand, frames, script):
+    stand.install(turns=[[BEGAN, *frames, message_end(), ENDED]], **script)
 
     async with running(make_spec(tmp_path, goal="")) as (driver, heard):
         await driver.deliver(delivery())

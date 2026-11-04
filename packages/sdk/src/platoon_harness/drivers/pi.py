@@ -375,8 +375,8 @@ class PiDriver:
                 self._ended(aborted=bool(frame.get("aborted")))
             case {"type": "message_start", "message": {"role": "user", "content": content}}:
                 self._landed(text_of(content))
-            case {"type": "message_end", "message": {"role": "user", "content": content}}:
-                self._written_down(text_of(content))
+            case {"type": "message_end", "message": {"role": "user"}}:
+                self._written_down()
             case {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": text}}:
                 self._report(Delta(text=text))
             case {"type": "message_end", "message": {"role": "assistant", "content": list(blocks)} as message}:
@@ -424,13 +424,14 @@ class PiDriver:
             self._landed_as[text] = InputDelivered(input=input, boundary=boundary, evidence="message_start")
             self._behind.append(text)
 
-    def _written_down(self, text: str) -> None:
-        """A user message has ended, and pi has written it down as an entry before it reads another command, so ask for
-        the entries since the last one seen. One ask is out at a time: pi answers after what it said before, so an
-        answer holds every entry whose message ended before it."""
-        if text not in self._landed_as:
+    def _written_down(self) -> None:
+        """A user message has ended, and its end follows its start, so pi has written down each input that landed, as an
+        entry, before it reads another command: ask for the entries since the last one seen. One ask is out at a time:
+        pi answers after what it said before, so an answer holds every entry whose message ended before it."""
+        landed = [text for text in self._landed_as if text not in self._written]
+        if not landed:
             return
-        self._written.append(text)
+        self._written += landed
         if self._naming is None:
             self._naming = uuid4().hex
             since = {} if self._last_entry is None else {"since": self._last_entry}

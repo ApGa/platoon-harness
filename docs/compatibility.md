@@ -524,7 +524,9 @@ did on FakeModel. A Codex tool call reaches its script's item and no call, and a
 are bounded at the event's commit, `commit`, which can count a read the same model call chose as below. A compaction is `unsaid` on
 Claude Code and Codex, which name nothing they forgot, on OpenHands, whose delivered inputs carry no id, and for every read; on pi it
 is `forgot` or `kept` for a handover. Each of these ran on the real binary against FakeModel, a read then a cited write, in
-`tests/integration` [L]. Every harness here has a
+`tests/integration` [L]. A read through `ph` stays unconfirmed on every harness, and is labelled so: `ph` would have to send the id of
+the shell call that runs it, and neither Claude Code 2.1.316 nor pi 1.5.0 hands a shell command any such id, by its environment on
+FakeModel [L]; Codex's shell does not run on the machine this was checked on. `exec` reports no tool item at all. Every harness here has a
 shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each.
 
 ### Workspaces

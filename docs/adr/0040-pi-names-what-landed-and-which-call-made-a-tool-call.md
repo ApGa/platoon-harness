@@ -19,8 +19,10 @@ has checked a call's arguments and before the tool runs, with the arguments muta
 
 - **A landed input names its entry.** Pi writes a user message down as an entry once that message has ended, before it reads
   another command. At that `message_end` the driver asks `get_entries` for what came after the last entry it saw, and reports the
-  input under the id of the entry holding its text, as `InputDelivered.native_id`, the id a compaction would name it by. Where pi
-  names none, as when it refuses the ask or exits first, the input is reported with no id, as before.
+  input under the id of the entry holding its text, as `InputDelivered.native_id`, the id a compaction would name it by. Any user
+  message's end will do, as pi says a message's start before its end, so every input that landed has been written down by then.
+  Where pi names none, as when it refuses the ask or exits first, or an extension of the user's rewrote the message as it ended, so
+  that no entry holds the text, the input is reported with no id, as before.
 - **Pi's order is kept.** A fast model can answer before pi answers the ask, so whatever pi says after an input waits behind it,
   at its place, until the input is named. One ask is out at a time: pi answers after what it said before, so an answer holds every
   entry whose message ended before it. What is still waiting when pi stops goes on with no id, before the exit.
@@ -52,6 +54,8 @@ has checked a call's arguments and before the tool runs, with the arguments muta
 - With a client id, two identical calls in one turn are two calls, as through the shim's own ids before. Two calls under one id
   are one, as for Claude Code: FakeModel gives every call the id `call_1` unless told otherwise.
 - OpenHands' calls still go under the shim's own id, and its inputs still carry none: its worker would have to report both.
+- A read through `ph` or by `exec` stays unconfirmed, and says so. `ph` would have to send the id of the shell call that runs it,
+  and neither Claude Code nor pi hands a shell command one, by its environment on FakeModel; `exec` reports no tool item.
 
 ## Evidence
 
@@ -61,7 +65,7 @@ has checked a call's arguments and before the tool runs, with the arguments muta
   seen (`test_a_handover_a_compaction_forgot_is_marked_forgot_by_the_entry_it_landed_as`); `tool_item_carries_its_anchor` passed,
   where it had skipped; a read was confirmed by its tool item, and a spawn's anchor was its call's tool item's id.
 - On the stand-in, `tests/unit/drivers/test_pi.py`: a turn said whole before the driver's ask was answered kept pi's order, and an
-  ask refused, or a pi that exited, left the input with no id in its place.
+  ask refused, a pi that exited, or a message rewritten as it ended left the input with no id in its place.
 - Pi's source, read and not copied: `AgentSession._handleAgentEvent` emits `message_end` and then appends the entry with no await
   between; `validateToolArguments` clones what a tool is handed; the MCP client's `callTool` sends `_meta` with `progressToken` alone.
 - [compatibility.md](../compatibility.md), pi and Provenance per harness. [Architecture sections 6 and 9.5](../architecture.md).
