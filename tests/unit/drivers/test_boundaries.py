@@ -24,9 +24,10 @@ PUBLIC = (
 LOCAL = re.compile(
     r"(?<![\w.-])/(home|groups|Users)/[A-Za-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|(?i:\babci\b)"
     r"|ANTHROPIC_API_KEY=sk-|sk-ant-"
-    r"|[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"
+    r"|[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(?!invalid\b)[A-Za-z]{2,}\b"
 )
-"""An absolute path under a home or a group, this cluster's names, a key, or an email address."""
+"""An absolute path under a home or a group, this cluster's names, a key, or an email address but one under `.invalid`,
+which RFC 2606 keeps from ever naming an account."""
 
 
 def roots_of(path: Path) -> set[str]:

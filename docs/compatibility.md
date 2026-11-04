@@ -478,6 +478,15 @@ Git, as the runtime's own git meets it [V]:
 - `rev-parse` resolves `HEAD`, `main` and `main@{1.year.ago}` as readily as a hex prefix, and a ref named in hex digits before an object
   with that prefix, so a look resolves an `Informed-By` value with `rev-parse --disambiguate`, which names objects alone.
 - `log --numstat -z` puts a renamed file's two paths in entries of their own after its counts, and says `-` for a binary file's.
+- `git add -A` and `write-tree` run in your checkout with `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY` and
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES` pointed at a snapshot capture its tree under your config, change neither your index, refs nor
+  object store, and write only what is new into the snapshot's store; a blob only staged in yours is not copied, and the snapshot's
+  own pack is what keeps it once you unstage it and prune.
+- `repack -a -d` in a repository with alternates packs what it borrowed too, so removing `objects/info/alternates` after it leaves
+  it whole.
+- `ls-files --others --exclude-standard` names an untracked repository inside the tree as `dir/`, where `status` names only its
+  untracked parent folder; `check-attr -z --stdin filter` gives each tracked file's filter, `unspecified` for none.
+- A fetch from a snapshot with no branch to land on writes only `FETCH_HEAD`, so its commits stay unreachable from your refs.
 - `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
 - `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36, by git's release notes.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as

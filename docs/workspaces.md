@@ -22,7 +22,7 @@ has the decisions behind this page, and [compatibility.md](compatibility.md#work
 |---|---|---|
 | `shared` | The session's checkout, its cwd. Every agent's writes land there at once, and nothing in it is private or confined | Given everywhere, with or without git |
 | `worktree` | A linked git worktree of your repository, on a branch of its own, made at your checkout's HEAD when its agent's workspace is made. It shares the repository's refs, objects, config and hooks, and what runs there can reach anything you can, so it is not a sandbox | Given on git |
-| `snapshot` | A repository of its own holding your tree as your git sees it, uncommitted work included | Planned, and refused before any cost, naming why |
+| `snapshot` | A repository of its own holding your tree as your git sees it, uncommitted and untracked work included, but no ignored file. It reads your objects and holds its own, has no remote, and git in it writes only its own repository, while what runs there can still reach anything you can | Given on git |
 | `isolated` | A snapshot whose harness an extension's isolation confines | Planned, and refused before any cost: no extension gives an isolation yet |
 
 An agent works in the same subfolder of its workspace as the session's cwd is of its repository: a session started in `src/` puts a
@@ -39,6 +39,16 @@ is when your home is on a network filesystem, a kept worktree is reachable only 
 reason names the host. A copy of a session folder must leave `agents/*/workspace` out, since git in a copied worktree would move the
 original's HEAD.
 
+## Where a snapshot lives
+
+At the same place, `agents/<agent>/workspace`, as a repository of its own on the branch `platoon-harness/<session>/<agent>`, which
+lives in that repository and not in yours. Its first commit is your HEAD when nothing differs, and otherwise one commit over it by
+`platoon-harness <runtime@platoon-harness.invalid>` holding your tree as your git saw it: what `git add -A` would stage, under your own
+config, so your excludes and attributes apply and your ignored files, such as a `.venv`, stay out. It takes your `user.name` and
+`user.email`, so an agent commits there as it would in a worktree, and how your git reads and writes files. Your hooks do not run
+there, since it is a repository of its own. It reads your objects through alternates and holds in its own pack everything else it
+needs, so your unstaging and pruning cannot take from it what it holds.
+
 ## Before any cost
 
 `team check`, `run` and `Session.start` refuse, with exit 78 on the command line, each of these, every one named:
@@ -50,7 +60,11 @@ original's HEAD.
 - In every mode, a session folder that lies inside your repository's work tree and is not ignored there, since an agent's `git add -A`
   would commit its credentials.
 
-And warn of submodules, which stay uninitialized in each worktree, of uncommitted changes in your checkout, which a worktree does not
+A snapshot is refused besides where git in it would see your tree otherwise than your own git: a tracked file with a `filter`
+attribute, LFS and git-crypt among them, since only your config runs that filter; a sparse checkout, which it would hold whole; and an
+untracked repository inside your tree, which a capture leaves out. Use `worktree` for these.
+
+And warn of submodules, which stay uninitialized in each workspace, of uncommitted changes in your checkout, which a worktree does not
 carry, and of a Codex role whose commits would each wait on an approval, below.
 
 ## What each harness sees there
@@ -72,7 +86,7 @@ outside the sandbox. Choose one of three postures for a Codex role in a worktree
 | The sandbox, its escalations allowed | `approvals = "allow"` | The sandbox stays, and each escalation the model asks for is allowed by policy |
 | Asking | `approvals = "ask"`, the default | You approve each commit, so a headless run ends `needs_human` at its first |
 
-## When a worktree goes
+## When a workspace goes
 
 At its agent's end, its stop removes the worktree only when nothing would go with it, as git says:
 
@@ -97,6 +111,19 @@ $ git worktree remove ~/.local/state/platoon-harness/sessions/fix-auth/agents/ad
 
 `remove` refuses one with uncommitted or untracked files until you say `--force`. Once a session folder is deleted, `git worktree
 unlock <path>` and then `git worktree prune` forget its worktrees, and `git branch -D` deletes their branches.
+
+A snapshot goes by the same rule, where the commits it alone holds are those of all its refs, its stash and its reflogs that are
+neither its base nor reachable from a ref of yours. A kept one is made whole: what it borrowed from your repository is packed into
+its own, and its alternates are removed, so it no longer depends on yours. To keep its work and let it go:
+
+```console
+$ git -C ~/src/app fetch ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace \
+    platoon-harness/fix-auth/ada:platoon-harness/fix-auth/ada
+$ rm -rf ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
+```
+
+A fetch with a branch to land on, as here, is what makes a snapshot's commits yours, and so a snapshot removable; a fetch with none
+writes only `FETCH_HEAD`.
 
 ## What a look sees
 

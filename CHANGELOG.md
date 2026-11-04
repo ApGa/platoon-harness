@@ -24,6 +24,11 @@
 - In the terminal, the header says what changed, `/review` or Alt+D lists it, grouped by workspace, with rows past your mark marked
   new, the inspector names the agent's workspace, and the dock says where a conflict is resolved. In the browser, a conflict is
   listed under Needs you.
+- `workspace = "snapshot"`: a repository of its own in the session folder holding your tree as your git sees it, uncommitted and
+  untracked work included, captured in your checkout under its own config into the snapshot's own store and index, reading your
+  objects through alternates and holding in its own pack what your refs did not reach, with your identity and file-reading values
+  and no remote. It is built aside and renamed into place last, so a retry adopts it; refused before any cost for filtered tracked
+  files, a sparse checkout or an untracked repository inside the tree; ended by the same lossless rule, a kept one made whole.
 - `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
   `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
   a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume

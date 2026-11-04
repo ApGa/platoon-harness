@@ -287,7 +287,9 @@ platoon_harness.runtime.told
 platoon_harness.runtime.workspaces.BRANCHES
 platoon_harness.runtime.workspaces.branch_of
 platoon_harness.runtime.workspaces.BUNDLE
+platoon_harness.runtime.workspaces.end_snapshot
 platoon_harness.runtime.workspaces.end_worktree
+platoon_harness.runtime.workspaces.make_snapshot
 platoon_harness.runtime.workspaces.make_worktree
 platoon_harness.runtime.workspaces.NOT_YET
 platoon_harness.runtime.workspaces.operations

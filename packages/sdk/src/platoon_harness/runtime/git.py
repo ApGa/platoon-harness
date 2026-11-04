@@ -5,7 +5,7 @@ An agent's git is its own and is never touched. Paths come from `rev-parse`, nev
 
 import os
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 SECONDS = 300.0
@@ -44,11 +44,16 @@ class GitError(Exception):
     runtime did not make."""
 
 
-def git(*args: str, cwd: Path, input: str | None = None, ok: Sequence[int] = (0,)) -> str:
+def git(
+    *args: str, cwd: Path, input: str | None = None, ok: Sequence[int] = (0,), env: Mapping[str, str] | None = None
+) -> str:
     """Run git in `cwd` and return what it printed, or raise `GitError` with what it said for an exit not in `ok`. Your
-    config applies, as it would to your own git, but for the settings that would run something or start a gc."""
+    config applies, as it would to your own git, but for the settings that would run something or start a gc. `env`
+    is what this one call sets besides, such as the index and object store a snapshot's capture writes instead."""
     settings = [part for setting in _SETTINGS for part in ("-c", setting)]
-    env = {name: value for name, value in os.environ.items() if name not in _LOCAL} | dict(_ENVIRONMENT)
+    env = (
+        {name: value for name, value in os.environ.items() if name not in _LOCAL} | dict(_ENVIRONMENT) | dict(env or {})
+    )
     try:
         done = subprocess.run(
             ["git", *settings, *args],

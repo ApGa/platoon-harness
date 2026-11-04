@@ -440,9 +440,9 @@ async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_
 
 async def test_a_mode_not_built_yet_is_refused_before_any_cost(tmp_path):
     with pytest.raises(ConfigError) as refused:
-        await Session.start(solo(workspace="snapshot"), root=tmp_path)
+        await Session.start(solo(workspace="isolated"), root=tmp_path)
 
-    assert "roles.bob.workspace: `snapshot` is not built yet" in str(refused.value)
+    assert "roles.bob.workspace: `isolated` needs an extension" in str(refused.value)
     assert not (tmp_path / "sessions").exists()
 
 

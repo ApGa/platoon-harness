@@ -56,7 +56,7 @@ from .git import GitError
 from .looks import PAGE, look, tips_of
 from .opening import PLAN_LOGIN_FIX, make_driver
 from .paths import agent_folder
-from .workspaces import branch_of, end_worktree, make_worktree, present, write_bundle
+from .workspaces import branch_of, end_snapshot, end_worktree, make_snapshot, make_worktree, present, write_bundle
 
 GRACE = 5.0
 
@@ -261,12 +261,15 @@ class Host:
             host = socket.gethostname()
             repository = None if repo is None else repo.repository
             made = Workspace(mode="shared", path=str(self._cwd), host=host, repository=repository)
-        elif mode != "worktree":
-            raise DriverError(f"workspace `{mode}` is not available yet: use `shared` or `worktree`")
+        elif mode not in ("worktree", "snapshot"):
+            raise DriverError(f"workspace `{mode}` is not available yet: use `shared`, `worktree` or `snapshot`")
         elif repo is None:
-            raise GitError(f"`worktree` needs a git work tree, and {self._cwd} was in none when the session opened")
-        else:
+            raise GitError(f"`{mode}` needs a git work tree, and {self._cwd} was in none when the session opened")
+        elif mode == "worktree":
             made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
+        else:
+            made_for = f"{self._folder.name}/{agent}"
+            made = await asyncio.to_thread(make_snapshot, repo, folder, branch, self._tips_at_open(repo), made_for)
         return made.model_dump()
 
     def _tips_at_open(self, repo: Repo) -> list[str]:
@@ -574,10 +577,11 @@ class Host:
             places = [where for where in self._places(name) if where == "shared" or self._root(where).exists()]
             await self._look(name, effect.data.get("cause"), places)
         ended = {"removed": False, "kept": None}
-        if record["workspace"] is not None and record["workspace"]["mode"] == "worktree":
+        if record["workspace"] is not None and (mode := record["workspace"]["mode"]) != "shared":
             workspace, repo = Workspace.model_validate(record["workspace"]), self._repo()
             assert repo is not None
-            ended = await asyncio.to_thread(end_worktree, workspace, folder, Path(repo.top), left)
+            ending = end_worktree if mode == "worktree" else end_snapshot
+            ended = await asyncio.to_thread(ending, workspace, folder, Path(repo.top), left)
         outcome = AgentOutcome(status=record["status"])
         await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
         return ended

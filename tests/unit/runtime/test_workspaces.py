@@ -153,11 +153,10 @@ def test_submodules_and_uncommitted_changes_are_warned_of_before_any_cost(repo, 
     ]
 
 
-@pytest.mark.parametrize("mode", ["snapshot", "isolated"])
-def test_a_mode_that_cannot_be_given_is_refused_before_any_cost(repo, tmp_path, mode):
-    found = problems_of(workspace_team(workspace=mode), repo, tmp_path / "home")
+def test_a_mode_that_cannot_be_given_is_refused_before_any_cost(repo, tmp_path):
+    found = problems_of(workspace_team(workspace="isolated"), repo, tmp_path / "home")
 
-    assert found["error"] == [f"roles.bob.workspace: {workspaces.NOT_YET[mode]}"]
+    assert found["error"] == [f"roles.bob.workspace: {workspaces.NOT_YET['isolated']}"]
 
 
 def test_isolated_with_no_extension_that_confines_is_refused_before_any_cost(repo, tmp_path):

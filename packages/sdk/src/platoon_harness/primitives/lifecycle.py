@@ -807,7 +807,9 @@ def _came_to(txn: Txn, state: str) -> str:
 
 def _left(agent: Agent, repo: Repo) -> dict[str, Any] | None:
     """A workspace an agent's end did not take, as the Ending names it, with the commands that let it go, for a person
-    to run once nothing in it is wanted. Its folder is where the agent works, less the session's subfolder."""
+    to run in your checkout once nothing in it is wanted: a worktree is unlocked and removed, and a snapshot's commits
+    are fetched into your repository before its folder is deleted. Its folder is where the agent works, less the
+    session's subfolder."""
     workspace = agent.workspace
     if workspace is None or workspace.mode == "shared" or agent.removed:
         return None
@@ -819,7 +821,10 @@ def _left(agent: Agent, repo: Repo) -> dict[str, Any] | None:
         why = "its stop never finished" if agent.ended else "its agent has not ended"
         left = {"path": str(folder), "host": workspace.host, "branch": workspace.branch, "bytes": None, "why": [why]}
     path, git = left["path"], f"git -C {repo.top}"
-    release = [f"{git} worktree unlock {path}", f"{git} worktree remove {path}"]
+    if workspace.mode == "worktree":
+        release = [f"{git} worktree unlock {path}", f"{git} worktree remove {path}"]
+    else:
+        release = [f"{git} fetch {path} {workspace.branch}:{workspace.branch}", f"rm -rf {path}"]
     return {"agent": agent.name, "mode": workspace.mode, **left, "release": release}
 
 

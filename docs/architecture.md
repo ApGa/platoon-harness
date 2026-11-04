@@ -1336,7 +1336,7 @@ op references, each with whatever keeps a stale button from deciding anything, s
 
 A role's `workspace` is a ladder, each step promising one thing more: `shared`, `worktree`, `snapshot` or `isolated`. The mode recorded
 is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
-another. The core gives the first two, on git and the filesystem alone, and refuses the others naming why. See
+another. The core gives the first three, on git and the filesystem alone, and refuses `isolated` naming why. See
 [ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
 
 - **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
@@ -1344,6 +1344,13 @@ another. The core gives the first two, on git and the filesystem alone, and refu
   `platoon-harness/<session>/<agent>` made at your checkout's HEAD when the workspace is made, locked with the reason
   `platoon-harness: <host>:<path>`. It shares the repository's refs, objects, config and hooks, and what runs in it can reach anything
   you can, so it is not a sandbox.
+- **`snapshot`** is a repository of its own at the same place, on that branch, holding your tree as your git sees it when the
+  workspace is made: tracked files and untracked files git does not ignore, committed or not, as HEAD when nothing differs and
+  otherwise as one runtime commit over HEAD. It is captured in your checkout under your repository's own config, reads your objects
+  through alternates, holds in its own store every object your refs at open did not reach, and has no remote. It gets the values your
+  checkout's git resolves for who commits and how files are read and written, and your local excludes and attributes. Git in it
+  writes only its own repository, and what runs there can still reach anything you can. It is built aside and renamed into place
+  last, so it is whole or absent, and a retry adopts a whole one.
 - **Where an agent works.** In the same subfolder of its workspace as the session's cwd is of its repository. The path never changes
   while the agent lives, every launch and resume runs its harness there, and a resume whose folder has gone, or is no longer a work tree
   of the recorded repository, ends its agent `lost`, naming the fix.
@@ -1352,7 +1359,9 @@ another. The core gives the first two, on git and the filesystem alone, and refu
 - **Before any cost**, a git mode is refused when the cwd is in no git work tree, the repository is bare or has no commit, git is older
   than 2.36, LFS files have no LFS filter, or a branch exists at `platoon-harness`, at `platoon-harness/<session>` or under it, each
   named with the command that deletes it. A session whose folder lies unignored in its repository's work tree is refused in every mode.
-  Submodules, uncommitted changes in your checkout, and a Codex role whose sandbox keeps `.git` read-only with approvals left to ask
+  A snapshot is refused too where git in it would see your tree otherwise than git in your checkout: a tracked file with a `filter`
+  attribute, a sparse checkout, or an untracked repository inside the tree, each named. Submodules, uncommitted changes in your
+  checkout where a worktree would not carry them, and a Codex role whose sandbox keeps `.git` read-only with approvals left to ask
   are warned of.
 - **Making one** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
   locked with our reason from its first write, and a fill. The effect is retried after a crash, each attempt adopts what an earlier
@@ -1361,8 +1370,9 @@ another. The core gives the first two, on git and the filesystem alone, and refu
   no `-B`, no `--force` or `reset` in a tree an agent has run in, no `prune`, and no `update-ref` of a branch an agent has.
 - **Ending one.** An agent's stop removes its worktree only when nothing would go with it: its processes proved gone, no path in its
   status, ignored ones included, no operation under way, no index entry hidden from status, and every commit its HEAD, reflog and own
-  refs hold its base or reachable from a ref of your repository. A kept one stays locked and is named with its host, path, size and
-  reason on the agent's record and in the Ending. No branch is ever removed, and closing a session ends no agent, so it keeps the
+  refs hold its base or reachable from a ref of your repository; for a snapshot, every commit of all its refs, its stash and its
+  reflogs. A kept worktree stays locked, a kept snapshot is made whole, packing what it borrowed into its own store, and either is
+  named with its host, path, size and reason on the agent's record and in the Ending. No branch is ever removed, and closing a session ends no agent, so it keeps the
   workspaces of agents that never ended.
 - **The look.** Each turn's end and each resume request a `probe` of that agent's (§7), and its stop looks once more before it ends the
   workspace. Looks run one at a time and change no ref, index or file. Each takes the shared workspace's commits and then the agent's
