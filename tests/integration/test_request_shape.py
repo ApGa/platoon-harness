@@ -56,7 +56,8 @@ TEAMS: dict[str, Callable[..., Team]] = {
 async def test_the_tool_block_and_our_words_hold_still_across_a_wake_and_a_resume(harness, tmp_path, monkeypatch):
     if harness != "openhands" and shutil.which(harness) is None:
         pytest.skip(f"{harness} is not installed, so this met no real harness here")
-    monkeypatch.setattr(support, "SECONDS", test_openhands.TIMEOUT)  # The OpenHands worker loads its SDK first.
+    if harness == "openhands":
+        monkeypatch.setattr(support, "SECONDS", test_openhands.TIMEOUT)  # Its worker loads the SDK first.
     replies = (wait_call(harness), "waiting for you", "woken", "resumed")
 
     async with FakeModel(*replies) as model:
