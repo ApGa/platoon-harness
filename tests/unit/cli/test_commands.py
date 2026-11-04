@@ -13,6 +13,7 @@ import pytest
 from cyclopts import CycloptsError
 from rich.console import Console
 
+from platoon_harness.annotations import Annotate
 from platoon_harness.kernel import GIST_LIMIT, Event, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.session import Reason
@@ -186,6 +187,16 @@ def test_the_provenance_commands_derive_from_the_registry(name: str):
     assert name in person_ops() and arguments["session"] == "fix-auth"
     assert "key" not in inspect.signature(command).parameters
     assert (command.__doc__ or "").split()[:4] == (OPS[name].fn.__doc__ or "").split()[:4]
+
+
+def test_annotate_is_made_from_the_schema_session_annotate_checks():
+    credit = ["--target", "agent/a@1", "--kind", "credit", "--producer", "p", "--producer-version", "1"]
+    said = ["--scope", "team", "--status", "unscored", "--head-seq", "9"]
+    _, arguments = parsed(["annotate", "fix-auth", *credit, *said])
+
+    flags = {name.replace("_", "-") for name in Annotate.model_fields}
+    assert {f"--{flag}" for flag in flags} <= set(re.findall(r"--[a-z-]+", helped(["annotate"])))
+    assert (arguments["session"], arguments["kind"]) == ("fix-auth", "credit")
 
 
 def test_the_reference_is_made_from_the_definitions():

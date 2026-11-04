@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from cyclopts import App, Parameter
+from pydantic import BaseModel
 
 from platoon_harness import Session
 from platoon_harness.kernel import GIST_LIMIT, Op, Outcome, registry
@@ -240,23 +241,44 @@ async def _body(session: Session, field: Flag, text: str | None, path: Path | No
 
 
 def _command(operation: Op) -> Callable[..., Awaitable[int]]:
-    """One op as a command: a read on a view credential, which writes nothing, and anything else on a control one."""
-    schema = operation.input.model_json_schema()
-    fields = _fields(schema)
+    """One op as a command: a read on a view credential, which writes nothing, and anything else on a control one,
+    named by `--key`."""
     reads = operation.query or operation.exposes
 
-    async def run_op(*named: str, **given: Any) -> int:
-        async with Session.attach(named[0], view=reads) as attached:
-            args = await _arguments(attached, fields, given)
-            outcome = await attached.submit(operation.name, key=given.get("key"), **args)
-        return said(outcome)
+    async def run(attached: Session, args: dict[str, Any], given: Mapping[str, Any]) -> int:
+        return said(await attached.submit(operation.name, key=given.get("key"), **args))
 
-    first, _, rest = _described(operation.fn.__doc__ or "", fields).partition(". ")
+    command: Any = derived(operation.name, operation.input, operation.fn.__doc__ or "", run, reads=reads)
+    if not reads:
+        signature = inspect.signature(command)
+        command.__signature__ = signature.replace(parameters=[*signature.parameters.values(), _KEY])
+    return command
+
+
+def derived(
+    name: str,
+    input: type[BaseModel],
+    doc: str,
+    run: Callable[[Session, dict[str, Any], Mapping[str, Any]], Awaitable[int]],
+    *,
+    reads: bool,
+) -> Callable[..., Awaitable[int]]:
+    """A command made from a schema as an op's is: the session, then a flag per field, with `doc` in a person's words as
+    its help. `run` takes the session, attached on a view credential if it `reads`, the arguments, and the flags as
+    given."""
+    schema = input.model_json_schema()
+    fields = _fields(schema)
+
+    async def run_command(*named: str, **given: Any) -> int:
+        async with Session.attach(named[0], view=reads) as attached:
+            return await run(attached, await _arguments(attached, fields, given), given)
+
+    first, _, rest = _described(doc, fields).partition(". ")
     described = f"{first.rstrip('.')}.\n\n{rest}".rstrip()
-    command: Any = run_op
-    command.__signature__ = inspect.Signature([_SESSION, *_parameters(schema, fields), *(() if reads else (_KEY,))])
+    command: Any = run_command
+    command.__signature__ = inspect.Signature([_SESSION, *_parameters(schema, fields)])
     command.__doc__ = (
-        f"{described}\n\nFor example:\n\n    {_example(operation.name, fields)}\n\n"
+        f"{described}\n\nFor example:\n\n    {_example(name, fields)}\n\n"
         f"Parameters\n----------\nsession\n    {_SESSION_HELP}"
     )
     return command

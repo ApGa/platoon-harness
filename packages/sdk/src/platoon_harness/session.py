@@ -25,8 +25,10 @@ from pathlib import Path
 from typing import Any, Literal, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
+from platoon_harness.annotations import Annotate, Annotation, Status, annotate
+from platoon_harness.annotations import annotations as annotations_of
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, first, is_held
 from platoon_harness.primitives import (
@@ -813,6 +815,47 @@ class Session:
         """Each maker a walk back from an outcome reaches, and apart from them each maker whose work was only handed to
         one of them: reachability in the record, never credit. Pass `cursor` as `after`."""
         return Contributors.model_validate(await self._ask("contributors", ref=ref, after=after))
+
+    async def annotate(
+        self,
+        target: str,
+        *,
+        kind: Literal["reward", "credit"],
+        producer: str,
+        producer_version: str,
+        scope: Literal["local", "team"],
+        status: Status,
+        head_seq: int,
+        value: float | None = None,
+        params: Mapping[str, Any] | None = None,
+        evidence: Sequence[str] = (),
+    ) -> Annotation:
+        """Say what an estimator found of an event, a `reward` or a `credit`, in `annotations.sqlite` beside the journal
+        and never in it, on a live session or a closed one, with no runtime. It is `producer`'s at `producer_version`,
+        run with `params`, of the trace up to `head_seq`, at or below which the target and each ref of `evidence` lie:
+        an estimate, never a fact. `value` is given when `status` is `scored` alone, so nothing unscored is zero. The
+        same statement again is answered with the first, and another under the same producer, version, params, target
+        and kind is refused `conflict`."""
+        if self._view:
+            raise Refused("not_permitted", "a view credential reads and never writes, an annotation among it")
+        given: dict[str, Any] = {"target": target, "kind": kind, "producer": producer, "scope": scope}
+        given |= {"producer_version": producer_version, "params": dict(params or {}), "status": status, "value": value}
+        try:
+            statement = Annotate.model_validate({**given, "evidence": tuple(evidence), "head_seq": head_seq})
+        except ValidationError as error:
+            faults = (f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in error.errors(include_url=False))
+            raise Refused("invalid", "; ".join(faults)) from None
+        if head_seq > (head := await self.head()):
+            raise Refused("invalid", f"head_seq {head_seq} is past the head, {head}")
+        for ref in dict.fromkeys((statement.target, *statement.evidence)):
+            if (seq := (await self.lineage(ref)).event.seq) > head_seq:
+                raise Refused("invalid", f"{ref} is at {seq}, past head_seq {head_seq}, so it is no part of that trace")
+        return await asyncio.to_thread(annotate, self.folder, statement, self._current().clock.now())
+
+    async def annotations(self, target: str | None = None) -> list[Annotation]:
+        """What estimators said of one event, or of every one, oldest first, each with its producer and version and
+        never summed. Nothing an agent can reach reads these."""
+        return await asyncio.to_thread(annotations_of, self.folder, target)
 
 
 def _marks_of(folder: Path, person: str) -> dict[str, int]:

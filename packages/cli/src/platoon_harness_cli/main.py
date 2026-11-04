@@ -15,7 +15,7 @@ from platoon_harness import ConfigError, JournalError, Refused
 from platoon_harness.runtime.paths import find_root, session_folder
 from platoon_harness.version import __version__ as sdk_version
 
-from . import __version__, machine, running, sessions, teams
+from . import __version__, annotations, machine, running, sessions, teams
 from .exits import CONFIGURATION, INTERRUPTED, JOURNAL, REFUSED, USAGE, Usage
 from .ops import groups
 from .output import note, refused
@@ -190,6 +190,8 @@ def build() -> App:
     app.command(machine.init)
     app.command(machine.doctor)
     app.command(machine.extension)
+    app.command(annotations.annotate, name="annotate")
+    app.command(annotations.annotations)
     for name, group in groups({"session": session}).items():
         if name != "session":
             group.group = (_OPS,)

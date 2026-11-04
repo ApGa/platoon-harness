@@ -89,7 +89,7 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
   `test_exposure_agrees_with_a_brute_force_reading_of_the_journal`, a hypothesis property that also passed at 600 examples;
   `test_provenance_answers_alike_after_a_rebuild_and_on_a_closed_copy`; `test_a_closed_copy_with_stale_views_is_refused_naming_the_fix`;
   `test_not_seen_needs_proved_coverage_and_no_gap_below_the_bound`; `test_no_agent_answers_not_seen_at_m2`; and the rest named in
-  STATUS. `tests/integration/test_cli.py`, `test_provenance_of_a_closed_session_from_the_command_line`.
+  STATUS. `tests/integration/test_cli.py`, `test_provenance_of_a_closed_session_from_the_command_line_and_credit_beside_it`.
 - Writer throughput, measured on the shared login node at load 27 to 64, each run 5 s, alternated. A trivial op with 256 in flight:
   10,290, 10,327 and 10,454 commands/s with the views against 10,382, 10,578 and 10,304 without. A loop of 32 workers, each a citing
   send, a read under a tool call's id and that tool item's completion: 2,524, 2,630, 2,621 and 2,630 commands/s with the views against

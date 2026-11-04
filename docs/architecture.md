@@ -121,7 +121,7 @@ Each law is a sentence, and each has a test of the same name.
 ```text
 <root>/sessions/fix-auth/
   journal.sqlite      events and folds; WAL, synchronous=FULL
-  annotations.sqlite  rewards, judgments, credit: no agent-reachable read opens it
+  annotations.sqlite  rewards and credit, each by a named estimator: nothing an agent can reach opens it
   marks.sqlite        per-human unread positions: neither evidence nor view; losing it loses badges
   swarmchat.sqlite    0600: the browser's projection, folded one way by `web`; dropping it costs a fold from the journal
   swarmchat.lock      flock: held by the one `web` serving the session, which says where it serves
@@ -1322,12 +1322,17 @@ through a shell, a file or git makes an answer `Unknown`, and words an agent cop
 lineage.
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
-`(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)`, unique on producer,
-version, params, target and kind. `head_seq` names the exact trace. Rewards live here with `scope: local | team`, a required
-`status`, and `value` nullable, so `invalid`, `error`, `cancelled` and `unscored` are never zero. A new estimator adds rows
-beside old ones, on a closed session, with no writer lock.
-
-See [ADR 0038](adr/0038-provenance-is-answered-from-the-record.md). [provenance.md](provenance.md) is the guide.
+`(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)` with a `scope`, unique on
+producer, version, params, target and kind. `kind` is `reward` or `credit`, and `scope` is `local` or `team`. `status` is required,
+`scored`, `invalid`, `error`, `cancelled` or `unscored`, and `value` is given when it is `scored` and only then, so nothing unscored is
+zero. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
+`annotate` command write one with no runtime and no lock but the file's own, on a live session or a closed one, and
+`Session.annotations` reads them. The same statement again is answered with the first, and another under the same key is refused
+`conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and the SDK makes no
+estimate of its own: credit is an annotation by a named producer, never a fact, and a client shows a value only with its producer and
+version, beside any other estimate of the same target, never summed. Judged attribution and validated intervention come at M3. See
+[ADR 0038](adr/0038-provenance-is-answered-from-the-record.md) and [ADR 0039](adr/0039-estimators-write-beside-the-journal-at-m2.md).
+[provenance.md](provenance.md) is the guide.
 
 ## 12. Clients
 
@@ -1394,8 +1399,10 @@ owner's shutdown, and says the session's name on stderr at once, so another shel
 from the team before any cost. Ctrl+C or `SIGTERM`, at any point, cancels what is under way and the shutdown still runs, so a run ends
 `cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a supervisor. `events` follows a session and
 `session stop` sends it the owner's stop, and each command under Ops on a session runs one op there as a guest, a read on a view
-credential, derived from the op registry. With `--json`, stdout holds one line per event the runtime it owns journals, from its
-`runtime.started`, in a shape versioned by its `format`, then the Ending, and nothing else; logs go to stderr. One stopped while its
+credential, derived from the op registry. `annotate` and `annotations` write and read `annotations.sqlite`, the first's flags made from
+the schema `Session.annotate` checks, as an op's are from its arguments. With `--json`, stdout holds one line per event the runtime it
+owns journals, from its `runtime.started`, in a shape versioned by its `format`, then the Ending, and nothing else; logs go to stderr.
+One stopped while its
 runtime starts prints its Ending alone. Nothing prompts: an `ask` with nobody attached ends `needs_human` at once, and `--approvals`
 states a policy over every role's, which the manifest keeps. [cli.md](cli.md) is its reference, made from the command definitions.
 

@@ -98,6 +98,8 @@ For example:
 - [`doctor`](#platoon-harness-doctor)
 - [`extension`](#platoon-harness-extension)
     - [`list`](#platoon-harness-extension-list)
+- [`annotate`](#platoon-harness-annotate)
+- [`annotations`](#platoon-harness-annotations)
 - [`agent`](#platoon-harness-agent)
     - [`cancel`](#platoon-harness-agent-cancel)
     - [`interrupt`](#platoon-harness-agent-interrupt)
@@ -155,6 +157,8 @@ For example:
 
 **Commands**:
 
+* [`annotate`](#platoon-harness-annotate): Say what an estimator found of an event, a `reward` or a `credit`, in `annotations.sqlite` beside the journal and never in it, on a live session or a closed one, with no runtime.
+* [`annotations`](#platoon-harness-annotations): List what estimators said of one event, or of every one, oldest first, each with its producer and version and never summed. Nothing an agent can reach reads these.
 * [`attach`](#platoon-harness-attach): Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
 * [`doctor`](#platoon-harness-doctor): Say whether this machine can run sessions, and what it has.
 * [`events`](#platoon-harness-events): Print a session's events past a cursor, live or closed, writing nothing.
@@ -676,6 +680,57 @@ List every installed driver and extension, with its distribution, and any proble
 **Parameters**:
 
 * `--json`: Say it as one JSON object.
+
+### platoon-harness annotate
+
+```console
+platoon-harness annotate --target STR --kind LITERAL[REWARD, CREDIT] --producer STR --producer-version STR --scope LITERAL[LOCAL, TEAM] --status LITERAL[SCORED, INVALID, ERROR, CANCELLED, UNSCORED] --head-seq INT [OPTIONS] SESSION
+```
+
+Say what an estimator found of an event, a `reward` or a `credit`, in `annotations.sqlite` beside the journal and never in it, on a live session or a closed one, with no runtime.
+
+It is `--producer`'s at `--producer-version`, run with `--params`, of the trace up to `--head-seq`, at or below which the target and each ref of `--evidence` lie: an estimate, never a fact. `--value` is given when `--status` is `scored` alone, so nothing unscored is zero. The same statement again is answered with the first, and another under the same producer, version, params, target and kind is refused `conflict`.
+
+For example:
+
+    platoon-harness annotate SESSION --target TARGET --kind KIND --producer PRODUCER --producer-version PRODUCER_VERSION --scope SCOPE --status STATUS --head-seq HEAD_SEQ
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--target`: The event it is about, by its ref, `stream@version`. **[required]**
+* `--kind`: `reward` or `credit`. **[required]** *[choices: reward, credit]*
+* `--producer`: The estimator that made it, by name. **[required]**
+* `--producer-version`: The estimator's version. **[required]**
+* `--params`: What the estimator was run with, kept as `params_hash`. As JSON.
+* `--scope`: `local` for the target's own, `team` for what its team shares. **[required]** *[choices: local, team]*
+* `--status`: `scored`, `invalid`, `error`, `cancelled` or `unscored`. **[required]** *[choices: scored, invalid, error, cancelled, unscored]*
+* `--value`: The estimate, given when `--status` is `scored` alone.
+* `--evidence`: The refs of the events it rests on.
+* `--head-seq`: The head the estimator read at, which names the trace it is about. **[required]**
+
+### platoon-harness annotations
+
+```console
+platoon-harness annotations [OPTIONS] SESSION
+```
+
+List what estimators said of one event, or of every one, oldest first, each with its producer and version and never summed. Nothing an agent can reach reads these.
+
+For example:
+
+    platoon-harness annotations fix-auth --target agent/lead@1
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--target`: The event they are about, by its ref, `stream@version`.
 
 ### platoon-harness agent
 

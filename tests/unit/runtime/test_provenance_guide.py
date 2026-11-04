@@ -32,5 +32,7 @@ async def test_the_guide_s_code_runs_on_a_session(tmp_path):
         answer = f"{sent[-1].stream}@{sent[-1].version}"
 
         cited = await namespace["citations"](session, answer)
+        estimates = await namespace["even_split"](session, answer)
 
     assert cited == [("inbox/bob@1", "human:you", "seen")]
+    assert [(found.target, found.producer, found.value) for found in estimates] == [("agent/bob@1", "even-split", 1.0)]

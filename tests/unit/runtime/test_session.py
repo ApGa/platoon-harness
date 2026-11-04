@@ -75,6 +75,8 @@ COVERED = {
     "wait.progress": "wait_progress",
 }
 DERIVED = {
+    "annotate": "annotations.sqlite",
+    "annotations": "annotations.sqlite",
     "approvals": "attention.list",
     "deltas": "the link",
     "events": "the link",

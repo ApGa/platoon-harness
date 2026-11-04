@@ -6,10 +6,11 @@ from pathlib import Path
 import pytest
 
 import platoon_harness
-from platoon_harness import runtime, session
+from platoon_harness import annotations, runtime, session
 from platoon_harness.runtime import authority, control, git, host, looks, opening, paths, recovery, workspaces
 
 MODULES = {
+    "annotations": annotations,
     "session": session,
     "runtime": runtime,
     "runtime.authority": authority,

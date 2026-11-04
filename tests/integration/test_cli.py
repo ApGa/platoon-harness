@@ -505,8 +505,8 @@ async def test_events_on_a_closed_session_reads_history_and_writes_nothing(cli: 
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 
-async def test_provenance_of_a_closed_session_from_the_command_line(cli: Cli):
-    """A worker's result reaches the lead that added its task, and the journal is as it was."""
+async def test_provenance_of_a_closed_session_from_the_command_line_and_credit_beside_it(cli: Cli):
+    """A worker's result reaches the lead that added its task, and an estimate of it goes beside the journal."""
     team = cli.write("crew.toml", crew())
     await cli.run("run", "go", "--team", team, "--trust", "--name", "s")
     path = journal(cli, "s")
@@ -515,15 +515,21 @@ async def test_provenance_of_a_closed_session_from_the_command_line(cli: Cli):
     traced = await cli.run("lineage", "s", "--ref", "task/tasks/1@3")
     reached = await cli.run("contributors", "s", "--ref", "task/tasks/1@3")
     seen = await cli.run("exposure", "s", "--agent", "@lead", "--ref", "task/tasks/1@3")
+    head = str(json.loads(traced.stdout)["head"])
+    credit = ("--kind", "credit", "--producer", "split", "--producer-version", "1", "--scope", "local")
+    scored = ("--status", "scored", "--value", "1", "--head-seq", head)
+    written = await cli.run("annotate", "s", "--target", "task/tasks/1@3", *credit, *scored)
+    listed = await cli.run("annotations", "s", "--target", "task/tasks/1@3")
     refused = await cli.run("lineage", "s", "--ref", "task/tasks/1@3#L1-2")
 
-    assert (traced.code, reached.code, seen.code) == (0, 0, 0), reached.stderr
+    assert (traced.code, reached.code, seen.code, written.code, listed.code) == (0, 0, 0, 0, 0), written.stderr
     lineage = json.loads(traced.stdout)
     worker = lineage["made"]["maker"]
     assert worker in ("agent:w1", "agent:w2") and [step["ref"] for step in lineage["ancestry"]] == ["task/tasks/1@2"]
     rows = [(row["maker"], row["kinds"]) for row in json.loads(reached.stdout)["rows"]]
     assert rows == [(worker, ["cause", "ancestry"]), ("agent:lead", ["ancestry"])]
     assert json.loads(seen.stdout)["answer"] in ("seen", "unknown")
+    assert [(row["producer"], row["value"]) for row in json.loads(listed.stdout)] == [("split", 1.0)]
     assert refused.code == 1 and "ask by task/tasks/1@3" in refused.stderr
     assert path.read_bytes() == before
 

@@ -9,7 +9,7 @@ Three things stay apart in every answer, and none is ever drawn as another:
 - **What an agent claims.** A citation, `based_on` on a write, is its writer's claim, checked only to name an event that exists.
 - **What reached it.** An offer the runtime made, and its harness's own report that it took it, is observed exposure. Seen means
   handed over and taken, never understood.
-- **What an estimator thinks.** Credit is an annotation by a named producer at a version, never a fact, and none is in the journal.
+- **What an estimator thinks.** Credit and rewards are annotations, each by a named producer at a version, never facts.
 
 ## Refs and citations
 
@@ -64,6 +64,36 @@ it reached them, with the kinds of edge that reached each. A maker whose work wa
 being handed something is not using it, and the walk does not go through them. Nobody is weighed or ranked: that is an estimate, and
 an estimate is an annotation.
 
+## Writing credit
+
+An estimator reads the record, then writes what it found beside the journal, in `annotations.sqlite`, with no runtime, on a live
+session or a closed one. Each statement names its producer and version, the events it is about and rests on, and the `head` it read
+at, which names the trace. A value is given when its status is `scored` and only then, so nothing unscored is zero. A second
+estimator, or a second version, writes beside the first. This one is a toy, labelled as one:
+
+```python
+async def even_split(session, outcome):
+    """A toy estimator: an even share of an outcome for each agent the record ties to it, which is a heuristic."""
+    found = await session.contributors(outcome)
+    agents = [row.maker for row in found.rows if row.maker and row.maker.startswith("agent:")]
+    for agent in agents:
+        await session.annotate(
+            f"agent/{agent.removeprefix('agent:')}@1",
+            kind="credit",
+            producer="even-split",
+            producer_version="0",
+            scope="team",
+            status="scored",
+            value=1 / len(agents),
+            params={"outcome": outcome},
+            evidence=[outcome],
+            head_seq=found.head,
+        )
+    return await session.annotations()
+```
+
+A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two.
+
 ## From the command line
 
 Each query is a command of its name, and prints its answer as JSON:
@@ -72,6 +102,9 @@ Each query is a command of its name, and prints its answer as JSON:
 $ platoon-harness lineage fix-auth --ref task/tasks/1@3
 $ platoon-harness contributors fix-auth --ref task/tasks/1@3
 $ platoon-harness exposure fix-auth --agent @lead --ref task/tasks/1@3
+$ platoon-harness annotate fix-auth --target agent/w1@1 --kind credit --producer mine --producer-version 1 \
+    --scope local --status scored --value 0.5 --head-seq 812
+$ platoon-harness annotations fix-auth --target agent/w1@1
 ```
 
 A closed copy written before these views existed refuses a query, naming the views behind its journal: open it once as its writer,
