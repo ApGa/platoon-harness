@@ -35,7 +35,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | A chord is a shortcut and never decides: each act has a typed command or a plain key, Tab reaches the dock with no place chosen, and Esc leaves a panel without interrupting |
 | [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | `web` is a guest that folds the journal one way into a projection of fixed ids, lets a browser in by a one-time link of a fixed class, and bounds every request as the tool server does |
 | [0028](0028-acting-from-the-page.md) | Acting from the page | Each act keeps its key until answered, across a reload; one cut in Python for both clients; Needs you is the runtime's `attention`; asking first in the page |
-| [0028](0028-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | `tool_names` on `Capabilities`, `bare` for OpenHands, picks the surface our words and a tool's URL use |
+| [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | `tool_names` on `Capabilities`, `bare` for OpenHands, picks the surface our words and a tool's URL use |
 
 ## Adding or changing one
 

@@ -1,4 +1,4 @@
-# 0028. A harness names our tools as it shows them
+# 0029. A harness names our tools as it shows them
 
 **Status:** Accepted, 2026-11-04
 
