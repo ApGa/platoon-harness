@@ -10,6 +10,7 @@ import pytest
 from platoon_harness import Session
 from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
+from platoon_harness_cli.ops import cut
 from platoon_harness_cli.web import LOOK
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
@@ -329,6 +330,31 @@ async def test_an_approval_takes_its_version_and_says_browser_and_the_loser_hear
     assert [(event.data["via"], event.data["verdict"]) for event in resolved] == [("browser", "allow")]
 
 
+async def test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it(web, session):
+    browser = await Browser(web).opened("control")
+    text = "a long line " * 40
+    command = {"op": "message.send", "args": {"to": "#general", "gist": text}, "key": "long"}
+
+    first = (await browser.request("POST", "/x/command", command)).json()
+    again = (await browser.request("POST", "/x/command", command)).json()
+
+    sent = await of_type(session, "message.sent")
+    assert first["refusal"] is None and again == first and len(sent) == 1
+    assert (sent[0].gist, await session.get_body(sent[0].data["body"])) == (cut(text)[0], text.encode())
+
+
+async def test_a_long_message_beside_a_file_is_refused_with_no_event(web, session):
+    browser = await Browser(web).opened("control")
+    stored = (await browser.request("POST", "/x/body", b"a file")).json()["ref"]
+    head = await session.head()
+    args = {"to": "#general", "gist": "x" * 300, "body": stored}
+
+    reply = await browser.request("POST", "/x/command", {"op": "message.send", "args": args, "key": "both"})
+
+    assert reply.status == 400 and "two bodies" in reply.json()["error"]
+    assert await session.head() == head
+
+
 async def test_a_body_is_stored_for_a_command_to_cite(web, session):
     browser = await Browser(web).opened("control")
 
@@ -351,11 +377,11 @@ async def test_a_control_session_mints_a_link_of_either_class(web, kind):
     assert opened.json()["class"] == kind
 
 
-async def test_the_feed_holds_until_something_comes(web, session):
+async def test_the_feed_holds_until_something_comes(web, session, clock):
     browser = await Browser(web).opened("view")
     info = await browser.view("view_info")
     waiting = asyncio.ensure_future(browser.view("view_feed", {"after": info["feed"], "feed_id": info["feed_id"]}))
-    await asyncio.sleep(0.05)
+    await clock.slept_until(clock.now() + 25)
     assert not waiting.done()
 
     await session.send("#general", "news")
@@ -418,6 +444,7 @@ async def test_capabilities_name_the_person_their_grants_and_what_is_asked_first
     assert x["person"] == "you" and x["live"] is True and x["cannot"] is None
     assert {"message.send", "approval.resolve", "agent.interrupt"} <= set(x["may"])
     assert x["confirmed"] == ["agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"]
+    assert x["body_limit"] == BODY_LIMIT
 
 
 async def test_web_folds_what_a_runtime_wrote_and_left_between_two_looks(root, clock):

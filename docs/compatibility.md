@@ -15,7 +15,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 | Upstream | Inspected | License and constraint | How we use it | IMPLEMENTED versus DRAFT | Most important fact |
 |---|---|---|---|---|---|
 | Platoon | `efe3b277c82c`, 0.5.0 | MIT AND Apache-2.0 (tool parsers). Optional extension; keep its NOTICE if parser code is ever copied | Training authority through an extension, pinned `>=0.5,<0.6` | IMPLEMENTED: gateway, child mint, trajectories, env forks, extensions. EXPERIMENTAL: credit, policies, Responses and Messages dialects. DRAFT: `AgentGraph`, `RewardEvent`, attribution levels, native selectors, `bus` | The only exact identity for an external agent is one key per agent, from `POST /v1/platoon/agents` |
-| SwarmChat | `fb5aa6a05b40`, PyPI 0.1.0 | MIT. Its notice heads each of its scripts we serve. Exact pin, `swarmchat==0.1.0` in the CLI package | Second client: its five page files, each held to its SHA-256, over our own backend, from `platoon-harness web`. Its server never runs | IMPLEMENTED: server, agent API and a read-only viewer. No composer exists or is documented. Nothing DRAFT | Messages have no idempotency key, no metadata and no caller ids, so a projection into its server cannot be idempotent |
+| SwarmChat | `fb5aa6a05b40`, PyPI 0.1.0 | MIT. Its notice heads each of its scripts we serve. Exact pin, `swarmchat==0.1.0` in the CLI package | Second client: its five page files, each held to its SHA-256, over our own backend, from `platoon-harness web`, with an overlay of ours that acts through `/x/command`. Its server never runs | IMPLEMENTED: server, agent API and a read-only viewer. No composer exists or is documented. Nothing DRAFT | Messages have no idempotency key, no metadata and no caller ids, so a projection into its server cannot be idempotent |
 | Toad | `dd4f90e8b370`, 0.6.20 | AGPL-3.0. Ideas only: no code, no dependency. Its `textual-diff-view` is AGPL too | Interaction reference | IMPLEMENTED: own ACP v1 client. Nothing DRAFT | Copying is ruled out by license, not merely unnecessary |
 | OpenHands | SDK `988494576218`, wheels 1.59.0. CLI `283c6ac3610f`, `openhands` 1.16.0 | MIT. The SDK installs proprietary `lmnr-claude-code-proxy` 0.2.0: review before shipping in any image | Wire worker on SDK `arun()` in its own environment | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
 | Codex | `05c08d765523`, CLI 0.164.0 probed (latest stable 0.166.0). Spike source read at tag commit `6aaac6948030` | Apache-2.0 with NOTICE. User-installed. Never read or copy `auth.json` | `codex app-server` over stdio, no `experimentalApi` | IMPLEMENTED in behavior, labelled Experimental upstream. `codex mcp-server` is removed. `turn/steer`, `thread/fork`, `thread/inject_items` are on the stable handshake | The model reaches MCP tools only from inside a Code Mode script, so `omit_tools_from: ["deferred"]` is required |
@@ -299,10 +299,11 @@ the installed package and held to these SHA-256 values when it starts. A file th
   in the test alone, and through ours, and holds every reply the page uses to the same keys of the same types: `view_info`,
   `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_search`, `view_as`, `view_knew`, `view_text` and
   `view_feed`. What we add is named `x` or begins `x_`, which the page passes by.
-- The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level:
-  `api`, `start`, `login`, `setLive`, `readRoute`, `renderTop`, `avatar`, `messageHtml`, `systemHtml`, `openReceipts`, `openMembers`,
-  `chatRow`, `chatRows`, and the classes `ChatView`, `PersonView`, `KnewPane` and `UnreadView`. An upgrade that renames one breaks
-  the browser tests, which fail on any page error.
+- The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
+  It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `apply`, `onClick`, `renderTop`, `avatar`, `messageHtml`, `systemHtml`,
+  `openReceipts`, `openMembers`, `chatRow`, `chatRows`, and the classes `ChatView`, `ThreadPane`, `PersonView`, `KnewPane` and
+  `UnreadView`, and uses `S`, `TOKEN`, `go`, `route`, `overlay`, `toast`, `throttle`, `buildSide` and the helpers `html`, `Safe`, `$`
+  and `$$`. An upgrade that renames one breaks the browser tests, which fail on any page error.
 - The link exchange is a script of ours before the gate's. It hands the gate the session token through the `#token=` the gate
   watches, as a link pasted into its tab would.
 - `view_posts` and `view_activity`, behind the board layout and the map, are not answered, and their controls are disabled. `view_as`
@@ -435,7 +436,7 @@ detection rows describe our code. The others record probes of upstreams or throw
 | Control socket | **Measured.** Python `bind` allows 107 bytes | **Not run.** 103 usable, from headers | Not run | Not run |
 | Filesystem detection | **Exercised:** xfs, tmpfs, Lustre, FUSE control, `proc`, symlinks. Other magics come from headers | **Not run.** Written from the man page | Not run | 9p magic known, not exercised |
 | TUI | **Tested.** Textual 8.2.8 under Pilot, and `platoon-harness attach` on a real PTY read through `pyte`. Real terminals, tmux and SSH have not been measured | Not run | Untested: the tests use Unix `pty` | Not run |
-| SwarmChat client | **Tested** for its read path on our backend, in Playwright 1.64.1's Chromium headless shell, revision 1248, on RHEL 9 x86-64. Firefox and WebKit untested | Not run by us. Upstream runs `unittest` only | Not run by us. Upstream runs `unittest` only | Not run |
+| SwarmChat client | **Tested** on our backend, reading and acting, in Playwright 1.64.1's Chromium headless shell, revision 1248, on RHEL 9 x86-64, on scripted harnesses and the real `claude` binary against FakeModel. Chromium's headless shell only: Firefox, WebKit and a headed Chromium untested | Not run by us. Upstream runs `unittest` only | Not run by us. Upstream runs `unittest` only | Not run |
 | Claude Code, Codex | **Real model** on x86-64 | Not run. Seatbelt not tested | Not run | Not run. Codex's sandbox does not support WSL1 |
 | pi, OpenCode, OpenHands | **Loopback** on x86-64 | Not run | Not run | Not run |
 | Prime Agent | Version and help on linux-x64 | Not run | Not run | Not run |

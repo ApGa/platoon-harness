@@ -1,9 +1,9 @@
 # The browser
 
 `platoon-harness web SESSION` serves [SwarmChat](https://swarmchat.io)'s page over one session's journal. It is a client
-like any other: it reads what the journal holds, decides nothing, and computes no status. [tui.md](tui.md) is the terminal's
-guide and [cli.md](cli.md) the command line's reference. In this stage the page reads: acting from it, by message, reply,
-approval or lifecycle, comes in the next, and each act is on the page now, disabled, saying so.
+like any other: it reads what the journal holds, decides nothing, and computes no status, and what a person does there is an
+op, through the same path as the terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](cli.md) the command line's
+reference.
 
 ## Opening it
 
@@ -28,9 +28,11 @@ itself as it was. It serves one session on one port, as the page keeps one sessi
 | Control | The session, as you: what you do through it is your op, through the same path as the terminal's, and your grants decide what you may do |
 
 A link opens once, within ten minutes, and is spent for a session in that browser of the same kind, which lasts twelve
-hours. Its secret is after `#`, so it never reaches a server log or a referrer. `web` keeps only hashes of what it gave
-out, in its own memory, so stopping it ends every browser's session: open a new link. A page that acts can make more links
-of either kind, through `/x/link`; the page has no button for it yet. Your own credential never reaches a browser.
+hours. Its secret is after `#`, so it never reaches a server log or a referrer. A link opened a second time says it was
+used already. `web` keeps only hashes of what it gave out, in its own memory, so stopping it ends every browser's session:
+open a new link. A page that acts can make more links of either kind, through `/x/link`; the page has no button for it
+yet. Your own credential never reaches a browser, and who sends from a page is the credential's, never anything the page
+says.
 
 A control link acts as you, on your login. Never hand one to somebody else: on a plan login that would be your login
 serving another person, which its terms do not allow. Give them a view link.
@@ -63,6 +65,39 @@ serving another person, which its terms do not allow. Give them a view link.
 Browsing writes nothing to the journal, moves no agent's cursor, and moves no mark of yours: the terminal's unread counts
 are yours alone.
 
+## Acting
+
+On a control link, each act is one op, sent to `/x/command` and run by `Session.submit`, as the terminal runs it, so your
+grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, and its title says why:
+on a view link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents,
+which you are not in, in a queue's or a board's chat, while you see the session as an agent, and for an op your grants do
+not hold.
+
+| Act | Where | What it sends |
+|---|---|---|
+| A message | The composer at the foot of a chat, which names its target, `@agent`, `#topic` or `+group`. Enter sends and Shift+Enter starts a new line | `message.send`. A text too long for a gist is cut as the terminal cuts one: its first 279 characters and an ellipsis are the gist, and the whole is the body, which the message shows |
+| A reply | Reply on a message opens its thread, with a composer at the foot that answers that message | `message.send` with `reply_to`, the entry the message is in the journal. What an agent said in its turn, and an approval, are no entry a reply can cite, so their Reply is disabled, saying so |
+| A file | Attach, beside Send, whose title says the most a body may be. A file larger is refused before it is sent, saying both sizes | The file to `/x/body`, saying how much has gone, then `message.send` with it as the body and your text, or `file NAME`, as the gist. A long text and a file are two bodies, refused together, as in the terminal |
+| An approval | A card in the agent's chat with you, Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
+| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
+| An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
+| The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
+
+**Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run:
+these are the ops the terminal asks about too, one set both read, and nothing takes them back.
+
+**Once.** The page makes a key for each draft sent or button pressed, and keeps it until the act is answered. Until then it
+sends the act again, after a lost connection and after a reload of the page, since it keeps unanswered acts in the tab's
+own storage, and `web` answers a key it has seen with its first answer. So a retry is one operation: one message, one
+decision. The key is the page's, under its credential's own name, so no other browser's or client's meets it.
+
+**Refusals.** A refusal is an answer and is shown with its reason, never as success: under the composer, under a person's
+acts, or as a notice. An approval someone decided first says who and through what: `Already decided by you via tui.`
+
+**Both clients at once.** The terminal and the page can be attached to one session together. What either sends is in both,
+once, and an approval answered in both at the same moment takes effect once: the other is told who decided and through
+what, and its card or dock updates as the journal moves.
+
 ## SwarmChat's requests, here
 
 Each request SwarmChat's page can make gets a real answer from the session, or its control is disabled with the reason.
@@ -79,10 +114,10 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 
 ## Not built yet
 
-Disabled where its control is, with the reason: sending, replying, a file as a message's body, approving, and an agent's
-interrupt, stop below, retire and cancel, which come next; the board layout, the tasks and board views, the map, tool
-activity, diff review and provenance. Pictures in a body are offered as a download and not drawn. [STATUS.md](STATUS.md)
-says what each is.
+Disabled where its control is, with the reason: the board layout, the tasks and board views, and the map. Tool activity,
+diff review, provenance and a button to make a link have no control yet. Live text, what an agent is saying before its turn
+commits it, is not shown in the page: an agent's words appear once they are in the journal. Pictures in a body are offered
+as a download and not drawn. [STATUS.md](STATUS.md) says what each is.
 
 ## Security
 
@@ -91,7 +126,8 @@ says what each is.
 - **What it believes.** Every request is bounded before it is believed, by the same code as the SDK's tool server: a head
   of at most 16 KiB, then `Host`, which must name the authority served, which defeats DNS rebinding, then on a POST
   `Origin`, which must be the page's own, then the bearer, and only then a body of a stated length, on a deadline, with a
-  cap on connections and on the requests the feed holds at once.
+  cap on connections and on the requests the feed holds at once. A page on another origin is refused before its bearer is
+  read, and a name rebound to this machine is refused by its `Host`.
 - **What it runs.** SwarmChat's five page files are read from the installed package, `swarmchat==0.1.0`, and each is held to
   its SHA-256: a file that differs stops `web` before anything is served, saying which. Its own server never runs. The page
   runs under SwarmChat's own policy, scripts by hash alone, with the hashes made for what is served, and every answer says

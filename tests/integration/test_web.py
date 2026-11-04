@@ -87,6 +87,7 @@ async def test_web_says_its_links_and_ends_cleanly_on_sigterm_or_ctrl_c_leaving_
             "session": "s",
             "may": [],
             "confirmed": info["x"]["confirmed"],
+            "body_limit": info["x"]["body_limit"],
             "cannot": None,
         }
     status = await cli.run("session", "status", "s")

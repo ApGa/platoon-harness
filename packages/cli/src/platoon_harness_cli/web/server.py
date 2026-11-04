@@ -14,11 +14,11 @@ from typing import Any, NamedTuple
 
 from platoon_harness import Refused, Session
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, length, response
-from platoon_harness.kernel import Clock, first, is_held
+from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__
-from ..ops import CONFIRMED, person_ops
+from ..ops import CONFIRMED, cut, person_ops
 from ..roster import status_of
 from . import replies
 from .credentials import Class, Credentials, Held
@@ -186,8 +186,8 @@ class Web(Server[Request]):
 
     async def _info(self, held: Held) -> dict[str, Any]:
         """The server, and in `x` what this page may do: the credential's class, whether a runtime holds the session,
-        who the person is, the ops their grants hold, the ops asked about before they run, and why the page may do
-        nothing, when it may not."""
+        who the person is, the ops their grants hold, the ops asked about before they run, the most bytes a body may
+        be, and why the page may do nothing, when it may not."""
         live, name = self.live(), self.session.name
         may: list[str] = []
         cannot = None
@@ -208,6 +208,7 @@ class Web(Server[Request]):
             "session": name,
             "may": may,
             "confirmed": sorted(CONFIRMED),
+            "body_limit": BODY_LIMIT,
             "cannot": cannot,
         }
         return self._server_info() | {"x": x}
@@ -272,7 +273,8 @@ class Web(Server[Request]):
     async def _command(self, params: dict[str, Any], held: Held) -> dict[str, Any]:
         """One op, as `Session.submit` runs it, and its outcome, a refusal among them. `key` is the page's for one draft
         or press, kept until it is answered, under this credential's own name, so a retry is one operation and no
-        other client's key meets it. `expected_version` is the op's argument of that name, and `via` is said here."""
+        other client's key meets it. `expected_version` is the op's argument of that name, and `via` is said here. A
+        message's text too long for a gist is cut as the terminal cuts it."""
         op, args, key = params.get("op"), params.get("args", {}), params.get("key")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(key, str) or not _KEY.fullmatch(key):
             raise Rejected(400, why="a command is an op, its args, and a key of at most 64 letters, digits, - and _")
@@ -284,7 +286,18 @@ class Web(Server[Request]):
             args = {**args, "expected_version": version}
         if (operation := person_ops().get(op)) is not None and "via" in operation.input.model_fields:
             args = {**args, "via": "browser"}
-        outcome = await self.session.submit(op, key=f"web/{held.id}/{key}", **args)
+        key = f"web/{held.id}/{key}"
+        if op == "message.send" and isinstance(gist := args.get("gist"), str):
+            try:
+                gist, body = cut(gist, file=args.get("body") is not None)
+            except ValueError as error:
+                raise Rejected(400, why=str(error)) from None
+            if body is not None:
+                try:
+                    args = {**args, "gist": gist, "body": await self.session.put_body(body.encode())}
+                except Refused as refused:
+                    return Outcome(op=op, key=key, args_hash="", refusal=refused.refusal).model_dump(mode="json")
+        outcome = await self.session.submit(op, key=key, **args)
         return outcome.model_dump(mode="json")
 
     async def _stored(self, body: bytes) -> dict[str, Any]:

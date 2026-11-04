@@ -499,7 +499,7 @@ One definition reaches every surface.
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, but `wait` and the ops on a wait, as a wait parks a turn and a person has none. Its name is split at the dot, a flag per argument comes from its schema, a read runs on a view credential, and its help is the op's description, each op named as the command that runs it and each argument as its flag. An extension's op has no command yet |
-| Web | `POST /x/command {op, args, key, expected_version}`: `expected_version` is the op's argument of that name, `via` is `browser`, and the key is the page's, under its credential's own name |
+| Web | `POST /x/command {op, args, key, expected_version}`: `expected_version` is the op's argument of that name, `via` is `browser`, the key is the page's, under its credential's own name, kept until the act is answered, and a message's text too long for a gist is cut as the terminal cuts one |
 | TUI | Palette entries for the commands a person may run, from the command line's definitions, worded as its help, with generated forms, as a read is what the views draw; the dock's actions come from `actions[]`, on the row the person chose; an interrupt the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
@@ -1302,7 +1302,10 @@ op references, each with whatever keeps a stale button from deciding anything, s
   says in a turn is its agent's message to the person; tools, thoughts, usage and live text never enter a chat. "Read by" becomes
   "Delivered to", from delivery evidence alone, and browsing writes nothing and moves no cursor or mark. A view link and a control
   link are two credentials of fixed class, one-time and exchanged for session tokens that expire. One session per port avoids the
-  `localStorage` collision. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) its decisions.
+  `localStorage` collision. A person acts there through `/x/command`: each act keeps its key until it is answered, across a lost
+  connection or a reload, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person
+  is the runtime's `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md) and
+  [ADR 0028](adr/0028-acting-from-the-page.md) its decisions.
 
 ## 13. Workspaces
 

@@ -4,6 +4,17 @@
 
 ### Added
 
+- Acting from SwarmChat's page, on a control link, each act one op through `/x/command`: a composer at the foot of a chat that names
+  its target, sends on Enter, starts a line on Shift+Enter and cuts a long text by the function the terminal cuts with, a reply in
+  a thread citing the message's entry, a file as a message's body with the most a body may be said first and its progress shown,
+  approvals as cards with Allow and Deny, Needs you with its count, from the runtime's `attention`, and an agent's interrupt, stop
+  below, retire and cancel and the session's close and cancel, each asking first where the terminal does. Each act keeps its key
+  until answered, across a lost connection and a reload, so a retry is one operation, and a refusal shows its reason. Every control
+  the person cannot use says why. See `docs/web.md` and ADR 0028.
+- `view_info`'s `x` says `body_limit`, the most bytes a body may be.
+- The browser suite, `tests/e2e/`, in Chromium's headless shell: a message in an agent's input path once, on a wire harness and on
+  the real `claude` binary against FakeModel, the browser and the terminal attached at once, approvals raced from two clients,
+  credentials, `Origin` and a rebound `Host` from real pages, hostile rendering under the policy, reconnects, receipts and history.
 - `platoon-harness web SESSION`: SwarmChat's pinned page over the session's journal, in a browser, as a guest on the owner's
   control credential that starts and resumes nothing and follows the session across runtime restarts. A follower folds the journal
   one way into `swarmchat.sqlite`, with ids a rebuild gives again, and serves the page's `view_*` replies from it, with "Delivered to"

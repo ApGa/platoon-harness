@@ -8,14 +8,13 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
-from playwright.async_api import Browser, ConsoleMessage, Page, expect
+from playwright.async_api import Browser, expect
 
 from ..integration.cli import Cli, crew, finished, said
 from ..integration.test_web import links
+from .support import SECONDS, opened
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
-
-SECONDS = 20_000
 
 
 @pytest.fixture
@@ -38,26 +37,6 @@ async def served(cli: Cli) -> AsyncIterator[dict[str, str]]:
     assert (await finished(web)).code == 0
     await cli.run("session", "stop", "s")
     await finished(serving)
-
-
-def watched(page: Page) -> list[str]:
-    """What went wrong on a page: an exception, or an error on its console."""
-    errors: list[str] = []
-    page.on("pageerror", lambda error: errors.append(f"pageerror: {error}"))
-    page.on("console", lambda message: errors.append(message.text) if _wrong(message) else None)
-    return errors
-
-
-def _wrong(message: ConsoleMessage) -> bool:
-    return message.type in ("error", "warning")
-
-
-async def opened(chromium: Browser, link: str) -> tuple[Page, list[str]]:
-    page = await (await chromium.new_context(viewport={"width": 1280, "height": 800})).new_page()
-    errors = watched(page)
-    await page.goto(link)
-    await expect(page.locator("#list .row").first).to_be_visible(timeout=SECONDS)
-    return page, errors
 
 
 async def test_the_page_opens_from_its_link_shows_the_session_follows_it_and_survives_a_reload(
@@ -92,7 +71,8 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(chromium: Browser
     composer = page.locator(".x-composer textarea")
     await expect(composer).to_be_disabled(timeout=SECONDS)
     await expect(composer).to_have_attribute("title", why)
-    await expect(page.locator(".x-composer button")).to_be_disabled()
+    for button in await page.locator(".x-composer button").all():
+        await expect(button).to_be_disabled()
     await expect(page.locator(".x-composer .x-why")).to_have_text(why)
     replies = page.locator("[data-x-reply]")
     await expect(replies.first).to_be_attached()
