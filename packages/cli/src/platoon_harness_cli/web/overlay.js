@@ -584,12 +584,21 @@ postHtml = (p, o) => new Safe(basePostHtml({...p, votes: 0}, o).s.replace(
   html`<div class="votes" title="No reactions">${new Safe(ARROW)}<span>0</span></div>`.s,
   () => html`<div class="votes x-off" aria-disabled="true" title="${X.UNVOTED}">${new Safe(ARROW)}</div>`.s));
 
-// The map's pane offers to see as whoever is under the mouse, and only an agent can be seen as.
+// The map's pane offers to see as whoever is under the mouse, and only an agent can be seen as. Its busiest list holds
+// everyone who writes, people and the runtime too. Its timeline and window count the chats of whoever it sees as, so
+// they are asked for again when that changes.
 MapView = class extends MapView {
   showPane() {
     super.showPane();
     const see = $('#pane [data-see-as]');
     if (see && X.kind(see.dataset.seeAs) !== 'agent') { see.disabled = true; see.title = X.AS_AGENT; }
+    const busiest = $('#pane .ph3');
+    if (busiest && busiest.textContent === 'Agents') busiest.textContent = 'Who writes';
+  }
+  onAs() {
+    super.onAs();
+    this.loadActivity();
+    if (this.win) this.fetchWindow();
   }
 };
 

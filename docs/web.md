@@ -83,7 +83,9 @@ serving another person, which its terms do not allow. Give them a view link.
 - **The Map.** Map in the top bar shows everyone at once: each agent and person in a chat, and whoever wrote one, joined
   to the channels and groups they are in and to each other by their direct chats, sized by what they sent, with a
   timeline of every message below. Dragging across the timeline weighs each chat and person by the messages of that stretch alone.
-  Clicking an agent sees the session as it; a person and the runtime cannot be seen as, and their See as says so.
+  With nothing under the mouse, its pane lists who writes most, people and the runtime among them, and the busiest chats.
+  Clicking an agent sees the session as it, and the timeline and the stretch then count that agent's chats alone; a person
+  and the runtime cannot be seen as, and their See as says so.
 - **Times.** The Board's and the Map's times are the journal's, when each message was written, and never when `web`
   read it.
 
