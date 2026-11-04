@@ -4,6 +4,14 @@
 
 ### Added
 
+- A person follows provenance from where they read. In the terminal, `/provenance`, or `p` with the transcript in focus, opens the
+  chosen line's provenance in a panel; in the browser, Provenance among a message's actions opens a pane, on a view link too, from
+  `x_provenance`, a read of ours beside SwarmChat's. Both show one event at a time, worded once for both: its sources, its uses, its
+  contributors, and what estimators said of it, each link labelled by how it is known and followed into its own event, each answer's
+  head, bound and open turn said, `unknown` with its reasons, why a link opens nothing in its place, and credit only as each
+  estimator's statement, by producer and version, never summed. A line that carries another event's words opens on that event. The
+  browser's projection, at version 6, keeps the ref of the event each line shows, so a link a chat shows opens that chat too. See ADR
+  0043.
 - Agents are asked to cite. The preamble template has a ninth slot, `citing`, which asks an agent holding a write of content to
   put the `ref` of what its write rests on in `based_on`, and the default template fills it, so asking is on by default; a tool's
   description says what `based_on` is and never asks, so a template without the slot asks nothing. It costs 78 bytes a request, 20

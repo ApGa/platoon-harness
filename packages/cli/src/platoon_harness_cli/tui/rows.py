@@ -18,7 +18,8 @@ CHOSEN = Style(reverse=True)
 
 @dataclass(frozen=True)
 class Row:
-    """One line. A row with no `key` is a heading, which the cursor passes over."""
+    """One line. A row with no `key` is a heading, which the cursor passes over, and rows that share a key are one
+    choice, as a long line wrapped is."""
 
     line: Content
     key: str | None = None
@@ -52,7 +53,7 @@ class Rows(ScrollView, can_focus=True):
         if rows == self.rows:
             return
         self.rows = rows
-        keys = [row.key for row in rows if row.key is not None]
+        keys = self.keys
         if self.cursor not in keys:
             self.cursor = keys[0] if keys else None
         self.virtual_size = Size(0, len(rows))
@@ -60,7 +61,7 @@ class Rows(ScrollView, can_focus=True):
 
     @property
     def keys(self) -> list[str]:
-        return [row.key for row in self.rows if row.key is not None]
+        return list(dict.fromkeys(row.key for row in self.rows if row.key is not None))
 
     def move_to(self, key: str) -> None:
         self.cursor = key

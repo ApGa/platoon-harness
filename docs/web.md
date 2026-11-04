@@ -71,6 +71,14 @@ serving another person, which its terms do not allow. Give them a view link.
   agent's first turn began on it. It never says one understood it. A
   person's reading leaves no evidence, so a person is in neither list. "What had reached" an agent, beside a message it
   sent, says how much of each of its chats had been delivered to it then.
+- **Provenance.** Provenance among a message's actions opens a pane on the event the message shows, in the words the terminal's
+  `/provenance` uses ([tui.md](tui.md) has them part by part): Sources, Uses, Contributors, and Credit and rewards. It begins
+  "This is what the record holds: a citation is the agent's claim, being handed something is not using it, and what reached an
+  agent through a file or a shell leaves nothing here. An estimate is its producer's, never a fact." Each link is labelled by how it
+  is known, and clicking it shows that event's provenance, and when a chat shows the event, opens that chat at its message too.
+  The address names the event, so Back goes back a hop and a reload keeps it, and Esc or × closes the pane. It is read when it opens,
+  and again when its Provenance is pressed again. It is a read, so a view link has it, and on history it answers what the journal
+  holds. Credit is only what an estimator said, by producer and version.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.
@@ -143,12 +151,15 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_posts` | Real: posts from one chat, or from every channel and group, sorted new or active, and with `as` an agent's chats alone. Hot and top are refused, saying why, and a post's `votes` is null, which is unknown, never 0 |
 | `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
+The page asks one read of ours beside them, `x_provenance`: one event's provenance, by its ref, in the terminal's words, and the
+message it is in its chat, if one shows it. A view link may ask it, as it asks the others.
+
 ## Not built yet
 
 Each is drawn disabled where its control is, saying why: the tasks and board views, with each task open, claimed and by
 whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
-chat, which holds what it announced; Tool activity and Review changes on an agent's page, which names the terminal's `/review` for what changed; and Provenance among each
-message's actions. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
+chat, which holds what it announced; and Tool activity and Review changes on an agent's page, which names the terminal's `/review`
+for what changed. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
 only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may
 run are the terminal's and the command line's for now. The page is laid out for a wide window, and at a phone's width it

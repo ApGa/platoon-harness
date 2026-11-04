@@ -1222,7 +1222,8 @@ says one. Tool descriptions, refusals and handovers stay fixed. See [ADR 0025](a
 The graph is not stored. Nodes are events, and edges are the references they already hold.
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
-- **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display.
+- **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display, at M4: the clients show one event's
+  hop at a time until then.
 - **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
   said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
   **upper bound** on what an action could have known, `delivered` edges are a **lower bound**, and what lies between them is
@@ -1339,6 +1340,13 @@ said beside it and never hidden: which request held a ref is the gateway's to kn
 through a shell, a file or git makes an answer `Unknown`, a read's `Seen` means its result returned to the harness, or under Codex's
 `callId` to the Code Mode script that made the call, and words an agent copied into another entry show only in that entry's
 lineage.
+
+**Where a person reads them.** The terminal's `/provenance`, on the chosen line of a transcript, and the browser's Provenance pane, on
+a message, show one event at a time, in words `platoon_harness_cli.provenance` makes once for both: Sources, Uses, Contributors, and
+Credit and rewards. A line that carries another event's words opens on that event. Each link is labelled by the kind it is known by
+and followed into its own event, a hop at a time; each answer says its head, where it stops counting, whether its turn was open and
+what its page left out, naming the command that reads on; and why a link opens nothing is said in its place. Credit is shown only
+as each estimator's statement, by producer and version, never summed. See [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md).
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
 `(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)` with a `scope`, unique on
@@ -1467,7 +1475,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   it only from the person's Tab, with no place chosen, and only the person moves its cursor. Every act also takes only keys every
   terminal delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the
   only way, and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter.
-  [tui.md](tui.md) is its guide.
+  `/provenance`, or `p` with the transcript in focus, opens the chosen line's provenance in a panel, Enter following a link and Esc
+  going back one hop, so it takes no chord. [tui.md](tui.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
@@ -1481,8 +1490,12 @@ op references, each with whatever keeps a stale button from deciding anything, s
   expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one writer. A
   person acts there through `/x/command`: each act keeps its key until it is answered, across a lost connection, a reload or a new
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
-  `attention` view. [web.md](web.md) is its guide, and [ADR 0027](adr/0027-the-browser-on-our-backend.md),
-  [ADR 0028](adr/0028-acting-from-the-page.md) and [ADR 0035](adr/0035-the-board-and-the-map-over-messages.md) its decisions.
+  `attention` view. Provenance among a message's actions opens a pane over `x_provenance`, a read of ours beside the `view_*`
+  that a view link reaches too, in the terminal's words, and the projection keeps the ref of the event each line shows, which the
+  pane opens on, and following a link a chat shows opens that chat there. [web.md](web.md) is its guide, and
+  [ADR 0027](adr/0027-the-browser-on-our-backend.md), [ADR 0028](adr/0028-acting-from-the-page.md),
+  [ADR 0035](adr/0035-the-board-and-the-map-over-messages.md) and [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md)
+  its decisions.
 
 ## 13. Workspaces
 

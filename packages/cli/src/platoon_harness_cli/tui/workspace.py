@@ -21,11 +21,13 @@ from platoon_harness.kernel import Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
 from ..ops import CONFIRMED, Flag, cut, described, flags, person_ops
+from ..provenance import shows
 from ..roster import detail_of, why_said
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
+from .provenance import Provenance
 from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
@@ -944,6 +946,22 @@ class Workspace(Screen[None]):
 
         snapshots = {f"@{row['agent']}" for row in live.roster if (row["workspace"] or {}).get("mode") == "snapshot"}
         self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, snapshots))
+
+    def action_provenance(self) -> None:
+        """Show the chosen line's provenance. Every line is an event, and one that carries another's words opens on what
+        it carries. What an agent is saying now is no line, until the journal holds it."""
+        live = self.live
+        chosen = self.query_one(Transcript).chosen
+        if live is None:
+            return
+        if chosen is None:
+            said = (
+                "No line is chosen, so no event has a provenance to show: choose a line of the transcript, which Tab "
+                "reaches, with its arrows. What an agent is saying now is no event until the journal holds it."
+            )
+            note(self, said, severity="warning")
+            return
+        self.app.push_screen(Provenance(live.session, shows(chosen.event)))
 
     def action_planned(self, action: str) -> None:
         key = next(key for key in KEYMAP if key.action == action and key.planned)

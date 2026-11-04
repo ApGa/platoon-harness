@@ -117,6 +117,28 @@ marked `●`, and reading the list to its end moves the mark. Diffs are drawn di
 conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves
 one. The inspector says why a workspace was kept only once its agent's stop has kept it.
 
+### Provenance
+
+`/provenance`, or `p` with the transcript in focus, shows where the chosen line came from: the newest line while the transcript
+follows, or the one you chose with the arrows. Every line is an event, and a line of a message that carries another event's words,
+a write it announces or a child's report, opens on that event. The panel has four parts, read from the session's provenance queries
+when it opens, in the words the browser's pane uses ([provenance.md](provenance.md) says what each answer means):
+
+| Part | What it says |
+|---|---|
+| Sources | Who made it, in which turn, and the model call that chose it, through the tool item that joins them, or why no call is joined. Each citation, with its maker and what its citer had been handed of it, `seen` with each offer its harness said it took and each compaction since, `unknown` with its reasons, and for a range whether its lines were shown; each cause; its previous version or a commit's parents; and what its maker was handed below where the answer stops counting, with the gaps in its record |
+| Uses | What cites it, what follows from it, its next version or the commits it is a parent of, and each agent it was handed to, with whether its harness said it took it |
+| Contributors | Each maker a walk back along citations, causes and ancestry reaches, with the kinds that reached it and its gaps, and apart from them each maker whose work was only handed to one of them. It weighs and ranks nobody |
+| Credit and rewards | What estimators said of it, each by its producer and version, with its scope and status and a value only when scored, beside any other and never summed |
+
+Each link is labelled by how it is known, `declared`, `observed`, `cause`, `ancestry` or `gap`, and Enter on it shows that event's
+provenance; Esc goes back one hop, and from the first leaves. A line that opens nothing, a commit git holds and the journal does
+not, or an `Informed-By` value naming nothing the session holds, says why in its place. Each part says the head it was read at;
+Sources says where it stops counting, below the model call that chose the event or its commit; and an answer whose turn had not
+ended says a later report can still confirm an offer or join a call. Yellow marks what is unknown, missing or cut, and a part an
+answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
+until the journal holds it.
+
 ### Size
 
 | Size | Layout |
@@ -205,6 +227,7 @@ before the session's. `^` is Ctrl.
 |  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths |
+|  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |
@@ -231,6 +254,7 @@ before the session's. `^` is Ctrl.
 | `↓` | Choose the line below |
 | `Enter` | Open or close the chosen line |
 | `End` | Go to the newest line and follow what comes |
+| `p` | Show the chosen line's provenance |
 
 ### The dock, once it has focus
 
@@ -248,13 +272,19 @@ before the session's. `^` is Ctrl.
 | `↑` | On the first line, what you sent or ran before |
 | `↓` | On the last line, what you sent or ran after |
 
-### A list: the sessions, the navigator, the dock, the help
+### A list: the sessions, the navigator, the dock, the help, provenance
 
 | Keys | Does |
 |---|---|
 | `↑` | Choose the row above, or scroll up the help |
 | `↓` | Choose the row below, or scroll down the help |
 | `Enter` | Open the chosen row, or show the chosen place |
+
+### The provenance panel
+
+| Keys | Does |
+|---|---|
+| `Esc` | Go back one hop, and from the first, leave |
 
 ### A question
 
@@ -275,6 +305,6 @@ before the session's. `^` is Ctrl.
 
 Disabled where a control for it would be, or absent from the palette: diffs and review comments, search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
-switching, taking over an agent's native terminal, following a line into its provenance, an approval and who answered it in
-the transcript, forking a session, copying a selection from the transcript, themes and notifications.
-[STATUS.md](STATUS.md) says what each is.
+switching, taking over an agent's native terminal, an approval and who answered it in the transcript, forking a session, copying
+a selection from the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who
+contributed, and refs in a message's text followed. [STATUS.md](STATUS.md) says what each is.

@@ -15,8 +15,11 @@ const X = {caps: null};
 X.unbuilt = {tasks: 'Not built yet: the tasks and board views are planned, with each task open, claimed and by whom ' +
     'under what lease, or done, and each board entry with its versions. This chat holds what its queue or board announced.',
   activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.',
-  review: 'Not built yet: diff review is planned. The terminal\'s /review lists what changed.',
-  provenance: 'Not built yet: following a message into its provenance is planned.'};
+  review: 'Not built yet: diff review is planned. The terminal\'s /review lists what changed.'};
+
+// What the Provenance pane says first: what the record holds, and what it cannot.
+X.RECORD = 'This is what the record holds: a citation is the agent\'s claim, being handed something is not using it, and ' +
+  'what reached an agent through a file or a shell leaves nothing here. An estimate is its producer\'s, never a fact.';
 
 // Only an agent leaves evidence of what reached it, so only an agent can be seen as.
 X.AS_AGENT = 'Only an agent leaves evidence of what reached it, so only an agent can be seen as.';
@@ -73,6 +76,12 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .pop .it.x-need { display: grid; gap: 6px; cursor: default; }
 .pop.x-ask { max-width: 380px; }
 .row.special.x-off, .pop .it.x-off, .votes.x-off { opacity: .55; cursor: not-allowed; }
+.x-provenance .x-part { padding: 12px 14px 4px; font-weight: 700; }
+.x-provenance .x-line { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 5px 14px; font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.x-provenance .x-line[data-x-follow] { cursor: pointer; }
+.x-provenance .x-line[data-x-follow]:hover { background: var(--hover); }
+.x-provenance .x-kind { color: var(--faint); }
+.x-provenance .x-warn { color: var(--warn); }
 button[disabled] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
@@ -113,10 +122,13 @@ setLive = state => {
 };
 
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
-// saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot.
+// saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
+// a thread or what had reached an agent takes it from provenance.
+KEYS.push('provenance');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
+  if (r.thread || r.knew) delete r.provenance;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
     if (r.sort) toast(X.UNVOTED);
@@ -124,6 +136,30 @@ readRoute = () => {
   }
   return r;
 };
+
+// The pane shows an event's provenance while the address names one. SwarmChat's own route takes the pane for a thread,
+// for what had reached an agent and for the map, and otherwise leaves it to this one.
+const baseRoute = route;
+route = async function () {
+  if (S.pane instanceof X.Provenance) S.paneKey = '';
+  await baseRoute();
+  const r = S.route, pane = $('#pane');
+  if (r.layout === 'map' || r.thread || r.knew) return;
+  if (!r.provenance) {
+    if (S.pane instanceof X.Provenance) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
+    return;
+  }
+  if (!(S.pane instanceof X.Provenance && S.pane.ref === r.provenance)) {
+    if (S.pane && S.pane.destroy) S.pane.destroy();
+    S.pane = new X.Provenance(r.provenance);
+  }
+  S.paneKey = `provenance|${r.provenance}`;
+  pane.classList.add('open');
+};
+
+// Esc closes the Provenance pane as it closes SwarmChat's own.
+const baseKey = onKey;
+onKey = e => e.key === 'Escape' && !overlay.on && S.route.provenance ? go({provenance: null}, true) : baseKey(e);
 
 const baseApply = apply;
 apply = events => {
@@ -414,7 +450,7 @@ messageHtml = (m, prev, o = {}) => {
     ? 'An approval is answered with Allow or Deny, not a reply.'
     : `What ${first(m.from)} said in its turn is no message a reply can cite: write to ${first(m.from)} in the chat.`);
   const reply = html`<button data-x-reply="${m.id}" data-x-ref="${m.x_ref || ''}"${why ? html` disabled title="${why}"` : ''}>Reply</button>`;
-  const provenance = html`<button disabled title="${X.unbuilt.provenance}">Provenance</button>`;
+  const provenance = html`<button data-x-provenance="${m.x_shows}" title="What ${m.x_shows} rests on, what came of it and whose work it reaches">Provenance</button>`;
   return new Safe(drawn.s
     .replace(knew, () => reached.s)
     .replace(html`<button data-receipts="${m.id}">Read by</button>`.s, () => html`<button data-receipts="${m.id}">Delivered to</button>`.s)
@@ -564,6 +600,50 @@ ThreadPane = class extends ThreadPane {
   }
 };
 
+// The provenance of one event, in the lines the terminal draws, read when it opens and when its event is asked again:
+// what it rests on, what came of it and whose work it reaches, each link by how it is known. Following a link shows that
+// event's, and one a chat shows opens there too.
+X.Provenance = class {
+  constructor(ref) {
+    this.ref = ref;
+    const pane = $('#pane');
+    pane.innerHTML = html`<div class="phead"><h2>Provenance of ${ref}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
+    this.box = $('.x-provenance', pane);
+    this.load();
+  }
+  async load() {
+    let r;
+    try { r = await api('x_provenance', {ref: this.ref}); } catch (e) {
+      if (!this.dead) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
+      return;
+    }
+    if (this.dead) return;
+    this.box.innerHTML = html`<div class="note">${X.RECORD}</div>${r.lines.map(X.line)}`.s;
+    if (r.at && X.followed === this.ref) X.reveal(r.at, this.ref);
+    X.followed = null;
+  }
+  destroy() { this.dead = true; }
+};
+
+// One line of the pane: a part's heading, or the kind a link is known by beside its words, which follow it when it
+// opens an event, and otherwise say why it opens nothing.
+X.line = l => l.kind === 'heading' ? html`<div class="x-part">${l.text}</div>`
+  : html`<div class="x-line${l.warn ? ' x-warn' : ''}"${l.ref ? html` data-x-follow="${l.ref}" title="Follow it into the provenance of ${l.ref}"` : ''}><span class="x-kind">${l.kind}</span><span>${l.text}</span></div>`;
+
+// Show an event's provenance in the pane, read again when it is the one shown. One followed there that a chat shows opens
+// in that chat too.
+X.followed = null;
+X.provenance = (ref, followed) => {
+  X.followed = followed ? ref : null;
+  if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
+  go({provenance: ref, thread: null, knew: null}, true);
+};
+X.reveal = (at, ref) => {
+  const [chat, seq] = at.split(':');
+  if (S.view instanceof ChatView && S.view.id === chat) return S.view.jump(+seq);
+  go({layout: 'chat', chat, m: seq, provenance: ref});
+};
+
 // A queue's or a board's own view, of its tasks or its entries, drawn disabled in its chat, saying why.
 X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)
   ? html`<button class="btn" disabled title="${X.unbuilt.tasks}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
@@ -676,10 +756,13 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow]');
+  if (!el && S.route.provenance && e.target.closest('[data-close-pane]')) return go({provenance: null}, true);
   if (!el) return baseClick(e);
   if (el.disabled) return;
   const d = el.dataset;
+  if (d.xProvenance) return X.provenance(d.xProvenance, false);
+  if (d.xFollow) return X.provenance(d.xFollow, true);
   if (d.xReply) return go({thread: d.xReply, knew: null}, true);
   if (d.xDecide) return X.decide(el);
   if (d.xAct) return X.lifecycle(el);

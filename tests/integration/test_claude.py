@@ -665,6 +665,23 @@ async def test_a_cited_write_is_traced_to_the_model_call_that_chose_it(tmp_path,
     ]
 
 
+async def test_the_tui_shows_the_call_that_chose_a_cited_write_and_what_its_citer_was_handed(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    read = ToolCall("mcp__ph__message_read", {"after": 0}, id="toolu_read")
+    replies = (read, ToolCall("mcp__ph__message_send", clients.CITING, id="toolu_send"), "answered")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        lines = await clients.the_tui_shows_where_a_cited_write_came_from(team, tmp_path)
+
+    (chosen,) = [line for line in lines if line.text.startswith("chosen by the model call ")]
+    (bound,) = [line for line in lines if line.text.startswith("lineage read at head ")]
+    (declared,) = [line for line in lines if line.kind == "declared"]
+    assert chosen.text.endswith(", of claudecode/toolUseId toolu_send") and chosen.ref is not None
+    assert f"counting what was handed over below the model call {chosen.ref} that chose it" in bound.text
+    assert declared.ref == clients.CITED and declared.text.startswith(f"{clients.CITED} by @you: ")
+    assert "seen: wake" in declared.text and "taken by tool_item toolu_read" in declared.text
+
+
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     async with FakeModel(clients.SAID) as model:

@@ -359,6 +359,49 @@ async def test_a_person_is_no_agent_to_be_seen_as(web):
     assert reply.status == 400 and "no agent" in reply.json()["error"]
 
 
+async def test_provenance_is_a_read_a_view_link_reaches_naming_where_a_chat_shows_its_event(root, clock):
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
+        await scenario(session)
+        await caught_up(web, session)
+        head = await session.head()
+        browser = await Browser(web).opened("view")
+        snapshot = await browser.view("view_snapshot")
+        between = next(chat["id"] for chat in snapshot["chats"] if chat["members"] == ["lead", "w1"])
+        lines = [
+            line for line in (await browser.view("view_messages", {"chat": between}))["messages"] if "x_shows" in line
+        ]
+        goal, report = lines[0], lines[-1]
+        carried = await browser.view("x_provenance", {"ref": report["x_shows"]})
+        started = await browser.view("x_provenance", {"ref": goal["x_shows"]})
+        offered = await browser.view("x_provenance", {"ref": "context/w1@1"})
+
+        assert await session.head() == head, "a read wrote an event"
+    assert goal["x_shows"] == "agent/w1@1" and started["at"] == goal["id"]
+    assert report["x_shows"].startswith("agent/w1@") and report["x_ref"] == report["x_shows"]
+    assert carried["at"] == report["id"] and carried["lines"][0]["text"].startswith(
+        f"agent.finished {report['x_shows']}"
+    )
+    assert offered["at"] is None and offered["ref"] == "context/w1@1"
+    assert {line["kind"] for line in carried["lines"]} >= {"heading", "observed", "cause"}
+
+
+@pytest.mark.parametrize(
+    ("ref", "status", "said"),
+    [
+        ("nothing/here@1", 404, "not_found: nothing is nothing/here@1"),
+        ("inbox/lead@1#L1-2", 400, "invalid: these ask about events"),
+        (f"sha256:{'0' * 64}", 400, "invalid: a body's hash names bytes and no event"),
+        (None, 400, "ref is an event's ref"),
+    ],
+)
+async def test_provenance_of_what_is_no_event_is_refused_saying_why(web, ref, status, said):
+    browser = await Browser(web).opened("view")
+
+    reply = await browser.request("POST", "/v1/x_provenance", {"ref": ref})
+
+    assert reply.status == status and reply.json()["error"].startswith(said)
+
+
 async def test_browsing_writes_no_event_and_moves_no_cursor_or_mark(root, clock):
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
         await scenario(session)

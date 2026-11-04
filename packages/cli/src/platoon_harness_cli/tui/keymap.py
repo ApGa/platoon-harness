@@ -18,6 +18,7 @@ Where = Literal[
     "dock",
     "composer",
     "list",
+    "provenance",
     "question",
     "dialog",
 ]
@@ -31,7 +32,8 @@ WHERE: dict[Where, str] = {
     "transcript": "The transcript, once it has focus",
     "dock": "The dock, once it has focus",
     "composer": "The composer",
-    "list": "A list: the sessions, the navigator, the dock, the help",
+    "list": "A list: the sessions, the navigator, the dock, the help, provenance",
+    "provenance": "The provenance panel",
     "question": "A question",
     "dialog": "A form or the help",
 }
@@ -156,6 +158,13 @@ KEYMAP: tuple[Key, ...] = (
     ),
     Key("alt+d", "review", "review", "List what changed: each workspace's commits and uncommitted paths", "workspace"),
     Key(
+        "",
+        "provenance",
+        "provenance",
+        "Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches",
+        "workspace",
+    ),
+    Key(
         "alt+m",
         "model",
         "model",
@@ -194,6 +203,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("down", "cursor_down", "line below", "Choose the line below", "transcript"),
     Key("enter", "open_line", "open-line", "Open or close the chosen line", "transcript"),
     Key("end", "follow", "follow", "Go to the newest line and follow what comes", "transcript"),
+    Key("p", "screen.provenance", "provenance", "Show the chosen line's provenance", "transcript"),
     Key("y", "screen.first_action", "yes", "Take the first action of the chosen place, such as Allow", "dock"),
     Key("n", "screen.second_action", "no", "Take the second action of the chosen place, such as Deny", "dock"),
     Key(
@@ -209,6 +219,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("up", "cursor_up", "row above", "Choose the row above, or scroll up the help", "list", priority=False),
     Key("down", "cursor_down", "row below", "Choose the row below, or scroll down the help", "list", priority=False),
     Key("enter", "choose", "open", "Open the chosen row, or show the chosen place", "list", priority=False),
+    Key("escape", "back", "back", "Go back one hop, and from the first, leave", "provenance", priority=False),
     Key("y", "yes", "yes", "Say yes", "question", priority=False),
     Key("n,escape", "no", "no", "Say no", "question", priority=False),
     Key("escape", "leave", "leave", "Leave it, and a form sends nothing", "dialog", priority=False),

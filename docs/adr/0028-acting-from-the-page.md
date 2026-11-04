@@ -1,6 +1,7 @@
 # 0028. Acting from the page
 
-**Status:** Accepted, 2026-11-04
+**Status:** Accepted, 2026-11-04. Amended by [0043](0043-a-person-follows-provenance-from-where-they-read.md): Provenance among a
+message's actions is built, and opens a pane.
 
 ## Context
 

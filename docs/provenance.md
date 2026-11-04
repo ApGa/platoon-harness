@@ -71,6 +71,15 @@ while the turn its event was made in has not ended, since a later report can sti
 says whether its lines were shown as exposure says whether its event was: true when a confirmed offer showed them, and otherwise
 null, as no answer can say they were not.
 
+## In the terminal and the browser
+
+A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen
+line, and Provenance among a message's actions in the browser, on a view link too. Both show one event at a time, in the same words,
+in four parts: its sources, its uses, its contributors, and what estimators said of it. Each link is labelled by how it is known,
+`declared`, `observed`, `cause`, `ancestry` or `gap`, and following one shows that event's provenance; a line that opens nothing says
+why. Each part says the head it was read at, where it stops counting, and whether its turn was still open, and a page an answer cut
+names the command below that reads on. [tui.md](tui.md) and [web.md](web.md) are the clients' guides.
+
 ## What `unknown` means
 
 `unknown` lists its reasons: offers its harness never said it took, surfaces of the agent's harness no stored conformance result
@@ -116,7 +125,8 @@ async def even_split(session, outcome):
     return await session.annotations()
 ```
 
-A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two.
+A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
+terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
 ## From the command line
 

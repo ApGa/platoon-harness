@@ -114,13 +114,14 @@ def _short(row: sqlite3.Row) -> dict[str, Any]:
 
 def message(projection: Projection, row: sqlite3.Row) -> dict[str, Any]:
     """A line as the page shows it: a message, with whatever answers it and what it answers, or a line of its chat's
-    own. `x_ref` names the journal's entry, which a reply cites, and `x_approval` an approval's card."""
+    own. `x_ref` names the journal's entry, which a reply cites, `x_shows` the event a message shows, which its
+    Provenance follows, and `x_approval` an approval's card."""
     chat, seq = row["chat"], row["seq"]
     shown: dict[str, Any] = {"id": f"{chat}:{seq}", "chat": chat, "seq": seq, "kind": row["kind"]}
     shown |= {"from": row["sender"], "at": row["at"]}
     if row["kind"] != "message":
         return shown | json.loads(row["extra"])
-    shown["text"] = row["text"]
+    shown |= {"text": row["text"], "x_shows": row["shows"]}
     db = projection.db
     if row["parent"] is not None:
         parent = db.execute("SELECT * FROM lines WHERE chat = ? AND seq = ?", (chat, row["parent"])).fetchone()
@@ -483,6 +484,16 @@ def knew(projection: Projection, params: Mapping[str, Any]) -> dict[str, Any]:
         )
     found.sort(key=lambda shown: (shown["chat"] != row["chat"], -shown["unseen"], shown["chat"]))
     return {"message": message(projection, row), "user": user, "at": row["at"], "chats": found}
+
+
+def at(projection: Projection, ref: str, seq: int) -> str | None:
+    """The message an event is in its chat, by the ref the message shows or by the seq of the event that made it, the
+    first where several are, or None for an event no chat shows."""
+    row = projection.db.execute(
+        "SELECT chat, seq FROM lines WHERE kind = 'message' AND (shows = ? OR event = ?) ORDER BY event, chat LIMIT 1",
+        (ref, seq),
+    ).fetchone()
+    return None if row is None else f"{row['chat']}:{row['seq']}"
 
 
 def attachment(projection: Projection, params: Mapping[str, Any]) -> tuple[dict[str, Any], str]:

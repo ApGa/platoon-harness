@@ -15,6 +15,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
 from platoon_harness_cli.tui.keymap import KEYMAP, TYPED, command, keys, reference, regenerate
+from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
@@ -32,6 +33,7 @@ PLACES = {
     Navigator: ("panel",),
     Dock: ("panel",),
     Rows: ("list",),
+    Provenance: ("provenance",),
     Confirm: ("question",),
     Form: ("dialog",),
     Help: ("dialog",),
@@ -87,7 +89,7 @@ def test_every_act_of_a_session_has_one_typed_command_that_runs_it():
 def test_every_act_is_reached_with_keys_every_terminal_delivers():
     """In a session, by its typed command, and between its parts and in each list, by plain keys. Where nothing is
     typed, the sessions screen, a question, a form and the help, each act has a plain key, quitting included."""
-    for where in ("sessions", "parts", "panel", "dock", "list", "question", "dialog"):
+    for where in ("sessions", "parts", "panel", "dock", "list", "provenance", "question", "dialog"):
         for key in keys(where):
             assert plain(key.keys.split(",")[0]), key
     for key in keys("everywhere"):

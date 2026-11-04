@@ -5,7 +5,8 @@ is a function of the events and of the bodies they cite and of nothing else, so 
 again. A chat's id is 16 hex of a hash of the session and what the chat is: a channel's stream, or the two people of a
 direct chat, whose inboxes it merges in journal order. A line's seq is its place in its chat, in journal order. The feed
 numbers what the page must hear, in the same order, and `feed_id` hashes the session and this version of the projection,
-whose change drops the file and folds again, which the page hears as a reset.
+whose change drops the file and folds again, which the page hears as a reset. A line shows one event, by its ref, which
+its Provenance follows.
 """
 
 import hashlib
@@ -20,7 +21,9 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
-VERSION = 5
+from ..provenance import shows
+
+VERSION = 6
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -69,6 +72,7 @@ CREATE TABLE lines(
     at TEXT NOT NULL,
     time REAL NOT NULL,
     event INTEGER NOT NULL,
+    shows TEXT NOT NULL,
     stream TEXT,
     ref TEXT,
     gist TEXT NOT NULL,
@@ -80,6 +84,8 @@ CREATE TABLE lines(
     PRIMARY KEY (chat, seq)
 ) WITHOUT ROWID, STRICT;
 CREATE UNIQUE INDEX lines_ref ON lines(ref);
+CREATE INDEX lines_shows ON lines(shows);
+CREATE INDEX lines_event ON lines(event);
 CREATE INDEX lines_body ON lines(body);
 CREATE INDEX lines_time ON lines(kind, time);
 CREATE INDEX lines_parent ON lines(chat, parent);
@@ -356,13 +362,14 @@ class Projection:
         extra: dict[str, Any] | None = None,
         ref: str | None = None,
     ) -> int:
-        """Add a line to a chat, at the next seq, and tell the feed: a message, or a line of the chat's own."""
+        """Add a line to a chat, at the next seq, and tell the feed: a message, or a line of the chat's own. It shows
+        the event that made it, or what that event's words carry."""
         self._known(sender)
         seq = self.db.execute("UPDATE chats SET seq = seq + 1 WHERE id = ? RETURNING seq", (chat,)).fetchone()[0]
         if file is not None and body is not None:
             file = {"id": f"a{hashed(self.session, body)}", **file}
         self.db.execute(
-            "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 chat,
                 seq,
@@ -371,6 +378,7 @@ class Projection:
                 iso(event.wall_time),
                 event.wall_time,
                 event.seq,
+                shows(event),
                 stream,
                 ref,
                 gist,

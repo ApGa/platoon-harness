@@ -349,8 +349,8 @@ async def test_a_reply_in_a_thread_cites_the_message_it_answers(chromium: Browse
         await expect(aloud).to_be_disabled()
         await expect(aloud).to_have_attribute("title", re.compile("is no message a reply can cite"))
         provenance = question.locator(".actions button", has_text="Provenance")
-        await expect(provenance).to_be_disabled()
-        await expect(provenance).to_have_attribute("title", re.compile("^Not built yet: "))
+        await expect(provenance).to_be_enabled()
+        await expect(provenance).to_have_attribute("title", re.compile("^What inbox/you@1 rests on"))
 
         await question.hover()
         await question.locator("[data-x-reply]").click()

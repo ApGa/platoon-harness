@@ -12,8 +12,10 @@ from platoon_harness.kernel import Delta, Event
 from platoon_harness.primitives import Contributors, Exposure, Lineage, Seen, Uses
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
+from platoon_harness_cli.provenance import Line
 from platoon_harness_cli.tui.app import TerminalUI
-from platoon_harness_cli.tui.transcript import Transcript
+from platoon_harness_cli.tui.provenance import Provenance
+from platoon_harness_cli.tui.transcript import Focus, Transcript
 
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn, workspace
@@ -157,6 +159,26 @@ def hold_their_bounds(traced: Traced, bound: str) -> None:
     assert {row.kind for row in uses.rows} == {"declared", "observed"} and uses.totals["declared"] == 1
     assert [(row.maker, row.kinds) for row in contributors.rows] == [("agent:bob", ()), ("human:you", ("declared",))]
     assert not (lineage.open or exposure.open or uses.open or contributors.open)
+
+
+async def the_tui_shows_where_a_cited_write_came_from(team: Team, root: Path) -> list[Line]:
+    """What the TUI's `/provenance` says of `bob`'s answer, the newest line sent to the person, once bob has read the
+    message that woke it by our tool and answered citing it. Its caller points `PLATOON_HARNESS_HOME` at `root`."""
+    answering = Team.model_validate({**team.canonical(), "topology": {"edges": {"bob": ["human"]}}})
+    async with Session.start(answering, name="s", root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "read your inbox, then answer citing what you read")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        app = TerminalUI("s")
+        async with app.run_test(size=(140, 40)) as pilot:
+            await drawn(pilot, lambda text: "@bob" in text, within=TIMEOUT)
+            await workspace(app).show(Focus.of_person("human:you"))
+            await drawn(pilot, lambda text: CITING["gist"] in text, within=TIMEOUT)
+            await pilot.press("slash", *"provenance", "enter")
+            await drawn(pilot, lambda text: "Credit and rewards" in text, within=TIMEOUT)
+            panel = app.screen
+            assert isinstance(panel, Provenance)
+            return panel.lines
 
 
 async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:

@@ -245,6 +245,11 @@ class Transcript(ScrollView, can_focus=True):
     def blocks(self) -> list[Block]:
         return self._blocks
 
+    @property
+    def chosen(self) -> Block | None:
+        """The chosen line: the newest while following, or the one the person chose, or None with no line held."""
+        return self._chosen
+
     async def show(self, focus: Focus, session: Session, through: int) -> None:
         """Show a focus as the journal holds it through `through`, newest first, and follow from there."""
         self.focus_on, self._session, self.through = focus, session, through

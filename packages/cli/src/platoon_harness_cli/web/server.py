@@ -2,14 +2,16 @@
 
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
-of a stated length. A view credential reaches `view_*` alone. Every mutation is `/x/command` into `Session.submit`, the
-op path the terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
+of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_provenance`, which answers from
+the session's provenance queries. Every mutation is `/x/command` into `Session.submit`, the op path the terminal uses,
+and the kernel's grants decide what the person may do. Every answer says `no-store`.
 """
 
 import asyncio
 import json
 import re
 from collections.abc import Mapping
+from dataclasses import asdict
 from typing import Any, NamedTuple
 
 from platoon_harness import Refused, Session
@@ -19,6 +21,7 @@ from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__
 from ..ops import CONFIRMED, cut, person_ops
+from ..provenance import read
 from ..roster import status_of
 from . import replies
 from .credentials import Class, Credentials, Held
@@ -36,6 +39,8 @@ _KEY = re.compile(r"[0-9a-f]{32}")
 _PAGE = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
 _JSON = "Content-Type: application/json"
 _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
+_READS = ("/v1/x_provenance",)
+"""The page's reads of our own, beside SwarmChat's `view_*`, which a view credential reaches as it reaches those."""
 _SPENT = "this link was used already or has expired: ask for a new one"
 
 
@@ -98,7 +103,7 @@ class Web(Server[Request]):
             if head.method != "GET":
                 raise Rejected(405, "Allow: GET")
             return Request(route, head.headers["host"])
-        if not (route.startswith("/v1/view_") or route in _ROUTES):
+        if not (route.startswith("/v1/view_") or route in _READS or route in _ROUTES):
             raise Rejected(404, why=f"there is no route {route}")
         if head.method != "POST":
             raise Rejected(405, "Allow: POST")
@@ -181,6 +186,8 @@ class Web(Server[Request]):
                     return _json(await self._text(params))
                 case "view_download":
                     return await self._download(params)
+                case "x_provenance":
+                    return _json(await self._provenance(params))
             raise replies.Error(404, f"There is no request named '{name}'.")
         except replies.Error as error:
             raise Rejected(error.status, why=str(error)) from None
@@ -275,6 +282,24 @@ class Web(Server[Request]):
         found, data = await self._body(params)
         headers = (f"Content-Type: {found['type']}", f"X-Attachment: {json.dumps(found)}")
         return response(200, data, *headers, *_PAGE)
+
+    async def _provenance(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """What the session's provenance queries say of the event `ref`, in the lines the terminal draws, and `at`, the
+        message it is in its chat, if one shows it, where following it opens."""
+        ref = params.get("ref")
+        if not isinstance(ref, str):
+            raise replies.Error(400, "ref is an event's ref, `stream@version`")
+        try:
+            panel = await read(self.session, ref)
+        except Refused as refused:
+            status = 404 if refused.refusal.code == "not_found" else 400
+            raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+        event = panel.event
+        return {
+            "ref": event["ref"],
+            "at": replies.at(self.projection, event["ref"], event["seq"]),
+            "lines": [asdict(line) for line in panel.lines],
+        }
 
     # The page's acts.
 

@@ -2,13 +2,20 @@
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
+from textual.app import App
 
 from platoon_harness import Session, Team
+from platoon_harness.annotations import Annotation
+from platoon_harness.primitives import Contributors, Lineage, Uses
 from platoon_harness.testing import Call, Say, ScriptedDriver
-from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.app import CSS, TerminalUI
+from platoon_harness_cli.tui.provenance import Provenance
 
+from ..cli.test_provenance import opened
+from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
 from ..runtime.support import in_state, of_type, until
 from .support import drawn
@@ -94,3 +101,55 @@ def test_review_lists_what_changed(snap_compare, reviewed):
         await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
 
     assert snap_compare(TerminalUI("s"), terminal_size=(120, 32), run_before=opened)
+
+
+class Answered:
+    """A session as the provenance panel asks one, answering what the queries answered of a journal written on a manual
+    clock, so that every seq and head is the same each run."""
+
+    name = "s"
+
+    def __init__(self, answers: dict[str, Any]) -> None:
+        self._answers = answers
+
+    async def lineage(self, ref: str) -> Lineage:
+        return Lineage.model_validate(self._answers["lineage"])
+
+    async def uses(self, ref: str) -> Uses:
+        return Uses.model_validate(self._answers["uses"])
+
+    async def contributors(self, ref: str) -> Contributors:
+        return Contributors.model_validate(self._answers["contributors"])
+
+    async def annotations(self, target: str) -> list[Annotation]:
+        estimate = {"target": target, "kind": "credit", "producer": "even-split", "producer_version": "0"}
+        estimate |= {"params_hash": "0" * 64, "scope": "team", "status": "scored", "value": 0.5, "evidence": ()}
+        return [Annotation.model_validate({"id": 1, **estimate, "head_seq": 49, "wall_time": 0.0})]
+
+
+class Panel(App[None]):
+    CSS = CSS
+
+    def __init__(self, session: Answered, ref: str) -> None:
+        super().__init__()
+        self._session, self._ref = session, ref
+
+    def on_mount(self) -> None:
+        self.push_screen(Provenance(self._session, self._ref))  # type: ignore[arg-type]
+
+
+async def _traced(folder: Path) -> tuple[str, dict[str, Any]]:
+    kernel = await opened(folder)
+    refs = await scenario(kernel)
+    answers = {query: ask(kernel, query, ref=refs["message"]) for query in ("lineage", "uses", "contributors")}
+    kernel.close()
+    return refs["message"], answers
+
+
+def test_the_provenance_panel_draws_each_link_with_how_it_is_known(snap_compare, tmp_path):
+    ref, answers = asyncio.run(_traced(tmp_path / "session"))
+
+    async def read(pilot) -> None:
+        await drawn(pilot, lambda text: "Credit and rewards" in text and "even-split" in text)
+
+    assert snap_compare(Panel(Answered(answers), ref), terminal_size=(120, 48), run_before=read)

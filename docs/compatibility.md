@@ -372,12 +372,13 @@ the installed package and held to these SHA-256 values when it starts. A file th
 - What the page asks is SwarmChat's internal shape, unversioned upstream. A test runs one scenario through SwarmChat's own server,
   in the test alone, and through ours, and holds every reply the page uses to the same keys of the same types: `view_info`,
   `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_posts`, `view_search`, `view_activity`, `view_as`,
-  `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by.
+  `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by, and the one read
+  of ours, `x_provenance`, is asked only by our overlay.
 - The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
-  It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `apply`, `onClick`, `renderTop`, `avatar`, `messageHtml`, `systemHtml`,
-  `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`, `ThreadPane`, `PersonView`,
-  `KnewPane`, `UnreadView`, `BoardView` and `MapView`, and uses `S`, `TOKEN`, `ARROW`, `go`, `route`, `overlay`, `toast`,
-  `throttle`, `buildSide` and the helpers `html`, `Safe`, `$` and `$$`. An upgrade that renames one breaks the browser tests,
+  It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `route`, `onKey`, `apply`, `onClick`, `renderTop`, `avatar`,
+  `messageHtml`, `systemHtml`, `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`,
+  `ThreadPane`, `PersonView`, `KnewPane`, `UnreadView`, `BoardView` and `MapView`, adds `provenance` to the address keys `KEYS`, and
+  uses `S`, `TOKEN`, `ARROW`, `go`, `overlay`, `toast`, `throttle`, `buildSide` and the helpers `html`, `Safe`, `$` and `$$`. An upgrade that renames one breaks the browser tests,
   which fail on any page error.
 - The link exchange is a script of ours before the gate's. It hands the gate the session token through the `#token=` the gate
   watches, as a link pasted into its tab would.
@@ -527,7 +528,9 @@ is `forgot` or `kept` for a handover. Each of these ran on the real binary again
 `tests/integration` [L]. A read through `ph` stays unconfirmed on every harness, and is labelled so: `ph` would have to send the id of
 the shell call that runs it, and neither Claude Code 2.1.316 nor pi 1.5.0 hands a shell command any such id, by its environment on
 FakeModel [L]; Codex's shell does not run on the machine this was checked on. `exec` reports no tool item at all. Every harness here has a
-shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each.
+shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each. The terminal's `/provenance`
+and the browser's Provenance pane say what the answers say: on Claude Code the call that chose a cited write and the tool item that
+joins it, and the read before it taken by that item [L]; elsewhere why no call is joined, as their reports above leave it.
 
 ### Workspaces
 
