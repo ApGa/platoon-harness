@@ -464,7 +464,7 @@ This is engineering policy, not legal advice.
 | Profile | What it is | What we do | Levels |
 |---|---|---|---|
 | **Native login** | The harness's own sign-in, made by the user through its own flow | Spawn the user's binary on the user's machine, with no credential added. `doctor` shows only whether a login exists and which kind. Each harness signs itself in | Operational, Observable |
-| **Plan login** | A native login on a subscription | The same, for that user's own work. Headless multi-agent exits 78 and names the fix unless the user opts in. `web --remote` refuses a second person | Operational, Observable. Never Trainable |
+| **Plan login** | A native login on a subscription | The same, for that user's own work. Headless multi-agent exits 78 and names the fix unless the user opts in. `web` serves loopback unless `--host` names another address with TLS, and a control link is the owner's alone to use, a view link what another person gets: refusing another address to a session on a plan login is planned | Operational, Observable. Never Trainable |
 | **API key** | A user-supplied key or provider credential | Pass it to that process by env var name. Scrub `ANTHROPIC_API_KEY` unless chosen: `-p` always uses it when present, which is a silent billing surprise | Operational, Observable |
 | **Gateway** | A key we receive from Platoon for one agent | One key per process, with an isolated config (`CLAUDE_CONFIG_DIR`, per-run `CODEX_HOME`). A path-form URL is a credential: normalize it to origin plus bearer before a driver sees it. Validate base URL and credential together, then fail closed | Adds Trainable where section 4 allows |
 

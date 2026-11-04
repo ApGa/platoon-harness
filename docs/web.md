@@ -20,7 +20,9 @@ says so at the top right, and names `platoon-harness session resume`. When a run
 shell, the page follows it. Ctrl+C or `SIGTERM` stops `web`, which ends every browser's session and leaves the session
 itself as it was. It serves one session on one port, as the page keeps one session in the browser per address, and one
 `web` serves a session at a time, as one folds its projection: a second is refused, saying where the first serves, so
-stop that one for new links.
+stop that one for new links. While it runs, `web` is a client holding your control credential, so a run whose agent asks
+for an approval waits for you to answer it, from the page or anywhere, instead of ending `needs_human` at once: stop `web`
+for a run that should end that way.
 
 ## The two links
 

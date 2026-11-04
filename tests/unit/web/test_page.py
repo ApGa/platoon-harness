@@ -2,6 +2,7 @@
 names every script by hash."""
 
 import ast
+import asyncio
 import base64
 import hashlib
 import re
@@ -10,8 +11,15 @@ from pathlib import Path
 
 import pytest
 
+from platoon_harness import Session
+from platoon_harness_cli.exits import CONFIGURATION
+from platoon_harness_cli.main import main
+from platoon_harness_cli.web import LOCK
 from platoon_harness_cli.web import page as page_module
 from platoon_harness_cli.web.page import BANNER, PINNED, Unpinned, edited, load
+
+from ..runtime.support import in_state
+from .support import QUIET
 
 ROOT = Path(__file__).parents[3]
 PRODUCT = sorted(ROOT.glob("packages/*/src/**/*.py"))
@@ -37,6 +45,28 @@ def test_a_page_file_that_is_not_the_one_pinned_is_refused_with_the_reason(monke
 
     with pytest.raises(Unpinned, match=r"app\.js is not the one pinned"):
         load()
+
+
+def test_web_on_a_page_file_that_is_not_the_one_pinned_exits_78_saying_which_and_serves_nothing(
+    tmp_path, monkeypatch, capsys
+):
+    """The command runs in this thread, as its signal handlers must."""
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+
+    async def made() -> Path:
+        async with Session.start(QUIET, name="s", root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "lead", "idle")
+        return session.folder
+
+    folder = asyncio.run(made())
+    monkeypatch.setitem(PINNED, "app.js", "0" * 64)
+
+    code = main(["web", "s"])
+
+    said = capsys.readouterr().err
+    assert code == CONFIGURATION
+    assert "app.js is not the one pinned" in said and "link" not in said
+    assert not (folder / LOCK).exists()
 
 
 def test_an_edit_whose_text_is_not_there_once_fails_closed():

@@ -158,7 +158,7 @@ can both be watched. Leaving only disconnects.
 
 - **Attach never has side effects** on the session. With no live runtime, `attach` gives read-only history, whose writes are refused
   naming `platoon-harness session resume`. Only `resume` restarts anything, because restarting can spend money. Reading moves only
-  the person's own marks, in `marks.sqlite` (§12).
+  the person's own marks, in `marks.sqlite` (§12), but for `web`, which keeps its projection and its lock beside the journal.
 - **One path up.** `Session.start` checks the team and writes the manifest before any cost, and that folder is all a runtime
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
@@ -168,8 +168,8 @@ can both be watched. Leaving only disconnects.
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
   on `SIGTERM`, which runs the shutdown below, and once a session that has stopped accepting work has drained. Signal handlers
-  live in the entry points, that one and the command line's `run`, `serve`, `session resume` and `events`, and nowhere else, so that
-  several runtimes can share a process. `platoon-harness session stop` is that `SIGTERM`, sent from another shell to a runtime whose
+  live in the entry points, that one and the command line's `run`, `serve`, `session resume`, `events` and `web`, and nowhere else,
+  so that several runtimes can share a process. `platoon-harness session stop` is that `SIGTERM`, sent from another shell to a runtime whose
   lock is held and whose `runtime.json` names the incarnation the journal last started; a script's own process does what its handler
   says.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release

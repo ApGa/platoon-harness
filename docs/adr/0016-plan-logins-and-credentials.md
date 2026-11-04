@@ -1,6 +1,9 @@
 # 0016. Plan logins and credentials
 
-**Status:** Accepted, 2026-11-02
+**Status:** Accepted, 2026-11-02. Its `web --remote` line is amended by [0027](0027-the-browser-on-our-backend.md), 2026-11-04:
+no such flag exists, `web` serves loopback unless `--host` names another address with TLS, a control link is the owner's
+alone to use and a view link is what another person gets, and refusing an address other than loopback to a session on a
+plan login is planned
 
 ## Context
 
@@ -9,7 +12,7 @@ Most users already have a harness signed in on a plan, and the brief says not to
 ## Decision
 
 - **We spawn the user's own harness under its own login.** We never read, copy, store or proxy a credential, and we build no login flow. `doctor` shows only that a login exists and its kind.
-- **Headless multi-agent on a plan login exits 78** and names the fix, unless the user opts in. `web --remote` refuses a second person on a plan-login session.
+- **Headless multi-agent on a plan login exits 78** and names the fix, unless the user opts in. `web --remote` refuses a second person on a plan-login session, which ADR 0027 amends.
 - **Secrets are handled by type.** Config holds env var names. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs. A path-form URL is normalized to origin plus bearer before a driver sees it.
 - **Harness env is an allowlist,** per process. Nothing is inherited by default. `ANTHROPIC_BASE_URL` is never set without a gateway credential, because alone it leaves the login active.
 

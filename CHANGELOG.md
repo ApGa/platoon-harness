@@ -242,6 +242,11 @@
   failure of `web`'s is an answer saying whether the act took effect is unknown, and only a request that reached nothing, or a
   503, is sent again. A body holding half of a character, nested past reading, or a search the page could not have made, is
   refused 400, where some failed 500 and a long draft holding half a character was sent again for ever.
+- ADR 0016 and the compatibility map said `web --remote` refuses a second person on a plan-login session, which no code did
+  and no such flag exists; ADR 0027 amends it, as the architecture already said, and refusing another address to such a
+  session is planned. The guide now says that while `web` runs a run's approval waits for you instead of ending
+  `needs_human`, and the architecture names `web` among the entry points with signal handlers and among what writes beside
+  the journal when it reads. `web` on a page file that is not the one pinned exits 78, which nothing tested before.
 - The page said a spawn's goal was "Delivered to 0 of 0 agents it was for", and that the spawner made each agent's chat with
   the person, which nobody in it did. A goal reached its agent when the agent's first turn began on it, and the runtime makes
   that chat. The projection is version 3, which `web` folds again from the journal when it starts.

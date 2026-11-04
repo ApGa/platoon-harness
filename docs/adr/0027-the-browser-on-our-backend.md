@@ -83,7 +83,11 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
 - Acting from the page is the next stage: every act is drawn, disabled, saying so, and `/x/command`, `/x/body` and
   `/x/link` already take what the page will send.
 - A control link is the owner's to use: every browser on one acts as the session's person, and nothing tells a second
-  person from the first. Refusing an address other than loopback on a plan-login session is not built.
+  person from the first. Refusing an address other than loopback on a plan-login session is not built. This amends ADR
+  0016, which promised that `web --remote` would refuse a second person.
+- While `web` runs it is a client on a control credential, so a run that asks for an approval nobody else could answer
+  waits for one from the page instead of ending `needs_human`, as ADR 0019 says of any such guest. Stop `web` for a run
+  that should end so.
 - A runtime report, a goal and an agent's words each land in one chat, so a lead's chat with its child holds the reports
   about it from `runtime`, and the child's own words are in its chat with the person.
 - Nothing here has run on macOS, in Firefox or in WebKit, or on a real model in the page.
