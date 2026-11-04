@@ -20,7 +20,7 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
-VERSION = 3
+VERSION = 4
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -82,6 +82,7 @@ CREATE TABLE lines(
 CREATE UNIQUE INDEX lines_ref ON lines(ref);
 CREATE INDEX lines_body ON lines(body);
 CREATE INDEX lines_time ON lines(kind, time);
+CREATE INDEX lines_parent ON lines(chat, parent);
 CREATE TABLE deliveries(
     chat TEXT NOT NULL,
     seq INTEGER NOT NULL,

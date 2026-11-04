@@ -12,6 +12,8 @@ import pytest
 from platoon_harness import Session, Team
 from platoon_harness.kernel import ManualClock
 from platoon_harness.testing import Hang, ScriptedDriver
+from platoon_harness_cli.web import replies
+from platoon_harness_cli.web.projection import Projection
 
 from ..runtime.support import harness, in_state
 from .support import Browser, caught_up, served
@@ -141,6 +143,19 @@ async def test_an_offset_and_a_limit_page_through_posts_and_more_says_whether_an
 
     assert [_texts(page) for page in pages] == [["aside", "second"], ["first"]]
     assert [page["more"] for page in pages] == [True, False]
+
+
+@pytest.mark.parametrize("sort", ["new", "active"])
+def test_a_post_s_thread_is_followed_down_by_its_parent_s_index(tmp_path, sort):
+    projection = Projection(tmp_path, "s", "you")
+    asked: list[str] = []
+    projection.db.set_trace_callback(asked.append)
+    replies.posts(projection, {"sort": sort})
+    projection.db.set_trace_callback(None)
+    (thread,) = [sql for sql in asked if sql.lstrip().startswith("WITH RECURSIVE")]
+    plan = [row["detail"] for row in projection.db.execute(f"EXPLAIN QUERY PLAN {thread}")]
+
+    assert any("INDEX lines_parent (chat=? AND parent=?)" in detail for detail in plan)
 
 
 async def test_activity_counts_messages_over_time_by_the_journal_s_times(root):
