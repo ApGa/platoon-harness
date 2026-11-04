@@ -3,19 +3,21 @@ every action but ours asked about. Importing this loads the OpenHands SDK, which
 
 import sys
 from collections.abc import Callable, Mapping
+from contextvars import ContextVar
 from typing import Any, ClassVar
 from uuid import UUID
 
 from litellm import get_supported_openai_params
 from openhands.sdk import LLM, Agent, AgentContext, LocalConversation, Tool
 from openhands.sdk.context.condenser import default_condenser
+from openhands.sdk.conversation.cancellation import CancellationToken
 from openhands.sdk.conversation.state import ConversationState
 from openhands.sdk.event.llm_convertible import ActionEvent
 from openhands.sdk.mcp import MCPToolAction, MCPToolDefinition
 from openhands.sdk.security.analyzer import SecurityAnalyzerBase
 from openhands.sdk.security.confirmation_policy import ConfirmRisky
 from openhands.sdk.security.risk import SecurityRisk
-from openhands.sdk.tool import ToolDefinition
+from openhands.sdk.tool import ToolDefinition, ToolExecutor
 from openhands.sdk.tool.builtins.think import ThinkAction
 from openhands.sdk.tool.registry import register_tool
 from openhands.tools.file_editor import FileEditorTool
@@ -28,9 +30,13 @@ from platoon_harness.config import Secret
 from platoon_harness.drivers import AgentSpec, DriverError
 from platoon_harness.tools import SHIM
 
-Asked = Callable[[str, list[ActionEvent]], bool]
+Asked = Callable[[str, list[ActionEvent]], bool | None]
+"""Whether a native child's step may run, or None to stop the child."""
 
-__all__ = ["Asked", "pending", "ready", "start"]
+_CALLING_RUN: ContextVar[CancellationToken | None] = ContextVar("calling_run", default=None)
+"""The cancellation of the run whose call of `task` runs the child under way here."""
+
+__all__ = ["pending", "ready", "start"]
 
 
 def ours(action: ActionEvent) -> bool:
@@ -48,7 +54,8 @@ class AllButOursAsk(SecurityAnalyzerBase):
 
 class AskingTasks(TaskToolSet):
     """OpenHands' `task` tool, whose native children ask before a step as their parent does, through `asked`, as the
-    tool alone would let them run. One agent runs per process, so the class holds it."""
+    tool alone would let them run. An interrupt that cuts off the call that started one stops it at its next ask, as
+    nothing else reaches it. One agent runs per process, so the class holds it."""
 
     asked: ClassVar[Asked]
 
@@ -56,7 +63,34 @@ class AskingTasks(TaskToolSet):
     def create(
         cls, conv_state: ConversationState, confirmation_handler: Asked | None = None, sub_agent_scope: Any = None
     ) -> list[ToolDefinition]:
-        return super().create(conv_state, cls.asked, sub_agent_scope)
+        tools = super().create(conv_state, _may_run, sub_agent_scope)
+        return [tool.set_executor(_TaskExecutor(tool.executor)) for tool in tools]
+
+
+class _TaskExecutor(ToolExecutor):
+    """OpenHands' executor of a call of `task`, which keeps for the child the call runs the cancellation of the run
+    that made it."""
+
+    def __init__(self, executor: Any) -> None:
+        self._executor = executor
+
+    def __call__(self, action: Any, conversation: LocalConversation | None = None) -> Any:
+        _CALLING_RUN.set(None if conversation is None else conversation.cancel_token)
+        return self._executor(action, conversation)
+
+    def close(self) -> None:
+        self._executor.close()
+
+
+def _may_run(task: str, actions: list[ActionEvent]) -> bool:
+    """Whether a native child's step may run: a call of ours may, and the runtime decides the rest. A child whose call
+    an interrupt cut off, or that the runtime stops, ends here, as raising is the one way the task tool lets one end."""
+    run = _CALLING_RUN.get()
+    cut = run is not None and run.is_cancelled
+    allowed = None if cut else all(map(ours, actions)) or AskingTasks.asked(task, actions)
+    if allowed is None:
+        raise DriverError("the turn that started this agent was cut off")
+    return allowed
 
 
 register_tool(AskingTasks.name, AskingTasks)
@@ -64,8 +98,8 @@ register_tool(AskingTasks.name, AskingTasks)
 
 def _llm(spec: AgentSpec, key: Secret, url: Secret | None) -> LLM:
     """The role's model on an endpoint that speaks Chat Completions. The SDK retries nothing, as a retry is a second
-    call a gateway records, and the completion log goes to a callback, so that no file is written. An effort is refused
-    for a model litellm's catalog says takes none, as litellm would drop it unsaid."""
+    call a gateway records. An effort is refused for a model litellm's catalog says takes none, as litellm would drop
+    it unsaid."""
     effort: dict[str, Any] = {} if spec.effort is None else {"reasoning_effort": spec.effort}
     if effort and "reasoning_effort" not in (get_supported_openai_params(spec.model, "openai") or ()):
         raise DriverError(f"{spec.model} takes no effort, so {spec.effort} would be dropped")
@@ -77,7 +111,6 @@ def _llm(spec: AgentSpec, key: Secret, url: Secret | None) -> LLM:
         api_mode="chat",
         num_retries=0,
         stream=True,
-        log_completions=True,
         **effort,
     )
 
@@ -94,9 +127,14 @@ def start(
     asked: Asked,
 ) -> LocalConversation:
     """A conversation for `spec`, new or reopened by its id. The terminal runs commands in a subprocess, as a tmux one
-    can outlive its agent, and the step cap is lifted, as a role's budget is what limits it. The agent starts agents
-    of its own only if its role allows them, with OpenHands' built-in kinds."""
+    can outlive its agent, and the step cap is lifted, as a role's budget is what limits it. Only the agent's own LLM
+    logs its requests, to `on_request`: the condenser's copy of it gets telemetry of its own, and a child's copy logs
+    nothing, as `log_completions` would have either write a file where it runs. The agent starts agents of its own only
+    if its role allows them, with OpenHands' built-in kinds."""
     llm = _llm(spec, key, url)
+    condensing = llm.model_copy(update={"usage_id": "condenser"})
+    condensing.reset_metrics()
+    llm.telemetry.log_enabled = True
     llm.telemetry.set_log_completions_callback(on_request)
     tools = [
         Tool(name=TerminalTool.name, params={"terminal_type": "subprocess"}),
@@ -104,7 +142,7 @@ def start(
         Tool(name=TaskTrackerTool.name),
     ]
     if spec.allow_native_children:
-        AskingTasks.asked = lambda task, actions: all(map(ours, actions)) or asked(task, actions)
+        AskingTasks.asked = asked
         register_builtins_agents(enable_browser=False)
         tools.append(Tool(name=AskingTasks.name))
     servers = {}
@@ -115,7 +153,7 @@ def start(
         tools=tools,
         mcp_config=servers,
         agent_context=AgentContext(load_project_skills=True, system_message_suffix=spec.instructions),
-        condenser=default_condenser(llm.model_copy(update={"usage_id": "condenser", "log_completions": False})),
+        condenser=default_condenser(condensing),
     )
     conversation = LocalConversation(
         agent=agent,

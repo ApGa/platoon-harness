@@ -297,7 +297,7 @@ platoon-harness-openhands --frozen` builds it from the repository's lock, and wi
 keeps, in a sentence:
 
 - **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can
-  abandon a model call and a message can land while one runs.
+  abandon a model call.
 - **Sign-in** is a key alone: `OPENAI_API_KEY` from the role's auth profile, with `OPENAI_BASE_URL` for an endpoint other than
   OpenAI's, and a role with none is refused, as is a ChatGPT subscription or an OpenHands Cloud login, which needs a person. Its way
   out to the network is the shell's: the proxy variables and `SSL_CERT_FILE` pass by name.
@@ -316,16 +316,18 @@ keeps, in a sentence:
   CLI loads them, and a conversation keeps the system prompt it began with, so a resume hands it the same text for nothing.
 - **A delivery** begins a turn, or goes to the one under way and lands at a later model call, and `input.delivered` comes from the
   request that carried it, which the SDK's completion log shows, and never from the order of its events.
+- **Between runs:** a delivery goes to the conversation only while no `arun()` runs and no action waits, as the SDK rejects, unasked,
+  what a step asks to run once a message came during its model call, and a message after it would come between a call and its
+  result. One that comes while a run goes on asks the run to pause, which it does after the step under way.
 - **Approvals:** every action asks the runtime but a call of our tools and a lone `finish` or `think`, which the SDK never asks
   about, and one approval covers what a step holds, as the SDK confirms a step whole; `deny` rejects it with `The runtime denied
   this.`
-- **Held deliveries:** a delivery waits while an approval is open, as a message would supersede the action, and then until what
-  was allowed has its result, as a message must not come between a call and its result.
-- **An interrupt** abandons a model call in flight, which a gateway may have recorded all the same, and rejects an approval left
-  open, and its turn says its usage is a lower bound.
+- **An interrupt** cancels the run under way, which abandons a model call in flight that a gateway may have recorded all the same,
+  so then the turn says its usage is a lower bound, and an approval left open is answered as cut off.
 - **A turn ends** when `arun()` returns with nothing it was handed left to run on: `stopped` when the agent finished,
   `interrupted`, `stuck` when the SDK found it repeating itself, and otherwise the code of the SDK's error, such as
-  `MaxBudgetReached`.
+  `LLMServiceUnavailableError` for a provider's 500. It leaves no action pending, as the next run would run it unasked: what it did
+  not run is rejected with `The turn ended before this ran.`
 - **Items** come from actions, their observations and the agent's own messages: `finish` is its last message, `think` a thought,
   and a message the SDK calls the user's is never read as anyone's, as the SDK writes such messages itself.
 - **A model call** is each one the SDK measured, by its response id, which items carry as `call_id`: its tokens are the provider's,
@@ -335,7 +337,8 @@ keeps, in a sentence:
   purpose `condenser`, the usage id of the SDK's LLM that made it.
 - **Its own agents** are off unless a role allows them; allowed, OpenHands' `task` tool starts its built-in kinds, whose steps ask
   the runtime as their parent's do, and a child, which has no identity we can see, is the gap `native_child_unattributed`, its
-  spending its parent's at the scope `tree`.
+  spending its parent's at the scope `tree`. An interrupt that cuts off the call of `task` stops its child at the child's next
+  ask, as nothing else reaches it, and a child's copy of the agent's LLM logs nothing, as the SDK would write its log where it works.
 - **A resume** reopens the conversation by its id with the key handed again and the same tools, a conversation that is not there is
   refused, as the SDK would start one anew under that id, and an action a crash or a stop left with no result is rejected before
   the next run, which would run it again.

@@ -54,6 +54,7 @@ from platoon_harness.testing import (
     chat_access,
     check_driver,
 )
+from platoon_harness.testing.loopback import Loopback, Message, answer
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE, delivery_heading
 
@@ -108,6 +109,9 @@ def garbling(folder: Path):
     return garble
 
 
+TASK = ToolCall("task", {"description": "make it", "prompt": "Make the file.", "subagent_type": "general-purpose"})
+
+
 async def conformance(folder: Path) -> Conformance:
     return await check_driver(
         OpenHandsDriver,
@@ -116,6 +120,7 @@ async def conformance(folder: Path) -> Conformance:
         garble=garbling(folder),
         gated=shell,
         shell=shell,
+        child=TASK,
         timeout=TIMEOUT,
     )
 
@@ -128,13 +133,7 @@ async def test_the_openhands_driver_conforms(tmp_path):
     assert result.failed == (), str(result)
     assert (result.driver, result.version) == ("openhands", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {
-        "tool_item_carries_its_anchor",
-        "native_children_off_by_default",
-        "native_child_seen",
-        "one_shot_exits",
-        "declared_but_unproven",
-    }
+    assert skipped == {"tool_item_carries_its_anchor", "native_child_seen", "one_shot_exits", "declared_but_unproven"}
     earned = levels(OpenHandsDriver().describe().capabilities, Profile(driver="openhands", version=PINNED), result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
@@ -216,9 +215,8 @@ async def test_our_words_and_the_project_s_reach_the_first_request_once_and_its_
 async def test_its_own_agents_when_allowed_are_unseen_and_ask_the_runtime_before_a_step(tmp_path):
     """Starting a child asks, as any action of the SDK's own does. The child runs in the SDK with no callback, so it is
     said as a gap, its spending at the scope of its parent's tree, and its step asks the runtime as its parent's
-    would."""
-    task = ToolCall("task", {"description": "make it", "prompt": "Make the file.", "subagent_type": "general-purpose"})
-    replies = (task, ToolCall("terminal", {"command": "touch made-by-the-child"}, id="call_child"), "made", "done")
+    would. It writes no log of its calls where it works."""
+    replies = (TASK, ToolCall("terminal", {"command": "touch made-by-the-child"}, id="call_child"), "made", "done")
 
     async with FakeModel(*replies) as model:
         spec = on_fake_model(tmp_path, model, goal="hand it on", allow_native_children=True)
@@ -230,7 +228,7 @@ async def test_its_own_agents_when_allowed_are_unseen_and_ask_the_runtime_before
 
     asked = [report.gist for report in heard.of(ApprovalRequested)]
     assert "task" in model.calls[0].tools
-    assert (spec.cwd / "made-by-the-child").exists()
+    assert sorted(path.name for path in spec.cwd.iterdir()) == ["made-by-the-child"]
     assert len(asked) == 2 and asked[0].startswith("task ") and "touch made-by-the-child" in asked[1]
     assert any(gap.what == "native_child_unattributed" for gap in heard.of(GapReport))
     assert not heard.of(ChildSeen)
@@ -238,6 +236,29 @@ async def test_its_own_agents_when_allowed_are_unseen_and_ask_the_runtime_before
     calls = [usage.tokens for usage in heard.of(Usage) if usage.scope == "call"]
     assert (sum(trees), sum(calls)) == (2 * SPENT, 2 * SPENT)
     assert len(heard.of(ModelCall)) == 2
+
+
+async def test_an_interrupt_stops_its_own_agent_at_its_next_ask_and_nothing_asks_outside_a_turn(tmp_path):
+    """The task tool lets a child run on past its parent's interrupt, so its next ask stops it, and the next turn's call
+    is the parent's, carrying what it was handed."""
+    replies = (TASK, ToolCall("terminal", {"command": "touch made-by-the-child"}, id="call_child"), "heard you")
+
+    async with FakeModel(*replies) as model:
+        spec = on_fake_model(tmp_path, model, goal="hand it on", allow_native_children=True)
+        driver, heard = OpenHandsDriver(), Heard()
+        await driver.start(spec, heard)
+        task = await heard.until(ApprovalRequested)
+        await driver.answer(task.id, "allow")
+        await heard.until(ApprovalRequested, lambda asked: asked is not task)
+        await driver.interrupt()
+        cut = await heard.until(TurnEnded)
+        await driver.deliver(Delivery(input="42", boundary="turn", text="the word is cinnabar", items=()))
+        await heard.until(TurnEnded, lambda ended: ended is not cut)
+        await driver.stop(2.0)
+
+    assert cut.reason == "interrupted" and len(heard.of(ApprovalRequested)) == 2
+    assert not (spec.cwd / "made-by-the-child").exists()
+    assert len(model.calls) == 3 and model.calls[2].says("cinnabar")
 
 
 async def test_a_message_waits_while_an_approval_is_open_and_lands_after_what_was_decided(tmp_path):
@@ -259,6 +280,90 @@ async def test_a_message_waits_while_an_approval_is_open_and_lands_after_what_wa
     assert (spec.cwd / "ran").exists()
     assert (delivered.input, delivered.boundary, delivered.evidence) == ("41", "model_call", "request")
     assert result < next(n for n, message in enumerate(said) if "cinnabar" in message)
+
+
+async def test_a_message_during_a_model_call_that_asks_waits_for_the_runtime_s_answer(tmp_path):
+    """The SDK rejects what a step asks to run once a message came during its model call, unasked, so nothing goes to
+    the conversation while a run goes on: the run pauses after its step, and the message lands after the result."""
+    gated = ToolCall("terminal", {"command": "touch ran"}, id="call_term")
+
+    async with FakeModel([Stall(), gated], "done") as model:
+        spec = on_fake_model(tmp_path, model, goal="go")
+        driver = OpenHandsDriver()
+        heard = Allowing(driver)
+        await driver.start(spec, heard)
+        await asyncio.wait_for(model.call(0), TIMEOUT)
+        await driver.deliver(Delivery(input="41", boundary="model_call", text="the word is cinnabar", items=()))
+        model.release()
+        delivered = await heard.until(InputDelivered)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    carried = next(call for call in model.calls if call.says("cinnabar"))
+    said = [json.dumps(message) for message in carried.json["messages"]]
+    result = next(n for n, message in enumerate(said) if "call_term" in message and '"tool"' in message)
+    assert (spec.cwd / "ran").exists() and len(heard.of(ApprovalRequested)) == 1
+    assert (delivered.input, delivered.boundary, delivered.evidence) == ("41", "model_call", "request")
+    assert result < next(n for n, message in enumerate(said) if "cinnabar" in message)
+
+
+async def test_an_allow_an_interrupt_cuts_off_leaves_no_action_for_the_next_turn(tmp_path):
+    """An action a turn left pending would run at the next run, after its message, between a call and its result, which
+    no provider takes. Sent together, the allow or the interrupt may come first, and either way the action is answered
+    in its own turn."""
+    async with FakeModel(ToolCall("terminal", {"command": "touch ran"}, id="call_term"), "next") as model:
+        spec = on_fake_model(tmp_path, model, goal="go")
+        driver, heard = OpenHandsDriver(), Heard()
+        await driver.start(spec, heard)
+        asked = await heard.until(ApprovalRequested)
+        await asyncio.gather(driver.answer(asked.id, "allow"), driver.interrupt())
+        cut = await heard.until(TurnEnded)
+        await driver.deliver(Delivery(input="42", boundary="turn", text="something else now", items=()))
+        await heard.until(TurnEnded, lambda ended: ended is not cut)
+        await driver.stop(2.0)
+
+    messages = model.calls[-1].json["messages"]
+    roles = [message["role"] for message in messages]
+    result = json.dumps(messages[roles.index("tool")])
+    assert cut.reason == "interrupted" and roles.index("tool") == roles.index("assistant") + 1
+    assert "The turn ended before this ran." not in result or not (spec.cwd / "ran").exists()
+
+
+async def test_an_interrupt_while_an_approval_is_open_cuts_off_no_call_and_the_action_never_runs(tmp_path):
+    """No run was under way, so the turn's usage is whole, and the model hears in its next turn why the action did not
+    run."""
+    async with FakeModel(ToolCall("terminal", {"command": "touch ran"}, id="call_term"), "next") as model:
+        spec = on_fake_model(tmp_path, model, goal="go")
+        driver, heard = OpenHandsDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(ApprovalRequested)
+        await driver.interrupt()
+        cut = await heard.until(TurnEnded)
+        await driver.deliver(Delivery(input="42", boundary="turn", text="something else now", items=()))
+        await heard.until(TurnEnded, lambda ended: ended is not cut)
+        await driver.stop(2.0)
+
+    assert cut.reason == "interrupted" and not heard.of(GapReport)
+    assert not (spec.cwd / "ran").exists() and model.calls[-1].says("The turn ended before this ran.")
+
+
+async def test_a_failed_model_call_is_not_retried_and_ends_the_turn_with_the_sdk_s_error(tmp_path):
+    """A retry is a second call a gateway records, so the SDK makes none, and nobody measured the call that failed."""
+    asked = []
+
+    async def fail(message: Message, _: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bool:
+        asked.append(message.target)
+        writer.write(answer(500, b'{"error": {"message": "the model fell over"}}'))
+        return True
+
+    async with Loopback(fail) as server:
+        driver, heard = OpenHandsDriver(), Heard()
+        await driver.start(on_fake_model(tmp_path, server, goal="go"), heard)
+        ended = await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert (len(asked), ended.reason) == (1, "LLMServiceUnavailableError")
+    assert any(gap.what == "usage_lower_bound" for gap in heard.of(GapReport))
 
 
 async def test_a_condensation_names_what_it_forgot_and_its_own_call(tmp_path):
@@ -522,8 +627,8 @@ async def test_a_turn_the_owner_stopped_is_told_on_resume_and_the_harness_goes_o
 
 
 async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_model(tmp_path, monkeypatch):
-    """What the conversation took and never sent a model is offered again once its turn is interrupted. OpenHands keeps
-    a message it was handed, so the model hears it once more than it was sent."""
+    """A steer waits in the worker for the run to pause, and an interrupt hands it back to the runtime, which offers it
+    again, so the model hears it once."""
     async with FakeModel([Stall()], "the next turn") as model:
         team = keyed(tmp_path / "home", model, monkeypatch, delivery="steer")
 
@@ -539,7 +644,7 @@ async def test_a_steer_an_interrupt_cut_off_is_offered_again_and_reaches_the_mod
             ended = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
 
     assert [event.data["reason"] for event in ended] == ["interrupted", "stopped"]
-    assert model.calls[1].message.body.decode().count("cinnabar") == 2
+    assert model.calls[1].message.body.decode().count("cinnabar") == 1
 
 
 def taken_twice(finished: list[Any]) -> bool:

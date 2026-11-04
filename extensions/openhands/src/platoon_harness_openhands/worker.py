@@ -1,8 +1,10 @@
 """One OpenHands agent as a wire driver: a conversation of the OpenHands SDK, driven only through `arun()`.
 
-A turn runs `arun()` until it returns with nothing it was handed left to run on. The SDK calls back on whichever thread
-it is on, so what it says is heard on the event loop, in the order it said it, and every report goes out from there.
-Nothing here loads the SDK until `start`, so a description takes no time.
+A turn runs `arun()` until it returns with nothing it was handed left to run on. A delivery goes to the conversation
+only between runs, with no action pending, as one that came during a model call would supersede what that call asks to
+run, and one that came after it would sit between a call and its result. The SDK calls back on whichever thread it is
+on, so what it says is heard on the event loop, in the order it said it, and every report goes out from there. Nothing
+here loads the SDK until `start`, so a description takes no time.
 """
 
 import asyncio
@@ -53,14 +55,14 @@ _URL = "OPENAI_BASE_URL"
 _TOOL_TIMEOUT_S = 300.0
 """The SDK's cap on one MCP tool call, which a server cannot change."""
 _DENIED = "The runtime denied this."
-_CUT = "The turn was interrupted before this was decided."
+_CUT = "The turn ended before this ran."
 _LEFT = "The session stopped before this was decided or done, so it was not run again."
 _SAYS_NOTHING = frozenset(
     {"CondensationRequest", "InterruptEvent", "PauseEvent", "SecurityAnalysisEvent", "SystemPromptEvent"}
 )
 _NOT_TOOLS = frozenset({"finish", "think"})
-_WHOLE = frozenset({"stopped", "stuck"})
-"""How a turn ends that lost no model call to what ended it."""
+_ENDS = frozenset({"stopped", "stuck", "interrupted"})
+"""How a turn ends that no error ended."""
 _CAPABILITIES = Capabilities(
     persistent=True,
     resume=True,
@@ -100,9 +102,8 @@ def _user_texts(messages: Iterable[Mapping[str, Any]]) -> Iterator[str]:
 
 
 class Worker:
-    """One conversation, presented through the seven methods. A delivery goes to the conversation at once, unless an
-    approval is open, as a message supersedes a pending action, or what one allowed has yet to end, as a message must
-    not come between a call and its result."""
+    """One conversation, presented through the seven methods. What waits for the conversation goes between runs, and a
+    run under way is asked to pause for it after its step."""
 
     def __init__(self) -> None:
         self._conversation: Any = None
@@ -114,12 +115,11 @@ class Worker:
         self._turn: asyncio.Task[None] | None = None
         self._running: asyncio.Task[None] | None = None
         self._outbox: deque[str] = deque()
-        self._handing: asyncio.Task[None] | None = None
         self._unheard: dict[str, tuple[str, Boundary]] = {}
         self._asking: tuple[str, asyncio.Future[Verdict | None]] | None = None
         self._decided: dict[str, str] = {}
-        self._allowed: set[str] = set()
         self._interrupted = False
+        self._cut = False
         self._failure: str | None = None
         self._counted: dict[str, int] = {}
 
@@ -174,7 +174,8 @@ class Worker:
             self._begin(spec.goal)
 
     async def deliver(self, delivery: Delivery) -> None:
-        """Take a delivery: it begins a turn, or goes to the one under way, landing at its next model call."""
+        """Take a delivery: it begins a turn, or goes to the one under way once its run pauses, landing at a later model
+        call."""
         if self._conversation is None:
             raise DriverError("this driver has not started")
         opening = self._turn is None
@@ -183,11 +184,12 @@ class Worker:
         if opening:
             self._begin()
         else:
-            self._hand_over()
+            self._pause()
 
     async def interrupt(self) -> None:
-        """Stop the turn. `interrupt()` abandons a model call in flight, which a gateway may have recorded all the same,
-        and an approval left open is answered as cut off."""
+        """Stop the turn. A run under way is cancelled, which abandons a model call in flight that a gateway may have
+        recorded all the same, and the run itself before the SDK has begun it, and an approval left open is answered as
+        cut off."""
         if self._turn is None:
             return
         self._interrupted = True
@@ -195,7 +197,9 @@ class Worker:
         if self._asking is not None and not self._asking[1].done():
             self._asking[1].set_result(None)
         if self._running is not None:
+            self._cut = True
             self._conversation.interrupt()
+            self._running.cancel()
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
         if self._asking is None or self._asking[0] != approval or self._asking[1].done():
@@ -227,80 +231,101 @@ class Worker:
         self._interrupted = False
         self._turn = asyncio.create_task(self._take_turn())
 
-    def _hand_over(self) -> asyncio.Task[None]:
-        """Hand the conversation what waits for it, in order, one message at a time, unless it is held."""
-        if self._handing is None or self._handing.done():
-            self._handing = asyncio.create_task(self._handing_over())
-        return self._handing
+    def _pause(self) -> None:
+        """Ask the run under way to stop after its step, so that what waits for the conversation can go. The SDK forgets
+        a pause asked before its run begins, or while the run waits on an approval, so each thing the run says asks
+        again."""
+        if self._running is not None and self._outbox:
+            assert self._loop is not None
+            self._loop.run_in_executor(None, self._conversation.pause)
 
-    async def _handing_over(self) -> None:
-        while self._outbox and self._asking is None and not self._allowed:
+    async def _hand_over(self) -> None:
+        """Hand the conversation what waits for it, in order, one message at a time."""
+        while self._outbox:
             await asyncio.to_thread(self._conversation.send_message, self._outbox.popleft())
 
     async def _take_turn(self) -> None:
-        """One turn: `arun()` again while what it was handed waits, or once an approval is answered. The SDK's own
-        status says how it ended."""
         cost = self._cost()
-        reason = "stopped"
         try:
-            await self._hand_over()
-            self._put(TurnStarted(turn=uuid4().hex))
-            while not self._interrupted:
-                self._running = asyncio.create_task(self._conversation.arun())
-                try:
-                    await self._running
-                finally:
-                    self._running = None
-                await self._hand_over()
-                status = self._conversation.state.execution_status.value
-                if status == "waiting_for_confirmation":
-                    await self._ask()
-                elif status != "idle":
-                    reason = {"finished": "stopped", "error": self._failure or status}.get(status, status)
-                    break
+            reason = await self._runs()
         except Exception as error:
             log.exception("the turn failed")
             reason = self._failure or type(error).__name__
         self._ended("interrupted" if self._interrupted else reason, cost)
 
-    async def _ask(self) -> None:
-        """One approval for every action a step holds, as the SDK confirms a step whole. What waited for it goes once
-        what was allowed has run, which the next run does first, or at once if nothing was."""
+    async def _runs(self) -> str:
+        """One turn: `arun()` again once an approval is answered, or while something waits for the conversation, and how
+        the SDK's own status says it ended. It leaves no action pending, as the next run would run it unasked."""
+        try:
+            await self._hand_over()
+            self._put(TurnStarted(turn=uuid4().hex))
+            while not self._interrupted:
+                await self._run()
+                status = self._conversation.state.execution_status.value
+                if status == "waiting_for_confirmation":
+                    verdict = await self._ask()
+                    if verdict == "allow":
+                        continue
+                    if verdict == "deny":
+                        await asyncio.to_thread(self._conversation.reject_pending_actions, _DENIED)
+                elif status in ("stuck", "error"):
+                    return self._failure or status
+                elif status == "finished" and not self._outbox:
+                    return "stopped"
+                await self._hand_over()
+            return "interrupted"
+        finally:
+            if self._pending():
+                await asyncio.to_thread(self._conversation.reject_pending_actions, _CUT)
+
+    async def _run(self) -> None:
+        """One `arun()`, which raises what the SDK raised. One an interrupt cancelled before the SDK began it says
+        nothing."""
+        running = self._running = asyncio.create_task(self._conversation.arun())
+        try:
+            await asyncio.wait({running})
+        finally:
+            self._running = None
+        if not running.cancelled():
+            running.result()
+
+    def _pending(self) -> list[Any]:
         from .agent import pending
 
-        actions = pending(self._conversation)
-        id, answered = await self._decide(_said(actions))
-        self._decided |= {action.tool_call_id: id for action in actions}
-        if answered == "allow":
-            self._allowed = {action.tool_call_id for action in actions}
-        else:
-            reason = _CUT if answered is None else _DENIED
-            await asyncio.to_thread(self._conversation.reject_pending_actions, reason)
-            await self._hand_over()
+        return pending(self._conversation)
 
-    async def _decide(self, said: str) -> tuple[str, Verdict | None]:
-        """An approval the runtime answers, or an interrupt, which answers None."""
+    async def _ask(self) -> Verdict | None:
+        """One approval for every action a step holds, as the SDK confirms a step whole."""
+        actions = self._pending()
+        return await self._decide(_said(actions), [action.tool_call_id for action in actions])
+
+    async def _decide(self, said: str, calls: Iterable[str] = ()) -> Verdict | None:
+        """What the runtime answers an approval, which `calls` record as theirs, or None: for one an interrupt cut off,
+        and at once, without asking, outside a turn that goes on."""
+        if self._turn is None or self._interrupted:
+            return None
         id, verdict = uuid4().hex, asyncio.get_running_loop().create_future()
         self._asking = (id, verdict)
+        self._decided |= dict.fromkeys(calls, id)
         self._put(ApprovalRequested(id=id, gist=self._gist(said)))
         try:
-            return id, await verdict
+            return await verdict
         finally:
             self._asking = None
 
-    def _child_asks(self, task: str, actions: list[Any]) -> bool:
-        """A native child's step that waits on a decision, which the runtime makes under its parent's role. This runs
-        on the child's thread, and waits there."""
+    def _child_asks(self, task: str, actions: list[Any]) -> bool | None:
+        """Whether a native child's step may run, which the runtime decides under its parent's role, or None once its
+        parent's turn is cut, which stops the child. This runs on the child's thread, and waits there."""
         assert self._loop is not None
-        decided = asyncio.run_coroutine_threadsafe(self._decide(f"{task}: {_said(actions)}"), self._loop)
-        return decided.result()[1] == "allow"
+        verdict = asyncio.run_coroutine_threadsafe(self._decide(f"{task}: {_said(actions)}"), self._loop).result()
+        return None if verdict is None else verdict == "allow"
 
     def _ended(self, reason: str, cost: float) -> None:
-        """A turn's end. One an interrupt or an error ended may have taken a call with it that nobody measured, and
-        what one that did not stop on its own left unheard is the runtime's again. Dollars are litellm's estimate, where
-        it prices the model."""
+        """A turn's end. One whose run an interrupt cut, or that an error ended, may have taken a call with it that
+        nobody measured, and what one that did not stop on its own left unheard is the runtime's again. Dollars are
+        litellm's estimate, where it prices the model."""
         self._spent()
-        if reason not in _WHOLE:
+        if self._cut or reason not in _ENDS:
             self._put(Usage(label="unavailable", scope="call"), GapReport(plane="model", what="usage_lower_bound"))
         if reason != "stopped":
             self._unheard.clear()
@@ -309,7 +334,7 @@ class Worker:
             self._put(Usage(usd=usd, label="estimated", scope="tree"))
         self._put(TurnEnded(reason=reason))
         self._decided.clear()
-        self._allowed.clear()
+        self._cut = False
         self._failure = None
         self._turn = None
 
@@ -375,6 +400,7 @@ class Worker:
         """One event. A message the SDK calls the user's says nothing of who wrote it, as a malformed call fed back to
         the model is one too, so of messages only the agent's own are reported."""
         self._spent()
+        self._pause()
         match event.kind:
             case "ActionEvent":
                 self._acted(event)
@@ -434,12 +460,7 @@ class Worker:
                 )
 
     def _answered(self, event: Any, outcome: str, said: str) -> None:
-        """A tool's end. One an approval decided is that approval's observed outcome, and once all it allowed have
-        ended what waited for them goes."""
-        if self._allowed:
-            self._allowed.discard(event.tool_call_id)
-            if not self._allowed:
-                self._hand_over()
+        """A tool's end. One an approval decided is that approval's observed outcome."""
         if event.tool_name in _NOT_TOOLS:
             return
         item = Item(

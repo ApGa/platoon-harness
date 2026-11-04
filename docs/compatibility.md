@@ -99,7 +99,7 @@ by a driver landing; only the row below changes.
 | `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.316 on FakeModel: 25 passed, 0 failed, 2 skipped (`one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `coverage`). Operational and observable met |
 | `codex` | `codex app-server` over stdio | User's binary | implemented | 0.164.0 on FakeModel: 24 passed, 0 failed, 3 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s`, `coverage` or `sandboxes`). Operational and observable met |
 | `pi` | `pi --mode rpc` | User's install | implemented | 1.5.0 on FakeModel: 22 passed, 0 failed, 5 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_children_off_by_default` and `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met. No live model has run: pi has no login on the machine that ran this |
-| `openhands` | `WireDriver`, worker `platoon-harness-openhands` on SDK `arun()` | Own environment | implemented | 1.59.0 on FakeModel: 22 passed, 0 failed, 5 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_children_off_by_default` and `native_child_seen`: a child has no identity to report, so no `child` is given, and `tests/integration/test_openhands.py` holds the default off and an allowed child to the runtime's approvals; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met; trainable unmet, as no gateway login has run and its own agents are opaque. No live model has run: no OpenHands login or provider key is on the machine that ran this |
+| `openhands` | `WireDriver`, worker `platoon-harness-openhands` on SDK `arun()` | Own environment | implemented | 1.59.0 on FakeModel: 23 passed, 0 failed, 4 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_child_seen`: its native children are opaque, and `tests/integration/test_openhands.py` holds an allowed child to the runtime's approvals; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met; trainable unmet, as no gateway login has run, and for a role that allows its own agents, as they are opaque. No live model has run: no OpenHands login or provider key is on the machine that ran this |
 | ACP, covering `opencode` | Generic driver, protocol 1 | `[acp]` extra | planned | none |
 | `prime` | Decided after a live probe | User's install | planned | none |
 | `exec` | One-shot command, `ph` only | Nothing | planned | none |
@@ -268,15 +268,26 @@ by a driver landing; only the row below changes.
 - The SDK readies an agent, and starts its MCP servers, on a message, a run or a tool, so the worker runs `think` at start. A server
   that failed is a warning in its log, and the worker fails the start then. Called on the thread of the loop that serves the tools,
   readying waits out the SDK's 30 s listing timeout: it blocks, so the worker calls it on a thread of its own [L].
-- What a request carried is in the SDK's completion log, which goes to a callback with `log_completions` and writes no file. A
-  message handed while a model call ran was in the next request, at `model_call` [L].
+- What a request carried is in the SDK's completion log, which the agent's own LLM sends to a callback and writes no file. Its
+  copies log nothing: the condenser's has telemetry of its own, and a child's, which `log_completions` would have write a
+  `logs/completions` folder in the workspace, did so before the worker turned the flag off [L].
 - Confirmation: `ConfirmRisky` over an analyzer that calls our tools low and the rest unknown asks for every action but ours and a
-  lone `finish` or `think`. A message handed once `allow` came, before the next run, landed between the call and its result in the
-  next request, so the worker holds it until the result is in: then it landed one model call later [L]. `deny` reached the model as
-  `Action rejected: The runtime denied this.`, and the command never ran [L].
+  lone `finish` or `think`. `deny` reached the model as `Action rejected: The runtime denied this.`, and the command never ran [L].
+- Deliveries go to the conversation only between runs with no action pending. A message handed during a model call whose reply asked
+  to run a command had the SDK reject the command as `Superseded by a new user message`, unasked, though the role allowed it; a
+  message handed once `allow` came, before the next run, landed between the call and its result in the next request [L]. So one
+  that comes while a run goes on asks the run to pause, which the SDK does after the step under way: the message then landed after
+  the command's result, which one approval allowed [L]. One that waited through an approval missed the call right after the result
+  in the run measured, as the run that runs what was allowed may hear the pause only during that call [L].
 - An interrupt during a stalled call ended the turn `interrupted` with `InterruptEvent`, and the next run sent the call again. Under a
-  `tokens` limit the cut turn was charged its estimate and the session went on [L]. A message the conversation took and no request
-  sent before the interrupt stays in it, so once the runtime offers it again the model hears it twice, which at-least-once allows [L].
+  `tokens` limit the cut turn was charged its estimate and the session went on [L]. A steer it cut off had waited in the worker, and
+  the runtime's next offer of it reached the model once [L]. A message handed between runs that only a call an interrupt cut carried
+  stays in the conversation, so once the runtime offers it again the model hears it twice, which at-least-once allows; this was
+  read from the code and not measured.
+- An interrupt while an approval was open measured the turn whole, as no run was under way, and the next turn's request told the
+  model `The turn ended before this ran.` [L]. An allow and an interrupt sent together leave the action answered in its own turn,
+  whichever the worker heard first, and the next request held its result right after its call [L]. A provider's 500 ended the turn
+  `LLMServiceUnavailableError` after one request, with its usage a lower bound [L].
 - Condensation with OpenHands' own default condenser: once its view held more than 80 events, after 40 `think` calls, it forgot
   events by id, a set the worker puts in the conversation's order, with the summary, and its call is measured under the usage id
   `condenser` [L].
@@ -285,13 +296,14 @@ by a driver landing; only the row below changes.
   the worker rejects it first, the model is told, and the command ran once [L]. `reconcile` reads the user messages on disk [L].
 - Its own agents, allowed: `task` was offered, the call of it asked, and the child's terminal step asked the runtime through the task
   tool's confirmation handler, which the tool alone would answer yes. No event of the child reached the parent's callbacks, and the
-  parent's stats gained `task:<id>` with the child's 2 calls [L]. The child's terminal is tmux, which keeps its socket in the shared
-  `tmux-<uid>` directory when `TMUX_TMPDIR` would make a path too long for a socket, so the driver gives the worker a short
-  directory of its own, which a `tmux` the agent runs in its terminal uses too, and takes it back at `stop`, after a worker killed
-  outright too [L].
+  parent's stats gained `task:<id>` with the child's 2 calls [L]. An interrupt answered a child's open ask as cut off, and the
+  child ended there, with no call after [L]: the task tool checks no cancellation, so a child the interrupt finds between asks calls
+  the model until its next, where it ends. The child's terminal is tmux, which keeps its socket in the shared `tmux-<uid>` directory
+  when `TMUX_TMPDIR` would make a path too long for a socket, so the driver gives the worker a short directory of its own, which a
+  `tmux` the agent runs in its terminal uses too, and takes it back at `stop`, after a worker killed outright too [L].
 - Credentials: `env` in the agent's terminal showed `TMPDIR` and no key, endpoint or token, no file of the session held the key, and
-  the workspace held nothing the SDK wrote [L]. The proxy variables and `SSL_CERT_FILE` reach the worker from the shell, as litellm
-  reads them; no real proxy has met it [L]. In the home it is given the SDK makes `.openhands/profiles` and
+  the workspace held nothing the SDK wrote, its own agents allowed or not [L]. The proxy variables and `SSL_CERT_FILE` reach the
+  worker from the shell, as litellm reads them; no real proxy has met it [L]. In the home it is given the SDK makes `.openhands/profiles` and
   `.openhands/provider-connections`, and its terminal's bash writes `.bash_history`, as they would in the user's shell [L].
 - Project instructions: with `load_project_skills=True` a project's `AGENTS.md` reached the first request beside ours [L]. The SDK takes
   the nearest folder above the workspace that holds a `.git` entry as the repository's root, and reads its instructions there too; one
@@ -450,7 +462,7 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Slash commands | Not determined | Found only in the CLI's TUI, which the worker does not run. `openhands acp` sends `available_commands_update`. The SDK path was not researched |
 | | Tool configuration | Ours by their own names | Our server, through the stdio shim, is the agent's one `mcp_config` entry, as the SDK reads no user's server, and its tools show unprefixed, so `tool_names` is `bare` [L]. Whether one can collide with a built-in: not determined. A child inherits our server and calls it on its parent's token |
 | | Hooks | None | The SDK loads no hooks file, `.openhands/hooks.json` being the CLI's, and the worker passes no `hook_config`, so a user's hooks do not run. A `Stop` hook could deny finishing and inject feedback [S] |
-| | Native subagents | Off unless a role allows them | `task` and `delegate` are absent by default [L]. Allowed, `task` starts OpenHands' built-in kinds, each step asking the runtime through the task tool's confirmation handler [L]. A child is unseen: none of its events reaches the parent and no observation names it, so it is the gap `native_child_unattributed`, its spending its parent's at `tree` [L]. A project's agent file that says `permission_mode: never_confirm` makes a child that asks nothing, as the file is the user's, and an interrupt does not reach a child under way, as the task tool checks no cancellation [S] |
+| | Native subagents | Off unless a role allows them | `task` and `delegate` are absent by default [L]. Allowed, `task` starts OpenHands' built-in kinds, each step asking the runtime through the task tool's confirmation handler [L]. A child is unseen: none of its events reaches the parent and no observation names it, so it is the gap `native_child_unattributed`, its spending its parent's at `tree` [L]. An interrupt stops a child at its next ask [L]; the task tool checks no cancellation, so until then the child calls the model on. A project's agent file that says `permission_mode: never_confirm` makes a child that asks nothing, which an interrupt then never stops, as the file is the user's [S] |
 | | Session compaction | Passthrough, exact | `Agent()` has no condenser, so the worker gives it OpenHands' default one, as its own default agent has, which forgets past 80 events. `Condensation` names `forgotten_event_ids`, so `compacted{forgotten}` is exact [L]. Through the gateway: untested |
 | `opencode` | Project instructions | Not determined | Not researched |
 | | Native skills | Not determined | Exists in its TUI. Reach over ACP was not researched |
@@ -600,7 +612,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Our HTTP tools server against OpenCode, and against OpenHands through its driver, which takes the shim. Claude Code and Codex have met it, and so has pi, on a fake model, and OpenHands' MCP client with a bearer in `headers` on FakeTools.
 - Delivery through `claude-agent-acp` and `codex-acp` past `initialize`, including resume, permissions, `mcpServers`, `env` leak behavior and steering.
 - Whether adapter `toolCallId` equals the model tool id, and whether native-subagent MCP calls carry a usable anchor.
-- OpenHands: anything on a real model; condenser, delegation and long runs through the gateway. A step holds the conversation's lock while a tool runs, a child's `task` among them, so a handover waits for it and past a minute is offered again, which at-least-once allows. Memory at 100 agents, given 210 MB RSS at import, and one worker per agent.
+- OpenHands: anything on a real model; condenser, delegation and long runs through the gateway. A delivery that comes while a tool runs, a child's `task` among them, waits in the worker until the run pauses after that step, so a long tool holds it as long; the worker takes it at once, so the runtime's handover does not wait, and no long tool has been timed. Memory at 100 agents, given 210 MB RSS at import, and one worker per agent.
 
 **Training path.**
 
