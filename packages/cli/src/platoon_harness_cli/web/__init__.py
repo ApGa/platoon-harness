@@ -66,7 +66,8 @@ def hold(folder: Path, name: str) -> int:
         where = os.read(lock, 512).decode(errors="replace")
         os.close(lock)
         raise Usage(
-            f"web serves session {name} already{where}: one serves a session at a time, so stop it first"
+            f"web serves session {name} already{where}, and one serves a session at a time: your own page there makes "
+            "new links, or stop that one first"
         ) from None
     os.ftruncate(lock, 0)
     return lock
