@@ -252,7 +252,7 @@ def test_the_manifest_says_how_the_session_was_started(tmp_path):
 
 def described(team: Team) -> dict[str, Capabilities]:
     """What each role's driver says it can do, as a runtime asks before it opens a session."""
-    return {name: opening.make_driver(role).describe().capabilities for name, role in team.roles.items()}
+    return {name: opening.make_driver(role, Path.cwd()).describe().capabilities for name, role in team.roles.items()}
 
 
 @pytest.fixture
@@ -266,7 +266,7 @@ async def opened(tmp_path: Path):
         resolved = Team.loads(manifest.team)
         kernel = Kernel.open(folder, extensions=PRIMITIVES)
         kernels.append(kernel)
-        await open_session(kernel, resolved, manifest, LocalAuthority(resolved), text, described(resolved))
+        await open_session(kernel, resolved, manifest, LocalAuthority(resolved), text, described(resolved), None)
         return kernel, resolved, manifest, text
 
     kernels: list[Kernel] = []
@@ -438,7 +438,7 @@ async def test_a_resource_the_authority_owns_is_no_limit_of_the_session(opened, 
     resolved = Team.loads(manifest.team)
     kernel = Kernel.open(folder, extensions=PRIMITIVES)
 
-    await open_session(kernel, resolved, manifest, Managed(resolved), text, described(resolved))
+    await open_session(kernel, resolved, manifest, Managed(resolved), text, described(resolved), None)
 
     assert [row["unit"] for row in query(kernel, "budget.status")] == ["turns"]
     kernel.close()
@@ -461,7 +461,7 @@ async def test_a_second_opening_changes_nothing(opened):
     kernel, team, manifest, text = await opened(full_team())
     head = kernel.head
 
-    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team))
+    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team), None)
 
     assert kernel.head == head
 
@@ -471,7 +471,7 @@ async def test_a_step_that_ran_under_an_older_sdk_stands_as_it_ran(opened, monke
     grants = compile(team)
     monkeypatch.setattr(opening, "compile", lambda _: (*grants[1:], grants[0]))
 
-    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team))
+    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team), None)
 
     assert len(events_of(kernel, "grant.added")) == len(grants)
 
@@ -503,11 +503,11 @@ async def test_a_crash_part_way_through_is_finished_by_the_next_opening(tmp_path
     with monkeypatch.context() as patched:
         patched.setattr(opening, "_steps", dying)
         with pytest.raises(ConnectionError):
-            await open_session(kernel, team, manifest, authority, text, described(team))
+            await open_session(kernel, team, manifest, authority, text, described(team), None)
     kernel.close()
 
     kernel = Kernel.open(folder, extensions=PRIMITIVES)
-    await open_session(kernel, team, manifest, authority, text, described(team))
+    await open_session(kernel, team, manifest, authority, text, described(team), None)
     events = kernel.read(kernel.runtime, after=0, limit=4096).events
     types = [event.type for event in events]
     kernel.close()

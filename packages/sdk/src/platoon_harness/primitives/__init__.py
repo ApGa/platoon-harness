@@ -16,7 +16,7 @@ from . import (
     tasks,
     waits,
 )
-from .agents import Agent, Agents
+from .agents import Agent, Agents, Kept, Mode, Workspace
 from .approvals import Approval, Approvals, Verdict
 from .boards import Boards
 from .budgets import Budgets
@@ -53,7 +53,7 @@ from .reports import (
     TurnStarted,
     Usage,
 )
-from .sessions import SessionRecord, Settings
+from .sessions import Repo, SessionRecord, Settings
 from .tasks import Task, Tasks
 from .waits import Condition, Waits, hold_open, on
 from .why import Why
@@ -158,12 +158,15 @@ __all__ = [
     "Injection",
     "InputDelivered",
     "Item",
+    "Kept",
     "Lines",
+    "Mode",
     "ModelCall",
     "Native",
     "Plane",
     "Policy",
     "Ready",
+    "Repo",
     "Report",
     "SessionRecord",
     "Settings",
@@ -175,6 +178,7 @@ __all__ = [
     "Verdict",
     "Waits",
     "Why",
+    "Workspace",
     "channel_grants",
     "hold_open",
     "lines_of",

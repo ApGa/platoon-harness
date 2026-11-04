@@ -52,8 +52,9 @@ from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE, delivery_heading
 
 from ..unit.drivers.support import Heard, running
+from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
-from . import clients
+from . import clients, worktrees
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -855,3 +856,11 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
     async with FakeModel(clients.SAID) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await clients.the_tui_sends_from_its_composer_and_draws_the_reply_once(team, tmp_path)
+
+
+async def test_pi_resumes_in_its_worktree(tmp_path, monkeypatch):
+    """It commits in its worktree, its runtime is killed, and it resumes there: the same folder, the same branch."""
+    repo = repository(tmp_path / "repo", monkeypatch)
+    async with FakeModel(*worktrees.replies(shell)) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await worktrees.commits_is_killed_and_resumes_in_its_worktree(team, tmp_path, repo)

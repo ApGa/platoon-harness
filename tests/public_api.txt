@@ -182,7 +182,9 @@ platoon_harness.primitives.IN_A_RESULT
 platoon_harness.primitives.Injection
 platoon_harness.primitives.InputDelivered
 platoon_harness.primitives.Item
+platoon_harness.primitives.Kept
 platoon_harness.primitives.Lines
+platoon_harness.primitives.Mode
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
 platoon_harness.primitives.OWNER_STOP
@@ -192,6 +194,7 @@ platoon_harness.primitives.Policy
 platoon_harness.primitives.RAW_LIMIT
 platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Ready
+platoon_harness.primitives.Repo
 platoon_harness.primitives.Report
 platoon_harness.primitives.SHORT_LIMIT
 platoon_harness.primitives.SessionRecord
@@ -205,6 +208,7 @@ platoon_harness.primitives.Verdict
 platoon_harness.primitives.WAKING
 platoon_harness.primitives.Waits
 platoon_harness.primitives.Why
+platoon_harness.primitives.Workspace
 platoon_harness.primitives.channel_grants
 platoon_harness.primitives.hold_open
 platoon_harness.primitives.lines_of
@@ -245,6 +249,9 @@ platoon_harness.runtime.control.Local
 platoon_harness.runtime.control.PROTOCOL
 platoon_harness.runtime.control.REFUSED
 platoon_harness.runtime.control.Remote
+platoon_harness.runtime.git.GitError
+platoon_harness.runtime.git.SECONDS
+platoon_harness.runtime.git.git
 platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
@@ -253,6 +260,7 @@ platoon_harness.runtime.opening.check
 platoon_harness.runtime.opening.make_driver
 platoon_harness.runtime.opening.open_session
 platoon_harness.runtime.opening.prepare
+platoon_harness.runtime.opening.repository
 platoon_harness.runtime.opening.told
 platoon_harness.runtime.paths.HOME_VARIABLE
 platoon_harness.runtime.paths.LOG
@@ -270,10 +278,21 @@ platoon_harness.runtime.paths.new_folder
 platoon_harness.runtime.paths.open_log
 platoon_harness.runtime.paths.read_running
 platoon_harness.runtime.paths.session_folder
+platoon_harness.runtime.paths.sessions_of
 platoon_harness.runtime.paths.socket_path
 platoon_harness.runtime.paths.write_private
 platoon_harness.runtime.recovery.recover_agents
 platoon_harness.runtime.told
+platoon_harness.runtime.workspaces.BRANCHES
+platoon_harness.runtime.workspaces.BUNDLE
+platoon_harness.runtime.workspaces.NOT_YET
+platoon_harness.runtime.workspaces.branch_of
+platoon_harness.runtime.workspaces.end_worktree
+platoon_harness.runtime.workspaces.make_worktree
+platoon_harness.runtime.workspaces.present
+platoon_harness.runtime.workspaces.problems
+platoon_harness.runtime.workspaces.read_repo
+platoon_harness.runtime.workspaces.write_bundle
 platoon_harness.schema.ConfigError
 platoon_harness.schema.Duration
 platoon_harness.schema.Model

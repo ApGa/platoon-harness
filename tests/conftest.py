@@ -47,6 +47,13 @@ def end_group(pid: int) -> None:
 
 
 @pytest.fixture(autouse=True)
+def outside_any_repository(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each test runs in a folder of its own, outside this checkout, so that no session it starts takes this repository
+    for its own: a test that wants one makes it under its `tmp_path`."""
+    monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
+
+
+@pytest.fixture(autouse=True)
 def no_runtime_left(request: pytest.FixtureRequest):
     """End each detached runtime a test left holding a session under its `tmp_path`, by its pid and its group."""
     folder = request.getfixturevalue("tmp_path") if "tmp_path" in request.fixturenames else None

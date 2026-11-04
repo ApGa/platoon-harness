@@ -7,17 +7,19 @@ import pytest
 
 import platoon_harness
 from platoon_harness import runtime, session
-from platoon_harness.runtime import authority, control, host, opening, paths, recovery
+from platoon_harness.runtime import authority, control, git, host, opening, paths, recovery, workspaces
 
 MODULES = {
     "session": session,
     "runtime": runtime,
     "runtime.authority": authority,
     "runtime.control": control,
+    "runtime.git": git,
     "runtime.host": host,
     "runtime.opening": opening,
     "runtime.paths": paths,
     "runtime.recovery": recovery,
+    "runtime.workspaces": workspaces,
 }
 RECORDED = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
 RUNTIME = Path(runtime.__file__).parent

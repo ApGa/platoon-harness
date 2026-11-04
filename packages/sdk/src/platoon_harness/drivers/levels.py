@@ -141,6 +141,7 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
             "exit_reported",
             "stop_leaves_no_process",
             "stop_ends_a_running_tool",
+            "runs_in_its_workspace",
         ),
         (
             "delivered_text_in_next_prompt",

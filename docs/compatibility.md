@@ -440,6 +440,38 @@ Rules that hold on every harness:
   message, and asks first about one that begins with `/`, since a harness may still read it as its own command, which nothing here
   claims yet. Its own commands are in its palette.
 - **Hooks.** Displayed, not reimplemented.
+
+### Workspaces
+
+What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's
+own git relies on or works around. Git 2.47.3 is the only version run; [V] verified here, [S] read in source, [U] unverified.
+
+| Harness | In a worktree |
+|---|---|
+| Claude Code 2.1.316 | Offers `EnterWorktree` and `ExitWorktree` in its first request, which the driver turns off on every launch, and takes `--worktree`, which nothing passes [V]. Reads the tracked `CLAUDE.md` and skills there; an untracked `CLAUDE.local.md` is absent [V], and `.claude/settings.local.json` and untracked skills are too [U]. Its auto memory is keyed on the repository, so every worktree of one shares it, a channel no topology binds [V]. It commits there and resumes in the same folder on FakeModel and on a real model [V]. After a commit on a real model it sent `system/vcs_state_changed`, a frame the driver does not know, journaled as `native` plus the gap `unknown_update` in runs 59 and 60 [V] |
+| Codex 0.164.0 | `thread/start` and `thread/resume` name the thread's `cwd`, which the driver holds to `spec.cwd` [V]. Reads `AGENTS.md` at the worktree's root, its project root [V]. Under `workspace-write` and `read-only` its sandbox keeps `.git` and the resolved git directory read-only, so each commit outside the session's checkout, and in it too, escalates to one approval that runs outside the sandbox [V]. Escalated and allowed, it committed in a worktree and resumed there on FakeModel [V]. Project trust taken from the main checkout for a new worktree path [U] |
+| pi 1.5.0 | Sessions are keyed on the folder, which never changes, so a resume never meets its prompt to fork into another [S]. It commits there and resumes in the same folder on FakeModel [V]. `.pi/` resources load only under a trusted path, which a session folder usually is not, so they are silently absent [S, from 1.4.0] |
+| OpenHands 1.59.0 | `workspace=spec.cwd`, and skills are read at the worktree's root [S] |
+
+A Codex role in a worktree has three postures, which `team check` names before any cost when its sandbox keeps `.git` read-only and
+its approvals are left to ask: `sandbox = "danger-full-access"`, where commits work and its commands run with no sandbox;
+`approvals = "allow"`, where the sandbox stays and each escalation is allowed by policy; or `ask`, where a person approves each commit,
+so a headless run ends `needs_human` at its first.
+
+Git, as the runtime's own git meets it [V]:
+
+- `rev-parse --git-path=X` prints `--git-path=X` back, unresolved, where `--git-path X` resolves it.
+- `worktree add --lock --reason` writes the reason into its `locked` file from the first write, with a newline after it. A
+  registration git never wrote `gitdir` into is invisible to `worktree list` and, locked, never pruned. One missing `commondir` or
+  `HEAD` is listed, detached at zeros, and `worktree remove -f -f` refuses it as no `.git` file; `worktree add -f -f`, once its folder
+  is empty, takes it back.
+- A locked worktree survives `prune` with its folder gone and refuses `remove`, and `unlock` works with the folder gone.
+- `rev-list --all` takes every worktree's HEAD, so a commit only a worktree's detached HEAD holds reads as reachable; `--glob='refs/*'`
+  in the session's checkout takes refs alone.
+- `worktree remove` deletes ignored files without asking, and refuses one with submodules.
+- `worktree add` with LFS files and no LFS filter checks out their pointers, silently.
+- `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
+- `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36, by git's release notes.
 - **Compaction.** Passed through and recorded as `compacted{forgotten, summary}`, native ids and the text that replaced them, both as
   bodies. If what was forgotten is unknown, that is a `compaction_opaque` gap. The context version advances either way. Coordination survives because the state is on the server:
   cursors are server-held, and a fence defaults to the caller's live lease. A notice carried on a tool result can still be lost to
@@ -646,3 +678,5 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - Many sessions in one process, lagging followers at scale, payloads above 4 KiB, and soak beyond 60 s.
 - Real terminal throughput over SSH and tmux, and accessibility on an alternate screen.
 - Shell-capable agents at one UID can read each other's tokens through `/proc`. Whether Codex's sandbox blocks that read is unknown.
+- Workspaces on git other than 2.47.3, on macOS, on a case-insensitive filesystem, where branch refs differing only in case may
+  collide, and on a repository past 100,000 files or on Lustre. Where Claude Code 2.1.316 reports `cwd` in its init frame.

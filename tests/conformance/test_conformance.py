@@ -30,6 +30,7 @@ ONE_SHOT_SKIPS = {
     "preamble_once_per_request",
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
+    "runs_in_its_workspace",
     "unset_model_refused",
     "native_children_off_by_default",
     "native_child_seen",
@@ -42,6 +43,7 @@ SCRIPTED_SKIPS = {
     "declared_but_unproven",
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
+    "runs_in_its_workspace",
     "native_children_off_by_default",
     "native_child_seen",
 }

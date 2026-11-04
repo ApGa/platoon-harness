@@ -19,6 +19,7 @@ NEEDED = (
     "exit_reported",
     "stop_leaves_no_process",
     "stop_ends_a_running_tool",
+    "runs_in_its_workspace",
     "malformed_frame_is_a_gap",
     "ready_with_pinned_model",
     "tool_in_first_request",

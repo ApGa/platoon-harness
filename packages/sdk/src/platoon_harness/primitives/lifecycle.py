@@ -1,5 +1,6 @@
 """Agents and sessions, from spawn to the one ended transition."""
 
+from pathlib import PurePath
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, JsonValue
@@ -306,7 +307,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
     launch = {**spec, "goal": a.goal, "body": a.body, "model": role.model, "harness": role.harness}
     admit = txn.effect("admit", spec, on_uncertain="surface", agent=a.name)
     workspace = txn.effect(
-        "workspace", {**spec, "workspace": role.workspace}, on_uncertain="reconcile", agent=a.name, after=admit
+        "workspace", {**spec, "workspace": role.workspace}, on_uncertain="retry", agent=a.name, after=admit
     )
     txn.effect("launch", launch, on_uncertain="reconcile", agent=a.name, after=workspace)
     spawned = {"agent": f"@{a.name}", "state": "spawning", "stays": stays}
@@ -796,12 +797,34 @@ def _came_to(txn: Txn, state: str) -> str:
     return "agent_failed" if failed else "settled"
 
 
+def _left(agent: Agent, prefix: str) -> dict[str, Any] | None:
+    """A workspace an agent's end did not take, as the Ending names it, with the commands that let it go, for a person
+    to run once nothing in it is wanted. Its folder is where the agent works, less the session's subfolder."""
+    workspace = agent.workspace
+    if workspace is None or workspace.mode == "shared" or agent.removed:
+        return None
+    if agent.kept is not None:
+        left = agent.kept.model_dump()
+    else:
+        folder = PurePath(workspace.path)
+        folder = folder.parents[len(PurePath(prefix).parts) - 1] if prefix else folder
+        why = "its stop never finished" if agent.ended else "its agent has not ended"
+        left = {"path": str(folder), "host": workspace.host, "branch": workspace.branch, "bytes": None, "why": [why]}
+    path = left["path"]
+    release = [f"git worktree unlock {path}", f"git worktree remove {path}"]
+    return {"agent": agent.name, "mode": workspace.mode, **left, "release": release}
+
+
 @op("session.ending", query=True)
 def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
     """What this session has come to: its state, why, each agent and its last report, what was spent with its labels,
-    and every gap."""
-    state = txn.view(SessionRecord).state()
+    every gap, and each workspace left in place, with why and the commands that let it go."""
+    session = txn.view(SessionRecord)
+    state = session.state()
     budget = txn.view(Budgets)
+    agents = txn.view(Agents).listed()
+    repo = session.settings().repo
+    prefix = "" if repo is None else repo.prefix
     return {
         "state": state,
         "reason": _came_to(txn, state),
@@ -812,10 +835,11 @@ def session_ending(txn: Txn, a: Args) -> dict[str, Any]:
                 "report": None if agent.final_gist is None else {"gist": agent.final_gist, "body": agent.final_body},
                 "usage": budget.usage_of(f"agent:{agent.name}"),
             }
-            for agent in txn.view(Agents).listed()
+            for agent in agents
         ],
         "usage": budget.usage_of("shared"),
         "gaps": txn.view(Gaps).rows(),
+        "workspaces": [left for agent in agents if (left := _left(agent, prefix)) is not None],
     }
 
 
@@ -850,13 +874,29 @@ def cancel_session(txn: Txn, a: Args) -> None:
             end(txn, agent, "cancelled", reason="session cancelled")
 
 
+class Bundle(Args):
+    """The commits the journal recorded, kept in the session folder outside your repository: `file` holds `commits` of
+    them, and `missing` counts those git no longer had. One that could not be written has neither, and `why` says what
+    stopped it, which leaves the last one as it was."""
+
+    file: str | None
+    commits: int | None
+    missing: int | None
+    why: str | None = None
+
+
+class Stop(Args):
+    bundle: Bundle | None = None
+
+
 @op("session.stop", runtime=True)
-def stop(txn: Txn, a: Args) -> None:
-    """Record that the owner has shut down, and cancel each handover that has not started, which queues its entries
-    again and is no failure of its harness's. The folder stays resumable."""
+def stop(txn: Txn, a: Stop) -> None:
+    """Record that the owner has shut down, with the bundle it left of the commits the journal recorded, or None when
+    it recorded none, and cancel each handover that has not started, which queues its entries again and is no failure
+    of its harness's. The folder stays resumable."""
     for effect in txn.view(Effects).in_state("requested"):
         if effect.kind == "deliver":
             data = {"id": effect.id, "kind": effect.kind}
             stream = f"effect/{effect.id}"
             txn.emit("effect.cancelled", stream, gist="deliver cancelled", agent=effect.agent, data=data)
-    txn.emit("session.stopped", "session", gist="session stopped")
+    txn.emit("session.stopped", "session", gist="session stopped", data={"bundle": a.bundle}, v=2)

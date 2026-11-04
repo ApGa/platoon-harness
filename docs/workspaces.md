@@ -1,0 +1,125 @@
+# Workspaces
+
+Where each agent works, and what becomes of it. A role names one:
+
+```toml
+[roles.lead]
+harness = "claude"
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "codex"
+workspace = "worktree"            # "shared" (the default) | "worktree" | "snapshot" | "isolated"
+```
+
+There is no branch, path, base, lock or removal option. The mode recorded is the one that ran: a mode that cannot be given fails
+loudly, before any cost where that can be seen, and never becomes another. [ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md)
+has the decisions behind this page, and [compatibility.md](compatibility.md#workspaces) what each harness sees.
+
+## What each mode promises
+
+| Mode | It is | State |
+|---|---|---|
+| `shared` | The session's checkout, its cwd. Every agent's writes land there at once, and nothing in it is private or confined | Given everywhere, with or without git |
+| `worktree` | A linked git worktree of your repository, on a branch of its own, made at your checkout's HEAD when its agent's workspace is made. It shares the repository's refs, objects, config and hooks, and what runs there can reach anything you can, so it is not a sandbox | Given on git |
+| `snapshot` | A repository of its own holding your tree as your git sees it, uncommitted work included | Planned, and refused before any cost, naming why |
+| `isolated` | A snapshot whose harness an extension's isolation confines | Planned, and refused before any cost: no extension gives an isolation yet |
+
+An agent works in the same subfolder of its workspace as the session's cwd is of its repository: a session started in `src/` puts a
+worktree agent in `src/` of its worktree. Its folder never changes while it lives, and every launch and resume runs its harness there.
+
+## Where a worktree lives
+
+At `agents/<agent>/workspace` in the session folder, on the branch `platoon-harness/<session>/<agent>`, locked with the reason
+`platoon-harness: <host>:<path>`, so a `git worktree prune` run where its folder cannot be seen leaves it alone, and `git worktree
+list` says whose it is. Nothing of it is in your checkout, and your checkout's tools never walk into it.
+
+A session folder lives on the host whose root holds it. Where your root is node-local, as the fallback `/var/tmp/platoon-harness-$UID`
+is when your home is on a network filesystem, a kept worktree is reachable only from that host, and the OS may age it away: the lock's
+reason names the host. A copy of a session folder must leave `agents/*/workspace` out, since git in a copied worktree would move the
+original's HEAD.
+
+## Before any cost
+
+`team check`, `run` and `Session.start` refuse, with exit 78 on the command line, each of these, every one named:
+
+- A git mode where the cwd is in no git work tree, the repository is bare or has no commit, or git is older than 2.36.
+- LFS-tracked files with no LFS filter configured, which a worktree would hold as their pointers.
+- A branch at `platoon-harness`, at `platoon-harness/<session>` or under it, with the `git branch -D` that deletes each once nothing on
+  it is wanted. Branches outlive their sessions on purpose, so a reused session name meets its own old ones.
+- In every mode, a session folder that lies inside your repository's work tree and is not ignored there, since an agent's `git add -A`
+  would commit its credentials.
+
+And warn of submodules, which stay uninitialized in each worktree, of uncommitted changes in your checkout, which a worktree does not
+carry, and of a Codex role whose commits would each wait on an approval, below.
+
+## What each harness sees there
+
+A worktree holds what is committed at its base and nothing else: untracked project files, such as `CLAUDE.local.md`,
+`.claude/settings.local.json`, `.env` or a `.venv`, are absent, so an agent can behave otherwise than it would in your checkout. Your git
+hooks run for agents' commits there, while `post-checkout` does not run when the runtime makes one. Claude Code's auto memory is keyed
+on the repository and shared by every worktree of it, a channel no topology binds.
+
+Claude Code's own worktree tools are off on every launch ([ADR 0033](adr/0033-a-harness-s-own-worktrees-are-off.md)). A worktree an
+agent makes with git from a shell is its own affair, and outside what the runtime records.
+
+**Codex** keeps `.git` read-only under its `workspace-write` and `read-only` sandboxes, so each commit asks for an approval that runs
+outside the sandbox. Choose one of three postures for a Codex role in a worktree:
+
+| Posture | Says | What it means |
+|---|---|---|
+| No sandbox | `sandbox = "danger-full-access"` | Commits work, and its commands run with no sandbox at all |
+| The sandbox, its escalations allowed | `approvals = "allow"` | The sandbox stays, and each escalation the model asks for is allowed by policy |
+| Asking | `approvals = "ask"`, the default | You approve each commit, so a headless run ends `needs_human` at its first |
+
+## When a worktree goes
+
+At its agent's end, its stop removes the worktree only when nothing would go with it, as git says:
+
+- its processes are proved gone;
+- its status shows no path, ignored ones included;
+- no merge, rebase, cherry-pick, revert or bisect is under way;
+- no index entry is hidden from status by `skip-worktree` or `assume-unchanged`;
+- every commit its HEAD, its reflog or its own refs hold is its base, or reachable from a ref of your repository. Its branch is one, so
+  committed work on its branch never keeps a worktree.
+
+Then it is unlocked and removed with plain `git worktree remove`. Otherwise it stays, locked, and the Ending's `workspaces` names it with
+its host, path, branch, size on disk and why, such as `1 uncommitted paths`, `ignored: .venv/, __pycache__/`, `a rebase under way` or
+`2 commits only it holds, in its HEAD, reflog or own refs`, and the commands that let it go. No branch is ever removed. Closing a
+session ends no agent, so it keeps the workspaces of agents that never ended, named `its agent has not ended`.
+
+To let a kept worktree go, once nothing in it is wanted:
+
+```console
+$ git worktree unlock ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
+$ git worktree remove ~/.local/state/platoon-harness/sessions/fix-auth/agents/ada/workspace
+```
+
+`remove` refuses one with uncommitted or untracked files until you say `--force`. Once a session folder is deleted, `git worktree
+unlock <path>` and then `git worktree prune` forget its worktrees, and `git branch -D` deletes their branches.
+
+## Taking an agent's work
+
+An agent's commits are on its branch in your repository, so you merge, rebase or cherry-pick them as you would anyone's:
+
+```console
+$ git log main..platoon-harness/fix-auth/ada
+$ git merge platoon-harness/fix-auth/ada
+```
+
+The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
+
+## What the journal recorded
+
+When a session stops or closes, the runtime writes `commits.bundle` into the session folder, holding every commit the journal recorded
+past the session's starting HEAD, and replaces the last one, keeping what it held. So a commit an agent amended or rebased away, which
+git would prune after a while, can be fetched back:
+
+```console
+$ git bundle list-heads ~/.local/state/platoon-harness/sessions/fix-auth/commits.bundle
+$ git fetch ~/.local/state/platoon-harness/sessions/fix-auth/commits.bundle 'refs/commits/*:refs/recovered/*'
+```
+
+It is built in a repository of its own beside it, so nothing is written into yours for it, and `session.stopped` records it, with how
+many recorded commits git no longer had. The look that records commits is the next step of this work, so until it lands the bundle
+holds nothing.

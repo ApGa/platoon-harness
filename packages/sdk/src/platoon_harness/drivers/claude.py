@@ -61,6 +61,7 @@ _LAUNCH = (
     "default",
 )
 _UNANSWERABLE = "AskUserQuestion"  # The prompt tool brings this in, and no verdict can answer it.
+_OWN_WORKTREES = ("EnterWorktree", "ExitWorktree")  # Move the agent out of its workspace, where no look follows.
 _NATIVE_CHILDREN = ("Agent", "Workflow", "ListAgents", "SendMessage")  # Start the harness's own agents, or reach them.
 _ENVIRONMENT = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
 _SIGN_IN = (
@@ -199,7 +200,7 @@ class ClaudeDriver:
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches: one path, and its files are written first. The server's token stays in the
         environment, and argv, which any process can read, names only its variable."""
-        disallowed = (_UNANSWERABLE, *(() if spec.allow_native_children else _NATIVE_CHILDREN))
+        disallowed = (_UNANSWERABLE, *_OWN_WORKTREES, *(() if spec.allow_native_children else _NATIVE_CHILDREN))
         command = [*_LAUNCH, "--disallowedTools", ",".join(disallowed)]
         command += ["--resume" if spec.resume else "--session-id", self._native]
         if spec.model is not None:

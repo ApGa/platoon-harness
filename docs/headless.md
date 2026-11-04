@@ -59,7 +59,13 @@ settled
 ```
 
 Stdout then holds one JSON line per journal event and one for the ending, and nothing else; notes and logs go to stderr. Nothing
-prompts. Without `--approvals`, an approval that would ask with nobody attached to answer ends the run at once with exit 4.
+prompts. Without `--approvals`, an approval that would ask with nobody attached to answer ends the run at once with exit 4. A Codex
+role in a worktree is one such: its sandbox keeps `.git` read-only, so its first commit asks, and `team check` says so before any
+cost, with the three ways out.
+
+The ending's `workspaces` names each agent's worktree its end did not take, with its host, path, branch, size and why, such as
+`1 uncommitted paths` or `ignored: .venv/`, and the commands that let it go once nothing in it is wanted. See
+[workspaces.md](workspaces.md).
 
 ## From another shell
 

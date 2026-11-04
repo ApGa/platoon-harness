@@ -15,6 +15,7 @@ from platoon_harness.kernel import Effect, Kernel, Refused
 from platoon_harness.schema import ConfigError
 
 from .authority import SpawnRequest
+from .git import GitError
 from .host import GRACE, Host
 from .paths import agent_folder
 
@@ -68,7 +69,7 @@ async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: b
             await _resume(host, agent)
         elif agent["unbegun"]:
             raise DriverError("its session closed before it began its goal")
-    except (DriverError, ConfigError) as error:
+    except (DriverError, ConfigError, GitError) as error:
         await _say(host, name, _CRASH, Exited(reason=str(error)))
     except Exception as error:
         log.error("%s could not be taken up: %s", name, type(error).__name__)
@@ -105,15 +106,15 @@ async def _reconcile_answer(host: Host, effect: Effect) -> None:
         await _fail(host, effect, "the answer never reached the harness")
 
 
-async def _reconcile(host: Host, cwd: Path, effect: Effect, agents: dict[str, dict[str, Any]]) -> None:
+async def _reconcile(host: Host, effect: Effect, agents: dict[str, dict[str, Any]]) -> None:
     agent = agents.get(effect.agent or "")
     match effect.kind:
         case "admit":
             await _fail(host, effect, "it was in flight when the runtime died, and an admission is never retried")
             if agent is not None:
                 await _say(host, agent["name"], GapReport(plane="model", what="crash_window"))
-        case "workspace":
-            await _finish(host, effect, {"path": str(cwd)})
+        case "workspace":  # Asked before a workspace was retried, so the shared one, and made again.
+            await _finish(host, effect, await host.workspace(effect))
         case "launch" if agent is not None and agent["state"] != "spawning":
             await _finish(host, effect)
         case "launch":
@@ -133,10 +134,10 @@ def _asked(kernel: Kernel, op: str, args: dict[str, Any]) -> Any:
     return outcome.result
 
 
-async def recover_agents(kernel: Kernel, host: Host, folder: Path, cwd: Path) -> None:
+async def recover_agents(kernel: Kernel, host: Host, folder: Path) -> None:
     """Take a session up again. A session that has stopped accepting work spends nothing: it is reaped and no more."""
     agents = {row["name"]: row for row in _asked(kernel, "agent.records", {})}
     accepting = _asked(kernel, "session.status", {})["state"] == "open"
     await asyncio.gather(*(_take_up(host, folder, agent, accepting) for agent in agents.values()))
     for row in _asked(kernel, "effect.list", {"state": "uncertain"}):
-        await _reconcile(host, cwd, Effect.model_validate(row), agents)
+        await _reconcile(host, Effect.model_validate(row), agents)

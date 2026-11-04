@@ -190,7 +190,7 @@ async def test_the_launch_is_the_one_path(tmp_path, stand):
         "--permission-mode",
         "default",
         "--disallowedTools",
-        "AskUserQuestion,Agent,Workflow,ListAgents,SendMessage",
+        "AskUserQuestion,EnterWorktree,ExitWorktree,Agent,Workflow,ListAgents,SendMessage",
         "--session-id",
     ]
     assert argv[14] == ready.native
@@ -204,7 +204,19 @@ async def test_a_role_that_allows_its_harness_s_own_agents_keeps_them(tmp_path, 
         await heard.until(Ready)
 
     argv = stand.launch["argv"]
-    assert argv[argv.index("--disallowedTools") + 1] == "AskUserQuestion"
+    assert argv[argv.index("--disallowedTools") + 1] == "AskUserQuestion,EnterWorktree,ExitWorktree"
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+async def test_claude_never_offers_its_own_worktree_tools(tmp_path, stand, allowed):
+    """A worktree it made itself would move the agent out of its workspace, where no look follows, so these stay off
+    whatever a role allows, and nothing asks for `--worktree`."""
+    async with running(make_spec(tmp_path, goal="", allow_native_children=allowed)) as (_, heard):
+        await heard.until(Ready)
+
+    argv = stand.launch["argv"]
+    assert {"EnterWorktree", "ExitWorktree"} <= set(argv[argv.index("--disallowedTools") + 1].split(","))
+    assert "--worktree" not in argv and "-w" not in argv
 
 
 async def test_it_leaves_the_user_s_setup_and_the_runtime_s_approvals_alone(tmp_path, stand):

@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import shutil
+import socket
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from functools import partial
 from pathlib import Path
@@ -36,7 +37,7 @@ from platoon_harness.drivers.env import Held, Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, levels, tool_visibility
 from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Outcome, Refused, first, hash_token, tool_name
-from platoon_harness.primitives import CUT_OFF, OWNER_STOP
+from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.team import Team
 from platoon_harness.tools import (
@@ -51,8 +52,10 @@ from platoon_harness.tools import (
 )
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
+from .git import GitError
 from .opening import PLAN_LOGIN_FIX, make_driver
 from .paths import agent_folder
+from .workspaces import branch_of, end_worktree, make_worktree, present, write_bundle
 
 GRACE = 5.0
 
@@ -128,7 +131,7 @@ class Host:
         self._closing = False
         self._acts: dict[str, Callable[[Effect], Awaitable[Any]]] = {
             "admit": self._admit,
-            "workspace": self._workspace,
+            "workspace": self.workspace,
             "launch": self._launch,
             "deliver": self._deliver,
             "interrupt": self._interrupt,
@@ -173,7 +176,7 @@ class Host:
         attempt = {"id": effect.id, "attempt": started.result}
         try:
             result = await self._acts[effect.kind](effect)
-        except (DriverError, ConfigError) as error:
+        except (DriverError, ConfigError, GitError) as error:
             await self.insist("effect.fail", {**attempt, "error": self._masked(effect, str(error))})
         except Exception as error:
             said = self._masked(effect, f"{type(error).__name__}: {error}")
@@ -232,11 +235,35 @@ class Host:
             raise DriverError(f"{spawn.agent} has no credential: {issued.refusal.detail}")
         return admission
 
-    async def _workspace(self, effect: Effect) -> dict[str, str]:
-        mode = effect.data["workspace"]
-        if mode != "shared":
-            raise DriverError(f"workspace `{mode}` is not available yet: use `shared`")
-        return {"path": str(self._cwd)}
+    def _repo(self) -> Repo | None:
+        """The repository the session opened on, as the journal holds it: a resume's own reading never replaces it."""
+        opened = self._kernel.read(self._kernel.runtime, streams=["session"], limit=1).events
+        repo = opened[0].data.get("repo") if opened else None
+        return None if repo is None else Repo.model_validate(repo)
+
+    def _workspace_of(self, agent: str) -> Workspace:
+        """Where an agent works, as its record holds it. One whose workspace nobody knows has nowhere to run."""
+        record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": agent}).result[0]
+        if record["workspace"] is None:
+            raise DriverError(f"{agent} has no workspace that anyone knows of")
+        return Workspace.model_validate(record["workspace"])
+
+    async def workspace(self, effect: Effect) -> dict[str, Any]:
+        """Make an agent's workspace, or adopt what an earlier attempt of this effect made, since no agent starts in
+        one before its effect has finished. A mode that cannot be given fails loudly and never degrades."""
+        mode, agent, repo = effect.data["workspace"], effect.data["agent"], self._repo()
+        if mode == "shared":
+            host = socket.gethostname()
+            repository = None if repo is None else repo.repository
+            made = Workspace(mode="shared", path=str(self._cwd), host=host, repository=repository)
+        elif mode == "worktree" and repo is not None:
+            folder, branch = agent_folder(self._folder, agent), branch_of(self._folder.name, agent)
+            made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
+        elif mode == "worktree":
+            raise GitError(f"`worktree` needs a git work tree, and {self._cwd} was in none when the session opened")
+        else:
+            raise DriverError(f"workspace `{mode}` is not available yet: use `shared` or `worktree`")
+        return made.model_dump()
 
     def _goal(self, data: Mapping[str, Any]) -> str:
         body = data["body"]
@@ -260,10 +287,12 @@ class Host:
     ) -> None:
         """Bring a harness up on its own binding. A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
-        driver = await asyncio.to_thread(make_driver, self._team.roles[role])
+        workspace = self._workspace_of(agent)
+        await asyncio.to_thread(present, workspace)
+        driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info)
         self._links[agent] = link
-        spec = self._spec(link, admission, goal, resume)
+        spec = self._spec(link, admission, goal, resume, Path(workspace.path))
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
 
@@ -297,20 +326,21 @@ class Host:
         with contextlib.suppress(Exception):
             await self._end(link, GRACE)
 
-    async def _end(self, link: DriverLink, grace: float) -> None:
+    async def _end(self, link: DriverLink, grace: float) -> tuple[str, ...]:
         """End a harness, then whatever its driver left: a wire program's own harness is a group of its own, and only
-        `reap` looks for it. A driver has what `stop` promises, which is twice `grace`."""
+        `reap` looks for it, and says what it left alone. A driver has what `stop` promises, which is twice `grace`."""
         link.leaving = True
         try:
             async with asyncio.timeout(2 * grace + _RETRY_SECONDS):
                 await link.driver.stop(grace)
         finally:
-            await reap(agent_folder(self._folder, link.agent), grace)
+            left = await reap(agent_folder(self._folder, link.agent), grace)
+        return left
 
     async def describe(self, role: str) -> DriverInfo:
         """What a role's driver says of itself, kept, because a wire program says it by running."""
         if role not in self._described:
-            make = partial(make_driver, self._team.roles[role])
+            make = partial(make_driver, self._team.roles[role], self._cwd)
             self._described[role] = await asyncio.to_thread(lambda: make().describe())
         return self._described[role]
 
@@ -351,9 +381,10 @@ class Host:
             if record["state"] != "ended" and record["name"] != besides and await self._on_plan(record["role"])
         ]
 
-    def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None) -> AgentSpec:
-        """How an agent starts. Its instructions are the preamble and then the role's words, so a role has the last. A
-        harness that reopens its own session keeps what it was told when that began, so it is handed that again."""
+    def _spec(self, link: DriverLink, admission: Admission, goal: str, resume: str | None, cwd: Path) -> AgentSpec:
+        """How an agent starts, in `cwd`, where its workspace is. Its instructions are the preamble and then the role's
+        words, so a role has the last. A harness that reopens its own session keeps what it was told when that began,
+        so it is handed that again."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
         surface = surface_of(link.info.capabilities)
@@ -371,7 +402,7 @@ class Host:
             agent=link.agent,
             role=link.role,
             goal=goal,
-            cwd=self._cwd,
+            cwd=cwd,
             folder=folder,
             model=role.model,
             effort=role.effort,
@@ -448,20 +479,44 @@ class Host:
             return answering.result()
         raise DriverError("its harness did not take it in time")
 
-    async def _stop(self, effect: Effect) -> None:
-        """End what an ended agent left. With no link, a crash may have left it, and `reap` proves what is ours. A link
-        stays until its harness has stopped, so a shutdown that cuts this short can still stop it."""
+    async def _stop(self, effect: Effect) -> dict[str, Any]:
+        """End what an ended agent left, then its workspace, if nothing would go with it. With no link, a crash may have
+        left it, and `reap` proves what is ours. A link stays until its harness has stopped, so a shutdown that cuts
+        this short can still stop it. Each step is safe to repeat, so a repeat finishes what the last one began."""
         name = effect.data["agent"]
+        folder = agent_folder(self._folder, name)
         link = self.link(name)
         if link is None:
-            await reap(agent_folder(self._folder, name), GRACE)
+            left = await reap(folder, GRACE)
         else:
             link.ready.set()
-            await self._end(link, GRACE)
+            left = await self._end(link, GRACE)
             self._links.pop(name, None)
-        status = self._kernel.query(self._kernel.runtime, "agent.status", {"agent": name})
-        role = link.role if link else status.result["role"]
-        await self._authority.finish(AgentRef(agent=name, role=role), AgentOutcome(status=status.result["status"]))
+        record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
+        ended = {"removed": False, "kept": None}
+        if record["workspace"] is not None and record["workspace"]["mode"] == "worktree":
+            workspace, repo = Workspace.model_validate(record["workspace"]), self._repo()
+            assert repo is not None
+            ended = await asyncio.to_thread(end_worktree, workspace, folder, Path(repo.top), left)
+        outcome = AgentOutcome(status=record["status"])
+        await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
+        return ended
+
+    async def bundle(self) -> dict[str, Any] | None:
+        """Keep the commits the journal recorded in a bundle in the session folder, or None when it recorded none, as
+        git may prune one an agent rewrote."""
+        kernel, repo = self._kernel, self._repo()
+        commits, after = [], 0
+        while repo is not None:
+            page = kernel.read(kernel.runtime, after=after, match="repo/*")
+            commits += [event.data["sha"] for event in page.events if event.type == "repo.committed"]
+            if (after := page.cursor) >= page.head:
+                break
+        if repo is None or not commits:
+            return None
+        records = kernel.query(kernel.runtime, "agent.records", {}).result
+        repositories = {record["workspace"]["repository"] for record in records if record["workspace"]} - {None}
+        return await asyncio.to_thread(write_bundle, self._folder, repo, commits, repositories)
 
     async def reconcile(self, agent: str | None, key: str) -> Reconciled:
         """What a harness says became of what it was sent. With no harness to ask, or none that says in time, nobody
@@ -576,7 +631,7 @@ class Host:
             "declared": info.capabilities,
             "verified": profile.model_dump(mode="json"),
             "levels": levels(info.capabilities, profile, None).model_dump(mode="json"),
-            "assurance": "cooperative",
+            "assurance": self._workspace_of(link.agent).assurance,
             "resumed": self._kernel.query(self._kernel.runtime, "agent.status", {"agent": link.agent}).result["state"]
             != "spawning",
         }

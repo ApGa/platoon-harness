@@ -19,7 +19,7 @@ from platoon_harness.tools import ToolServer
 from .authority import Admission, AgentOutcome, AgentRef, Authority, LocalAuthority, SpawnRequest
 from .control import Control
 from .host import GRACE, Host
-from .opening import open_session, told
+from .opening import open_session, repository, told
 from .paths import MANIFEST, OWNER_TOKEN, RUNNING, VIEW_TOKEN, Running, write_private
 from .recovery import recover_agents
 
@@ -75,10 +75,11 @@ class Runtime:
         try:
             await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
-            await open_session(self.kernel, team, manifest, authority, text, await self.host.capabilities())
+            capabilities, repo = await self.host.capabilities(), await repository(self.kernel, cwd)
+            await open_session(self.kernel, team, manifest, authority, text, capabilities, repo)
             await self.tools.start()
             await self._issue_credentials()
-            await first(recover_agents(self.kernel, self.host, self.folder, cwd), self._stop_asked.wait())
+            await first(recover_agents(self.kernel, self.host, self.folder), self._stop_asked.wait())
             self._supervising = asyncio.create_task(self.kernel.supervise())
             await self.control.start()
             running = Running(
@@ -135,7 +136,8 @@ class Runtime:
             try:
                 await self._end_daemons()
                 await host.close(grace)
-                await first(self._hand_back(), kernel.clock.sleep(limit))
+                bundle = await host.bundle()
+                await first(self._hand_back(bundle), kernel.clock.sleep(limit))
             finally:
                 await self._close()
         log.info("session %s stopped", self.folder.name)
@@ -153,16 +155,17 @@ class Runtime:
                 return
             await first(kernel.changed(head), kernel.clock.sleep(remaining))
 
-    async def _hand_back(self) -> None:
+    async def _hand_back(self, bundle: dict[str, Any] | None) -> None:
         """Release what will not happen now. A turn still open ends, which reconciles its reservation, and its agent is
-        told on resume. `session.stop` cancels a handover that never started, which queues its entries again and returns
-        a wake's reservation. A spawn still to come keeps its own, since the next runtime goes on with it."""
+        told on resume. `session.stop` records the `bundle` of the commits the journal recorded, and cancels a handover
+        that never started, which queues its entries again and returns a wake's reservation. A spawn still to come keeps
+        its own, since the next runtime goes on with it."""
         host = self.host
         for record in self._records():
             if record["turn"] is not None:
                 report = TurnEnded(reason=OWNER_STOP)
                 await host.insist("agent.report", {"agent": record["name"], "report": report})
-        await host.insist("session.stop", {})
+        await host.insist("session.stop", {"bundle": bundle})
 
     async def _end_daemons(self) -> None:
         if self._supervising is not None:

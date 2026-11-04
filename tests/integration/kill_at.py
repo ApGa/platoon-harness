@@ -1,4 +1,5 @@
-"""A detached runtime that SIGKILLs itself at one exact step: `kill_at.py <folder> <op[:kind]> <before|after> <nth>`."""
+"""A detached runtime that SIGKILLs itself at one exact step: `kill_at.py <folder> <op[:kind]> <before|after> <nth>`.
+`git:<subcommand>` is a call of a workspace's git."""
 
 import asyncio
 import os
@@ -68,6 +69,22 @@ def arm(point: Point) -> None:
                 die()
 
         Record.write = writing  # type: ignore[method-assign]
+
+    if point.op == "git":  # `git:<subcommand>`, its first word or two, as the workspace's runner is given it.
+        from platoon_harness.runtime import workspaces
+
+        run = workspaces.git
+
+        def gitting(*args: str, **options: Any) -> str:
+            fires = " ".join(args[: len(point.kind.split())]) == point.kind and point.reached()
+            if fires and point.when == "before":
+                die()
+            said = run(*args, **options)
+            if fires and point.when == "after":
+                die()
+            return said
+
+        workspaces.git = gitting  # type: ignore[assignment]
 
     if point.op == "go":
         init = Process.__init__

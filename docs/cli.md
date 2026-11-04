@@ -46,7 +46,7 @@ Its `v` is its payload's version. Its `seq` is a cursor: pass the last one as `-
 stopped. The last line of `run` and `session resume` is the ending, with these keys, where `type` is `ending` and
 `code` is what the command exits with. One stopped while its runtime starts prints its ending alone:
 
-`type`, `state`, `reason`, `agents`, `usage`, `gaps`, `code`
+`type`, `state`, `reason`, `agents`, `usage`, `gaps`, `workspaces`, `code`
 
 Without `--json` each event is one readable line, which is no contract. JSONL is the one versioned shape here: what
 another command prints with `--json`, and what an op's command prints, is that op's result or that command's report,
@@ -484,7 +484,7 @@ For example:
 platoon-harness session ending SESSION
 ```
 
-What this session has come to: its state, why, each agent and its last report, what was spent with its labels, and every gap.
+What this session has come to: its state, why, each agent and its last report, what was spent with its labels, every gap, and each workspace left in place, with why and the commands that let it go.
 
 For example:
 

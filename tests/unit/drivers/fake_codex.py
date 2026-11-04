@@ -40,7 +40,8 @@ def answer(id: int, method: str, params: dict) -> None:
             thread = {"id": THREAD, "cliVersion": script.get("version", "9.9.9")}
             effort = script.get("effort", params.get("config", {}).get("model_reasoning_effort"))
             model = script.get("model", params.get("model"))
-            say({"id": id, "result": {"thread": thread, "model": model, "reasoningEffort": effort}})
+            cwd = script.get("cwd", params.get("cwd"))
+            say({"id": id, "result": {"thread": thread, "model": model, "reasoningEffort": effort, "cwd": cwd}})
             if method == "thread/resume":
                 play(script.get("on_resume", ()))
         case "turn/start":

@@ -24,7 +24,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     TurnStarted,
 )
-from platoon_harness.kernel import ManualClock, is_held
+from platoon_harness.kernel import ManualClock, Txn, is_held
 from platoon_harness.primitives import CUT_OFF, Agents
 from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
 from platoon_harness.runtime.paths import MANIFEST
@@ -32,7 +32,7 @@ from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
 from ...integration.scripts import ran_before
-from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, solo, until
+from .support import SECONDS, harness, in_state, journal, of_type, rebuilt_equals_live, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -168,7 +168,8 @@ async def test_an_admission_that_finished_is_asked_for_again_as_a_resume_and_the
 # Workspace.
 
 
-async def test_a_workspace_in_flight_is_adopted(tmp_path):
+async def workspace_in_flight(tmp_path: Path) -> None:
+    """A session whose runtime died while `ada`'s workspace was being made."""
     session = await Session.start(solo_with(ScriptedDriver), name="s", root=tmp_path)
     runtime = session._runtime
     assert runtime is not None
@@ -181,11 +182,39 @@ async def test_a_workspace_in_flight_is_adopted(tmp_path):
     await started("workspace", "ada")(session)
     await abandon(session)
 
+
+async def test_an_uncertain_workspace_is_retried_and_its_agent_starts_once(tmp_path):
+    await workspace_in_flight(tmp_path)
+
     async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "ada", "idle")
-        finished = [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "workspace"]
+        events = await journal(session)
 
-    assert finished[-1].data["result"] == {"path": str(Path.cwd())}
+    made = [event for event in events if event.type == "effect.finished" and event.data["kind"] == "workspace"]
+    assert {event.data["result"]["path"] for event in made} == {str(Path.cwd())}
+    assert {event.data["result"]["mode"] for event in made} == {"shared"}
+    retried = [(event.agent, event.data["kind"]) for event in events if event.type == "effect.retried"]
+    assert sorted(retried) == [("ada", "workspace"), ("bob", "workspace")]
+    assert sorted(event.agent for event in events if event.type == "agent.started") == ["ada", "bob"]
+
+
+async def test_a_workspace_asked_for_before_retries_is_made_again(tmp_path, monkeypatch):
+    """A row journaled with `reconcile`, as every spawn asked before workspaces were retried, was the shared one."""
+    effect = Txn.effect
+
+    def as_it_was(self: Txn, kind: str, data: Any, **options: Any) -> int:
+        return effect(self, kind, data, **(options | {"on_uncertain": "reconcile"} if kind == "workspace" else options))
+
+    with monkeypatch.context() as patched:
+        patched.setattr(Txn, "effect", as_it_was)
+        await workspace_in_flight(tmp_path)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "ada", "idle")
+        made = [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "workspace"]
+
+    assert made[-1].data["result"]["mode"] == "shared"
+    assert made[-1].data["result"]["path"] == str(Path.cwd())
 
 
 # Launch.

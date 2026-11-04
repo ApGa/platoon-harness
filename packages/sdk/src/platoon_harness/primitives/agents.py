@@ -10,6 +10,34 @@ from platoon_harness.kernel import Event, View, fold
 from .common import IN_A_RESULT
 
 AgentState = Literal["spawning", "idle", "waking", "running", "waiting", "held", "ended"]
+Mode = Literal["shared", "worktree", "snapshot", "isolated"]
+
+
+class Workspace(BaseModel, frozen=True):
+    """Where an agent works, as its `workspace` effect made it: in `mode`, its harness runs in the folder `path` on
+    `host`, on `branch` made at the commit `base`, with the git directory `repository` holding its refs, and `objects`
+    the object directory a snapshot reads. `assurance` is how well what runs there is tied to its credential. What a
+    mode does not have is None."""
+
+    mode: Mode
+    path: str
+    host: str | None = None
+    branch: str | None = None
+    base: str | None = None
+    repository: str | None = None
+    objects: str | None = None
+    assurance: Literal["cooperative", "isolated"] = "cooperative"
+
+
+class Kept(BaseModel, frozen=True):
+    """A workspace its agent's stop left in place, on `host` at `path`, on `branch`, taking `bytes` on disk, and `why`:
+    what removing it would lose, or why that could not be told."""
+
+    path: str
+    host: str | None
+    branch: str | None
+    bytes: int | None
+    why: tuple[str, ...]
 
 
 class Agent(BaseModel, frozen=True):
@@ -21,7 +49,8 @@ class Agent(BaseModel, frozen=True):
     own, until the next begins. `failure` is what the last effect to fail for it said, `failures` counts handovers
     failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last interrupt of it or owner's
     stop, and a handover asked for before it is no failure of its harness's. `instructions` is the body of what its
-    harness was told last, or None for nothing."""
+    harness was told last, or None for nothing. `workspace` is where it works, once made, and `removed` or `kept` say
+    what its stop did with it."""
 
     name: str
     role: str
@@ -57,6 +86,9 @@ class Agent(BaseModel, frozen=True):
     quieted: int
     levels: dict[str, Any]
     instructions: str | None
+    workspace: Workspace | None
+    removed: bool
+    kept: Kept | None
 
     @property
     def id(self) -> str:
@@ -75,7 +107,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 9
+    version = 10
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -111,7 +143,10 @@ class Agents(View):
         retry_at REAL NOT NULL DEFAULT 0,
         quieted INTEGER NOT NULL DEFAULT 0,
         levels TEXT NOT NULL DEFAULT '{}',
-        instructions TEXT
+        instructions TEXT,
+        workspace TEXT,
+        removed INTEGER NOT NULL DEFAULT 0,
+        kept TEXT
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_agents_parent ON v_agents(parent);
     CREATE INDEX v_agents_state ON v_agents(state);
@@ -230,6 +265,22 @@ class Agents(View):
                 (event.wall_time, event.agent, event.data["id"]),
             )
 
+    @fold("effect.finished")
+    def made(self, event: Event) -> None:
+        """Where an agent works, and what its stop did with that. A workspace from before modes was the session's cwd,
+        and a stop from before kept nothing it made."""
+        result = event.data["result"]
+        if event.data["kind"] == "workspace" and result is not None:
+            workspace = Workspace.model_validate({"mode": "shared", **result})
+            self.db.execute(
+                "UPDATE v_agents SET workspace = ? WHERE name = ?", (workspace.model_dump_json(), event.agent)
+            )
+        elif event.data["kind"] == "stop" and result is not None:
+            kept = None if result["kept"] is None else json.dumps(result["kept"])
+            self.db.execute(
+                "UPDATE v_agents SET removed = ?, kept = ? WHERE name = ?", (result["removed"], kept, event.agent)
+            )
+
     @fold("effect.cancelled")
     def handed_back(self, event: Event) -> None:
         """A handover cancelled before it started, as the owner's stop does, gives back its wake and is no failure."""
@@ -303,6 +354,8 @@ class Agents(View):
             "harness": json.loads(row["harness"]),
             "boundaries": tuple(json.loads(row["boundaries"])),
             "levels": json.loads(row["levels"]),
+            "workspace": row["workspace"] and Workspace.model_validate_json(row["workspace"]),
+            "kept": row["kept"] and Kept.model_validate_json(row["kept"]),
         }
         return Agent(**fields)
 

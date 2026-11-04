@@ -148,9 +148,13 @@ bounded log, and nothing else may reach stdout. In a team file:
 harness = { command = ["python", "/opt/my-agent/my_driver.py"], mode = "wire" }
 ```
 
-Use an absolute path. A relative one resolves against the session's `cwd` when the harness runs, and against your own directory when
-it describes itself, so it can pass one and fail the other. If the program dies, the reason is in the agent's `stderr.log`, which the
-error names.
+A relative program, one with a `/` in it, resolves against the session's `cwd`, both when the harness runs and when it describes
+itself, whatever its agent's workspace: a worktree holds only what is committed, and your program may not be. If the program dies,
+the reason is in the agent's `stderr.log`, which the error names.
+
+A driver runs its harness in `spec.cwd`. That is where the journal says its agent works, which the host takes from the agent's
+workspace, so no driver knows the mode. Nothing checks that a wire program's own harness runs there, and `runs_in_its_workspace` in
+`check_driver` is how to show it does.
 
 ### In Python
 
@@ -453,6 +457,7 @@ async def test_my_driver_conforms(tmp_path):
 | `denial_holds` | A tool denied never runs: the file only its command makes is not there. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
+| `runs_in_its_workspace` | A shell tool runs in `spec.cwd`, a folder that is no default: its `pwd -P`, written to a pipe, names that folder. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `stop_ends_a_running_tool` | A shell tool under way when `stop` comes ends too, and so do the child it put in the background and the one it put in a session of its own. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
 | `malformed_frame_is_a_gap` | A bad frame becomes `native` plus a gap. Pass `garble`, or it is skipped |
 | `steers_at_declared_boundary` | A delivery lands at a boundary inside a turn. Needs one, and an MCP path, as a call of our tool is what makes the boundary |

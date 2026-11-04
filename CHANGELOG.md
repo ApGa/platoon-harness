@@ -11,6 +11,22 @@
   views are planned. A post's thread is followed by an index on each message's parent, so the Board's time grows with a
   session's messages and not with their square; the projection is version 4, which `web` folds again from the journal when
   it starts. See `docs/web.md` and ADR 0035.
+- `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
+  `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
+  a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume
+  whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/workspaces.md` and ADR 0031.
+- Refused before any cost: a git mode outside a work tree, in a bare repository or one with no commit, on git older than 2.36, with
+  LFS files and no filter, or where a session's branches exist; a session folder unignored in its repository's work tree, in every
+  mode. Warned of: submodules, uncommitted changes, and a Codex role in a worktree whose commits would each wait on an approval,
+  naming its three postures.
+- An ended agent's worktree removed only when git says nothing would go with it, and otherwise kept, locked, and named in the
+  Ending's `workspaces` with its host, path, branch, size, why and the commands that let it go.
+- `commits.bundle` in the session folder at each stop, holding every commit the journal recorded past the session's starting HEAD,
+  recorded on `session.stopped`, with nothing written into your repository.
+- The repository a session opens on, in `session.opened`, with every ref and its tip at open as a body.
+- `runs_in_its_workspace` in `check_driver`, which `operational` needs.
+- `platoon_harness.runtime.git`, the runtime's one git runner, which runs no hook, no fsmonitor and no gc, and
+  `platoon_harness.runtime.workspaces`.
 - Acting from SwarmChat's page, on a control link, each act one op through `/x/command`: a composer at the foot of a chat that names
   its target, sends on Enter, starts a line on Shift+Enter and cuts a long text by the function the terminal cuts with, a reply in
   a thread citing the message's entry, a file as a message's body with the most a body may be said first and its progress shown,
@@ -163,6 +179,11 @@
 ### Changed
 
 - Every name is a git branch part: no `..`, and no `.` or `.lock` at its end. Such a name was accepted before.
+- A relative program in a `command` harness resolves against the session's cwd, for the harness and for `describe` alike.
+- Claude Code's `EnterWorktree` and `ExitWorktree` are off on every launch, and a Codex thread naming a `cwd` other than its
+  workspace is refused. See ADR 0033.
+- `make_driver` takes the session's cwd, `open_session` the repository it opens on, `check` the session's cwd, root, name and
+  approvals, and `session.stop` the bundle it left.
 - `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
   `tool_names` too.
 - `doctor --json` gives each harness it did not find a `reason`, `not on PATH` for a command.

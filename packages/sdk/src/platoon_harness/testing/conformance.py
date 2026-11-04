@@ -431,6 +431,25 @@ async def stop_leaves_no_process(rig: _Rig) -> None:
     _expect(not alive, f"groups {alive} outlived `stop`")
 
 
+@_check()
+async def runs_in_its_workspace(rig: _Rig) -> None:
+    """Ground truth is what a command the harness ran says of the folder it ran in, through a pipe, which a sandbox that
+    keeps the folder read-only still lets it write. The host takes `spec.cwd` from the agent's workspace, so no driver
+    knows the mode, and each runs a harness there."""
+    if rig.options.shell is None:
+        raise _Skipped("nothing was given that makes this harness run a shell command")
+    cwd = rig.folder / "workspace" / "sub"
+    cwd.mkdir(parents=True)
+    async with _named_pipe(rig.folder / "where") as where:
+        rig.allowing = True
+        rig.model.script([rig.options.shell(f"pwd -P > {shlex.quote(str(rig.folder / 'where'))}")])
+        await rig.start(cwd=cwd)
+        rig.awaiting = "the shell tool"
+        said = (await where.readline()).decode().strip()
+
+    _expect(said == str(cwd.resolve()), f"the command ran in {said or 'no folder it said'}, and `spec.cwd` is {cwd}")
+
+
 @contextlib.asynccontextmanager
 async def _named_pipe(path: Path) -> AsyncGenerator[asyncio.StreamReader]:
     """A pipe a shell can write to by name, which ends when its last writer does, whatever else that writer did."""

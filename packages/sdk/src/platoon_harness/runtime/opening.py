@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 import re
 import tempfile
 from collections.abc import AsyncGenerator, Mapping
@@ -19,12 +20,14 @@ from platoon_harness.team import Budget, Command, Role, Team, team_check
 from platoon_harness.tools import instructions, surface_of
 from platoon_harness.topology import Limits, Queue, Topic, compile, scopes
 
+from . import workspaces
 from .authority import Authority, LocalAuthority
-from .paths import find_root, new_folder
+from .paths import find_root, new_folder, sessions_of
+from .workspaces import read_repo
 
 log = logging.getLogger("platoon_harness.runtime")
 
-__all__ = ["PLAN_LOGIN_FIX", "check", "make_driver", "open_session", "prepare", "told"]
+__all__ = ["PLAN_LOGIN_FIX", "check", "make_driver", "open_session", "prepare", "repository", "told"]
 
 PLAN_LOGIN_FIX = (
     "say this is your own work with `plan_login=True`, or `--plan-login` on the command line, or give each role an "
@@ -32,19 +35,24 @@ PLAN_LOGIN_FIX = (
 )
 
 
-def make_driver(role: Role) -> Driver:
-    """A new driver for a role's harness, by exact name, since a driver is one instance per agent."""
+def make_driver(role: Role, cwd: Path) -> Driver:
+    """A new driver for a role's harness, by exact name, since a driver is one instance per agent. A relative program in
+    a command is the session's, so it resolves against the session's `cwd`, whatever its agent's workspace and wherever
+    it is described."""
     factory = load(DRIVERS, role.driver)
-    return factory(role.harness.command) if isinstance(role.harness, Command) else factory()
+    if not isinstance(role.harness, Command):
+        return factory()
+    program, *rest = role.harness.command
+    return factory((str(cwd / program) if os.sep in program else program, *rest))
 
 
-def _described(team: Team) -> tuple[dict[str, DriverInfo], list[Problem]]:
+def _described(team: Team, cwd: Path) -> tuple[dict[str, DriverInfo], list[Problem]]:
     """What each role's driver says of itself, by role, since a command decides that and a driver's name does not."""
     known: dict[str, DriverInfo] = {}
     problems: list[Problem] = []
     for name, role in team.roles.items():
         try:
-            known[name] = make_driver(role).describe()
+            known[name] = make_driver(role, cwd).describe()
         except ConfigError as error:
             problems += [Problem(f"roles.{name}.harness", problem.what) for problem in error.problems]
         except DriverError as error:
@@ -62,21 +70,33 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     return [Problem("plan_login", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
 
 
-def check(team: Team, *, plan_login: bool = False) -> tuple[Problem, ...]:
+def check(
+    team: Team,
+    *,
+    plan_login: bool = False,
+    approvals: Policy | None = None,
+    cwd: str | Path | None = None,
+    root: str | Path | None = None,
+    name: str | None = None,
+) -> tuple[Problem, ...]:
     """Every problem a session would meet in a team, errors and warnings, at once and before any cost, asking each
-    role's driver what it is. A team that cannot be resolved raises `ConfigError`.
+    role's driver what it is and git what the session's `cwd` is in. `root` and `name` say where the session's folder
+    would be. A team that cannot be resolved raises `ConfigError`.
 
-    This blocks, because a driver may describe itself by running something.
+    This blocks, because a driver may describe itself by running something, and git runs.
     """
     extensions = Installed()
     resolved = team.resolved(extensions)
-    known, problems = _described(resolved)
+    cwd = Path(cwd or ".").resolve()
+    known, problems = _described(resolved, cwd)
     named = {problem.where for problem in problems}
     capabilities = {role: info.capabilities for role, info in known.items()}
     checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
     problems += [problem for problem in checked if problem.where not in named]
     if not plan_login:
         problems += _on_a_plan_login(resolved, known)
+    folder = sessions_of(find_root(root)) / (name or "")
+    problems += workspaces.problems(resolved, cwd=cwd, folder=folder, session=name, approvals=approvals)
     return tuple(problems)
 
 
@@ -96,22 +116,21 @@ def prepare(
     """
     if re.fullmatch(NAME, human) is None:
         raise ConfigError([Problem("human", f"{human!r} cannot name a principal")])
-    problems = check(team, plan_login=plan_login)
+    cwd = Path(cwd or ".").resolve()
+    problems = check(team, plan_login=plan_login, approvals=approvals, cwd=cwd, root=root, name=name)
     if errors := [problem for problem in problems if problem.level == "error"]:
         raise ConfigError(errors)
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(
-        team.resolved(Installed()),
-        human=f"human:{human}",
-        approvals=approvals,
-        cwd=str(Path(cwd or ".").resolve()),
-        plan_login=plan_login,
+        team.resolved(Installed()), human=f"human:{human}", approvals=approvals, cwd=str(cwd), plan_login=plan_login
     )
     return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 
 
-def _settings(team: Team, manifest: Manifest, body: str, capabilities: Mapping[str, Capabilities]) -> dict[str, Any]:
+def _settings(
+    team: Team, manifest: Manifest, body: str, capabilities: Mapping[str, Capabilities], repo: Mapping[str, Any] | None
+) -> dict[str, Any]:
     roles = {
         name: {
             "harness": role.harness if isinstance(role.harness, str) else role.harness.model_dump(mode="json"),
@@ -128,7 +147,8 @@ def _settings(team: Team, manifest: Manifest, body: str, capabilities: Mapping[s
         for name, role in team.roles.items()
     }
     limits = team.topology.limits.model_dump()
-    return {"roles": roles, "limits": limits, "until": team.topology.until or "settled", "manifest": f"sha256:{body}"}
+    until = team.topology.until or "settled"
+    return {"roles": roles, "limits": limits, "until": until, "manifest": f"sha256:{body}", "repo": repo}
 
 
 def _channel(name: str, channel: Any) -> dict[str, Any]:
@@ -169,6 +189,15 @@ async def _steps(kernel: Kernel, op: str, *steps: tuple[str, Mapping[str, Any]])
             raise Refused.of(outcome.refusal)
 
 
+async def repository(kernel: Kernel, cwd: Path) -> dict[str, Any] | None:
+    """The repository a session's `cwd` is in, as git says now, with its refs and tips stored as a body, or None."""
+    found = await asyncio.to_thread(read_repo, cwd)
+    if found is None:
+        return None
+    record, tips = found
+    return {**record, "tips": f"sha256:{await kernel.put_body(tips.encode())}"}
+
+
 async def open_session(
     kernel: Kernel,
     team: Team,
@@ -176,12 +205,13 @@ async def open_session(
     authority: Authority,
     text: str,
     capabilities: Mapping[str, Capabilities],
+    repo: Mapping[str, Any] | None,
 ) -> None:
     """Journal a session through ops. Each step has a fixed key, so a crash part of the way is finished by the next
-    runtime, which runs this again, and a session that opened long ago is not disturbed. `capabilities` is what each
-    role's driver says, by role, and a role missing from it is unknown."""
+    runtime, which runs this again, and a session that opened long ago is not disturbed, nor the `repo` it opened on.
+    `capabilities` is what each role's driver says, by role, and a role missing from it is unknown."""
     body = await kernel.put_body(text.encode())
-    await _steps(kernel, "session.open", ("session", _settings(team, manifest, body, capabilities)))
+    await _steps(kernel, "session.open", ("session", _settings(team, manifest, body, capabilities, repo)))
     await _steps(kernel, "principal.add", ("human", {"id": manifest.human}))
     grants = compile(team)
     await _steps(kernel, "grant.add", *((f"grant/{index}", grant.model_dump()) for index, grant in enumerate(grants)))
@@ -206,7 +236,7 @@ async def told(team: Team) -> dict[str, str | None]:
     on a session of its own, in a folder thrown away after, and no harness starts. A role nothing starts is shown as an
     agent of its own name, started by an agent of a role that may start it, as an agent's name is its spawner's."""
     resolved = team.resolved(Installed())
-    known, problems = await asyncio.to_thread(_described, resolved)
+    known, problems = await asyncio.to_thread(_described, resolved, Path.cwd())
     if problems:
         raise ConfigError(problems)
     capabilities = {name: info.capabilities for name, info in known.items()}
@@ -235,7 +265,8 @@ async def _rehearsed(team: Team, capabilities: Mapping[str, Capabilities]) -> As
         kernel = Kernel.open(Path(folder), extensions=loaded)
         try:
             manifest = Manifest(team=team.show(resolved=True), topology_hash=team.topology.hash, components=())
-            await open_session(kernel, team, manifest, LocalAuthority(team), manifest.model_dump_json(), capabilities)
+            text = manifest.model_dump_json()
+            await open_session(kernel, team, manifest, LocalAuthority(team), text, capabilities, None)
             yield kernel
         finally:
             kernel.close()

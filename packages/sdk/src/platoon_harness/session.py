@@ -60,13 +60,15 @@ __all__ = ["Ending", "Reason", "Session"]
 class Ending(BaseModel, frozen=True):
     """What a session came to. `reason` is what an exit code is made from. Each of `agents` has its last `report`, a
     `gist` and the ref of any `body`, or None if it said nothing. `usage` keeps its labels: a unit nobody measured has
-    no amount, which is not zero."""
+    no amount, which is not zero. Each of `workspaces` is one an agent's end did not take, with where it is, what it
+    takes on disk, why it stayed and the commands that let it go."""
 
     state: str
     reason: Reason
     agents: tuple[dict[str, Any], ...]
     usage: dict[str, dict[str, Any]]
     gaps: tuple[dict[str, Any], ...]
+    workspaces: tuple[dict[str, Any], ...] = ()
 
 
 def _result(outcome: Outcome) -> Any:

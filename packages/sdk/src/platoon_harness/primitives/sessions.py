@@ -36,13 +36,29 @@ class Limits(Args):
     max_hops: int | None = None
 
 
+class Repo(Args):
+    """The repository the session's cwd is in, as git said at open: `name` for its stream `repo/<name>`, the `top` of
+    its work tree and the session's `prefix` within it, `head` and `branch` then, the `repository` that holds its refs
+    and objects, and `tips`, a body naming every ref and its tip, one `<sha> <ref>` a line."""
+
+    name: str
+    top: str
+    prefix: str
+    head: str | None
+    branch: str | None
+    repository: str
+    tips: BodyRef
+
+
 class Settings(Args):
-    """What a session states at open. `manifest` is a stored body."""
+    """What a session states at open. `manifest` is a stored body. `repo` is None when the session's cwd is in no
+    repository, and when a session opened before it was recorded, which is not observed."""
 
     roles: dict[Name, Role] = {}
     limits: Limits = Limits()
     until: Annotated[str, Field(pattern=rf"^(settled|program|role:{NAME})$")] = "settled"
     manifest: BodyRef | None = None
+    repo: Repo | None = None
 
 
 class SessionRecord(View):
@@ -94,7 +110,8 @@ def open_session(txn: Txn, a: Settings) -> None:
     """Journal what this session runs under, before its first turn."""
     if txn.view(SessionRecord).state() != "unopened":
         raise Refused("conflict", "this session is open")
-    txn.emit("session.opened", "session", gist="session opened", data=a, refs=[a.manifest] if a.manifest else ())
+    refs = [ref for ref in (a.manifest, None if a.repo is None else a.repo.tips) if ref is not None]
+    txn.emit("session.opened", "session", gist="session opened", data=a, refs=refs, v=2)
 
 
 @op("session.manifest", query=True)

@@ -328,6 +328,18 @@ async def test_a_resume_sends_the_same_fields_and_waits_for_a_delivery(tmp_path,
     assert "turn/start" not in [frame.get("method") for frame in stand.heard]
 
 
+@pytest.mark.parametrize("resume", [None, "thread-1"])
+@pytest.mark.parametrize("said", ["/somewhere/else", None])
+async def test_codex_refuses_a_thread_running_outside_its_workspace(tmp_path, stand, resume, said):
+    """What the thread says it runs in is what its tools run in, and an agent's workspace is the one place that is."""
+    stand.install(cwd=said)
+    driver = CodexDriver()
+
+    with pytest.raises(DriverError, match=f"its thread runs in {said}, and its workspace is {tmp_path}"):
+        await driver.start(make_spec(tmp_path, goal="", resume=resume), Heard())
+    await driver.stop(GRACE)
+
+
 async def test_a_refused_thread_is_a_refused_start_with_secrets_masked(tmp_path, stand):
     stand.install(refused={"thread/start": "required MCP servers failed: tok-1"})
     driver = CodexDriver()

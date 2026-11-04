@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session, Team, told
+from platoon_harness import ConfigError, Session, Team, told
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
@@ -438,16 +438,12 @@ async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_
     assert started.data["verified"]["allow_native_children"] is True
 
 
-async def test_a_workspace_nobody_built_yet_fails_loudly(tmp_path):
-    team = solo(workspace="worktree")
+async def test_a_mode_not_built_yet_is_refused_before_any_cost(tmp_path):
+    with pytest.raises(ConfigError) as refused:
+        await Session.start(solo(workspace="snapshot"), root=tmp_path)
 
-    async with Session.start(team, root=tmp_path) as session:
-        row = await ended(session, "bob")
-
-        assert row["status"] == "failed"
-        failed = (await of_type(session, "effect.failed"))[0]
-        assert failed.data["error"] == "workspace `worktree` is not available yet: use `shared`"
-        assert await of_type(session, "agent.started") == []
+    assert "roles.bob.workspace: `snapshot` is not built yet" in str(refused.value)
+    assert not (tmp_path / "sessions").exists()
 
 
 async def test_a_harness_that_will_not_start_fails_its_spawn_and_its_parent_hears(tmp_path):

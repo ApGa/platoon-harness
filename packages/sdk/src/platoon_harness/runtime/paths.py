@@ -46,6 +46,7 @@ __all__ = [
     "open_log",
     "read_running",
     "session_folder",
+    "sessions_of",
     "socket_path",
     "write_private",
 ]
@@ -86,7 +87,8 @@ def _writable(root: Path) -> Path:
     return root
 
 
-def _sessions_of(root: Path) -> Path:
+def sessions_of(root: Path) -> Path:
+    """The folder every session under a root lives in."""
     return root / "sessions"
 
 
@@ -95,7 +97,7 @@ def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
     claimed whole or not at all: no two sessions can share one, and a crash here burns none."""
     if name is not None and re.fullmatch(NAME, name) is None:
         raise Refused("invalid", f"{name!r} cannot name a session: it must be safe as a part of a path")
-    sessions = _sessions_of(root)
+    sessions = sessions_of(root)
     _make_private(sessions)
     folder = sessions / (name or f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}")
     built = Path(tempfile.mkdtemp(dir=root, prefix=".new-"))
@@ -113,7 +115,7 @@ def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
 
 def session_folder(root: Path, name: str) -> Path:
     """The folder of an existing session, or refuse."""
-    folder = _sessions_of(root) / name
+    folder = sessions_of(root) / name
     if re.fullmatch(NAME, name) is None or not (folder / MANIFEST).exists():
         raise Refused("not_found", f"no session {name} under {root}")
     return folder
@@ -134,7 +136,7 @@ class Listed(NamedTuple):
 
 def listing(root: Path) -> list[Listed]:
     """Every session under a root. There is no registry: a scan finds them, and `flock` says which are live."""
-    sessions = _sessions_of(root)
+    sessions = sessions_of(root)
     folders = sorted(sessions.iterdir()) if sessions.exists() else []
     return [Listed(folder.name, folder, is_held(folder)) for folder in folders if (folder / MANIFEST).exists()]
 

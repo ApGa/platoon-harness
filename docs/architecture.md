@@ -131,7 +131,8 @@ Each law is a sentence, and each has a test of the same name.
   owner.token         0600: a control credential, fresh each incarnation
   view.token          0600: a view credential, which reads and never writes
   lock                flock: held by the one live runtime
-  agents/<id>/        per-agent state: proc.json, stderr.log, native home, workspace pointer, bin/ph
+  commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
+  agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one
 ```
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. If that is on a network filesystem,
@@ -323,8 +324,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `deliver` | Input id (`uuid`, `clientUserMessageId`) | `reconcile` if capable, else redeliver: at-least-once, with the id visible for dedupe. One that landed but began no turn is redelivered too, since a harness killed before its turn will not begin one now |
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
-| `workspace` | Path and branch | Inspect, adopt or fail. Never discard uncommitted work |
-| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7) |
+| `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
+| `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop removes its agent's workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
 | `erase` | None | Repeat: erasing twice is harmless |
 
 - **Live timeouts.** An effect stuck in `started` past its `timeout` becomes `effect.uncertain` without a crash. `effect.start`
@@ -457,7 +458,8 @@ A client that misses an ack retries under the same key, since a commit without a
 | WSL | Linux rules inside the distro filesystem; `/mnt/c` is 9p and refused | Not run |
 
 A closed session is portable: `session.close` checkpoints the WAL to empty, so the folder can be copied anywhere
-and opened read-only with `immutable=1`. A reader holding the WAL stops that, and the close logs it. Estimators and exports use
+and opened read-only with `immutable=1`. Its agents' workspaces are not part of it: a worktree's `.git` names its registration in
+your repository, so git in a copy would move the original's HEAD, and a copy leaves `agents/*/workspace` out. A reader holding the WAL stops that, and the close logs it. Estimators and exports use
 this form; a live journal is never read over a network filesystem. `Kernel.open(path, read_only=True)` picks between the two by
 whether `lock` is held or the WAL has content. A read-only kernel folds nothing, so a query refuses `unavailable` if a view it
 holds is behind the journal. `immutable=1` tells SQLite not to look for change, so a reader of a closed journal looks itself, and
@@ -957,7 +959,8 @@ class Driver(Protocol):
     async def stop(self, grace: float) -> None: ...              # ends the process tree it owns
 ```
 
-`AgentSpec` holds agent, role, goal, cwd, the agent's own folder, model, effort (a string handed to the harness as it stands), sandbox
+`AgentSpec` holds agent, role, goal, cwd, which is where the journal says its agent works, so no driver knows the mode, the agent's
+own folder, model, effort (a string handed to the harness as it stands), sandbox
 (one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
 again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal. With no goal, or resumed, it waits for a
 delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
@@ -1066,8 +1069,8 @@ all of this through `agent.start`, and a report has no field for it.
 
 | Harness | Path | Notes that matter |
 |---|---|---|
-| `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
-| `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the thread's own, so no saved login pays |
+| `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `EnterWorktree` and `ExitWorktree`, which would move the agent out of its workspace, always ([ADR 0033](adr/0033-a-harness-s-own-worktrees-are-off.md)), and `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
+| `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. A thread whose `thread/start` or `thread/resume` names a `cwd` other than `spec.cwd` is refused. Under `workspace-write` and `read-only` its sandbox keeps `.git` read-only, so a commit outside the session's checkout waits on an approval, and `team check` names the three postures. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the thread's own, so no saved login pays |
 | `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. `message_end` gives `model.call`, with `responseId`; the gateway join is claimed at M3. `compaction_end` gives a `model.call` of purpose `compaction`, and `forgotten` from `get_entries`. Cache warming off when trainable |
 | `openhands` | Wire worker on SDK `arun()`, from the SDK's `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again |
 | ACP agents | Generic driver, protocol 1, `fs` and `terminal` false | Turn boundary only; raw frames captured before parsing; `steer` only after a fixture passes. OpenCode must set `codemode: false`, or tools hide behind Code Mode, and must never run with an unset model |
@@ -1232,7 +1235,8 @@ client that stops reading is dropped by its `Peer`, and live text is refused for
 A stop aborts every connection, so no client can hold up shutdown either.
 
 `settled()` waits for `session.status` to say done, closes the session at `until`, waits for it to drain, and returns an `Ending`: the
-state, each agent, usage with its labels, every gap, and a reason, which `session.ending` works out in the kernel. Timing out leaves
+state, each agent, usage with its labels, every gap, each workspace an agent's end did not take, with where it is, what it takes, why
+and the commands that let it go, and a reason, which `session.ending` works out in the kernel. Timing out leaves
 the session as it is. What only a person can move, an approval left to `ask` or a session that has stalled, ends it with `needs_human`
 and leaves the session as it is, unless another client holding a control credential is attached. It waits for that client to act or
 to go, and looks once a second, because a client can leave without moving the journal. So a session at rest cannot hang `settled()`
@@ -1321,10 +1325,43 @@ op references, each with whatever keeps a stale button from deciding anything, s
 
 ## 13. Workspaces
 
-`workspace` is `shared`, `worktree`, `snapshot` or `isolated`, as the provider allows. An unavailable mode fails loudly and never
-degrades. A worktree is not a security sandbox. Git operations by agents are observed at turn end; commits, tests, merges and
-conflicts are events on `repo/<name>`. Git ancestry, declared `informed_by`, observed reads and credit stay different relations.
-Uncommitted work is never silently discarded, and conflicts are surfaced, never auto-resolved. Gitea and GitLab are extensions.
+A role's `workspace` is a ladder, each step promising one thing more: `shared`, `worktree`, `snapshot` or `isolated`. The mode recorded
+is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
+another. The core gives the first two, on git and the filesystem alone, and refuses the others naming why. See
+[ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
+
+- **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
+- **`worktree`** is a linked git worktree of the cwd's repository at `agents/<agent>/workspace`, on a new branch
+  `platoon-harness/<session>/<agent>` made at your checkout's HEAD when the workspace is made, locked with the reason
+  `platoon-harness: <host>:<path>`. It shares the repository's refs, objects, config and hooks, and what runs in it can reach anything
+  you can, so it is not a sandbox.
+- **Where an agent works.** In the same subfolder of its workspace as the session's cwd is of its repository. The path never changes
+  while the agent lives, every launch and resume runs its harness there, and a resume whose folder has gone, or is no longer a work tree
+  of the recorded repository, ends its agent `lost`, naming the fix.
+- **The repository** is read at open into `session.opened`: its name, its work tree's top, the session's prefix, HEAD, branch, the git
+  directory and, as a body, every ref and its tip. A resume's reading never replaces it.
+- **Before any cost**, a git mode is refused when the cwd is in no git work tree, the repository is bare or has no commit, git is older
+  than 2.36, LFS files have no LFS filter, or a branch exists at `platoon-harness`, at `platoon-harness/<session>` or under it, each
+  named with the command that deletes it. A session whose folder lies unignored in its repository's work tree is refused in every mode.
+  Submodules, uncommitted changes in your checkout, and a Codex role whose sandbox keeps `.git` read-only with approvals left to ask
+  are warned of.
+- **Making one** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
+  locked with our reason from its first write, and a fill. The effect is retried after a crash, each attempt adopts what an earlier
+  one made, and one fails, naming it, on a branch, registration or folder the runtime did not make.
+- **The runtime's own git** goes through one runner, which runs no hook, no fsmonitor and no gc, and never changes what an agent made:
+  no `-B`, no `--force` or `reset` in a tree an agent has run in, no `prune`, and no `update-ref` of a branch an agent has.
+- **Ending one.** An agent's stop removes its worktree only when nothing would go with it: its processes proved gone, no path in its
+  status, ignored ones included, no operation under way, no index entry hidden from status, and every commit its HEAD, reflog and own
+  refs hold its base or reachable from a ref of your repository. A kept one stays locked and is named with its host, path, size and
+  reason on the agent's record and in the Ending. No branch is ever removed, and closing a session ends no agent, so it keeps the
+  workspaces of agents that never ended.
+- **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
+  HEAD, replacing the last and holding what it held, so a commit an agent rewrote outlives git's pruning. Nothing is written into your
+  repository for it.
+
+Git operations by agents are observed at turn end; commits, tests, merges and conflicts are events on `repo/<name>`. Git ancestry,
+declared `informed_by`, observed reads and credit stay different relations. Uncommitted work is never discarded, and conflicts are
+surfaced, never auto-resolved. Gitea and GitLab are extensions.
 
 ## 14. Training
 

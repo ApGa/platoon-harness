@@ -289,6 +289,8 @@ class CodexDriver:
             opened = await self._call("thread/start", fields)
         else:
             opened = await self._call("thread/resume", {"threadId": spec.resume, "excludeTurns": True, **fields})
+        if opened.get("cwd") is None or Path(opened["cwd"]).resolve() != spec.cwd.resolve():
+            raise DriverError(f"its thread runs in {opened.get('cwd')}, and its workspace is {spec.cwd}")
         refuse_other_effort(spec, opened.get("reasoningEffort"))
         self._native = opened["thread"]["id"]
         version = opened["thread"].get("cliVersion")
