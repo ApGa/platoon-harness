@@ -1,7 +1,7 @@
 """What an agent is launched with, on real models and native logins, through the public `Session`. Set
 `PLATOON_HARNESS_LIVE=1` to run these, and say what ran.
 
-Budget: at most 28 model calls in all, each test stating its own, `claude-haiku-5-5` or `gpt-6-luna` at low effort.
+Budget: at most 36 model calls in all, each test stating its own, `claude-haiku-5-5` or `gpt-6-luna` at low effort.
 Every session has a `Budget`, so that a runaway stops itself.
 """
 
@@ -80,3 +80,31 @@ async def test_a_team_s_template_is_what_its_agent_is_told_and_acts_on(harness, 
     assert told.endswith(TOLD)
     assert words and words[-1].lstrip("*_ ").lower().startswith("kestrel")
     assert used["total"] <= 6
+
+
+@pytest.mark.parametrize("harness", ROLES)
+async def test_a_goal_is_handed_over_as_the_first_delivery_under_its_launch_offer_s_id(harness, tmp_path):
+    """Budget: at most 4 model calls, counted from the journal. A spawn's goal is what its launch offers, with the
+    instructions, and the harness says it landed under that offer's id, as it says any input did, which is the only
+    thing that confirms the launch."""
+    team = Team(roles={"ada": ROLES[harness].model_copy(update={"count": 0})}, budget=LIMIT)
+
+    async with Session.start(team, root=tmp_path / "root", cwd=seeded(tmp_path / "work"), plan_login=True) as session:
+        await session.spawn("ada", "ada", "Reply with only the word heliotrope, then finish.")
+        await seen(session, "turn.ended")
+        events = await journal(session)
+        used = await spent(session)
+        print(used, sorted((await tools_called(session)).items()))
+
+    launch = next(event for event in events if event.type == "context.offered" and event.data["how"] == "launch")
+    landed = [event for event in events if event.type == "context.delivered" and event.data["input"] == launch.seq]
+    began = next(event for event in events if event.type == "turn.started")
+    words = [event.gist for event in events if event.type == "item.recorded" and event.data["kind"] == "message"]
+    print("launch:", launch.data["items"], "landed:", [event.data for event in landed], "words:", words)
+    assert [item["ref"] for item in launch.data["items"]][:1] == ["agent/ada@1"]
+    assert [event.data["evidence"] for event in landed] == [
+        {"claude": "command_lifecycle", "codex": "userMessage"}[harness]
+    ]
+    assert landed[0].data["native_id"] and words == ["heliotrope"]
+    assert began.context_version >= launch.version
+    assert used["total"] <= 4
