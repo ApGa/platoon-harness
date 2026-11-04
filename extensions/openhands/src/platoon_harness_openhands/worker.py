@@ -9,12 +9,10 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 import tempfile
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from importlib.metadata import version
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -45,7 +43,6 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.env import Redactor, secrets_of
 from platoon_harness.kernel import GIST_LIMIT
-from platoon_harness.runtime.paths import socket_path
 from platoon_harness.tools import delivery_heading
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
@@ -125,16 +122,13 @@ class Worker:
         self._interrupted = False
         self._failure: str | None = None
         self._counted: dict[str, int] = {}
-        self._tmux: Path | None = None
 
     def describe(self) -> DriverInfo:
         return DriverInfo(name=_NAME, capabilities=_CAPABILITIES)
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         """Open the conversation, ready its agent, and say so. The key, the endpoint and our token leave the worker's
-        environment once read, so the agent's terminal cannot read them. A tmux that a native child's terminal starts
-        keeps its socket in a directory of this agent's beside the runtime's own, short enough for one, as OpenHands
-        falls back to the one every tmux of the user's shares past that."""
+        environment once read, so the agent's terminal cannot read them."""
         refuse_unset_model(spec)
         if _KEY not in spec.access:
             raise DriverError(
@@ -148,9 +142,6 @@ class Worker:
             shim |= {URL_VARIABLE: spec.tools.url, TOKEN_VARIABLE: spec.tools.token.reveal()}
         for name in (_KEY, _URL, TOKEN_VARIABLE):
             os.environ.pop(name, None)
-        self._tmux = socket_path(spec.folder).with_suffix("")
-        self._tmux.mkdir(mode=0o700, exist_ok=True)
-        os.environ["TMUX_TMPDIR"] = str(self._tmux)
         self._loop = asyncio.get_running_loop()
         self._forwarding = asyncio.create_task(self._forward(report))
         self._redact = Redactor(secrets_of(spec))
@@ -219,16 +210,14 @@ class Worker:
         return "landed" if any(_text(event.llm_message.content).startswith(heading) for event in said) else "unknown"
 
     async def stop(self, grace: float) -> None:
-        """End the turn, then close the conversation, which ends its terminal and the shim to our tools, let every
-        report go, and take tmux's directory back."""
+        """End the turn, then close the conversation, which ends its terminal and the shim to our tools, and let every
+        report go."""
         if self._conversation is not None:
             await self.interrupt()
             if self._turn is not None:
                 await asyncio.wait({self._turn}, timeout=grace)
             await asyncio.wait({asyncio.ensure_future(asyncio.to_thread(self._conversation.close))}, timeout=grace)
             await asyncio.wait({asyncio.ensure_future(self._queue.join())}, timeout=grace)
-        if self._tmux is not None:
-            shutil.rmtree(self._tmux, ignore_errors=True)
 
     # The turn.
 

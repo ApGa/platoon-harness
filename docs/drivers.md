@@ -279,7 +279,8 @@ Each report is a `report` notification whose params are the report, with its `ty
 - **Errors.** A method you cannot honor answers `-32001` with the reason, which surfaces as `DriverError`.
 - **Credentials never travel in a frame.** `spec.access` names variables, and their values are in your environment. So is the tool
   token, in `PLATOON_HARNESS_TOKEN`, with `PLATOON_HARNESS_URL` beside it. `ph` is on your `PATH`.
-- **Your environment is an allowlist:** `PATH`, `HOME`, a `TMPDIR` of your own, and what the spec names. Nothing else is inherited.
+- **Your environment is an allowlist:** `PATH`, `HOME`, a `TMPDIR` of your own, and what the spec names. Nothing else is inherited,
+  but what a driver in Python names in `WireDriver(command, inherited)`, as `openhands` names the proxy variables.
 - **A line is at most 16 MiB.** Past that the agent stops with a gap, since the line may have held an answer.
 - **Stdout is the protocol.** A line that is not a frame costs you a `native` frame and a gap, and an unknown report the same.
 - **Exit when stdin ends.** A program still there is sent `SIGTERM`, then `SIGKILL`.
@@ -290,13 +291,16 @@ Each report is a `report` notification whose params are the report, with its `ty
 ## OpenHands: a wire worker
 
 `harness = "openhands"` runs `platoon-harness-openhands`, a wire program in an environment of its own, as the OpenHands SDK shares
-one with nothing else: `uv tool install platoon-harness-openhands` makes it, the runtime finds it on `PATH`, and `doctor` shows it
-with the version of the SDK it runs. The command is not `openhands`, which is the OpenHands CLI's. Each rule it keeps, in a sentence:
+one with nothing else. It is not published: in a checkout of this repository, `UV_PROJECT_ENVIRONMENT=<folder> uv sync --package
+platoon-harness-openhands --frozen` builds it from the repository's lock, and with `<folder>/bin` on `PATH` the runtime finds it and
+`doctor` shows it with the version of the SDK it runs. The command is not `openhands`, which is the OpenHands CLI's. Each rule it
+keeps, in a sentence:
 
 - **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can
   abandon a model call and a message can land while one runs.
 - **Sign-in** is a key alone: `OPENAI_API_KEY` from the role's auth profile, with `OPENAI_BASE_URL` for an endpoint other than
-  OpenAI's, and a role with none is refused, as is a ChatGPT subscription or an OpenHands Cloud login, which needs a person.
+  OpenAI's, and a role with none is refused, as is a ChatGPT subscription or an OpenHands Cloud login, which needs a person. Its way
+  out to the network is the shell's: the proxy variables and `SSL_CERT_FILE` pass by name.
 - **The model** is the role's, sent as it is named through litellm's OpenAI provider in the Chat Completions dialect, and an effort
   goes as `reasoning_effort`, refused for a model litellm's catalog says takes none, as litellm would drop it unsaid.
 - **No retries:** the SDK retries no model call, as a retry is a second call a gateway records, so a failed one ends the turn.
@@ -336,7 +340,8 @@ with the version of the SDK it runs. The command is not `openhands`, which is th
   refused, as the SDK would start one anew under that id, and an action a crash or a stop left with no result is rejected before
   the next run, which would run it again.
 - **`stop`** ends the turn and closes the conversation, which ends its terminal and the shim, and then the group ends as any wire
-  program's does; a tmux that a child's terminal starts keeps its socket in a directory of the agent's beside the runtime's own.
+  program's does. The driver gives the worker a short directory of its own for tmux's sockets, as OpenHands falls back to the one
+  every tmux of the user's shares past a socket's length, and takes it back at `stop`, which a worker killed outright cannot.
 
 ## A Python package
 

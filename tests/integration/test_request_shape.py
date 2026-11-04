@@ -10,9 +10,10 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
-from platoon_harness.drivers.openhands import WORKER
+from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.testing import FakeModel, ToolCall
 from platoon_harness.testing.model import Request
+from platoon_harness_cli.machine import program
 
 from ..unit.runtime import support
 from ..unit.runtime.support import in_state, of_type, until
@@ -50,13 +51,11 @@ TEAMS: dict[str, Callable[..., Team]] = {
     "pi": test_pi.keyed,
     "openhands": test_openhands.keyed,
 }
-PROGRAMS = {"openhands": WORKER}
-"""The command a harness is found by, where it is not the harness's name."""
 
 
 @pytest.mark.parametrize("harness", TEAMS)
 async def test_the_tool_block_and_our_words_hold_still_across_a_wake_and_a_resume(harness, tmp_path, monkeypatch):
-    if shutil.which(PROGRAMS.get(harness, harness)) is None:
+    if shutil.which(program(harness, load(DRIVERS, harness)())) is None:
         pytest.skip(f"{harness} is not installed, so this met no real harness here")
     monkeypatch.setattr(support, "SECONDS", test_openhands.TIMEOUT)  # The OpenHands worker loads its SDK first.
     replies = (wait_call(harness), "waiting for you", "woken", "resumed")

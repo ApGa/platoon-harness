@@ -58,7 +58,9 @@ Consequences:
   `subscriptions/listen`, tasks) carry no core semantics.
 - **Dependencies.** The core SDK depends on neither `mcp` nor `agent-client-protocol`. `openhands-sdk` 1.59.0 is unsatisfiable
   with `mcp==2.3.0` or `agent-client-protocol==1.0.0rc3`, and unpinned it resolves silently to 1.49.1 and 1.44.1. The worker pins
-  it exactly, in an environment of its own, and the workspace's one lock holds it beside ours, as nothing of ours needs either.
+  it exactly, in an environment of its own, and the workspace's one lock holds it beside ours, which moved `filelock` from 4.2.6 to
+  3.32.7, a package the core reaches only through `pre-commit` in its dev group. The planned `[acp]` extra's `agent-client-protocol`
+  1.0.0rc3 cannot share that lock with the SDK's 0.12.1, so that extra will need a conflict declared or a lock of its own.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, and recorded from `ready` on `agent.started` and `agent.resumed`. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
@@ -284,11 +286,12 @@ by a driver landing; only the row below changes.
 - Its own agents, allowed: `task` was offered, the call of it asked, and the child's terminal step asked the runtime through the task
   tool's confirmation handler, which the tool alone would answer yes. No event of the child reached the parent's callbacks, and the
   parent's stats gained `task:<id>` with the child's 2 calls [L]. The child's terminal is tmux, which keeps its socket in the shared
-  `tmux-<uid>` directory when `TMUX_TMPDIR` would make a path too long for a socket, so the worker gives it a short directory of the
-  agent's own, which a `tmux` the agent runs in its terminal uses too. `stop` takes it back, and a worker killed outright leaves it
-  empty beside the runtime's sockets [L].
+  `tmux-<uid>` directory when `TMUX_TMPDIR` would make a path too long for a socket, so the driver gives the worker a short
+  directory of its own, which a `tmux` the agent runs in its terminal uses too, and takes it back at `stop`, after a worker killed
+  outright too [L].
 - Credentials: `env` in the agent's terminal showed `TMPDIR` and no key, endpoint or token, no file of the session held the key, and
-  the workspace held nothing the SDK wrote [L]. In the home it is given the SDK makes `.openhands/profiles` and
+  the workspace held nothing the SDK wrote [L]. The proxy variables and `SSL_CERT_FILE` reach the worker from the shell, as litellm
+  reads them; no real proxy has met it [L]. In the home it is given the SDK makes `.openhands/profiles` and
   `.openhands/provider-connections`, and its terminal's bash writes `.bash_history`, as they would in the user's shell [L].
 - Project instructions: with `load_project_skills=True` a project's `AGENTS.md` reached the first request beside ours [L]. The SDK takes
   the nearest folder above the workspace that holds a `.git` entry as the repository's root, and reads its instructions there too; one
@@ -495,7 +498,7 @@ Milestone 1 closes.
 | `claude`, `codex` | User-installed binary |
 | `opencode` | `@opencode/cli`, platform binary, no Node at runtime. Check the major version: bins are `opencode` and `opencode2` |
 | `pi` | Node >= 22.19 |
-| `openhands` | `platoon-harness-openhands`, a tool environment of its own: Python 3.12+, 387 MB for the SDK alone, 498 MB with its tools and without the proxy. The OpenHands CLI needs `==3.12.*` and is not used |
+| `openhands` | `platoon-harness-openhands`, unpublished, built from the repository's lock in an environment of its own: Python 3.12+, 387 MB for the SDK alone, 498 MB with its tools and without the proxy. The OpenHands CLI needs `==3.12.*` and is not used |
 | `prime` | Release tarball, `uv`, Python >= 3.11 kernel |
 | Codex sandbox on Linux | Bubblewrap and user namespaces. A bundled `bwrap` is the fallback. With user namespaces blocked, sandboxed commands cannot run (docs, not reproduced). Never fall back to `danger-full-access` silently |
 
@@ -565,7 +568,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 **Terms and licenses.**
 
 - OpenAI Terms clauses need review from a direct source.
-- `lmnr-claude-code-proxy` is proprietary and installed by default. The worker runs without it, and the workspace lock excludes it; `uv tool install --excludes` has not run, as the distribution is not published.
+- `lmnr-claude-code-proxy` is proprietary and installed by default. The worker runs without it, and the workspace lock excludes it. Nothing is published, so no install from an index has run.
 - `claude-stream-sample.jsonl` holds short strings authored by a proprietary CLI. Review before the repository goes public.
 - Concurrency of one plan login across many processes is unknown for both Claude Code and Codex.
 

@@ -41,8 +41,8 @@ def harnesses() -> list[tuple[str, Driver]]:
     return found
 
 
-def _program(name: str, driver: Driver) -> str:
-    """The command a harness is found by on PATH."""
+def program(name: str, driver: Driver) -> str:
+    """The command a harness is found by on PATH: its name, or the program its wire driver runs."""
     return driver.command[0] if isinstance(driver, WireDriver) else name
 
 
@@ -56,10 +56,10 @@ def _first_line(command: list[str]) -> str | None:
 def _harness(name: str, driver: Driver) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
     command, which is all of what it said that is kept."""
-    program = _program(name, driver)
-    if shutil.which(program) is None:
+    command = program(name, driver)
+    if shutil.which(command) is None:
         return {"name": name, "found": False}
-    return {"name": name, "found": True, "version": _first_line([program, "--version"]), "login": _login(driver)}
+    return {"name": name, "found": True, "version": _first_line([command, "--version"]), "login": _login(driver)}
 
 
 def _login(driver: Driver) -> str | None:
@@ -170,8 +170,8 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
 def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
-    A lead on the first, which starts workers on the second. It never overwrites one. A harness behind a wire program,
-    as `openhands` is, is passed over: init writes no auth profile, and `openhands` needs one.
+    A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile, so it
+    passes over a harness behind a wire program, as `openhands` is, since nothing tells it how one signs in.
 
     For example:
 

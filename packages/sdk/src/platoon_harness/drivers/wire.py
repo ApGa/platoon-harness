@@ -29,7 +29,7 @@ from . import (
     Reporter,
     ToolBinding,
 )
-from .env import inherited
+from .env import harness_env, inherited
 from .process import LOG, WIRE, Process, exit_reason
 
 DRIVER_ERROR = -32001
@@ -58,10 +58,12 @@ def _from_frame(frame: Mapping[str, Any], environ: Mapping[str, str]) -> AgentSp
 
 
 class WireDriver:
-    """The one adapter for a driver in another process. One instance runs one program for one agent."""
+    """The one adapter for a driver in another process. One instance runs one program for one agent, on the environment
+    every harness has and the variables of ours that `inherited` names, as a harness may need them to sign in."""
 
-    def __init__(self, command: Sequence[str]) -> None:
+    def __init__(self, command: Sequence[str], inherited: Sequence[str] = ()) -> None:
         self._command = tuple(command)
+        self._inherited = tuple(inherited)
         self._info: DriverInfo | None = None
         self._process: Process | None = None
         self._peer: Peer | None = None
@@ -140,7 +142,7 @@ class WireDriver:
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         self._log = spec.folder / LOG
-        await Process.launch(self._command, spec, report, read=self._read)
+        await Process.launch(self._command, spec, report, read=self._read, env=harness_env(spec, *self._inherited))
         await self._call("start", {"protocol": WIRE_PROTOCOL, "spec": _to_frame(spec)})
 
     async def deliver(self, delivery: Delivery) -> None:

@@ -628,7 +628,7 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
     assert {component["name"] for component in report["installed"]["components"]} >= {"claude", "codex", "pi"}
 
 
-async def test_openhands_is_found_by_its_worker_and_init_passes_it_over_as_it_needs_an_auth_profile(cli: Cli):
+async def test_openhands_is_found_by_its_worker_and_init_passes_it_over_as_a_wire_program(cli: Cli):
     """The OpenHands CLI is `openhands`, so the harness of that name runs a worker of its own name."""
     fake_harnesses(cli, "platoon-harness-openhands", "openhands")
 
