@@ -165,13 +165,15 @@ a commit builds on with a trailer, `git commit --trailer Informed-By=<sha>`: a v
 repository is resolved to its full SHA, and anything else, a branch name among them, is kept as written.
 
 The terminal's header counts what changed, `/review` lists it, and a merge stopped on conflicts waits in the dock, and under Needs you
-in the browser, until its agent's next turn. What a look cannot see:
+in the browser, saying where to resolve it, until its agent's next turn. What an agent wrote of a commit is cut to fit: its author and
+each `Informed-By` value to 256 characters, ending in `…` where cut, and a commit's first 16 values, with how many it had. What a look
+cannot see:
 
 - a one-turn agent's work, until its turn has ended;
-- commits on a branch no workspace has at HEAD;
-- a worktree an agent makes with git, which is outside every look;
 - a commit made and undone within one turn, as by an amend or a reset before the turn ended, which only the workspace's reflog
   holds, so the bundle below does not keep it, though its stop keeps the workspace for it;
+- commits on a branch no workspace has at HEAD;
+- a worktree an agent makes with git, which is outside every look;
 - who made a commit when the agent's git did not move HEAD onto it, as `commit-tree` with `update-ref` does not, or when two
   workspaces made the same commit in one second. Attribution reads what the agent's own git wrote, so it is evidence, never proof.
 
@@ -187,7 +189,15 @@ $ git log main..platoon-harness/fix-auth/ada
 $ git merge platoon-harness/fix-auth/ada
 ```
 
-The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
+A snapshot agent's commits are in the snapshot's own repository until you fetch its branch, as its `release` does, and `/review` says
+so of its group. The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
+
+## From a script
+
+`platoon-harness view watch <session> --name changes` gives the `changes` view's rows: each recorded commit, each workspace's last
+reading and each uncommitted path, with the `seq` that last moved it. `platoon-harness session ending <session>` gives the Ending,
+whose `workspaces` are the kept ones with their reasons and any `release`, and whose `unobserved` names the agents whose last look
+never finished.
 
 ## What the journal recorded
 

@@ -108,13 +108,14 @@ command line prints any. A takeover says it is not built yet, as `/takeover` doe
 ### What changed
 
 `/review`, or Alt+D, lists what changed, read-only, grouped by workspace: the commits made in an agent's workspace under that agent,
-newest first, with their short SHA, subject and lines added and removed, a dropped one marked; then that workspace's uncommitted paths,
-conflicted first, with their state and lines, `?` where nobody measured them, and how many more there are than the list holds; your
-checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout or in no workspace the session
-knows. A look after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on
-`repo/<name>` is marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is
-planned. A conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it or to tell the agent,
-since the runtime never resolves one.
+newest recorded first, with their short SHA, subject and lines added and removed, a dropped one marked where it stands; then that
+workspace's uncommitted paths, conflicted first, with their state and lines, `?` where nobody measured them, and how many more there
+are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
+or in no workspace the session knows. A snapshot's group says its commits are in its own repository, until you fetch them. A look
+after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
+marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
+conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves
+one. The inspector says why a workspace was kept only once its agent's stop has kept it.
 
 ### Size
 

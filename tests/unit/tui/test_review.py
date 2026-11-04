@@ -118,14 +118,23 @@ async def test_a_conflict_in_the_dock_says_where_to_resolve_it(root, repo):
         text = await drawn(pilot, lambda text: "conflict @lead" in text)
 
     line = next(line for line in text.splitlines() if "conflict @lead" in line)
-    assert "merge stopped on conflicts in 1 files: README: resolve it in" in line
+    assert "conflict @lead merge stopped on conflicts in 1 file, README: resolve it in" in line
     assert path[:20] in line
 
 
 def test_review_groups_commits_by_the_workspace_that_made_them():
     def commit_row(sha: str, made_in: str | None, seq: int) -> dict[str, Any]:
         found = {"id": f"commit/{sha}", "kind": "commit", "commit": sha, "gist": f"{sha} made", "made_in": made_in}
-        return {**found, "branch": None, "added": 1, "removed": 0, "files": 1, "dropped": False, "seq": seq}
+        return {
+            **found,
+            "branch": None,
+            "added": 1,
+            "removed": 0,
+            "files": 1,
+            "recorded": seq,
+            "dropped": False,
+            "seq": seq,
+        }
 
     reading = {"kind": "workspace", "head": None, "branch": "main", "under_way": "merge", "rebasing": None}
     changes = {
@@ -160,5 +169,48 @@ def test_review_groups_commits_by_the_workspace_that_made_them():
         "  2 more",
         "nobody's",
         "  cccc made  +1 -0",
+        "  bbbb made  +1 -0",
+    ]
+
+
+def commit_of(sha: str, made_in: str, recorded: int, seq: int | None = None, dropped: bool = False) -> dict[str, Any]:
+    found = {"id": f"commit/{sha}", "kind": "commit", "commit": sha, "gist": f"{sha} made", "made_in": made_in}
+    return {
+        **found,
+        "branch": None,
+        "added": 1,
+        "removed": 0,
+        "files": 1,
+        "recorded": recorded,
+        "dropped": dropped,
+        "seq": recorded if seq is None else seq,
+    }
+
+
+def test_review_lists_commits_newest_recorded_first_whatever_a_rewrite_moved():
+    """An amend drops the commit it replaced, which moves that row's seq, and not its place."""
+    changes = {
+        row["id"]: row
+        for row in (
+            commit_of("aaaa", "@ada", 3, seq=9, dropped=True),
+            commit_of("bbbb", "@ada", 5),
+            commit_of("cccc", "@ada", 8),
+        )
+    }
+
+    lines = [row.line.plain.rstrip() for row in rows_of(changes, mark=9)]
+
+    assert lines == ["@ada", "  cccc made  +1 -0", "  bbbb made  +1 -0", "  aaaa made  +1 -0 dropped"]
+
+
+def test_review_says_a_snapshot_s_commits_are_in_its_own_repository():
+    changes = {row["id"]: row for row in (commit_of("aaaa", "@ada", 3), commit_of("bbbb", "@cy", 4))}
+
+    lines = [row.line.plain.rstrip() for row in rows_of(changes, mark=9, snapshots={"@cy"})]
+
+    assert lines == [
+        "@ada",
+        "  aaaa made  +1 -0",
+        "@cy, a snapshot, whose commits are in its own repository",
         "  bbbb made  +1 -0",
     ]

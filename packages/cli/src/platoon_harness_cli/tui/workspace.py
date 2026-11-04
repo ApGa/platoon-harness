@@ -547,7 +547,7 @@ class Workspace(Screen[None]):
             lines.append(SafeText(f"why {why_said(row['why'])}", "yellow"))
         if row["held_by"]:
             lines.append(SafeText(f"held by @{row['held_by']}"))
-        lines += self._workspace(live, row)
+        lines += self._workspace(row)
         for level, said in (row["levels"] or {}).items():
             reasons = "; ".join(said.get("reasons", ()))
             lines.append(SafeText(f"{level} {said.get('state')}" + (f": {reasons}" if reasons else "")))
@@ -564,9 +564,9 @@ class Workspace(Screen[None]):
         ]
         return Content("\n").join(lines)
 
-    def _workspace(self, live: Live, row: dict[str, Any]) -> list[Content]:
+    def _workspace(self, row: dict[str, Any]) -> list[Content]:
         """Where the agent in view works: the mode, branch and folder of its workspace, the commit it started from and
-        how well what runs there is tied to its credential, and why its stop kept it, if it did."""
+        how well what runs there is tied to its credential, and why its stop kept it, once its stop has."""
         workspace = row["workspace"]
         if workspace is None:
             return []
@@ -577,8 +577,7 @@ class Workspace(Screen[None]):
         lines += [SafeText(f"  branch {workspace['branch']}")] if workspace["branch"] else []
         lines += [SafeText(f"  from {made['base'][:12]}")] if made.get("base") else []
         lines.append(SafeText(f"  {workspace['path']}", "dim"))
-        left = live.ending.workspaces if live.ending else ()
-        if kept := next((found for found in left if found["agent"] == row["agent"]), None):
+        if kept := status.get("kept"):
             lines.append(SafeText(f"kept: {'; '.join(kept['why'])}", "yellow"))
         return lines
 
@@ -606,19 +605,10 @@ class Workspace(Screen[None]):
                 (f"{place['kind']} ", "bold"),
                 SafeText(f"@{place['agent']} " if place["agent"] else ""),
                 *hints,
-                SafeText(
-                    " ".join(place["gist"].split()) + (self._resolve(place) if place["kind"] == "conflict" else "")
-                ),
+                SafeText(" ".join(place["gist"].split())),
             )
             rows.append(Row(line, place["id"]))
         return rows
-
-    def _resolve(self, conflict: dict[str, Any]) -> str:
-        """Where a conflict is resolved, since the runtime never resolves one: in the workspace it is in."""
-        row = self._row(conflict["agent"])
-        if row is None or row["workspace"] is None:
-            return ": resolve it in your checkout"
-        return f": resolve it in {row['workspace']['path']}, or tell @{conflict['agent']}"
 
     def _unsendable(self, live: Live) -> str | None:
         """Why the composer cannot send now, or None when it can."""
@@ -952,7 +942,8 @@ class Workspace(Screen[None]):
             self.marks[stream] = seq
             self.run_worker(self._mark_one(live.session, stream, seq), group="marks")
 
-        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read))
+        snapshots = {f"@{row['agent']}" for row in live.roster if (row["workspace"] or {}).get("mode") == "snapshot"}
+        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, snapshots))
 
     def action_planned(self, action: str) -> None:
         key = next(key for key in KEYMAP if key.action == action and key.planned)

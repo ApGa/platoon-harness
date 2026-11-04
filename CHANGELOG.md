@@ -21,9 +21,11 @@
 - The `changes` view rebuilt on the look, with a row per commit, per workspace reading and per uncommitted path, each with the `seq`
   that last moved it; a `conflict` attention row while an agent rests on a conflict its look found; the roster's `workspace`,
   `agent.status`'s workspace and why it was kept, and `session.status`'s `repo`.
-- In the terminal, the header says what changed, `/review` or Alt+D lists it, grouped by workspace, with rows past your mark marked
-  new, the inspector names the agent's workspace, and the dock says where a conflict is resolved. In the browser, a conflict is
-  listed under Needs you.
+- In the terminal, the header says what changed, `/review` or Alt+D lists it, grouped by workspace, newest recorded first, a snapshot's
+  group saying its commits are in its own repository, with rows past your mark marked new, the inspector names the agent's workspace
+  and why its stop kept it, and the dock says where a conflict is resolved. In the browser, a conflict is listed under Needs you,
+  saying the same. What an agent wrote of a commit, its author and each `Informed-By` value, is cut to fit, and a commit's first 16
+  values are kept with how many it had.
 - `workspace = "snapshot"`: a repository of its own in the session folder holding your tree as your git sees it, uncommitted and
   untracked work included, captured in your checkout under its own config into the snapshot's own store and index, reading your
   objects through alternates and holding in its own pack what your refs did not reach, with your identity and file-reading values

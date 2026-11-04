@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from platoon_harness.kernel import Args, Effect, Effects, Event, Stamps, Txn, View, fold, op
+from platoon_harness.kernel import GIST_LIMIT, Args, Effect, Effects, Event, Stamps, Txn, View, fold, op
 
 from . import why
 from .agents import Agent, Agents
@@ -13,6 +13,7 @@ from .approvals import Approvals
 from .budgets import Budgets
 from .common import name_of
 from .messages import Deliveries
+from .repo import unsettled
 from .tasks import Tasks
 from .waits import Waits
 
@@ -135,9 +136,10 @@ class Attention(View):
         it never comes for an agent that has ended, whose stop looked last."""
         where = event.data["workspace"]
         if event.data["conflicted"]:
-            self.db.execute("INSERT OR REPLACE INTO v_attention_conflicts VALUES (?, ?)", (where, event.gist))
+            gist = unsettled(event.data)[:GIST_LIMIT]
+            self.db.execute("INSERT OR REPLACE INTO v_attention_conflicts VALUES (?, ?)", (where, gist))
             if where == "shared":
-                self._raise("conflict/shared", "conflict", event)
+                self._raise("conflict/shared", "conflict", event, gist=gist)
         else:
             self.db.execute("DELETE FROM v_attention_conflicts WHERE workspace = ?", (where,))
             self._lower(event, "id = ?", f"conflict/{where}")
@@ -206,10 +208,10 @@ class Attention(View):
 
 
 class Changes(View):
-    """What changed, as looks found it, a row for each recorded commit, for each workspace's last reading and for each
-    path it holds uncommitted, keyed by `id`, each with the `seq` that last moved it, which a client compares with the
-    person's mark on `repo/<name>`. A newer reading replaces its workspace's paths whole, and a row closes in place, so
-    a watcher hears that it went away."""
+    """What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it, for each
+    workspace's last reading and for each path it holds uncommitted, keyed by `id`, each with the `seq` that last moved
+    it, which a client compares with the person's mark on `repo/<name>`. A newer reading replaces its workspace's paths
+    whole, and a row closes in place, so a watcher hears that it went away."""
 
     version = 2
     schema = """
@@ -236,7 +238,7 @@ class Changes(View):
         data = event.data
         shown = {key: data[key] for key in ("made_in", "branch", "added", "removed", "files")}
         row = {"id": f"commit/{data['sha']}", "kind": "commit", "commit": data["sha"], "gist": event.gist, **shown}
-        self._put({**row, "dropped": False}, None, event)
+        self._put({**row, "recorded": event.seq, "dropped": False}, None, event)
 
     @fold("repo.rewritten")
     def rewritten(self, event: Event) -> None:

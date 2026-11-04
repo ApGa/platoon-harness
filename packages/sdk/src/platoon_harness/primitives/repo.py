@@ -3,6 +3,7 @@ journal holds, and each workspace's head and uncommitted state. A look is the ru
 agent's, so none of its events names an agent in its envelope, and none claims a turn or a context."""
 
 import json
+from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
 from pydantic import Field
@@ -19,15 +20,19 @@ UnderWay = Literal["merge", "rebase", "cherry-pick", "revert", "bisect", "sequen
 PathState = Literal["modified", "added", "deleted", "renamed", "copied", "type_changed", "untracked", "conflicted"]
 
 DROPPED_LIMIT = 64
+TEXT_LIMIT = 256
+"""How many characters a look keeps of a commit's author and of each `Informed-By` value, which an agent wrote."""
+CITED_LIMIT = 16
+"""How many `Informed-By` values of one commit a look keeps."""
 _WHY_LIMIT = 512
 _NAMED = 3
 
 
 class Cited(Args):
-    """One `Informed-By` value of a commit as it was `written`, and the commit it names, or None when it names no one
-    commit: only 4 to 40 hex digits naming one commit in the commit's own repository do."""
+    """One `Informed-By` value of a commit as it was `written`, cut to fit, and the commit it names, or None when it
+    names no one commit: only 4 to 40 hex digits naming one commit in the commit's own repository do."""
 
-    written: Annotated[str, Field(max_length=256)]
+    written: Annotated[str, Field(max_length=TEXT_LIMIT)]
     sha: Sha | None
 
 
@@ -35,18 +40,20 @@ class Commit(Args):
     """A commit a look found: its `parents`, the `branch` its workspace's HEAD was on, or None for one found only as
     cited, the workspace whose HEAD reflog records making it as `made_in`, or None when none or two do, its `author`,
     its lines `added` and `removed` against its first parent, None when a file's were not measured, as a binary file's
-    are not, how many `files` it touched, and what it says it was `informed_by`."""
+    are not, how many `files` it touched, and what it says it was `informed_by`, the first of its `informed_by_total`
+    values. What an agent wrote is cut to fit, so one long value cannot keep a commit from being recorded."""
 
     sha: Sha
     parents: tuple[Sha, ...]
     subject: str
-    author: str
+    author: Annotated[str, Field(max_length=TEXT_LIMIT)]
     branch: str | None
     made_in: Where | None
     added: int | None
     removed: int | None
     files: int
-    informed_by: tuple[Cited, ...] = ()
+    informed_by: Annotated[tuple[Cited, ...], Field(max_length=CITED_LIMIT)] = ()
+    informed_by_total: int = 0
 
 
 class Uncommitted(Args):
@@ -60,11 +67,13 @@ class Uncommitted(Args):
 
 
 class Reading(Args):
-    """What a look read of a workspace, which is its last look from then on: its `head` and `branch`, any operation
-    `under_way` and the branch a rebase is `rebasing`, and its uncommitted `paths`, conflicted first and cut to fit,
-    with the true `total`, how many are `conflicted`, and the whole list as a `body` when it was cut. Its state is None
-    for the shared workspace when no role works in it, since your own edits there are not the session's."""
+    """What a look read of a workspace, which is its last look from then on: the `path` of its work tree, its `head`
+    and `branch`, any operation `under_way` and the branch a rebase is `rebasing`, and its uncommitted `paths`,
+    conflicted first and cut to fit, with the true `total`, how many are `conflicted`, and the whole list as a `body`
+    when it was cut. Its state is None for the shared workspace when no role works in it, since your own edits there
+    are not the session's."""
 
+    path: str
     head: Sha | None
     branch: str | None
     under_way: UnderWay | None = None
@@ -135,15 +144,25 @@ class Looks(View):
         return {row["workspace"]: json.loads(row["reading"]) for row in self.db.execute("SELECT * FROM v_looks")}
 
 
+def _some(count: int, what: str) -> str:
+    return f"{count} {what}{'' if count == 1 else 's'}"
+
+
+def unsettled(reading: Mapping[str, Any]) -> str:
+    """A conflict a reading found, in a line: what stopped on it, in which files, and where to resolve it."""
+    named = [path["path"] for path in reading["paths"] or () if path["state"] == "conflicted"][:_NAMED]
+    more = f" and {reading['conflicted'] - len(named)} more" if reading["conflicted"] > len(named) else ""
+    files = f"{_some(reading['conflicted'], 'file')}, {', '.join(named)}{more}"
+    return f"{reading['under_way'] or 'work'} stopped on conflicts in {files}: resolve it in {reading['path']}"
+
+
 def _said(where: str, reading: Reading) -> str:
     """A reading in a line: its conflicts, else how much it holds uncommitted, else where it stands."""
     if reading.conflicted:
-        named = ", ".join(path.path for path in (reading.paths or ())[:_NAMED] if path.state == "conflicted")
-        what = reading.under_way or "work"
-        return f"{where}: {what} stopped on conflicts in {reading.conflicted} files: {named}"
+        return f"{where}: {unsettled(reading.model_dump(mode='json'))}"
     if reading.total:
         under_way = f", a {reading.under_way} under way" if reading.under_way else ""
-        return f"{where}: {reading.total} paths uncommitted{under_way}"
+        return f"{where}: {_some(reading.total, 'path')} uncommitted{under_way}"
     at = "no commit" if reading.head is None else reading.head[:12]
     return f"{where} at {at}" + (f" on {reading.branch}" if reading.branch else "")
 
@@ -171,7 +190,7 @@ def report(txn: Txn, a: Report) -> None:
     if a.rewrite is not None and (dropped := [sha for sha in a.rewrite.dropped if looks.ref(sha)]):
         rewrite = a.rewrite.model_dump(mode="json", exclude={"dropped"})
         data = {"workspace": a.workspace, **rewrite, "dropped": dropped[:DROPPED_LIMIT], "dropped_total": len(dropped)}
-        gist = f"{a.workspace}: {a.rewrite.branch or 'HEAD'} no longer reaches {len(dropped)} recorded commits"
+        gist = f"{a.workspace}: {a.rewrite.branch or 'HEAD'} no longer reaches {_some(len(dropped), 'recorded commit')}"
         txn.emit("repo.rewritten", stream, gist=gist[:GIST_LIMIT], cause=cause, data=data)
     if a.reading is not None and looks.reading(a.workspace) != (reading := a.reading.model_dump(mode="json")):
         refs = [a.reading.body] if a.reading.body else ()

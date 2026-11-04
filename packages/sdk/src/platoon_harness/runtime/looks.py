@@ -14,8 +14,10 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from platoon_harness.primitives.repo import CITED_LIMIT, TEXT_LIMIT
+
 from .git import GitError, git
-from .workspaces import UNDER_WAY, operations, status_of
+from .workspaces import STATUS, UNDER_WAY, operations, status_of
 
 PAGE = 64
 """How many commits one `repo.report` carries."""
@@ -66,7 +68,7 @@ def look(
     found = _found(root, head, [*known, *filter(None, (looked,))], branch)
     _attribute(found, makers)
     rewrite = None if last is None or looked is None else _rewrite(root, last, head, known)
-    reading: dict[str, Any] = {"head": head, "branch": branch}
+    reading: dict[str, Any] = {"path": str(root), "head": head, "branch": branch}
     whole = None
     if record:
         state, whole = _state(root, head)
@@ -95,7 +97,8 @@ def _found(root: Path, head: str | None, exclusions: Sequence[str], branch: str 
 
 
 def _described(root: Path, shas: Sequence[str]) -> dict[str, dict[str, Any]]:
-    """Each commit's parents, committer time, author, subject, lines against its first parent and citations."""
+    """Each commit's parents, committer time, author, subject, lines against its first parent and citations, what an
+    agent wrote of them cut to fit."""
     if not shas:
         return {}
     given = "".join(f"{sha}\n" for sha in shas)
@@ -104,13 +107,15 @@ def _described(root: Path, shas: Sequence[str]) -> dict[str, dict[str, Any]]:
     for record in git("log", "--no-walk=unsorted", "--stdin", "-z", form, cwd=root, input=given).split("\0"):
         if record.strip():
             sha, parents, time, author, subject, *cited = record.split("\n")
+            values = [value.strip() for value in cited if value.strip()]
             found[sha] = {
                 "sha": sha,
                 "parents": parents.split(),
                 "time": int(time),
-                "author": author,
+                "author": _cut(author),
                 "subject": subject,
-                "informed_by": [value.strip() for value in cited if value.strip()],
+                "informed_by": [_cut(value) for value in values[:CITED_LIMIT]],
+                "informed_by_total": len(values),
             }
     for sha, (added, removed, files) in _counted(root, given).items():
         found[sha] |= {"added": added, "removed": removed, "files": files}
@@ -118,6 +123,11 @@ def _described(root: Path, shas: Sequence[str]) -> dict[str, dict[str, Any]]:
     for commit in found.values():
         commit["informed_by"] = [{"written": value, "sha": resolved.get(value)} for value in commit["informed_by"]]
     return found
+
+
+def _cut(text: str) -> str:
+    """Text an agent wrote, within what a record keeps, ending in `…` where it was cut."""
+    return text if len(text) <= TEXT_LIMIT else f"{text[: TEXT_LIMIT - 1]}…"
 
 
 def _counted(root: Path, given: str) -> dict[str, tuple[int | None, int | None, int]]:
@@ -202,7 +212,7 @@ def _rewrite(root: Path, last: Mapping[str, Any], head: str | None, known: Seque
 def _state(root: Path, head: str | None) -> tuple[dict[str, Any], str | None]:
     """Its uncommitted paths, conflicted first and cut to fit, any operation under way, and the whole list as text when
     it was cut. Status must name the HEAD read first, or HEAD moved between the two, and that would be a mixed state."""
-    status = git("status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal", cwd=root)
+    status = git(*STATUS, "--branch", cwd=root)
     named = next((entry for entry in status.split("\0") if entry.startswith("# branch.oid ")), "")
     if named.removeprefix("# branch.oid ") != (head or "(initial)"):
         raise GitError(f"HEAD moved during the look, from {head} to {named.removeprefix('# branch.oid ')}")

@@ -8,6 +8,7 @@ from pathlib import Path
 from platoon_harness import primitives
 from platoon_harness.kernel import Kernel, ManualClock
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives.clients import Changes
 
 ARCHITECTURE = Path(__file__).parents[3] / "docs" / "architecture.md"
 OUT_OF_SCOPE = {"topology.patch", "topology.show", "lineage", "exposure"}
@@ -76,3 +77,8 @@ def test_a_view_that_changes_shape_changes_version(tmp_path):
     kernel.close()
 
     assert found == VIEWS
+
+
+def test_changes_view_schema_is_pinned_to_its_version():
+    """Clients read its rows, so a change of its table is a new version, as for every view above."""
+    assert (Changes.version, sha256(" ".join(Changes.schema.split()).encode()).hexdigest()[:12]) == VIEWS["changes"]

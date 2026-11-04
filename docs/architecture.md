@@ -1283,7 +1283,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 |---|---|---|
 | `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict` |
-| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, dropped`, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
+| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, dropped`, `recorded` being the seq that recorded it, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
 
 **What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry
 with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
@@ -1389,8 +1389,10 @@ another. The core gives the first three, on git and the filesystem alone, and re
   journal does not hold, parents first and each after what it cites; `repo.rewritten` when a branch no longer reaches commits the
   journal holds, naming only those; and `workspace.changed` whenever a workspace's head, branch or uncommitted state differs from its
   last look, with any merge, rebase, cherry-pick, revert or bisect under way, its paths, conflicted first, cut to fit with the true
-  `total`, and the whole list as a body. A line count nobody measured, of an untracked or binary file, is None. Your checkout's
-  uncommitted state is recorded only when a role works in it.
+  `total`, the work tree's `path`, and the whole list as a body. A line count nobody measured, of an untracked or binary file, is
+  None. What an agent wrote of a commit is cut to fit, its author and each `Informed-By` value to 256 characters and its first 16
+  values with how many it had, so no trailer can keep a look from being recorded. Your checkout's uncommitted state is recorded only
+  when a role works in it.
 - **Whose a commit is.** A commit is the agent's whose workspace's HEAD reflog records making it, an entry moving HEAD onto it at its
   own committer time, and nobody's when that workspace is the shared one, when none records it, or when two do. Git writes that entry
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
@@ -1401,7 +1403,8 @@ another. The core gives the first three, on git and the filesystem alone, and re
   written and unresolved. `based_on` cites the recorded commits a commit names.
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
-  its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. For your checkout it is open
+  its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve
+  it. For your checkout it is open
   while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`.
 - **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
   HEAD, replacing the last and holding what it held, so a commit an agent rewrote outlives git's pruning. Nothing is written into your

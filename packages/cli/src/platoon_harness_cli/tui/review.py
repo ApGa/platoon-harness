@@ -1,6 +1,6 @@
 """What changed, as a list a person reads: each workspace's commits and uncommitted paths, from the `changes` view."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import Any
 
 from textual.app import ComposeResult
@@ -28,11 +28,12 @@ def _owner(commit: Mapping[str, Any]) -> str:
     return made_in if made_in.startswith("@") else NOBODY
 
 
-def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int) -> list[Row]:
-    """The changes as rows, grouped by workspace: each agent's commits under it, newest first, then its uncommitted
-    paths, conflicted first, and how many more there are than the list holds; your checkout's paths; and last the
-    commits that are nobody's. A row past `mark` is marked new."""
-    commits = sorted((row for row in changes.values() if row["kind"] == "commit"), key=lambda row: -row["seq"])
+def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:
+    """The changes as rows, grouped by workspace: each agent's commits under it, newest recorded first, then its
+    uncommitted paths, conflicted first, and how many more there are than the list holds; your checkout's paths; and
+    last the commits that are nobody's. A group of one of `snapshots` says its commits are in its own repository. A
+    row past `mark` is marked new."""
+    commits = sorted((row for row in changes.values() if row["kind"] == "commit"), key=lambda row: -row["recorded"])
     readings = {row["workspace"]: row for row in changes.values() if row["kind"] == "workspace"}
     paths = sorted(
         (row for row in changes.values() if row["kind"] == "path"),
@@ -46,7 +47,8 @@ def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int) -> list[Row]:
         reading = readings.get(group)
         under_way = f", a {reading['under_way']} under way" if reading and reading["under_way"] else ""
         title = "your checkout" if group == "shared" else group
-        found.append(Row(Content.assemble(SafeText(title, "bold"), (under_way, "yellow"))))
+        apart = (", a snapshot, whose commits are in its own repository", "dim") if group in snapshots else ""
+        found.append(Row(Content.assemble(SafeText(title, "bold"), apart, (under_way, "yellow"))))
         for commit in (commit for commit in commits if _owner(commit) == group):
             dropped = (" dropped", "red") if commit["dropped"] else ""
             counts = (f"  {_lines(commit['added'], commit['removed'])}", "dim")
@@ -77,9 +79,15 @@ class Review(ModalScreen[None]):
 
     BINDINGS = bindings("dialog")
 
-    def __init__(self, changes: Mapping[str, Mapping[str, Any]], mark: int, read: Callable[[int], object]) -> None:
+    def __init__(
+        self,
+        changes: Mapping[str, Mapping[str, Any]],
+        mark: int,
+        read: Callable[[int], object],
+        snapshots: Collection[str] = (),
+    ) -> None:
         super().__init__()
-        self._rows = rows_of(changes, mark)
+        self._rows = rows_of(changes, mark, snapshots)
         self._mark = mark
         self._newest = max((row["seq"] for row in changes.values()), default=0)
         self._read = read

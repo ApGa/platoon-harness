@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
+from platoon_harness.primitives.repo import Commit
 from platoon_harness.runtime import host, looks
 from platoon_harness.runtime.git import GitError
 from platoon_harness.testing import Hang
@@ -209,6 +210,41 @@ def test_an_informed_by_value_naming_a_ref_is_kept_unresolved(repo, tmp_path):
     assert cited["informed_by"] == [
         {"written": written, "sha": None} for written in ("HEAD", "main", "beefcafe", "HEAD~1")
     ]
+
+
+def test_what_an_agent_wrote_of_a_commit_is_cut_to_fit_saying_so(repo, tmp_path):
+    opened = tips(repo)
+    ada, base = worktree(repo, tmp_path, "ada")
+    git("config", "user.name", "A" * 300, cwd=ada)
+    first = commit(ada, "first")
+    values = [first, "x" * 300, *(f"note {number}" for number in range(20))]
+    citing = commit(ada, "citing", cites=",".join(values))
+
+    found = seen("@ada", ada, base, opened, {"@ada": ada, "shared": repo}, record=False)
+
+    [cited] = [found_commit for found_commit in found.commits if found_commit["sha"] == citing]
+    assert cited["informed_by_total"] == 22 and len(cited["informed_by"]) == 16
+    assert cited["informed_by"][:2] == [{"written": first, "sha": first}, {"written": "x" * 255 + "…", "sha": None}]
+    assert cited["author"] == "A" * 255 + "…"
+    Commit.model_validate_json(json.dumps(cited))
+
+
+async def test_a_long_informed_by_value_never_blinds_a_workspace_s_looks(repo, tmp_path):
+    team = team_of(
+        harness=working(lambda cwd: commit(cwd, "work", cites="see " + "x" * 300), lambda cwd: commit(cwd, "more"))
+    )
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "work")
+        await looked(session)
+        await session.send("@ada", "more")
+        await looked(session, 2)
+        found = await committed(session)
+        gaps = [
+            event for event in await of_type(session, "gap.recorded") if event.data["what"] == "workspace_unobserved"
+        ]
+
+    assert gaps == []
+    assert [event.gist.split(" ", 1)[1] for event in found] == ["add work", "add more"]
 
 
 # What its branch no longer reaches.

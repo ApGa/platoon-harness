@@ -31,10 +31,13 @@ def commit(sha: str, *parents: str, made_in: str | None = "@bob", **fields: Any)
     }
 
 
+WORKTREE = "/s/agents/bob/workspace"
+
+
 def reading(head: str | None = ONE, *paths: dict[str, Any], **fields: Any) -> dict[str, Any]:
     conflicted = sum(path["state"] == "conflicted" for path in paths)
     found = {"paths": list(paths), "total": len(paths), "conflicted": conflicted}
-    return {"head": head, "branch": "platoon-harness/s/bob", **found, **fields}
+    return {"path": WORKTREE, "head": head, "branch": "platoon-harness/s/bob", **found, **fields}
 
 
 def path(name: str, state: str = "modified", added: int | None = 1, removed: int | None = 0) -> dict[str, Any]:
@@ -182,7 +185,7 @@ async def test_uncommitted_state_is_recorded_only_when_it_changes(kernel):
 
     changed = of_type(kernel, "workspace.changed")
     assert [[path["added"] for path in event.data["paths"]] for event in changed] == [[], [1], [2]]
-    assert changed[1].gist == "@bob: 1 paths uncommitted"
+    assert changed[1].gist == "@bob: 1 path uncommitted"
 
 
 async def test_a_rewrite_names_only_the_journaled_commits_it_dropped(kernel):
@@ -265,7 +268,7 @@ async def test_the_changes_view_holds_commits_and_uncommitted_paths(kernel):
 
     rows = {row["id"]: row for row in changes(kernel)["rows"]}
 
-    assert rows[f"commit/{ONE}"] | {"seq": 0} == {
+    assert rows[f"commit/{ONE}"] | {"seq": 0, "recorded": 0} == {
         "id": f"commit/{ONE}",
         "kind": "commit",
         "commit": ONE,
@@ -275,9 +278,11 @@ async def test_the_changes_view_holds_commits_and_uncommitted_paths(kernel):
         "added": None,
         "removed": 0,
         "files": 1,
+        "recorded": 0,
         "dropped": False,
         "seq": 0,
     }
+    assert rows[f"commit/{ONE}"]["recorded"] == rows[f"commit/{ONE}"]["seq"]
     assert rows["workspace/@bob"]["total"] == 1 and rows["workspace/@bob"]["head"] == ONE
     assert rows["path/@bob/notes.txt"]["state"] == "untracked" and rows["path/@bob/notes.txt"]["added"] is None
 
@@ -324,7 +329,7 @@ async def test_changes_rows_carry_seq_and_marks_say_what_is_new(kernel):
 
 async def test_your_checkout_shows_nothing_when_no_role_works_in_it(kernel):
     await spawn(kernel, "bob")
-    await looked(kernel, "shared", reading={"head": BASE, "branch": "main"})
+    await looked(kernel, "shared", reading={"path": "/src/app", "head": BASE, "branch": "main"})
 
     assert changes(kernel)["rows"] == []
     assert result_of(kernel.query(kernel.runtime, "repo.looks", {}))["shared"]["head"] == BASE
@@ -353,7 +358,7 @@ async def test_a_conflict_needs_you_while_its_agent_rests_on_it(kernel):
     [row] = attention(kernel)
     rostered = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))["rows"]
     assert (row["id"], row["kind"], row["agent"], row["actions"]) == ("conflict/@bob", "conflict", "bob", [])
-    assert row["gist"] == "@bob: merge stopped on conflicts in 2 files: a.py, b.py"
+    assert row["gist"] == f"merge stopped on conflicts in 2 files, a.py, b.py: resolve it in {WORKTREE}"
     assert next(found for found in rostered if found["agent"] == "bob")["group"] == "needs_you"
 
     await start_turn(kernel, "bob", "t2")

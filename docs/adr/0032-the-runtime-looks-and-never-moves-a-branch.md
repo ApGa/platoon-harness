@@ -39,9 +39,15 @@ agents' turns happen to end, and a look must never claim the turn or the context
   them, since a ref names whatever it points at when asked. `based_on` holds the refs of the cited commits the journal holds.
 - **Unknown stays unknown.** A line count of an untracked or binary file is None, a list cut to fit says how many paths there were,
   with the whole list as a body, and the Ending names every agent whose last look never finished as `unobserved`.
+- **What an agent wrote is cut to fit.** A commit's author and each `Informed-By` value are kept to 256 characters, ending in `…` where
+  cut, and a commit's first 16 values with how many it had, so one long trailer cannot make a look's page invalid. The design bounded
+  a value only where the op checked it, which refused the page, so every later look of that workspace failed the same way and none of
+  its commits was ever recorded.
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, a conflict is what a look found, and
   a `conflict` attention row is open while its agent rests on it: it comes at the end of each look of the agent's that still finds
-  conflicted paths, goes at the next turn's start, and is moot once the agent ends, when the Ending names the kept workspace.
+  conflicted paths, goes at the next turn's start, and is moot once the agent ends, when the Ending names the kept workspace. Its gist
+  says what stopped, on which files, and where to resolve it, from the work tree's `path` each reading names, so the terminal and the
+  browser show the same words and neither repeats the agent.
 - **`changes` leaves the driver's vocabulary,** with `Changed` and `change.recorded`. A wire program that sends one gets `native` plus a
   gap, and the wire protocol stays 1, since no program ever sent it.
 
@@ -60,7 +66,10 @@ These details differ from the design, each the smallest change that keeps its ru
 - The view of each workspace's last look is `Looks`, as `Repo` names the repository a session opens on, and `repo.looks`, a runtime
   query, gives the host each workspace's last head and branch from it, since a daemon keeps nothing of its own.
 - `session.status` names the repository observed as `repo`, None when there is none, and a client says "not observed" from that.
-- A commit row has no `tests` until runtime tests exist.
+- A commit row has no `tests` until runtime tests exist, and has the seq that `recorded` it beside the `seq` that last moved it, so
+  `/review` lists commits newest recorded first, where a rewrite that dropped one would otherwise lift it above the newer ones.
+- A look and a stop read status through one form, `--untracked-files=normal --ignore-submodules=none`, so no config makes them
+  disagree on what a workspace holds.
 
 ## Alternatives considered
 
@@ -90,7 +99,8 @@ These details differ from the design, each the smallest change that keeps its ru
 ## Evidence
 
 - `tests/unit/runtime/test_looks.py`, on real git under a test's own folder: whose each commit is, whatever order looks run in, after
-  a fast-forward, a merge from your checkout, two makers and none; cited commits first and trailers resolved from hex alone; rewrites
+  a fast-forward, a merge from your checkout, two makers and none; cited commits first and trailers resolved from hex alone; an author
+  and trailers cut to fit, and a long trailer that blinds no later look; rewrites
   and a moved untouched branch; merges and rebases under way; untracked and binary counts; a list cut to fit; HEAD moving mid-look; a
   look that changes no ref, index or file; and through a session: a look after a turn, at a stop, on a resume after the owner's stop,
   one at a time, of a one-shot program, and one that failed.

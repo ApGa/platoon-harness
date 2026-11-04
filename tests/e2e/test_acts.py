@@ -230,7 +230,8 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
 
 
 async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, root: Path, monkeypatch):
-    """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, with no action here."""
+    """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, with no action here,
+    saying on which files and where to resolve it, and naming its agent once."""
     repo = repository(root / "repo", monkeypatch)
     git("checkout", "-q", "-b", "theirs", cwd=repo)
     commit(repo, "README", "theirs\n")
@@ -252,9 +253,9 @@ async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, 
             await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
             await needs.click()
             place = page.locator(".x-needs .x-need")
-            await expect(place).to_have_text(
-                re.compile(r"⚠ conflict .*bob: @bob: merge stopped on conflicts in 1 files: README$"), timeout=SECONDS
-            )
+            where = re.escape(str((root / "home" / "sessions" / "s" / "agents" / "bob" / "workspace").resolve()))
+            said = rf"⚠ conflict .*bob: merge stopped on conflicts in 1 file, README: resolve it in {where}$"
+            await expect(place).to_have_text(re.compile(said), timeout=SECONDS)
             await expect(place.get_by_role("button")).to_have_count(0)
             await page.context.close()
 
