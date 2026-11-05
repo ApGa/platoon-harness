@@ -49,6 +49,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | An `Informed-By` value that is an event's ref joins the commit's `based_on` once checked as any citation is, and only in a commit an agent of the session made, of an event it made or was handed, since a trailer travels between clones and sessions; anything else stays as written, its record saying why |
 | [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | A ninth slot, `citing`, one sentence filled for an agent holding a write of content, in the default template, and the one place an agent is asked, at 78 bytes a request |
 | [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | One wording for both clients, the terminal's `/provenance` on the chosen line and the browser's Provenance pane through `x_provenance`, each link by how it is known, each answer's head, bound and open turn, and credit only as what an estimator said |
+| [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Its first failure since a run that lasted is `daemon.failed` and the next run that lasts `daemon.recovered`, so a daemon that fails on every pass stands in `attention` as a kind of its own and never passes for a quiet session |
 
 ## Adding or changing one
 

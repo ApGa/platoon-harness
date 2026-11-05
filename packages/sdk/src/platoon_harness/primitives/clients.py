@@ -50,7 +50,7 @@ class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
     look found conflicted paths is kept, so that its row comes back after the next look that still finds them."""
 
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_attention(
         id TEXT PRIMARY KEY,
@@ -179,6 +179,20 @@ class Attention(View):
     @fold("budget.set")
     def budget_set(self, event: Event) -> None:
         self._lower(event, "kind = 'budget'")
+
+    @fold("daemon.failed")
+    def daemon_failed(self, event: Event) -> None:
+        """A daemon that fails is restarted with backoff, and one that fails on every pass leaves no other trace."""
+        self._raise(event.stream, "daemon", event)
+
+    @fold("daemon.recovered")
+    def daemon_recovered(self, event: Event) -> None:
+        self._lower(event, "id = ?", event.stream)
+
+    @fold("runtime.started")
+    def restarted(self, event: Event) -> None:
+        """A new runtime's daemons have not failed yet."""
+        self._lower(event, "kind = 'daemon'")
 
     @fold("turn.lost")
     def turn_lost(self, event: Event) -> None:

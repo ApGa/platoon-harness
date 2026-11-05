@@ -469,3 +469,21 @@ async def test_a_lost_turn_asks_for_attention_until_a_turn_starts(kernel):
     await start_turn(kernel, "bob", "t2")
 
     assert attention(kernel) == []
+
+
+async def test_a_daemon_that_keeps_failing_stands_in_attention_until_a_run_of_it_lasts(kernel):
+    """Loud failure: a daemon that fails on every pass would otherwise look like a quiet session. The row names it and
+    the error that began it, and goes once a run lasts a minute, or a new runtime brings new daemons."""
+    said = {"daemon": "courier", "error": "RuntimeError: no luck"}
+    result_of(await kernel.submit(kernel.runtime, "daemon.fail", said))
+    raised = attention(kernel)
+    result_of(await kernel.submit(kernel.runtime, "daemon.recover", {"daemon": "courier"}))
+    lowered = attention(kernel)
+    result_of(await kernel.submit(kernel.runtime, "daemon.fail", said))
+    result_of(await kernel.submit(kernel.runtime, "runtime.start", {}))
+
+    assert [(row["id"], row["kind"], row["agent"], row["actions"]) for row in raised] == [
+        ("daemon/courier", "daemon", None, [])
+    ]
+    assert raised[0]["gist"] == "daemon courier failed and is restarted with backoff: RuntimeError: no luck"
+    assert lowered == [] and attention(kernel) == []

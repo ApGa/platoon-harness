@@ -12,6 +12,7 @@ from rich.cells import cell_len
 from textual.strip import Strip
 
 from platoon_harness import Session, Team
+from platoon_harness.primitives import delivery
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
 from platoon_harness_cli.tui import live as live_module
@@ -586,6 +587,21 @@ async def test_alt_a_goes_round_every_place_and_yes_answers_the_one_it_is_at(roo
 
 def row_text(dock: Dock, index: int) -> str:
     return dock.rows[index].line.plain
+
+
+async def test_a_daemon_that_keeps_failing_is_a_place_in_the_dock(root, monkeypatch):
+    """A courier that fails on every pass hands nothing over, so the dock says so where a quiet session would show."""
+
+    async def broken(kernel) -> float | None:
+        raise RuntimeError("no luck")
+
+    async with attached(team([Say("hi")]), root) as (_, app, pilot):
+        monkeypatch.setattr(delivery, "_pass", broken)
+        await pilot.press(*"go", "enter")
+        text = await drawn(pilot, lambda text: "daemon courier failed" in text)
+
+        assert "⚠ daemon daemon courier failed and is restarted with backoff: RuntimeError: no luck" in text
+        assert [place["kind"] for place in workspace(app)._places(workspace(app).live)] == ["daemon"]
 
 
 async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_screen_cuts_only_the_gist(root):

@@ -14,6 +14,7 @@ import pytest
 from playwright.async_api import Browser, Route, expect
 
 from platoon_harness import Session, Team
+from platoon_harness.primitives import delivery
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say
 from platoon_harness_cli.ops import cut
@@ -256,6 +257,32 @@ async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, 
             where = re.escape(str((root / "home" / "sessions" / "s" / "agents" / "bob" / "workspace").resolve()))
             said = rf"⚠ conflict .*bob: merge stopped on conflicts in 1 file, README: resolve it in {where}$"
             await expect(place).to_have_text(re.compile(said), timeout=SECONDS)
+            await expect(place.get_by_role("button")).to_have_count(0)
+            await page.context.close()
+
+    assert errors == []
+
+
+async def test_needs_you_names_a_daemon_that_keeps_failing(chromium: Browser, root: Path, monkeypatch):
+    """A courier that fails on every pass hands nothing over, which would look like a quiet session: Needs you says
+    which daemon fails and why, with no action, as only a person can find out what broke it."""
+
+    async def broken(kernel) -> float | None:
+        raise RuntimeError("no luck")
+
+    async with Session.start(solo([Say("hi")]), name="s", root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        monkeypatch.setattr(delivery, "_pass", broken)
+        await session.send("@bob", "go")
+        await until(lambda: session.attention(), session)
+        async with serving("s", root) as web:
+            page, errors = await opened(chromium, web.link("control"))
+            needs = page.locator("[data-x-needs]")
+            await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
+            await needs.click()
+            place = page.locator(".x-needs .x-need")
+            said = "⚠ daemon: daemon courier failed and is restarted with backoff: RuntimeError: no luck"
+            await expect(place).to_have_text(said, timeout=SECONDS)
             await expect(place.get_by_role("button")).to_have_count(0)
             await page.context.close()
 

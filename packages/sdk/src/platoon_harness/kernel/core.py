@@ -4,6 +4,7 @@ from typing import Any
 
 from .auth import Grants, Principals, add_grant, add_principal, issue_credential, remove_grant, revoke_principal
 from .bodies import Tombstones, eraser_daemon, tombstone_body
+from .daemon import fail_daemon, recover_daemon
 from .effects import (
     Effects,
     expire_effect,
@@ -33,6 +34,7 @@ CORE = (
     Extension("runtime", ops=[start_runtime]),
     Extension("timer", ops=[next_timers, clear_timer], views=[Timers], daemons=[clock_daemon]),
     Extension("body", ops=[tombstone_body], views=[Tombstones], daemons=[eraser_daemon]),
+    Extension("daemon", ops=[fail_daemon, recover_daemon]),
 )
 
 

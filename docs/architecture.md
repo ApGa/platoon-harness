@@ -204,7 +204,8 @@ class Kernel:
 
 The kernel knows streams, principals, grants and effects. It does not know what a message, board, task or harness
 is; those are primitives, written as `Extension` values on the same contract a third party uses. Its own ops, views and
-daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime`, `op` and `ops` are taken names.
+daemons load the same way, so `effect`, `timer`, `principal`, `grant`, `body`, `runtime`, `daemon`, `op` and `ops` are taken
+names.
 
 `submit` and `query` return an `Outcome`, whose `refusal` says why nothing happened; they never raise one. A read-only kernel
 answers only a command its journal answered under the same key, as any retry is answered. `read` and
@@ -356,6 +357,11 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `Kernel.recover()` does the journal's part of this, including `turn.lost` and beside it the gap `crash_window`, which names in
   `since` the `turn.started` of the turn it cut; the
   incarnation is the version of `runtime.started` on the stream `runtime`.
+- **A daemon that fails** is restarted with backoff, from a tenth of a second to thirty, and a run that lasts a minute forgives the
+  failures before it. The first failure since a run that lasted is `daemon.failed`, naming the daemon and its error, and the next run
+  that lasts is `daemon.recovered`, so a daemon that fails on every pass is said once and stands in `attention` until it runs a
+  minute or a new runtime starts, and never passes for a quiet session. See
+  [ADR 0046](adr/0046-a-daemon-that-keeps-failing-needs-a-person.md).
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 - **A kind of an extension's own.** The host starts only the kinds in this table, and recovery settles only those. An extension that
   requests another brings the daemon that performs it, and that daemon settles its rows, after a crash and past a `timeout` alike:
@@ -559,7 +565,7 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -1444,7 +1450,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 | View | Row | Answers |
 |---|---|---|
 | `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
-| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict` |
+| `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict`, `daemon` |
 | `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, dropped`, `recorded` being the seq that recorded it, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
 
 **What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry

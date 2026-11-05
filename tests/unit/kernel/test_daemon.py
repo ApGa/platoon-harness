@@ -29,8 +29,7 @@ async def test_a_failed_daemon_restarts_with_doubling_backoff(folder, clock):
     task = asyncio.create_task(kernel.supervise())
 
     for delay in (0.1, 0.2, 0.4):
-        await clock.sleeping()
-        assert clock.wakes == [pytest.approx(clock.now() + delay)]
+        await clock.slept_until(clock.now() + delay)
         clock.advance(delay)
     await healthy.wait()
 
@@ -47,16 +46,13 @@ async def test_backoff_is_capped(folder, clock):
     kernel = open_with(folder, clock, Daemon("broken", broken))
     task = asyncio.create_task(kernel.supervise())
 
-    waits = []
-    for _ in range(12):
-        await clock.sleeping()
-        waits.append(clock.wakes[0] - clock.now())
-        clock.advance(waits[-1])
+    for delay in (0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8, 25.6, 30.0, 30.0, 30.0):
+        await clock.slept_until(clock.now() + min(delay, 30.0))
+        clock.advance(delay)
 
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     kernel.close()
-    assert max(waits) == 30.0
 
 
 async def test_a_run_that_lasted_forgives_earlier_failures(folder, clock):
@@ -71,11 +67,10 @@ async def test_a_run_that_lasted_forgives_earlier_failures(folder, clock):
     kernel = open_with(folder, clock, Daemon("late", fails_late))
     task = asyncio.create_task(kernel.supervise())
     for delay in (0.1, 0.2, 120):
-        await clock.sleeping()
+        await clock.slept_until(clock.now() + delay)
         clock.advance(delay)
-    await clock.sleeping()
 
-    assert clock.wakes == [pytest.approx(clock.now() + 0.1)]
+    await clock.slept_until(clock.now() + 0.1)
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     kernel.close()
@@ -137,3 +132,73 @@ async def test_closing_during_a_failure_stops_the_supervisor(folder, clock):
 
     kernel = open_with(folder, clock, Daemon("closing", tries_after_close))
     await kernel.supervise()
+
+
+def said(kernel: Kernel) -> list[tuple[str, str]]:
+    return [(event.type, event.gist) for event in kernel.read(kernel.runtime).events if event.stream == "daemon/flaky"]
+
+
+async def test_a_daemon_that_keeps_failing_is_said_once_until_a_run_of_it_lasts_a_minute(folder, clock):
+    """The first failure since a run that lasted is journaled, and so is the next run that lasts, which the supervisor
+    already took as forgiving what came before: a daemon that fails on every pass is said once, not once a pass."""
+    runs = []
+    lasting = asyncio.Event()
+
+    async def flaky(kernel: Kernel) -> None:
+        runs.append(clock.now())
+        if len(runs) in (4, 5):
+            lasting.set()
+            await clock.sleep(600)
+        raise RuntimeError(f"pass {len(runs)}")
+
+    kernel = open_with(folder, clock, Daemon("flaky", flaky))
+    task = asyncio.create_task(kernel.supervise())
+    for delay in (0.1, 0.2, 0.4):
+        await clock.slept_until(clock.now() + delay)
+        clock.advance(delay)
+    await lasting.wait()
+    failing = said(kernel)
+    clock.advance(60)
+    await until_said(kernel, 2)
+    clock.advance(600)
+    await until_said(kernel, 3)
+    lasting.clear()
+    await clock.slept_until(clock.now() + 0.1)
+    clock.advance(0.1)
+    await lasting.wait()
+    clock.advance(60)
+    await until_said(kernel, 4)
+
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    events = said(kernel)
+    kernel.close()
+    assert failing == [("daemon.failed", "daemon flaky failed and is restarted with backoff: RuntimeError: pass 1")]
+    assert [type for type, _ in events] == ["daemon.failed", "daemon.recovered", "daemon.failed", "daemon.recovered"]
+    assert events[2][1].endswith("RuntimeError: pass 4")
+
+
+async def until_said(kernel: Kernel, count: int) -> None:
+    while len(said(kernel)) < count:
+        head = kernel.head
+        await kernel.changed(head)
+
+
+async def test_a_daemon_that_never_failed_says_nothing(folder, clock):
+    done = asyncio.Event()
+
+    async def calm(kernel: Kernel) -> None:
+        await clock.sleep(600)
+        done.set()
+
+    kernel = open_with(folder, clock, Daemon("flaky", calm))
+    task = asyncio.create_task(kernel.supervise())
+    await clock.slept_until(clock.now() + 600)
+    clock.advance(600)
+    await done.wait()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    events = said(kernel)
+    kernel.close()
+
+    assert events == []
