@@ -40,7 +40,8 @@ off.
 - If more than one write in ten were refused for a citation on real models, the default would go back to the owner. The live runs
   below refused none; two runs measure no rate.
 - Citing moves credit along declared edges, so a trained policy may learn to cite nothing, or agents to cite each other in rings:
-  a declared edge never feeds a reward alone, without exposure beside it.
+  an estimator that reads declared edges should read exposure beside them. Credit is an annotation, no estimator ships, and
+  eligibility and attribution are milestone 3's, so nothing here enforces it.
 
 ## Evidence
 

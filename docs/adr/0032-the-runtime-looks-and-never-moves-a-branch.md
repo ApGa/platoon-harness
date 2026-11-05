@@ -1,7 +1,8 @@
 # 0032. The runtime looks and never moves a branch
 
 **Status:** Accepted, 2026-11-04. Superseded in part by [0038](0038-provenance-is-answered-from-the-record.md): a commit's and a
-rewrite's record name no `cause`, as the turn end that prompted a look did not cause what git holds.
+rewrite's record name no `cause`, as the turn end that prompted a look did not cause what git holds. Extended by
+[0041](0041-a-commit-cites-what-informed-it-by-its-ref.md): an `Informed-By` value can cite an event of the session.
 
 ## Context
 

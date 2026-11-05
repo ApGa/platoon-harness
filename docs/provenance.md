@@ -40,8 +40,9 @@ When what you write rests on something you read, put its `ref` in `based_on`.
 That line, the template's `{citing}` slot, is the one place an agent is asked: a tool's description says what `based_on` is and
 never asks. It costs 78 bytes in every request of such an agent, 20 tokens by Qwen3's tokenizer, and a refused write and its retry
 for each citation that names nothing or no lines of its event. A team that copies the default and leaves the slot out asks nothing,
-and its agents' citations are still checked and kept. On real models asked this way, every citation named something its citer had
-been shown, and none was refused; [STATUS.md](STATUS.md) keeps the runs.
+and its agents' citations are still checked and kept. In two live runs, one on each of Claude Code and Codex, each of the two
+citations made named something its citer had been shown, and none was refused; two runs measure no rate, and
+[STATUS.md](STATUS.md) keeps them.
 
 ## Asking the record
 

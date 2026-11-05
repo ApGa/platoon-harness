@@ -1,6 +1,7 @@
 # 0037. An offer is confirmed only by its harness, and the record claims nothing more than it holds
 
-**Status:** Accepted, 2026-11-05
+**Status:** Accepted, 2026-11-05. Extended by [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md): pi's
+shim passes pi's own tool call id, so a read through pi is confirmed by its tool item.
 
 ## Context
 

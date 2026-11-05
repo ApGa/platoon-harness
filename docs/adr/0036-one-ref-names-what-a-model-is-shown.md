@@ -1,6 +1,7 @@
 # 0036. One ref names what a model is shown, and a citation is checked and kept as a claim
 
-**Status:** Accepted, 2026-11-04
+**Status:** Accepted, 2026-11-04. Extended by [0042](0042-agents-are-asked-to-cite-by-their-template.md): the `{citing}` slot
+asks agents to cite, and by [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md): a commit cites an event by its ref.
 
 ## Context
 

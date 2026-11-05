@@ -1,6 +1,7 @@
 # 0038. Provenance is answered from the record, one hop at a time, and never as credit
 
-**Status:** Accepted, 2026-11-05
+**Status:** Accepted, 2026-11-05. Extended by [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md): a commit's
+`Informed-By` cites an event its maker could read, and an unresolved value says why.
 
 ## Context
 
