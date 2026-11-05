@@ -63,7 +63,10 @@ def test_every_primitive_op_is_in_the_table():
 
 
 def test_every_public_primitive_name_is_written_down():
-    recorded = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+    recorded = [
+        line.partition("(")[0].partition("[")[0]
+        for line in (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+    ]
     prefix = "platoon_harness.primitives."
 
     assert {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)} == set(primitives.__all__)

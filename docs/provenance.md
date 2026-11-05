@@ -136,6 +136,14 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
+The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@1`, and it is a heuristic, run only when someone runs it.
+It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
+`retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
+and its citations, an agent's only where its exposure says `seen`, never along an offer. It writes one local `credit` row per agent it
+reached, on that agent's first `agent.started`, and none for an agent it never reached, which stays unscored. Citing gives away all
+but `retained` of what reaches the citer, and work nobody cites earns nothing from it, so training on it pulls against the default
+template's request to cite. [training.md](training.md) shows it run.
+
 ## What can train
 
 `eligibility` says whether an agent's work in one episode can train, from the record alone, and what trains is the training

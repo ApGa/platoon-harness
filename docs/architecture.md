@@ -1413,9 +1413,10 @@ its `model.called`. `head_seq` names the exact trace, at or below which the targ
 `annotate` command write one, checked against the journal, with no runtime and no lock but the file's own, on a live session or a
 closed one, and `Session.annotations` reads them: the one way in and out. The file keeps a write-ahead log, so a reader never holds
 a writer up, and finds statements by target through an index. The same statement again is answered with the first, and another under the same key is refused
-`conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and the SDK makes no
-estimate of its own: credit is an annotation by a named producer, never a fact, and a client shows a value only with its producer and
-version, beside any other estimate of the same target, never summed. See
+`conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and nothing in the
+runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@1`, a heuristic run
+only when someone runs it (§14), and a client shows a value only with its producer and version, beside any other estimate of the
+same target, never summed. See
 [ADR 0038](adr/0038-provenance-is-answered-from-the-record.md), [ADR 0039](adr/0039-estimators-write-beside-the-journal-at-m2.md)
 and [ADR 0052](adr/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
 
@@ -1701,8 +1702,21 @@ class AgentOutcome(Model):
 - **Model access is one value.** Variables by name reach the harness's environment: under `LocalAuthority`, which issues
   session-scoped identity and leaves the harness's own auth alone, a role's auth profile names them, and with none the harness signs
   itself in. A `Gateway` goes only to a driver that declares `sealed` (§9.2), its model is the one pinned, and its login is
-  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does, and a harness's words are masked of the
-  bearer in every form, as of any access value.
+  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does: an origin with a path, or a tools URL
+  that holds the bearer, is refused, and a harness's words are masked of the bearer in every form, as of any access value.
+- **A gateway admission launches sealed.** The harness runs on the gateway's model under its bearer with nothing of the user's: none
+  of their settings, extensions, skills or project instructions, no tool of its own that acts, no native agents and no retries, and
+  its compaction on. Our tools and the environment's reach it, the environment's as a second MCP server, `environment`, at
+  `Gateway.tools` under the same bearer. The bearer goes only by environment, as `PLATOON_HARNESS_BEARER`, and a file a launch
+  writes names it as `${PLATOON_HARNESS_BEARER}`: the agent's folder lies inside the session's, which is its export, and a cut
+  rollout's stop may never run. A wire frame names the variable, with the gateway's origin, model, tools and compaction headers in
+  the clear. ScriptedDriver, wire programs that declare it, pi and OpenHands launch sealed (§9.5), and two checks in the one kept
+  result earn it (§9.3).
+- **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
+  compact a context, and reports that call as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's
+  `Compact` step, a wire program from its launch spec, OpenHands' condenser, and pi through our extension, which runs pi's own
+  `compact`, one or two calls, each with the headers and its id kept. A gateway that counts a budget does so as calls arrive, so
+  only a label a call carries keeps it out, and a call whose purpose is unknown never trains.
 - **Finish** tells the authority how an agent ended, with its report. A stop that a crash cut is said again by the next runtime, so
   `finish` takes a second telling as the first.
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
@@ -1717,11 +1731,25 @@ class AgentOutcome(Model):
   each role's driver: a sealed launch, and a result kept under the root that proves trainable for the harness it would run, naming
   `doctor --check` where it ships. `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so
   no plan login is theirs.
-- **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11), and rewards are
-  annotations of five statuses on the targets §11 names, written after the session has ended, so no context a policy could see
-  held one.
-- **Afterwards.** A session whose admit results name the backend's ids is never resumed, as its keys went with its authority (§4):
-  it is read as history, which estimators write annotations beside.
+- **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11): a call is
+  eligible for its turn's purpose or for `compaction`, and for no other. What trains is the training system's to decide.
+- **Rewards and credit are annotations,** of five statuses on the targets §11 names, written after the session has ended, so no
+  context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named
+  by `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,
+  `platoon_harness.credit.propagate`, `propagate@1`, a heuristic: it splits an episode's one team reward over the refs the episode
+  closed on, and each event it reaches keeps `retained` of what reached it for its maker and passes the rest equally along its
+  causes, ancestry and citations, an agent's only where exposure says Seen, newest first and at most 4,096 events, writing one local
+  `credit` row per agent it reached, on its first `agent.started`. An agent it never reached has no row, a team reward not scored
+  passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all but `retained` of what reaches the
+  citer, and work nobody cites earns nothing from it. See [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
+- **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
+  no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session whose
+  admit results name the backend's ids is never resumed, as its keys went with its authority (§4).
+- **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
+  of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority admitting
+  each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to `Team.recipients()`, a
+  compaction, `settled`, retirement, the close on each report, eligibility `exact` from a kept result, a reward of each status, and
+  `propagate@1`'s rows. See [ADR 0053](adr/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|

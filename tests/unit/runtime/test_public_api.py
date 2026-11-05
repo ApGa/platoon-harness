@@ -1,16 +1,20 @@
 """The public names of the runtime and the facade are written down, and a runtime keeps nothing global."""
 
 import ast
+import importlib
+import inspect
 from pathlib import Path
+from typing import Any, get_args
 
 import pytest
 
 import platoon_harness
-from platoon_harness import annotations, runtime, session
+from platoon_harness import annotations, credit, runtime, session
 from platoon_harness.runtime import authority, control, git, host, looks, opening, paths, recovery, workspaces
 
 MODULES = {
     "annotations": annotations,
+    "credit": credit,
     "session": session,
     "runtime": runtime,
     "runtime.authority": authority,
@@ -23,7 +27,8 @@ MODULES = {
     "runtime.recovery": recovery,
     "runtime.workspaces": workspaces,
 }
-RECORDED = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+WRITTEN = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+RECORDED = [line.partition("(")[0].partition("[")[0] for line in WRITTEN]
 RUNTIME = Path(runtime.__file__).parent
 
 
@@ -57,3 +62,49 @@ def test_a_runtime_keeps_nothing_at_module_level_that_could_change():
 
     for path in RUNTIME.rglob("*.py"):
         assert not [node.lineno for node in ast.parse(path.read_text()).body if mutable(node)], path.name
+
+
+def resolved(dotted: str) -> Any:
+    """What a dotted name names: the longest module it begins with, then each attribute."""
+    parts = dotted.split(".")
+    for cut in range(len(parts), 0, -1):
+        try:
+            found = importlib.import_module(".".join(parts[:cut]))
+        except ImportError:
+            continue
+        for part in parts[cut:]:
+            found = getattr(found, part)
+        return found
+    raise AssertionError(f"{dotted} names nothing")
+
+
+def signature_of(thing: Any) -> str:
+    """A callable's parameters as the list writes them: each name, `*` before the first keyword-only one, and neither
+    `self` nor `cls`."""
+    shown, starred = [], False
+    for parameter in inspect.signature(thing).parameters.values():
+        if parameter.name in ("self", "cls"):
+            continue
+        if parameter.kind is parameter.VAR_POSITIONAL:
+            shown.append(f"*{parameter.name}")
+            starred = True
+        elif parameter.kind is parameter.VAR_KEYWORD:
+            shown.append(f"**{parameter.name}")
+        elif parameter.kind is parameter.KEYWORD_ONLY and not starred:
+            shown += ["*", parameter.name]
+            starred = True
+        else:
+            shown.append(parameter.name)
+    return f"({','.join(shown)})"
+
+
+@pytest.mark.parametrize("line", [line for line in WRITTEN if line.endswith((")", "]"))])
+def test_every_recorded_signature_is_the_one_it_has(line):
+    """A member, as `name(parameters)`, and a closed set of words, as `name[words]`, are written down whole, so a
+    change to either changes the list."""
+    if line.endswith("]"):
+        name, _, words = line[:-1].partition("[")
+        assert ",".join(get_args(resolved(name))) == words
+    else:
+        name, _, _ = line.partition("(")
+        assert f"{name}{signature_of(resolved(name))}" == line

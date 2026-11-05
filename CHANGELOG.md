@@ -23,6 +23,14 @@
 - Two conformance checks of a sealed launch, `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`, kept in
   the one result per driver, which `trainable` now stands on; `check_driver(kept=)` names the tools of a harness's own that a sealed
   launch keeps, each acting on nothing, as OpenHands' `finish` and `think`. See ADR 0053.
+- `platoon_harness.credit.propagate`, `propagate@1`, a heuristic producer in the one producer signature, `produce(session, episode,
+  *, judge, **params)`, which splits an episode's one team reward back along causes, ancestry and seen citations, each maker keeping
+  `retained`, and writes one local `credit` row per agent it reached, on its first `agent.started`. `primitives.WALK_LIMIT` names the
+  4,096 events a walk reaches. See ADR 0054.
+- The hand-off contract, `test_a_managed_session_runs_as_a_training_authority_drives_it`, on ScriptedDriver in the fast pass and on pi
+  and OpenHands in the slow pass. `tests/public_api.txt` now writes each frozen member's parameters, as `name(parameters)`, and a
+  closed set of words, as `name[words]`, which a test holds to the code.
+
 - `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
   closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR

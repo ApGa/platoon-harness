@@ -44,6 +44,7 @@ from .eligibility import Attribution, Bar, CallEligibility, Eligibility
 from .exposures import Exposures
 from .messages import Cursor, Deliveries, Entry
 from .provenance import (
+    WALK_LIMIT,
     Calls,
     Contributors,
     Exposure,
@@ -167,6 +168,7 @@ __all__ = [
     "REPORTS",
     "SHORT_LIMIT",
     "WAKING",
+    "WALK_LIMIT",
     "Agent",
     "Agents",
     "Approval",

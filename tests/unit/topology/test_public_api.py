@@ -11,9 +11,13 @@ MODULES = {"topology": topology, "team": team, "config": config, "extensions": e
 
 @pytest.mark.parametrize("name", MODULES)
 def test_public_names_match_the_list(name):
-    recorded = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+    recorded = [
+        line.partition("(")[0].partition("[")[0]
+        for line in (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+    ]
     prefix = f"platoon_harness.{name}."
-    assert {line.removeprefix(prefix) for line in recorded if line.startswith(prefix)} == set(MODULES[name].__all__)
+    listed = {line.removeprefix(prefix) for line in recorded if line.startswith(prefix)}
+    assert {line for line in listed if "." not in line} == set(MODULES[name].__all__)
 
 
 @pytest.mark.parametrize("name", MODULES)

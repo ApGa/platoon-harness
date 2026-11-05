@@ -91,15 +91,78 @@ conformance store gone:
 
 [provenance.md](provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
 
-## Rewards
+## What a sealed launch is
+
+A gateway goes only to a driver that declares `sealed`, and that driver launches its harness on the gateway's model with nothing of
+the user's: no settings, extensions, skills or project instructions of theirs, no tool of the harness's own that acts, no native
+agents and no retries. ScriptedDriver, pi, OpenHands and a wire program that declares it launch sealed; Claude Code, Codex, `exec`
+and ACP do not, and a gateway admission to one fails, naming why.
+
+- **The bearer goes only by environment,** under `PLATOON_HARNESS_BEARER`. A file the launch writes names the variable, as
+  `${PLATOON_HARNESS_BEARER}`, never its value, so the session folder, which is your export, holds no key. A wire program finds the
+  variable's name in its launch frame, beside your origin, model, tools and compaction headers.
+- **Your environment's tools are a second MCP server,** named `environment`, at `Gateway.tools`, under the same bearer, beside the
+  session's own tools.
+- **Compaction stays on, and each compaction call carries your `compaction_headers`,** so your gateway tells it apart as it arrives
+  and can keep it out of a step budget. The harness reports each such call as `model.call` of purpose `compaction`, with the id
+  your model gave it: ScriptedDriver's `Compact` step, OpenHands' condenser, a wire program from its launch spec, and pi through
+  the extension our driver loads, which runs pi's own `compact`, one call or two for a split turn, each with the headers and its id.
+  Pi compacts when your gateway refuses a request as longer than its window, in its dialect's own words, and retries it once.
+- **A sealed launch is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance` for a driver it ships
+  no check of, runs `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request` beside the rest, on `FakeModel`
+  acting as a gateway, and keeps them in the one result an agent's levels read.
+
+## Rewards and credit
 
 Every reward and credit is an annotation, written through `Session.annotate` once the session has ended, on the session attached
 with no runtime, so no context a policy could see held one. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`, a
 value is given when it is `scored` alone, and a target with no statement is unscored. A team's reward targets the episode's
 `episode.closed`, and an agent's its first `agent.started`.
 
-## Not yet
+A producer writes what it estimates of one episode, and is one function, named by `module:attr`:
 
-The drivers' sealed launches, the environment's tools as a second MCP server, compaction sent with your headers and reported with
-its id, the testing kit's gateway on `FakeModel`, the shipped producer `propagate@1` and the contract test are still to land, and
-[STATUS.md](STATUS.md) says which have.
+```python
+async def produce(session: Session, episode: str, *, judge: Gateway | None, **params) -> None: ...
+```
+
+`judge` is model access for a producer that asks a model, or None. The SDK ships one, `platoon_harness.credit:propagate`,
+`propagate@1`, a heuristic:
+
+```python
+from platoon_harness.credit import propagate
+
+async with Session.attach(rollout_id) as ended:
+    await propagate(ended, "task", judge=None, retained=0.5)
+```
+
+It reads the one team reward on the episode's close, and splits it over the refs the episode closed on. Each event it reaches keeps
+`retained` of what reached it for its maker, and the rest goes equally along the event's causes, its previous version or a commit's
+parents, and its citations, an agent's only where its exposure says Seen. It walks newest first, at most 4,096 events, and writes one
+local `credit` row per agent it reached, on that agent's first `agent.started`, under the producer `platoon_harness.credit:propagate`.
+An agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a walk
+cut short makes every row `invalid`. What reached the events of no agent is the reward less the rows.
+
+Its incentive: citing gives away all but `retained` of what reaches the citer, and work nobody cites earns nothing from it. The
+default template asks every agent to cite, so training under it pulls against that request: watch the citation rate. Rows like
+these are fractions of the team reward, so a training system centres them per role, as Platoon's keyed credit does at a group size
+above one.
+
+## The export
+
+The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside its
+journal. It holds no key, as bearers lived only in the harnesses' environments. Read it with `Session.attach` once its runtime has
+stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy.
+
+## Testing without a training system
+
+`platoon_harness.testing` is what a training system's own tests build on:
+
+- **`FakeModel` acts as your gateway.** `model.gateway(bearer)` gives a `Gateway` to its models, at its origin, and to an MCP
+  server of one tool, `environment_ping`, at `/mcp`, which answers only a bearer it gave, with compaction headers of its own. It
+  logs every request with its bearer and headers, gives each response an id in its body, and answers an `Overflow` in its script
+  with each dialect's own refusal of a request too long for the model's window.
+- **`ScriptedDriver` launches sealed** with no binary: its tool calls are real MCP, its `AskModel` step a real model call, and its
+  `Compact` step a compaction call with the headers.
+- **The contract test,** `test_a_managed_session_runs_as_a_training_authority_drives_it` in this repository's
+  `tests/integration/test_contract.py`, runs your whole use of the SDK with no training system behind it, on ScriptedDriver and, in
+  the slow pass, on pi and OpenHands.

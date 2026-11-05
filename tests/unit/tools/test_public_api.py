@@ -6,7 +6,10 @@ import pytest
 
 from platoon_harness import http, tools
 
-RECORDED = (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+RECORDED = [
+    line.partition("(")[0].partition("[")[0]
+    for line in (Path(__file__).parents[2] / "public_api.txt").read_text().split()
+]
 
 
 @pytest.mark.parametrize("module", [tools, http], ids=lambda module: module.__name__)
