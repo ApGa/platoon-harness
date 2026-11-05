@@ -795,15 +795,17 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   that exits on its own puts its agent to rest once, below. One that cannot come back ends its agent `lost`, or `failed` if it never
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
   its turn: `finished` if that turn `stopped`, and `failed` otherwise.
-- **Rest: an agent's process is not its identity.** An agent between turns for ten minutes on the session's clock, with no setting,
+- **Rest: an agent's process is not its identity.** Any agent between turns for ten minutes on the session's clock, with no setting,
   rests, when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a `rest` effect ends its
   process tree, and its next handover brings its harness back first, on its native session, or anew where it took no turn, on a fresh
   credential and offering nothing, as a resume after a crash does, so its identity, cursors, waits and instructions stay as they stood.
   No agent rests while it is held, has a goal not begun or a finish to come, or its session accepts no work. A harness that exits
   on its own rests its agent too, at once, while its session accepts work: a turn it was in is lost, with `crash_window` naming where
-  that turn began, and the agent is told so, as a resume tells a turn a crash cut off, which wakes it. A second exit with no turn of
-  its ended since the first ends its agent `lost`, saying so, and so does a harness that could not come back, after six handovers
-  fail. A runtime start leaves a resting agent to its next handover. See
+  that turn began, and the agent is told so, as a resume tells a turn a crash cut off, which wakes it; an exit tells nothing else, but
+  a goal not begun that its inbox does not hold already. A second exit with no turn of its ended since the first ends its agent `lost`,
+  saying so, and a harness its handover brings back that exits before it is ready has exited so. One that could not come back for
+  another reason is lost after six handovers fail. A runtime start leaves a resting agent to its next handover, and the roster says an
+  agent is `resting`. See
   [ADR 0045](adr/0045-an-agent-s-process-is-not-its-identity.md).
 - **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
@@ -1476,7 +1478,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 
 | View | Row | Answers |
 |---|---|---|
-| `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, login, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
+| `roster` | `agent, role, harness, model, parent, state, resting, group, activity, stopped, held_by, why, unread, levels, login, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict`, `daemon` |
 | `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, dropped`, `recorded` being the seq that recorded it, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
 

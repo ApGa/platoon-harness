@@ -371,6 +371,11 @@ class Deliveries(View):
         ).fetchone()
         return Cursor() if row is None else Cursor(*row[:3], bool(row["closed"]), row["shown"])
 
+    def holds(self, stream: str, ref: str) -> bool:
+        """Whether an entry on `stream` is shown by `ref`."""
+        found = self.db.execute("SELECT 1 FROM v_deliveries WHERE ref = ? AND stream = ? LIMIT 1", (ref, stream))
+        return found.fetchone() is not None
+
     def handed(self, reader: str, stream: str) -> tuple[int, list[Entry]]:
         """What the offer that last moved a reader's cursor on `stream` handed over there, and the cursor before it,
         unless that offer was a read of the reader's own, which showed what it gave."""

@@ -694,6 +694,9 @@ class Host:
             case Exited() if link.leaving:
                 return
             case Exited(reason=reason) if not link.ready.is_set():
+                record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": link.agent}).result[0]
+                if record["resting"]:  # Brought back from rest by a handover, it ended on its own once more.
+                    await self.insist("agent.rest", {"agent": link.agent, "exited": reason})
                 link.refuse(reason)  # Nobody has heard of this harness, so `connect` fails, which says so.
                 return
             case Exited(reason=reason):  # It ended on its own, which `agent.rest` forgives once.

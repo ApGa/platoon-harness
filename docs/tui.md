@@ -59,7 +59,7 @@ quits. In a form, Enter goes to the next field, and from the last sends it.
 | Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
-| Inspector, `/inspector` | Why an agent waits, its harness, model and levels, its workspace, with its branch, the commit it started from and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
+| Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions. A conflict has none, and says where to resolve it |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
 

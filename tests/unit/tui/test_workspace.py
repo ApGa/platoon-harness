@@ -12,6 +12,7 @@ from rich.cells import cell_len
 from textual.strip import Strip
 
 from platoon_harness import Session, Team
+from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives import delivery
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
@@ -23,7 +24,7 @@ from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock
 
-from ..runtime.support import harness, in_state, of_type, until
+from ..runtime.support import SECONDS, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
 from .support import at_once, drawn, workspace
 
@@ -544,6 +545,20 @@ async def test_the_inspector_says_why_an_agent_waits_what_it_runs_on_and_what_it
             "operational unverified",
         ):
             assert said in text
+
+
+async def test_the_inspector_says_an_agent_rests_while_its_harness_has_no_process(root):
+    """Ten minutes between turns end a harness's process, and the agent in view says so, and what brings it back."""
+    clock = ManualClock(1000.0)
+    async with Session.start(team(), name="s", root=root, cwd=root, clock=clock) as owner:
+        await in_state(owner, "lead", "idle")
+        await asyncio.wait_for(clock.slept_until(1600.0), SECONDS)
+        clock.advance(600)
+        await until(lambda: of_type(owner, "effect.finished"), owner, lambda done: done[-1].data["kind"] == "rest")
+        async with TerminalUI("s").run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "@lead" in text)
+            await pilot.press("f2")
+            await drawn(pilot, lambda text: "resting: its harness has no process," in text)
 
 
 async def test_showing_another_focus_draws_only_its_lines(root):

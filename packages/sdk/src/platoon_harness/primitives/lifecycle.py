@@ -529,7 +529,7 @@ class Start(Args):
 def start(txn: Txn, a: Start) -> None:
     """Record that a harness is up, with what its driver declared, what the runtime verified of it, the conformance
     result its levels were computed from, as a body, or None for none that speaks for it, and those levels. A report
-    these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
+    cannot carry these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
     agent = _live(txn, a.agent)
     if (agent.state != "spawning") != a.resumed:
         raise Refused("conflict", f"{agent.name} has started" if not a.resumed else f"{agent.name} has not started")
@@ -594,8 +594,8 @@ def _digest(body: str) -> str:
 @op("agent.retell", on=lambda a: f"agent/{a.agent}", runtime=True)
 def retell(txn: Txn, a: Named) -> None:
     """Tell a resumed harness what it has no way to know, as a delivery, since a resume starts no turn of its own: the
-    goal it never began, or that its last turn was cut off. With neither there is nothing to say, and one that has ended
-    since is left alone."""
+    goal it never began, unless it waits in its inbox already, or that its last turn was cut off. With neither there is
+    nothing to say, and one that has ended since is left alone."""
     _retell(txn, a.agent)
 
 
@@ -603,8 +603,10 @@ def _retell(txn: Txn, name: str) -> None:
     agent = txn.view(Agents).get(name)
     if agent is None or agent.ended:
         return
-    inbox = f"inbox/{agent.name}"
-    if agent.unbegun:  # The goal is the spawn's, and is shown by its ref.
+    inbox, spawn = f"inbox/{agent.name}", f"agent/{agent.name}@1"
+    if agent.unbegun:  # The goal is the spawn's, shown by its ref, and one retold already waits, as no turn began.
+        if txn.view(Deliveries).holds(inbox, spawn):
+            return
         post(
             txn,
             inbox,
@@ -633,8 +635,9 @@ def _comes_back(txn: Txn, agent: Agent) -> bool:
 def rest(txn: Txn, a: Rest) -> None:
     """Put an agent's harness to rest: its process ends, and its next handover brings it back, natively. The courier
     asks once the agent has been between turns ten minutes, and an agent no longer so is left alone. With `exited`, its
-    harness ended on its own, which cuts off any turn it was in and tells it so, and a second exit before a turn of its
-    ends, or one with nothing to come back to, ends its agent as an exit does."""
+    harness ended on its own, which cuts off any turn it was in and tells it so, or retells a goal it had not begun, as
+    it told nothing else, and a second exit before a turn of its ends, or one with nothing to come back to, ends its
+    agent as an exit does."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None or agent.ended:
         return
@@ -651,7 +654,8 @@ def rest(txn: Txn, a: Rest) -> None:
         record_gap(txn, name, "crash_window")
         txn.emit("turn.lost", f"turn/{name}", gist=f"turn {turn} lost"[:GIST_LIMIT], agent=name, v=2)
     txn.effect("rest", {"agent": name, "exited": a.exited}, on_uncertain="retry", agent=name)
-    _retell(txn, name)
+    if turn is not None or agent.unbegun:
+        _retell(txn, name)
 
 
 def _exited(txn: Txn, agent: Agent, reason: str) -> None:

@@ -2782,6 +2782,27 @@ async def test_a_harness_that_exits_on_its_own_in_a_turn_cuts_it_off_and_rests_o
     assert state_of(kernel, "bob")["state"] == "idle"
 
 
+async def test_an_exit_tells_only_what_it_cut_off_and_a_goal_once(kernel):
+    """An exit between turns cut nothing, so it tells nothing; one before a goal began retells the goal, unless the goal
+    already waits in the inbox, as a retell after a resume left it."""
+    await resumable(kernel, "ann")
+    await start_turn(kernel, "ann")
+    await end_turn(kernel, "ann")
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "ann", "exited": "killed by signal 9"}))
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "bob", "child_role": "worker", "goal": "go"}))
+    await settle_effects(kernel, "bob")
+    declared = {"persistent": True, "resume": True, "boundaries": ["turn"]}
+    ready = {"agent": "bob", "ready": {"native": "native-bob"}, "declared": declared}
+    result_of(await kernel.submit(kernel.runtime, "agent.start", ready))
+    result_of(await kernel.submit(kernel.runtime, "agent.retell", {"agent": "bob"}))
+
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "bob", "exited": "killed by signal 9"}))
+
+    told = [(event.stream, event.data["carries"]) for event in of_type(kernel, "message.sent")]
+    assert told == [("inbox/bob", "agent/bob@1")]
+    assert [event.agent for event in rests(kernel)] == ["ann", "bob"]
+
+
 async def test_a_second_exit_before_a_turn_ends_loses_the_agent_and_a_turn_that_ends_forgives_one(kernel):
     await resumable(kernel)
     exited = {"agent": "bob", "exited": "killed by signal 9"}

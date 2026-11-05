@@ -1,9 +1,10 @@
 """An agent's process is not its identity, on real models and native logins, through the public `Session`. Set
 `PLATOON_HARNESS_LIVE=1` to run these, and say what ran.
 
-Budget: at most 30 model calls in all, each test stating its own, all `claude-haiku-5-5` or `gpt-6-luna` at low effort:
-10 for each harness's idle agent that rests and comes back, and 5 for each one whose harness is killed alone. Every
-session has a `Budget` of turns, and none of time, as the first test moves the session's clock ten minutes.
+Budget: at most 33 model calls in all, each test stating its own, all `claude-haiku-5-5` or `gpt-6-luna` at low effort:
+10 for each harness's idle agent that rests and comes back, 5 for each one whose harness is killed alone, and 3 for
+Claude Code killed as its first turn begins. Every session has a `Budget` of turns, and none of time, as the first test
+moves the session's clock ten minutes.
 """
 
 import asyncio
@@ -111,3 +112,45 @@ async def test_a_harness_killed_alone_in_a_turn_is_resumed_once_and_told_its_tur
     assert rests == ["killed by signal 9"] and ending.agents[0]["state"] == "idle"
     assert told[-1].startswith("Your last turn was cut off by a crash.")
     assert used["total"] <= 5
+
+
+async def ended_or_answered(session: Session) -> list:
+    """The journal once the agent has ended or a turn of its has."""
+    async with asyncio.timeout(75.0):
+        async for _ in session._moves():
+            events = await journal(session)
+            if any(event.type in ("agent.ended", "turn.ended") for event in events):
+                return events
+    raise AssertionError("the session ended first")
+
+
+async def test_claude_code_killed_as_its_first_turn_begins_comes_back_or_is_lost_at_once(tmp_path):
+    """Budget: at most 3 model calls, counted from the journal. Killed as its first turn begins, Claude Code has often
+    written no conversation to reopen, as run 76 found, so its relaunch exits before it is ready: its second exit, which
+    loses the agent there, saying why, and no handover is tried again. One that had written it comes back on it."""
+    work, root = tmp_path / "work", tmp_path / "root"
+    work.mkdir()
+    team = Team(roles={"ada": ROLES["claude"]}, budget=LIMIT)
+
+    try:
+        async with Session.start(team, name="first", root=root, cwd=work, plan_login=True) as session:
+            await in_state(session, "ada", "idle")
+            await session.send("@ada", REMEMBER)
+            await seen(session, "turn.started")
+            os.kill(harness_of(session), signal.SIGKILL)
+            events = await ended_or_answered(session)
+            used = await spent(session)
+            print("claude:", used)
+            print(
+                "claude: ended",
+                [(event.data["status"], event.data["reason"]) for event in events if event.type == "agent.ended"],
+            )
+    finally:
+        print("claude: left behind", end_what_is_left(work))
+
+    ended = [event.data for event in events if event.type == "agent.ended"]
+    failed = [event for event in events if event.type == "effect.failed" and event.data["kind"] == "deliver"]
+    again = "its harness exited again before a turn of its ended: "
+    assert ended == [] or (ended[0]["status"] == "lost" and ended[0]["reason"].startswith(again)), ended
+    assert len(failed) <= 1
+    assert used["total"] <= 3

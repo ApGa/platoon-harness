@@ -613,6 +613,20 @@ async def test_a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(tmp_pat
         await clients.a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(team, tmp_path, model)
 
 
+async def test_a_tool_a_harness_killed_alone_left_ends_with_its_rest(tmp_path, monkeypatch):
+    shell = ToolCall(BASH, {"command": clients.LEFT.format(pipe=tmp_path / "tool"), "description": "a long job"})
+    async with FakeModel("noted", shell, "checked") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await clients.a_tool_a_harness_killed_alone_left_ends_with_its_rest(team, tmp_path)
+
+
+async def test_a_harness_killed_in_its_first_turn_comes_back_or_is_lost_at_once(tmp_path, monkeypatch):
+    """Claude Code killed in its first turn has often written no conversation to reopen yet."""
+    async with FakeModel(HELD, "checked") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.a_harness_killed_in_its_first_turn_comes_back_or_is_lost_at_once(team, tmp_path, model)
+
+
 async def test_a_harness_killed_alone_twice_before_a_turn_ends_is_lost(tmp_path, monkeypatch):
     async with FakeModel("noted", HELD, HELD) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)

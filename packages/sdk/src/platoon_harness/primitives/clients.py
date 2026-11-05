@@ -416,6 +416,7 @@ def _roster(txn: Txn) -> list[dict[str, Any]]:
                 "model": agent.model,
                 "parent": agent.parent and name_of(agent.parent),
                 "state": agent.state,
+                "resting": agent.resting,
                 "group": _group(agent, said, needing),
                 "activity": agent.activity,
                 "stopped": agent.stopped,

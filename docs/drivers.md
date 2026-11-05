@@ -36,7 +36,9 @@ method promises:
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
   for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. It also
-  starts a resting agent's harness again this way, after ten minutes between turns ended its process. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
+  starts a resting agent's harness again this way, after ten minutes between turns ended its process. A harness that exits before
+  it is ready then, as one asked to reopen a session it never wrote down does, has exited on its own a second time, and its agent
+  is lost. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of

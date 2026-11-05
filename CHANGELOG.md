@@ -14,12 +14,15 @@
   reads it again, in the words of its surface, unless that offer was a read of its own: a wake moves the cursor past what it
   hands over, so a read right after found nothing, and a Codex model took that for an empty channel. `Deliveries` is at view
   version 12, keeping the offer that last moved each cursor. See ADR 0047.
-- An agent's process is not its identity. An agent between turns for ten minutes on the session's clock, with no setting, rests
+- An agent's process is not its identity. Any agent between turns for ten minutes on the session's clock, with no setting, rests
   when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a runtime-only op, a `rest`
   effect ends its process tree, and its next handover brings its harness back first, natively, or anew where it took no turn, on a
   fresh credential and offering nothing, as a resume after a crash does. A held agent, one with a goal not begun or a finish to come,
-  never rests, and a runtime start leaves a resting agent to its handover. `delivery.ready` lists the agents to put to rest, and
-  `Agents`, at view version 13, keeps `idle_since`, `resting` and `exits`. See ADR 0045.
+  never rests, and a runtime start leaves a resting agent to its handover. A harness that exits on its own rests its agent once,
+  its turn cut off and told, an exit telling nothing else but a goal not begun that waits nowhere already, and a second exit before a
+  turn of its ends loses the agent, a harness brought back from rest that exits before it is ready among them. `delivery.ready`
+  lists the agents to put to rest, `Agents`, at view version 13, keeps `idle_since`, `resting` and `exits`, the roster carries
+  `resting`, and the terminal's inspector says an agent rests and what brings it back. See ADR 0045.
 - A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the
   SDK ships a check of that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
   `platoon_harness.testing`, and keeps the result under the root, `conformance/<driver>.json`, which `write_conformance` and
@@ -322,8 +325,9 @@
 - A harness that exits on its own rests its agent once instead of ending it: a turn it was in is lost, with `crash_window` naming
   where that turn began, its agent is told its turn was cut off, which wakes it at once, and the `rest` effect ends what the harness
   left. A second exit before a turn of its ends, an exit while the session accepts no work, or of a harness that cannot resume,
-  ends its agent `lost` as before, the second saying so. `Host.resume` brings an agent's harness back, for recovery and for a
-  handover alike. See ADR 0045.
+  ends its agent `lost` as before, the second saying so, and a harness brought back from rest that exits before it is ready has
+  exited so, rather than failing six handovers. `Host.resume` brings an agent's harness back, for recovery and for a handover alike.
+  See ADR 0045.
 - A result kept by `check_driver` is pinned to the class that implements the driver, the SDK and the host as well as the driver's
   name and the harness version, so a result made before, which names none of them, no longer reads, and `doctor --check` makes one
   again. `Profile` takes `implementation`. See ADR 0044.

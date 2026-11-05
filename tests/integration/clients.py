@@ -3,6 +3,7 @@ FakeModel. Each scenario takes a team whose one role, `bob`, runs that binary, a
 its own."""
 
 import asyncio
+import contextlib
 import os
 import signal
 from collections.abc import AsyncIterator
@@ -20,7 +21,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.transcript import Focus, Transcript
 
-from ..unit.runtime.support import in_state, of_type, until
+from ..unit.runtime.support import in_state, journal, of_type, until
 from ..unit.tui.support import drawn, workspace
 from .scripts import over
 
@@ -28,6 +29,8 @@ TIMEOUT = 60.0
 SPAWN = {"name": "w", "child_role": "bob"}
 SAID = "every word of this comes live before it is an item"
 LIMIT = Budget(tokens=1_000_000, estimate={"tokens": 100_000})
+LEFT = "exec 3>{pipe}; echo $$ >&3; exec sleep 600"
+"""A shell tool that says its pid down the named pipe `pipe` and runs on, holding the pipe open."""
 
 
 async def followed(frames: AsyncIterator[Delta]) -> tuple[str, int]:
@@ -170,6 +173,58 @@ async def a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(team: Team, 
     assert len(lost) == 1 and [gap.data["what"] for gap in gaps] == ["crash_window"]
     assert exited == ["killed by signal 9"] and ending.agents[0]["status"] is None
     assert model.calls[-1].says("Your last turn was cut off by a crash.")
+
+
+@contextlib.asynccontextmanager
+async def named_pipe(path: Path) -> AsyncIterator[asyncio.StreamReader]:
+    """A pipe a shell can write to by name."""
+    os.mkfifo(path)
+    reader = asyncio.StreamReader()
+    pipe = os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb", 0)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), pipe
+    )
+    try:
+        yield reader
+    finally:
+        transport.close()
+
+
+async def a_tool_a_harness_killed_alone_left_ends_with_its_rest(team: Team, root: Path):
+    """`kill -9` of the harness alone while its shell tool runs `LEFT`, at `root / "tool"`, leaves the tool running, and
+    the `rest` effect ends what the harness left, so the tool is gone by the time it finishes."""
+    async with named_pipe(root / "tool") as tool, Session.start(team, root=root, cwd=root) as session:
+        await in_a_second_turn(session)
+        pid = int(await asyncio.wait_for(tool.readline(), TIMEOUT))
+        os.kill(harness_pid(session), signal.SIGKILL)
+        await until(lambda: of_type(session, "effect.finished"), session, rests)
+        left = running(pid)
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+    assert not left
+
+
+async def a_harness_killed_in_its_first_turn_comes_back_or_is_lost_at_once(team: Team, root: Path, model: FakeModel):
+    """`kill -9` of the harness alone during a held call of ours in its first turn, which the model's first reply is. A
+    harness that had written its session down comes back on it; one that had not exits again when its handover brings
+    it back, its second exit before a turn of its ended, so its agent is lost there and says so, and no handover is
+    tried again."""
+    async with Session.start(team, root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await asyncio.wait_for(model.call(0), TIMEOUT)
+        await until(lambda: of_type(session, "item.recorded"), session, lambda items: calls_held(items) >= 1)
+        os.kill(harness_pid(session), signal.SIGKILL)
+        events = await until(
+            lambda: journal(session), session, lambda found: any(e.type in ("agent.ended", "turn.ended") for e in found)
+        )
+        failed = [e for e in events if e.type == "effect.failed" and e.data["kind"] == "deliver"]
+
+    ended = [(event.data["status"], event.data["reason"]) for event in events if event.type == "agent.ended"]
+    again = "its harness exited again before a turn of its ended: "
+    assert ended == [] or (ended[0][0] == "lost" and ended[0][1].startswith(again)), ended
+    assert len(failed) <= 1
 
 
 async def a_harness_killed_alone_twice_before_a_turn_ends_is_lost(team: Team, root: Path, model: FakeModel):

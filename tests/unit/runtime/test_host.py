@@ -1660,6 +1660,66 @@ async def test_a_harness_that_exits_on_its_own_in_a_turn_is_resumed_once_and_tol
     assert (ending.agents[0]["state"], ending.agents[0]["status"]) == ("idle", None)
 
 
+async def test_a_harness_that_cannot_reopen_its_session_is_lost_at_its_second_exit(tmp_path):
+    """A harness killed before it wrote its session down exits again when its handover brings it back. That is its
+    second exit on its own before a turn of its ended, which loses its agent there and says why, and no handover is
+    tried again."""
+    starts: list[str | None] = []
+
+    class Forgetful(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            starts.append(spec.resume)
+            if spec.resume is not None:
+                await report(Exited(reason="No conversation found"))
+                return
+            await super().start(spec, report)
+
+    async with Session.start(solo_with(lambda: Forgetful([[Exit("killed by signal 9")]])), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        ended = await until(lambda: of_type(session, "agent.ended"), session)
+        failed = [event for event in await of_type(session, "effect.failed") if event.data["kind"] == "deliver"]
+
+    assert starts == [None, "scripted-bob"]
+    assert (ended[0].data["status"], ended[0].data["reason"]) == (
+        "lost",
+        "its harness exited again before a turn of its ended: No conversation found",
+    )
+    assert len(failed) <= 1
+
+
+async def test_an_exit_before_a_retold_turn_begins_tells_it_nothing_twice(tmp_path):
+    """A turn cut off is told once. A harness brought back by a resume that exits on its own when handed the notice,
+    before the turn it would wake begins, cut nothing of its own, so it is told nothing new, and the notice waiting is
+    what it is handed when it comes back again."""
+    starts: list[str | None] = []
+    turns = iter([[Say("working"), Hang()], [Say("checked")]])
+
+    class Dying(ScriptedDriver):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            starts.append(spec.resume)
+            self.heard = report
+            await super().start(spec, report)
+
+        async def deliver(self, delivery: Delivery) -> None:
+            if len(starts) == 2:
+                await self.heard(Exited(reason="exited with code 1"))
+                raise DriverError("it exited")
+            await super().deliver(delivery)
+
+    async with Session.start(solo_with(lambda: Dying(turns)), name="s", root=tmp_path) as session:
+        await session.send("@bob", "go")
+        await in_state(session, "bob", "running")
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session, lambda found: found[-1].gist == "checked")
+        told = [event.gist for event in await of_type(session, "message.sent") if event.stream == "inbox/bob"]
+
+    assert starts == [None, "scripted-bob", "scripted-bob"]
+    assert [gist for gist in told if gist.startswith("Your last turn was cut off")] == [
+        next(gist for gist in told if gist.startswith("Your last turn was cut off by the owner stopping the session."))
+    ]
+
+
 async def test_a_resting_agent_comes_back_at_its_handover_and_not_at_a_runtime_start(tmp_path):
     """A resting harness has no process to bring back, so a resume of its session starts nothing for it."""
     clock, starts = ManualClock(1000.0), Starts([Say("first")], [Say("second")])

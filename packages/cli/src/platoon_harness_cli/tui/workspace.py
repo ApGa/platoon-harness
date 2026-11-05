@@ -545,6 +545,8 @@ class Workspace(Screen[None]):
                 + (f", {row['group'].replace('_', ' ')}" if row["group"] != row["state"] else "")
             ),
         ]
+        if row["resting"]:
+            lines.append(SafeText("resting: its harness has no process, and its next message brings it back"))
         if row["why"] is not None:
             lines.append(SafeText(f"why {why_said(row['why'])}", "yellow"))
         if row["held_by"]:
