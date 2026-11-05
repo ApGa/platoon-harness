@@ -69,6 +69,7 @@ async def test_the_scripted_driver_conforms_in_this_process(tmp_path):
     assert skipped == {*SCRIPTED_SKIPS, "stop_leaves_no_process", "malformed_frame_is_a_gap"}
 
 
+@pytest.mark.timeout(240)  # Every check starts a program of its own, the shell's two among them.
 async def test_a_wire_driver_conforms_across_a_process(tmp_path):
     command = [sys.executable, str(HERE / "wire_program.py")]
 
