@@ -423,6 +423,7 @@ def _roster(txn: Txn) -> list[dict[str, Any]]:
                 "why": said,
                 "unread": deliveries.unread(agent.name),
                 "levels": agent.levels,
+                "login": agent.login,
                 "usage": budget.usage_of(f"agent:{agent.name}"),
                 "workspace": agent.workspace and agent.workspace.model_dump(include={"mode", "path", "branch"}),
             }

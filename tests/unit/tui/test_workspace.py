@@ -535,7 +535,13 @@ async def test_the_inspector_says_why_an_agent_waits_what_it_runs_on_and_what_it
         await pilot.press("f2")
         text = await drawn(pilot, lambda text: "why asks you to approve" in text)
 
-        for said in ("role lead, parent none", "harness driver_", "model its default", "operational unverified"):
+        for said in (
+            "role lead, parent none",
+            "harness driver_",
+            "model its default",
+            "login unknown",
+            "operational unverified",
+        ):
             assert said in text
 
 

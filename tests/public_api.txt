@@ -39,6 +39,7 @@ platoon_harness.drivers.Exited
 platoon_harness.drivers.GapReport
 platoon_harness.drivers.InputDelivered
 platoon_harness.drivers.Item
+platoon_harness.drivers.levels.CHECK
 platoon_harness.drivers.levels.Check
 platoon_harness.drivers.levels.Checks
 platoon_harness.drivers.levels.Conformance
@@ -283,6 +284,7 @@ platoon_harness.runtime.opening.prepare
 platoon_harness.runtime.opening.repository
 platoon_harness.runtime.opening.told
 platoon_harness.runtime.paths.agent_folder
+platoon_harness.runtime.paths.CONFORMANCE
 platoon_harness.runtime.paths.find_root
 platoon_harness.runtime.paths.HOME_VARIABLE
 platoon_harness.runtime.paths.Listed
@@ -293,13 +295,16 @@ platoon_harness.runtime.paths.MARKS
 platoon_harness.runtime.paths.new_folder
 platoon_harness.runtime.paths.open_log
 platoon_harness.runtime.paths.OWNER_TOKEN
+platoon_harness.runtime.paths.read_conformance
 platoon_harness.runtime.paths.read_running
 platoon_harness.runtime.paths.Running
 platoon_harness.runtime.paths.RUNNING
+platoon_harness.runtime.paths.root_of
 platoon_harness.runtime.paths.session_folder
 platoon_harness.runtime.paths.sessions_of
 platoon_harness.runtime.paths.socket_path
 platoon_harness.runtime.paths.VIEW_TOKEN
+platoon_harness.runtime.paths.write_conformance
 platoon_harness.runtime.paths.write_private
 platoon_harness.runtime.recovery.recover_agents
 platoon_harness.runtime.Runtime
@@ -350,6 +355,7 @@ platoon_harness.testing.Call
 platoon_harness.testing.chat_access
 platoon_harness.testing.check_driver
 platoon_harness.testing.check_extension
+platoon_harness.testing.check_harness
 platoon_harness.testing.EndTurn
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.testing.Exit
@@ -362,6 +368,7 @@ platoon_harness.testing.NAMESPACE
 platoon_harness.testing.Request
 platoon_harness.testing.Say
 platoon_harness.testing.ScriptedDriver
+platoon_harness.testing.SHELL
 platoon_harness.testing.Stall
 platoon_harness.testing.Text
 platoon_harness.testing.Think

@@ -2,8 +2,10 @@
 
 from .conformance import chat_access, check_driver, goal
 from .extension import check_extension
+from .harnesses import check_harness
 from .model import FakeModel, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
+    SHELL,
     Ask,
     AskModel,
     Call,
@@ -21,6 +23,7 @@ from .tools import NAMESPACE, TOOL, FakeTools
 
 __all__ = [
     "NAMESPACE",
+    "SHELL",
     "TOOL",
     "Ask",
     "AskModel",
@@ -43,6 +46,7 @@ __all__ = [
     "chat_access",
     "check_driver",
     "check_extension",
+    "check_harness",
     "every_turn_asks_the_model",
     "goal",
 ]

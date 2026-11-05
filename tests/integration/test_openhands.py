@@ -37,6 +37,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.process import Record
+from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile, Command
 from platoon_harness.testing import (
     TOOL,
@@ -48,7 +49,7 @@ from platoon_harness.testing import (
     Text,
     ToolCall,
     chat_access,
-    check_driver,
+    check_harness,
     goal,
 )
 from platoon_harness.testing.loopback import Loopback, Message, answer
@@ -90,39 +91,16 @@ def shell(command: str) -> ToolCall:
     return ToolCall("terminal", {"command": command}, id="call_gated")
 
 
-def garbling(folder: Path):
-    """Write into the worker's own stdout, as nothing makes the real SDK write a frame no parser knows."""
-
-    async def garble(_: OpenHandsDriver) -> None:
-        record = Record.read(folder / "malformed_frame_is_a_gap" / "agent")
-        assert record is not None
-        pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
-        unknown = json.dumps({"jsonrpc": "2.0", "method": "nobody_knows"}).encode()
-        os.write(pipe, b"this is no frame\n" + unknown + b"\n")
-        os.close(pipe)
-
-    return garble
-
-
 TASK = ToolCall("task", {"description": "make it", "prompt": "Make the file.", "subagent_type": "general-purpose"})
 
 
 async def conformance(folder: Path) -> Conformance:
-    return await check_driver(
-        OpenHandsDriver,
-        folder=folder,
-        access=access(folder / "home"),
-        garble=garbling(folder),
-        gated=shell,
-        shell=shell,
-        child=TASK,
-        timeout=TIMEOUT,
-    )
+    return await check_harness("openhands", folder)
 
 
 @pytest.mark.timeout(1200)
-async def test_the_openhands_driver_conforms(tmp_path):
-    result = await conformance(tmp_path)
+async def test_the_openhands_driver_conforms(tmp_path, monkeypatch):
+    result = await conformance(tmp_path / "check")
 
     print(result)
     assert result.failed == (), str(result)
@@ -133,6 +111,15 @@ async def test_the_openhands_driver_conforms(tmp_path):
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
     assert earned.trainable.state == "unmet"
+
+    write_conformance(tmp_path, result)
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["levels"]["operational"]["state"] == "met", started.data["levels"]["operational"]
 
 
 def on_fake_model(tmp_path: Path, fake: FakeModel, **fields: Any) -> AgentSpec:

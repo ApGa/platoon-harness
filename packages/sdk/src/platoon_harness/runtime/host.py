@@ -55,7 +55,7 @@ from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnReques
 from .git import GitError
 from .looks import PAGE, look, tips_of
 from .opening import PLAN_LOGIN_FIX, make_driver
-from .paths import agent_folder
+from .paths import agent_folder, read_conformance, root_of
 from .workspaces import branch_of, end_snapshot, end_worktree, make_snapshot, make_worktree, present, write_bundle
 
 GRACE = 5.0
@@ -716,9 +716,11 @@ class Host:
             await self._lose(link.agent, why)
 
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
-        """Commit what was declared with what was verified, so no driver can claim a level. A model that is not the one
-        pinned is refused here: the effective model must equal the requested one, and an unknown one stays unknown. A
-        harness for an agent that has started before comes back to it, whether it reopened a session or began anew."""
+        """Commit what was declared with what was verified, so no driver can claim a level: levels come from the
+        conformance result kept under the root for the harness's driver, read at every launch and resume, and say
+        nothing where it ran on another version. A model that is not the one pinned is refused here: the effective
+        model must equal the requested one, and an unknown one stays unknown. A harness for an agent that has started
+        before comes back to it, whether it reopened a session or began anew."""
         pinned = self._team.roles[link.role].model
         if pinned is not None and ready.effective_model not in (None, pinned):
             link.refuse(f"it runs {ready.effective_model}, and its role pins {pinned}")
@@ -731,12 +733,14 @@ class Host:
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
             allow_native_children=role.allow_native_children,
         )
+        kept = await asyncio.to_thread(read_conformance, root_of(self._folder), info.name)
         args = {
             "agent": link.agent,
             "ready": ready,
             "declared": info.capabilities,
             "verified": profile.model_dump(mode="json"),
-            "levels": levels(info.capabilities, profile, None).model_dump(mode="json"),
+            "conformance": None if kept is None else await self._stored(kept.model_dump_json()),
+            "levels": levels(info.capabilities, profile, kept).model_dump(mode="json"),
             "assurance": self._workspace_of(link.agent).assurance,
             "resumed": self._kernel.query(self._kernel.runtime, "agent.status", {"agent": link.agent}).result["state"]
             != "spawning",

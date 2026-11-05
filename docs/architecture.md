@@ -136,7 +136,8 @@ Each law is a sentence, and each has a test of the same name.
   agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one
 ```
 
-- **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. If that is on a network filesystem,
+- **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/` and `conformance/`, what
+  `doctor --check` found of each harness (§9.3). If that is on a network filesystem,
   the default falls back to `/var/tmp/platoon-harness-$UID`, with a one-line notice and a `doctor` entry. An
   explicitly chosen root on a network filesystem is refused with exit 78. Only live writers are refused: a closed
   session is a portable artifact (§5.8). A root to write in must be this user's, and writable by nobody else, since a manifest in it
@@ -1043,8 +1044,8 @@ agent's surface, with each entry's ref and sender, whether it has a body, which 
 wire program in any language has it for nothing, and `items` is there for one that wants more.
 
 The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
-`agent.start` with the declared capabilities, the verified result and the levels, as `resumed` when it comes from a resumed harness,
-which leaves the agent as it stood. A report cannot carry those, so a driver that tries to state one has sent an unknown frame.
+`agent.start` with the declared capabilities, the verified profile, the conformance result kept for its driver, as a body, and the
+levels, as `resumed` when it comes from a resumed harness, which leaves the agent as it stood. A report cannot carry those, so a driver that tries to state one has sent an unknown frame.
 
 ### 9.1 Wire
 
@@ -1115,6 +1116,12 @@ Absence means unsupported, as in ACP.
   against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to
   `(driver, harness version)`, and a result pinned elsewhere says nothing of this agent. A wire `describe` runs the program once and
   starts no harness.
+- **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
+  SDK drives that it finds, on the binary that runs, against `FakeModel` and on no account, and keeps what it found under the root,
+  `conformance/<driver>.json`, one for each driver, beside the folder it ran in. The host reads it at every launch and resume, so an
+  agent's levels come from proof made on its own machine, and an upgrade the result did not run on reads `unverified`, naming the
+  command that makes one. No check proves a coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
+  [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - **Model pinning.** The effective model must equal the requested one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
   nothing. An unset model on the harness's own login means the harness's own default, and `ready` says which. A driver refuses an unset
@@ -1449,7 +1456,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 
 | View | Row | Answers |
 |---|---|---|
-| `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
+| `roster` | `agent, role, harness, model, parent, state, group, activity, stopped, held_by, why, unread, levels, login, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict`, `daemon` |
 | `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, dropped`, `recorded` being the seq that recorded it, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
 

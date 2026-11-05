@@ -7,8 +7,8 @@ From a terminal or CI, with harnesses you already use and their own logins. [cli
 ```console
 $ platoon-harness doctor
 platoon-harness 0.1.0, SDK 0.1.0
-claude     2.1.316 (Claude Code), plan login
-codex      codex-cli 0.164.0, plan login
+claude     2.1.316 (Claude Code), plan login, checked on 2.1.316: 25 passed, none failed
+codex      codex-cli 0.164.0, plan login, not checked: --check checks it
 openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness-cli/bin/python: install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`
 pi         not on PATH
 root       ~/.local/state/platoon-harness, on xfs
@@ -18,7 +18,9 @@ usable
 ```
 
 It says each harness's version and the kind of its login, from the harness's own status command, and never an account. It exits 0
-when the machine can run sessions and 78 when it cannot. `openhands` is there once the SDK's `openhands` extra is installed for
+when the machine can run sessions and 78 when it cannot. `doctor --check` runs every check of each harness it finds against a model
+of ours on loopback, on no account, and keeps what it found under the root, where the runtime reads it at each launch and resume:
+an agent's levels come from it, and say `unverified` for a harness whose version no result was made on. `openhands` is there once the SDK's `openhands` extra is installed for
 the interpreter it names, as [drivers.md](drivers.md#openhands-a-wire-worker) says.
 
 ## Write a team

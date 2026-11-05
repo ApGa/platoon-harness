@@ -1,5 +1,6 @@
 """What this machine has: the harnesses on its PATH and their logins, where sessions live, and what is installed."""
 
+import asyncio
 import os
 import re
 import shutil
@@ -11,12 +12,21 @@ from cyclopts import App
 from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
+from platoon_harness.drivers.levels import Conformance
 from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import status
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
 from platoon_harness.kernel import filesystem
-from platoon_harness.runtime.paths import HOME_VARIABLE, find_root, socket_path
+from platoon_harness.runtime.paths import (
+    CONFORMANCE,
+    HOME_VARIABLE,
+    find_root,
+    read_conformance,
+    socket_path,
+    write_conformance,
+)
 from platoon_harness.schema import Problem, dumps
+from platoon_harness.testing import check_harness
 from platoon_harness.version import __version__ as sdk_version
 
 from . import __version__
@@ -47,14 +57,45 @@ def _first_line(command: list[str]) -> str | None:
     return done.stdout.decode(errors="replace").strip().partition("\n")[0] or None
 
 
-def _harness(name: str, driver: Driver) -> dict[str, Any]:
+def _harness(name: str, driver: Driver, root: Path) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
-    command, which is all of what it said that is kept, or why it is not here."""
+    command, which is all of what it said that is kept, or why it is not here; and what its checks found, as kept."""
     if isinstance(driver, OpenHandsDriver):
-        return _openhands(name)
-    if shutil.which(name) is None:
-        return {"name": name, "found": False, "reason": "not on PATH"}
-    return {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
+        found = _openhands(name)
+    elif shutil.which(name) is None:
+        found = {"name": name, "found": False, "reason": "not on PATH"}
+    else:
+        found = {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
+    return {**found, "checked": _checked(read_conformance(root, name))} if found["found"] else found
+
+
+def _checked(result: Conformance | None) -> dict[str, Any] | None:
+    """What a kept result says, by the harness version it ran on, or None when none is kept."""
+    if result is None:
+        return None
+    states = [check.state for check in result.checks]
+    failed = [check.name for check in result.checks if check.state == "failed"]
+    return {
+        "version": result.version,
+        "passed": states.count("passed"),
+        "failed": failed,
+        "skipped": states.count("skipped"),
+    }
+
+
+def _check(found: list[dict[str, Any]], root: Path) -> None:
+    """Check each harness found, against a model of ours and on no account, and keep what its checks found under the
+    root, where the runtime reads it at every launch and resume, beside the folder the checks ran in, whose logs a
+    failed check names, until the next check of that harness."""
+    for harness in found:
+        if harness["found"]:
+            note(f"checking {harness['name']} against a model of ours, which takes a few minutes and no account")
+            folder = root / CONFORMANCE / harness["name"]
+            shutil.rmtree(folder, ignore_errors=True)
+            folder.mkdir(mode=0o700, parents=True)
+            result = asyncio.run(check_harness(harness["name"], folder))
+            write_conformance(root, result)
+            harness["checked"] = _checked(result)
 
 
 def _openhands(name: str) -> dict[str, Any]:
@@ -109,33 +150,42 @@ def _installed() -> dict[str, Any]:
     return {"components": components, "problems": [str(problem) for problem in check_installed()]}
 
 
-def doctor(*, json: bool = False) -> int:
+def doctor(*, json: bool = False, check: bool = False) -> int:
     """Say whether this machine can run sessions, and what it has.
 
-    Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
-    installed, and where not the interpreter to install it for, pi's Node, where sessions and sockets live, and what is
-    installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own
-    status command: no account name is kept, and no credential file is read.
+    Each harness on PATH, with its version, the kind of its login and what its checks found, `openhands` where the
+    SDK's `openhands` extra is installed, and where not the interpreter to install it for, pi's Node, where sessions and
+    sockets live, and what is installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind
+    comes from the harness's own status command: no account name is kept, and no credential file is read.
+
+    A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
+    finds, on the binary that runs, against a model of ours on loopback and on no account. The runtime reads it at
+    every launch and resume, and a result that ran on another version says nothing of the one that runs.
 
     For example:
 
         platoon-harness doctor
+        platoon-harness doctor --check
         platoon-harness doctor --json | jq .harnesses
 
     Parameters
     ----------
     json
         Say it as one JSON object.
+    check
+        Check each harness found, and keep what its checks found.
     """
-    found = [_harness(name, driver) for name, driver in harnesses()]
-    pi = any(harness["name"] == "pi" and harness["found"] for harness in found)
-    report = {
+    report: dict[str, Any] = {
         "versions": {"cli": __version__, "sdk": sdk_version},
-        "harnesses": found,
-        "node": _node() if pi else None,
         "root": _root(),
         "installed": _installed(),
     }
+    root = Path(report["root"]["path"])
+    found = [_harness(name, driver, root) for name, driver in harnesses()]
+    if check and report["root"]["problem"] is None:
+        _check(found, root)
+    pi = any(harness["name"] == "pi" and harness["found"] for harness in found)
+    report |= {"harnesses": found, "node": _node() if pi else None}
     problems = [
         *([] if any(harness["found"] for harness in found) else ["no harness is on PATH"]),
         *([] if report["root"]["problem"] is None else [report["root"]["problem"]]),
@@ -154,7 +204,8 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
     for harness in report["harnesses"]:
         if harness["found"]:
             login = f"{harness['login']} login" if harness["login"] else "login unknown"
-            lines.append(f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}")
+            said = f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}"
+            lines.append(f"{said}, {_said_checked(harness['checked'])}")
         else:
             lines.append(f"{harness['name']:<10} {harness['reason']}")
     if (node := report["node"]) is not None:
@@ -170,6 +221,13 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
     lines += [f"problem    {problem}" for problem in problems]
     lines.append("usable" if not problems else "not usable")
     say(safe("\n".join(lines)))
+
+
+def _said_checked(checked: dict[str, Any] | None) -> str:
+    if checked is None:
+        return "not checked: --check checks it"
+    failed = f", and {', '.join(checked['failed'])} failed" if checked["failed"] else ", none failed"
+    return f"checked on {checked['version'] or 'a version it never said'}: {checked['passed']} passed{failed}"
 
 
 def init() -> int:

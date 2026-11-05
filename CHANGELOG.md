@@ -4,6 +4,16 @@
 
 ### Added
 
+- A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the SDK
+  drives that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
+  `platoon_harness.testing`, and keeps the result under the root, `conformance/<driver>.json`, which `write_conformance` and
+  `read_conformance` in `platoon_harness.runtime.paths` write and read. The host reads it at every launch and resume, so an agent's
+  levels come from it, and records it on `agent.started` and `agent.resumed`, at payload 2, as `conformance`, a body beside the
+  levels; one with no result for the version that runs is `unverified`, naming the command that makes one. `doctor` says what each
+  harness's kept result found. The terminal's inspector says the login kind beside the levels, which the roster carries as `login`,
+  and `Agents` is at view version 12. The scripted harness has a `shell` tool of its own, `testing.SHELL`, which runs its `command`
+  once allowed, so it and the conformance wire program meet every shell check, and the wire program earns `operational`. No check
+  proves a coverage surface, so nothing answers `not_seen` yet. See ADR 0044.
 - A daemon that keeps failing needs a person. The supervisor journals a daemon's first failure since a run that lasted, as
   `daemon.failed` naming it and its error, and the next run that lasts a minute, as `daemon.recovered`, through two runtime-only ops of
   the kernel's, `daemon.fail` and `daemon.recover`, so a courier or a host that fails on every pass stands in `attention` as a kind of

@@ -24,17 +24,20 @@ from platoon_harness.drivers import (
     DriverError,
     DriverInfo,
     Exited,
+    GapReport,
     InputDelivered,
     Item,
     ModelCall,
     Ready,
     Reconciled,
+    Report,
     Reporter,
     TurnEnded,
     TurnStarted,
     Usage,
     refuse_unset_model,
 )
+from platoon_harness.drivers.process import Process
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
 
@@ -42,6 +45,10 @@ from .loopback import post
 
 BASE_URL = "OPENAI_BASE_URL"
 API_KEY = "OPENAI_API_KEY"
+SHELL = "shell"
+"""The one tool of a scripted harness's own, which runs its `command` once allowed."""
+
+_SHELL_GRACE = 1.0
 
 _DEFAULT = Capabilities(
     persistent=True,
@@ -162,6 +169,7 @@ class ScriptedDriver:
         self._steps: asyncio.Task[str] | None = None
         self._interrupted = False
         self._work: asyncio.Task[None] | None = None
+        self._shells: set[Process] = set()
         self._exited = False
 
     def describe(self) -> DriverInfo:
@@ -339,13 +347,38 @@ class ScriptedDriver:
             result = await self._call(name, arguments, native_id=call["id"], call_id=call_id)
             output = json.dumps(result)
         else:
-            output = await self._gate(name)
+            output = await self._gate(name, arguments)
         return {"role": "tool", "tool_call_id": call["id"], "content": output}
 
-    async def _gate(self, name: str) -> str:
+    async def _gate(self, name: str, arguments: Mapping[str, Any]) -> str:
+        """A tool of its own needs an approval. Once allowed, `shell` runs its `command`."""
         if self._capabilities.approvals == "none":
             return f"{name} needs an approval this harness cannot ask for"
-        return f"{name} {await self._ask(f'run {name}?')}"
+        verdict = await self._ask(f"run {name}?")
+        if verdict == "allow" and name == SHELL and "command" in arguments:
+            return await self._shell(str(arguments["command"]))
+        return f"{name} {verdict}"
+
+    async def _shell(self, command: str) -> str:
+        """Run a command as a harness runs its shell tool: in `spec.cwd`, on this harness's own environment, in a group
+        recorded before it can run, which `stop` ends with whatever it put in the background."""
+        said: list[bytes] = []
+
+        async def read(process: Process) -> None:
+            said.append(await process.stdout.read())
+
+        async def heard(report: Report) -> None:  # The tool's end is no end of the harness's, but a gap is a gap.
+            if isinstance(report, GapReport):
+                await self._report(report)
+
+        process = await Process.launch(["/bin/sh", "-c", command], self._spec, heard, read=read)
+        self._shells.add(process)
+        try:
+            await process.exited()
+        finally:
+            self._shells.discard(process)
+            await process.stop(_SHELL_GRACE)
+        return f"exit {process.returncode}\n{b''.join(said).decode(errors='replace')}"
 
     async def _complete(self) -> Any:
         spec = self._spec
@@ -398,7 +431,7 @@ class ScriptedDriver:
         if self._work is None:
             return
         self._work.cancel()
-        await asyncio.gather(self._work, return_exceptions=True)
+        await asyncio.gather(self._work, *(shell.stop(grace) for shell in tuple(self._shells)), return_exceptions=True)
         await self._exit("stopped")
 
 

@@ -9,7 +9,7 @@ from platoon_harness.drivers import Capabilities, Delivery, Offered
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.wire import WireDriver
-from platoon_harness.testing import ScriptedDriver, check_driver, every_turn_asks_the_model
+from platoon_harness.testing import SHELL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -42,11 +42,14 @@ SCRIPTED_SKIPS = {
     "one_shot_exits",
     "declared_but_unproven",
     "tool_item_carries_its_anchor",
-    "stop_ends_a_running_tool",
-    "runs_in_its_workspace",
     "native_children_off_by_default",
     "native_child_seen",
 }
+
+
+def shell(command: str) -> ToolCall:
+    """The scripted harness's own shell tool, which runs `command` once allowed."""
+    return ToolCall(SHELL, {"command": command})
 
 
 def states(result: Conformance) -> dict[str, str]:
@@ -58,7 +61,7 @@ def assert_nothing_failed(result: Conformance) -> None:
 
 
 async def test_the_scripted_driver_conforms_in_this_process(tmp_path):
-    result = await check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=tmp_path)
+    result = await check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=tmp_path, shell=shell)
 
     assert_nothing_failed(result)
     assert (result.driver, result.version) == ("scripted", "1")
@@ -73,12 +76,14 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
         item = Offered(ref="inbox/ada@1", gist="anything")
         await driver.deliver(Delivery(input="garble", boundary="turn", text=item.gist, items=(item,)))
 
-    result = await check_driver(lambda: WireDriver(command), folder=tmp_path, garble=garble, timeout=20)
+    result = await check_driver(lambda: WireDriver(command), folder=tmp_path, garble=garble, shell=shell, timeout=20)
 
     assert_nothing_failed(result)
     assert (result.driver, result.version) == ("wire-scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == SCRIPTED_SKIPS
+    earned = levels(WireDriver(command).describe().capabilities, Profile(driver="wire-scripted", version="1"), result)
+    assert earned.operational.state == "met", earned.operational.reasons
 
 
 async def test_the_exec_driver_conforms_as_far_as_a_one_shot_can(tmp_path):

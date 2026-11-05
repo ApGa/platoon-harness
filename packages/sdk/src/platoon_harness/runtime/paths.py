@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import NamedTuple
 
+from platoon_harness.drivers.levels import Conformance
 from platoon_harness.kernel import NAME, Refused, filesystem, is_held
 from platoon_harness.schema import ConfigError, Model, Problem
 
@@ -23,6 +24,7 @@ OWNER_TOKEN = "owner.token"
 VIEW_TOKEN = "view.token"
 LOG = "runtime.log"
 MARKS = "marks.sqlite"
+CONFORMANCE = "conformance"
 
 _SOCKET_LIMIT = 103
 _HASH_LENGTH = 16
@@ -30,6 +32,7 @@ _HASH_LENGTH = 16
 log = logging.getLogger("platoon_harness.runtime")
 
 __all__ = [
+    "CONFORMANCE",
     "HOME_VARIABLE",
     "LOG",
     "MANIFEST",
@@ -44,10 +47,13 @@ __all__ = [
     "listing",
     "new_folder",
     "open_log",
+    "read_conformance",
     "read_running",
+    "root_of",
     "session_folder",
     "sessions_of",
     "socket_path",
+    "write_conformance",
     "write_private",
 ]
 
@@ -111,6 +117,34 @@ def new_folder(root: Path, manifest: str, name: str | None = None) -> Path:
             raise
         raise Refused("conflict", f"session {folder.name} exists: resume it, or choose another name") from None
     return folder
+
+
+def root_of(session: Path) -> Path:
+    """The root a session's folder lives under, as `sessions_of` places it."""
+    return session.parent.parent
+
+
+def write_conformance(root: Path, result: Conformance) -> Path:
+    """Keep what `check_driver` found of a driver's harness under a root, replacing what was kept for that driver, as
+    one result speaks for the binary that runs. A driver's name is a path part."""
+    if re.fullmatch(NAME, result.driver) is None:
+        raise Refused("invalid", f"{result.driver!r} cannot name a file: a driver's name is a part of a path")
+    folder = root / CONFORMANCE
+    _make_private(folder)
+    path = folder / f"{result.driver}.json"
+    write_private(path, result.model_dump_json(indent=2))
+    return path
+
+
+def read_conformance(root: Path, driver: str) -> Conformance | None:
+    """What was kept under a root of a driver's harness, or None when nothing was, or what was no longer reads, as
+    after an upgrade of the SDK, since then nothing vouches for it."""
+    if re.fullmatch(NAME, driver) is None:
+        return None
+    try:
+        return Conformance.model_validate_json((root / CONFORMANCE / f"{driver}.json").read_bytes())
+    except (OSError, ValueError):
+        return None
 
 
 def session_folder(root: Path, name: str) -> Path:

@@ -44,7 +44,7 @@ from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
 
 from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
-from .scripted import API_KEY, BASE_URL
+from .scripted import API_KEY, BASE_URL, SHELL
 from .tools import TOOL, FakeTools
 
 _GRACE = 2.0
@@ -70,7 +70,7 @@ def _tool(note: str) -> ToolCall:
 
 
 def _gated(command: str) -> ToolCall:
-    return ToolCall("shell", {"command": command}, id="call_gated")
+    return ToolCall(SHELL, {"command": command}, id="call_gated")
 
 
 class _Failed(Exception):

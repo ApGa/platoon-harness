@@ -16,6 +16,7 @@ import pytest
 
 from platoon_harness import Team
 from platoon_harness.config import Manifest
+from platoon_harness.runtime.paths import read_conformance
 
 from .cli import EXECUTABLE, SECONDS, Cli, checked, crew, finished, line_where, said, solo
 
@@ -712,7 +713,13 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
 
     assert done.code == 0 and report["usable"]
     found = {harness["name"]: harness for harness in report["harnesses"]}
-    assert found["claude"] == {"name": "claude", "found": True, "version": "9.9.9 (fake)", "login": None}
+    assert found["claude"] == {
+        "name": "claude",
+        "found": True,
+        "version": "9.9.9 (fake)",
+        "login": None,
+        "checked": None,
+    }
     assert found["pi"] == {"name": "pi", "found": False, "reason": "not on PATH"}
     assert report["root"]["path"] == cli.env["PLATOON_HARNESS_HOME"]
     assert {component["name"] for component in report["installed"]["components"]} >= {"claude", "codex", "pi"}
@@ -727,7 +734,13 @@ async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_it_wri
 
     found = {harness["name"]: harness for harness in json.loads(doctor.stdout)["harnesses"]}
     assert doctor.code == 0
-    assert found["openhands"] == {"name": "openhands", "found": True, "version": "1.59.0", "login": None}
+    assert found["openhands"] == {
+        "name": "openhands",
+        "found": True,
+        "version": "1.59.0",
+        "login": None,
+        "checked": None,
+    }
     assert init.code == 78 and "openhands" not in init.stderr
 
 
@@ -742,10 +755,28 @@ async def test_doctor_and_a_start_without_the_openhands_extra_name_one_interpret
     told = next(line for line in doctor.stdout.splitlines() if line.startswith("openhands "))
     reason = run.lines()[-1]["agents"][0]["reason"]
     interpreter = re.match(r"openhands +openhands-sdk is not installed for (.+?): ", told)
-    assert doctor.code == 0 and "claude     9.9.9 (fake), login unknown" in doctor.stdout
+    assert doctor.code == 0 and "claude     9.9.9 (fake), login unknown, not checked" in doctor.stdout
     assert interpreter is not None and Path(interpreter[1]).is_file(), told
     assert told.endswith("install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`")
     assert (run.code, reason) == (1, f"its spawn failed: {told.removeprefix('openhands').lstrip()}")
+
+
+async def test_doctor_check_keeps_what_each_harness_s_checks_found_where_the_runtime_reads_it(cli: Cli):
+    """A stand-in that exits at once fails nearly every check, and its result is kept all the same: what makes a level
+    is what was found, and the runtime reads it at every launch and resume."""
+    fake_harnesses(cli, "claude")
+    without_openhands(cli)
+
+    checked = await cli.run("doctor", "--check", "--json")
+    again = await cli.run("doctor")
+
+    kept = read_conformance(Path(cli.env["PLATOON_HARNESS_HOME"]), "claude")
+    found = {harness["name"]: harness for harness in json.loads(checked.stdout)["harnesses"]}
+    assert checked.code == 0 and "checking claude against a model of ours" in checked.stderr
+    assert kept is not None and kept.driver == "claude" and kept.failed
+    assert found["claude"]["checked"]["failed"] == [check.name for check in kept.failed]
+    line = next(line for line in again.stdout.splitlines() if line.startswith("claude "))
+    assert line.startswith("claude     9.9.9 (fake), login unknown, checked on a version it never said: ")
 
 
 async def test_doctor_with_no_harness_on_path_and_no_openhands_extra_exits_78(cli: Cli):

@@ -52,8 +52,9 @@ class Agent(BaseModel, frozen=True):
     `agent.finish` in a turn that has not ended, and `finish_ref` is that call's `agent.finished`. `stopped` says why
     its last turn did not stop on its own, until the next begins. `failure` is what the last effect to fail for it said,
     `failures` counts handovers failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last
-    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `instructions`
-    is the body of what its harness was told last, or None for nothing. `workspace` is where it works, once made, and
+    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `login` is the
+    kind of login its harness ran on at its latest start, or None where nobody could tell. `instructions` is the body of
+    what its harness was told last, or None for nothing. `workspace` is where it works, once made, and
     `removed` or `kept` say what its stop did with it."""
 
     name: str
@@ -91,6 +92,7 @@ class Agent(BaseModel, frozen=True):
     retry_at: float
     quieted: int
     levels: dict[str, Any]
+    login: str | None
     instructions: str | None
     workspace: Workspace | None
     removed: bool
@@ -113,7 +115,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 11
+    version = 12
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -151,6 +153,7 @@ class Agents(View):
         retry_at REAL NOT NULL DEFAULT 0,
         quieted INTEGER NOT NULL DEFAULT 0,
         levels TEXT NOT NULL DEFAULT '{}',
+        login TEXT,
         instructions TEXT,
         workspace TEXT,
         removed INTEGER NOT NULL DEFAULT 0,
@@ -189,7 +192,7 @@ class Agents(View):
         self.db.execute(
             """
             UPDATE v_agents SET persistent = :persistent, resume = :resume, tool_timeout_s = :tool_timeout_s,
-                boundaries = :boundaries, levels = :levels, model = coalesce(:effective_model, model),
+                boundaries = :boundaries, levels = :levels, login = :login, model = coalesce(:effective_model, model),
                 native = coalesce(:native, native)
             WHERE name = :agent
             """,
@@ -199,6 +202,7 @@ class Agents(View):
                 "native": data["native"],
                 "boundaries": json.dumps(sorted(declared["boundaries"])),
                 "levels": json.dumps(data["levels"]),
+                "login": (data.get("verified") or {}).get("login"),
                 "agent": event.agent,
             },
         )

@@ -518,6 +518,7 @@ class Start(Args):
     ready: Ready
     declared: Capabilities
     verified: dict[str, JsonValue] | None = None
+    conformance: BodyRef | None = None
     levels: dict[str, JsonValue] = {}
     assurance: Literal["cooperative", "isolated"] = "cooperative"
     resumed: bool = False
@@ -525,19 +526,21 @@ class Start(Args):
 
 @op("agent.start", on=lambda a: f"agent/{a.agent}", runtime=True)
 def start(txn: Txn, a: Start) -> None:
-    """Record that a harness is up, with what its driver declared and what the runtime verified of it. A report cannot
-    carry these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
+    """Record that a harness is up, with what its driver declared, what the runtime verified of it, the conformance
+    result its levels were computed from, as a body, or None for none kept, and those levels. A report cannot carry
+    these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
     agent = _live(txn, a.agent)
     if (agent.state != "spawning") != a.resumed:
         raise Refused("conflict", f"{agent.name} has started" if not a.resumed else f"{agent.name} has not started")
-    stated = a.model_dump(include={"declared", "verified", "levels", "assurance"})
+    stated = a.model_dump(include={"declared", "verified", "conformance", "levels", "assurance"})
     data = {**a.ready.model_dump(exclude={"type"}), **stated}
-    stream = f"agent/{agent.name}"
+    stream, refs = f"agent/{agent.name}", [a.conformance] if a.conformance else ()
     if a.resumed:
-        resumed = txn.emit("agent.resumed", stream, gist=f"{agent.name} resumed", agent=agent.name, data=data)
+        gist = f"{agent.name} resumed"
+        resumed = txn.emit("agent.resumed", stream, gist=gist, agent=agent.name, refs=refs, data=data, v=2)
         _look(txn, agent.name, resumed.seq)  # The turn a crash cut off is looked at here, as no other turn may come.
     else:
-        txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, data=data)
+        txn.emit("agent.started", stream, gist=f"{agent.name} started", agent=agent.name, refs=refs, data=data, v=2)
         regroup(txn, agent.name, agent.role, joined=True)
 
 

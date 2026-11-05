@@ -66,7 +66,9 @@ Consequences:
   leaves out `lmnr-claude-code-proxy`, which the extra installed from an index brings in unless excluded, as uv's `--excludes`
   does. The planned `[acp]` extra's `agent-client-protocol` 1.0.0rc3 cannot share that lock with the SDK's 0.12.1, so when that
   extra lands, no one environment holds both.
-- **Harness versions.** Exact, user-installed, shown by `doctor`, and recorded from `ready` on `agent.started` and `agent.resumed`. Adapters seen:
+- **Harness versions.** Exact, user-installed, shown by `doctor`, checked on this machine by `doctor --check`, which keeps what it
+  found for the version it ran on, and recorded from `ready` on `agent.started` and `agent.resumed`, with that result when it is for
+  the version that runs. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
 ## 3. Capability matrix

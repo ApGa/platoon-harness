@@ -509,6 +509,13 @@ own checks. What a driver leaves running, the suite reaps.
 The result is pinned to the driver and the harness version it reported, and `levels` reads it. A result for another version says
 nothing of this one.
 
+The runtime earns an agent's levels from a result kept under the root, one for each driver: `write_conformance(root, result)`, from
+`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness the SDK drives
+that it finds, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. The host reads
+it at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body, beside the levels it gave. A level
+that has no result kept for the version that runs says so, and names the command that makes one. A wire program is checked as above,
+and its result kept the same way.
+
 ```python
 from platoon_harness.drivers.levels import Profile, levels
 
@@ -537,7 +544,9 @@ model.requests                  # everything that arrived, exactly as it arrived
 ### A scripted harness
 
 `ScriptedDriver` is a deterministic harness for tests and demos: one list of steps per turn. Its tool calls are real MCP over the
-binding, so a scripted team exercises the real tool plane. Its capabilities are data, and it holds to them, so a test can make it
+binding, so a scripted team exercises the real tool plane. It has one tool of its own, `shell`, which runs its `command` once an
+approval allows it, in `spec.cwd`, in a group recorded before it can run, so `check_driver` with `shell` holds it, in this process or
+behind a wire program, to every check a harness's shell meets. Its capabilities are data, and it holds to them, so a test can make it
 one-shot or unsteerable.
 
 ```python

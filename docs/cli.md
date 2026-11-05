@@ -664,19 +664,25 @@ platoon-harness doctor [OPTIONS]
 
 Say whether this machine can run sessions, and what it has.
 
-Each harness on PATH, with its version and the kind of its login, `openhands` where the SDK's `openhands` extra is
-installed, and where not the interpreter to install it for, pi's Node, where sessions and sockets live, and what is
-installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind comes from the harness's own
-status command: no account name is kept, and no credential file is read.
+Each harness on PATH, with its version, the kind of its login and what its checks found, `openhands` where the
+SDK's `openhands` extra is installed, and where not the interpreter to install it for, pi's Node, where sessions and
+sockets live, and what is installed. It exits 0 when it can run sessions, and 78 when it cannot. A login's kind
+comes from the harness's own status command: no account name is kept, and no credential file is read.
+
+A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
+finds, on the binary that runs, against a model of ours on loopback and on no account. The runtime reads it at
+every launch and resume, and a result that ran on another version says nothing of the one that runs.
 
 For example:
 
     platoon-harness doctor
+    platoon-harness doctor --check
     platoon-harness doctor --json | jq .harnesses
 
 **Parameters**:
 
 * `--json`: Say it as one JSON object.
+* `--check`: Check each harness found, and keep what its checks found.
 
 ### platoon-harness extension
 

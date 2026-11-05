@@ -3,7 +3,7 @@
 import pytest
 
 from platoon_harness.drivers import Capabilities
-from platoon_harness.drivers.levels import Check, Conformance, Profile, levels, tool_visibility
+from platoon_harness.drivers.levels import CHECK, Check, Conformance, Profile, levels, tool_visibility
 
 PROFILE = Profile(driver="pi", version="1.4.0", login="gateway", tools="visible")
 CAPABILITIES = Capabilities(
@@ -43,7 +43,7 @@ def test_no_result_is_unverified_rather_than_unmet():
     earned = levels(CAPABILITIES, PROFILE, None)
 
     assert earned.operational.state == "unverified"
-    assert earned.operational.reasons == ("no conformance result for pi",)
+    assert earned.operational.reasons == (f"no conformance result for pi is kept: {CHECK}",)
 
 
 @pytest.mark.parametrize(("driver", "version"), [("pi", "1.5.0"), ("codex", "1.4.0"), ("pi", None)])

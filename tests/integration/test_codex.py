@@ -32,6 +32,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.process import Record
+from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
     NAMESPACE,
@@ -42,7 +43,7 @@ from platoon_harness.testing import (
     Text,
     ToolCall,
     chat_access,
-    check_driver,
+    check_harness,
     goal,
 )
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
@@ -98,35 +99,13 @@ def tool(name: str, id: str, **arguments: Any) -> ToolCall:
     return ToolCall(name, arguments, id=id, namespace="mcp__ph")
 
 
-def garbling(folder: Path):
-    """Write into the harness's own stdout, since nothing makes the real binary write a frame no parser knows."""
-
-    async def garble(_: CodexDriver) -> None:
-        record = Record.read(folder / "malformed_frame_is_a_gap" / "agent")
-        assert record is not None
-        pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
-        os.write(pipe, b"this is no frame\n" + json.dumps({"method": "nobody/knows"}).encode() + b"\n")
-        os.close(pipe)
-
-    return garble
-
-
 async def conformance(folder: Path) -> Conformance:
-    return await check_driver(
-        CodexDriver,
-        folder=folder,
-        access=access(folder / "home"),
-        garble=garbling(folder),
-        gated=gated,
-        shell=shell,
-        tool=ours,
-        child=CHILD,
-        timeout=TIMEOUT,
-    )
+    return await check_harness("codex", folder)
 
 
-async def test_the_codex_driver_conforms(tmp_path):
-    result = await conformance(tmp_path)
+@pytest.mark.timeout(600)
+async def test_the_codex_driver_conforms(tmp_path, monkeypatch):
+    result = await conformance(tmp_path / "check")
 
     print(result)
     assert result.failed == (), str(result)
@@ -136,6 +115,15 @@ async def test_the_codex_driver_conforms(tmp_path):
     earned = levels(CodexDriver().describe().capabilities, Profile(driver="codex", version=result.version), result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
+
+    write_conformance(tmp_path, result)
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["levels"]["operational"]["state"] == "met", started.data["levels"]["operational"]
 
 
 def on_fake_model(tmp_path: Path, fake: FakeModel, *, settings: str = "", **fields: Any) -> AgentSpec:

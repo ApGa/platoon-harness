@@ -550,6 +550,7 @@ class Workspace(Screen[None]):
         if row["held_by"]:
             lines.append(SafeText(f"held by @{row['held_by']}"))
         lines += self._workspace(row)
+        lines.append(SafeText(f"login {row['login'] or 'unknown'}"))
         for level, said in (row["levels"] or {}).items():
             reasons = "; ".join(said.get("reasons", ()))
             lines.append(SafeText(f"{level} {said.get('state')}" + (f": {reasons}" if reasons else "")))

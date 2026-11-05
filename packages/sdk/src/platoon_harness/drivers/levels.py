@@ -10,12 +10,16 @@ from . import Login
 
 SURFACES = ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
 
+CHECK = "`platoon-harness doctor --check` checks each harness it finds on this machine and keeps what it found"
+"""What makes a conformance result that speaks for the harness that runs."""
+
 Visibility = Literal["visible", "hidden", "unverified"]
 Standing = Literal["met", "unmet", "unverified"]
 
 _Finding = tuple[Standing, str]
 
 __all__ = [
+    "CHECK",
     "SURFACES",
     "Check",
     "Checks",
@@ -105,12 +109,12 @@ def _level(findings: Iterable[_Finding]) -> Level:
 
 
 def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
-    """Why a result says nothing of this agent, if it does not."""
+    """Why a result says nothing of this agent, if it does not, and what makes one that does."""
     if conformance is None:
-        return f"no conformance result for {profile.driver}"
+        return f"no conformance result for {profile.driver} is kept: {CHECK}"
     pin = (conformance.driver, conformance.version)
     if pin != (profile.driver, profile.version):
-        return f"conformance ran on {pin[0]} {pin[1]}, and this is {profile.driver} {profile.version}"
+        return f"conformance ran on {pin[0]} {pin[1]}, and this is {profile.driver} {profile.version}: {CHECK}"
     return None
 
 

@@ -30,7 +30,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.levels import Conformance, Profile, levels
 from platoon_harness.drivers.process import Record
-from platoon_harness.runtime.paths import read_running
+from platoon_harness.runtime.paths import read_running, write_conformance
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
     NAMESPACE,
@@ -41,7 +41,7 @@ from platoon_harness.testing import (
     Stall,
     Text,
     ToolCall,
-    check_driver,
+    check_harness,
     goal,
 )
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
@@ -97,35 +97,13 @@ def ours(note: str) -> ToolCall:
     return ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note})
 
 
-def garbling(folder: Path):
-    """Write into the harness's own stdout, since nothing makes the real binary write a frame no parser knows."""
-
-    async def garble(_: ClaudeDriver) -> None:
-        record = Record.read(folder / "malformed_frame_is_a_gap" / "agent")
-        assert record is not None
-        pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
-        os.write(pipe, b"this is no frame\n" + json.dumps({"type": "nobody knows"}).encode() + b"\n")
-        os.close(pipe)
-
-    return garble
-
-
 async def conformance(folder: Path) -> Conformance:
-    return await check_driver(
-        ClaudeDriver,
-        folder=folder,
-        access=access(folder / "home"),
-        garble=garbling(folder),
-        gated=gated,
-        shell=shell,
-        tool=ours,
-        child=CHILD,
-        timeout=TIMEOUT,
-    )
+    return await check_harness("claude", folder)
 
 
-async def test_the_claude_driver_conforms(tmp_path):
-    result = await conformance(tmp_path)
+@pytest.mark.timeout(600)
+async def test_the_claude_driver_conforms(tmp_path, monkeypatch):
+    result = await conformance(tmp_path / "check")
 
     print(result)
     assert result.failed == (), str(result)
@@ -135,6 +113,15 @@ async def test_the_claude_driver_conforms(tmp_path):
     earned = levels(ClaudeDriver().describe().capabilities, Profile(driver="claude", version=result.version), result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
+
+    write_conformance(tmp_path, result)
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        async with Session.start(team, root=tmp_path, cwd=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["levels"]["operational"]["state"] == "met", started.data["levels"]["operational"]
 
 
 def keyed(home: Path, model: FakeModel, monkeypatch: pytest.MonkeyPatch, **role: Any) -> Team:

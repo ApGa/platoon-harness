@@ -32,10 +32,12 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
+from platoon_harness.drivers.levels import CHECK, Check, Conformance
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
 from platoon_harness.primitives import Verdict
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
+from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
 from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
@@ -427,7 +429,52 @@ async def test_capabilities_and_levels_reach_agent_started(tmp_path):
     assert started.data["verified"]["tools"] == "visible"
     assert started.data["verified"]["allow_native_children"] is False
     assert started.data["levels"]["operational"]["state"] == "unverified"
-    assert "no conformance result for scripted" in started.data["levels"]["operational"]["reasons"]
+    assert f"no conformance result for scripted is kept: {CHECK}" in started.data["levels"]["operational"]["reasons"]
+
+
+def passing(version: str) -> Conformance:
+    """A result of the scripted harness at `version` whose every check that a level needs passed."""
+    needed = (
+        "describe_starts_nothing",
+        "turn_end_reported",
+        "exit_reported",
+        "stop_leaves_no_process",
+        "stop_ends_a_running_tool",
+        "runs_in_its_workspace",
+        "malformed_frame_is_a_gap",
+    )
+    return Conformance(
+        driver="scripted", version=version, checks=tuple(Check(name=name, state="passed") for name in needed)
+    )
+
+
+async def test_levels_come_from_the_conformance_result_kept_for_the_harness_that_runs(tmp_path):
+    """The host reads what `doctor --check` kept under the root at every launch and resume, and records it on the
+    start, so a level rests on a result anyone can read back."""
+    async with Session.start(solo(), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+    write_conformance(tmp_path, passing("1"))
+    async with Session.resume("s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started, resumed = await of_type(session, "agent.started"), await of_type(session, "agent.resumed")
+        kept = await session.get_body(resumed[0].data["conformance"].removeprefix("sha256:"))
+
+    assert started[0].data["conformance"] is None
+    assert started[0].data["levels"]["operational"]["state"] == "unverified"
+    assert resumed[0].data["levels"]["operational"] == {"state": "met", "reasons": []}
+    assert resumed[0].data["levels"]["observable"]["state"] == "met"
+    assert Conformance.model_validate_json(kept) == passing("1")
+
+
+async def test_a_result_kept_for_another_version_says_nothing_of_the_one_that_runs(tmp_path):
+    write_conformance(tmp_path, passing("0"))
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+
+    reasons = started.data["levels"]["operational"]["reasons"]
+    assert started.data["levels"]["operational"]["state"] == "unverified"
+    assert reasons == [f"conformance ran on scripted 0, and this is scripted 1: {CHECK}"]
 
 
 async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_so(tmp_path):
