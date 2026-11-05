@@ -440,6 +440,18 @@ async def test_a_group_with_its_recorded_leader_is_reaped(tmp_path):
     await process.stop(1)
 
 
+async def test_two_stops_of_one_group_at_once_each_end_it_and_neither_fails(tmp_path):
+    """A shutdown's stop and an agent's own can reap one folder at once: the record the first removes is no failure of
+    the second's."""
+    spec = make_spec(tmp_path)
+    process = await launch(tmp_path, "sleep", "100", spec=spec)
+
+    assert await asyncio.gather(reap(spec.folder, 1), reap(spec.folder, 1)) == [(), ()]
+
+    assert not (spec.folder / RECORD).exists()
+    await process.stop(1)
+
+
 async def test_a_recorded_group_that_is_gone_needs_nothing(tmp_path):
     finished = spawn_group("true")
     finished.wait()

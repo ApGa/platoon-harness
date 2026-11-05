@@ -260,12 +260,12 @@ async def reap(folder: Path, grace: float) -> tuple[str, ...]:
                 continue
             case "gone":
                 pass
-        path.unlink()
+        path.unlink(missing_ok=True)  # A stop of the same agent under way, as a shutdown runs, may remove it first.
     if recorded:  # A stop that ran to its end left no record, and nothing.
         await _end_marked((folder, folder / WIRE), grace)
     for path, record in unproven:
         if record.state() == "gone":
-            path.unlink()
+            path.unlink(missing_ok=True)
         else:
             left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
     return tuple(left)

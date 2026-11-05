@@ -519,6 +519,8 @@
 
 ### Fixed
 
+- Two stops of one agent at once, as a shutdown's and the agent's own, could both read its process record, and the second to remove
+  it failed, so its stop effect failed and its authority was never told how it ended. A record the other stop removed is gone.
 - Another agent's stop could end its workspace while a look read that workspace's reflog to say whose a commit was, and the look
   then failed whole and recorded a gap, losing the commit and its citations. A workspace gone while a look reads it is as gone as
   one removed before, and one still on disk that git cannot read still fails the look, since it might have made the commit.
