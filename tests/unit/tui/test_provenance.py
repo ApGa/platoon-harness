@@ -193,13 +193,13 @@ async def test_credit_is_shown_only_as_what_each_estimator_said_by_its_producer_
         head = await owner.head()
         common = {"kind": "credit", "scope": "team", "head_seq": head}
         await owner.annotate(ASKED, producer="even-split", producer_version="0", status="scored", value=0.5, **common)
-        await owner.annotate(ASKED, producer="judge", producer_version="2", status="unscored", **common)
+        await owner.annotate(ASKED, producer="judge", producer_version="2", status="timeout", **common)
         await choose(pilot, app, "check the tests")
         text = await asked(pilot, ASKED)
 
     params = "params 44136fa3"
     assert f"credit 0.5 by even-split, version 0, {params}, team, of the trace at head {head:,}" in text
-    assert f"credit no value, unscored, by judge, version 2, {params}, team, of the trace at head {head:,}" in text
+    assert f"credit no value, timeout, by judge, version 2, {params}, team, of the trace at head {head:,}" in text
     assert "each an estimate by its producer at its version" in text
     assert " 0.5 " not in text.replace("credit 0.5 by", "")
 

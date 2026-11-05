@@ -133,6 +133,7 @@ For example:
 - [`contributors`](#platoon-harness-contributors)
 - [`effect`](#platoon-harness-effect)
     - [`settle`](#platoon-harness-effect-settle)
+- [`eligibility`](#platoon-harness-eligibility)
 - [`episode`](#platoon-harness-episode)
     - [`close`](#platoon-harness-episode-close)
     - [`open`](#platoon-harness-episode-open)
@@ -183,6 +184,7 @@ For example:
 * [`channel`](#platoon-harness-channel): The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
 * [`contributors`](#platoon-harness-contributors): Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
 * [`effect`](#platoon-harness-effect): The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
+* [`eligibility`](#platoon-harness-eligibility): Say whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked` or none, and its verdict with each bar, of a closed set, and the same for a page of its model calls, oldest first, each eligible when its agent is and it has no bar of its own.
 * [`episode`](#platoon-harness-episode): The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
 * [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not said it took by then, the surfaces no result proves observed and the gaps content could have come through.
 * [`lineage`](#platoon-harness-lineage): Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
@@ -595,6 +597,8 @@ It exits 78 when one is an error.
 * `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
         profile.
 * `--plan-login`: Several agents may run headless on one plan login, as `run --plan-login` says.
+* `--trainable`: Check it as a training system starts it, on this machine: what keeps the team from training, and each role's
+    driver for a sealed launch and a result kept here that proves trainable.
 
 #### platoon-harness team show
 
@@ -710,12 +714,12 @@ List every installed driver and extension, with its distribution, and any proble
 ### platoon-harness annotate
 
 ```console
-platoon-harness annotate --target STR --kind LITERAL[REWARD, CREDIT] --producer STR --producer-version STR --scope LITERAL[LOCAL, TEAM] --status LITERAL[SCORED, INVALID, ERROR, CANCELLED, UNSCORED] --head-seq INT [OPTIONS] SESSION
+platoon-harness annotate --target STR --kind LITERAL[REWARD, CREDIT] --producer STR --producer-version STR --scope LITERAL[LOCAL, TEAM] --status LITERAL[SCORED, INVALID, ERROR, TIMEOUT, CANCELLED] --head-seq INT [OPTIONS] SESSION
 ```
 
 Say what an estimator found of an event, a `reward` or a `credit`, in `annotations.sqlite` beside the journal and never in it, on a live session or a closed one, with no runtime.
 
-It is `--producer`'s at `--producer-version`, run with `--params`, of the trace up to `--head-seq`, at or below which the target and each ref of `--evidence` lie: an estimate, never a fact. `--value` is given when `--status` is `scored` alone, so nothing unscored is zero. The same statement again is answered with the first, and another under the same producer, version, params, target and kind is refused `conflict`.
+It is `--producer`'s at `--producer-version`, run with `--params`, of the trace up to `--head-seq`, at or below which the target and each ref of `--evidence` lie: an estimate, never a fact. `--status` is `scored`, `invalid`, `error`, `timeout` or `cancelled`, and `--value` is given when it is `scored` alone, so no other is ever zero; with no statement a target is unscored. The same statement again is answered with the first, and another under the same producer, version, params, target and kind is refused `conflict`.
 
 For example:
 
@@ -733,7 +737,7 @@ For example:
 * `--producer-version`: The estimator's version. **[required]**
 * `--params`: What the estimator was run with, kept as `params_hash`. As JSON.
 * `--scope`: `local` for the target's own, `team` for what its team shares. **[required]** *[choices: local, team]*
-* `--status`: `scored`, `invalid`, `error`, `cancelled` or `unscored`. **[required]** *[choices: scored, invalid, error, cancelled, unscored]*
+* `--status`: `scored`, `invalid`, `error`, `timeout` or `cancelled`. **[required]** *[choices: scored, invalid, error, timeout, cancelled]*
 * `--value`: The estimate, given when `--status` is `scored` alone.
 * `--evidence`: The refs of the events it rests on.
 * `--head-seq`: The head the estimator read at, which names the trace it is about. **[required]**
@@ -1335,6 +1339,30 @@ For example:
 * `--id`: The effect, as its row in `platoon-harness attention list` names it. **[required]**
 * `--happened, --no-happened`: Whether it happened. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
+
+### platoon-harness eligibility
+
+```console
+platoon-harness eligibility --agent STR --episode STR [OPTIONS] SESSION
+```
+
+Say whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked` or none, and its verdict with each bar, of a closed set, and the same for a page of its model calls, oldest first, each eligible when its agent is and it has no bar of its own.
+
+It reads the levels its starts recorded, never a result kept since. Pass `cursor` as `--after` for the next page. Refused `invalid` for a person or a program, which never trains, and `not_found` for no such agent or episode.
+
+For example:
+
+    platoon-harness eligibility SESSION --agent AGENT --episode EPISODE
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--agent`: The agent, as `@agent`. **[required]**
+* `--episode`: The episode, by name. **[required]**
+* `--after`: A `cursor` from an earlier answer.
 
 ### platoon-harness episode
 

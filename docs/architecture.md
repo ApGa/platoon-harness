@@ -569,7 +569,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
-| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` |
+| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` |
 | Evidence, kernel | `body.tombstone` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
@@ -1036,7 +1036,7 @@ One driver instance per agent.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities. Starts nothing
+    def describe(self) -> DriverInfo: ...                        # name, login kind, version, capabilities. Starts nothing
     async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
     async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
@@ -1143,6 +1143,8 @@ Absence means unsupported, as in ACP.
   driver, by the name it gives and the class that implements it, the harness version it said, the SDK and the host, as a check
   proves the driver's code and the binary together where they ran, and a result pinned elsewhere, or to a version nobody said, says
   nothing of this agent. A wire `describe` runs the program once and starts no harness.
+- **A driver says its version where it can.** `describe` gives the harness version it would run when it can tell without starting
+  one, which a check before any cost holds a kept result to, and `ready` the one that runs, which the levels hold it to.
 - **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
   SDK ships a check of that it finds, on the binary that runs, against `FakeModel` and on no account, and keeps what it found under
   the root, `conformance/<driver>.json`, one for each driver, beside the folder it ran in; a check that cannot run, or of a harness
@@ -1299,8 +1301,8 @@ Git ancestry, declared `informed_by`, observed reads and credit are four relatio
 `parents` are ancestry, its `Informed-By` trailers are its one declaration, which `based_on` cites, an agent's read is exposure, and
 credit is an annotation. Commits, rewrites and each workspace's state are events on `repo/<name>`, which a look records with no agent
 in the envelope, since a look is the runtime's observation and claims no turn or context (§13). **Three axes never merge:** evidence type
-says why an edge is believed; **attribution** (`exact`, `declared`, `inferred`, `forked`) says how well a model call is tied to
-an agent, tracking a Platoon draft in our own versioned enum; **assurance** (`cooperative`, `isolated`) says how well an actor is
+says why an edge is believed; **attribution** (`exact` or `forked`, and None otherwise) says how well a model call is tied to an
+agent, which `eligibility` answers and nothing stores; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
 
 **Calls.** A `model.called`, and an `item` or a `usage` that names its call, carry that `call_id` on the envelope, verbatim as the
@@ -1397,15 +1399,30 @@ producer, version and params, never summed. See [ADR 0043](adr/0043-a-person-fol
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
 `(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)` with a `scope`, unique on
 producer, version, params, target and kind. `kind` is `reward` or `credit`, and `scope` is `local` or `team`. `status` is required,
-`scored`, `invalid`, `error`, `cancelled` or `unscored`, and `value` is given when it is `scored` and only then, so nothing unscored is
-zero. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
+`scored`, `invalid`, `error`, `timeout` or `cancelled`, and `value` is given when it is `scored` and only then, so nothing but a
+score has a value, and a target with no statement is unscored, which no status says. A team's row targets the episode's
+`episode.closed`, an agent's its first `agent.started`, never the spawn its spawner made, a turn's a `turn.started`, and a call's
+its `model.called`. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
 `annotate` command write one, checked against the journal, with no runtime and no lock but the file's own, on a live session or a
 closed one, and `Session.annotations` reads them: the one way in and out. The file keeps a write-ahead log, so a reader never holds
 a writer up, and finds statements by target through an index. The same statement again is answered with the first, and another under the same key is refused
 `conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and the SDK makes no
 estimate of its own: credit is an annotation by a named producer, never a fact, and a client shows a value only with its producer and
-version, beside any other estimate of the same target, never summed. Judged attribution and validated intervention come at M3. See
-[ADR 0038](adr/0038-provenance-is-answered-from-the-record.md) and [ADR 0039](adr/0039-estimators-write-beside-the-journal-at-m2.md).
+version, beside any other estimate of the same target, never summed. See
+[ADR 0038](adr/0038-provenance-is-answered-from-the-record.md), [ADR 0039](adr/0039-estimators-write-beside-the-journal-at-m2.md)
+and [ADR 0052](adr/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
+
+**Eligibility.** `eligibility(agent, episode)` is a query op that is no agent's tool, a `Session` method and a command, as the four
+are: whether an agent's work in one episode can train, from the record alone. It answers the agent's attribution, `exact` where
+every start of it recorded its trainable level met and no other agent's admission names its backend ids, `forked` once a
+`child.seen` names it, and None otherwise, and its verdict, eligible when nothing bars it, with every bar of a closed set:
+`not_trainable`, with the level a start recorded, `shared_key`, `forked` and `no_end`. It answers the same for a page of its calls,
+each eligible when its agent is and it has no bar of its own: `outside_episode`; `person`, in a turn a person held or below a
+person's entry handed to its agent, which exposure then never answers `not_seen`; and `purpose`, one neither its turn's nor
+`compaction`. A program's message is no person's. It reads the levels the starts recorded, never a result kept since, so it
+answers alike after a rebuild, on a closed copy and with the conformance store gone. Humans, programs and judges are never agents
+here, and what trains is the training system's to decide.
+
 [provenance.md](provenance.md) is the guide.
 
 ## 12. Clients
@@ -1551,7 +1568,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
 
 A role's `workspace` is a ladder, each step promising one thing more: `shared`, `worktree`, `snapshot` or `isolated`. The mode recorded
 is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
-another. The core gives the first three, on git and the filesystem alone, and refuses `isolated` naming why. See
+another. The core gives the first three, on git and the filesystem alone, and refuses `isolated` naming why. A trainable team
+works in `shared` or `isolated` (§14). See
 [ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
 
 - **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
@@ -1685,6 +1703,16 @@ class AgentOutcome(Model):
 - **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody
   else can act (§12). It sends its task to `Team.recipients()`, every agent the session starts, and closes an episode on the refs
   of what each starting agent reported (§6).
+- **Trainable is checked before any harness launches.** `trainable_problems(team)` reads the team alone, as a training system's
+  load check reads it with no driver to ask: a model or an auth profile a role names, approvals left to `ask`, a harness's own
+  agents allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches. `Session.start(trainable=True)`,
+  which needs an authority, passes the flag to `check`, as `plan_login` passes, and `check(team, trainable=True)` adds those to
+  each role's driver: a sealed launch, and a result kept under the root that proves trainable for the harness it would run, naming
+  `doctor --check` where it ships. `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so
+  no plan login is theirs.
+- **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11), and rewards are
+  annotations of five statuses on the targets §11 names, written after the session has ended, so no context a policy could see
+  held one.
 - **Afterwards.** A session whose admit results name the backend's ids is never resumed, as its keys went with its authority (§4):
   it is read as history, which estimators write annotations beside.
 

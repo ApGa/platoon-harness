@@ -94,9 +94,9 @@ async def test_provenance_on_a_message_shows_sources_uses_and_contributors(chrom
         await expect(pane).to_contain_text("weighing and ranking nobody")
         said = f"0.5 by even-split, version 0, params 44136fa3, team, of the trace at head {head:,}"
         await expect(line(page, "credit", said)).to_have_count(1)
-        await session.annotate(ANSWERED, producer="judge", producer_version="2", **(estimate | {"status": "unscored"}))
+        await session.annotate(ANSWERED, producer="judge", producer_version="2", **(estimate | {"status": "timeout"}))
         await provenance_of(page, "the tests pass")
-        await expect(line(page, "credit", "no value, unscored, by judge, version 2")).to_have_count(1, timeout=SECONDS)
+        await expect(line(page, "credit", "no value, timeout, by judge, version 2")).to_have_count(1, timeout=SECONDS)
         await expect(line(page, "credit", "0.5 by even-split, version 0")).to_have_count(1)
         await page.context.close()
 

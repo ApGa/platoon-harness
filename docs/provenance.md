@@ -105,9 +105,12 @@ an estimate is an annotation.
 An estimator reads the record, then writes what it found beside the journal, in `annotations.sqlite`, with no runtime, on a live
 session or a closed one. `Session.annotate` and the `annotate` command are the one way in, and each statement is checked against
 the journal: it names its producer and version, the events it is about and rests on, and the `head` it read at, which names the
-trace, and each of those events lies at or below that head. A value is given when its status is `scored` and only then, so nothing
-unscored is zero. A second estimator, or a second version, writes beside the first. This one is a toy, labelled as one, and its
-target is an event of each agent's own, the first the walk reached, never a spawn, which its spawner made:
+trace, and each of those events lies at or below that head. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`,
+and a value is given when it is `scored` and only then, so no other is ever zero; an event nobody said anything of is unscored,
+which no status says. A team's reward targets its episode's `episode.closed`, an agent's its first `agent.started`, never the
+spawn its spawner made, a turn's a `turn.started` and a call's its `model.called`. A second estimator, or a second version, writes
+beside the first. This one is a toy, labelled as one, and its target is an event of each agent's own, the first the walk reached,
+never a spawn:
 
 ```python
 async def even_split(session, outcome):
@@ -133,6 +136,29 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
+## What can train
+
+`eligibility` says whether an agent's work in one episode can train, from the record alone, and what trains is the training
+system's to decide:
+
+```python
+async def what_can_train(session, agent, episode):
+    """An agent's attribution and verdict in an episode, and each bar to training it or any call of its met."""
+    answer = await session.eligibility(agent, episode)
+    bars = [bar.reason for bar in answer.reasons]
+    while True:
+        bars += [bar.reason for call in answer.calls for bar in call.reasons]
+        if answer.cursor is None:
+            return answer.attribution, answer.verdict, bars
+        answer = await session.eligibility(agent, episode, after=answer.cursor)
+```
+
+An agent is `exact` where every start of it recorded its trainable level met and no other agent's admission names its backend ids,
+and `forked` once a native child of its harness is seen. Its bars are `not_trainable`, with the level its start recorded,
+`shared_key`, `forked` and `no_end`, and a call's own are `outside_episode`, `person`, for a turn a person held or a person's entry
+its agent was handed before it, and `purpose`, for a call made for something other than its turn or a compaction. A program's
+message is no person's. It reads the levels each start recorded, so a result kept or lost since changes no answer.
+
 ## From the command line
 
 Each query is a command of its name, and prints its answer as JSON:
@@ -141,6 +167,7 @@ Each query is a command of its name, and prints its answer as JSON:
 $ platoon-harness lineage fix-auth --ref task/tasks/1@3
 $ platoon-harness contributors fix-auth --ref task/tasks/1@3
 $ platoon-harness exposure fix-auth --agent @lead --ref task/tasks/1@3
+$ platoon-harness eligibility fix-auth --agent @lead --episode task-17
 $ platoon-harness annotate fix-auth --target task/tasks/1@3 --kind credit --producer mine --producer-version 1 \
     --scope local --status scored --value 0.5 --head-seq 812
 $ platoon-harness annotations fix-auth --target task/tasks/1@3

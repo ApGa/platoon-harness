@@ -15,8 +15,9 @@ __all__ = ["ANNOTATIONS", "Annotate", "Annotation", "Status"]
 
 ANNOTATIONS = "annotations.sqlite"
 
-Status = Literal["scored", "invalid", "error", "cancelled", "unscored"]
-"""How an estimate came out. Only `scored` has a value, so invalid, error, cancelled and unscored are never zero."""
+Status = Literal["scored", "invalid", "error", "timeout", "cancelled"]
+"""How an estimate came out. Only `scored` has a value, so the other four are never zero, and with no statement at all a
+target is unscored, which no status says."""
 
 EventRef = Annotated[str, Field(pattern=r"^[^\s@#]+@[1-9]\d{0,17}$", max_length=1024)]
 
@@ -35,7 +36,7 @@ class Annotate(Args):
     scope: Annotated[
         Literal["local", "team"], Field(description="`local` for the target's own, `team` for what its team shares.")
     ]
-    status: Annotated[Status, Field(description="`scored`, `invalid`, `error`, `cancelled` or `unscored`.")]
+    status: Annotated[Status, Field(description="`scored`, `invalid`, `error`, `timeout` or `cancelled`.")]
     value: Annotated[
         float | None, Field(allow_inf_nan=False, description="The estimate, given when `status` is `scored` alone.")
     ] = None
@@ -47,7 +48,7 @@ class Annotate(Args):
     @model_validator(mode="after")
     def _valued(self) -> "Annotate":
         if (self.value is not None) != (self.status == "scored"):
-            raise ValueError("a value is given when the status is `scored`, and only then, as unscored is never zero")
+            raise ValueError("a value is given when the status is `scored`, and only then, as no other is ever zero")
         return self
 
 

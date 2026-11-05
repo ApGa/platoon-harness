@@ -37,6 +37,7 @@ from platoon_harness.primitives import (
     PRIMITIVES,
     Condition,
     Contributors,
+    Eligibility,
     Exposure,
     Lineage,
     NotSeen,
@@ -183,6 +184,7 @@ class Session:
         root: str | Path | None = None,
         clock: Clock | None = None,
         plan_login: bool = False,
+        trainable: bool = False,
     ) -> Self:
         """Start a team. You own it, unless `detach` starts a runtime of its own and gives you a guest.
 
@@ -190,15 +192,20 @@ class Session:
         person, `human:<name>`, or a program, `program:<name>`. A program's session issues no owner credential, as
         whoever held it would act as that program, so a guest of it holds a view credential, and it cannot detach.
         `approvals` states a policy over every role's own, which is durable, so it is said here and not when you wait.
-        `plan_login` says several agents may run headless on one plan login, which is refused otherwise.
+        `plan_login` says several agents may run headless on one plan login, which is refused otherwise. `trainable`
+        checks the team as a training system starts it, which an `authority` admits through its gateway, before any
+        harness launches.
         """
         _refuse_across_processes(detach, authority, clock)
+        if trainable and authority is None:
+            raise Refused("invalid", "a trainable session's agents reach their model through an authority's gateway")
         if detach and principal.startswith("program:"):
             raise Refused("unsupported", "a program's session issues no owner credential, so only its own process acts")
 
         async def enter(self: Session) -> None:
-            options = {"name": name, "root": root, "principal": principal, "approvals": approvals, "cwd": cwd}
-            preparing = asyncio.ensure_future(asyncio.to_thread(prepare, team, plan_login=plan_login, **options))
+            options: dict[str, Any] = {"name": name, "root": root, "principal": principal, "approvals": approvals}
+            options |= {"cwd": cwd, "plan_login": plan_login, "trainable": trainable}
+            preparing = asyncio.ensure_future(asyncio.to_thread(prepare, team, **options))
             try:
                 folder = await asyncio.shield(preparing)
             except asyncio.CancelledError:  # A thread runs on, so what it makes is taken back once it has.
@@ -840,6 +847,12 @@ class Session:
         one of them: reachability in the record, never credit. Pass `cursor` as `after`."""
         return Contributors.model_validate(await self._ask("contributors", ref=ref, after=after))
 
+    async def eligibility(self, agent: str, episode: str, *, after: str | None = None) -> Eligibility:
+        """Whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked`
+        or None, and its verdict with every bar, and the same for a page of its model calls. It reads the levels its
+        starts recorded, never a result kept since. Pass `cursor` as `after` for the next page."""
+        return Eligibility.model_validate(await self._ask("eligibility", agent=agent, episode=episode, after=after))
+
     async def annotate(
         self,
         target: str,
@@ -857,9 +870,10 @@ class Session:
         """Say what an estimator found of an event, a `reward` or a `credit`, in `annotations.sqlite` beside the journal
         and never in it, on a live session or a closed one, with no runtime. It is `producer`'s at `producer_version`,
         run with `params`, of the trace up to `head_seq`, at or below which the target and each ref of `evidence` lie:
-        an estimate, never a fact. `value` is given when `status` is `scored` alone, so nothing unscored is zero. The
-        same statement again is answered with the first, and another under the same producer, version, params, target
-        and kind is refused `conflict`."""
+        an estimate, never a fact. `status` is `scored`, `invalid`, `error`, `timeout` or `cancelled`, and `value` is
+        given when it is `scored` alone, so no other is ever zero; with no statement a target is unscored. The same
+        statement again is answered with the first, and another under the same producer, version, params, target and
+        kind is refused `conflict`."""
         if self._view:
             raise Refused("not_permitted", "a view credential reads and never writes, an annotation among it")
         given: dict[str, Any] = {"target": target, "kind": kind, "producer": producer, "scope": scope}

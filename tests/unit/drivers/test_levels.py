@@ -15,6 +15,7 @@ from platoon_harness.drivers.levels import (
     levels,
     speaks_for,
     tool_visibility,
+    unearned,
     unmet_by,
 )
 from platoon_harness.drivers.pi import PiDriver
@@ -25,6 +26,7 @@ PROFILE = Profile(driver="pi", implementation=PI, version="1.4.0", login="gatewa
 HOST = socket.gethostname()
 DOCTOR = "`platoon-harness doctor --check` checks it here and keeps what it found"
 CAPABILITIES = Capabilities(
+    sealed=True,
     tool_paths={"mcp-http", "shell"},
     call_ids="call",
     dialects={"chat"},
@@ -216,6 +218,27 @@ def test_only_a_gateway_key_is_trainable(login):
 
     assert earned.trainable.state == "unmet"
     assert (earned.operational.state, earned.observable.state) == ("met", "met")
+
+
+def test_a_harness_with_no_sealed_launch_is_not_trainable():
+    earned = levels(CAPABILITIES.model_copy(update={"sealed": False}), PROFILE, conformance())
+
+    assert (earned.trainable.state, earned.trainable.reasons) == (
+        "unmet",
+        ("it has no sealed launch, so the user's own setup reaches the policy",),
+    )
+
+
+def test_what_a_result_does_not_prove_of_a_level_is_said_with_what_makes_one():
+    failed = conformance(Check(name="call_ids_reported", state="failed", reason="none came"))
+    other = PROFILE.model_copy(update={"version": "1.5.0"})
+
+    assert unearned(PROFILE, conformance(), "trainable") == ()
+    assert unearned(PROFILE, failed, "trainable") == ("`call_ids_reported` failed: none came",)
+    assert unearned(other, conformance(), "trainable") == (
+        f"conformance ran on pi 1.4.0, and this is pi 1.5.0: {DOCTOR}",
+    )
+    assert unearned(PROFILE, None, "trainable") == (f"no conformance result for pi is kept: {DOCTOR}",)
 
 
 def test_opaque_children_a_role_allows_and_no_call_ids_are_not_trainable():

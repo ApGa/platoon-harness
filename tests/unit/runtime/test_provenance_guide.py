@@ -27,12 +27,15 @@ async def test_the_guide_s_code_runs_on_a_session(tmp_path):
 
     async with Session.start(team, root=tmp_path) as session:
         await in_state(session, "bob", "idle")
+        await session.open_episode("e")
         await session.send("@bob", "please do it")
         sent = await until(lambda: of_type(session, "message.sent"), session, lambda found: len(found) == 2)
         answer = f"{sent[-1].stream}@{sent[-1].version}"
 
         cited = await namespace["citations"](session, answer)
         estimates = await namespace["even_split"](session, answer)
+        trains = await namespace["what_can_train"](session, "@bob", "e")
 
     assert cited == [("inbox/bob@1", "human:you", "seen")]
     assert [(found.target, found.producer, found.value) for found in estimates] == [(answer, "even-split", 1.0)]
+    assert trains == (None, "ineligible", ["not_trainable", "no_end"])

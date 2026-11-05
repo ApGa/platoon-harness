@@ -438,8 +438,12 @@ upstream allows today, not a computed level. Platoon still decides eligibility.
 | Generic exec | **Degraded.** One-shot, `ph` only, no parking. `wait` beyond `hold` refuses `unsupported` | **Minimal.** Turn-end probes and the monitor. Most surfaces are `none` | **Possible,** one process on its own key with a verified profile. Nothing has been verified |
 
 Across adapters: only Claude Code and Codex give an MCP-to-tool-call anchor, Codex's stops at the script, and any harness with a
-shell is blind to `shell_reads` for life. A native child on a shared key stays on the parent and is at most `inferred`. A profile on a
-plan login is never Trainable. Token ids and logprobs come only from the gateway.
+shell is blind to `shell_reads` for life. A native child on a shared key stays on the parent and is never `exact`: a `child.seen`
+makes its agent `forked`. A profile on a plan login is never Trainable. Token ids and logprobs come only from the gateway.
+
+The computed level needs more than this ceiling: a gateway admission, a driver that declares `sealed`, and a result kept on the
+machine that proves trainable, and a trainable session refuses a role without them before any harness launches. No shipped driver
+declares `sealed` yet, so none is trainable today, whatever its column says; each harness's sealed launch is the next step.
 
 ## 5. Native features and coordination
 

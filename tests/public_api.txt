@@ -55,6 +55,7 @@ platoon_harness.drivers.levels.speaks_for
 platoon_harness.drivers.levels.Standing
 platoon_harness.drivers.levels.SURFACES
 platoon_harness.drivers.levels.tool_visibility
+platoon_harness.drivers.levels.unearned
 platoon_harness.drivers.levels.unmet_by
 platoon_harness.drivers.levels.Visibility
 platoon_harness.drivers.Login
@@ -165,11 +166,14 @@ platoon_harness.primitives.Approval
 platoon_harness.primitives.ApprovalRequested
 platoon_harness.primitives.Approvals
 platoon_harness.primitives.Attention
+platoon_harness.primitives.Attribution
+platoon_harness.primitives.Bar
 platoon_harness.primitives.Boards
 platoon_harness.primitives.body_of
 platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boundary
 platoon_harness.primitives.Budgets
+platoon_harness.primitives.CallEligibility
 platoon_harness.primitives.Calls
 platoon_harness.primitives.Capabilities
 platoon_harness.primitives.Changes
@@ -184,6 +188,7 @@ platoon_harness.primitives.Cursor
 platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.Deliveries
 platoon_harness.primitives.Delta
+platoon_harness.primitives.Eligibility
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
 platoon_harness.primitives.Exposure
@@ -357,6 +362,7 @@ platoon_harness.team.Command
 platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
+platoon_harness.team.trainable_problems
 platoon_harness.testing.Ask
 platoon_harness.testing.AskModel
 platoon_harness.testing.Call

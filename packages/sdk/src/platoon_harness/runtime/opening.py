@@ -12,16 +12,17 @@ from typing import Any
 
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, Driver, DriverError, DriverInfo
+from platoon_harness.drivers.levels import Profile, implementation, unearned
 from platoon_harness.extensions import DRIVERS, Installed, load
 from platoon_harness.kernel import NAME, Kernel, Principal, Refused
 from platoon_harness.primitives import PRIMITIVES, Policy
 from platoon_harness.schema import ConfigError, Problem, seconds
-from platoon_harness.team import Budget, Command, Role, Team, team_check
+from platoon_harness.team import Budget, Command, Role, Team, team_check, trainable_problems
 from platoon_harness.tools import instructions, surface_of
 from platoon_harness.topology import Limits, Queue, Topic, compile, scopes
 
 from . import workspaces
-from .paths import find_root, new_folder, sessions_of
+from .paths import find_root, new_folder, read_conformance, sessions_of
 from .workspaces import read_repo
 
 log = logging.getLogger("platoon_harness.runtime")
@@ -69,10 +70,26 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
     return [Problem("plan_login", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]
 
 
+def _untrainable(team: Team, known: Mapping[str, DriverInfo], cwd: Path, root: Path) -> list[Problem]:
+    """What keeps each role's driver from training on this machine: no sealed launch, or no result kept under `root`
+    that proves trainable for the harness it would run, naming what makes one."""
+    problems = []
+    for name, info in known.items():
+        where = f"roles.{name}.harness"
+        if not info.capabilities.sealed:
+            problems.append(Problem(where, f"`{info.name}` has no sealed launch, which a trainable session needs"))
+            continue
+        made = implementation(make_driver(team.roles[name], cwd))
+        profile = Profile(driver=info.name, implementation=made, version=info.version, login="gateway")
+        problems += [Problem(where, why) for why in unearned(profile, read_conformance(root, info.name), "trainable")]
+    return problems
+
+
 def check(
     team: Team,
     *,
     plan_login: bool = False,
+    trainable: bool = False,
     approvals: Policy | None = None,
     cwd: str | Path | None = None,
     root: str | Path | None = None,
@@ -81,6 +98,10 @@ def check(
     """Every problem a session would meet in a team, errors and warnings, at once and before any cost, asking each
     role's driver what it is and git what the session's `cwd` is in. `root` and `name` say where the session's folder
     would be. A team that cannot be resolved raises `ConfigError`.
+
+    `trainable` checks it as a training system starts it: what keeps the team from training, `trainable_problems`, and
+    each role's driver for a sealed launch and a result kept under `root` that proves trainable. Its agents run on the
+    authority's gateway, so no plan login is theirs.
 
     This blocks, because a driver may describe itself by running something, and git runs.
     """
@@ -92,7 +113,9 @@ def check(
     capabilities = {role: info.capabilities for role, info in known.items()}
     checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
     problems += [problem for problem in checked if problem.where not in named]
-    if not plan_login:
+    if trainable:
+        problems += [*trainable_problems(resolved), *_untrainable(resolved, known, cwd, find_root(root))]
+    elif not plan_login:
         problems += _on_a_plan_login(resolved, known)
     folder = sessions_of(find_root(root)) / (name or "")
     problems += workspaces.problems(resolved, cwd=cwd, folder=folder, session=name, approvals=approvals)
@@ -108,9 +131,10 @@ def prepare(
     approvals: Policy | None = None,
     cwd: str | Path | None = None,
     plan_login: bool = False,
+    trainable: bool = False,
 ) -> Path:
     """Check a team and write down how it starts, before any cost, and who starts it, `principal`, a person or a
-    program. The folder is all a runtime then needs.
+    program. `trainable` checks it as a training system starts it. The folder is all a runtime then needs.
 
     This blocks, because a driver may describe itself by running something.
     """
@@ -118,7 +142,9 @@ def prepare(
         what = f"{principal!r} is neither `human:<name>` nor `program:<name>`"
         raise ConfigError([Problem("principal", what)])
     cwd = Path(cwd or ".").resolve()
-    problems = check(team, plan_login=plan_login, approvals=approvals, cwd=cwd, root=root, name=name)
+    problems = check(
+        team, plan_login=plan_login, trainable=trainable, approvals=approvals, cwd=cwd, root=root, name=name
+    )
     if errors := [problem for problem in problems if problem.level == "error"]:
         raise ConfigError(errors)
     for warning in problems:

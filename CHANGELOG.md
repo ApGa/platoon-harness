@@ -4,6 +4,16 @@
 
 ### Added
 
+- `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
+  one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
+  closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR
+  0052.
+- `trainable_problems(team)`, what keeps a team from training, read from the team alone, and `check(team, trainable=True)`, which
+  adds each role's driver, a sealed launch and a result kept under the root that proves trainable, and which
+  `Session.start(trainable=True)`, `prepare(trainable=True)` and `platoon-harness team check --trainable` run. A trainable start needs
+  an authority. `DriverInfo.version` says the harness version a driver would run, where it can tell without starting one, and
+  `levels.unearned` why a result does not prove a level. See ADR 0052.
+- `docs/training.md`, the guide for a training system building on the contract.
 - A session's principal is a person or a program: `Session.start(principal=)` and `prepare(principal=)` take `human:<name>` or
   `program:<name>`, and `Manifest.principal` names it, a manifest from before reading its `human` as one. A program's message goes
   as its reader's setting says, and a session a program starts issues no owner credential, so a guest of its runtime holds a view
@@ -333,6 +343,9 @@
 
 ### Changed
 
+- An annotation's status is one of five, `scored`, `invalid`, `error`, `timeout` or `cancelled`: `timeout` is new, and `unscored` is
+  gone, as no statement is what unscored is. See ADR 0052.
+- `trainable` needs a driver that declares `sealed`, as well as a gateway login. See ADR 0052.
 - `run` sends its prompt to every agent the session starts unless `--to` names one, where it refused a team that started several,
   and refuses a team that starts none. See ADR 0051.
 - `episode.close` closes on `based_on`, the refs of what the episode came to, checked as any citation is, in place of a free

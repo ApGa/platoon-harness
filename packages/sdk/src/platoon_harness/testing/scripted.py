@@ -157,7 +157,7 @@ class ScriptedDriver:
         self._turns: Iterator[Sequence[Step]] = iter(turns)
         self._capabilities = capabilities
         self._version = version
-        self._info = DriverInfo(name=name, capabilities=capabilities)
+        self._info = DriverInfo(name=name, version=version, capabilities=capabilities)
         self._messages: list[dict[str, Any]] = []
         self._pending: deque[Delivery] = deque()
         self._landed: set[str] = set()

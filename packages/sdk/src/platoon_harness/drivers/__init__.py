@@ -86,10 +86,13 @@ class DriverError(Exception):
 
 
 class DriverInfo(Model):
-    """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one."""
+    """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one, and
+    `version` is the harness version it would run, None when it cannot tell without starting one: `ready` says the
+    version that runs."""
 
     name: str
     login: Login | None = None
+    version: str | None = None
     capabilities: Capabilities = Capabilities()
 
 

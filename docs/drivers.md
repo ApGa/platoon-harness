@@ -31,7 +31,9 @@ method promises:
 
 - **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer. `login` comes
   from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
-  tell. `prepare` reads it to refuse several agents on one plan login.
+  tell. `prepare` reads it to refuse several agents on one plan login. `version` is the harness version it would run, where it can tell
+  without starting one, which a trainable session's check holds a kept result to before any harness launches; `ready` says the version
+  that runs.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits

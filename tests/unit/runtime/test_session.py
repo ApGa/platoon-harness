@@ -48,6 +48,7 @@ COVERED = {
     "channel.create": "create_channel",
     "channel.list": "channels",
     "effect.settle": "settle_effect",
+    "eligibility": "eligibility",
     "episode.close": "close_episode",
     "episode.open": "open_episode",
     "exposure": "exposure",

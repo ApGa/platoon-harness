@@ -10,6 +10,7 @@ from . import (
     channels,
     clients,
     delivery,
+    eligibility,
     lifecycle,
     messages,
     provenance,
@@ -39,6 +40,7 @@ from .common import (
     stream_of,
 )
 from .delivery import courier
+from .eligibility import Attribution, Bar, CallEligibility, Eligibility
 from .exposures import Exposures
 from .messages import Cursor, Deliveries, Entry
 from .provenance import (
@@ -150,6 +152,7 @@ PRIMITIVES = (
     Extension("lineage", ops=[provenance.lineage], views=[Calls]),
     Extension("uses", ops=[provenance.uses], views=[References]),
     Extension("contributors", ops=[provenance.contributors]),
+    Extension("eligibility", ops=[eligibility.eligibility]),
 )
 
 __all__ = [
@@ -170,9 +173,12 @@ __all__ = [
     "ApprovalRequested",
     "Approvals",
     "Attention",
+    "Attribution",
+    "Bar",
     "Boards",
     "Boundary",
     "Budgets",
+    "CallEligibility",
     "Calls",
     "Capabilities",
     "Changes",
@@ -184,6 +190,7 @@ __all__ = [
     "Cursor",
     "Deliveries",
     "Delta",
+    "Eligibility",
     "Entry",
     "Exited",
     "Exposure",

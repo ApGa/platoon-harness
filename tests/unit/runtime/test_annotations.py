@@ -40,12 +40,24 @@ async def test_an_estimator_writes_credit_beside_a_live_session_and_a_closed_one
         assert await history.annotations("session@1") == []
 
 
-async def test_unscored_is_never_zero(tmp_path):
+async def test_a_reward_row_has_one_of_five_statuses_and_a_value_only_when_scored(tmp_path):
+    """No statement at all is what unscored is, so no status says it, and none but `scored` is ever zero."""
     async with Session.start(solo(), name="s", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         head = await session.head()
 
-        unscored = await session.annotate("agent/bob@1", status="unscored", head_seq=head, **CREDIT)
+        written = [
+            await session.annotate(
+                "agent/bob@1",
+                status=status,
+                value=1.0 if status == "scored" else None,
+                head_seq=head,
+                **{**CREDIT, "producer": status},
+            )
+            for status in ("scored", "invalid", "error", "timeout", "cancelled")
+        ]
+        with pytest.raises(Refused) as unscored:
+            await session.annotate("agent/bob@1", status="unscored", head_seq=head, **{**CREDIT, "producer": "z"})
         with pytest.raises(Refused) as valued:
             await session.annotate(
                 "agent/bob@1", status="error", value=0.0, head_seq=head, **{**CREDIT, "producer": "x"}
@@ -53,8 +65,14 @@ async def test_unscored_is_never_zero(tmp_path):
         with pytest.raises(Refused) as missing:
             await session.annotate("agent/bob@1", status="scored", head_seq=head, **{**CREDIT, "producer": "y"})
 
-    assert unscored.value is None and unscored.status == "unscored"
-    assert valued.value.refusal.code == missing.value.refusal.code == "invalid"
+    assert [(row.status, row.value) for row in written] == [
+        ("scored", 1.0),
+        ("invalid", None),
+        ("error", None),
+        ("timeout", None),
+        ("cancelled", None),
+    ]
+    assert valued.value.refusal.code == missing.value.refusal.code == unscored.value.refusal.code == "invalid"
     assert "`scored`, and only then" in str(valued.value.refusal.detail)
 
 
@@ -92,7 +110,7 @@ async def test_an_annotation_is_about_events_of_the_trace_it_read(tmp_path):
             ("agent/bob@1", head + 9),
         ):
             with pytest.raises(Refused) as refused:
-                await session.annotate(target, status="unscored", head_seq=head_seq, **CREDIT)
+                await session.annotate(target, status="invalid", head_seq=head_seq, **CREDIT)
             refusals.append(refused.value.refusal.code)
 
         assert refusals == ["not_found", "invalid", "invalid", "invalid"]
@@ -104,7 +122,7 @@ async def test_a_view_credential_writes_no_annotation_and_reading_writes_nothing
         await in_state(session, "bob", "idle")
         async with Session.attach("s", root=tmp_path, view=True) as viewer:
             with pytest.raises(Refused) as refused:
-                await viewer.annotate("agent/bob@1", status="unscored", head_seq=1, **CREDIT)
+                await viewer.annotate("agent/bob@1", status="invalid", head_seq=1, **CREDIT)
             assert await viewer.annotations() == []
 
         assert refused.value.refusal.code == "not_permitted"
@@ -118,7 +136,7 @@ async def test_estimators_writing_one_statement_at_once_write_it_once(tmp_path):
         head = await session.head()
 
         written = await asyncio.gather(
-            *(session.annotate("agent/bob@1", status="unscored", head_seq=head, **CREDIT) for _ in range(16))
+            *(session.annotate("agent/bob@1", status="invalid", head_seq=head, **CREDIT) for _ in range(16))
         )
 
         assert len({found.id for found in written}) == 1 and len(await session.annotations()) == 1
@@ -137,7 +155,7 @@ def test_annotations_have_one_checked_way_in():
 async def test_annotations_are_found_by_target_and_never_hold_up_a_writer(tmp_path):
     async with Session.start(solo(), name="s", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-        await session.annotate("agent/bob@1", status="unscored", head_seq=await session.head(), **CREDIT)
+        await session.annotate("agent/bob@1", status="invalid", head_seq=await session.head(), **CREDIT)
         with contextlib.closing(sqlite3.connect(session.folder / ANNOTATIONS)) as db:
             mode = db.execute("PRAGMA journal_mode").fetchone()[0]
             plan = db.execute(

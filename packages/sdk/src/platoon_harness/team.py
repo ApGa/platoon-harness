@@ -62,6 +62,7 @@ __all__ = [
     "Role",
     "Team",
     "team_check",
+    "trainable_problems",
 ]
 
 
@@ -461,4 +462,48 @@ def team_check(
     if not unsound:
         ops = (operation for extension in (*PRIMITIVES, *loaded) for operation in extension.ops)
         problems += _template_problems(team, {operation.name for operation in ops if operation.tool}, capabilities)
+    return tuple(problems)
+
+
+def _reached_alone(team: Team) -> str | None:
+    """Why only a person brings a session of this team to its `until`, or None when something else does: no program
+    runs, a role's agents that stay end only when told to finish, and a role nothing starts a person must start."""
+    until = team.topology.until or "settled"
+    if until == "program":
+        return "`program` is left to a program, and none runs, so only someone closing the session ends it"
+    role = until.removeprefix("role:")
+    if until == "settled" or role not in team.roles:
+        return None
+    stays = team.roles[role].stays
+    if stays or (stays is None and team.starts(role)):
+        return f"`{role}`'s agents stay until told to finish, and no person is there to tell them: set `stays = false`"
+    if not team.starts(role) and not team.spawners(role):
+        return f"nothing starts `{role}`, so only a person could"
+    return None
+
+
+def trainable_problems(team: Team) -> tuple[Problem, ...]:
+    """What keeps a team from training, read from the team alone, with no driver to ask: a model or an auth profile a
+    role names, as a training system's gateway gives both; approvals left to `ask`, which nobody answers in a rollout; a
+    harness's own agents allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`;
+    and an `until` only a person reaches."""
+    problems = []
+    for name, role in team.roles.items():
+        where = f"roles.{name}"
+        if role.model is not None:
+            problems.append(Problem(f"{where}.model", "a trainable team names no model: its gateway serves one"))
+        if role.auth is not None:
+            what = "a trainable team names no auth profile: its gateway is its access"
+            problems.append(Problem(f"{where}.auth", what))
+        if role.approvals == "ask":
+            what = "approvals left to `ask` wait for a person, and nobody answers in a rollout: say `allow` or `deny`"
+            problems.append(Problem(f"{where}.approvals", what))
+        if role.allow_native_children:
+            what = "a harness's own agents call on their parent's key, so no call of theirs is tied to an agent"
+            problems.append(Problem(f"{where}.allow_native_children", what))
+        if role.workspace not in ("shared", "isolated"):
+            what = f"a trainable team works in `shared` or `isolated`, not `{role.workspace}`"
+            problems.append(Problem(f"{where}.workspace", what))
+    if (why := _reached_alone(team)) is not None:
+        problems.append(Problem("topology.until", why))
     return tuple(problems)

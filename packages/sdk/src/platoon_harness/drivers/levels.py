@@ -76,6 +76,7 @@ __all__ = [
     "levels",
     "speaks_for",
     "tool_visibility",
+    "unearned",
     "unmet_by",
 ]
 
@@ -242,6 +243,8 @@ def _observable(capabilities: Capabilities, profile: Profile, conformance: Confo
 def _trainable(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
     if profile.login != "gateway":
         yield "unmet", f"exact data needs a gateway key, and this login is {profile.login or 'unknown'}"
+    if not capabilities.sealed:
+        yield "unmet", "it has no sealed launch, so the user's own setup reaches the policy"
     if capabilities.call_ids == "none":
         yield "unmet", "it cannot tie a model call to an agent"
     if capabilities.native_children == "opaque" and profile.allow_native_children:
@@ -251,6 +254,14 @@ def _trainable(capabilities: Capabilities, profile: Profile, conformance: Confor
     elif profile.tools == "unverified":
         yield "unverified", "tools unverified"
     yield from _verified(profile, conformance, *_STANDS_ON["trainable"])
+
+
+def unearned(
+    profile: Profile, conformance: Conformance | None, level: Literal["operational", "observable", "trainable"]
+) -> tuple[str, ...]:
+    """Why a result does not prove what `level` stands on for the harness a profile names, naming what makes one that
+    does, or nothing when it proves it."""
+    return tuple(reason for _, reason in _verified(profile, conformance, *_STANDS_ON[level]))
 
 
 def levels(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Levels:

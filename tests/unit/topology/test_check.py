@@ -4,7 +4,7 @@ import pytest
 
 from platoon_harness.kernel import Extension, Grant
 from platoon_harness.schema import ConfigError, Problem
-from platoon_harness.team import Budget, Capabilities, Command, Role, Team, team_check
+from platoon_harness.team import Budget, Capabilities, Command, Role, Team, team_check, trainable_problems
 from platoon_harness.tools import PREAMBLE
 from platoon_harness.topology import (
     Group,
@@ -425,6 +425,35 @@ def test_a_prompt_goes_to_the_agent_named_or_to_every_agent_the_session_starts()
     assert team.recipients("@worker-2") == ("@worker-2",)
     with pytest.raises(ConfigError, match="@child is no agent this session starts: it starts @lead, @worker-1"):
         team.recipients("@child")
+
+
+TRAINABLE = {"harness": "no-driver-has-this-name", "approvals": "allow"}
+
+
+@pytest.mark.parametrize(
+    ("role", "topology", "where", "said"),
+    [
+        ({}, {}, None, None),
+        ({"model": "m"}, {}, "roles.a.model", "names no model"),
+        ({"auth": "keys"}, {}, "roles.a.auth", "names no auth profile"),
+        ({"approvals": "ask"}, {}, "roles.a.approvals", "nobody answers in a rollout"),
+        ({"allow_native_children": True}, {}, "roles.a.allow_native_children", "their parent's key"),
+        ({"workspace": "worktree"}, {}, "roles.a.workspace", "`shared` or `isolated`, not `worktree`"),
+        ({}, {"until": "program"}, "topology.until", "only someone closing the session ends it"),
+        ({}, {"until": "role:a"}, "topology.until", "stay until told to finish"),
+        ({"count": 0}, {"until": "role:a"}, "topology.until", "nothing starts `a`"),
+        ({"stays": False}, {"until": "role:a"}, None, None),
+    ],
+)
+def test_trainable_problems_reads_the_team_file_alone(role, topology, where, said):
+    """No driver is asked, so a harness nothing provides is no problem of its."""
+    team = Team.model_validate(
+        {"roles": {"a": {**TRAINABLE, **role}}, "auth": {"keys": {"env": ["KEY"]}}, "topology": topology}
+    )
+
+    found = trainable_problems(team)
+
+    assert [(problem.where, said in problem.what) for problem in found] == ([] if where is None else [(where, True)])
 
 
 def test_a_grant_of_another_op_is_no_spawning():

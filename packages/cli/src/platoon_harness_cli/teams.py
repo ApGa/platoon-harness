@@ -62,7 +62,9 @@ For example:
 
 
 @group.command
-async def check(team: Path | None = None, /, *, source: Source = Source(), plan_login: bool = False) -> int:
+async def check(
+    team: Path | None = None, /, *, source: Source = Source(), plan_login: bool = False, trainable: bool = False
+) -> int:
     """Say every problem a session would meet in a team, at once, before any cost.
 
     It exits 78 when one is an error.
@@ -73,8 +75,12 @@ async def check(team: Path | None = None, /, *, source: Source = Source(), plan_
         A team file. Left out, the project file.
     plan_login
         Several agents may run headless on one plan login, as `run --plan-login` says.
+    trainable
+        Check it as a training system starts it, on this machine: what keeps the team from training, and each role's
+        driver for a sealed launch and a result kept here that proves trainable.
     """
-    problems = await asyncio.to_thread(problems_of, source.load(team), plan_login=plan_login)
+    loaded = source.load(team)
+    problems = await asyncio.to_thread(problems_of, loaded, plan_login=plan_login, trainable=trainable)
     for problem in problems:
         say(safe(f"{problem.level}: {problem}"))
     if not problems:

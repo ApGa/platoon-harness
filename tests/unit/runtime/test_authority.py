@@ -2,7 +2,6 @@
 keeps of it."""
 
 import json
-from collections.abc import Iterable, Sequence
 from typing import Any
 from urllib.parse import quote
 
@@ -11,51 +10,15 @@ from pydantic import ValidationError
 
 from platoon_harness import Refused, Session, Team
 from platoon_harness.config import Secret
-from platoon_harness.drivers import AgentSpec, Capabilities, DriverInfo, Gateway, Item, Ready, Reporter
+from platoon_harness.drivers import AgentSpec, Gateway, Item, Ready, Reporter
 from platoon_harness.kernel import is_held
-from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, SpawnRequest
+from platoon_harness.runtime import Admission, SpawnRequest
 from platoon_harness.testing import Exit, Say, ScriptedDriver
-from platoon_harness.testing.scripted import Step
 
 from .support import harness, in_state, journal, of_type, until
+from .training import ORIGIN, Gating, Sealed
 
 pytestmark = pytest.mark.timeout(30)
-
-SEALED = Capabilities(
-    persistent=True, resume=True, boundaries={"turn"}, tool_paths={"mcp-http"}, call_ids="call", sealed=True
-)
-ORIGIN = "http://127.0.0.1:9"
-
-
-class Sealed(ScriptedDriver):
-    """A scripted harness that says it launches sealed and that its own login is a plan, and that runs what it is
-    given: it reads nothing of its access until a step asks the model."""
-
-    def __init__(self, turns: Iterable[Sequence[Step]] = ()) -> None:
-        super().__init__(turns, capabilities=SEALED)
-
-    def describe(self) -> DriverInfo:
-        return DriverInfo(name="scripted", login="plan", capabilities=SEALED)
-
-
-class Gating(LocalAuthority):
-    """Admits each agent through a gateway of its own, by a bearer and a backend id of its own, and keeps what it was
-    asked and told."""
-
-    def __init__(self, team: Team, model: str = "m") -> None:
-        super().__init__(team)
-        self.model = model
-        self.asked: list[SpawnRequest] = []
-        self.told: list[tuple[AgentRef, AgentOutcome]] = []
-
-    async def admit(self, spawn: SpawnRequest) -> Admission:
-        self.asked.append(spawn)
-        gateway = Gateway(origin=ORIGIN, bearer=Secret(f"bearer-of-{spawn.agent}"), model=self.model)
-        token = Secret(f"token-{len(self.asked)}")
-        return Admission(token=token, access=gateway, backend={"agent_id": f"id-of-{spawn.agent}"})
-
-    async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
-        self.told.append((agent, outcome))
 
 
 def team_on(make: Any, **role: Any) -> Team:
