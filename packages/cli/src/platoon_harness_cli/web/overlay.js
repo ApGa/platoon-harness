@@ -77,9 +77,11 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .pop.x-ask { max-width: 380px; }
 .row.special.x-off, .pop .it.x-off, .votes.x-off { opacity: .55; cursor: not-allowed; }
 .x-provenance .x-part { padding: 12px 14px 4px; font-weight: 700; }
-.x-provenance .x-line { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 5px 14px; font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.x-provenance .x-line { display: grid; grid-template-columns: 76px 1fr; gap: 8px; width: 100%; padding: 5px 14px; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; line-height: 1.45; text-align: left; overflow-wrap: anywhere; }
 .x-provenance .x-line[data-x-follow] { cursor: pointer; }
-.x-provenance .x-line[data-x-follow]:hover { background: var(--hover); }
+.x-provenance .x-line[data-x-follow]:hover, .x-provenance .x-line[data-x-follow]:focus-visible { background: var(--hover); }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; }
+.msg:hover .actions, .msg:focus-within .actions { opacity: 1; pointer-events: auto; }
 .x-provenance .x-kind { color: var(--faint); }
 .x-provenance .x-warn { color: var(--warn); }
 button[disabled] { opacity: .55; cursor: not-allowed; }
@@ -625,10 +627,11 @@ X.Provenance = class {
   destroy() { this.dead = true; }
 };
 
-// One line of the pane: a part's heading, or the kind a link is known by beside its words, which follow it when it
-// opens an event, and otherwise say why it opens nothing.
+// One line of the pane: a part's heading, or the kind a link is known by beside its words. A line that opens an event
+// is a button, which the keyboard reaches and follows, and one that opens nothing says why in its words.
 X.line = l => l.kind === 'heading' ? html`<div class="x-part">${l.text}</div>`
-  : html`<div class="x-line${l.warn ? ' x-warn' : ''}"${l.ref ? html` data-x-follow="${l.ref}" title="Follow it into the provenance of ${l.ref}"` : ''}><span class="x-kind">${l.kind}</span><span>${l.text}</span></div>`;
+  : l.ref ? html`<button type="button" class="x-line${l.warn ? ' x-warn' : ''}" data-x-follow="${l.ref}" title="Follow it into the provenance of ${l.ref}"><span class="x-kind">${l.kind}</span><span>${l.text}</span></button>`
+  : html`<div class="x-line${l.warn ? ' x-warn' : ''}"><span class="x-kind">${l.kind}</span><span>${l.text}</span></div>`;
 
 // Show an event's provenance in the pane, read again when it is the one shown. One followed there that a chat shows opens
 // in that chat too.

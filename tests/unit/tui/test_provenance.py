@@ -109,8 +109,8 @@ async def test_provenance_on_a_chosen_line_shows_sources_uses_and_contributors_e
         "heading Sources\nmade by @you\nlineage read at head",
         "heading Uses\nuses read at head",
         "1 citing it, 1 following from it, 0 after it, and handed to 1 agent",
-        "observed @lead by context/lead@",
-        "and its harness said it took it",
+        "observed @lead, first by context/lead@",
+        "and its harness said it took an offer of it",
         f"declared {ANSWERED} message.sent by @lead: the tests pass",
         f"cause {ANSWERED} message.sent by @lead: the tests pass",
         "heading Contributors\ncontributors read at head",
@@ -145,12 +145,12 @@ async def test_following_an_edge_shows_its_lineage_and_escape_comes_back(root):
     for words in (
         f"message.sent {ANSWERED}: the tests pass",
         "made by @lead in turn t1-",
-        "no model call is joined: no tool call's id came with it",
-        "counting what was handed over below its commit, at seq",
+        "no model call is joined: its command came with no tool call's id",
+        "counting what was handed over below where the journal recorded it, at seq",
         "declared inbox/lead@1 by @you: check the tests; seen: wake context/lead@",
-        "taken by turn_start",
+        "taken, as its harness's turn_start report says",
         "cause inbox/lead@1 message.sent by @you: check the tests",
-        "@lead was handed 2 offers below the bound, 2 said taken and 0 never",
+        "@lead was handed 2 offers below the bound, 2 said taken there and 0 not",
         "@lead: made it, 1 event, the first inbox/you@1, 0 hops back",
         "@you: declared, cause, 1 event, the first inbox/lead@1, 1 hop back",
     ):
@@ -197,8 +197,9 @@ async def test_credit_is_shown_only_as_what_each_estimator_said_by_its_producer_
         await choose(pilot, app, "check the tests")
         text = await asked(pilot, ASKED)
 
-    assert f"credit 0.5 by even-split 0, team, of the trace at head {head:,}" in text
-    assert f"credit no value, unscored, by judge 2, team, of the trace at head {head:,}" in text
+    params = "params 44136fa3"
+    assert f"credit 0.5 by even-split, version 0, {params}, team, of the trace at head {head:,}" in text
+    assert f"credit no value, unscored, by judge, version 2, {params}, team, of the trace at head {head:,}" in text
     assert "each an estimate by its producer at its version" in text
     assert " 0.5 " not in text.replace("credit 0.5 by", "")
 

@@ -184,7 +184,7 @@ For example:
 * [`contributors`](#platoon-harness-contributors): Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
 * [`effect`](#platoon-harness-effect): The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
 * [`episode`](#platoon-harness-episode): The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
-* [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness never said it took, the surfaces no result proves observed and the gaps content could have come through.
+* [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not said it took by then, the surfaces no result proves observed and the gaps content could have come through.
 * [`lineage`](#platoon-harness-lineage): Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
 * [`message`](#platoon-harness-message): The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
 * [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
@@ -1383,7 +1383,7 @@ For example:
 platoon-harness exposure --agent STR --ref STR [OPTIONS] SESSION
 ```
 
-Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness never said it took, the surfaces no result proves observed and the gaps content could have come through.
+Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not said it took by then, the surfaces no result proves observed and the gaps content could have come through.
 
 Seen means handed over and taken, never understood, and an agent with a shell never answers `not_seen`. Refused `invalid` for a range or a body's hash, which name no event, and for a person or a program, whose reads are no evidence, and `not_found` when no such event or agent exists.
 

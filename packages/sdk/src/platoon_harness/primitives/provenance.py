@@ -8,7 +8,7 @@ annotation. See architecture section 11.
 import json
 import sqlite3
 from collections import deque
-from collections.abc import Callable, Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import cache, partial
 from typing import Annotated, Any, Literal, NamedTuple, get_args
 
@@ -286,10 +286,11 @@ class NotSeen(Model):
 
 
 class Unknown(Model):
-    """Whether the event reached the agent below the bound is not known, and these are why: the offers of it its harness
-    never said it took, `handed`, empty when it was never handed through us; the surfaces no result proves observed,
-    `standing`; the gaps content could have come through, `incidents`; and `older_offers`, from before offer payload 3,
-    which named bodies by hash and announces by their own refs, so none can be tied to this event."""
+    """Whether the event reached the agent below the bound is not known, and these are why: the offers of it made below
+    the bound that its harness had not said there it took, `handed`, empty when none was made through us below it; the
+    surfaces no result proves observed, `standing`; the gaps content could have come through, `incidents`; and
+    `older_offers`, from before offer payload 3, which named bodies by hash and announces by their own refs, so none can
+    be tied to this event."""
 
     answer: Literal["unknown"] = "unknown"
     handed: tuple[Offer, ...]
@@ -323,7 +324,10 @@ class Node(Model):
 class Made(Model):
     """Who made an event: its `maker`, None for a commit nobody's workspace made alone, in `turn`, driven `by` a person
     holding the agent or by nobody, the model `call` that chose it, joined through the tool call it came under and the
-    tool `item` holding that call's id, and how its maker ran, from its latest start below: `assurance` and `levels`."""
+    tool `item` holding that call's id, or for a harness's report of an item through the call that report names, and
+    how its maker ran, from its latest start below: `assurance` and `levels`. For a tool item, `anchor` is its tool call
+    as its agent's commands came under it, and `commands` names the first event of each, which is its own act, as many
+    as a page holds, empty when none came under it; for any other event it is None."""
 
     maker: str | None
     turn: str | None
@@ -331,6 +335,7 @@ class Made(Model):
     call: str | None
     anchor: Anchor | None
     item: str | None
+    commands: tuple[str, ...] | None
     assurance: str | None
     levels: dict[str, Any] | None
 
@@ -505,11 +510,13 @@ def decide(
 
 class Join(NamedTuple):
     """How an event reaches the model call that chose it: the tool call it came under, the tool item holding that
-    call's id, and the call that item names, each None where the records hold no id to join by."""
+    call's id, and the call that item names, each None where the records hold no id to join by; and for a tool item,
+    the commands its agent made under its id, or None for any other event."""
 
     anchor: Anchor | None
     item: Event | None
     call: Event | None
+    commands: Sequence[Event] | None = None
 
 
 def _asked(txn: Txn, ref: str) -> Event:
@@ -535,29 +542,47 @@ def _agent_of(made_by: str | None) -> str | None:
     return name_of(made_by) if made_by is not None and made_by.startswith("agent:") else None
 
 
-def _commands(txn: Txn, agent: str, anchor: str) -> int:
-    """How many of an agent's commands came under one tool call's id: those of its events that end a command."""
-    stamps = txn.view(Stamps)
-    return sum(
-        1 for seq in txn.view(References).anchored(agent, anchor) if (found := stamps.event(seq)) and found.outcome
-    )
+def _commands(txn: Txn, agent: str, anchor: str) -> list[Event]:
+    """Each of an agent's commands under one tool call's id, by its first event, which is its own act: a command's
+    events are written together, and the last of them holds its outcome."""
+    stamps, firsts, starting = txn.view(Stamps), [], True
+    for seq in txn.view(References).anchored(agent, anchor):
+        found = _at(stamps, seq)
+        if starting:
+            firsts.append(found)
+        starting = found.outcome is not None
+    return firsts
 
 
 def _join(txn: Txn, event: Event) -> Join:
     """The join through ids both records hold: the op's anchor equal to a tool item's `native_id`, and that item's
-    `call_id`. An event its agent's own command did not make under a tool call joins nothing."""
+    `call_id`. A harness's report of an item is joined by its own ids. Anything else joins nothing."""
+    if event.type == "item.recorded" and event.agent is not None:
+        return _reported(txn, event.agent, event.data)
     if not event.native or not event.actor.startswith("agent:"):
         return Join(None, None, None)
-    agent, stamps = name_of(event.actor), txn.view(Stamps)
+    agent, stamps, calls = name_of(event.actor), txn.view(Stamps), txn.view(Calls)
     key, id = next(iter(event.native.items()))
-    calls = txn.view(Calls)
     item = calls.item_for(agent, id)
     called = None if item is None or item["call_id"] is None else calls.call(agent, item["call_id"])
     return Join(
-        Anchor(key=key, id=id, ops=_commands(txn, agent, id)),
+        Anchor(key=key, id=id, ops=len(_commands(txn, agent, id))),
         None if item is None else stamps.event(item["seq"]),
         None if called is None else stamps.event(called),
     )
+
+
+def _reported(txn: Txn, agent: str, item: Mapping[str, Any]) -> Join:
+    """An item as its harness reported it: the call its reports name, and for a tool item the commands its agent made
+    under its `native_id`, each under the anchor that names it."""
+    calls, native_id = txn.view(Calls), item["native_id"]
+    first = calls.item_for(agent, native_id) if native_id else None
+    call_id = item["call_id"] if first is None else first["call_id"]
+    called = None if call_id is None else calls.call(agent, call_id)
+    commands = _commands(txn, agent, native_id) if item["kind"] == "tool" and native_id else []
+    anchor = Anchor(key=next(iter(commands[0].native)), id=native_id, ops=len(commands)) if commands else None
+    call = None if called is None else txn.view(Stamps).event(called)
+    return Join(anchor, None, call, commands if item["kind"] == "tool" else None)
 
 
 def _bound(event: Event, join: Join, agent: str | None) -> Bound:
@@ -618,7 +643,7 @@ def _offer(
     """An offer as an answer shows it, and with `forgetting` the compactions since it was confirmed."""
     anchor = None
     if row["key"] is not None:
-        anchor = Anchor(key=row["key"], id=row["anchor"], ops=_commands(txn, row["agent"], row["anchor"]))
+        anchor = Anchor(key=row["key"], id=row["anchor"], ops=len(_commands(txn, row["agent"], row["anchor"])))
     confirmed = None
     if row["confirmed"] is not None:
         fields = ("turn", "boundary", "evidence", "native_id")
@@ -805,10 +830,10 @@ class AskedOf(Args):
 @op("exposure", query=True)
 def exposure(txn: Txn, a: AskedOf) -> Seen | NotSeen | Unknown:
     """Say whether an event reached an agent through us before another, `before`, or by now: `seen`, with each offer of
-    it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness never
-    said it took, the surfaces no result proves observed and the gaps content could have come through. Seen means
-    handed over and taken, never understood, and an agent with a shell never answers `not_seen`. Refused `invalid` for a
-    range or a body's hash, which name no event, and for a person or a program, whose reads are no evidence, and
+    it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not
+    said it took by then, the surfaces no result proves observed and the gaps content could have come through. Seen
+    means handed over and taken, never understood, and an agent with a shell never answers `not_seen`. Refused `invalid`
+    for a range or a body's hash, which name no event, and for a person or a program, whose reads are no evidence, and
     `not_found` when no such event or agent exists."""
     if txn.view(Agents).get(a.agent) is None:
         found = txn.view(Principals).named(a.agent)
@@ -846,6 +871,7 @@ def lineage(txn: Txn, a: Asked) -> Lineage:
         call=None if join.call is None else _ref(join.call),
         anchor=join.anchor,
         item=None if join.item is None else _ref(join.item),
+        commands=None if join.commands is None else tuple(_ref(found) for found in join.commands[:_PAGE]),
         assurance=None if start is None else start["assurance"],
         levels=None if start is None else json.loads(start["levels"]),
     )

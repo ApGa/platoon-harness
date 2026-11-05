@@ -126,15 +126,16 @@ when it opens, in the words the browser's pane uses ([provenance.md](provenance.
 
 | Part | What it says |
 |---|---|
-| Sources | Who made it, in which turn, and the model call that chose it, through the tool item that joins them, or why no call is joined. Each citation, with its maker and what its citer had been handed of it, `seen` with each offer its harness said it took and each compaction since, `unknown` with its reasons, and for a range whether its lines were shown; each cause; its previous version or a commit's parents; and what its maker was handed below where the answer stops counting, with the gaps in its record |
-| Uses | What cites it, what follows from it, its next version or the commits it is a parent of, and each agent it was handed to, with whether its harness said it took it |
-| Contributors | Each maker a walk back along citations, causes and ancestry reaches, with the kinds that reached it and its gaps, and apart from them each maker whose work was only handed to one of them. It weighs and ranks nobody |
-| Credit and rewards | What estimators said of it, each by its producer and version, with its scope and status and a value only when scored, beside any other and never summed |
+| Sources | Who made it, in which turn, and the model call that chose it, through the tool item that joins them, or why no call is joined. A tool item, which is how an agent's own writes show in its transcript, names the call its harness's report names and opens what each command of the agent's under it made. Each citation, with its maker and what its citer had been handed of it, `seen` with each offer its harness said it took and each compaction since, a read's saying where its result returned, `unknown` with its reasons, and for a range whether its lines were shown; each cause; its previous version or a commit's parents; and what its maker was handed below where the answer stops counting, with the gaps in its record |
+| Uses | What cites it, what follows from it, its next version or the commits it is a parent of, and each agent it was handed to, by its first offer, with whether its harness said it took an offer of it |
+| Contributors | Each maker a walk back along citations, causes and ancestry reaches, the outcome's own maker saying it made it, with the kinds that reached it and its gaps, and apart from them each maker whose work was only handed to one of them. It weighs and ranks nobody |
+| Credit and rewards | What estimators said of it, each by its producer, version and params, with its scope and status and a value only when scored, beside any other and never summed |
 
 Each link is labelled by how it is known, `declared`, `observed`, `cause`, `ancestry` or `gap`, and Enter on it shows that event's
-provenance; Esc goes back one hop, and from the first leaves. A line that opens nothing, a commit git holds and the journal does
-not, or an `Informed-By` value naming nothing the session holds, says why in its place. Each part says the head it was read at;
-Sources says where it stops counting, below the model call that chose the event or its commit; and an answer whose turn had not
+provenance; Esc goes back one hop, and from the first leaves. A line that opens nothing, such as a commit git holds and the journal
+does not, says why in its place, and an `Informed-By` value that cites nothing says why it does not. Each part says the head it was
+read at; Sources says where it stops counting, below the model call that chose the event, where the journal recorded it, or a
+commit's look; what an answer does not hold below there reads as not held there, never as never; and an answer whose turn had not
 ended says a later report can still confirm an offer or join a call. Yellow marks what is unknown, missing or cut, and a part an
 answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
 until the journal holds it.

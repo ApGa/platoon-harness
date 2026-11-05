@@ -57,6 +57,15 @@ async def provenance_of(page: Page, said: str) -> None:
     await message.locator("[data-x-provenance]").click()
 
 
+async def tabbed_to(page: Page, focused: str) -> str:
+    """Press Tab until what has focus says `focused`, as a person would, a few presses at most, and say what it said."""
+    for _ in range(8):
+        await page.keyboard.press("Tab")
+        if said := await page.evaluate(f"{focused} || null"):
+            return said
+    raise AssertionError(f"Tab never reached {focused}")
+
+
 def line(page: Page, kind: str, text: str):
     return page.locator(f"{PANE} .x-line", has=page.locator(".x-kind", has_text=kind), has_text=text)
 
@@ -83,11 +92,12 @@ async def test_provenance_on_a_message_shows_sources_uses_and_contributors(chrom
         await expect(pane).to_contain_text(f"lineage read at head {head:,}")
         await expect(pane).to_contain_text("@you: declared, cause, 1 event, the first inbox/bob@1, 1 hop back")
         await expect(pane).to_contain_text("weighing and ranking nobody")
-        await expect(line(page, "credit", f"0.5 by even-split 0, team, of the trace at head {head:,}")).to_have_count(1)
+        said = f"0.5 by even-split, version 0, params 44136fa3, team, of the trace at head {head:,}"
+        await expect(line(page, "credit", said)).to_have_count(1)
         await session.annotate(ANSWERED, producer="judge", producer_version="2", **(estimate | {"status": "unscored"}))
         await provenance_of(page, "the tests pass")
-        await expect(line(page, "credit", "no value, unscored, by judge 2")).to_have_count(1, timeout=SECONDS)
-        await expect(line(page, "credit", "0.5 by even-split 0")).to_have_count(1)
+        await expect(line(page, "credit", "no value, unscored, by judge, version 2")).to_have_count(1, timeout=SECONDS)
+        await expect(line(page, "credit", "0.5 by even-split, version 0")).to_have_count(1)
         await page.context.close()
 
     assert errors == []
@@ -107,7 +117,7 @@ async def test_a_ref_in_the_pane_is_followed_into_its_chat_or_its_own_pane(chrom
         await expect(page.locator("#main .mhead")).to_contain_text("bob")
         chat_shown = page.url
 
-        offered = line(page, "observed", "@bob by context/bob@")
+        offered = line(page, "observed", "@bob, first by context/bob@")
         await expect(offered).to_have_count(1, timeout=SECONDS)
         offer = (await offered.get_attribute("data-x-follow")) or ""
         await offered.click()
@@ -140,8 +150,54 @@ async def test_the_pane_says_what_the_record_cannot_know(chromium: Browser, root
         await expect(page.locator("#pane h2")).to_have_text(f"Provenance of {ASKED}", timeout=SECONDS)
         await expect(pane.locator(".note")).to_have_text(RECORD)
         await expect(pane).to_contain_text("no estimator has said anything of it")
-        await expect(line(page, "observed", "its harness said it took it")).to_have_count(1)
+        await expect(line(page, "observed", "its harness said it took an offer of it")).to_have_count(1)
         await expect(pane.locator(".x-line:not([data-x-follow])", has_text="made by @you")).to_have_count(1)
         await page.context.close()
 
+    assert errors == []
+
+
+async def test_the_pane_is_opened_and_followed_from_the_keyboard(chromium: Browser, root: Path):
+    """A message's actions show while focus is in it, so Tab reaches Provenance, and each link in the pane is a button,
+    which Tab reaches and Enter follows."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await answered(session)
+        page, errors = await opened(chromium, web.link("control"))
+        await chat(page, "bob & you")
+        message = message_of(page, "the tests pass")
+        await expect(message).to_have_count(1, timeout=SECONDS)
+
+        await message.locator("[data-x-reply]").focus()
+        await expect(message.locator(".actions")).to_have_css("opacity", "1")
+        await tabbed_to(page, "document.activeElement.dataset.xProvenance")
+        await page.keyboard.press("Enter")
+        heading = page.locator("#pane h2")
+        await expect(heading).to_have_text(f"Provenance of {ANSWERED}", timeout=SECONDS)
+        await expect(page.locator(f"{PANE} button.x-line").first).to_be_visible(timeout=SECONDS)
+        await page.locator("#pane [data-close-pane]").focus()
+        followed = await tabbed_to(page, "document.activeElement.dataset.xFollow")
+        await page.keyboard.press("Enter")
+        await expect(heading).to_have_text(f"Provenance of {followed}", timeout=SECONDS)
+        await page.context.close()
+
+    assert errors == []
+
+
+async def test_a_message_s_actions_stay_within_it_beside_the_pane(chromium: Browser, root: Path):
+    """With the pane open at 1024 pixels, the chat is narrow, and a message's actions wrap within it rather than cover
+    what is beside it."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await answered(session)
+        page, errors = await opened(chromium, web.link("control"))
+        await page.set_viewport_size({"width": 1024, "height": 768})
+        await chat(page, "bob & you")
+        await provenance_of(page, "the tests pass")
+        await expect(page.locator("#pane h2")).to_have_text(f"Provenance of {ANSWERED}", timeout=SECONDS)
+        message = message_of(page, "the tests pass")
+        await message.hover()
+        actions, whole = await message.locator(".actions").bounding_box(), await message.bounding_box()
+        await page.context.close()
+
+    assert actions is not None and whole is not None
+    assert whole["x"] <= actions["x"] and actions["x"] + actions["width"] <= whole["x"] + whole["width"]
     assert errors == []

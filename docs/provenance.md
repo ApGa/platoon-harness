@@ -80,13 +80,15 @@ line, and Provenance among a message's actions in the browser, on a view link to
 in four parts: its sources, its uses, its contributors, and what estimators said of it. Each link is labelled by how it is known,
 `declared`, `observed`, `cause`, `ancestry` or `gap`, and following one shows that event's provenance; a line that opens nothing says
 why. Each part says the head it was read at, where it stops counting, and whether its turn was still open, and a page an answer cut
-names the command below that reads on. [tui.md](tui.md) and [web.md](web.md) are the clients' guides.
+names the command below that reads on. A harness's report of a tool item names the model call it says chose it and opens what each
+command of its agent's under that call's id made, so an agent's own transcript leads to its writes. What was not said below a bound
+reads as not said there, never as never. [tui.md](tui.md) and [web.md](web.md) are the clients' guides.
 
 ## What `unknown` means
 
-`unknown` lists its reasons: offers its harness never said it took, surfaces of the agent's harness no stored conformance result
-proves observed, and gaps content could have come through. An empty list of offers is how "never handed through us" reads, which is
-not "never seen": every harness here has a shell, and what reaches an agent through a shell, a file or git leaves nothing in the
+`unknown` lists its reasons: offers its harness had not said by the bound that it took, surfaces of the agent's harness no stored
+conformance result proves observed, and gaps content could have come through. An empty list of offers is how "not handed over
+through us below the bound" reads, which is not "never seen": every harness here has a shell, and what reaches an agent through a shell, a file or git leaves nothing in the
 journal. So nothing answers `not_seen` today. [compatibility.md](compatibility.md), Provenance per harness, says what each harness's
 reports let the runtime confirm and join.
 

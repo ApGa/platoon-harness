@@ -1313,7 +1313,7 @@ await session.contributors("task/tasks/1@3")                                    
   showed, its evidence, the turn it landed in, and each compaction since, up to the one that forgot it, marked `forgot` or `kept` by
   the id its harness reported delivering that input under and `unsaid` otherwise, as a read always is. It answers `NotSeen` when nothing offered the event there, a
   stored conformance result proves every coverage surface observed, and no gap content could come through lies below the bound. Else it
-  answers `Unknown`, listing the offers never confirmed, the surfaces no result proves observed, the gaps content could have come
+  answers `Unknown`, listing the offers not confirmed below the bound, the surfaces no result proves observed, the gaps content could have come
   through and the offers from before payload 3, which no event can be tied to. No check proves a surface yet, so **at M2 nothing answers
   `NotSeen`**, and an agent with a shell never will. `Seen` means handed over and taken, never understood, and a compaction never undoes
   it.
@@ -1345,8 +1345,10 @@ lineage.
 a message, show one event at a time, in words `platoon_harness_cli.provenance` makes once for both: Sources, Uses, Contributors, and
 Credit and rewards. A line that carries another event's words opens on that event. Each link is labelled by the kind it is known by
 and followed into its own event, a hop at a time; each answer says its head, where it stops counting, whether its turn was open and
-what its page left out, naming the command that reads on; and why a link opens nothing is said in its place. Credit is shown only
-as each estimator's statement, by producer and version, never summed. See [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md).
+what its page left out, naming the command that reads on; and why a link opens nothing is said in its place. A harness's report of
+a tool item names the call its report names and opens what each command of its agent's under that item's id made. What an answer
+does not hold below its bound is said as not held there, never as never. Credit is shown only as each estimator's statement, by
+producer, version and params, never summed. See [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md).
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
 `(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)` with a `scope`, unique on
@@ -1492,7 +1494,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
   `attention` view. Provenance among a message's actions opens a pane over `x_provenance`, a read of ours beside the `view_*`
   that a view link reaches too, in the terminal's words, and the projection keeps the ref of the event each line shows, which the
-  pane opens on, and following a link a chat shows opens that chat there. [web.md](web.md) is its guide, and
+  pane opens on, and following a link a chat shows opens that chat there. Each link in the pane is a button, and a message's
+  actions show while focus is in it, so the keyboard reaches both. [web.md](web.md) is its guide, and
   [ADR 0027](adr/0027-the-browser-on-our-backend.md), [ADR 0028](adr/0028-acting-from-the-page.md),
   [ADR 0035](adr/0035-the-board-and-the-map-over-messages.md) and [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md)
   its decisions.

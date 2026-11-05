@@ -26,7 +26,7 @@ from platoon_harness.primitives import (
     Unknown,
     Uses,
 )
-from platoon_harness.primitives.provenance import Bound, Coverage, Facts, Incident, decide
+from platoon_harness.primitives.provenance import Anchor, Bound, Coverage, Facts, Incident, decide
 from platoon_harness.testing import scripted
 
 from .support import (
@@ -365,6 +365,35 @@ async def test_a_tool_links_to_a_model_call_only_through_ids_both_hold(kernel):
         (False, False, None),
     ]
     assert [lineage(kernel, ref).bound.by for ref in refs] == ["call", "commit", "commit", "commit"]
+
+
+async def test_a_harness_s_report_of_an_item_is_joined_by_its_own_ids(kernel):
+    """An item names the call that made it, and a tool item's id is the anchor its agent's commands came under, so its
+    lineage names that call and each command's own event; a tool no command came under names none."""
+    await spawn(kernel, "alice")
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await call(kernel, "bob", "c1", "t1", "t2")
+    await report(kernel, "bob", "item", kind="message", gist="saying", call_id="c1")
+    sent = [
+        result_of(await kernel.submit(bob, "message.send", {"to": "@alice", "gist": gist}, native=tool("t1")))["ref"]
+        for gist in ("once", "twice")
+    ]
+    await done(kernel, "bob", "t1", "t2")
+    called = ref_of(of_type(kernel, "model.called")[-1])
+    items = {
+        (event.data["native_id"], event.data["phase"]): ref_of(event) for event in of_type(kernel, "item.recorded")
+    }
+
+    made = {key: lineage(kernel, ref) for key, ref in items.items()}
+
+    assert {key: (found.made.call, found.bound.by) for key, found in made.items()} == dict.fromkeys(
+        made, (called, "call")
+    )
+    assert made["t1", "completed"].made.commands == tuple(sent)
+    assert made["t1", "completed"].made.anchor == Anchor(key="claudecode/toolUseId", id="t1", ops=2)
+    assert (made["t2", "completed"].made.commands, made["t2", "completed"].made.anchor) == ((), None)
+    assert made[None, None].made.commands is None
 
 
 async def test_seen_lists_each_compaction_since_as_forgot_kept_or_unsaid(kernel):

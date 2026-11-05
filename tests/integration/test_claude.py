@@ -46,6 +46,7 @@ from platoon_harness.testing import (
 )
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE
+from platoon_harness_cli.provenance import Line
 
 from ..unit.drivers.support import Heard
 from ..unit.runtime.gitting import repository
@@ -679,7 +680,23 @@ async def test_the_tui_shows_the_call_that_chose_a_cited_write_and_what_its_cite
     assert chosen.text.endswith(", of claudecode/toolUseId toolu_send") and chosen.ref is not None
     assert f"counting what was handed over below the model call {chosen.ref} that chose it" in bound.text
     assert declared.ref == clients.CITED and declared.text.startswith(f"{clients.CITED} by @you: ")
-    assert "seen: wake" in declared.text and "taken by tool_item toolu_read" in declared.text
+    assert "seen: wake" in declared.text and "its result returned to its harness, under toolu_read" in declared.text
+
+
+async def test_a_tool_item_names_the_call_its_report_names_and_opens_the_write_its_command_made(tmp_path, monkeypatch):
+    """Claude Code reports the answer as a tool item in bob's transcript, under the id the answer's command came with,
+    so its panel joins the call that chose it and opens the answer, and says no id is missing."""
+    read = ToolCall("mcp__ph__message_read", {"after": 0}, id="toolu_read")
+    replies = (read, ToolCall("mcp__ph__message_send", clients.CITING, id="toolu_send"), "answered")
+    async with FakeModel(*replies) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        lines, call, written = await clients.a_tool_item_and_what_its_command_made(team, tmp_path)
+
+    (chosen,) = [line for line in lines if line.text.startswith("chosen by the model call ")]
+    (made,) = [line for line in lines if " its agent's command made " in line.text]
+    assert chosen == Line("", f"chosen by the model call {call}, which its harness's report of it names", call)
+    assert made == Line("", f"under tool call toolu_send, its agent's command made {written}", written)
+    assert not [line for line in lines if "no tool call's id came with it" in line.text]
 
 
 async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path, monkeypatch):

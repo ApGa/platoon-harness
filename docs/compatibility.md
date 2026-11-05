@@ -530,7 +530,9 @@ the shell call that runs it, and neither Claude Code 2.1.316 nor pi 1.5.0 hands 
 FakeModel [L]; Codex's shell does not run on the machine this was checked on. `exec` reports no tool item at all. Every harness here has a
 shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each. The terminal's `/provenance`
 and the browser's Provenance pane say what the answers say: on Claude Code the call that chose a cited write and the tool item that
-joins it, and the read before it taken by that item [L]; elsewhere why no call is joined, as their reports above leave it.
+joins it, and the read before it returned to the harness under that item's id [L]; a tool item's own panel names the call its report
+names and opens the write its command made [L]; elsewhere why no call is joined, as their reports above leave it. A read a Codex
+script made is said to have returned to that script, which may never have shown it to the model.
 
 ### Workspaces
 

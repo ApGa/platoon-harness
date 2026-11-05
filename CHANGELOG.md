@@ -8,10 +8,15 @@
   chosen line's provenance in a panel; in the browser, Provenance among a message's actions opens a pane, on a view link too, from
   `x_provenance`, a read of ours beside SwarmChat's. Both show one event at a time, worded once for both: its sources, its uses, its
   contributors, and what estimators said of it, each link labelled by how it is known and followed into its own event, each answer's
-  head, bound and open turn said, `unknown` with its reasons, why a link opens nothing in its place, and credit only as each
-  estimator's statement, by producer and version, never summed. A line that carries another event's words opens on that event. The
-  browser's projection, at version 6, keeps the ref of the event each line shows, so a link a chat shows opens that chat too. See ADR
-  0043.
+  head, bound and open turn said, what it does not hold below its bound said as not held there and never as never, `unknown` with its
+  reasons, where a read's result returned, to its harness or to the Code Mode script that made a Codex call, why a link opens nothing
+  in its place, and credit only as each estimator's statement, by producer, version and params, never summed. A line that carries
+  another event's words opens on that event, and a harness's report of a tool item names the call its report names and opens what
+  its agent's command under it made, so an agent's own transcript leads to its writes. The browser's links are buttons and a
+  message's actions show while focus is in it, so the keyboard reaches both. The browser's projection, at version 6, keeps the ref
+  of the event each line shows, so a link a chat shows opens that chat too. `lineage` names, for a harness's report of an item, the
+  call that report names, and for a tool item the first event of each command its agent made under its id, as `Made.commands`. See
+  ADR 0043.
 - Agents are asked to cite. The preamble template has a ninth slot, `citing`, which asks an agent holding a write of content to
   put the `ref` of what its write rests on in `based_on`, and the default template fills it, so asking is on by default; a tool's
   description says what `based_on` is and never asks, so a template without the slot asks nothing. It costs 78 bytes a request, 20

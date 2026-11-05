@@ -13,7 +13,7 @@ from platoon_harness.primitives import PRIMITIVES
 from platoon_harness_cli.provenance import Line, lines_of
 
 from ..kernel.support import grant, result_of
-from ..primitives.support import ROLES, confirm, report, send, spawn, start_turn
+from ..primitives.support import ROLES, channel, confirm, of_type, report, send, spawn, start_turn
 from ..primitives.test_provenance import (
     CHILD,
     CITED,
@@ -23,12 +23,14 @@ from ..primitives.test_provenance import (
     commit,
     committed,
     done,
+    ref_of,
     scenario,
     stored,
     tool,
 )
 
 ESTIMATE = {"kind": "credit", "scope": "team", "status": "scored", "head_seq": 49, "producer_version": "0"}
+ESTIMATE |= {"params_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"}
 
 
 @pytest.fixture
@@ -88,8 +90,8 @@ async def test_each_link_is_labelled_by_how_it_is_known_and_opens_its_event(kern
     ]
     declared = next(line for line in sources if line.kind == "declared")
     assert declared.text.startswith("board/notes/spec@1 by @alice: v1; seen: wake context/bob@1 showed")
-    assert "taken by command_lifecycle n1, then 1 compaction: forgot" in declared.text
-    assert "taken by tool_item t1, then 1 compaction: unsaid" in declared.text
+    assert "taken, as its harness's command_lifecycle report n1 says, then 1 compaction: forgot" in declared.text
+    assert "its result returned to its harness, under t1, then 1 compaction: unsaid" in declared.text
 
 
 async def test_every_answer_says_its_head_where_it_stops_and_whether_its_turn_was_open(kernel):
@@ -115,8 +117,8 @@ async def test_unknown_is_spelled_out_with_its_reasons_and_a_claim_is_never_draw
     (declared,) = [line for line in lines(kernel, cited) if line.kind == "declared"]
 
     assert declared.text == (
-        f"{unseen} by @alice: a note to self; unknown: never handed over through us; 7 surfaces of its harness no "
-        "stored conformance result proves observed"
+        f"{unseen} by @alice: a note to self; unknown: not handed over through us below the bound; 7 surfaces of its "
+        "harness no stored conformance result proves observed"
     )
     assert declared.warn and declared.ref == unseen
 
@@ -136,7 +138,7 @@ async def test_what_a_page_left_out_is_said_with_the_command_that_reads_on(kerne
     assert sum(line.kind in ("observed", "gap") for line in sources) == 32
     said = f"32 of 44 shown, newest first: `platoon-harness lineage s --ref {final} --after {cursor}` reads on"
     assert Line("", said, warn=True) == sources[-1]
-    assert "@bob was handed 40 offers below the bound, 0 said taken and 40 never, with 4 gaps in its record" in [
+    assert "@bob was handed 40 offers below the bound, 0 said taken there and 40 not, with 4 gaps in its record" in [
         line.text for line in sources
     ]
 
@@ -150,7 +152,11 @@ async def test_a_link_that_opens_nothing_says_why(kernel):
     unopened = [line for line in sources if line.ref is None and line.kind]
 
     assert unopened == [
-        Line("unresolved", "Informed-By 'the spec' names no recorded commit and no event of the session", warn=True),
+        Line(
+            "unresolved",
+            "Informed-By 'the spec' cites nothing: it names no commit git could resolve and no event of the session",
+            warn=True,
+        ),
         Line("ancestry", f"commit {CITED[:12]}, which git holds and the journal has no record of"),
     ]
     assert any("below the look that recorded it" in line.text for line in sources)
@@ -180,8 +186,8 @@ async def test_an_estimate_is_shown_by_its_producer_and_version_beside_another_a
     said = part(lines(kernel, refs["message"], estimates), "Credit and rewards")
 
     assert said[1:] == [
-        Line("credit", "0.5 by even-split 0, team, of the trace at head 49"),
-        Line("reward", "no value, invalid, by judge 0, local, of the trace at head 49"),
+        Line("credit", "0.5 by even-split, version 0, params 44136fa3, team, of the trace at head 49"),
+        Line("reward", "no value, invalid, by judge, version 0, params 44136fa3, local, of the trace at head 49"),
     ]
     assert part(lines(kernel, refs["message"]), "Credit and rewards")[1:] == [
         Line("", "no estimator has said anything of it")
@@ -220,7 +226,148 @@ async def test_not_seen_and_a_walk_cut_short_are_said_as_the_answers_say_them(ke
     (said,) = [line for line in found if line.kind == "declared"]
     assert said.text.endswith(
         "; not seen: nothing offered it below the bound, every surface of its harness is proved observed, and no gap "
-        "content could come through lies below it"
+        "below it could have let content through"
     )
     assert said.warn, "not seen is no evidence the citer used what it cites"
     assert Line("", "the walk stopped at its limit, so more may lie beyond what it reached", warn=True) in found
+
+
+async def test_no_line_says_never_where_the_record_holds_only_nothing_below_the_bound(kernel):
+    """A citation made before its event was handed over, and one made before its handover was confirmed: each answer
+    counts below its bound, and the harness's report that came after is in the record, so nothing reads as never."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = (await send(kernel, alice, "@bob", "the spec"))["ref"]
+    early = (await send(kernel, bob, "@alice", "resting on it", based_on=[sent]))["ref"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await start_turn(kernel, "bob")
+    later = (await send(kernel, bob, "@alice", "again", based_on=[sent]))["ref"]
+    await confirm(kernel, "bob", handed["input"], evidence="message_start", native_id="entry-1")
+
+    said = {ref: [line.text for line in lines(kernel, ref)] for ref in (early, later, sent)}
+
+    assert not [text for found in said.values() for text in found if "never" in text]
+    assert any("unknown: not handed over through us below the bound" in text for text in said[early])
+    assert any("unknown: handed 1 time and not said taken below the bound" in text for text in said[later])
+    assert any("its harness had not said it took it below the bound" in text for text in said[later])
+    assert any(text.endswith("and its harness said it took an offer of it") for text in said[sent])
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_a_commit_nobody_s_workspace_made_alone_is_cited_by_nobody_the_record_names(kernel):
+    trailers = [{"written": CITED[:8], "sha": CITED}, {"written": "agent/alice@1", "sha": None}]
+    refs = await committed(kernel, [commit(CITED, [], "@alice", [])], [commit(CHILD, [], None, trailers)])
+
+    sources = part(lines(kernel, refs[CHILD]), "Sources")
+
+    (declared,) = [line for line in sources if line.kind == "declared"]
+    (unresolved,) = [line for line in sources if line.kind == "unresolved"]
+    assert sources[0] == Line("", "made by nobody the record names")
+    assert declared.text.endswith("; its citer is nobody the record names, so no reading of it is evidence")
+    assert unresolved.text == (
+        "Informed-By 'agent/alice@1' cites nothing: it names an event, and nobody the record names made the commit, so "
+        "nobody can be shown to have read it"
+    )
+    assert not [line for line in sources if "no agent" in line.text]
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_each_informed_by_value_that_cites_nothing_says_why(kernel):
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "notes", kind="board")
+    post = {"board": "notes", "name": "spec", "gist": "the spec", "body": await stored(kernel, "one\n")}
+    spec = result_of(await kernel.submit(bob, "board.post", post))["ref"]
+    written = [("e" * 12, "e" * 40), ("the spec", None), (f"{spec}#L2-5", None), (spec, None)]
+    trailers = [{"written": value, "sha": sha} for value, sha in written]
+    refs = await committed(kernel, [commit(CHILD, [], "@alice", trailers)])
+
+    said = [line for line in part(lines(kernel, refs[CHILD]), "Sources") if line.kind == "unresolved"]
+
+    assert [(line.text.partition(" cites nothing: it ")[2], line.ref) for line in said] == [
+        ("names commit eeeeeeeeeeee, which git holds and the journal held no record of", None),
+        ("names no commit git could resolve and no event of the session", None),
+        ("names lines its event's body does not hold", spec),
+        ("names an event @alice had neither made nor been handed when the look ran", spec),
+    ]
+    assert all(line.warn for line in said)
+
+
+async def test_a_read_that_returned_to_a_code_mode_script_says_it_went_to_the_script(kernel):
+    """Codex's `callId` names the script that made a call, so a result taken under it went to that script, which may
+    never have shown it to the model, and every call of the script shares it."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = (await send(kernel, alice, "@bob", "the spec"))["ref"]
+    await start_turn(kernel, "bob")
+    for _ in range(2):
+        result_of(await kernel.submit(bob, "message.read", {"after": 0}, native={"callId": "exec-1"}))
+    await done(kernel, "bob", "exec-1")
+    cited = (await send(kernel, bob, "@alice", "read it", based_on=[sent]))["ref"]
+
+    (declared,) = [line for line in lines(kernel, cited) if line.kind == "declared"]
+
+    shared = "its result returned to the Code Mode script that made call exec-1, which 2 of its agent's commands share"
+    assert shared in declared.text and "returned to its harness" not in declared.text
+
+
+async def test_an_outcome_s_own_maker_made_it_whatever_else_reached_it(kernel):
+    await spawn(kernel, "alice")
+    bob = await spawn(kernel, "bob")
+    await channel(kernel, "notes", kind="board")
+    noted = result_of(await kernel.submit(bob, "board.post", {"board": "notes", "name": "n", "gist": "mine"}))["ref"]
+    answer = (await send(kernel, bob, "@alice", "as I noted", based_on=[noted]))["ref"]
+
+    (row,) = [line for line in part(lines(kernel, answer), "Contributors") if line.text.startswith("@bob:")]
+
+    assert row.text.startswith(f"@bob: made it, and reached by declared, 2 events, the first {answer}, 0 hops back")
+
+
+async def test_a_reader_is_named_by_its_first_offer_and_whether_its_harness_took_any(kernel):
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    sent = (await send(kernel, alice, "@bob", "twice"))["ref"]
+    for anchor in ("t1", "t2"):
+        result_of(await kernel.submit(bob, "message.read", {"after": 0}, native=tool(anchor)))
+    await done(kernel, "bob", "t2")
+    first = ref_of(next(event for event in of_type(kernel, "context.offered") if event.agent == "bob"))
+
+    (row,) = [line for line in part(lines(kernel, sent), "Uses") if line.kind == "observed"]
+
+    assert row == Line("observed", f"@bob, first by {first}, and its harness said it took an offer of it", first)
+
+
+async def test_a_tool_item_names_the_call_its_report_names_and_what_its_agent_s_command_made(kernel):
+    refs = await scenario(kernel)
+    items = [event for event in of_type(kernel, "item.recorded") if event.data["native_id"] == "t2"]
+    called = of_type(kernel, "model.called")[0]
+
+    item, call = part(lines(kernel, ref_of(items[-1])), "Sources"), part(lines(kernel, ref_of(called)), "Sources")
+
+    assert item[1:3] == [
+        Line("", f"chosen by the model call {refs['c2']}, which its harness's report of it names", refs["c2"]),
+        Line("", f"under tool call t2, its agent's command made {refs['message']}", refs["message"]),
+    ]
+    assert "below the model call" in item[3].text
+    assert call[1] == Line("", "no model call is joined: the runtime recorded it, not a command of its agent's")
+    assert not [line for line in (*item, *call) if "no tool call's id came with it" in line.text]
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_a_commit_s_maker_is_joined_to_no_call_as_a_look_found_it_in_git(kernel):
+    refs = await committed(kernel, [commit(ROOT, [], "@alice", [])])
+
+    sources = part(lines(kernel, refs[ROOT]), "Sources")
+
+    assert sources[1] == Line("", "no model call is joined: a look found it in git, which names no tool call")
+
+
+async def test_estimates_that_differ_only_in_their_params_say_so(kernel):
+    refs = await scenario(kernel)
+    estimates = [
+        {**ESTIMATE, "producer": "even-split", "value": 0.25},
+        {**ESTIMATE, "producer": "even-split", "value": 0.75, "params_hash": "e070fd" + "0" * 58},
+    ]
+
+    said = part(lines(kernel, refs["message"], estimates), "Credit and rewards")
+
+    assert [line.text.partition(", team")[0] for line in said[1:]] == [
+        "0.25 by even-split, version 0, params 44136fa3",
+        "0.75 by even-split, version 0, params e070fd00",
+    ]

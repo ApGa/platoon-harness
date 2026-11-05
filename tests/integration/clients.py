@@ -12,7 +12,7 @@ from platoon_harness.kernel import Delta, Event
 from platoon_harness.primitives import Contributors, Exposure, Lineage, Seen, Uses
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
-from platoon_harness_cli.provenance import Line
+from platoon_harness_cli.provenance import Line, read
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.transcript import Focus, Transcript
@@ -179,6 +179,32 @@ async def the_tui_shows_where_a_cited_write_came_from(team: Team, root: Path) ->
             panel = app.screen
             assert isinstance(panel, Provenance)
             return panel.lines
+
+
+class Panelled(NamedTuple):
+    """What a provenance panel says of `bob`'s tool item for its cited write, with the ref of the model call that item's
+    report names and of the write its command made."""
+
+    lines: list[Line]
+    call: str
+    written: str
+
+
+async def a_tool_item_and_what_its_command_made(team: Team, root: Path) -> Panelled:
+    """`bob`, woken by a person's message, reads its inbox and answers citing it: the panel of the tool item its
+    harness reported for the answer, as a person reaches it from bob's own transcript, where the answer shows as it."""
+    answering = Team.model_validate({**team.canonical(), "topology": {"edges": {"bob": ["human"]}}})
+    async with Session.start(answering, root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "read your inbox, then answer citing what you read")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        sent = next(event for event in await of_type(session, "message.sent") if event.actor == "agent:bob")
+        (anchor,) = sent.native.values()
+        items = [event for event in await of_type(session, "item.recorded") if event.data["native_id"] == anchor]
+        calls = [event for event in await of_type(session, "model.called") if event.model is not None]
+        call = next(event for event in calls if event.model and event.model.call_id == items[0].data["call_id"])
+        panel = await read(session, f"{items[-1].stream}@{items[-1].version}")
+        return Panelled(panel.lines, f"{call.stream}@{call.version}", f"{sent.stream}@{sent.version}")
 
 
 async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, root: Path) -> None:
