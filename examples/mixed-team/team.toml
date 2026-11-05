@@ -1,0 +1,18 @@
+# A Claude Code lead and a Codex worker in one session, working in the session's own checkout, the `shared` workspace.
+# The lead adds work to the queue `tasks` and starts workers, everyone shares the board `notes`, and a worker reports
+# back by message. Swap a harness with `--set`, as README.md shows.
+
+[roles.lead]
+harness = "claude"
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "codex"
+
+[topology.manager-worker]
+manager = "lead"
+workers = "worker"
+
+[budget]
+turns = 12
+wall = "15m"

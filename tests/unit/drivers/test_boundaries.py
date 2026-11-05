@@ -19,6 +19,7 @@ PUBLIC = (
     *ROOT.glob("*.md"),
     *ROOT.glob("packages/*/README.md"),
     *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
+    *(path for path in (ROOT / "examples").rglob("*") if path.is_file()),
     *(ROOT / "tests" / "conformance").glob("*.py"),
 )
 LOCAL = re.compile(

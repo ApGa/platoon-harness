@@ -4,6 +4,11 @@
 
 ### Added
 
+- `examples/mixed-team`, a Claude Code lead and a Codex worker in one session, coordinating through the queue `tasks`, the
+  board `notes` and messages, with a README that runs it headless, watches and steers it from the terminal UI and the page,
+  reads its provenance, swaps a role's harness for pi or OpenHands with `--set`, and runs it with no keys on scripted
+  stand-ins. The test suite runs the file with those stand-ins, from the command line and from the page with the terminal UI
+  attached, and on the real binaries against FakeModel, a Claude Code lead beside each of Codex, pi and OpenHands.
 - An empty read names what was already handed over. An agent's read that finds nothing past its own cursor answers with `next`,
   naming what the offer that last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that
   reads it again, in the words of its surface, unless that offer was a read of its own: a wake moves the cursor past what it

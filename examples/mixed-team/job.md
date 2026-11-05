@@ -1,0 +1,1 @@
+Put one task on the queue `tasks`: list three risks of caching DNS answers, as a note named `risks` on the board `notes`. Spawn one worker to do it. When it reports, read the note, then finish with a one-line summary that cites it.
