@@ -360,9 +360,10 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   `since` the `turn.started` of the turn it cut; the
   incarnation is the version of `runtime.started` on the stream `runtime`.
 - **A daemon that fails** is restarted with backoff, from a tenth of a second to thirty, and a run that lasts a minute forgives the
-  failures before it. The first failure since a run that lasted is `daemon.failed`, naming the daemon and its error, and the next run
-  that lasts is `daemon.recovered`, so a daemon that fails on every pass is said once and stands in `attention` until it runs a
-  minute or a new runtime starts, and never passes for a quiet session. See
+  failures before it. A failure that begins a run of them, or says another error than the last, is `daemon.failed`, naming the daemon
+  and its error, and the next run that lasts is `daemon.recovered`, so a daemon that fails on every pass with one error is said once
+  and stands in `attention`, with where its traceback is, what starts it anew and its latest error, until it runs a minute or a new
+  runtime starts, and never passes for a quiet session. See
   [ADR 0046](adr/0046-a-daemon-that-keeps-failing-needs-a-person.md).
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 - **A kind of an extension's own.** The host starts only the kinds in this table, and recovery settles only those. An extension that

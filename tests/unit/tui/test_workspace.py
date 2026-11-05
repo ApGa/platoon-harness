@@ -622,7 +622,7 @@ async def test_a_daemon_that_keeps_failing_is_a_place_in_the_dock(root, monkeypa
         await pilot.press(*"go", "enter")
         text = await drawn(pilot, lambda text: "daemon courier failed" in text)
 
-        assert "⚠ daemon daemon courier failed and is restarted with backoff: RuntimeError: no luck" in text
+        assert "⚠ daemon courier failed and is restarted with backoff, its traceback in the session folder's" in text
         assert [place["kind"] for place in workspace(app)._places(workspace(app).live)] == ["daemon"]
 
 

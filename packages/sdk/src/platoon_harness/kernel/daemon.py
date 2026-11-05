@@ -21,6 +21,10 @@ _MAX_BACKOFF = 30.0
 _STABLE_AFTER = 60.0
 _ERROR_LIMIT = 2048
 _RETRY_SECONDS = 1.0
+_FAILING = (
+    "failed and is restarted with backoff, its traceback in the session folder's runtime.log, and `session stop` then "
+    "`session resume` start it anew"
+)
 
 
 @dataclass(frozen=True)
@@ -33,9 +37,9 @@ class Daemon:
 
 async def keep_running(daemon: Daemon, kernel: "Kernel") -> None:
     """Restart one daemon with backoff until it returns. A run that lasted forgives earlier failures. The journal hears
-    the first failure since a run that lasted, and the next run that lasts, so a daemon that fails on every pass stands
-    in `attention` and never passes for a quiet session."""
-    failures = 0
+    a failure when it begins a run of them or says another error than the last, and the next run that lasts, so a
+    daemon that fails on every pass stands in `attention` with its latest error and never passes for a quiet session."""
+    failures, said = 0, None
     while True:
         started = kernel.clock.now()
         try:
@@ -46,8 +50,10 @@ async def keep_running(daemon: Daemon, kernel: "Kernel") -> None:
             log.exception("daemon %s failed", daemon.name)
             if kernel.clock.now() - started >= _STABLE_AFTER:
                 failures = 0
-            if not failures:
-                await _say(kernel, "daemon.fail", {"daemon": daemon.name, "error": f"{type(error).__name__}: {error}"})
+            latest = f"{type(error).__name__}: {error}"
+            if not failures or latest != said:
+                said = latest
+                await _say(kernel, "daemon.fail", {"daemon": daemon.name, "error": said})
         await kernel.clock.sleep(min(_MAX_BACKOFF, _FIRST_BACKOFF * 2**failures))
         failures += 1
 
@@ -89,15 +95,16 @@ def _stream(daemon: str) -> str:
 
 @op("daemon.fail", on=lambda a: _stream(a.daemon), runtime=True)
 def fail_daemon(txn: Txn, a: Failed) -> None:
-    """Record that a daemon failed and is restarted with backoff, which needs a person until a run of it lasts a minute.
-    A long error is cut, so that a failure can always be said."""
+    """Record that a daemon failed and is restarted with backoff, which needs a person until a run of it lasts a minute:
+    where its traceback is, what starts it anew, and its error. A long error is cut, so that a failure can always be
+    said."""
     error = a.error if len(a.error) <= _ERROR_LIMIT else f"{a.error[:_ERROR_LIMIT]} [cut]"
-    gist = f"daemon {a.daemon} failed and is restarted with backoff: {error}"[:GIST_LIMIT]
+    gist = f"{a.daemon} {_FAILING}: {error}"[:GIST_LIMIT]
     txn.emit("daemon.failed", _stream(a.daemon), gist=gist, data={"daemon": a.daemon, "error": error})
 
 
 @op("daemon.recover", on=lambda a: _stream(a.daemon), runtime=True)
 def recover_daemon(txn: Txn, a: Lasted) -> None:
     """Record that a run of a daemon that had failed has lasted a minute."""
-    gist = f"daemon {a.daemon} has run a minute since it failed"[:GIST_LIMIT]
+    gist = f"{a.daemon} has run a minute since it failed"[:GIST_LIMIT]
     txn.emit("daemon.recovered", _stream(a.daemon), gist=gist, data={"daemon": a.daemon})

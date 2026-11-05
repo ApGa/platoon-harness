@@ -281,7 +281,10 @@ async def test_needs_you_names_a_daemon_that_keeps_failing(chromium: Browser, ro
             await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
             await needs.click()
             place = page.locator(".x-needs .x-need")
-            said = "⚠ daemon: daemon courier failed and is restarted with backoff: RuntimeError: no luck"
+            said = (
+                "⚠ daemon: courier failed and is restarted with backoff, its traceback in the session folder's "
+                "runtime.log, and `session stop` then `session resume` start it anew: RuntimeError: no luck"
+            )
             await expect(place).to_have_text(said, timeout=SECONDS)
             await expect(place.get_by_role("button")).to_have_count(0)
             await page.context.close()

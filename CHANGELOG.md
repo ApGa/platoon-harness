@@ -40,11 +40,12 @@
   version 12. The scripted harness has a `shell` tool of its own, `testing.SHELL`, which runs its `command` once allowed, so it and
   the conformance wire program meet every shell check, and the wire program earns `operational`. No check proves a coverage surface,
   so nothing answers `not_seen` yet. See ADR 0044.
-- A daemon that keeps failing needs a person. The supervisor journals a daemon's first failure since a run that lasted, as
-  `daemon.failed` naming it and its error, and the next run that lasts a minute, as `daemon.recovered`, through two runtime-only ops of
-  the kernel's, `daemon.fail` and `daemon.recover`, so a courier or a host that fails on every pass stands in `attention` as a kind of
-  its own, `daemon`, until it runs a minute or a new runtime starts, and the terminal's dock and the browser's Needs you say so where
-  a quiet session would show. The kernel takes the namespace `daemon`. `Attention` is at view version 4. See ADR 0046.
+- A daemon that keeps failing needs a person. The supervisor journals a daemon's failure when it begins a run of them or says another
+  error than the last, as `daemon.failed` naming it and its error, and the next run that lasts a minute, as `daemon.recovered`,
+  through two runtime-only ops of the kernel's, `daemon.fail` and `daemon.recover`, so a courier or a host that fails on every pass
+  stands in `attention` as a kind of its own, `daemon`, saying where its traceback is, what starts it anew and its latest error,
+  until it runs a minute or a new runtime starts, and the terminal's dock and the browser's Needs you say so where a quiet session
+  would show. The kernel takes the namespace `daemon`. `Attention` is at view version 4. See ADR 0046.
 - A person follows provenance from where they read. In the terminal, `/provenance`, or `p` with the transcript in focus, opens the
   chosen line's provenance in a panel; in the browser, Provenance among a message's actions opens a pane, on a view link too, from
   `x_provenance`, a read of ours beside SwarmChat's. Both show one event at a time, worded once for both: its sources, its uses, its

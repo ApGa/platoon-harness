@@ -138,9 +138,11 @@ def said(kernel: Kernel) -> list[tuple[str, str]]:
     return [(event.type, event.gist) for event in kernel.read(kernel.runtime).events if event.stream == "daemon/flaky"]
 
 
-async def test_a_daemon_that_keeps_failing_is_said_once_until_a_run_of_it_lasts_a_minute(folder, clock):
-    """The first failure since a run that lasted is journaled, and so is the next run that lasts, which the supervisor
-    already took as forgiving what came before: a daemon that fails on every pass is said once, not once a pass."""
+async def test_a_daemon_that_keeps_failing_is_said_at_each_new_error_until_a_run_of_it_lasts_a_minute(folder, clock):
+    """A failure is journaled when it begins a run of them and when it says another error than the last, and so is the
+    next run that lasts, which the supervisor already took as forgiving what came before: a daemon that fails on every
+    pass with one error is said once, not once a pass, and what is said last is its latest error."""
+    errors = iter(["no luck", "no luck", "worse"])
     runs = []
     lasting = asyncio.Event()
 
@@ -149,7 +151,7 @@ async def test_a_daemon_that_keeps_failing_is_said_once_until_a_run_of_it_lasts_
         if len(runs) in (4, 5):
             lasting.set()
             await clock.sleep(600)
-        raise RuntimeError(f"pass {len(runs)}")
+        raise RuntimeError(next(errors, f"pass {len(runs)}"))
 
     kernel = open_with(folder, clock, Daemon("flaky", flaky))
     task = asyncio.create_task(kernel.supervise())
@@ -159,23 +161,31 @@ async def test_a_daemon_that_keeps_failing_is_said_once_until_a_run_of_it_lasts_
     await lasting.wait()
     failing = said(kernel)
     clock.advance(60)
-    await until_said(kernel, 2)
-    clock.advance(600)
     await until_said(kernel, 3)
+    clock.advance(600)
+    await until_said(kernel, 4)
     lasting.clear()
     await clock.slept_until(clock.now() + 0.1)
     clock.advance(0.1)
     await lasting.wait()
     clock.advance(60)
-    await until_said(kernel, 4)
+    await until_said(kernel, 5)
 
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     events = said(kernel)
     kernel.close()
-    assert failing == [("daemon.failed", "daemon flaky failed and is restarted with backoff: RuntimeError: pass 1")]
-    assert [type for type, _ in events] == ["daemon.failed", "daemon.recovered", "daemon.failed", "daemon.recovered"]
-    assert events[2][1].endswith("RuntimeError: pass 4")
+    failed = "flaky failed and is restarted with backoff, its traceback in the session folder's runtime.log, and"
+    assert [gist.partition(" `session stop`")[0] for _, gist in failing] == [failed, failed]
+    assert [gist.rpartition(": ")[2] for _, gist in failing] == ["no luck", "worse"]
+    assert [type for type, _ in events] == [
+        "daemon.failed",
+        "daemon.failed",
+        "daemon.recovered",
+        "daemon.failed",
+        "daemon.recovered",
+    ]
+    assert events[3][1].endswith("RuntimeError: pass 4")
 
 
 async def until_said(kernel: Kernel, count: int) -> None:
