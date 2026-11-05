@@ -1071,6 +1071,26 @@ async def test_a_result_s_next_step_names_tools_as_its_surface_does(lead):
     assert "`ph agent.retire`" in said and "`mcp__coord__agent_retire`" in also
 
 
+@pytest.mark.parametrize(
+    ("surface", "named"),
+    [("mcp", "`message_read`"), ("mcp__coord", "`mcp__coord__message_read`"), ("ph", "`ph message.read`")],
+)
+async def test_an_empty_read_after_a_wake_names_what_it_handed_over_as_its_surface_does(
+    kernel, server, lead, worker, surface, named
+):
+    await lead[1].call("message_send", {"to": "@w1", "gist": "the code word is heliotrope"})
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "w1"}))
+    reader = Client(f"{server.url}?surface={surface}", worker[1].token)
+
+    said = value_of(await reader.call("message_read"))
+
+    assert said["entries"] == []
+    assert said["next"] == (
+        "Nothing is new here past what was already handed to you: inbox/w1@1. To read that again here, call "
+        f"{named} with `after` 0."
+    )
+
+
 async def test_a_refusal_with_structure_shows_it(lead, worker):
     await lead[1].call("board_post", {"board": "notes", "name": "spec", "gist": "v1"})
 

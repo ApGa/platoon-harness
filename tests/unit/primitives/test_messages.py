@@ -293,6 +293,53 @@ async def test_a_confirmed_handover_can_be_acked(kernel):
     assert cursor(kernel, "bob", "inbox/bob").acked == sent["seq"]
 
 
+async def test_a_read_right_after_a_wake_names_what_the_wake_handed_over(kernel):
+    """A wake moves the cursor past what it hands over, so a read right after finds nothing new: it says so by the refs
+    the agent was handed them by, and how to read them again, so an empty page is never taken for an empty channel."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "memo", delivery="wake")
+    earlier = await send(kernel, alice, "#memo", "read before")
+    await read(kernel, bob, "#memo")
+    sent = [await send(kernel, alice, "#memo", gist) for gist in ("the code word is heliotrope", "and keep it")]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await confirm(kernel, "bob", handed["input"])
+
+    empty = await read(kernel, bob, "#memo")
+    again = await read(kernel, bob, "#memo", after=earlier["seq"])
+
+    assert gists(empty) == [] and empty["behind"] == 0
+    assert empty["next"] == (
+        "Nothing is new here past what was already handed to you: channel/memo@2, channel/memo@3. To read that again "
+        f"here, call `message.read` with `after` {earlier['seq']}."
+    )
+    assert [entry["ref"] for entry in again["entries"]] == [receipt["ref"] for receipt in sent]
+    assert "next" not in again
+
+
+async def test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_show(kernel, ada):
+    """What a read of an agent's own showed, what its filter leaves out, what it asked for by `after` and a person's
+    read are each told no more than the entries they hold."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    carol = await spawn(kernel, "carol")
+    await send(kernel, alice, "@bob", "from alice")
+    await send(kernel, carol, "@bob", "from carol")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    await confirm(kernel, "bob", handed["input"])
+
+    filtered = await read(kernel, bob, "@bob", sender="@carol")
+    asked = await read(kernel, bob, "@bob", after=kernel.head)
+    by_a_person = await read(kernel, ada, "@bob", after=kernel.head)
+    await read(kernel, bob, "@bob", after=0)
+    await send(kernel, alice, "@bob", "read by bob")
+    await read(kernel, bob, "@bob")
+    after_its_own_read = await read(kernel, bob, "@bob")
+
+    assert filtered["next"].endswith(
+        "handed to you: inbox/bob@2. To read that again here, call `message.read` with `after` 0."
+    )
+    assert "next" not in asked and "next" not in by_a_person and "next" not in after_its_own_read
+
+
 async def test_a_read_defaults_to_your_own_inbox(kernel):
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     await send(kernel, alice, "@bob", "hello")

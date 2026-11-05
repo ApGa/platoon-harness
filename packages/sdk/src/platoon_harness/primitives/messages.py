@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Iterator, Sequence
-from itertools import islice
+from itertools import islice, takewhile
 from typing import Annotated, Any, NamedTuple
 
 from pydantic import BaseModel, Field
@@ -41,6 +41,10 @@ _QUEUED = """
     JOIN v_deliveries AS e ON e.seq = a.seq
 """
 _QUIET = "coalesce((SELECT upto FROM v_deliveries_quiet WHERE agent = {reader}), 0)"
+_ALREADY_HANDED = (
+    "Nothing is new here past what was already handed to you: {refs}. To read that again here, call `message.read` "
+    "with `after` {after}."
+)
 
 
 def _delivery(entry: str, audience: str, reader: str) -> str:
@@ -105,9 +109,11 @@ class Offered(NamedTuple):
 
 
 class Deliveries(View):
-    """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers."""
+    """Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers. A
+    cursor keeps the offer that last moved it on, so a read that finds nothing new can say what that offer handed
+    over."""
 
-    version = 11
+    version = 12
     schema = """
     CREATE TABLE v_deliveries(
         seq INTEGER PRIMARY KEY,
@@ -135,6 +141,7 @@ class Deliveries(View):
         acked INTEGER NOT NULL DEFAULT 0,
         closed INTEGER NOT NULL DEFAULT 0,
         shown INTEGER NOT NULL DEFAULT 0,
+        offer INTEGER,
         PRIMARY KEY (reader, stream)
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_deliveries_offers(
@@ -200,9 +207,18 @@ class Deliveries(View):
         for stream, seq in data["positions"].items():
             self._touch(event.agent, stream)
             self.db.execute(
-                "UPDATE v_deliveries_cursors SET offered = max(offered, ?), shown = max(shown, ?) "
-                "WHERE reader = ? AND stream = ?",
-                (seq, seq if in_a_result else 0, event.agent, stream),
+                """
+                UPDATE v_deliveries_cursors SET offered = max(offered, :seq), shown = max(shown, :shown),
+                    offer = CASE WHEN :seq > offered THEN :input ELSE offer END
+                WHERE reader = :reader AND stream = :stream
+                """,
+                {
+                    "seq": seq,
+                    "shown": seq if in_a_result else 0,
+                    "input": event.seq,
+                    "reader": event.agent,
+                    "stream": stream,
+                },
             )
         self.db.execute(
             """
@@ -255,8 +271,12 @@ class Deliveries(View):
         dedupes it."""
         for stream, seq in json.loads(offer["before"]).items():
             self.db.execute(
-                "UPDATE v_deliveries_cursors SET offered = min(offered, ?) WHERE reader = ? AND stream = ?",
-                (seq, offer["reader"], stream),
+                """
+                UPDATE v_deliveries_cursors SET offered = min(offered, :seq),
+                    offer = CASE WHEN :seq < offered THEN NULL ELSE offer END
+                WHERE reader = :reader AND stream = :stream
+                """,
+                {"seq": seq, "reader": offer["reader"], "stream": stream},
             )
 
     @fold("effect.failed", "effect.cancelled")
@@ -350,6 +370,23 @@ class Deliveries(View):
             (reader, stream),
         ).fetchone()
         return Cursor() if row is None else Cursor(*row[:3], bool(row["closed"]), row["shown"])
+
+    def handed(self, reader: str, stream: str) -> tuple[int, list[Entry]]:
+        """What the offer that last moved a reader's cursor on `stream` handed over there, and the cursor before it,
+        unless that offer was a read of the reader's own, which showed what it gave."""
+        row = self.db.execute(
+            """
+            SELECT o.how, o.before, c.offered FROM v_deliveries_cursors AS c JOIN v_deliveries_offers AS o
+                ON o.input = c.offer
+            WHERE c.reader = ? AND c.stream = ?
+            """,
+            (reader, stream),
+        ).fetchone()
+        if row is None or row["how"] == "read":
+            return 0, []
+        before = json.loads(row["before"])[stream]
+        entries = self.entries(stream, reader, before, whole=False)
+        return before, list(islice(takewhile(lambda entry: entry.seq <= row["offered"], entries), DIGEST_ITEMS))
 
     def entries(self, stream: str, reader: str | None, after: int, *, whole: bool) -> Iterator[Entry]:
         """What `reader` may see past `after`. `whole` is the stream, else only entries whose audience held it."""
@@ -797,4 +834,9 @@ def read(txn: Txn, a: Read) -> dict[str, Any]:
     if not entries and len(left) == _SCAN_LIMIT:  # A whole window matched nothing, so go on from past it.
         cursor = left[-1].seq
         left = list(window(cursor))
-    return {"entries": [item.row for item in shown], "cursor": cursor, "behind": len(left)}
+    page = {"entries": [item.row for item in shown], "cursor": cursor, "behind": len(left)}
+    if entries or reader is None or a.after is not None:
+        return page
+    before, handed = deliveries.handed(reader, stream)
+    refs = [entry.ref for entry in handed if wanted(entry)]
+    return {**page, "next": _ALREADY_HANDED.format(refs=", ".join(refs), after=before)} if refs else page

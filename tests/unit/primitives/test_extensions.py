@@ -24,7 +24,7 @@ VIEWS = {
     "agents": (13, "c41ef0319faf"),
     "channels": (1, "385abe8c30d1"),
     "groups": (1, "8989bb29c3c8"),
-    "deliveries": (11, "e0c57ab765b9"),
+    "deliveries": (12, "7619c2dfbf0c"),
     "waits": (1, "745fdf295b54"),
     "boards": (1, "0d20dc5d4414"),
     "tasks": (1, "0f9ee7057d2b"),

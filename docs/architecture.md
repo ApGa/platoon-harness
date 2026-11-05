@@ -614,6 +614,10 @@ Each statement here is a promise with a test.
   of the unbroken run offered, and reading from it acks what was shown of that run. An offer hands over everything up to the newest
   entry it wants on a stream, even entries its mode would leave, so the cursor always moves. A human or a program holds none and
   reads from `after`.
+- **An empty page is no empty channel.** An agent's read that finds nothing past its own cursor names in `next` what the offer that
+  last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that reads it again, unless that
+  offer was a read of its own, which showed what it gave: a wake moves the cursor past what it hands over, so a read right after
+  finds nothing, which a model took for an empty channel. See [ADR 0047](adr/0047-an-empty-read-names-what-was-already-handed-over.md).
 - **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience, and a sender
   is not in its own. Late joiners see history only if the channel says `history = "full"`.
 - **Entries** are a capped `gist` plus an optional body, which a row says it has with `body: true` and `blob.get` reads by the
