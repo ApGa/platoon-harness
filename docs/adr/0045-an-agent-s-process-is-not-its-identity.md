@@ -66,7 +66,7 @@ exit. The owner chose a fixed ten minutes idle, with no setting.
   `test_a_harness_that_exits_on_its_own_in_a_turn_is_resumed_once_and_told_its_turn_was_cut_off`,
   `test_a_resting_agent_comes_back_at_its_handover_and_not_at_a_runtime_start`, and
   `test_a_harness_that_exits_twice_before_a_turn_ends_is_lost_and_its_parent_hears`.
-- On the real Claude Code, Codex and pi binaries against FakeModel, `tests/integration/clients.py`:
+- On the real Claude Code, Codex and pi binaries and the OpenHands worker against FakeModel, `tests/integration/clients.py`:
   `an_idle_harness_rests_and_its_next_message_resumes_it_natively`, `a_harness_killed_alone_in_a_turn_is_resumed_once_and_told` and
   `a_harness_killed_alone_twice_before_a_turn_ends_is_lost`.
 - Live, `tests/live/test_rests.py`: an idle agent rested and answered on its native session after, on `claude-haiku-5-5` in run 74
