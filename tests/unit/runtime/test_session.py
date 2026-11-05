@@ -16,7 +16,7 @@ from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import MANIFEST, MARKS
+from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 from ...integration.scripts import wire
@@ -311,7 +311,7 @@ async def test_a_detached_runtime_takes_nothing_it_could_not_keep(tmp_path):
 
 
 async def test_a_human_is_a_name_in_the_journal(tmp_path):
-    async with Session.start(solo(), human="ada", root=tmp_path) as session:
+    async with Session.start(solo(), principal="human:ada", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         sent = await session.send("@bob", "hello")
         event = (await of_type(session, "message.sent"))[0]
@@ -320,9 +320,62 @@ async def test_a_human_is_a_name_in_the_journal(tmp_path):
     assert (event.actor, event.data["sender"]) == ("human:ada", "@ada")
 
 
+async def test_a_script_is_a_person_or_a_program_in_the_journal(tmp_path):
+    """Each acts under its own name, and a person's message steers while a program's goes as its reader's setting
+    says."""
+    said = {}
+    for principal in ("human:ada", "program:platoon"):
+        async with Session.start(solo(), principal=principal, root=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            await session.send("@bob", "hello")
+            sent = (await of_type(session, "message.sent"))[0]
+        said[principal] = (sent.actor, sent.data["sender"], sent.data["delivery"])
+
+    assert said == {
+        "human:ada": ("human:ada", "@ada", "steer"),
+        "program:platoon": ("program:platoon", "@platoon", "wake"),
+    }
+
+
+async def test_a_session_a_program_opens_gives_attachers_a_view_credential_only(tmp_path):
+    """Nobody holds an owner credential to act as the program: a guest of its runtime reads and never writes, and once
+    the runtime has gone its history is read, and written beside, as any session's is."""
+    async with Session.start(solo(), name="s", principal="program:platoon", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        async with Session.attach("s", root=tmp_path) as guest:
+            with pytest.raises(Refused) as refused:
+                await guest.send("@bob", "steer it")
+            with pytest.raises(Refused, match="a view credential"):
+                await guest.mark("inbox/bob", 1)
+        issued = [event.data["id"] for event in await of_type(session, "principal.issued")]
+
+    async with Session.attach("s", root=tmp_path) as history:
+        head = await history.head()
+        written = await history.annotate(
+            "agent/bob@1",
+            kind="reward",
+            producer="p",
+            producer_version="1",
+            scope="local",
+            status="invalid",
+            head_seq=head,
+        )
+
+    assert refused.value.refusal.code == "not_permitted"
+    assert issued == ["agent:bob"] and not (tmp_path / "sessions" / "s" / OWNER_TOKEN).exists()
+    assert written.status == "invalid"
+
+
+def test_a_program_s_session_cannot_detach(tmp_path):
+    with pytest.raises(Refused, match="only its own process acts") as refused:
+        Session.start(solo(), principal="program:platoon", detach=True, root=tmp_path)
+
+    assert refused.value.refusal.code == "unsupported"
+
+
 async def test_a_human_cannot_take_a_name_that_is_taken(tmp_path):
     with pytest.raises(Refused) as refused:
-        await Session.start(solo(), human="bob", root=tmp_path)
+        await Session.start(solo(), principal="human:bob", root=tmp_path)
 
     assert refused.value.refusal.code == "conflict"
 
@@ -544,7 +597,7 @@ async def test_a_session_folder_with_a_manifest_and_no_journal_opens_on_resume(t
 
     async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
-    assert Manifest.model_validate_json((folder / MANIFEST).read_text()).human == "human:you"
+    assert Manifest.model_validate_json((folder / MANIFEST).read_text()).principal == "human:you"
 
 
 # One way in.
@@ -587,6 +640,22 @@ def worker_team(**fields: Any) -> Team:
             "topology": {"channels": channels, "groups": {"crew": {"roles": ["bob"]}}},
         }
     )
+
+
+async def test_an_episode_closes_on_the_event_each_starting_agents_report_carries(tmp_path):
+    """Each agent the session starts is prompted, says what it came to in a message of its own, and the episode closes
+    on those, so the edges a walk back from its close starts on are each made by its own agent."""
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted([Say("done")]), "count": 2}}})
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob-2", "idle")
+        await session.open_episode("e")
+        for recipient in team.recipients():
+            await session.send(recipient, "go")
+        said = await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        await session.close_episode(based_on=[f"{event.stream}@{event.version}" for event in said])
+        lineage = await session.lineage("episode/e@2")
+
+    assert sorted(declared.maker for declared in lineage.declared) == ["agent:bob-1", "agent:bob-2"]
 
 
 async def test_a_board_through_the_facade(tmp_path):
@@ -693,7 +762,7 @@ async def test_channels_and_budgets_through_the_facade(tmp_path):
         await session.create_channel("later", "topic", delivery="next-turn")
         await session.set_budget(limits={"turns": 10})
         await session.open_episode("first")
-        await session.close_episode({"score": 1})
+        await session.close_episode()
 
         assert [row["name"] for row in (await session.channels())["channels"]] == ["#later"]
         assert (await session.budgets())[0]["limit"] == 10.0

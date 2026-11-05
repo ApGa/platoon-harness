@@ -175,7 +175,7 @@ class Session:
         team: Team,
         *,
         name: str | None = None,
-        human: str = "you",
+        principal: str = "human:you",
         approvals: Policy | None = None,
         authority: Authority | None = None,
         detach: bool = False,
@@ -186,14 +186,18 @@ class Session:
     ) -> Self:
         """Start a team. You own it, unless `detach` starts a runtime of its own and gives you a guest.
 
-        `human` is who you are in the journal, a name and not a claim: identity comes from the credential. `approvals`
-        states a policy over every role's own, which is durable, so it is said here and not when you wait. `plan_login`
-        says several agents may run headless on one plan login, which is refused otherwise.
+        `principal` is who you are in the journal, a name and not a claim, as identity comes from the credential: a
+        person, `human:<name>`, or a program, `program:<name>`. A program's session issues no owner credential, as
+        whoever held it would act as that program, so a guest of it holds a view credential, and it cannot detach.
+        `approvals` states a policy over every role's own, which is durable, so it is said here and not when you wait.
+        `plan_login` says several agents may run headless on one plan login, which is refused otherwise.
         """
         _refuse_across_processes(detach, authority, clock)
+        if detach and principal.startswith("program:"):
+            raise Refused("unsupported", "a program's session issues no owner credential, so only its own process acts")
 
         async def enter(self: Session) -> None:
-            options = {"name": name, "root": root, "human": human, "approvals": approvals, "cwd": cwd}
+            options = {"name": name, "root": root, "principal": principal, "approvals": approvals, "cwd": cwd}
             preparing = asyncio.ensure_future(asyncio.to_thread(prepare, team, plan_login=plan_login, **options))
             try:
                 folder = await asyncio.shield(preparing)
@@ -207,20 +211,15 @@ class Session:
 
     @classmethod
     def resume(
-        cls,
-        name: str,
-        *,
-        authority: Authority | None = None,
-        detach: bool = False,
-        root: str | Path | None = None,
-        clock: Clock | None = None,
+        cls, name: str, *, detach: bool = False, root: str | Path | None = None, clock: Clock | None = None
     ) -> Self:
         """Restart a session whose runtime has gone. This is its own verb because restarting can spend money. Harnesses
-        come back on fresh credentials, or their agents are lost, with a gap."""
-        _refuse_across_processes(detach, authority, clock)
+        come back on fresh credentials, which the session issues, or their agents are lost, with a gap. A session whose
+        agents an authority admitted with the backend's ids is refused: their keys went with it."""
+        _refuse_across_processes(detach, None, clock)
 
         async def enter(self: Session) -> None:
-            await self._take_up(session_folder(find_root(root, writing=True), name), detach, authority, clock)
+            await self._take_up(session_folder(find_root(root, writing=True), name), detach, None, clock)
 
         return cls(enter)
 
@@ -264,21 +263,22 @@ class Session:
             runtime = Runtime(folder, authority=authority, clock=clock)
             await runtime.start()
             self._runtime = runtime
-            self._link = Local(runtime.kernel, runtime.human, others=runtime.control.clients)
+            self._link = Local(runtime.kernel, runtime.principal, others=runtime.control.clients)
 
     def _history(self) -> History:
         folder = self.folder
         if not (folder / "journal.sqlite").exists():
             raise Refused("unavailable", f"session {self.name} never opened: {_resume_command(folder)} opens it")
-        manifest = Manifest.model_validate_json((folder / MANIFEST).read_bytes())
         kernel = Kernel.open(folder, read_only=True, extensions=PRIMITIVES)
-        return History(kernel, Principal(id=manifest.human), _resume_command(folder))
+        return History(kernel, Principal(id=_principal_of(folder)), _resume_command(folder))
 
     async def _attached(self) -> Link:
-        """What attaching gives now. A lock held with nothing answering is a runtime on its way up or down."""
+        """What attaching gives now. A lock held with nothing answering is a runtime on its way up or down. A runtime of
+        a program's session issued no owner credential, so its guests hold a view credential."""
         async for _ in _pauses(_ATTACH_SECONDS):
             if not is_held(self.folder):
                 return self._history()
+            self._view = self._view or _principal_of(self.folder).startswith("program:")
             try:
                 return await Remote.connect(self.folder, view=self._view)
             except Closed:
@@ -444,8 +444,9 @@ class Session:
     async def open_episode(self, episode: str) -> None:
         await self._do("episode.open", episode=episode)
 
-    async def close_episode(self, outcome: Mapping[str, Any] | None = None) -> None:
-        await self._do("episode.close", outcome=outcome or {})
+    async def close_episode(self, *, based_on: Sequence[str] = ()) -> None:
+        """Close the open episode on the refs of what it came to. What it is worth is an annotation's to say."""
+        await self._do("episode.close", based_on=based_on)
 
     # Waiting.
 
@@ -970,6 +971,11 @@ def _annotations_of(folder: Path, target: str | None) -> list[Annotation]:
             return [_annotation(row) for row in rows]
     except sqlite3.Error as error:
         raise Refused("unavailable", f"annotations cannot be read: {error}") from None
+
+
+def _principal_of(folder: Path) -> str:
+    """Who started a session, as its manifest says."""
+    return Manifest.model_validate_json((folder / MANIFEST).read_bytes()).principal
 
 
 def _unclaim(folder: Path) -> None:

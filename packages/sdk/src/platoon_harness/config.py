@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NoReturn, Self
 
-from pydantic import GetCoreSchemaHandler, ValidationError
+from pydantic import GetCoreSchemaHandler, ValidationError, model_validator
 from pydantic_core import CoreSchema, core_schema
 
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Component, discover, find
@@ -191,19 +191,28 @@ def sanitized(team: Team, environ: Mapping[str, str] = os.environ) -> str:
 
 class Manifest(Model):
     """What reproduces a session, and all a runtime needs to take one up: `team` is the sanitized resolved form, which
-    reloads alone, `human` the principal who started it, `approvals` a policy stated over every role's own, `cwd`
-    where a shared workspace is, and `plan_login` whether its owner said several agents may run on one plan login."""
+    reloads alone, `principal` the person or the program who started it, `approvals` a policy stated over every role's
+    own, `cwd` where a shared workspace is, and `plan_login` whether its owner said several agents may run on one plan
+    login."""
 
     team: str
     topology_hash: str
     components: tuple[Component, ...]
-    human: str = "human:you"
+    principal: str = "human:you"
     approvals: Literal["ask", "deny", "allow"] | None = None
     cwd: str = "."
     plan_login: bool = False
     sdk_version: str = __version__
     team_schema: int = TEAM_SCHEMA
     wire_protocol: int = WIRE_PROTOCOL
+
+    @model_validator(mode="before")
+    @classmethod
+    def _principal(cls, data: Any) -> Any:
+        """A manifest from before a program could start a session named its person `human`."""
+        if isinstance(data, Mapping) and "human" in data:
+            return {"principal": data["human"], **{key: value for key, value in data.items() if key != "human"}}
+        return data
 
     @classmethod
     def of(cls, team: Team, environ: Mapping[str, str] = os.environ, **started: Any) -> Self:

@@ -262,9 +262,9 @@ session resumable. What it cannot run as given, a name that is taken among it, e
 commit to its journal that fails ends it with exit 74, as a kill would, leaving it to `session resume`.
 
 The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
-on that harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it
-lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can
-reach it.
+on that harness. The prompt goes to every agent the session starts, or to --to alone. A person's message steers:
+it lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell
+can reach it.
 
 With --json, stdout holds one JSON line per event of the session's journal, then one for its ending, and nothing
 else. An approval left to ask, with nobody attached to answer, ends the run at once with exit 4, and never prompts:
@@ -288,7 +288,7 @@ For example:
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
 * `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
         profile.
-* `--to`: Who the prompt is for, as `@agent`, when the session starts more than one.
+* `--to`: The one agent the prompt is for, as `@agent`. Left out, it goes to every agent the session starts.
 * `--prompt-file`: A file whose text is the prompt.
 * `--name`: The session's name. Left out, one is made from the time.
 * `--approvals`: Answer every approval this way, over each role's own policy. The manifest keeps it. *[choices: ask, deny, allow]*
@@ -1346,7 +1346,9 @@ The `episode` ops, each on one session, with the arguments an agent's `ph episod
 platoon-harness episode close [OPTIONS] SESSION
 ```
 
-Close the open episode, or refuse `conflict` when none is open.
+Close the open episode on the refs of what it came to, which are checked as any citation is, or refuse `conflict` when none is open.
+
+What it is worth is an annotation's to say, never the episode's.
 
 For example:
 
@@ -1358,7 +1360,7 @@ For example:
 
 **Parameters**:
 
-* `--outcome`: What the span came to. As JSON.
+* `--based-on`: The refs of what the span came to.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness episode open

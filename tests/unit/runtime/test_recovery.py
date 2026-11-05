@@ -37,7 +37,6 @@ from platoon_harness.runtime import (
     recovery,
 )
 from platoon_harness.runtime.paths import MANIFEST
-from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
 from ...integration.scripts import ran_before
@@ -146,16 +145,17 @@ async def test_an_admit_in_flight_is_never_retried_and_the_spawn_fails_with_a_ga
     assert ending.gaps == ({"agent": "bob", "what": "crash_window", "plane": "control", "count": 1},)
 
 
-async def test_an_admission_that_finished_is_asked_for_again_as_a_resume_and_the_spawn_goes_on(tmp_path):
+async def test_an_admission_that_finished_is_asked_for_again_as_a_resume_and_the_spawn_goes_on(tmp_path, monkeypatch):
     asked: list[SpawnRequest] = []
+    admit = LocalAuthority.admit
 
-    class Keeping(LocalAuthority):
-        async def admit(self, spawn: SpawnRequest) -> Admission:
-            asked.append(spawn)
-            return await super().admit(spawn)
+    async def keeping(self: LocalAuthority, spawn: SpawnRequest) -> Admission:
+        asked.append(spawn)
+        return await admit(self, spawn)
 
+    monkeypatch.setattr(LocalAuthority, "admit", keeping)
     team = solo_with(ScriptedDriver)
-    session = await Session.start(team, name="s", authority=Keeping(team), root=tmp_path)
+    session = await Session.start(team, name="s", root=tmp_path)
     await in_state(session, "bob", "idle")
     runtime = session._runtime
     assert runtime is not None
@@ -171,7 +171,7 @@ async def test_an_admission_that_finished_is_asked_for_again_as_a_resume_and_the
     await abandon(session)
     asked.clear()
 
-    async with Session.resume("s", authority=Keeping(team), root=tmp_path) as session:
+    async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "ada", "idle")
 
     assert {(spawn.agent, spawn.resumed) for spawn in asked} == {("bob", True), ("ada", True)}
@@ -357,19 +357,19 @@ async def test_a_harness_that_fails_to_resume_is_lost_and_says_why(tmp_path):
         assert (await session.ending()).agents[0]["reason"] == "its session file is gone"
 
 
-async def test_model_access_that_went_away_loses_the_agent_and_says_so(tmp_path):
-    class Forgetful(LocalAuthority):
-        async def admit(self, spawn: SpawnRequest) -> Admission:
-            if spawn.resumed:
-                raise ConfigError([Problem("auth.work.env", "`KEY` is not set")])
-            return await super().admit(spawn)
-
-    team = solo_with(ScriptedDriver)
-    session = await Session.start(team, name="s", authority=Forgetful(team), root=tmp_path)
+async def test_model_access_that_went_away_loses_the_agent_and_says_so(tmp_path, monkeypatch):
+    team = Team.model_validate(
+        {
+            "roles": {"bob": {"harness": harness(ScriptedDriver), "auth": "work", "model": "m"}},
+            "auth": {"work": {"env": ["KEY"]}},
+        }
+    )
+    session = await Session.start(team, name="s", authority=LocalAuthority(team, {"KEY": "k"}), root=tmp_path)
     await in_state(session, "bob", "idle")
     await abandon(session)
+    monkeypatch.delenv("KEY", raising=False)
 
-    async with Session.resume("s", authority=Forgetful(team), root=tmp_path) as session:
+    async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "bob", "ended")
         assert "`KEY` is not set" in (await session.ending()).agents[0]["reason"]
 

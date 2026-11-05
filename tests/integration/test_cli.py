@@ -18,7 +18,7 @@ from platoon_harness import Team
 from platoon_harness.config import Manifest
 from platoon_harness.runtime.paths import read_conformance
 
-from .cli import EXECUTABLE, SECONDS, Cli, checked, crew, finished, line_where, said, solo
+from .cli import EXECUTABLE, SECONDS, Cli, Done, checked, crew, finished, line_where, said, solo
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -274,23 +274,23 @@ async def test_a_long_prompt_from_a_file_goes_whole_as_the_body(cli: Cli):
     assert json.loads(body.stdout)["text"] == ("Fix the flaky test. " * 40).strip()
 
 
-async def test_the_prompt_goes_to_the_agent_named_when_a_session_starts_several(cli: Cli):
+async def test_a_prompt_goes_to_the_agent_named_or_to_every_agent_the_session_starts(cli: Cli):
     team = cli.write("pair.toml", solo("saying", count="2"))
 
     named = await cli.run("run", "go", "--team", team, "--trust", "--to", "@bob-2", "--json")
+    everyone = await cli.run("run", "go", "--team", team, "--trust", "--json")
 
-    sent = next(event for event in checked(named) if event["type"] == "message.sent")
-    assert sent["stream"] == "inbox/bob-2"
+    def inboxes(done: Done) -> list[str]:
+        return [event["stream"] for event in checked(done) if event["type"] == "message.sent" and not event["agent"]]
+
+    assert inboxes(named) == ["inbox/bob-2"]
+    assert inboxes(everyone) == ["inbox/bob-1", "inbox/bob-2"]
 
 
 @pytest.mark.parametrize(
     ("team", "to", "said"),
     [
-        (
-            solo("saying", count="2"),
-            (),
-            "say which agent the prompt is for, with --to: this session starts @bob-1, @bob-2",
-        ),
+        ('[roles.bob]\nharness = "tests.integration.scripts:saying"\ncount = 0\n', (), "starts no agent"),
         (solo("saying"), ("--to", "@nobody"), "--to @nobody is no agent this session starts: it starts @bob"),
         (solo("saying"), ("--to", "bob"), "--to bob is no agent this session starts: it starts @bob"),
     ],

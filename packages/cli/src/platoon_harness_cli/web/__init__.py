@@ -83,7 +83,7 @@ async def serve(
     async with Session.attach(name) as session:
         lock = hold(session.folder, name)
         try:
-            person = name_of(Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).human)
+            person = name_of(Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal)
             projection = Projection(session.folder, name, person)
             web = Web(session, projection, page, clock, host=host, scheme="https" if tls else "http")
             try:

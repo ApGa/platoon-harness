@@ -2386,7 +2386,7 @@ async def test_events_inside_an_episode_carry_it(kernel, ada):
 
     result_of(await kernel.submit(ada, "episode.open", {"episode": "e1"}))
     inside = await send(kernel, alice, "@alice", "in")
-    result_of(await kernel.submit(ada, "episode.close", {"outcome": {"score": 1}}))
+    result_of(await kernel.submit(ada, "episode.close", {}))
     outside = await send(kernel, alice, "@alice", "out")
 
     stamped = {event.seq: event.episode for event in of_type(kernel, "message.sent")}

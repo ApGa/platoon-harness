@@ -235,17 +235,18 @@ async def test_a_resume_that_would_bring_back_several_agents_on_a_plan_login_nee
     assert len(await journal(await Session.attach("s", root=tmp_path))) == head
 
 
-def test_a_name_for_the_human_must_be_one(tmp_path):
-    with pytest.raises(ConfigError, match="cannot name a principal"):
-        prepare(team_of(), root=tmp_path, human="not/a/name")
+@pytest.mark.parametrize("principal", ["human:not/a/name", "agent:bob", "you"])
+def test_a_principal_is_a_person_or_a_program_by_a_name(tmp_path, principal):
+    with pytest.raises(ConfigError, match="neither `human:<name>` nor `program:<name>`"):
+        prepare(team_of(), root=tmp_path, principal=principal)
 
 
 def test_the_manifest_says_how_the_session_was_started(tmp_path):
-    folder = prepare(team_of(), name="s", root=tmp_path, human="ada", approvals="deny", cwd=tmp_path)
+    folder = prepare(team_of(), name="s", root=tmp_path, principal="human:ada", approvals="deny", cwd=tmp_path)
 
     manifest = Manifest.model_validate_json((folder / MANIFEST).read_text())
 
-    assert (manifest.human, manifest.approvals, manifest.cwd) == ("human:ada", "deny", str(tmp_path))
+    assert (manifest.principal, manifest.approvals, manifest.cwd) == ("human:ada", "deny", str(tmp_path))
     assert Team.loads(manifest.team).topology.hash == manifest.topology_hash
     assert folder.stat().st_mode & 0o077 == 0
 

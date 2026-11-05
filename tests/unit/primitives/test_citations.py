@@ -95,6 +95,21 @@ async def test_every_write_of_content_returns_its_ref(kernel, ada):
     assert refs[-2] == "agent/w@1"
 
 
+async def test_an_episode_closes_on_refs_never_on_a_reward(kernel, ada):
+    """What an episode came to is cited, checked as any citation is, and what it was worth is no part of it."""
+    bob = await spawn(kernel, "bob")
+    result_of(await kernel.submit(ada, "episode.open", {"episode": "e1"}))
+    said = (await send(kernel, bob, "@ada", "the answer"))["ref"]
+
+    worth = refusal(await kernel.submit(ada, "episode.close", {"outcome": {"score": 1}}))
+    missing = refusal(await kernel.submit(ada, "episode.close", {"based_on": ["inbox/nobody@9"]}))
+    result_of(await kernel.submit(ada, "episode.close", {"based_on": [said]}))
+
+    [closed] = of_type(kernel, "episode.closed")
+    assert (worth.code, missing.code) == ("invalid", "not_found")
+    assert (closed.based_on, closed.data, closed.v) == ((said,), {"episode": "e1"}, 2)
+
+
 async def test_a_finish_out_of_a_turn_returns_the_ref_of_the_end_that_holds_its_report(kernel):
     bob = await spawn(kernel, "bob")
 
@@ -382,6 +397,7 @@ async def test_an_offered_item_s_digest_covers_what_was_shown(kernel):
 
 
 def test_every_write_of_content_takes_based_on():
+    """So does `episode.close`, which writes no content and cites what its span came to."""
     takes = {
         operation.name
         for extension in PRIMITIVES
@@ -395,8 +411,8 @@ def test_every_write_of_content_takes_based_on():
         if operation.name in takes
     }
 
-    assert takes == WRITES
-    assert described == {"Refs this write rests on."}
+    assert takes == WRITES | {"episode.close"}
+    assert described == {"Refs this write rests on.", "The refs of what the span came to."}
     assert not [op.name for ext in PRIMITIVES for op in ext.ops if op.tool and "Cite" in (op.fn.__doc__ or "")]
 
 

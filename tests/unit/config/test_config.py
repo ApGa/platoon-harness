@@ -483,6 +483,13 @@ def test_a_duration_that_is_none_says_what_one_looks_like():
 
 
 def test_a_manifest_says_how_a_session_was_started():
-    manifest = Manifest.of(installed_team(), human="human:ada", approvals="deny", cwd="work")
+    manifest = Manifest.of(installed_team(), principal="human:ada", approvals="deny", cwd="work")
 
     assert Manifest.model_validate_json(manifest.model_dump_json()) == manifest
+
+
+def test_a_manifest_from_before_programs_names_its_person():
+    older = json.loads(Manifest.of(installed_team()).model_dump_json())
+    older["human"] = older.pop("principal")
+
+    assert Manifest.model_validate(older).principal == "human:you"

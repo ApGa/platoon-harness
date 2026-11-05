@@ -53,7 +53,8 @@ platoon-harness: session 20261103-101500-1a2b3c4d: follow it with `platoon-harne
 
 `run` owns the session in the foreground until it settles, and exits with how it ended: 0 settled, 1 an agent failed, 2 the budget
 ran out, 3 it timed out, 4 it needs a person, 130 cancelled. Ctrl+C runs the owner's shutdown, which keeps the session resumable.
-What it cannot run as given exits 64 before any cost: a `--to` naming no agent the session starts, or a name that is taken.
+The prompt goes to every agent the session starts, or with `--to` to that one alone. What it cannot run as given exits 64 before
+any cost: a `--to` naming no agent the session starts, a team that starts none, or a name that is taken.
 Several agents on one plan login need `--plan-login`, which says this is your own work; without it the run exits 78 and says so.
 A commit to the session's journal that fails, as on a full disk, ends the run with exit 74, naming the journal, as a kill would:
 `platoon-harness session resume` goes on from what the journal holds.
@@ -106,6 +107,7 @@ $ platoon-harness serve --team crew.toml --name nightly
 ```
 
 `session stop` is the owner's stop from another shell, and keeps the session resumable. `session resume` restarts its harnesses,
-which can spend money, and owns it as `run` does. `session refold` brings a stopped session's views up to its journal, as a runtime
+which can spend money, and owns it as `run` does. A session whose agents a training system's authority admitted is never resumed,
+as their keys went with that authority, and `session resume` refuses it with exit 64; it stays history, which `events` reads. `session refold` brings a stopped session's views up to its journal, as a runtime
 does as it opens, and writes no event, for when an upgrade changed a view and its history refuses to answer. `serve` keeps a session's runtime in the foreground with no client attached, for a
 supervisor, and stops on `SIGTERM`.

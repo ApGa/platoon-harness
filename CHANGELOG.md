@@ -4,6 +4,12 @@
 
 ### Added
 
+- A session's principal is a person or a program: `Session.start(principal=)` and `prepare(principal=)` take `human:<name>` or
+  `program:<name>`, and `Manifest.principal` names it, a manifest from before reading its `human` as one. A program's message goes
+  as its reader's setting says, and a session a program starts issues no owner credential, so a guest of its runtime holds a view
+  credential, and it cannot detach. See ADR 0050.
+- `Team.recipients(to=None)`, the one rule for whom a session's prompt goes to: the agent `to` names, or else every agent the
+  session starts. See ADR 0051.
 - The contract a training system's authority builds on, which names nothing after any training system. Model access is one
   value: variables by name, or a `Gateway(origin, bearer, model, tools, compaction_headers)`, whose origin is a scheme and a
   host and nothing more and whose bearer is masked in every form, given only to a driver that declares the new capability
@@ -327,6 +333,12 @@
 
 ### Changed
 
+- `run` sends its prompt to every agent the session starts unless `--to` names one, where it refused a team that started several,
+  and refuses a team that starts none. See ADR 0051.
+- `episode.close` closes on `based_on`, the refs of what the episode came to, checked as any citation is, in place of a free
+  `outcome`, which an annotation says now; `episode.closed` is at payload version 2. `Session.close_episode(based_on=)` follows.
+- `Session.resume` takes no authority, as a resume runs under `LocalAuthority`, and refuses a session whose admit results name the
+  backend's ids before anything runs: an authority that has gone admitted its agents, so it stays history. See ADR 0049.
 - A launch whose harness runs a model other than the one pinned fails saying `it runs <model>, and <pinned> is pinned`, as the
   pinned model is a gateway's where access is one, and an agent's login is `key` when it was given variables, whatever its role
   names. See ADR 0049.
@@ -479,6 +491,7 @@
 
 ### Removed
 
+- `Session.start(human=)`, `prepare(human=)` and `Manifest.human`, which `principal` replaces. See ADR 0050.
 - `Authority.budget_owner`, which no authority used: every limit a team states is the session's own. `open_session` takes no
   authority. See ADR 0049.
 - A topic's `digest` and its type, `platoon_harness.topology.Digest`, which nothing enforced: a lagging reader's digest is the

@@ -182,7 +182,7 @@ class Workspace(Screen[None]):
     async def _join(self) -> None:
         try:
             session = self._given or await Session.attach(self.session_name)
-            self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).human
+            self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal
             through = await session.head()
         except Refused as refused:
             self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))

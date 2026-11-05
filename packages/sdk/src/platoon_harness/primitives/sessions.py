@@ -7,7 +7,7 @@ from pydantic import Field, JsonValue
 
 from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .common import BodyRef, Injection, Name, Policy
+from .common import BasedOn, BodyRef, Injection, Name, Policy, cited
 
 
 class Role(Args):
@@ -125,7 +125,7 @@ class OpenEpisode(Args):
 
 
 class CloseEpisode(Args):
-    outcome: Annotated[dict[str, JsonValue], Field(description="What the span came to.")] = {}
+    based_on: Annotated[BasedOn, Field(description="The refs of what the span came to.")] = ()
 
 
 @op("episode.open", on=lambda a: f"episode/{a.episode}")
@@ -136,9 +136,12 @@ def open_episode(txn: Txn, a: OpenEpisode) -> None:
 
 @op("episode.close")
 def close_episode(txn: Txn, a: CloseEpisode) -> None:
-    """Close the open episode, or refuse `conflict` when none is open."""
+    """Close the open episode on the refs of what it came to, which are checked as any citation is, or refuse
+    `conflict` when none is open. What it is worth is an annotation's to say, never the episode's."""
     episode = txn.view(Stamps).episode()
     if episode is None:
         raise Refused("conflict", "no episode is open")
-    data = {"episode": episode, "outcome": a.outcome}
-    txn.emit("episode.closed", f"episode/{episode}", gist=f"episode {episode} closed", data=data)
+    based_on, data = cited(txn, a.based_on), {"episode": episode}
+    txn.emit(
+        "episode.closed", f"episode/{episode}", gist=f"episode {episode} closed", based_on=based_on, data=data, v=2
+    )

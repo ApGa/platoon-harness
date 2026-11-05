@@ -55,6 +55,8 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | An agent's read that finds nothing past its cursor names, in `next`, what the offer that last moved that cursor handed over there and the `after` that reads it again, so an empty page is never taken for an empty channel |
 | [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | `team check` refuses a `program` while none runs, and a topic's `digest`, `entry`, `requires` and `validator` and a board's `keys` are gone, so no team it accepts names something nothing does |
 | [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Model access as variables or a `Gateway` that only a sealed driver is given, the backend's ids as the admit's result and the one join key, a spawn's parent and goal, an end's report, and no `budget_owner` |
+| [0050](0050-a-script-is-a-person-or-a-program.md) | A script is a person or a program | `Session.start(principal=)` takes `human:<name>` or `program:<name>`, a program's message goes as its reader's setting says, and a program's session issues no owner credential, so its guests only read |
+| [0051](0051-one-rule-for-whom-a-prompt-goes-to.md) | One rule for whom a session's prompt goes to | `Team.recipients`: the agent named, or every agent the session starts, which `run` adopts |
 
 ## Adding or changing one
 

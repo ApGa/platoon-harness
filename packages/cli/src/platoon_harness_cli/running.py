@@ -11,7 +11,7 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from platoon_harness import Refused, Session, Team
+from platoon_harness import ConfigError, Refused, Session, Team
 from platoon_harness.extensions import Installed
 from platoon_harness.kernel import GIST_LIMIT, first
 from platoon_harness.primitives import Policy
@@ -88,19 +88,16 @@ def _span(timeout: str | None) -> float | None:
         raise Usage(f"--timeout: {error}") from None
 
 
-def _target(team: Team, to: str | None) -> str:
-    """Who a prompt is for, decided before any cost: `to`, which must name an agent the session starts, or that one
-    agent alone."""
-    resolved = team.resolved(Installed())
-    started = [f"@{agent}" for role in resolved.roles for agent in resolved.starts(role)]
-    if to is None and len(started) == 1:
-        return started[0]
-    if to in started:
-        return to
-    said = ", ".join(started) or "none"
-    if to is None:
-        raise Usage(f"say which agent the prompt is for, with --to: this session starts {said}")
-    raise Usage(f"--to {to} is no agent this session starts: it starts {said}")
+def _recipients(team: Team, to: str | None) -> tuple[str, ...]:
+    """Whom a prompt is for, decided before any cost, as `Team.recipients` says: `to`, which must name an agent the
+    session starts, or else every agent it starts."""
+    try:
+        found = team.resolved(Installed()).recipients(to)
+    except ConfigError as error:
+        raise Usage(f"--to {error.problems[0].what}") from None
+    if not found:
+        raise Usage("this session starts no agent, so the prompt would reach nobody")
+    return found
 
 
 async def printing(name: str, after: int, *, json: bool, follow: bool = True) -> None:
@@ -126,11 +123,13 @@ async def _ending(name: str, reason: Reason, json: bool) -> int:
     return code
 
 
-async def own(session: Session, *, span: float | None, json: bool, message: tuple[str, str] | None = None) -> int:
+async def own(
+    session: Session, *, span: float | None, json: bool, message: tuple[tuple[str, ...], str] | None = None
+) -> int:
     """Own a session in the foreground: enter it, print what its runtime does, send `message`, a person's, as `(to,
-    text)`, wait for it to settle, then run the owner's shutdown and print how it ended, last. Ctrl+C or SIGTERM at any
-    point cancels what is under way, and the shutdown still runs, so it ends `cancelled` and stays resumable. One
-    stopped while its runtime starts has printed nothing yet, so it prints its ending alone.
+    text)`, to each of `to`, wait for it to settle, then run the owner's shutdown and print how it ended, last. Ctrl+C
+    or SIGTERM at any point cancels what is under way, and the shutdown still runs, so it ends `cancelled` and stays
+    resumable. One stopped while its runtime starts has printed nothing yet, so it prints its ending alone.
 
     The events print from a thread of their own, as a guest of this runtime, so a reader of stdout that falls behind
     holds up nothing here: the runtime drops a guest that stops reading, and it comes back where it was."""
@@ -163,14 +162,15 @@ async def own(session: Session, *, span: float | None, json: bool, message: tupl
             return INTERRUPTED
 
 
-async def _send(session: Session, to: str, text: str) -> None:
-    """A prompt as a person's message: the whole of it when it fits a gist, else its start and the whole as the body. A
-    refusal is said, and the session's ending says what came of it."""
+async def _send(session: Session, to: tuple[str, ...], text: str) -> None:
+    """A prompt as a person's message to each of `to`: the whole of it when it fits a gist, else its start and the whole
+    as the body. A refusal is said, and the session's ending says what came of it."""
     gist, body = (text, None) if len(text) <= GIST_LIMIT else (f"{text[: GIST_LIMIT - 1]}…", text)
-    try:
-        await session.send(to, gist, body=body)
-    except Refused as error:
-        note(refused(error.refusal))
+    for recipient in to:
+        try:
+            await session.send(recipient, gist, body=body)
+        except Refused as error:
+            note(refused(error.refusal))
 
 
 async def run(
@@ -195,9 +195,9 @@ async def run(
     commit to its journal that fails ends it with exit 74, as a kill would, leaving it to `session resume`.
 
     The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
-    on that harness. The prompt goes to the one agent the session starts, or to --to. A person's message steers: it
-    lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell can
-    reach it.
+    on that harness. The prompt goes to every agent the session starts, or to --to alone. A person's message steers:
+    it lands at the earliest boundary the harness has. The session's name is on stderr at the start, so another shell
+    can reach it.
 
     With --json, stdout holds one JSON line per event of the session's journal, then one for its ending, and nothing
     else. An approval left to ask, with nobody attached to answer, ends the run at once with exit 4, and never prompts:
@@ -216,7 +216,7 @@ async def run(
     team
         A team file, over the project file.
     to
-        Who the prompt is for, as `@agent`, when the session starts more than one.
+        The one agent the prompt is for, as `@agent`. Left out, it goes to every agent the session starts.
     prompt_file
         A file whose text is the prompt.
     name
@@ -232,9 +232,9 @@ async def run(
     """
     text, span = _prompt(prompt, prompt_file), _span(timeout)
     loaded = source.load(team)
-    target = _target(loaded, to)
+    recipients = _recipients(loaded, to)
     session = Session.start(loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd())
-    return await own(session, span=span, json=json, message=(target, text))
+    return await own(session, span=span, json=json, message=(recipients, text))
 
 
 async def resume(

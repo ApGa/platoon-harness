@@ -380,9 +380,9 @@ class Control:
     task and a socket. Pages leave only when asked for, and a client that stops reading is dropped by its `Peer`, so it
     costs its own lag and can hold up nobody else."""
 
-    def __init__(self, kernel: Kernel, human: Principal, folder: Path) -> None:
+    def __init__(self, kernel: Kernel, principal: Principal, folder: Path) -> None:
         self._kernel = kernel
-        self._human = human
+        self._principal = principal
         self._folder = folder
         self.view_token = secrets.token_urlsafe(32)
         self._server: asyncio.Server | None = None
@@ -414,7 +414,7 @@ class Control:
         are ops, and the tool plane is its way in."""
         if hmac.compare_digest(token, self.view_token):
             denied = Refusal(code="not_permitted", detail="a view credential reads and never writes")
-            return Local(self._kernel, self._human, denied=denied), False, self._human.id
+            return Local(self._kernel, self._principal, denied=denied), False, self._principal.id
         principal = self._kernel.authenticate(token)
         if principal.kind == "agent":
             raise Refused("not_permitted", "an agent's token is for the tool plane")

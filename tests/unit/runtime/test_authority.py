@@ -9,9 +9,10 @@ from urllib.parse import quote
 import pytest
 from pydantic import ValidationError
 
-from platoon_harness import Session, Team
+from platoon_harness import Refused, Session, Team
 from platoon_harness.config import Secret
 from platoon_harness.drivers import AgentSpec, Capabilities, DriverInfo, Gateway, Item, Ready, Reporter
+from platoon_harness.kernel import is_held
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, SpawnRequest
 from platoon_harness.testing import Exit, Say, ScriptedDriver
 from platoon_harness.testing.scripted import Step
@@ -128,6 +129,24 @@ async def test_the_gateway_bearer_is_masked_in_every_form(tmp_path):
 
     assert item.gist == "*** *** ***" and body == "*** | *** | ***"
     assert not any(form in text for form in forms)
+
+
+async def test_a_session_whose_admissions_name_backend_ids_is_never_resumed(tmp_path):
+    """Its agents' keys went with the authority that admitted them, so a resume would run them on nothing of theirs: it
+    is refused before anything runs, and the session stays history."""
+    team = team_on(Sealed)
+    async with Session.start(team, name="s", authority=Gating(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+    async with Session.attach("s", root=tmp_path) as history:
+        head = await history.head()
+
+    with pytest.raises(Refused, match="never resumed: an authority that has gone admitted bob") as refused:
+        await Session.resume("s", root=tmp_path)
+
+    async with Session.attach("s", root=tmp_path) as history:
+        assert await history.head() == head
+    assert refused.value.refusal.code == "unsupported"
+    assert not is_held(tmp_path / "sessions" / "s")
 
 
 async def test_an_agent_is_admitted_with_its_parent_and_its_goal(tmp_path):

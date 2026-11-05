@@ -66,14 +66,15 @@ class Runtime:
         host_daemon = Daemon("host", lambda _: self.host.run())
         loaded = [*PRIMITIVES, *extensions, Extension("host", daemons=[host_daemon])]
         self.kernel = Kernel.open(self.folder, clock=self._clock, extensions=loaded)
-        self.human = Principal(id=manifest.human)
+        self.principal = Principal(id=manifest.principal)
         self.tools = ToolServer(self.kernel)
         authority = self._authority or LocalAuthority(team)
         cwd = Path(manifest.cwd)
         self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd, plan_login=manifest.plan_login)
-        self.control = Control(self.kernel, self.human, self.folder)
+        self.control = Control(self.kernel, self.principal, self.folder)
         incarnation = None
         try:
+            self._refuse_a_managed_session()
             await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
             capabilities, repo = await self.host.capabilities(), await repository(self.kernel, cwd)
@@ -99,15 +100,25 @@ class Runtime:
                 raise failure from error
             raise
 
+    def _refuse_a_managed_session(self) -> None:
+        """A session whose agents an authority admitted with the backend's ids never runs again: their keys went with
+        that authority, and no other can admit them as the same agents."""
+        if admitted := [record["name"] for record in self._records() if record["backend"]]:
+            names = ", ".join(admitted)
+            what = f"session {self.folder.name} is never resumed: an authority that has gone admitted {names}"
+            raise Refused("unsupported", f"{what}, so it is history, which `Session.attach` reads")
+
     async def _issue_credentials(self) -> None:
-        """A fresh pair per incarnation, so the last one's stop working. The owner's hash is in the journal. A view
-        token is nobody's identity, so it lives only in the runtime and its file."""
-        owner = secrets.token_urlsafe(32)
-        issue = {"id": self.human.id, "token_hash": hash_token(owner)}
-        issued = await self.kernel.submit(self.kernel.runtime, "principal.issue", issue)
-        if issued.refusal is not None:
-            raise Refused(issued.refusal.code, issued.refusal.detail)
-        write_private(self.folder / OWNER_TOKEN, owner)
+        """Fresh credentials each incarnation, so the last one's stop working. The owner's hash is in the journal, and a
+        session a program started issues none, as whoever held it would act as that program. A view token is nobody's
+        identity, so it lives only in the runtime and its file."""
+        if self.principal.kind == "human":
+            owner = secrets.token_urlsafe(32)
+            issue = {"id": self.principal.id, "token_hash": hash_token(owner)}
+            issued = await self.kernel.submit(self.kernel.runtime, "principal.issue", issue)
+            if issued.refusal is not None:
+                raise Refused(issued.refusal.code, issued.refusal.detail)
+            write_private(self.folder / OWNER_TOKEN, owner)
         write_private(self.folder / VIEW_TOKEN, self.control.view_token)
 
     def ask_to_stop(self) -> None:

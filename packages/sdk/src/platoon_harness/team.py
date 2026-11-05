@@ -179,6 +179,17 @@ class Team(Model):
             count = 0 if self.spawners(role) - {role} else 1
         return [role] if count == 1 else [f"{role}-{number}" for number in range(1, count + 1)]
 
+    def recipients(self, to: str | None = None) -> tuple[str, ...]:
+        """Whom a session's prompt goes to, as `@agent`: the agent `to` names, which the session must start, or else
+        every agent it starts."""
+        started = tuple(f"@{agent}" for role in self.roles for agent in self.starts(role))
+        if to is None:
+            return started
+        if to not in started:
+            what = f"{to} is no agent this session starts: it starts {', '.join(started) or 'none'}"
+            raise ConfigError([Problem("to", what)])
+        return (to,)
+
     def preamble_of(self, role: str) -> str:
         """The template of what `role`'s agents are told before its words: its own, else the team's."""
         own = self.roles[role].preamble

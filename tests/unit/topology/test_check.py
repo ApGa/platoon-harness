@@ -417,6 +417,16 @@ def test_a_written_grant_of_spawning_makes_a_spawner_as_may_spawn_does():
     assert (team.spawners("b"), team.starts("b")) == ({"a"}, [])
 
 
+def test_a_prompt_goes_to_the_agent_named_or_to_every_agent_the_session_starts():
+    team = Team(roles={"lead": Role(harness="pi"), "worker": Role(harness="pi", count=2), "child": Role(harness="pi")})
+    team = team.model_copy(update={"roles": {**team.roles, "lead": Role(harness="pi", may_spawn=("child",))}})
+
+    assert team.recipients() == ("@lead", "@worker-1", "@worker-2")
+    assert team.recipients("@worker-2") == ("@worker-2",)
+    with pytest.raises(ConfigError, match="@child is no agent this session starts: it starts @lead, @worker-1"):
+        team.recipients("@child")
+
+
 def test_a_grant_of_another_op_is_no_spawning():
     written = Grant(who="role:a", ops="board.*", on="role/a")
     team = Team(roles={"a": Role(harness="pi")}, topology=Topology(grants=[written]))

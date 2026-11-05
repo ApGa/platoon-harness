@@ -126,10 +126,10 @@ Each law is a sentence, and each has a test of the same name.
   swarmchat.sqlite    0600: the browser's projection, folded one way by `web`; dropping it costs a fold from the journal
   swarmchat.lock      flock: held by the one `web` serving the session, which says where it serves
   blobs/ab/<sha256>   bodies too large for the journal file
-  manifest.json       resolved team, how it was started, component and protocol versions, topology hash; no secrets
+  manifest.json       resolved team, who started it and how, component and protocol versions, topology hash; no secrets
   runtime.json        pid, start time, socket path, incarnation: left by a crash, so only `lock` proves it true
   runtime.log         what a detached runtime said
-  owner.token         0600: a control credential, fresh each incarnation
+  owner.token         0600: a control credential, fresh each incarnation, which a session a program started has none of
   view.token          0600: a view credential, which reads and never writes
   lock                flock: held by the one live runtime
   commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
@@ -170,7 +170,9 @@ can both be watched. Leaving only disconnects.
   needs. A runtime is one path for a new session and a resumed one: `Kernel.recover()`, then open, whose steps run under fixed keys
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
   through opening is finished by the next runtime. A resume under an SDK or component version other than the manifest's is labelled
-  on `runtime.started`, in its `gist` and whole in its `drift`, and never refused, since a session survives an upgrade.
+  on `runtime.started`, in its `gist` and whole in its `drift`, and never refused, since a session survives an upgrade. A session
+  whose admit results name the backend's ids is refused before anything runs: an authority that has gone admitted its agents, and
+  their keys went with it (§14). It stays history.
 - **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
@@ -573,6 +575,8 @@ to do next.
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+`episode.close` closes the open episode on `based_on`, the refs of what it came to, checked as a citation is (§7), and what it was
+worth is an annotation's to say (§11), never the episode's.
 Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
 requires `expected_version`, as `board.revise` and `approval.resolve` do, takes it as an argument, so a tool call can carry it. A
 body enters through `Kernel.put_body` before the op cites it, and an op reads only bodies held in the journal: one in `blobs/`
@@ -634,8 +638,8 @@ Each statement here is a promise with a test.
 
 **Injection** is `pull < next-turn < wake < steer`, set per channel on the reader's side, so an agent cannot buy a wake,
 and an agent creating a channel stops at `next-turn`. A person's message to an agent steers, whatever its reader's setting, so a
-correction lands at the earliest boundary its harness has, and a script's `Session.send` is a person's message, as its principal is
-the human. Nothing withdraws a sent message: a person sends a correction instead.
+correction lands at the earliest boundary its harness has. A script's `Session.send` is its principal's message: a person's
+steers, and a program's goes as its reader's setting says, as any agent's does. Nothing withdraws a sent message: a person sends a correction instead.
 `wake` starts a turn if the agent is idle or parked. `steer` asks for the earliest boundary the harness has and degrades visibly:
 `tool`, then `model_call`, then `turn`. Tool results of coordination ops also carry pending `steer` notices, which gives
 a tool boundary on any harness whose tools are visible. `coalesce` merges wakes into one turn.
@@ -1416,8 +1420,10 @@ async with Session.start(team, name="fix-auth") as session:   # owner: leaving s
 ```
 
 `await Session.start(...)` works too. `Session.attach(name)` is the same class as a guest, and `Session.resume(name)` restarts an
-owner, as its own verb because restarting can spend money. The human is one principal, `human:you` unless `start` says otherwise. That
-is a name in the journal and not a claim: identity still comes from the credential.
+owner, as its own verb because restarting can spend money. Who starts a session is its principal, a person, `human:you` unless `start`
+says otherwise, or a program, `program:<name>`, and the manifest names it. That is a name in the journal and not a claim: identity
+still comes from the credential. A program's session has no person: it issues no owner credential, as whoever held it would act as
+that program, so a guest of its runtime holds a view credential, and it cannot detach.
 
 A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, which
 answers a command its journal answered under the same key and refuses any other write `unavailable`, naming the resume command), and
@@ -1466,7 +1472,8 @@ as `team check`, `doctor` and a plan login refused headless say. Any other comma
 
 **The command line** is a client like any other, a thin one: `run` is `Session.start`, a person's message and `settled()`, then the
 owner's shutdown, and says the session's name on stderr at once, so another shell can reach it. Whom the message is for it decides
-from the team before any cost. Ctrl+C or `SIGTERM`, at any point, cancels what is under way and the shutdown still runs, so a run ends
+from the team before any cost, by the SDK's one rule, `Team.recipients`: the agent `--to` names, or else every agent the session
+starts. Ctrl+C or `SIGTERM`, at any point, cancels what is under way and the shutdown still runs, so a run ends
 `cancelled` and the session stays resumable. `serve` keeps a runtime with no client for a supervisor. `events` follows a session and
 `session stop` sends it the owner's stop, `session refold` brings a session's views up to its journal while no runtime holds it,
 writing no event, and each command under Ops on a session runs one op there as a guest, a read on a view
@@ -1675,6 +1682,11 @@ class AgentOutcome(Model):
   `finish` takes a second telling as the first.
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
   that counts steps counts them at its gateway.
+- **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody
+  else can act (§12). It sends its task to `Team.recipients()`, every agent the session starts, and closes an episode on the refs
+  of what each starting agent reported (§6).
+- **Afterwards.** A session whose admit results name the backend's ids is never resumed, as its keys went with its authority (§4):
+  it is read as history, which estimators write annotations beside.
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|

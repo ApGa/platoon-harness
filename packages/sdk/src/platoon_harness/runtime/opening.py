@@ -104,17 +104,19 @@ def prepare(
     *,
     name: str | None = None,
     root: str | Path | None = None,
-    human: str = "you",
+    principal: str = "human:you",
     approvals: Policy | None = None,
     cwd: str | Path | None = None,
     plan_login: bool = False,
 ) -> Path:
-    """Check a team and write down how it starts, before any cost. The folder is all a runtime then needs.
+    """Check a team and write down how it starts, before any cost, and who starts it, `principal`, a person or a
+    program. The folder is all a runtime then needs.
 
     This blocks, because a driver may describe itself by running something.
     """
-    if re.fullmatch(NAME, human) is None:
-        raise ConfigError([Problem("human", f"{human!r} cannot name a principal")])
+    if re.fullmatch(f"(human|program):{NAME}", principal) is None:
+        what = f"{principal!r} is neither `human:<name>` nor `program:<name>`"
+        raise ConfigError([Problem("principal", what)])
     cwd = Path(cwd or ".").resolve()
     problems = check(team, plan_login=plan_login, approvals=approvals, cwd=cwd, root=root, name=name)
     if errors := [problem for problem in problems if problem.level == "error"]:
@@ -122,7 +124,7 @@ def prepare(
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(
-        team.resolved(Installed()), human=f"human:{human}", approvals=approvals, cwd=str(cwd), plan_login=plan_login
+        team.resolved(Installed()), principal=principal, approvals=approvals, cwd=str(cwd), plan_login=plan_login
     )
     return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 
@@ -205,7 +207,7 @@ async def open_session(
     `capabilities` is what each role's driver says, by role, and a role missing from it is unknown."""
     body = await kernel.put_body(text.encode())
     await _steps(kernel, "session.open", ("session", _settings(team, manifest, body, capabilities, repo)))
-    await _steps(kernel, "principal.add", ("human", {"id": manifest.human}))
+    await _steps(kernel, "principal.add", ("human", {"id": manifest.principal}))  # Keyed as when only a person could.
     grants = compile(team)
     await _steps(kernel, "grant.add", *((f"grant/{index}", grant.model_dump()) for index, grant in enumerate(grants)))
     channels = team.topology.channels.items()
