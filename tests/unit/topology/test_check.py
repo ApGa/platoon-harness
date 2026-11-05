@@ -392,7 +392,10 @@ def test_a_relation_that_no_may_spawn_makes_true_is_warned():
 def test_team_check_refuses_a_program_it_cannot_run():
     """No program runs yet, so a team left to one would never get what it waits for: refused, naming it."""
     team = Team(roles={"a": Role(harness="pi")}, topology=Topology(program="nope", until="program"))
-    assert errors(team) == ["topology.program: `nope` cannot run: no program runs yet, so nothing it does happens"]
+    assert errors(team) == [
+        "topology.program: `nope` cannot run, as no program runs yet: use a topology that names none, such as "
+        "`manager-worker`, or drive the session from Python"
+    ]
 
 
 def test_recursion_through_a_written_grant_is_seen():

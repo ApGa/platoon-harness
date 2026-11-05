@@ -442,9 +442,8 @@ def team_check(
             problems.append(Problem("topology.limits.max_hops", what, "warning"))
     if (program := topology.program) is not None:
         name = program if isinstance(program, str) else program.name
-        problems.append(
-            Problem("topology.program", f"`{name}` cannot run: no program runs yet, so nothing it does happens")
-        )
+        instead = "use a topology that names none, such as `manager-worker`, or drive the session from Python"
+        problems.append(Problem("topology.program", f"`{name}` cannot run, as no program runs yet: {instead}"))
 
     problems += _unestimated(team.budget, "budget")
     problems += _warnings(team)

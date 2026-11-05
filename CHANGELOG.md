@@ -320,9 +320,9 @@
 
 ### Changed
 
-- `team check` refuses a `program`, naming it, while none runs, so `run` and `Session.start` refuse such a team before any cost,
-  with exit 78 on the command line, the `map-reduce` and `git-swarm` presets among them. Before, it warned, and a session
-  under `until = "program"` never ended short of its budget. See ADR 0048.
+- `team check` refuses a `program`, naming it and what to use instead, while none runs, so `run` and `Session.start` refuse such a
+  team before any cost, with exit 78 on the command line, the `map-reduce` and `git-swarm` presets among them. Before, it warned, and
+  a session under `until = "program"` never ended short of its budget. See ADR 0048.
 - A harness that exits on its own rests its agent once instead of ending it: a turn it was in is lost, with `crash_window` naming
   where that turn began, its agent is told its turn was cut off, which wakes it at once, and the `rest` effect ends what the harness
   left. A second exit before a turn of its ends, an exit while the session accepts no work, or of a harness that cannot resume,
@@ -473,8 +473,9 @@
   fixed 32 entries it always was. A team that sets it is refused, as any unknown key is. See ADR 0048.
 - A topic's `entry`, `requires` and `validator`, which nothing enforced. A team that sets one is refused. See ADR 0048.
 - A board's `keys`, which nothing enforced. A team that sets it is refused. See ADR 0048.
-- The `git-swarm` preset's `contributions` topic, which held only those settings: the repository is the contribution log,
-  and `Informed-By` the declaration. A session whose resolved team holds it no longer loads. See ADR 0048.
+- The `git-swarm` preset's `contributions` topic, which held only those settings: the repository is the contribution log, and
+  `Informed-By` the declaration. A session whose resolved team holds it can no longer be resumed, and its journal still reads. See
+  ADR 0048.
 - `delivery.confirm`, which only tests used: a driver's `input.delivered`, through `agent.report`, is the one way to confirm a
   handover.
 

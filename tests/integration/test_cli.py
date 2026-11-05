@@ -619,7 +619,7 @@ async def test_team_check_and_run_refuse_a_program_none_can_run_with_78(cli: Cli
     checked = await cli.run("team", "check", mapped, "--trust")
     ran = await cli.run("run", "go", "--team", mapped, "--trust")
 
-    refused = "error: topology.program: `map_reduce` cannot run: no program runs yet, so nothing it does happens"
+    refused = "error: topology.program: `map_reduce` cannot run, as no program runs yet: use a topology that names"
     assert checked.code == 78 and refused in checked.stdout
     assert ran.code == 78 and "`map_reduce` cannot run" in ran.stderr
     assert not (cli.folder / "home" / "sessions").exists()

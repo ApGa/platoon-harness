@@ -51,12 +51,15 @@ the command line:
 
 ```console
 $ uv run platoon-harness uses dns --ref board/notes/risks@1           # what cites the note, and whom it was handed to
-$ uv run platoon-harness contributors dns --ref agent/lead@7          # whose work the record ties to the lead's finish
+$ finish=$(uv run platoon-harness uses dns --ref board/notes/risks@1 \
+    | jq -r '.rows[] | select(.type == "agent.finished" and .maker == "agent:lead") | .ref')
+$ uv run platoon-harness contributors dns --ref "$finish"             # whose work the record ties to the lead's finish
 ```
 
-`uses` names the lead's finish among what cites the note, with its ref, which is what to ask `contributors` about: here
-`agent/lead@7`, which differs from run to run. `contributors` is reachability in the record and never credit: it weighs and ranks
-nobody, and a citation is its agent's claim. [docs/provenance.md](../../docs/provenance.md) says how to read each answer.
+`uses` names the lead's finish, its `agent.finished`, among what cites the note, with its ref, which is what to ask `contributors`
+about; the ref differs from run to run, so the second line picks it from `uses`. `contributors` is reachability in the record and
+never credit: it weighs and ranks nobody, and a citation is its agent's claim. [docs/provenance.md](../../docs/provenance.md) says
+how to read each answer.
 
 ## Other harnesses
 
@@ -84,7 +87,7 @@ Scripted stand-ins do what the job asks, each citing what it rests on, with no m
 ```console
 $ PYTHONPATH=. uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file examples/mixed-team/job.md \
     --set 'roles.lead.harness = "tests.integration.scripts:mixed_lead"' \
-    --set 'roles.worker.harness = "tests.integration.scripts:mixed_worker"'
+    --set 'roles.worker.harness = "tests.integration.scripts:mixed_worker"' --name dns
 ```
 
 The test suite runs this file that way, from the command line in `tests/integration/test_examples.py` and from the page with the
