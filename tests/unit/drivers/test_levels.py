@@ -44,6 +44,8 @@ NEEDED = (
     "ready_with_pinned_model",
     "tool_in_first_request",
     "call_ids_reported",
+    "sealed_first_request_holds_only_ours",
+    "environment_tools_in_first_request",
 )
 
 
@@ -227,6 +229,18 @@ def test_a_harness_with_no_sealed_launch_is_not_trainable():
         "unmet",
         ("it has no sealed launch, so the user's own setup reaches the policy",),
     )
+
+
+@pytest.mark.parametrize("sealed", ["sealed_first_request_holds_only_ours", "environment_tools_in_first_request"])
+def test_trainable_stands_on_the_sealed_checks(sealed):
+    """A sealed launch is earned on a gateway: either check failed leaves trainable unmet, and either skipped leaves it
+    unverified."""
+    failed = levels(CAPABILITIES, PROFILE, conformance(Check(name=sealed, state="failed", reason="no")))
+    skipped = levels(CAPABILITIES, PROFILE, conformance(Check(name=sealed, state="skipped", reason="no")))
+
+    assert (failed.trainable.state, failed.trainable.reasons) == ("unmet", (f"`{sealed}` failed: no",))
+    assert (skipped.trainable.state, skipped.trainable.reasons) == ("unverified", (f"`{sealed}` did not run: no",))
+    assert failed.operational.state == skipped.operational.state == "met"
 
 
 def test_what_a_result_does_not_prove_of_a_level_is_said_with_what_makes_one():

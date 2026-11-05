@@ -12,7 +12,7 @@ from urllib.parse import quote, quote_plus
 from platoon_harness.config import Secret
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
-from . import AgentSpec, Gateway, Report, keys_of
+from . import BEARER_VARIABLE, AgentSpec, Gateway, Report
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
@@ -31,7 +31,8 @@ def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str,
 
 def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The whole environment of one harness process: what it inherits, a `TMPDIR` of its own, and what `spec` names.
-    Later entries win: `spec.env` over the inherited, and the variables of `spec.access` over both."""
+    Later entries win: `spec.env` over the inherited, and model access over both, each variable it names or a gateway's
+    bearer under `BEARER_VARIABLE`."""
     own = tmpdir(spec.folder)
     own.mkdir(mode=0o700, parents=True, exist_ok=True)
     env = {**inherited(*names, environ=environ), "TMPDIR": str(own)}
@@ -39,7 +40,8 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
         env["PATH"] = os.pathsep.join(filter(None, (str(spec.tools.bin), env.get("PATH"))))
         env[URL_VARIABLE] = spec.tools.url
         env[TOKEN_VARIABLE] = spec.tools.token.reveal()
-    return {**env, **spec.env, **{name: secret.reveal() for name, secret in keys_of(spec).items()}}
+    access = {BEARER_VARIABLE: spec.access.bearer} if isinstance(spec.access, Gateway) else spec.access
+    return {**env, **spec.env, **{name: secret.reveal() for name, secret in access.items()}}
 
 
 def tmpdir(folder: Path) -> Path:

@@ -3,6 +3,11 @@
 A role runs in the user's own setup: pi keeps its own agent directory, so their login, settings and extensions stay
 theirs, and what we add comes in beside them, by the one extension `-e` loads. Pi asks for no approval of its own, so
 that extension asks, and every approval comes to the runtime. A role's budget is what limits it.
+
+On a gateway the launch is sealed: an agent directory of the agent's own, holding settings that retry nothing and warm
+no cache, none of the user's extensions, skills, templates, themes or project instructions, no built-in tool, and the
+gateway's model, our tools and the environment's beside them. Pi still compacts, through our extension, which runs pi's
+own `compact` with the gateway's compaction headers and keeps the id the model gave each of its calls.
 """
 
 import asyncio
@@ -20,6 +25,8 @@ from platoon_harness.rpc import Lines
 from platoon_harness.tools import SHIM, delivery_heading
 
 from . import (
+    BEARER_VARIABLE,
+    ENVIRONMENT,
     UNREADABLE,
     AgentSpec,
     ApprovalRequested,
@@ -30,6 +37,7 @@ from . import (
     Delta,
     DriverError,
     DriverInfo,
+    Gateway,
     InputDelivered,
     Item,
     Login,
@@ -41,7 +49,6 @@ from . import (
     TurnEnded,
     TurnStarted,
     Usage,
-    keys_of,
     refuse_other_effort,
     refuse_unset_model,
     text_of,
@@ -72,7 +79,28 @@ _PROVIDER = "platoon-harness"
 _LOGINS: Mapping[str, Login] = {"oauth": "plan", "api_key": "key"}
 _TOOL_TIMEOUT_S = 600.0
 _NO_PRICE = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+_UNREACHED = 2**53 - 1
+"""The context window a sealed launch states, which no context reaches. A gateway names none, and pi takes one unstated
+as none at all, which would have it compact after every turn: so it compacts once its gateway refuses a request as too
+long, and retries that request once."""
+_TOOLS_STATUS = "platoon_harness.tools"
+"""The status our extension says the tools pi declares under, once ours have connected."""
 _INSTRUCTIONS = "instructions.md"
+_AGENT_DIR = "PI_CODING_AGENT_DIR"
+_SEALED = (
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-themes",
+    "--no-context-files",
+    "--no-approve",
+    "--no-builtin-tools",
+    "--offline",
+)
+"""What a sealed launch keeps out: whatever pi would find of the user's or the project's, and pi's own tools."""
+_SEALED_SETTINGS = {"retry": {"enabled": False}, "cacheWarming": "off"}
+"""A sealed agent's settings: a retry is a second call a gateway records, and a warmed cache one nobody asked for."""
+_CALLS = "platoon_harness"
+"""Where our extension puts the ids of a compaction's calls, among the details pi keeps of it."""
 _DIALOGS = frozenset({"select", "input", "editor"})
 _IN_CONTEXT = frozenset({"message", "custom_message", "branch_summary"})
 _SAYS_NOTHING = frozenset(
@@ -110,6 +138,7 @@ _CAPABILITIES = Capabilities(
     dialects={"chat"},
     coverage={"prompt": "partial", "tool_results": "observed", "compaction": "observed"},
     measures={"tokens", "usd"},
+    sealed=True,
 )
 
 __all__ = ["PiDriver"]
@@ -136,7 +165,9 @@ def _version(env: Mapping[str, str]) -> str | None:
 
 def _extension_config(spec: AgentSpec) -> str:
     """What the extension adds for this agent, with the file of instructions it reads. Our tools go through the stdio
-    shim on this very interpreter, so that each call has an id of its own, and the token stays in the environment."""
+    shim on this very interpreter, so that each call has an id of its own, and the token stays in the environment. A
+    provider of the agent's own reaches its access, and on a gateway the environment's server and its compaction headers
+    come too, each naming the variable the bearer is in, never its value."""
     config: dict[str, Any] = {}
     if spec.instructions is not None:
         config["instructions"] = private(spec.folder / _INSTRUCTIONS, spec.instructions)
@@ -148,12 +179,25 @@ def _extension_config(spec: AgentSpec) -> str:
             "exposure": "direct",
             "timeout": _TOOL_TIMEOUT_S,
         }
-    if _BASE_URL in (access := keys_of(spec)):
-        model = {"id": spec.model, "reasoning": spec.effort is not None, "input": ["text"], "cost": _NO_PRICE}
-        url = access[_BASE_URL].reveal()
-        settings = {"baseUrl": url, "apiKey": f"${_KEY}", "api": "openai-completions", "models": [model]}
-        config["provider"] = [_PROVIDER, settings]
+    model = {"id": spec.model, "reasoning": spec.effort is not None, "input": ["text"], "cost": _NO_PRICE}
+    if isinstance(access := spec.access, Gateway):
+        bearer = f"${{{BEARER_VARIABLE}}}"
+        config["provider"] = [
+            _PROVIDER,
+            _provider(f"{access.origin}/v1", bearer, {**model, "contextWindow": _UNREACHED}),
+        ]
+        config["compaction"] = {"bearer": BEARER_VARIABLE, "headers": dict(access.compaction_headers)}
+        if access.tools is not None:
+            headers = {"Authorization": f"Bearer {bearer}"}
+            config["environment"] = [ENVIRONMENT, {"url": access.tools, "headers": headers, "exposure": "direct"}]
+    elif _BASE_URL in access:
+        config["provider"] = [_PROVIDER, _provider(access[_BASE_URL].reveal(), f"${_KEY}", model)]
     return json.dumps(config)
+
+
+def _provider(url: str, key: str, model: Mapping[str, Any]) -> dict[str, Any]:
+    """A provider that speaks Chat Completions at `url`, with `key` naming the variable its key is in."""
+    return {"baseUrl": url, "apiKey": key, "api": "openai-completions", "models": [model]}
 
 
 def _kind(frame: Any) -> str:
@@ -223,25 +267,39 @@ class PiDriver:
         self._asking: dict[str, str | None] = {}
         self._deciding: dict[str, str] = {}
         self._later: set[asyncio.Task[None]] = set()
+        self._declared: tuple[str, ...] | None = None
+        self._declaring = asyncio.Event()
 
     def describe(self) -> DriverInfo:
         if self._info is None:
-            self._info = DriverInfo(name=_PI, login=_login(), capabilities=_CAPABILITIES)
+            version = _version(inherited(*_SIGN_IN))
+            self._info = DriverInfo(name=_PI, login=_login(), version=version, capabilities=_CAPABILITIES)
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
-        if _BASE_URL in (access := keys_of(spec)) and _KEY not in access:
+        access = spec.access
+        if not isinstance(access, Gateway) and _BASE_URL in access and _KEY not in access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._native = spec.resume or str(uuid4())
         self._folder = spec.folder
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        env = {**harness_env(spec, *_SIGN_IN), _EXTENSION_CONFIG: _extension_config(spec)}
+        env = {**self._env(spec), _EXTENSION_CONFIG: _extension_config(spec)}
         self._launched = await Process.launch(self._command(spec), spec, report, read=self._read, env=env)
         self._lines.open(self._launched.stdin)
         await self._handshake(spec, await asyncio.to_thread(_version, env))
         if spec.goal is not None and spec.resume is None:
             await self.deliver(spec.goal)
+
+    def _env(self, spec: AgentSpec) -> dict[str, str]:
+        """The harness's environment: what signs it in as in the user's shell, or for a sealed launch nothing of the
+        user's, and an agent directory of its own, in the agent's folder, whose settings are a sealed agent's."""
+        if not isinstance(spec.access, Gateway):
+            return harness_env(spec, *_SIGN_IN)
+        home = spec.folder / "pi"
+        home.mkdir(mode=0o700, exist_ok=True)
+        (home / "settings.json").write_text(json.dumps(_SEALED_SETTINGS))
+        return {**harness_env(spec), _AGENT_DIR: str(home)}
 
     def _command(self, spec: AgentSpec) -> list[str]:
         """How this agent launches. `--session-id` makes a session under an id we chose, so `native` is known before
@@ -249,7 +307,9 @@ class PiDriver:
         turn cannot be found. A provider of the agent's own is named, or `--model` would pick among the user's."""
         command = [_PI, "--mode", "rpc", "--session" if spec.resume else "--session-id", self._native]
         command += ["-e", str(_EXTENSION)]
-        if _BASE_URL in keys_of(spec):
+        if isinstance(spec.access, Gateway):
+            command += [*_SEALED, "--provider", _PROVIDER]
+        elif _BASE_URL in spec.access:
             command += ["--provider", _PROVIDER]
         if spec.model is not None:
             command += ["--model", spec.model]
@@ -259,7 +319,8 @@ class PiDriver:
 
     async def _handshake(self, spec: AgentSpec, version: str | None) -> None:
         """Ask what no record says before the first turn, none of which calls a model. Pi warns of an effort a model
-        cannot honor and runs on, and a provider it has no login for fails only at a prompt, so both are refused now."""
+        cannot honor and runs on, and a provider it has no login for fails only at a prompt, so both are refused now.
+        With our tools, it waits for our extension to say which tools pi declares, once they have connected."""
         state = await self._ask("get_state")
         model = state.get("model") or {}
         provider, id = model.get("provider"), model.get("id")
@@ -268,7 +329,10 @@ class PiDriver:
             raise DriverError(f"{_PI} has no login for {provider}: sign in with `pi`, or give the role an auth profile")
         refuse_other_effort(spec, state.get("thinkingLevel"))
         effective = f"{provider}/{id}" if spec.model == f"{provider}/{id}" else id
-        self._report(Ready(native=self._native, version=version, effective_model=effective))
+        if spec.tools is not None:
+            await self._declaring.wait()
+        declared = self._declared
+        self._report(Ready(native=self._native, version=version, effective_model=effective, tools_visible=declared))
 
     # What the harness is sent.
 
@@ -385,6 +449,11 @@ class PiDriver:
                 self._named(frame)
             case {"type": "response", "id": str(id)}:
                 self._answered(id, frame)
+            case {"type": "extension_ui_request", "method": "setStatus", "statusKey": key, "statusText": str(text)} if (
+                key == _TOOLS_STATUS
+            ):
+                self._declared = tuple(json.loads(text))
+                self._declaring.set()
             case {"type": "extension_ui_request", "method": "confirm", "id": id}:
                 self._asked(id, frame.get("title") or "", frame.get("message") or "")
             case {"type": "extension_ui_request", "method": method, "id": id} if method in _DIALOGS:
@@ -535,10 +604,12 @@ class PiDriver:
         self._report(item)
 
     def _compaction(self, result: Mapping[str, Any] | None) -> None:
-        """One or two model calls whose usage comes as one, with no id. One that came to nothing says what it spent, and
-        one that came to something waits in its place for what it forgot."""
-        self._report(ModelCall(purpose="compaction"))
-        self._spent((result or {}).get("usage") or {}, None)
+        """One or two model calls whose usage comes as one. Through our extension each is reported by the id the model
+        gave it, and pi's own compaction names none. One that came to nothing says what it spent, and one that came to
+        something waits in its place for what it forgot."""
+        calls = ((result or {}).get("details") or {}).get(_CALLS, {}).get("calls") or [None]
+        self._report(*(ModelCall(call_id=call, purpose="compaction") for call in calls))
+        self._spent((result or {}).get("usage") or {}, calls[0] if len(calls) == 1 else None)
         if result is not None:
             place = _Place(Compacted(forgotten=None, summary=result.get("summary")))
             self._report(place)

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from platoon_harness.testing import FakeModel, Stall, Text, Thought, ToolCall
+from platoon_harness.testing import ENVIRONMENT_TOOL, FakeModel, Overflow, Stall, Text, Thought, ToolCall
 from platoon_harness.testing.loopback import post
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 
@@ -275,3 +275,43 @@ async def test_a_script_can_grow_while_it_runs():
         model.script(["later"])
 
         assert (await ask(model, CHAT))["choices"][0]["message"]["content"] == "later"
+
+
+async def test_fake_model_serves_models_and_tools_on_a_bearer_and_records_headers():
+    """As a gateway: its models at its origin, and the environment's tool at the URL it names, which answers only a
+    bearer it gave, and each request kept with the bearer and the headers it came with."""
+    async with FakeModel() as model:
+        gateway = model.gateway("bearer-1")
+        bearer = {"authorization": "Bearer bearer-1"}
+        await post(f"{gateway.origin}{CHAT}", {"model": gateway.model}, {**bearer, **gateway.compaction_headers})
+        assert gateway.tools is not None
+        listed = await post(gateway.tools, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, bearer)
+        called = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": ENVIRONMENT_TOOL}}
+        answered = await post(gateway.tools, called, bearer)
+        strangers = await post(gateway.tools, called, {"authorization": "Bearer someone-else"})
+
+    tools = json.loads(listed[1])["result"]["tools"]
+    assert [tool["name"] for tool in tools] == [ENVIRONMENT_TOOL]
+    assert json.loads(answered[1])["result"]["content"] == [{"type": "text", "text": "pong"}]
+    assert strangers[0] == 401
+    assert model.calls[0].bearer == "bearer-1" and model.calls[0].carries(gateway.compaction_headers)
+    assert [request.bearer for request in model.tool_calls] == ["bearer-1", "someone-else"]
+    assert (gateway.model, gateway.origin) == ("fake-model", model.url)
+
+
+@pytest.mark.parametrize(
+    ("path", "said"),
+    [
+        (CHAT, "maximum context length is 128000 tokens"),
+        (MESSAGES, "prompt is too long"),
+        (RESPONSES, "exceeds the context window"),
+    ],
+)
+async def test_an_overflow_is_refused_in_the_dialect_s_own_error_form_and_names_no_response(path, said):
+    async with FakeModel(Overflow(), "next") as model:
+        status, body = await post(f"{model.url}{path}", {"model": "m", "stream": True})
+        after = await ask(model, CHAT)
+
+    assert status == 400 and said in json.dumps(json.loads(body))
+    assert model.calls[0].response_id is None
+    assert after["choices"][0]["message"]["content"] == "next"

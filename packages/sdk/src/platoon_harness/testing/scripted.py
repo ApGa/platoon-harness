@@ -1,7 +1,9 @@
 """ScriptedDriver: a deterministic harness for tests and demos, with no model unless a step asks for one.
 
 Its tool calls are real MCP over `ToolBinding.url`, and an `AskModel` step is a real model call, so a scripted team
-exercises the real tool plane, and conformance can read what it did from the model's log.
+exercises the real tool plane, and conformance can read what it did from the model's log. Given a gateway it launches
+sealed, which is the reference a training system's tests run on with no binary: the gateway's model under its bearer,
+the environment's tools beside ours, and a `Compact` step that carries the gateway's compaction headers.
 """
 
 import asyncio
@@ -14,17 +16,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     SHORT_LIMIT,
     AgentSpec,
     ApprovalRequested,
     Capabilities,
+    Compacted,
     Delivery,
     Delta,
     DriverError,
     DriverInfo,
     Exited,
     GapReport,
+    Gateway,
     InputDelivered,
     Item,
     ModelCall,
@@ -48,6 +53,8 @@ BASE_URL = "OPENAI_BASE_URL"
 API_KEY = "OPENAI_API_KEY"
 SHELL = "shell"
 """The one tool of a scripted harness's own, which runs its `command` once allowed."""
+SUMMARIZE = "Summarize the conversation so far, so that it can go on from the summary alone."
+"""What a `Compact` step asks the model."""
 
 _SHELL_GRACE = 1.0
 
@@ -62,6 +69,7 @@ _DEFAULT = Capabilities(
     dialects={"chat"},
     measures={"tokens"},
     coverage={"prompt": "observed", "tool_results": "observed"},
+    sealed=True,
 )
 
 
@@ -126,10 +134,16 @@ class Hang:
 @dataclass(frozen=True)
 class AskModel:
     """Behave like a harness: ask the model at `spec.access`, run what it calls, and go on until it only talks. A tool
-    that is not ours is gated, as a harness gates its shell."""
+    that is neither ours nor the environment's is gated, as a harness gates its shell."""
 
 
-type Step = Say | Think | Call | Wait | EndTurn | Fail | Exit | Ask | Hang | AskModel
+@dataclass(frozen=True)
+class Compact:
+    """Compact the context as a harness does: one model call asks for a summary, with the compaction headers a gateway
+    gave, and what was said gives way to that summary."""
+
+
+type Step = Say | Think | Call | Wait | EndTurn | Fail | Exit | Ask | Hang | AskModel | Compact
 
 
 class _Exiting(Exception):
@@ -165,6 +179,7 @@ class ScriptedDriver:
         self._heard_this_turn = False
         self._approvals: dict[str, asyncio.Future[Verdict]] = {}
         self._tools: list[dict[str, Any]] = []
+        self._servers: dict[str, tuple[str, Secret]] = {}
         self._turn_count = 0
         self._incarnation = uuid.uuid4().hex[:8]
         self._steps: asyncio.Task[str] | None = None
@@ -181,12 +196,14 @@ class ScriptedDriver:
             raise DriverError("this harness cannot resume")
         if spec.effort is not None:
             raise DriverError("a scripted harness has no effort to set")
+        if not self._capabilities.sealed:
+            keys_of(spec)  # Which refuses a gateway.
         refuse_unset_model(spec)
         self._spec, self._report = spec, report
         self._native = spec.resume or f"scripted-{spec.agent}"
         if spec.resume is not None and self._transcript.exists():
             self._messages = json.loads(self._transcript.read_text())
-        tools = await self._list_tools() if spec.tools is not None else None
+        tools = await self._list_tools()
         await report(Ready(native=self._native, version=self._version, effective_model=spec.model, tools_visible=tools))
         self._work = asyncio.create_task(self._run())
 
@@ -278,6 +295,8 @@ class ScriptedDriver:
                     await asyncio.Event().wait()
                 case AskModel():
                     await self._ask_model()
+                case Compact():
+                    await self._compact()
         return "stopped"
 
     async def _say(self, text: str, call_id: str | None = None) -> None:
@@ -293,13 +312,17 @@ class ScriptedDriver:
         await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
         return verdict
 
-    async def _mcp(self, method: str, params: Mapping[str, Any]) -> Any:
-        binding = self._spec.tools
-        if binding is None:
-            raise DriverError("this agent has no tools")
+    def _servers_given(self) -> Iterator[tuple[str, Secret]]:
+        """Where its tools are, each server's URL with the bearer it takes: ours, and a gateway's environment's."""
+        if self._spec.tools is not None:
+            yield self._spec.tools.url, self._spec.tools.token
+        if isinstance(access := self._spec.access, Gateway) and access.tools is not None:
+            yield access.tools, access.bearer
+
+    async def _mcp(self, server: tuple[str, Secret], method: str, params: Mapping[str, Any]) -> Any:
+        url, bearer = server
         frame = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
-        bearer = {"authorization": f"Bearer {binding.token.reveal()}"}
-        status, body = await post(binding.url, frame, bearer)
+        status, body = await post(url, frame, {"authorization": f"Bearer {bearer.reveal()}"})
         if status != 200:
             raise DriverError(f"{method} answered {status}")
         answer = json.loads(body)
@@ -307,20 +330,26 @@ class ScriptedDriver:
             raise DriverError(f"{method} refused: {answer['error']}")
         return answer["result"]
 
-    async def _list_tools(self) -> tuple[str, ...]:
-        tools = (await self._mcp("tools/list", {}))["tools"]
-        self._tools = [
-            {"type": "function", "function": {"name": tool["name"], "parameters": tool["inputSchema"]}}
-            for tool in tools
-        ]
-        return tuple(tool["name"] for tool in tools)
+    async def _list_tools(self) -> tuple[str, ...] | None:
+        """The tools the model is shown, ours and the environment's, as each server lists them, or None with neither."""
+        for server in self._servers_given():
+            for tool in (await self._mcp(server, "tools/list", {}))["tools"]:
+                self._servers[tool["name"]] = server
+                function = {"name": tool["name"], "parameters": tool["inputSchema"]}
+                self._tools.append({"type": "function", "function": function})
+        return tuple(self._servers) if self._spec.tools is not None or self._servers else None
 
     async def _call(
         self, tool: str, arguments: Mapping[str, Any], *, native_id: str | None = None, call_id: str | None = None
     ) -> Any:
+        """Call a tool of ours, or of the environment's by the name its server lists."""
+        binding = self._spec.tools
+        server = self._servers.get(tool) or (None if binding is None else (binding.url, binding.token))
+        if server is None:
+            raise DriverError("this agent has no tools")
         started = Item(kind="tool", phase="started", gist=f"{tool} called"[:GIST_LIMIT])
         await self._report(started.model_copy(update={"native_id": native_id, "call_id": call_id}))
-        result = await self._mcp("tools/call", {"name": tool, "arguments": dict(arguments)})
+        result = await self._mcp(server, "tools/call", {"name": tool, "arguments": dict(arguments)})
         self.results.append(result)
         outcome = "failed" if result.get("isError") else "completed"
         done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)
@@ -329,7 +358,7 @@ class ScriptedDriver:
 
     async def _ask_model(self) -> None:
         while True:
-            reply = await self._complete()
+            reply = await self._complete(self._messages, tools=self._tools)
             message = reply["choices"][0]["message"]
             self._messages.append(message)
             if message.get("content"):
@@ -340,11 +369,19 @@ class ScriptedDriver:
                 self._messages.append(await self._run_call(call, reply["id"]))
             await self._land_steers()
 
+    async def _compact(self) -> None:
+        """One model call for a summary, under the compaction headers its gateway gave, which then stands in for all
+        that was said. It names no native id of what it forgot, as it keeps none."""
+        asked = [*self._messages, {"role": "user", "content": SUMMARIZE}]
+        reply = await self._complete(asked, compacting=True)
+        summary = reply["choices"][0]["message"].get("content") or ""
+        self._messages = [{"role": "user", "content": summary}]
+        await self._report(Compacted(forgotten=None, summary=summary))
+
     async def _run_call(self, call: Mapping[str, Any], call_id: str) -> dict[str, Any]:
         function = call["function"]
         name, arguments = function["name"], json.loads(function["arguments"] or "{}")
-        ours = any(tool["function"]["name"] == name for tool in self._tools)
-        if ours:
+        if name in self._servers:
             result = await self._call(name, arguments, native_id=call["id"], call_id=call_id)
             output = json.dumps(result)
         else:
@@ -381,21 +418,30 @@ class ScriptedDriver:
             await process.stop(_SHELL_GRACE)
         return f"exit {process.returncode}\n{b''.join(said).decode(errors='replace')}"
 
-    async def _complete(self) -> Any:
+    async def _complete(
+        self, messages: Sequence[Mapping[str, Any]], *, tools: Sequence[Any] = (), compacting: bool = False
+    ) -> Any:
+        """One model call, at its gateway when it has one, and reported with the id the model gave it. One that compacts
+        carries the gateway's compaction headers, and is reported for that purpose."""
         spec = self._spec
         if spec.model is None:
             raise DriverError("no model was set, and this harness will not pick one")
-        access = keys_of(spec)
-        url, key = access[BASE_URL].reveal(), access[API_KEY].reveal()
+        access, headers = spec.access, {}
+        if isinstance(access, Gateway):
+            url, key = f"{access.origin}/v1", access.bearer.reveal()
+            headers = dict(access.compaction_headers) if compacting else {}
+        else:
+            url, key = access[BASE_URL].reveal(), access[API_KEY].reveal()
         system = [{"role": "system", "content": spec.instructions}] if spec.instructions else []
-        body = {"model": spec.model, "messages": [*system, *self._messages], "stream": False}
+        body = {"model": spec.model, "messages": [*system, *messages], "stream": False}
         status, answer = await post(
-            f"{url}/chat/completions", {**body, "tools": self._tools}, {"authorization": f"Bearer {key}"}
+            f"{url}/chat/completions", {**body, "tools": list(tools)}, {"authorization": f"Bearer {key}", **headers}
         )
         if status != 200:
             raise DriverError(f"the model answered {status}")
         reply = json.loads(answer)
-        await self._report(ModelCall(call_id=reply["id"], model=reply["model"]))
+        purpose = "compaction" if compacting else None
+        await self._report(ModelCall(call_id=reply["id"], model=reply["model"], purpose=purpose))
         usage = Usage(tokens=reply["usage"]["total_tokens"], label="provider", scope="call", call_id=reply["id"])
         await self._report(usage)
         return reply

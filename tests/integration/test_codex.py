@@ -111,7 +111,8 @@ async def test_the_codex_driver_conforms(tmp_path, monkeypatch):
     assert result.failed == (), str(result)
     assert (result.driver, result.version) == ("codex", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven"}
+    unsealed = {"sealed_first_request_holds_only_ours", "environment_tools_in_first_request"}
+    assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven", *unsealed}
     profile = Profile(driver="codex", implementation=implementation(CodexDriver()), version=result.version)
     earned = levels(CodexDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons

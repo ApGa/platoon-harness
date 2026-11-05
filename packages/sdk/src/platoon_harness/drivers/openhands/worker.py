@@ -8,6 +8,7 @@ here loads the SDK until `start`, so a description takes no time.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -19,11 +20,13 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 from uuid import uuid4
 
+from platoon_harness.config import Secret
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.tools import delivery_heading
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
 from .. import (
+    BEARER_VARIABLE,
     AgentSpec,
     ApprovalRequested,
     Boundary,
@@ -34,6 +37,7 @@ from .. import (
     DriverError,
     DriverInfo,
     GapReport,
+    Gateway,
     InputDelivered,
     Item,
     ModelCall,
@@ -45,7 +49,6 @@ from .. import (
     TurnStarted,
     Usage,
     Verdict,
-    keys_of,
     refuse_unset_model,
     unknown_frame,
 )
@@ -65,6 +68,9 @@ _SAYS_NOTHING = frozenset(
     {"CondensationRequest", "InterruptEvent", "PauseEvent", "SecurityAnalysisEvent", "SystemPromptEvent"}
 )
 _NOT_TOOLS = frozenset({"finish", "think"})
+_PURPOSES = {"agent": None, "condenser": "compaction"}
+"""What each of its LLMs calls the model for, by the LLM's usage id: the agent's for its turn, and the condenser's to
+compact its context."""
 _ENDS = frozenset({"stopped", "stuck", "interrupted"})
 """How a turn ends that no error ended."""
 _CAPABILITIES = Capabilities(
@@ -81,6 +87,7 @@ _CAPABILITIES = Capabilities(
     dialects={"chat"},
     coverage={"prompt": "partial", "tool_results": "observed", "compaction": "observed"},
     measures={"tokens"},
+    sealed=True,
 )
 
 log = logging.getLogger(__name__)
@@ -100,6 +107,20 @@ def sdk_version() -> str:
             "`platoon-harness-sdk[openhands]`"
         ) from error
     return sdk
+
+
+def _access(spec: AgentSpec) -> tuple[Secret, Secret | None]:
+    """The key and the endpoint the agent's model is reached by: its gateway's bearer and models, or its role's."""
+    if isinstance(access := spec.access, Gateway):
+        if spec.allow_native_children:
+            raise DriverError("a sealed launch starts no agents of openhands' own, whose calls would go on its key")
+        return access.bearer, Secret(f"{access.origin}/v1")
+    if _KEY not in access:
+        raise DriverError(
+            f"openhands signs in with a key alone: name {_KEY} in the role's auth profile, with {_URL} for an "
+            "endpoint other than OpenAI's, as a ChatGPT subscription or an OpenHands Cloud login needs a person"
+        )
+    return access[_KEY], access.get(_URL)
 
 
 def _text(parts: Iterable[Any]) -> str:
@@ -140,26 +161,25 @@ class Worker:
         self._cut = False
         self._failure: str | None = None
         self._counted: dict[str, int] = {}
+        self._environment: Any = None
 
     def describe(self) -> DriverInfo:
+        with contextlib.suppress(DriverError):
+            return DriverInfo(name=_NAME, version=sdk_version(), capabilities=_CAPABILITIES)
         return DriverInfo(name=_NAME, capabilities=_CAPABILITIES)
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        """Open the conversation, ready its agent, and say so. The key, the endpoint and our token leave the worker's
-        environment once read, so the agent's terminal cannot read them."""
+        """Open the conversation, ready its agent, and say so. The key, the endpoint, a gateway's bearer and our token
+        leave the worker's environment once read, so the agent's terminal cannot read them."""
         sdk = sdk_version()
         refuse_unset_model(spec)
-        if _KEY not in (access := keys_of(spec)):
-            raise DriverError(
-                f"openhands signs in with a key alone: name {_KEY} in the role's auth profile, with {_URL} for an "
-                "endpoint other than OpenAI's, as a ChatGPT subscription or an OpenHands Cloud login needs a person"
-            )
+        key, url = _access(spec)
         from . import agent  # The SDK, which takes seconds to load.
 
         shim = {"TMPDIR": tempfile.gettempdir()}
         if spec.tools is not None:
             shim |= {URL_VARIABLE: spec.tools.url, TOKEN_VARIABLE: spec.tools.token.reveal()}
-        for name in (_KEY, _URL, TOKEN_VARIABLE):
+        for name in (_KEY, _URL, BEARER_VARIABLE, TOKEN_VARIABLE):
             os.environ.pop(name, None)
         self._loop = asyncio.get_running_loop()
         self._forwarding = asyncio.create_task(self._forward(report))
@@ -169,8 +189,8 @@ class Worker:
         self._conversation = conversation = await asyncio.to_thread(
             agent.start,
             spec,
-            access[_KEY],
-            access.get(_URL),
+            key,
+            url,
             shim,
             on_event=lambda event: self._soon(self._heard, event),
             on_token=lambda chunk: self._soon(self._spoke, chunk),
@@ -180,7 +200,7 @@ class Worker:
         if spec.resume is not None and not len(conversation.state.events):
             raise DriverError(f"no conversation {spec.resume} is here to resume, and the SDK would start one anew")
         self._counted = {name: len(metrics.token_usages) for name, metrics in self._usage().items()}
-        tools, ours = await asyncio.to_thread(agent.ready, conversation)
+        tools, ours, self._environment = await asyncio.to_thread(agent.ready, conversation, spec, key)
         if spec.tools is not None and not ours:
             raise DriverError(
                 "our tools did not reach openhands: their server failed to start, as the agent's log says"
@@ -232,13 +252,17 @@ class Worker:
         return "landed" if any(_text(event.llm_message.content).startswith(heading) for event in said) else "unknown"
 
     async def stop(self, grace: float) -> None:
-        """End the turn, then close the conversation, which ends its terminal and the shim to our tools, and let every
-        report go."""
+        """End the turn, then close the conversation, which ends its terminal and the shim to our tools, and the client
+        of the environment's tools, and let every report go."""
         if self._conversation is not None:
             await self.interrupt()
             if self._turn is not None:
                 await asyncio.wait({self._turn}, timeout=grace)
             await asyncio.wait({asyncio.ensure_future(asyncio.to_thread(self._conversation.close))}, timeout=grace)
+            if self._environment is not None:
+                await asyncio.wait(
+                    {asyncio.ensure_future(asyncio.to_thread(self._environment.sync_close))}, timeout=grace
+                )
             await asyncio.wait({asyncio.ensure_future(self._queue.join())}, timeout=grace)
 
     # The turn.
@@ -381,7 +405,7 @@ class Worker:
 
     def _spent(self) -> None:
         """Each model call the SDK measured since, by its response id: the agent's own, and the condenser's, whose
-        purpose is its LLM's usage id. A native child's is its parent's spending and no call of the agent's."""
+        purpose is `compaction`. A native child's is its parent's spending and no call of the agent's."""
         for name, metrics in self._usage().items():
             calls = metrics.token_usages[self._counted.get(name, 0) :]
             self._counted[name] = len(metrics.token_usages)
@@ -393,7 +417,7 @@ class Worker:
                     continue
                 id = call.response_id or None
                 self._put(
-                    ModelCall(call_id=id, model=self._model, purpose=None if name == "agent" else name),
+                    ModelCall(call_id=id, model=self._model, purpose=_PURPOSES.get(name, name)),
                     Usage(tokens=tokens, label="provider", scope="call", call_id=id),
                 )
             if child and calls:

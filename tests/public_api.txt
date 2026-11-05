@@ -16,6 +16,7 @@ platoon_harness.config.WIRE_PROTOCOL
 platoon_harness.drivers.Access
 platoon_harness.drivers.AgentSpec
 platoon_harness.drivers.ApprovalRequested
+platoon_harness.drivers.BEARER_VARIABLE
 platoon_harness.drivers.Boundary
 platoon_harness.drivers.Capabilities
 platoon_harness.drivers.ChildSeen
@@ -30,6 +31,7 @@ platoon_harness.drivers.DriverInfo
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.inherited
+platoon_harness.drivers.ENVIRONMENT
 platoon_harness.drivers.env.private
 platoon_harness.drivers.env.Redactor
 platoon_harness.drivers.env.secrets_of
@@ -370,7 +372,9 @@ platoon_harness.testing.chat_access
 platoon_harness.testing.check_driver
 platoon_harness.testing.check_extension
 platoon_harness.testing.check_harness
+platoon_harness.testing.Compact
 platoon_harness.testing.EndTurn
+platoon_harness.testing.ENVIRONMENT_TOOL
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.testing.Exit
 platoon_harness.testing.Fail
@@ -379,6 +383,7 @@ platoon_harness.testing.FakeModel
 platoon_harness.testing.FakeTools
 platoon_harness.testing.Hang
 platoon_harness.testing.NAMESPACE
+platoon_harness.testing.Overflow
 platoon_harness.testing.Request
 platoon_harness.testing.Say
 platoon_harness.testing.ScriptedDriver

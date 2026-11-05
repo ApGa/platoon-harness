@@ -109,7 +109,8 @@ async def test_the_claude_driver_conforms(tmp_path, monkeypatch):
     assert result.failed == (), str(result)
     assert (result.driver, result.version) == ("claude", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"one_shot_exits", "declared_but_unproven"}
+    unsealed = {"sealed_first_request_holds_only_ours", "environment_tools_in_first_request"}
+    assert skipped == {"one_shot_exits", "declared_but_unproven", *unsealed}
     profile = Profile(driver="claude", implementation=implementation(ClaudeDriver()), version=result.version)
     earned = levels(ClaudeDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons

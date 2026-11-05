@@ -142,9 +142,9 @@ async def test_a_driver_that_asks_for_another_model_than_it_reports_fails(tmp_pa
             self._real = spec
             return await super().start(spec, report)
 
-        async def _complete(self):
+        async def _complete(self, messages, **asked):
             self._spec = self._spec.model_copy(update={"model": "hosted-default"})
-            return await super()._complete()
+            return await super()._complete(messages, **asked)
 
     result = await check(Unpinned, tmp_path)
 
@@ -474,9 +474,9 @@ async def test_a_preamble_that_never_reaches_a_request_fails(tmp_path):
 class Anchored(Filtered):
     """A harness whose MCP client names each call, as Claude Code does."""
 
-    async def _mcp(self, method, params):
+    async def _mcp(self, server, method, params):
         meta = {"_meta": {"claudecode/toolUseId": "toolu_1"}} if method == "tools/call" else {}
-        return await super()._mcp(method, {**params, **meta})
+        return await super()._mcp(server, method, {**params, **meta})
 
 
 async def test_an_item_that_carries_the_anchor_passes(tmp_path):
@@ -685,3 +685,57 @@ async def test_a_program_that_is_no_driver_fails_its_checks_and_ends(tmp_path):
 
     with pytest.raises(DriverError, match="did not describe itself"):
         await check(lambda: WireDriver([sys.executable, "-I", str(script)]), tmp_path)
+
+
+async def test_a_sealed_launch_that_holds_only_ours_and_shows_the_environment_s_tools_passes(tmp_path):
+    result = await check(Filtered, tmp_path)
+
+    assert result.get("sealed_first_request_holds_only_ours").state == "passed"
+    assert result.get("environment_tools_in_first_request").state == "passed"
+
+
+async def test_a_sealed_launch_that_shows_a_tool_of_the_harness_s_own_fails(tmp_path):
+    class Shelled(Filtered):
+        async def _list_tools(self):
+            names = await super()._list_tools()
+            self._tools.append({"type": "function", "function": {"name": "shell", "parameters": {}}})
+            return names
+
+    result = await check(Shelled, tmp_path)
+
+    assert result.get("sealed_first_request_holds_only_ours").reason == (
+        "the first request shows shell, which are neither ours nor the environment's"
+    )
+
+
+async def test_a_sealed_launch_that_reads_the_project_s_instructions_fails(tmp_path):
+    class Reading(Filtered):
+        async def start(self, spec, report):
+            told = (spec.cwd / "AGENTS.md").read_text() if (spec.cwd / "AGENTS.md").exists() else ""
+            return await super().start(spec.model_copy(update={"instructions": told or None}), report)
+
+    result = await check(Reading, tmp_path)
+
+    assert result.get("sealed_first_request_holds_only_ours").reason == (
+        "the first request holds the instructions of the project it works in"
+    )
+
+
+async def test_a_sealed_launch_that_leaves_the_environment_s_tools_out_fails(tmp_path):
+    class Unconnected(Filtered):
+        async def start(self, spec, report):
+            return await super().start(
+                spec.model_copy(update={"access": spec.access.model_copy(update={"tools": None})}), report
+            )
+
+    result = await check(Unconnected, tmp_path)
+
+    assert result.get("environment_tools_in_first_request").state == "failed"
+
+
+async def test_a_harness_with_no_sealed_launch_skips_the_sealed_checks(tmp_path):
+    unsealed = ScriptedDriver().describe().capabilities.model_copy(update={"sealed": False})
+    result = await check(lambda: Filtered(capabilities=unsealed), tmp_path)
+
+    for name in ("sealed_first_request_holds_only_ours", "environment_tools_in_first_request"):
+        assert (result.get(name).state, result.get(name).reason) == ("skipped", "it declares no sealed launch")

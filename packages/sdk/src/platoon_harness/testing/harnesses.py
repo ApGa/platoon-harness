@@ -141,6 +141,7 @@ def _openhands(folder: Path) -> dict[str, Any]:
         "gated": terminal,
         "shell": terminal,
         "child": ToolCall("task", task),
+        "kept": ("finish", "think"),  # How its agent ends a run and notes a thought.
         "timeout": 90.0,
     }
 

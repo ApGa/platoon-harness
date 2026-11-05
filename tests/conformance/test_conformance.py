@@ -31,6 +31,8 @@ ONE_SHOT_SKIPS = {
     "tool_item_carries_its_anchor",
     "stop_ends_a_running_tool",
     "runs_in_its_workspace",
+    "sealed_first_request_holds_only_ours",
+    "environment_tools_in_first_request",
     "unset_model_refused",
     "native_children_off_by_default",
     "native_child_seen",

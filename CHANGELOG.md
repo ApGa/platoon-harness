@@ -4,6 +4,25 @@
 
 ### Added
 
+- Sealed launches. On a gateway, ScriptedDriver, pi, OpenHands and a wire program that declares `sealed` launch with nothing of the
+  user's: the gateway's model under its bearer, which goes by environment alone, under `BEARER_VARIABLE`,
+  `PLATOON_HARNESS_BEARER`, a file the launch writes naming it as `${PLATOON_HARNESS_BEARER}`; ours and the environment's tools, the
+  environment's a second MCP server, `ENVIRONMENT`, at `Gateway.tools`; no tool of the harness's own that acts, no project
+  instructions and no retries. A wire frame carries a gateway as an object naming the bearer's variable. A gateway whose tools' URL
+  holds its bearer is refused. ScriptedDriver declares `sealed`. Pi gets an agent directory of its own in the agent's folder, and a
+  context window no context reaches, as it took an unstated one as none and compacted after every turn once its history passed what a
+  compaction keeps; OpenHands none of its coding tools, the environment's from an MCP client of their own, so ours keep their names.
+  See ADR 0053.
+- Compaction labelled at call time: each compaction call of a sealed launch carries the gateway's `compaction_headers` and is
+  reported as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's new `Compact` step, OpenHands'
+  condenser, a wire program from its frame, and pi through our extension, which takes `session_before_compact` and runs pi's own
+  `compact`, keeping each of its one or two calls' ids. See ADR 0053.
+- `FakeModel.gateway(bearer)`: FakeModel as a training system's gateway, its models and an MCP server of the environment's one tool,
+  `ENVIRONMENT_TOOL`, at `/mcp`, answering only a bearer it gave. `Request.bearer`, `Request.carries(headers)`, `FakeModel.tool_calls`,
+  and `Overflow`, a reply that refuses a request as too long in each dialect's own error form.
+- Two conformance checks of a sealed launch, `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`, kept in
+  the one result per driver, which `trainable` now stands on; `check_driver(kept=)` names the tools of a harness's own that a sealed
+  launch keeps, each acting on nothing, as OpenHands' `finish` and `think`. See ADR 0053.
 - `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
   closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR
@@ -343,6 +362,12 @@
 
 ### Changed
 
+- `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
+  `call_ids_reported`. See ADR 0053.
+- OpenHands' condenser calls are reported with the purpose `compaction`, where they were `condenser`. Its `describe` says the
+  SDK's version, and pi's says what `pi --version` said.
+- Pi's driver waits at start for our extension to say which tools pi declares, once ours have connected, so `ready.tools_visible` is
+  pi's own list, and a server that never connects leaves our tools hidden rather than unverified.
 - An annotation's status is one of five, `scored`, `invalid`, `error`, `timeout` or `cancelled`: `timeout` is new, and `unscored` is
   gone, as no statement is what unscored is. See ADR 0052.
 - `trainable` needs a driver that declares `sealed`, as well as a gateway login. See ADR 0052.

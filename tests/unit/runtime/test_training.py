@@ -14,7 +14,7 @@ from platoon_harness.runtime.paths import CONFORMANCE
 from platoon_harness.testing import Say
 
 from .support import harness, in_state, of_type, rebuilt_equals_live, scripted, until
-from .training import Gating, Sealed, kept
+from .training import UNSEALED, Gating, Sealed, kept
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -50,7 +50,7 @@ def test_check_trainable_refuses_what_the_machine_decides(tmp_path, made, failed
 
 
 def test_check_trainable_refuses_a_driver_with_no_sealed_launch(tmp_path):
-    team = Team.model_validate({"roles": {"bob": {"harness": scripted(), "approvals": "allow"}}})
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted(capabilities=UNSEALED), "approvals": "allow"}}})
 
     found = said(check(team, trainable=True, root=tmp_path, cwd=tmp_path))
 

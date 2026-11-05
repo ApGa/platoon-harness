@@ -17,6 +17,7 @@ from platoon_harness.testing.scripted import Step
 SEALED = Capabilities(
     persistent=True, resume=True, boundaries={"turn"}, tool_paths={"mcp-http"}, call_ids="call", sealed=True
 )
+UNSEALED = SEALED.model_copy(update={"sealed": False})
 ORIGIN = "http://127.0.0.1:9"
 
 
@@ -57,7 +58,13 @@ class Gating(LocalAuthority):
         self.told.append((agent, outcome))
 
 
-TRAINABLE = ("ready_with_pinned_model", "tool_in_first_request", "call_ids_reported")
+TRAINABLE = (
+    "ready_with_pinned_model",
+    "tool_in_first_request",
+    "call_ids_reported",
+    "sealed_first_request_holds_only_ours",
+    "environment_tools_in_first_request",
+)
 
 
 def kept(root: Path, *failed: str, version: str = "1") -> Path:

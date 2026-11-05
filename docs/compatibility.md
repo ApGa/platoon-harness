@@ -424,14 +424,14 @@ the installed package and held to these SHA-256 values when it starts. A file th
 ## 4. Operational, Observable, Trainable
 
 Levels are computed per agent from what was verified, and no driver can claim one (architecture §9.4). This table is the ceiling
-upstream allows today, not a computed level. Platoon still decides eligibility.
+upstream allows today, not a computed level. A training system still decides what trains.
 
 | Adapter | Operational | Observable | Trainable |
 |---|---|---|---|
 | `claude` | **Yes.** Control, tools, interrupt, approvals and resume all ran on a real model | **Yes, with gaps.** Stable ids across stream and hooks. No token ids or logprobs, thinking text unreliable, aborted calls unrecorded, shell reads blind, children need `--forward-subagent-text` | **No.** Native login never. Through Platoon: `Unsupported message role 'system'`, exit 1, zero records. No Platoon spec. Anthropic does not support non-Claude models behind a gateway. Terms await the owner |
 | `codex` | **Yes, with a guard.** Tools need `omit_tools_from`. A turn that ends with no required `wait` must be flagged, since the default failure was silent | **Yes, with gaps.** Items and per-thread usage are good. No response id on stable. Review, compact, memory and Auto-review work are hidden. Tool-to-call links stop at the script | **No.** Exact calls land on a minted key, but the gateway's Responses dialect drops `namespace` and `custom` tools, so MCP tools never reach the policy. The shell could not reach loopback under `workspace-write` (1 trial), and Unix sockets from that shell are untested. So no coordinated path is known in that sandbox. No Platoon spec |
-| `pi` | **Yes on loopback.** No real model yet. Approvals are an extension we ship, which is no boundary | **Yes on loopback.** Assembled prompt visible, clean call profile, compaction named. A queue does not survive a kill. A tool call joins the model call that chose it through `pi/toolCallId` | **Candidate.** Full path passed. Needs a spec, cache warming off, and extensions restricted. Compaction purpose is on our `model.call`, and unlabelled at a gateway |
-| `openhands` | **Yes on loopback.** A worker process per agent. Assert the tools appear in `SystemPromptEvent.tools`, or fail the spawn | **Yes on loopback.** Best record: `llm_response_id`, `Condensation` with forgotten ids. Children visible only on disk after the fact | **Yes on loopback, on a pinned profile.** `num_retries` 0 or 1, `api_mode="chat"`, reasoning replay on (Platoon gets it from private overrides), condenser marked `aux`, no autotitle, no `ask_agent`, fixed tools, native delegation off or keyed. The pin is open. Subscription or Cloud auth never |
+| `pi` | **Yes on loopback.** No real model yet. Approvals are an extension we ship, which is no boundary | **Yes on loopback.** Assembled prompt visible, clean call profile, compaction named. A queue does not survive a kill. A tool call joins the model call that chose it through `pi/toolCallId` | **Yes, sealed, on FakeModel acting as a gateway.** Its sealed launch passes both sealed checks at 1.5.0: no built-in tool, nothing of the user's, our tools and the environment's, each body id its call id. Each compaction call, one or two, carries the gateway's headers through our extension and is reported with its id. Nothing real has met it |
+| `openhands` | **Yes on loopback.** A worker process per agent. Assert the tools appear in `SystemPromptEvent.tools`, or fail the spawn | **Yes on loopback.** Best record: `llm_response_id`, `Condensation` with forgotten ids. Children visible only on disk after the fact | **Yes, sealed, on FakeModel acting as a gateway, at 1.59.0.** No coding tool, `num_retries` 0, `api_mode="chat"`, native delegation off, our tools and the environment's beside `finish` and `think`, and the condenser's every call carrying the gateway's headers, reported as `compaction` with its id. Subscription or Cloud auth never |
 | `opencode` via ACP | **Partial.** Control works. Tool exposure through `mcpServers` is unresolved, so tools may hide behind Code Mode | **Partial.** Coarser than HTTP. Title calls hidden. Inbox delivery evidence is HTTP only | **Unknown.** Untested with Platoon. Title and compaction calls cannot be told apart by anything exact |
 | `prime` | **Unknown.** No model turn ran | **Unknown** | **Unknown.** Not marked until a live probe exists |
 | Generic ACP | **Per agent,** after conformance. Turn boundary only, `steer` after a fixture | **At best.** ACP carries no call attribution. Gaps across reconnect are labelled | **No by ACP alone.** Requires the gateway plane, which ACP neither gives nor blocks |
@@ -441,9 +441,23 @@ Across adapters: only Claude Code and Codex give an MCP-to-tool-call anchor, Cod
 shell is blind to `shell_reads` for life. A native child on a shared key stays on the parent and is never `exact`: a `child.seen`
 makes its agent `forked`. A profile on a plan login is never Trainable. Token ids and logprobs come only from the gateway.
 
-The computed level needs more than this ceiling: a gateway admission, a driver that declares `sealed`, and a result kept on the
-machine that proves trainable, and a trainable session refuses a role without them before any harness launches. No shipped driver
-declares `sealed` yet, so none is trainable today, whatever its column says; each harness's sealed launch is the next step.
+The computed level needs more than this ceiling: a gateway admission, a driver that declares `sealed`, our tools seen, and a result
+kept on the machine that proves trainable, its two sealed checks among it, and a trainable session refuses a role without them before
+any harness launches. Of the drivers shipped, ScriptedDriver, `pi` and `openhands` declare `sealed`, and a wire program may; Claude
+Code, Codex, `exec` and ACP do not, so a gateway admission to one fails.
+
+| Harness | How each compaction call carries the gateway's headers | How it is reported | Settled by |
+|---|---|---|---|
+| ScriptedDriver | Its `Compact` step makes one call with them | `model.call` of purpose `compaction`, with the response's id | `tests/unit/drivers/test_sealed.py` |
+| A wire program | It sends them from the gateway in its launch frame | As it reports any call, with purpose `compaction` | `tests/unit/drivers/test_sealed.py`, on a program serving ScriptedDriver |
+| `pi` 1.5.0 | Our extension takes `session_before_compact` and runs pi's own exported `compact` with them, and a stream function that keeps each response's id; one call, or two for a split turn's prefix and the history before it | One `model.call` of purpose `compaction` per id, which reach the driver in the details pi keeps of the compaction | `tests/integration/test_pi.py`, slow, on FakeModel [L] |
+| `openhands` 1.59.0 | Its condenser's LLM sends them as `extra_headers` | Its `condenser` usage id is reported under `compaction`, with `llm_response_id` | `tests/integration/test_openhands.py`, slow, on FakeModel [L] |
+
+Pi's overflow handling and its tools off are settled too, at 1.5.0 on FakeModel [L]: with `--no-builtin-tools` its first request
+shows only ours and the environment's, and a request the model refuses as too long in the Chat Completions dialect's own words, which
+pi reads as an overflow, is compacted and retried once. A sealed launch states a context window no context reaches, as pi takes an
+unstated one as none at all, which had it compact after every turn once its history passed what a compaction keeps [L]. Whether
+Platoon's own refusal text reaches pi as its error message has been read only in code.
 
 ## 5. Native features and coordination
 
@@ -739,7 +753,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - `--bare` becoming the default for `claude -p`: announced with no version, and it stops reading a native login.
 - Auto compaction, nested subagents and parallel tool batches on Claude Code. A harness killed outright on a real model, as a power cut would, since on real runs it outlived its runtime.
 - `tool_timeout_s` on Claude Code: no cap was measured, so none is declared.
-- Successful compaction on OpenCode, so provenance across compaction is unconfirmed there. On pi it ran on FakeModel, on a low threshold: overflow recovery and a real summary have not run.
+- Successful compaction on OpenCode, so provenance across compaction is unconfirmed there. On pi it ran on FakeModel, on a low threshold, and its overflow recovery, sealed, on a refusal in the Chat Completions dialect's words: a real summary has not run.
 - pi on anything real: a provider, an OAuth login, retries, `totalFromProvider`, parallel tool calls on a real model, and steering on a real stream. Nothing but FakeModel has met the driver.
 - OpenCode: `mcpServers` precedence, repeated prompt `id` retry semantics, and the empty experimental log replay.
 - Our HTTP tools server against OpenCode, and against OpenHands through its driver, which takes the shim. Claude Code and Codex have met it, and so has pi, on a fake model, and OpenHands' MCP client with a bearer in `headers` on FakeTools.

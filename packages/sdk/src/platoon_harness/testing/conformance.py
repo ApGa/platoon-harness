@@ -11,7 +11,7 @@ import re
 import shlex
 import signal
 import socket
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType
@@ -45,7 +45,7 @@ from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
 from platoon_harness.version import __version__
 
-from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
+from .model import ENVIRONMENT_TOOL, INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
 from .scripted import API_KEY, BASE_URL, SHELL
 from .tools import TOOL, FakeTools
 
@@ -55,6 +55,8 @@ _GOAL = "conformance goal: the first word is heliotrope"
 _LAUNCH = "launch"
 _GIST = "conformance delivery: the second word is cinnabar"
 _PREAMBLE = "conformance preamble: the third word is viridian"
+_USERS = "conformance project instructions: the fourth word is vermilion"
+_BEARER = "conformance-bearer"
 _EFFORT = "low"
 _SAID_EFFORT = re.compile(rb'effort"\s*:\s*"' + _EFFORT.encode() + rb'"')
 
@@ -195,6 +197,7 @@ class _Options:
     shell: Shell | None
     tool: Tool
     child: ToolCall | None
+    kept: Sequence[str]
     timeout: float
 
 
@@ -654,6 +657,37 @@ async def one_shot_exits(rig: _Rig) -> None:
     await rig.until(Exited)
 
 
+def _sealing(capabilities: Capabilities) -> str | None:
+    return None if capabilities.sealed else "it declares no sealed launch"
+
+
+@_check(_sealing)
+async def sealed_first_request_holds_only_ours(rig: _Rig) -> None:
+    """On a gateway, the first request goes under its bearer and holds nothing of the user's: the instructions of the
+    project it works in never reach it, and every tool it shows is ours, the environment's, or one the harness keeps
+    that acts on nothing."""
+    work = rig.folder / "work"
+    work.mkdir(parents=True, exist_ok=True)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        (work / name).write_text(f"{_USERS}\n")
+    await rig.start(access=rig.model.gateway(_BEARER))
+    first = await rig.call(0)
+
+    _expect(first.bearer == _BEARER, "the first request went under another bearer than its gateway's")
+    _expect(not first.says(_USERS), "the first request holds the instructions of the project it works in")
+    known = (TOOL, ENVIRONMENT_TOOL)
+    theirs = [name for name in first.tools if not name.endswith(known) and name not in rig.options.kept]
+    _expect(not theirs, f"the first request shows {', '.join(theirs)}, which are neither ours nor the environment's")
+
+
+@_check(_sealing)
+async def environment_tools_in_first_request(rig: _Rig) -> None:
+    """On a gateway, the environment's own tools, at the URL it names, are shown in the first request beside ours."""
+    await rig.start(access=rig.model.gateway(_BEARER))
+
+    _expect((await rig.call(0)).offers(ENVIRONMENT_TOOL), f"the first model request does not show {ENVIRONMENT_TOOL}")
+
+
 def _unproven(capabilities: Capabilities) -> str | None:
     declared = {
         "tool_timeout_s": capabilities.tool_timeout_s is not None,
@@ -706,6 +740,7 @@ async def check_driver(
     shell: Shell | None = None,
     tool: Tool = _tool,
     child: ToolCall | None = None,
+    kept: Sequence[str] = (),
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
     """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver, the
@@ -715,12 +750,13 @@ async def check_driver(
     write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
     harness asks approval for, and `shell` into one that runs it, with none of which the check of a stop during a
     running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
-    `child` is a tool call that starts a native child, and with none that check is skipped. `timeout` bounds each check,
-    so one wedged harness costs only its own checks.
+    `child` is a tool call that starts a native child, and with none that check is skipped. `kept` names each tool of
+    the harness's own that a sealed launch keeps, which acts on nothing. `timeout` bounds each check, so one wedged
+    harness costs only its own checks.
     """
     made = factory()
     name = made.describe().name
-    options = _Options(garble, gated, shell, tool, child, timeout)
+    options = _Options(garble, gated, shell, tool, child, tuple(kept), timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)

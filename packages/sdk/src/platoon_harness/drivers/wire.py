@@ -1,6 +1,7 @@
 """A driver in another process or language: line-delimited JSON-RPC 2.0 on stdio, its verbs equal to the Python methods.
 
-Credentials never travel in a frame. `start` names them, and the program finds their values in its own environment.
+Credentials never travel in a frame. `start` names them, and the program finds their values in its own environment: a
+gateway's bearer under the variable its frame names, beside the gateway's origin, model, tools and compaction headers.
 """
 
 import asyncio
@@ -20,15 +21,16 @@ from platoon_harness.rpc import INVALID_PARAMS, METHOD_NOT_FOUND, Closed, Peer, 
 from platoon_harness.tools.ph import TOKEN_VARIABLE
 
 from . import (
+    BEARER_VARIABLE,
     AgentSpec,
     Delivery,
     Driver,
     DriverError,
     DriverInfo,
+    Gateway,
     Reconciled,
     Reporter,
     ToolBinding,
-    keys_of,
 )
 from .env import harness_env, inherited
 from .process import LOG, WIRE, Process, exit_reason
@@ -44,15 +46,23 @@ __all__ = ["DRIVER_ERROR", "UNKNOWN_PROTOCOL", "WireDriver", "serve"]
 
 
 def _to_frame(spec: AgentSpec) -> dict[str, Any]:
-    """A spec with credentials by name. The program's own folder sits inside the agent's, so that its record and ours
-    stay apart, and `reap` finds both."""
+    """A spec with credentials by name: the variables of its access, or its gateway with the bearer's. The program's
+    own folder sits inside the agent's, so that its record and ours stay apart, and `reap` finds both."""
     tools = None if spec.tools is None else spec.tools.model_dump(mode="json", exclude={"token"})
     fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder"})
-    return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": sorted(keys_of(spec))}
+    if isinstance(spec.access, Gateway):
+        access: Any = {**spec.access.model_dump(mode="json", exclude={"bearer"}), "bearer": BEARER_VARIABLE}
+    else:
+        access = sorted(spec.access)
+    return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": access}
 
 
 def _from_frame(frame: Mapping[str, Any], environ: Mapping[str, str]) -> AgentSpec:
-    access = {name: Secret(environ[name]) for name in frame["access"]}
+    given = frame["access"]
+    if isinstance(given, Mapping):
+        access: Any = Gateway.model_validate({**given, "bearer": Secret(environ[given["bearer"]])})
+    else:
+        access = {name: Secret(environ[name]) for name in given}
     tools = frame["tools"]
     binding = None if tools is None else ToolBinding(**tools, token=Secret(environ[TOKEN_VARIABLE]))
     return AgentSpec.model_validate({**frame, "access": access, "tools": binding})

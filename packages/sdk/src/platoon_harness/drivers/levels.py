@@ -56,7 +56,16 @@ _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("turn_end_reported", "malformed_frame_is_a_gap"),
         ("measures_reported", "call_ids_reported", "tool_item_carries_its_anchor"),
     ),
-    "trainable": (("ready_with_pinned_model", "tool_in_first_request", "call_ids_reported"), ()),
+    "trainable": (
+        (
+            "ready_with_pinned_model",
+            "tool_in_first_request",
+            "call_ids_reported",
+            "sealed_first_request_holds_only_ours",
+            "environment_tools_in_first_request",
+        ),
+        (),
+    ),
 }
 """The checks each level stands on: those it needs passed, and those covering what a harness may leave out, which must
 not fail."""
@@ -266,7 +275,7 @@ def unearned(
 
 def levels(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Levels:
     """What this agent has earned. Pure: all it knows arrives as arguments, and a capability counts only as far as a
-    check that speaks for this agent proved it. Platoon still decides eligibility."""
+    check that speaks for this agent proved it. A training system still decides what trains."""
     return Levels(
         operational=_level(_operational(capabilities, profile, conformance)),
         observable=_level(_observable(capabilities, profile, conformance)),

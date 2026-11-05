@@ -147,6 +147,36 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 
 A declaration earns nothing by itself. See [Conformance](#conformance).
 
+### A sealed launch
+
+A training system's authority admits an agent through its gateway: `spec.access` is then a `Gateway`, and only a driver that
+declares `sealed` is given one. Such a driver launches its harness with nothing of the user's:
+
+- **The gateway's model, under its bearer.** Its models are at `origin`, which is a scheme and a host, so a client that wants a base
+  with `/v1` adds it, and `model` is the one `spec.model` names.
+- **The bearer goes by environment alone,** under `BEARER_VARIABLE`, `PLATOON_HARNESS_BEARER`, where `harness_env` puts it. A file
+  the launch writes names the variable, as `${PLATOON_HARNESS_BEARER}`, never its value: the agent's folder is part of the session's
+  export.
+- **Ours and the environment's tools.** `Gateway.tools`, when there is one, is the environment's own MCP server, under the same bearer:
+  give it to the harness beside ours, named `ENVIRONMENT`, `environment`. No tool of the harness's own that acts on the world stays:
+  no shell, no file tool, no agents of its own.
+- **Nothing of the user's.** None of their settings, extensions, skills or project instructions, and no retries, as a retry is a
+  call a gateway records twice.
+- **Compaction on, labelled.** Each call the harness makes to compact its context carries `Gateway.compaction_headers`, and is
+  reported as `ModelCall(purpose="compaction", call_id=...)` with the id the model gave it.
+
+How each harness here does it:
+
+| Harness | Sealed launch | Compaction calls |
+|---|---|---|
+| ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours | A `Compact` step: one call, with the headers, reported with its id |
+| A wire program | It finds the gateway in its launch frame, and the bearer in the variable the frame names | It sends the headers from its frame, and reports each call with its id |
+| `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; the ids reach the driver in the details pi keeps of the compaction |
+| `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
+
+A driver with no sealed launch reads access through `keys_of(spec)`, which refuses a gateway, and the host refuses one before that.
+Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver.
+
 ## A one-shot CLI: `exec`
 
 ```toml
@@ -313,7 +343,9 @@ Each report is a `report` notification whose params are the report, with its `ty
 - **`protocol`** is an integer, currently 1, and whichever side does not know the other's refuses it. Your side answers `-32002`.
 - **Errors.** A method you cannot honor answers `-32001` with the reason, which surfaces as `DriverError`.
 - **Credentials never travel in a frame.** `spec.access` names variables, and their values are in your environment. So is the tool
-  token, in `PLATOON_HARNESS_TOKEN`, with `PLATOON_HARNESS_URL` beside it. `ph` is on your `PATH`.
+  token, in `PLATOON_HARNESS_TOKEN`, with `PLATOON_HARNESS_URL` beside it. `ph` is on your `PATH`. A program that declares `sealed` may
+  be given a gateway instead, as an object: `{"origin": ..., "bearer": "PLATOON_HARNESS_BEARER", "model": ..., "tools": ...,
+  "compaction_headers": {...}}`, whose `bearer` names the variable the bearer is in. `serve` gives a Python driver a `Gateway` back.
 - **Your environment is an allowlist:** `PATH`, `HOME`, a `TMPDIR` of your own, and what the spec names. Nothing else is inherited,
   but what a driver in Python names in `WireDriver(command, inherited)`, as `openhands` names the proxy variables and what tells
   Python where its modules are, to describe your program as to start it.
@@ -499,6 +531,8 @@ async def test_my_driver_conforms(tmp_path):
 | `native_child_seen` | A native child is reported. Needs `native_children` that are `observed`. Pass `child`, or it is skipped |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
+| `sealed_first_request_holds_only_ours` | On a gateway, the first request goes under its bearer, holds none of the instructions an `AGENTS.md` or `CLAUDE.md` in the folder it works in gives, and shows no tool but ours and the environment's. Needs `sealed` |
+| `environment_tools_in_first_request` | On a gateway, the environment's tool, at the URL the gateway names, is in the first model request. Needs `sealed` |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |
 
 Each check gets a fresh instance, a fresh model and a fresh folder, and `timeout` bounds each one, so a wedged harness costs only its
@@ -512,6 +546,7 @@ own checks. What a driver leaves running, the suite reaps.
 | `shell` | None | A function from a command to the tool call that runs it. An approval it asks for is allowed |
 | `tool` | A call of `conformance_ping` by that name | A function from a note to a call of our tool, by the name this harness's model knows it by, such as `mcp__conformance__conformance_ping` |
 | `child` | None | A tool call that starts a native child, by the name the harness shows its model |
+| `kept` | None | The names of the tools of the harness's own that a sealed launch keeps, each of which acts on nothing, such as OpenHands' `finish` and `think` |
 | `timeout` | 10 s | How long one check may take |
 
 The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK and the
@@ -537,7 +572,9 @@ earned = levels(capabilities, profile, result)
 ```
 
 `levels` gives `operational`, `observable` and `trainable`, each `met`, `unmet` or `unverified`, with reasons. It is a pure function,
-and nothing a driver says reaches it except through a check that passed. Native and plan logins are never trainable.
+and nothing a driver says reaches it except through a check that passed. Native and plan logins are never trainable: `trainable`
+needs a gateway login, a driver that declares `sealed`, our tools seen, and a kept result whose sealed checks passed beside
+`ready_with_pinned_model`, `tool_in_first_request` and `call_ids_reported`.
 
 ### A real binary for free
 

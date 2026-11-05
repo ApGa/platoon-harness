@@ -41,6 +41,7 @@ from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile, Command
 from platoon_harness.testing import (
+    ENVIRONMENT_TOOL,
     TOOL,
     Call,
     FakeModel,
@@ -54,7 +55,7 @@ from platoon_harness.testing import (
     goal,
 )
 from platoon_harness.testing.loopback import Loopback, Message, answer
-from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
+from platoon_harness.testing.model import COMPACTION_HEADERS, INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE, delivery_heading
 
 from ..unit.drivers.support import Heard
@@ -342,7 +343,7 @@ from types import SimpleNamespace
 from platoon_harness.config import Secret
 from platoon_harness.drivers import AgentSpec, Delivery
 
-agent = SimpleNamespace(ready=lambda _: ((), ()), pending=lambda _: [])
+agent = SimpleNamespace(ready=lambda *_: ((), (), None), pending=lambda _: [])
 sys.modules["platoon_harness.drivers.openhands.agent"] = agent
 from platoon_harness.drivers.openhands.worker import Worker
 
@@ -471,7 +472,7 @@ async def test_a_condensation_names_what_it_forgot_and_its_own_call(tmp_path):
         await heard.until(TurnEnded)
         await driver.stop(2.0)
 
-    condensing = [call for call in heard.of(ModelCall) if call.purpose == "condenser"]
+    condensing = [call for call in heard.of(ModelCall) if call.purpose == "compaction"]
     assert compacted.summary == summary and compacted.forgotten
     assert len(condensing) == 1 and condensing[0].call_id is not None
     assert model.calls[-1].says(summary) and not model.calls[-1].says('"step 1"')
@@ -846,3 +847,27 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
     async with FakeModel(clients.SAID) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await clients.the_tui_sends_from_its_composer_and_draws_the_reply_once(team, tmp_path)
+
+
+async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compaction(tmp_path):
+    """Sealed, OpenHands shows its model our tools and the environment's alone: forty calls of the environment's tool
+    take its view past what its condenser keeps, and the condenser's call carries the gateway's compaction headers and
+    is reported, for that purpose, by the id the model gave it."""
+    calls = [ToolCall(ENVIRONMENT_TOOL, {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
+    async with FakeModel(*calls, "SUMMARY of the steps so far", "done") as model, FakeTools() as tools:
+        gateway = model.gateway("bearer-of-ada")
+        spec = on_fake_model(tmp_path, model, goal="look forty times", access=gateway, tools=tools.binding(tmp_path))
+        driver = OpenHandsDriver()
+        heard = Allowing(driver)
+        await driver.start(spec, heard)
+        ready = await heard.until(Ready)
+        await heard.until(Compacted)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    compacting = [call for call in model.calls if call.carries(COMPACTION_HEADERS)]
+    reported = [call for call in heard.of(ModelCall) if call.purpose == "compaction"]
+    assert len(compacting) == 1 and [call.call_id for call in reported] == [compacting[0].response_id]
+    assert {call.bearer for call in model.calls} == {"bearer-of-ada"}
+    assert set(model.calls[0].tools) == set(ready.tools_visible or ()) == {TOOL, ENVIRONMENT_TOOL, "finish", "think"}
+    assert len(model.tool_calls) == 40

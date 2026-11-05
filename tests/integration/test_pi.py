@@ -39,10 +39,12 @@ from platoon_harness.primitives import Seen
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
+    ENVIRONMENT_TOOL,
     NAMESPACE,
     TOOL,
     FakeModel,
     FakeTools,
+    Overflow,
     Stall,
     Text,
     ToolCall,
@@ -51,7 +53,7 @@ from platoon_harness.testing import (
     goal,
 )
 from platoon_harness.testing.loopback import answer
-from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
+from platoon_harness.testing.model import COMPACTION_HEADERS, INPUT_TOKENS, OUTPUT_TOKENS
 from platoon_harness.tools import PREAMBLE, delivery_heading
 
 from ..unit.drivers.support import Heard, running
@@ -953,3 +955,96 @@ async def test_pi_resumes_in_its_worktree(tmp_path, monkeypatch):
     async with FakeModel(*worktrees.replies(shell)) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await worktrees.commits_is_killed_and_resumes_in_its_worktree(team, tmp_path, repo)
+
+
+# Sealed: what the slow pass settles before a training system relies on it, on FakeModel acting as its gateway.
+
+BEARER = "bearer-of-ada"
+BUILT_IN = {"read", "bash", "edit", "write", "grep", "find", "ls", "powershell", "codemode", "tool_search"}
+LONG = Text(" ".join(["x" * 1000] * 100))
+"""An answer of some 25,000 tokens by pi's estimate, past the 20,000 a compaction keeps, so that one has work to do."""
+
+
+def sealed(tmp_path: Path, fake: FakeModel, tools: FakeTools, **fields: Any) -> AgentSpec:
+    """An agent launched on the gateway's access alone, with our tools and the environment's, under a project whose
+    own instructions a sealed launch keeps out."""
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    (work / "AGENTS.md").write_text("the project's own instructions: vermilion\n")
+    gateway = fake.gateway(BEARER)
+    spec = {"agent": "ada", "role": "worker", "goal": "", "cwd": work, "folder": tmp_path / "ada", "model": MODEL}
+    given = {**spec, "access": gateway, "tools": tools.binding(tmp_path / "bin"), **fields}
+    return AgentSpec.model_validate({**given, "goal": goal(given["goal"])})
+
+
+async def test_pi_reports_each_body_id_as_its_call_id_when_sealed(tmp_path):
+    async with (
+        FakeModel(ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "a"}), "done") as model,
+        FakeTools() as tools,
+    ):
+        driver, heard = PiDriver(), Heard()
+        await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert [call.call_id for call in heard.of(ModelCall)] == [call.response_id for call in model.calls]
+    assert [call.bearer for call in model.calls] == [BEARER, BEARER]
+    assert [request.bearer for request in model.tool_calls] == [BEARER]
+
+
+async def test_pi_sealed_first_request_holds_no_built_in_tool(tmp_path):
+    """Pi's built-in tools are off, and none of the user's setup or the project's instructions reaches the model: our
+    tools and the environment's are all it is shown, and `ready` says so."""
+    async with FakeModel() as model, FakeTools() as tools:
+        driver, heard = PiDriver(), Heard()
+        await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
+        ready = await heard.until(Ready)
+        first = await model.call(0)
+        await driver.stop(2.0)
+
+    shown = {f"mcp__{NAMESPACE}__{TOOL}", f"mcp__environment__{ENVIRONMENT_TOOL}"}
+    assert set(first.tools) == shown and not set(first.tools) & BUILT_IN
+    assert set(ready.tools_visible or ()) == shown
+    assert not first.says("vermilion")
+
+
+async def test_pi_compacts_and_retries_on_a_dialects_overflow_refusal(tmp_path):
+    """A request the model refuses as longer than its window, in the dialect's own words: pi compacts and retries it
+    once, and the turn ends on the retry's answer."""
+    replies = [
+        [LONG, ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "a"})],
+        Overflow(),
+        "the summary",
+        "done",
+    ]
+    async with FakeModel(*replies) as model, FakeTools() as tools:
+        driver, heard = PiDriver(), Heard()
+        await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
+        ended = await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    refused, compacting, retried = model.calls[1:]
+    assert refused.response_id is None and compacting.carries(COMPACTION_HEADERS)
+    assert not retried.carries(COMPACTION_HEADERS) and retried.response_id is not None
+    assert ended.reason == "stopped" and heard.of(Compacted)
+    assert heard.of(Item)[-1].body == "done"
+
+
+async def test_pi_compacts_through_our_extension_with_the_headers_and_reports_each_call_with_its_id(tmp_path):
+    """A compaction of history and of a split turn's prefix is two calls: each carries the gateway's compaction headers,
+    and each is reported, for that purpose, by the id the model gave it."""
+    second = Delivery(input="2", boundary="turn", text="go on", items=())
+    replies = [LONG, [LONG, ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "a"})], Overflow()]
+    async with FakeModel(*replies, "the history", "the turn so far", "done") as model, FakeTools() as tools:
+        driver, heard = PiDriver(), Heard()
+        await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
+        await heard.until(TurnEnded)
+        await driver.deliver(second)
+        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
+        await driver.stop(2.0)
+
+    compacting = [call for call in model.calls if call.carries(COMPACTION_HEADERS)]
+    reported = [call for call in heard.of(ModelCall) if call.purpose == "compaction"]
+    assert len(compacting) == 2 and all(call.bearer == BEARER for call in compacting)
+    assert [call.call_id for call in reported] == [call.response_id for call in compacting]
+    assert "the history" in heard.of(Compacted)[0].summary and "the turn so far" in heard.of(Compacted)[0].summary

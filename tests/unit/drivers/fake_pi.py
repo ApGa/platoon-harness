@@ -68,6 +68,19 @@ if "exit_at_once" in script:
 if script.get("ignores_term"):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
+if "server" in json.loads(os.environ.get("PLATOON_HARNESS_PI", "{}")):  # As our extension says, once ours connect.
+    tools = script.get("declared", [])
+    say(
+        json.dumps(
+            {
+                "type": "extension_ui_request",
+                "id": "s",
+                "method": "setStatus",
+                "statusKey": "platoon_harness.tools",
+                "statusText": json.dumps(tools),
+            }
+        )
+    )
 turns = iter(script.get("turns", ()))
 heard = SCRIPT.with_suffix(".heard").open("a", buffering=1)
 for line in sys.stdin:

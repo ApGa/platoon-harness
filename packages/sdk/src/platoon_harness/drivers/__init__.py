@@ -2,10 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol, runtime_checkable
-from urllib.parse import urlsplit
+from typing import Annotated, Any, Literal, Protocol, Self, runtime_checkable
+from urllib.parse import quote, urlsplit
 
-from pydantic import PlainSerializer, field_validator
+from pydantic import PlainSerializer, field_validator, model_validator
 
 from platoon_harness.config import Secret
 from platoon_harness.primitives import (
@@ -39,7 +39,16 @@ Reporter = Callable[[Report], Awaitable[None]]
 UNREADABLE = (AttributeError, KeyError, TypeError, ValueError, RecursionError)
 """What reading a harness's frame raises, whichever part of it would not read."""
 
+BEARER_VARIABLE = "PLATOON_HARNESS_BEARER"
+"""Where a sealed launch puts its gateway's bearer: the harness's environment is the one place the bearer goes, and a
+file the launch writes names this variable, never its value."""
+
+ENVIRONMENT = "environment"
+"""The name a sealed launch gives the environment's own MCP server, which a harness reaches beside ours."""
+
 __all__ = [
+    "BEARER_VARIABLE",
+    "ENVIRONMENT",
     "RAW_LIMIT",
     "SHORT_LIMIT",
     "UNREADABLE",
@@ -140,6 +149,13 @@ class Gateway(Model):
     @classmethod
     def _a_server(cls, tools: str | None) -> str | None:
         return None if tools is None else _url(tools, path=True)
+
+    @model_validator(mode="after")
+    def _bearer_alone(self) -> Self:
+        bearer = self.bearer.reveal()
+        if self.tools is not None and (bearer in self.tools or quote(bearer, safe="") in self.tools):
+            raise ValueError("a credential goes by the bearer alone, and the tools' URL holds it")
+        return self
 
 
 def _refused(access: Any) -> dict[str, Any]:

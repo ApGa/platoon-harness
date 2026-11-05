@@ -1,7 +1,8 @@
 """FakeModel: a loopback server in the three dialects harnesses speak, so a real binary runs on a dummy key for free.
 
 It replies from a script and logs every request exactly as it arrived, which makes the log ground truth: "our tool in
-the first request" is read from what the harness sent, and never from what it claimed.
+the first request" is read from what the harness sent, and never from what it claimed. It can act as a training system's
+gateway too: its models and the environment's tools, each under a bearer it gave.
 """
 
 import asyncio
@@ -12,12 +13,27 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any, Literal, Self
 
+from platoon_harness.config import Secret
+from platoon_harness.drivers import Gateway
+
 from .loopback import Loopback, Message, answer, stream_head
 
 INPUT_TOKENS = 11
 OUTPUT_TOKENS = 3
 
+ENVIRONMENT_TOOL = "environment_ping"
+"""The one tool of the environment's own that FakeModel serves as a gateway, at `/mcp`."""
+COMPACTION_HEADERS = {"X-Call-Purpose": "compaction"}
+"""What FakeModel as a gateway asks each compaction call to carry."""
+
+_MODEL = "fake-model"
+_TOOLS = "/mcp"
 _DEFAULT_REPLY = "ok"
+_ENVIRONMENT_TOOL = {
+    "name": ENVIRONMENT_TOOL,
+    "description": "Answer with pong. It is the environment's own, which a training system's gateway serves.",
+    "inputSchema": {"type": "object", "properties": {"note": {"type": "string"}}, "additionalProperties": False},
+}
 
 Dialect = Literal["chat", "responses", "messages"]
 _ROUTES: tuple[tuple[str, Dialect], ...] = (
@@ -56,7 +72,13 @@ class Stall:
     """Hold the response until `FakeModel.release` or the client goes away. What follows it in a reply comes after."""
 
 
-type Block = Text | Thought | ToolCall | Stall
+@dataclass(frozen=True)
+class Overflow:
+    """Refuse the request as longer than the model's context window, in the dialect's own error form, which names no
+    response."""
+
+
+type Block = Text | Thought | ToolCall | Stall | Overflow
 type Reply = str | Block | Sequence[Block]
 
 
@@ -75,6 +97,22 @@ class Request:
     @property
     def model(self) -> str | None:
         return self.json.get("model")
+
+    @property
+    def bearer(self) -> str | None:
+        """The bearer it was sent under, if any."""
+        scheme, _, bearer = (self.message.header("authorization") or "").partition(" ")
+        return bearer if scheme.lower() == "bearer" and bearer else None
+
+    def carries(self, headers: Mapping[str, str]) -> bool:
+        """Whether it carries each of these headers with its value."""
+        return all(self.message.header(name.lower()) == value for name, value in headers.items())
+
+    @property
+    def tool_method(self) -> str | None:
+        """What it asked of the environment's MCP server, or None for a request of any other kind."""
+        asked = self.json if self.message.target.partition("?")[0] == _TOOLS else None
+        return asked.get("method") if isinstance(asked, dict) else None
 
     def says(self, text: str) -> bool:
         """Whether this text is anywhere in what the harness sent."""
@@ -106,7 +144,7 @@ def _names(tools: Sequence[Any]) -> Iterator[str]:
 def _blocks(reply: Reply) -> tuple[Block, ...]:
     if isinstance(reply, str):
         return (Text(reply),)
-    return (reply,) if isinstance(reply, Text | Thought | ToolCall | Stall) else tuple(reply)
+    return (reply,) if isinstance(reply, Text | Thought | ToolCall | Stall | Overflow) else tuple(reply)
 
 
 def _pieces(text: str) -> list[str]:
@@ -117,6 +155,18 @@ def _pieces(text: str) -> list[str]:
 
 class _Chat:
     """OpenAI Chat Completions."""
+
+    OVERFLOW = {
+        "error": {
+            "message": (
+                "This model's maximum context length is 128000 tokens. However, your messages resulted in 128001 "
+                "tokens. Please reduce the length of the messages."
+            ),
+            "type": "invalid_request_error",
+            "param": "messages",
+            "code": "context_length_exceeded",
+        }
+    }
 
     @staticmethod
     def whole(blocks: Sequence[Block], id: str, model: str) -> dict[str, Any]:
@@ -176,6 +226,11 @@ class _Chat:
 
 class _Messages:
     """Anthropic Messages."""
+
+    OVERFLOW = {
+        "type": "error",
+        "error": {"type": "invalid_request_error", "message": "prompt is too long: 200001 tokens > 200000 maximum"},
+    }
 
     @staticmethod
     def block(block: Block, index: int) -> dict[str, Any]:
@@ -252,6 +307,15 @@ class _Messages:
 
 class _Responses:
     """OpenAI Responses."""
+
+    OVERFLOW = {
+        "error": {
+            "message": "Your input exceeds the context window of this model. Please adjust your input and try again.",
+            "type": "invalid_request_error",
+            "param": "input",
+            "code": "context_length_exceeded",
+        }
+    }
 
     @staticmethod
     def items(blocks: Sequence[Block]) -> list[dict[str, Any]]:
@@ -348,13 +412,15 @@ class FakeModel:
     """A scripted model. Each model call takes the next reply, and past the script's end the model says "ok".
 
     `async with FakeModel("hello", ToolCall("ping")) as model:` serves on loopback at `model.url`. `model.requests` logs
-    everything that arrived, and `model.calls` what was a model call. `await model.call(0)` waits for one.
+    everything that arrived, with its bearer and headers, and `model.calls` what was a model call. `await model.call(0)`
+    waits for one. `model.gateway(bearer)` is access to it as a training system's gateway gives it.
     """
 
     def __init__(self, *replies: Reply) -> None:
         self.requests: list[Request] = []
         self._script: deque[Reply] = deque(replies)
         self._next_id = 0
+        self._bearers: set[str] = set()
         self._arrived = asyncio.Event()
         self._released = asyncio.Event()
         self._server = Loopback(self._handle)
@@ -375,6 +441,25 @@ class FakeModel:
     @property
     def calls(self) -> list[Request]:
         return [request for request in self.requests if request.dialect is not None]
+
+    @property
+    def tool_calls(self) -> list[Request]:
+        """Each call of the environment's tool its MCP server answered."""
+        served = (request for request in self.requests if request.message.method == "POST")
+        return [request for request in served if request.tool_method == "tools/call"]
+
+    def gateway(self, bearer: str) -> Gateway:
+        """Access to this model as a training system's gateway gives it, under `bearer`: its models at its origin, the
+        environment's tools at `/mcp`, which answer only a bearer it gave, and `COMPACTION_HEADERS` for each call that
+        compacts a context."""
+        self._bearers.add(bearer)
+        return Gateway(
+            origin=self.url,
+            bearer=Secret(bearer),
+            model=_MODEL,
+            tools=f"{self.url}{_TOOLS}",
+            compaction_headers=COMPACTION_HEADERS,
+        )
 
     def script(self, replies: Iterable[Reply]) -> None:
         """Add to what the model will say."""
@@ -403,29 +488,61 @@ class FakeModel:
                 self._log(Request(message))
                 writer.write(answer(200, json.dumps({"input_tokens": INPUT_TOKENS}).encode()))
                 return True
+            if path == _TOOLS:
+                writer.write(self._serve_tools(self._log(Request(message))))
+                return True
             for suffix, dialect in _ROUTES:
                 if path.endswith(suffix):
                     return await self._complete(message, dialect, reader, writer)
         self._log(Request(message))
         if message.method == "GET" and path.endswith("/models"):
-            models = {"object": "list", "data": [{"id": "fake-model", "object": "model"}], "models": []}
+            models = {"object": "list", "data": [{"id": _MODEL, "object": "model"}], "models": []}
             writer.write(answer(200, json.dumps(models).encode()))
+        elif path == _TOOLS:
+            writer.write(answer(405))
         else:
             writer.write(answer(200 if message.method == "HEAD" else 404))
         return True
 
+    def _serve_tools(self, request: Request) -> bytes:
+        """The environment's tools, as an MCP server serves them over Streamable HTTP, to a bearer it gave alone."""
+        if request.bearer not in self._bearers:
+            return answer(401)
+        frame = request.json
+        if "id" not in frame:
+            return answer(202)
+        match frame.get("method"):
+            case "initialize":
+                asked = (frame.get("params") or {}).get("protocolVersion", "2025-11-25")
+                info = {"name": "fake-environment", "version": "1"}
+                result = {"protocolVersion": asked, "capabilities": {"tools": {}}, "serverInfo": info}
+            case "tools/list":
+                result = {"tools": [_ENVIRONMENT_TOOL]}
+            case "tools/call":
+                called = (frame.get("params") or {}).get("name")
+                result = {"content": [{"type": "text", "text": "pong"}], "isError": called != ENVIRONMENT_TOOL}
+            case method:
+                error = {"code": -32601, "message": f"no method {method}"}
+                return answer(200, json.dumps({"jsonrpc": "2.0", "id": frame["id"], "error": error}).encode())
+        return answer(200, json.dumps({"jsonrpc": "2.0", "id": frame["id"], "result": result}).encode())
+
     async def _complete(
         self, message: Message, dialect: Dialect, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> bool:
+        blocks = _blocks(self._script.popleft() if self._script else _DEFAULT_REPLY)
+        form = _DIALECTS[dialect]
+        if blocks == (Overflow(),):
+            self._log(Request(message, dialect))
+            writer.write(answer(400, json.dumps(form.OVERFLOW).encode()))
+            return True
         self._next_id += 1
         id = f"resp_{self._next_id}"
         request = self._log(Request(message, dialect, id))
-        blocks = _blocks(self._script.popleft() if self._script else _DEFAULT_REPLY)
         if blocks and isinstance(blocks[0], Stall):
             if not await self._held(reader):
                 return False
             blocks = blocks[1:] or _blocks(_DEFAULT_REPLY)
-        form, model = _DIALECTS[dialect], request.model or "fake-model"
+        model = request.model or _MODEL
         if not request.json.get("stream"):
             writer.write(answer(200, json.dumps(form.whole(blocks, id, model)).encode()))
             return True

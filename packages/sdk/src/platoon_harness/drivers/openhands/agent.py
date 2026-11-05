@@ -1,5 +1,6 @@
 """One OpenHands conversation for one agent: OpenHands' coding tools and ours, the project's instructions and ours, and
-every action but ours asked about. Importing this loads the OpenHands SDK, which takes seconds."""
+every action but ours asked about, or on a gateway a sealed one, with ours and the environment's tools alone. Importing
+this loads the OpenHands SDK, which takes seconds."""
 
 import sys
 from collections.abc import Callable, Mapping
@@ -13,7 +14,7 @@ from openhands.sdk.context.condenser import default_condenser
 from openhands.sdk.conversation.cancellation import CancellationToken
 from openhands.sdk.conversation.state import ConversationState
 from openhands.sdk.event.llm_convertible import ActionEvent
-from openhands.sdk.mcp import MCPToolAction, MCPToolDefinition
+from openhands.sdk.mcp import MCPClient, MCPServer, MCPToolAction, MCPToolDefinition, create_mcp_tools
 from openhands.sdk.security.analyzer import SecurityAnalyzerBase
 from openhands.sdk.security.confirmation_policy import ConfirmRisky
 from openhands.sdk.security.risk import SecurityRisk
@@ -29,7 +30,7 @@ from openhands.tools.terminal import TerminalTool
 from platoon_harness.config import Secret
 from platoon_harness.tools import SHIM
 
-from .. import AgentSpec, DriverError
+from .. import ENVIRONMENT, AgentSpec, DriverError, Gateway
 
 Asked = Callable[[str, list[ActionEvent]], bool | None]
 """Whether a native child's step may run, or None to stop the child."""
@@ -131,9 +132,15 @@ def start(
     can outlive its agent, and the step cap is lifted, as a role's budget is what limits it. Only the agent's own LLM
     logs its requests, to `on_request`: the condenser's copy of it gets telemetry of its own, and a child's copy logs
     nothing, as `log_completions` would have either write a file where it runs. The agent starts agents of its own only
-    if its role allows them, with OpenHands' built-in kinds."""
+    if its role allows them, with OpenHands' built-in kinds.
+
+    On a gateway the launch is sealed: none of OpenHands' coding tools, so ours, and the environment's once `ready`
+    adds them, beside its own `finish` and `think`, which act on nothing, none of the project's instructions, and a
+    condenser whose every call carries the gateway's compaction headers."""
     llm = _llm(spec, key, url)
-    condensing = llm.model_copy(update={"usage_id": "condenser"})
+    gateway = spec.access if isinstance(spec.access, Gateway) else None
+    headers = None if gateway is None else dict(gateway.compaction_headers) or None
+    condensing = llm.model_copy(update={"usage_id": "condenser", "extra_headers": headers})
     condensing.reset_metrics()
     llm.telemetry.log_enabled = True
     llm.telemetry.set_log_completions_callback(on_request)
@@ -142,18 +149,20 @@ def start(
         Tool(name=FileEditorTool.name),
         Tool(name=TaskTrackerTool.name),
     ]
+    if gateway is not None:
+        tools = []
     if spec.allow_native_children:
         AskingTasks.asked = asked
         register_builtins_agents(enable_browser=False)
         tools.append(Tool(name=AskingTasks.name))
-    servers = {}
+    servers: dict[str, Any] = {}
     if spec.tools is not None:
         servers[spec.tools.namespace] = {"command": sys.executable, "args": ["-I", str(SHIM)], "env": dict(shim_env)}
     agent = Agent(
         llm=llm,
         tools=tools,
         mcp_config=servers,
-        agent_context=AgentContext(load_project_skills=True, system_message_suffix=spec.instructions),
+        agent_context=AgentContext(load_project_skills=gateway is None, system_message_suffix=spec.instructions),
         condenser=default_condenser(condensing),
         critic=None,
     )
@@ -173,13 +182,21 @@ def start(
     return conversation
 
 
-def ready(conversation: LocalConversation) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Ready the agent, which starts our server and the terminal, and say the tools it offers its model and which of
-    them are ours. The SDK readies an agent on a message, a run or a tool: `think` is the one with no other effect.
-    This blocks."""
+def ready(
+    conversation: LocalConversation, spec: AgentSpec, key: Secret
+) -> tuple[tuple[str, ...], tuple[str, ...], MCPClient | None]:
+    """Ready the agent, which starts our server and the terminal, and say the tools it offers its model, which of them
+    are ours, and on a gateway the client of the environment's server, whose tools it adds. That server is a client's
+    own, as the SDK's client of two servers would name each tool by its server, and ours go by their own names. The SDK
+    readies an agent on a message, a run or a tool: `think` is the one with no other effect. This blocks."""
     conversation.execute_tool("think", ThinkAction(thought="ready"))
-    tools = conversation.agent.tools_map
-    return tuple(tools), tuple(name for name, tool in tools.items() if isinstance(tool, MCPToolDefinition))
+    ours = tuple(name for name, tool in conversation.agent.tools_map.items() if isinstance(tool, MCPToolDefinition))
+    environment = None
+    if isinstance(gateway := spec.access, Gateway) and gateway.tools is not None:
+        server = MCPServer(url=gateway.tools, headers={"Authorization": f"Bearer {key.reveal()}"})
+        environment = create_mcp_tools({ENVIRONMENT: server})
+        conversation.agent.add_runtime_tools(environment.tools)
+    return tuple(conversation.agent.tools_map), ours, environment
 
 
 def pending(conversation: LocalConversation) -> list[ActionEvent]:

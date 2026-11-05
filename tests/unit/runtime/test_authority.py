@@ -16,7 +16,7 @@ from platoon_harness.runtime import Admission, SpawnRequest
 from platoon_harness.testing import Exit, Say, ScriptedDriver
 
 from .support import harness, in_state, journal, of_type, until
-from .training import ORIGIN, Gating, Sealed
+from .training import ORIGIN, UNSEALED, Gating, Sealed
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -156,7 +156,7 @@ async def test_a_resumed_admission_keeps_its_model_access_and_never_mints(tmp_pa
 
 
 async def test_a_driver_without_a_sealed_launch_refuses_a_gateway(tmp_path):
-    team = team_on(ScriptedDriver)
+    team = team_on(lambda: ScriptedDriver(capabilities=UNSEALED))
     async with Session.start(team, authority=Gating(team), root=tmp_path) as session:
         await in_state(session, "bob", "ended")
         row = (await session.ending()).agents[0]

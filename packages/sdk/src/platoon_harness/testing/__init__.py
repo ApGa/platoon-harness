@@ -3,12 +3,13 @@
 from .conformance import chat_access, check_driver, goal
 from .extension import check_extension
 from .harnesses import check_harness
-from .model import FakeModel, Request, Stall, Text, Thought, ToolCall
+from .model import ENVIRONMENT_TOOL, FakeModel, Overflow, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
     SHELL,
     Ask,
     AskModel,
     Call,
+    Compact,
     EndTurn,
     Exit,
     Fail,
@@ -22,18 +23,21 @@ from .scripted import (
 from .tools import NAMESPACE, TOOL, FakeTools
 
 __all__ = [
+    "ENVIRONMENT_TOOL",
     "NAMESPACE",
     "SHELL",
     "TOOL",
     "Ask",
     "AskModel",
     "Call",
+    "Compact",
     "EndTurn",
     "Exit",
     "Fail",
     "FakeModel",
     "FakeTools",
     "Hang",
+    "Overflow",
     "Request",
     "Say",
     "ScriptedDriver",
