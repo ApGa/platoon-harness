@@ -664,6 +664,28 @@ async def test_a_tail_of_live_text_joined_to_what_was_committed_is_the_text(tmp_
         await clients.a_tail_joined_to_what_was_committed_is_the_text(team, tmp_path)
 
 
+async def test_an_idle_harness_rests_and_its_next_message_resumes_it_natively(tmp_path, monkeypatch):
+    async with FakeModel("noted", "heliotrope") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.an_idle_harness_rests_and_its_next_message_resumes_it_natively(team, tmp_path, model)
+
+
+HELD = ToolCall("wait", {"from": ["@you"], "hold": 30}, id="call_held", namespace="mcp__ph")
+"""A call of our `wait` that holds, so a test can kill the harness while it is in a turn."""
+
+
+async def test_a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(tmp_path, monkeypatch):
+    async with FakeModel("noted", HELD, "checked") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(team, tmp_path, model)
+
+
+async def test_a_harness_killed_alone_twice_before_a_turn_ends_is_lost(tmp_path, monkeypatch):
+    async with FakeModel("noted", HELD, HELD) as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.a_harness_killed_alone_twice_before_a_turn_ends_is_lost(team, tmp_path, model)
+
+
 async def test_stop_below_stops_the_turns_of_a_lead_and_its_child_and_keeps_both(tmp_path, monkeypatch):
     async with FakeModel([Stall()]) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)

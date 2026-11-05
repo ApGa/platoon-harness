@@ -839,7 +839,8 @@ async def test_an_agent_that_failed_is_exit_1(tmp_path):
         ending = await session.settled(timeout="10s")
 
     assert ending.reason == "agent_failed"
-    assert (ending.agents[0]["status"], ending.agents[0]["reason"]) == ("lost", "it fell over")
+    reason = "its harness exited again before a turn of its ended: it fell over"
+    assert (ending.agents[0]["status"], ending.agents[0]["reason"]) == ("lost", reason)
 
 
 async def test_a_budget_spent_is_exit_2(tmp_path):

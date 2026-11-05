@@ -341,6 +341,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
 | `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
 | `probe` | None | Repeat: a look records only what the journal does not hold, so a repeat records nothing twice |
+| `rest` | None | Repeat: ending a harness that has gone ends nothing, and `reap` proves what is ours |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop looks once more at what its agent left, then removes its workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
 | `erase` | None | Repeat: erasing twice is harmless |
 
@@ -383,7 +384,8 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   What a driver wrote stays in the pipe of a harness that has stopped reading, and lands if it reads again, so that is at-least-once. An
   `interrupt` or an `answer` that does not come back in a minute fails too, which leaves the turn open and the approval unanswered, and
   only a wall limit ends a harness that stays that way.
-- **Recovery runs per agent at once,** and only for a session still open. A resumed harness gets a fresh credential through
+- **Recovery runs per agent at once,** and only for a session still open, but for an agent at rest, whose next handover brings its
+  harness back (§7). A resumed harness gets a fresh credential through
   `Authority.admit(resumed=True)` and commits `agent.start` as `resumed`, which leaves the agent as it stood. A harness that took no turn
   has written no session to reopen, so it starts anew, with no `resume`. `agent.retell` then tells
   it what it cannot know, a goal that never began or a turn that was cut off (§7). With no native id, no
@@ -566,7 +568,7 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` |
 | Evidence, kernel | `body.tombstone` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
 run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
@@ -784,9 +786,19 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
 - **Ended transition.** `finish`, `cancel`, `retire`, `lost` and a failed spawn are one event, `agent.ended{status}` (§5.5). An ended
   agent stays ended: `agent.interrupt` is the stop that keeps one, and `retire` the quiet end of one that has stopped working.
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
-  that exits ends its agent `lost`, or `failed` if it never started, and one that exits in a turn leaves the gap `crash_window`, since a
-  tool of its own can run on. A one-shot agent ends with its turn: `finished` if that turn
-  `stopped`, and `failed` otherwise.
+  that exits on its own puts its agent to rest once, below. One that cannot come back ends its agent `lost`, or `failed` if it never
+  started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
+  its turn: `finished` if that turn `stopped`, and `failed` otherwise.
+- **Rest: an agent's process is not its identity.** An agent between turns for ten minutes on the session's clock, with no setting,
+  rests, when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a `rest` effect ends its
+  process tree, and its next handover brings its harness back first, on its native session, or anew where it took no turn, on a fresh
+  credential and offering nothing, as a resume after a crash does, so its identity, cursors, waits and instructions stay as they stood.
+  No agent rests while it is held, has a goal not begun or a finish to come, or its session accepts no work. A harness that exits
+  on its own rests its agent too, at once, while its session accepts work: a turn it was in is lost, with `crash_window` naming where
+  that turn began, and the agent is told so, as a resume tells a turn a crash cut off, which wakes it. A second exit with no turn of
+  its ended since the first ends its agent `lost`, saying so, and so does a harness that could not come back, after six handovers
+  fail. A runtime start leaves a resting agent to its next handover. See
+  [ADR 0045](adr/0045-an-agent-s-process-is-not-its-identity.md).
 - **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
   still going a minute later is cut off, so what it had yet to report goes unmeasured. A harness that exits has finished all the same.

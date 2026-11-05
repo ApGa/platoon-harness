@@ -152,22 +152,25 @@ async def test_an_owner_s_exit_leaves_no_process_behind(tmp_path: Path):
     assert (folder / "journal.sqlite").exists()
 
 
-async def test_a_wire_process_that_is_killed_is_lost_and_its_parent_hears(tmp_path: Path):
+async def test_a_wire_process_that_is_killed_is_resumed_once_finishes_its_task_and_its_parent_hears(tmp_path: Path):
+    """An agent's process is not its identity: `kill -9` of a wire program in a turn cuts that turn off, and the same
+    agent comes back on a new process, told so, and finishes the task it held."""
     team = manager_worker(lead_harness(), wire("hanging"))
 
     async with Session.start(team, name="killed", root=tmp_path) as session:
         await session.send("@lead", "Fix the flaky test")
         group_kill(await running_harness(session, "w1"))
         await until(lambda: of_type(session, "agent.ended"), session)
-        ended = {row["agent"]: (row["status"], row["reason"]) for row in (await session.ending()).agents}
-
-        assert ended["w1"] == ("lost", "killed by signal 9")
+        ended = {row["agent"]: (row["status"], row["report"]) for row in (await session.ending()).agents}
+        lost, resumed = await of_type(session, "turn.lost"), await of_type(session, "agent.resumed")
         told = await until(
             lambda: of_type(session, "message.sent"),
             session,
-            lambda sent: any(event.stream == "inbox/lead" and event.gist.startswith("w1 lost") for event in sent),
+            lambda sent: any(event.stream == "inbox/lead" and event.data["subject"] == "w1" for event in sent),
         )
-        assert told[-1].actor == "runtime"
+
+    assert [event.agent for event in lost] == ["w1"] == [event.agent for event in resumed]
+    assert ended["w1"][0] == "finished" and told[-1].actor == "runtime"
 
 
 async def running_harness(session: Session, agent: str) -> Record:

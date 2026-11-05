@@ -14,7 +14,6 @@ from platoon_harness.drivers.process import reap
 from platoon_harness.kernel import Effect, Kernel, Refused
 from platoon_harness.schema import ConfigError
 
-from .authority import SpawnRequest
 from .git import GitError
 from .host import GRACE, Host
 from .paths import agent_folder
@@ -44,15 +43,10 @@ async def _reap(host: Host, folder: Path, agent: dict[str, Any]) -> None:
 
 
 async def _resume(host: Host, agent: dict[str, Any]) -> None:
-    """Bring a harness back on a fresh credential. It is told what it cannot know, a goal that never began or a turn
-    that was cut off, since a resumed harness waits to be told, and a resume is someone wanting the session to go on.
-    A harness that took no turn has written no session to reopen, so it starts anew."""
-    name, role, native = agent["name"], agent["role"], agent["native"]
-    if native is None or not (await host.describe(role)).capabilities.resume:
-        raise DriverError("its harness cannot resume")
-    admission = await host.admit(SpawnRequest(agent=name, role=role, resumed=True))
-    await host.connect(name, role, admission, resume=native if agent["began"] else None)
-    await _must(host, "agent.retell", {"agent": name})
+    """Bring a harness back. It is told what it cannot know, a goal that never began or a turn that was cut off, since a
+    resumed harness waits to be told, and a resume is someone wanting the session to go on."""
+    await host.resume(agent)
+    await _must(host, "agent.retell", {"agent": agent["name"]})
 
 
 async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: bool) -> None:
@@ -63,7 +57,7 @@ async def _take_up(host: Host, folder: Path, agent: dict[str, Any], accepting: b
         await _reap(host, folder, agent)
         if agent["finishing"]:
             await host.insist("agent.conclude", {"agent": name})
-        elif agent["state"] in ("spawning", "ended"):
+        elif agent["state"] in ("spawning", "ended") or agent["resting"]:  # A resting one comes back at its handover.
             return
         elif accepting:
             await _resume(host, agent)

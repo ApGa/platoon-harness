@@ -14,6 +14,8 @@ from .waits import WaitRecord, Waits, out_of_turn
 _RETRY_SECONDS = 1.0
 _ATTACHED = ("next-turn", "wake", "steer")
 _HANDOVERS = 6
+_REST_SECONDS = 600.0
+"""How long an agent stays between turns before its harness's process is ended, with no setting."""
 
 
 def _steerable(agent: Agent) -> str | None:
@@ -92,6 +94,19 @@ def work(txn: Txn) -> Work:
     if deadline is not None:
         dues.append(deadline)
     return Work(ready, waits, stranded, later, min(dues, default=None))
+
+
+def resting(txn: Txn) -> tuple[list[str], float | None]:
+    """Agents whose harness has been between turns for ten minutes, while the session accepts work, and when the next
+    will have been."""
+    if not txn.view(SessionRecord).accepting():
+        return [], None
+    due, later = [], []
+    for agent in txn.view(Agents).between_turns():
+        assert agent.idle_since is not None
+        rests_at = agent.idle_since + _REST_SECONDS
+        (due if rests_at <= txn.now else later).append((agent.name, rests_at))
+    return [name for name, _ in due], min((when for _, when in later), default=None)
 
 
 class Offer(Args):
@@ -206,10 +221,12 @@ def confirmed(txn: Txn, input: int, boundary: str | None, evidence: str | None, 
 
 @op("delivery.ready", query=True, runtime=True)
 def delivery_ready(txn: Txn, a: Args) -> dict[str, Any]:
-    """List what the courier could do now."""
+    """List what the courier could do now, the agents to put to rest among it, and when more falls due."""
     found = work(txn)
     waits = [wait.id for wait in found.waits]
-    return {"agents": found.agents, "waits": waits, "stranded": found.stranded, "due": found.due}
+    rest, rests_at = resting(txn)
+    due = min((when for when in (found.due, rests_at) if when is not None), default=None)
+    return {"agents": found.agents, "waits": waits, "stranded": found.stranded, "resting": rest, "due": due}
 
 
 async def _pass(kernel: Kernel) -> float | None:
@@ -222,6 +239,7 @@ async def _pass(kernel: Kernel) -> float | None:
         ("agent.report", {"agent": agent, "report": {"type": "exited", "reason": why}})
         for agent, why in found["stranded"]
     ]
+    commands += [("agent.rest", {"agent": agent}) for agent in found["resting"]]
     for name, args in commands:
         outcome = await kernel.submit(runtime, name, args)
         if outcome.refusal is not None:

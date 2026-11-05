@@ -43,7 +43,7 @@ from .common import (
     name_of,
     paged,
 )
-from .delivery import confirmed, work
+from .delivery import confirmed, resting, work
 from .messages import Deliveries, post
 from .reports import (
     CUT_OFF,
@@ -61,6 +61,7 @@ from .reports import (
     Native,
     Ready,
     Report,
+    Short,
     TurnEnded,
     TurnStarted,
     Usage,
@@ -595,7 +596,11 @@ def retell(txn: Txn, a: Named) -> None:
     """Tell a resumed harness what it has no way to know, as a delivery, since a resume starts no turn of its own: the
     goal it never began, or that its last turn was cut off. With neither there is nothing to say, and one that has ended
     since is left alone."""
-    agent = txn.view(Agents).get(a.agent)
+    _retell(txn, a.agent)
+
+
+def _retell(txn: Txn, name: str) -> None:
+    agent = txn.view(Agents).get(name)
     if agent is None or agent.ended:
         return
     inbox = f"inbox/{agent.name}"
@@ -610,6 +615,54 @@ def retell(txn: Txn, a: Named) -> None:
         )
     elif cause := CUT_OFF.get(agent.stopped or ""):
         post(txn, inbox, _NOTICE.format(cause=cause), wake=True)
+
+
+class Rest(Named):
+    exited: Short | None = None
+
+
+def _comes_back(txn: Txn, agent: Agent) -> bool:
+    """Whether a harness that exited on its own may rest instead of ending its agent: once since a turn of its ended,
+    while the session accepts work, on a persistent harness that resumes by a native id it gave, with nothing to
+    finish."""
+    persists = bool(agent.persistent and agent.resume) and agent.native is not None
+    return persists and not agent.exits and not agent.finishing and txn.view(SessionRecord).accepting()
+
+
+@op("agent.rest", on=lambda a: f"agent/{a.agent}", runtime=True)
+def rest(txn: Txn, a: Rest) -> None:
+    """Put an agent's harness to rest: its process ends, and its next handover brings it back, natively. The courier
+    asks once the agent has been between turns ten minutes, and an agent no longer so is left alone. With `exited`, its
+    harness ended on its own, which cuts off any turn it was in and tells it so, and a second exit before a turn of its
+    ends, or one with nothing to come back to, ends its agent as an exit does."""
+    agent = txn.view(Agents).get(a.agent)
+    if agent is None or agent.ended:
+        return
+    name = agent.name
+    if a.exited is None:
+        if name in resting(txn)[0]:
+            txn.effect("rest", {"agent": name, "exited": None}, on_uncertain="retry", agent=name)
+        return
+    if not _comes_back(txn, agent):
+        again = f"its harness exited again before a turn of its ended: {a.exited}" if agent.exits else a.exited
+        _exited(txn, agent, again)
+        return
+    if (turn := txn.view(Stamps).turn(name)) is not None:
+        record_gap(txn, name, "crash_window")
+        txn.emit("turn.lost", f"turn/{name}", gist=f"turn {turn} lost"[:GIST_LIMIT], agent=name, v=2)
+    txn.effect("rest", {"agent": name, "exited": a.exited}, on_uncertain="retry", agent=name)
+    _retell(txn, name)
+
+
+def _exited(txn: Txn, agent: Agent, reason: str) -> None:
+    """A harness gone for good: its finish stands, or its agent is lost, or failed if it never started. What it was
+    doing in a turn is unknown, and a tool of its can run on."""
+    if agent.finishing:
+        _conclude(txn, agent)
+    elif not agent.ended:
+        if txn.view(Stamps).turn(agent.name) is not None:
+            record_gap(txn, agent.name, "crash_window")
+        end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
 
 
 class AgentReport(Args):
@@ -677,12 +730,7 @@ def report(txn: Txn, a: AgentReport) -> None:
         case Ready() | Delta():
             raise Refused("invalid", f"a {a.report.type} report is not journaled through agent.report")
         case Exited(reason=reason):
-            if agent.finishing:
-                _conclude(txn, agent)
-            elif not agent.ended:
-                if txn.view(Stamps).turn(name) is not None:  # What it was doing is unknown, and a tool may run on.
-                    record_gap(txn, name, "crash_window")
-                end(txn, agent, "failed" if agent.state == "spawning" else "lost", reason=reason)
+            _exited(txn, agent, reason)
         case TurnEnded(reason=reason):
             _turn_ended(txn, agent, reason)
         case Native() as native:

@@ -948,7 +948,7 @@ async def test_activity_renews_a_lease_up_to_its_limit(tmp_path):
 # What dies.
 
 
-async def test_a_harness_that_exits_is_lost_and_its_parent_hears(tmp_path):
+async def test_a_harness_that_exits_twice_before_a_turn_ends_is_lost_and_its_parent_hears(tmp_path):
     team = Team.model_validate(
         {
             "roles": {
@@ -967,7 +967,7 @@ async def test_a_harness_that_exits_is_lost_and_its_parent_hears(tmp_path):
         await until(lambda: of_type(session, "agent.ended"), session)
         told = await until(lambda: of_type(session, "message.sent"), session, lambda sent: len(sent) > 1)
 
-        assert told[-1].gist == "w lost: it fell over"
+        assert told[-1].gist == "w lost: its harness exited again before a turn of its ended: it fell over"
         assert (await session.ending()).reason == "agent_failed"
 
 
@@ -1549,3 +1549,95 @@ async def test_a_driver_that_breaks_in_stop_leaves_nothing_half_closed(tmp_path)
     assert runtime.kernel.closed
     assert not is_held(folder)
     assert not (folder / "runtime.json").exists()
+
+
+# Rest: an agent's process is not its identity.
+
+
+class Starts:
+    """Scripted harnesses that share one script, so a harness brought back goes on where the last left off, and the
+    spec each instance was started with."""
+
+    def __init__(self, *turns: Any) -> None:
+        self.turns = iter(turns)
+        self.specs: list[AgentSpec] = []
+
+    def __call__(self) -> ScriptedDriver:
+        starts = self
+
+        class Recorded(ScriptedDriver):
+            async def start(self, spec: AgentSpec, report: Reporter) -> None:
+                starts.specs.append(spec)
+                await super().start(spec, report)
+
+        return Recorded(self.turns)
+
+
+def rested(events: list[Any]) -> list[Any]:
+    return [event for event in events if event.data["kind"] == "rest"]
+
+
+async def test_an_idle_agent_s_process_ends_after_ten_minutes_and_its_next_message_resumes_it_natively(tmp_path):
+    """No setting: ten minutes on the session's clock from its last turn's end. The agent stays as it stood, and its
+    harness is brought back on its native session by the handover that needs it, which a resume offers nothing."""
+    clock, starts = ManualClock(1000.0), Starts([Say("first")], [Say("second")])
+    async with Session.start(solo_with(starts), root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "one")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await asyncio.wait_for(clock.slept_until(1600.0), SECONDS)
+        clock.advance(600)
+        await until(lambda: of_type(session, "effect.finished"), session, rested)
+        link = session._runtime.host.link("bob")
+        await session.send("@bob", "two")
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+        resumed = await of_type(session, "agent.resumed")
+        instructed = await of_type(session, "agent.instructed")
+        launches = [event for event in await of_type(session, "context.offered") if event.data["how"] == "launch"]
+        said = [event.gist for event in await of_type(session, "item.recorded") if event.data["kind"] == "message"]
+
+    assert link is None and len(resumed) == 1
+    assert [spec.resume for spec in starts.specs] == [None, "scripted-bob"]
+    assert len(instructed) == 2 and instructed[0].data["body"] == instructed[1].data["body"]
+    assert len(launches) == 1 and said == ["first", "second"]
+
+
+async def test_a_harness_that_exits_on_its_own_in_a_turn_is_resumed_once_and_told_its_turn_was_cut_off(tmp_path):
+    starts = Starts([Exit("killed by signal 9")], [Say("checked")], [Say("still here")])
+    async with Session.start(solo_with(starts), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await session.send("@bob", "again")
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+        gaps = await of_type(session, "gap.recorded")
+        lost, began = await of_type(session, "turn.lost"), await of_type(session, "turn.started")
+        told = [event.gist for event in await of_type(session, "message.sent") if event.stream == "inbox/bob"]
+        rests = rested(await of_type(session, "effect.requested"))
+        ending = await session.ending()
+
+    assert [spec.resume for spec in starts.specs] == [None, "scripted-bob"]
+    assert [(gap.data["what"], gap.data["since"]) for gap in gaps] == [("crash_window", began[0].seq)]
+    assert len(lost) == 1 and [rest.data["data"]["exited"] for rest in rests] == ["killed by signal 9"]
+    assert told[1].startswith("Your last turn was cut off by a crash.")
+    assert (ending.agents[0]["state"], ending.agents[0]["status"]) == ("idle", None)
+
+
+async def test_a_resting_agent_comes_back_at_its_handover_and_not_at_a_runtime_start(tmp_path):
+    """A resting harness has no process to bring back, so a resume of its session starts nothing for it."""
+    clock, starts = ManualClock(1000.0), Starts([Say("first")], [Say("second")])
+    async with Session.start(solo_with(starts), name="s", root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "one")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await asyncio.wait_for(clock.slept_until(1600.0), SECONDS)
+        clock.advance(600)
+        await until(lambda: of_type(session, "effect.finished"), session, rested)
+
+    async with Session.resume("s", root=tmp_path, clock=clock) as session:
+        await until(lambda: of_type(session, "runtime.started"), session, lambda found: len(found) == 2)
+        untouched = len(starts.specs)
+        await session.send("@bob", "two")
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+
+    assert untouched == 1 and [spec.resume for spec in starts.specs] == [None, "scripted-bob"]

@@ -1542,7 +1542,7 @@ async def test_a_join_of_three_costs_one_wake(kernel):
 
     for name in ("a", "b"):
         await finished(kernel, agent(name))
-        assert ready(kernel) == {"agents": [], "waits": [], "stranded": [], "due": None}
+        assert ready(kernel) == {"agents": [], "waits": [], "stranded": [], "resting": [], "due": None}
     await finished(kernel, agent("c"))
 
     wait = ready(kernel)["waits"]
@@ -2713,3 +2713,103 @@ async def test_a_wait_s_timeout_is_waited_for_before_a_settled_session_stalls(ke
     await end_turn(kernel, "a")
 
     assert not stalled(kernel)
+
+
+# Rest: an agent's process is not its identity.
+
+
+async def resumable(kernel, name: str = "bob") -> None:
+    """An agent with no goal on a persistent harness that resumes, by the native id its harness gave."""
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": name, "child_role": "worker"}))
+    await settle_effects(kernel, name)
+    declared = {"persistent": True, "resume": True, "boundaries": ["turn"]}
+    ready = {"agent": name, "ready": {"native": f"native-{name}"}, "declared": declared}
+    result_of(await kernel.submit(kernel.runtime, "agent.start", ready))
+
+
+def rests(kernel) -> list:
+    return [event for event in of_type(kernel, "effect.requested") if event.data["kind"] == "rest"]
+
+
+def resting(kernel) -> list[str]:
+    return result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["resting"]
+
+
+async def test_an_agent_between_turns_for_ten_minutes_is_put_to_rest(kernel, clock):
+    """Ten minutes, with no setting, from the end of its last turn, and the courier asks then and not before."""
+    await resumable(kernel)
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+    clock.advance(599)
+    early = resting(kernel)
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "bob"}))
+    before = rests(kernel)
+    clock.advance(1)
+    due = resting(kernel)
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "bob"}))
+
+    assert (early, before, due) == ([], [], ["bob"])
+    assert [event.data["data"] for event in rests(kernel)] == [{"agent": "bob", "exited": None}]
+    assert result_of(kernel.query(kernel.runtime, "agent.records", {"agent": "bob"}))[0]["resting"] is True
+    assert resting(kernel) == []
+
+
+async def test_an_agent_that_is_held_or_on_a_harness_that_cannot_resume_never_rests(kernel, clock, ada):
+    await resumable(kernel, "bob")
+    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    await spawn(kernel, "cal", goal="")
+    clock.advance(600)
+
+    assert resting(kernel) == []
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "cal"}))
+    assert rests(kernel) == []
+
+
+async def test_a_harness_that_exits_on_its_own_in_a_turn_cuts_it_off_and_rests_once(kernel):
+    """Its turn is lost with a gap that begins where the turn did, it is told so with a wake, and it is no end."""
+    await resumable(kernel)
+    await start_turn(kernel, "bob")
+    began = of_type(kernel, "turn.started")[-1].seq
+
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "bob", "exited": "killed by signal 9"}))
+
+    gap = of_type(kernel, "gap.recorded")[-1]
+    told = of_type(kernel, "message.sent")[-1]
+    assert (gap.data["what"], gap.data["since"]) == ("crash_window", began)
+    assert len(of_type(kernel, "turn.lost")) == 1 and of_type(kernel, "agent.ended") == []
+    assert [event.data["data"]["exited"] for event in rests(kernel)] == ["killed by signal 9"]
+    assert told.stream == "inbox/bob" and told.gist.startswith("Your last turn was cut off by a crash.")
+    assert state_of(kernel, "bob")["state"] == "idle"
+
+
+async def test_a_second_exit_before_a_turn_ends_loses_the_agent_and_a_turn_that_ends_forgives_one(kernel):
+    await resumable(kernel)
+    exited = {"agent": "bob", "exited": "killed by signal 9"}
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", exited))
+    declared = {"persistent": True, "resume": True, "boundaries": ["turn"]}
+    back = {"agent": "bob", "ready": {"native": "native-bob"}, "declared": declared, "resumed": True}
+    result_of(await kernel.submit(kernel.runtime, "agent.start", back))  # What its next handover's resume commits.
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", exited))
+    forgiven = of_type(kernel, "agent.ended")
+
+    await start_turn(kernel, "bob")
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", exited))
+
+    ended = of_type(kernel, "agent.ended")
+    assert forgiven == [] and len(rests(kernel)) == 2
+    assert [(event.data["status"], event.data["reason"]) for event in ended] == [
+        ("lost", "its harness exited again before a turn of its ended: killed by signal 9")
+    ]
+
+
+async def test_a_harness_with_nothing_to_come_back_to_ends_its_agent_when_it_exits(kernel):
+    await spawn(kernel, "bob", goal="", ready={"resume": True})
+    await start_turn(kernel, "bob")
+
+    result_of(await kernel.submit(kernel.runtime, "agent.rest", {"agent": "bob", "exited": "killed by signal 9"}))
+
+    ended = of_type(kernel, "agent.ended")
+    assert [(event.data["status"], event.data["reason"]) for event in ended] == [("lost", "killed by signal 9")]
+    assert rests(kernel) == [] and of_type(kernel, "gap.recorded")[-1].data["what"] == "crash_window"

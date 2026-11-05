@@ -52,7 +52,10 @@ class Agent(BaseModel, frozen=True):
     `agent.finish` in a turn that has not ended, and `finish_ref` is that call's `agent.finished`. `stopped` says why
     its last turn did not stop on its own, until the next begins. `failure` is what the last effect to fail for it said,
     `failures` counts handovers failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last
-    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `login` is the
+    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `idle_since` is
+    when it was last left between turns, by a start, a turn's end or a hold's release. `resting` says its harness has
+    no process, which its next handover brings back, and `exits` counts the exits of its harness on its own since a turn
+    of its last ended. `login` is the
     kind of login its harness ran on at its latest start, or None where nobody could tell. `instructions` is the body of
     what its harness was told last, or None for nothing. `workspace` is where it works, once made, and
     `removed` or `kept` say what its stop did with it."""
@@ -92,6 +95,9 @@ class Agent(BaseModel, frozen=True):
     retry_at: float
     quieted: int
     levels: dict[str, Any]
+    idle_since: float | None
+    resting: bool
+    exits: int
     login: str | None
     instructions: str | None
     workspace: Workspace | None
@@ -115,7 +121,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 12
+    version = 13
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -153,6 +159,9 @@ class Agents(View):
         retry_at REAL NOT NULL DEFAULT 0,
         quieted INTEGER NOT NULL DEFAULT 0,
         levels TEXT NOT NULL DEFAULT '{}',
+        idle_since REAL,
+        resting INTEGER NOT NULL DEFAULT 0,
+        exits INTEGER NOT NULL DEFAULT 0,
         login TEXT,
         instructions TEXT,
         workspace TEXT,
@@ -206,6 +215,9 @@ class Agents(View):
                 "agent": event.agent,
             },
         )
+        self.db.execute(
+            "UPDATE v_agents SET resting = 0, idle_since = ? WHERE name = ?", (event.wall_time, event.agent)
+        )
         if event.type == "agent.started":
             self._move(event, "idle", "spawning")
 
@@ -236,8 +248,12 @@ class Agents(View):
 
     @fold("turn.ended", "turn.lost")
     def turn_over(self, event: Event) -> None:
+        """A turn that ended forgives its harness's exits, and one that was lost does not."""
         self._move(event, "idle", "running", "waking")
         self._reachable(event)
+        self.db.execute("UPDATE v_agents SET idle_since = ? WHERE name = ?", (event.wall_time, event.agent))
+        if event.type == "turn.ended":
+            self.db.execute("UPDATE v_agents SET exits = 0 WHERE name = ?", (event.agent,))
         reason = "lost" if event.type == "turn.lost" else event.data["reason"]
         self.db.execute(
             "UPDATE v_agents SET stopped = ? WHERE name = ?", (None if reason == "stopped" else reason, event.agent)
@@ -277,6 +293,16 @@ class Agents(View):
                 WHERE name = ? AND quieted < ?
                 """,
                 (event.wall_time, event.agent, event.data["id"]),
+            )
+
+    @fold("effect.requested")
+    def resting_asked(self, event: Event) -> None:
+        """A harness put to rest has no process from here on, as its next handover waits for the rest to finish."""
+        effect = event.data
+        if effect["kind"] == "rest":
+            self.db.execute(
+                "UPDATE v_agents SET resting = 1, exits = exits + ? WHERE name = ?",
+                (effect["data"]["exited"] is not None, event.agent),
             )
 
     @fold("effect.finished")
@@ -323,7 +349,8 @@ class Agents(View):
     @fold("agent.released")
     def released(self, event: Event) -> None:
         self.db.execute(
-            "UPDATE v_agents SET state = ?, held_by = NULL WHERE name = ?", (event.data["state"], event.agent)
+            "UPDATE v_agents SET state = ?, held_by = NULL, idle_since = ? WHERE name = ?",
+            (event.data["state"], event.wall_time, event.agent),
         )
 
     @fold("agent.adopted")
@@ -397,6 +424,19 @@ class Agents(View):
             ORDER BY name
             """,
             (handovers,),
+        )
+        return [self._load(row) for row in rows]
+
+    def between_turns(self) -> list[Agent]:
+        """Live agents between turns whose harness has a process and could reopen its session: out of a turn and on
+        their way to none, with nothing to finish, and on a persistent harness that resumes, by a native id it gave."""
+        rows = self.db.execute(
+            """
+            SELECT * FROM v_agents
+            WHERE state IN ('idle', 'waiting') AND resting = 0 AND unbegun = 0 AND finishing = 0 AND persistent = 1
+                AND resume = 1 AND native IS NOT NULL AND idle_since IS NOT NULL
+            ORDER BY name
+            """
         )
         return [self._load(row) for row in rows]
 

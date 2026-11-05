@@ -17,14 +17,10 @@ import pytest
 
 from platoon_harness import Role, Session, Team
 from platoon_harness.config import Secret
-from platoon_harness.drivers import Delivery, Item, Ready, TurnEnded
-from platoon_harness.drivers.claude import ClaudeDriver
-from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
 from platoon_harness.team import Budget
 
-from ..unit.drivers.support import Heard, make_spec
 from ..unit.runtime.support import in_state, journal, of_type, until
 from .support import (
     CLAUDE,
@@ -178,66 +174,4 @@ async def test_an_owner_s_stop_during_a_shell_tool_is_told_on_resume(harness, tm
         print(f"{harness}: left behind", end_what_is_left(work))
 
     assert log_of(work).count("start") == commands(events), "the shell tool ran behind the journal's back"
-    assert used["total"] <= 8
-
-
-def driver_of(harness: str) -> ClaudeDriver | CodexDriver:
-    return ClaudeDriver() if harness == "claude" else CodexDriver()
-
-
-async def cured(harness: str, native: str, work: Path, folder: Path) -> str:
-    """Whether a harness's own resume gets its session back, as nothing in a session asks it to yet."""
-    spec = make_spec(
-        folder, goal="", cwd=work, model=ROLES[harness].model, effort=EFFORT, resume=native, folder=folder / "again"
-    )
-    driver, heard = driver_of(harness), Heard()
-    await driver.start(spec, heard)
-    await heard.until(Ready)
-    try:
-        await driver.deliver(
-            Delivery(input="1", boundary="turn", text="Which command did I ask for? One line.", items=())
-        )
-        await heard.until(TurnEnded)
-    finally:
-        await driver.stop(5.0)
-    return " ".join(item.gist for item in heard.of(Item) if item.kind == "message")
-
-
-@pytest.mark.parametrize("harness", ROLES)
-@pytest.mark.parametrize("when", ["during-a-tool", "between-turns"])
-async def test_a_harness_killed_alone_ends_its_agent_and_a_native_resume_cures_it(harness, when, tmp_path):
-    """Budget: at most 8 model calls, counted from the journal, plus the one turn of a native resume, which no session
-    counts, at most 3. `kill -9` of the harness alone, with the runtime well, shows how its turn ends. Then a new
-    process on its native id shows what a resume would cure."""
-    work, root = seeded(tmp_path / "work"), tmp_path / "root"
-    team = Team(roles={"ada": ROLES[harness]}, budget=LIMIT)
-
-    try:
-        async with Session.start(team, name="alone", root=root, cwd=work, plan_login=True) as session:
-            if when == "during-a-tool":
-                pid = await started(session)
-            else:
-                await in_state(session, "ada", "idle")
-                await session.send("@ada", "Reply with the single word ready, and do not finish.")
-                await seen(session, "turn.ended")
-                pid = harness_of(session)
-            native = (await of_type(session, "agent.started"))[0].data["native"]
-            os.kill(pid, signal.SIGKILL)
-            killed = time.monotonic()
-            lost = (await seen(session, "agent.ended"))[0]
-            print(f"{harness} {when}: ended in {time.monotonic() - killed:.2f} s: {lost.data}")
-            turns = [event.data["reason"] for event in await of_type(session, "turn.ended")]
-            print(f"{harness} {when}: turns {turns}, still running {running_in(work)}")
-            ending = await session.ending()
-            used = await spent(session)
-            print(f"{harness} {when}:", ending.reason, ending.gaps, used)
-        print(f"{harness} {when}: after the session {running_in(work)}, log {log_of(work)}")
-        end_what_is_left(work)
-
-        said = await cured(harness, native, work, tmp_path / "cure")
-        print(f"{harness} {when}: on a native resume: {said}")
-    finally:
-        print(f"{harness} {when}: left behind", end_what_is_left(work))
-
-    assert lost.data["status"] == "lost"
     assert used["total"] <= 8

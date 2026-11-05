@@ -139,6 +139,7 @@ class Host:
             "deliver": self._deliver,
             "interrupt": self._interrupt,
             "probe": self._probe,
+            "rest": self._rest,
             "stop": self._stop,
             "answer": self._answer,
         }
@@ -339,6 +340,16 @@ class Host:
                 raise DriverError(link.redact(str(error))) from error
             raise
 
+    async def resume(self, agent: Mapping[str, Any]) -> None:
+        """Bring an agent's harness back, as its record holds it, on a fresh credential: on its native session, or anew
+        when it took no turn, as it has written no session to reopen. With no native id or no resume it cannot come
+        back."""
+        name, role, native = agent["name"], agent["role"], agent["native"]
+        if native is None or not (await self.describe(role)).capabilities.resume:
+            raise DriverError("its harness cannot resume")
+        admission = await self.admit(SpawnRequest(agent=name, role=role, resumed=True))
+        await self.connect(name, role, admission, resume=native if agent["began"] else None)
+
     async def _instructed(self, agent: str, text: str | None, *, goal: bool, resumed: bool) -> int | None:
         """Journal what a harness is told, as the body it is, before it hears it, and what a fresh start offers it,
         whose seq is the id its goal goes under."""
@@ -460,7 +471,11 @@ class Host:
 
     async def _deliver(self, effect: Effect) -> None:
         """Hand entries over, and for a wake stay open until its turn begins, so `waking` always has an effect behind it
-        and a crash cannot strand one. Past a time, or at an interrupt, the handover fails, which queues it again."""
+        and a crash cannot strand one. A resting agent's harness is brought back first. Past a time, or at an
+        interrupt, the handover fails, which queues it again."""
+        record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": effect.agent}).result[0]
+        if record["resting"] and self.link(effect.agent) is None:
+            await self.resume(record)
         link, data = self._required(effect), effect.data
         surface = surface_of(link.info.capabilities) or shell_name
         delivery = Delivery(
@@ -570,6 +585,16 @@ class Host:
             await self._report({**{key: page[key] for key in ("agent", "workspace", "cause")}, "unobserved": why})
         return refused is None
 
+    async def _rest(self, effect: Effect) -> None:
+        """End a resting agent's harness, and what it left, which its next handover brings back. With no link, a crash
+        may have left it, and `reap` proves what is ours."""
+        name = effect.data["agent"]
+        link = self._links.pop(name, None)
+        if link is None:
+            await reap(agent_folder(self._folder, name), GRACE)
+        else:
+            await self._end(link, GRACE)
+
     async def _stop(self, effect: Effect) -> dict[str, Any]:
         """End what an ended agent left, look once more at what it left, then end its workspace, if nothing would go
         with it. With no link, a crash may have left it, and `reap` proves what is ours. A link stays until its harness
@@ -670,6 +695,11 @@ class Host:
                 return
             case Exited(reason=reason) if not link.ready.is_set():
                 link.refuse(reason)  # Nobody has heard of this harness, so `connect` fails, which says so.
+                return
+            case Exited(reason=reason):  # It ended on its own, which `agent.rest` forgives once.
+                await self._taken(
+                    link, report, await self.insist("agent.rest", {"agent": link.agent, "exited": reason})
+                )
                 return
             case TurnEnded(reason=reason) if reason in CUT_OFF:
                 await self._unknown(link, report.type, f"a turn ended `{reason}`, which only the runtime can say")

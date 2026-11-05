@@ -35,7 +35,8 @@ method promises:
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
-  for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
+  for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. It also
+  starts a resting agent's harness again this way, after ten minutes between turns ended its process. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
@@ -75,7 +76,7 @@ method promises:
 | `ChildSeen` | `native`, `parent` | A native child it made on its own, and the tool call that started it. It claims no attribution: how well a call is tied to an agent is the record's to say |
 | `GapReport` | `what` | Something went unseen, from a closed list, `GAPS`, which gives each its plane |
 | `Native` | `kind`, `raw`, `cut` | A frame nobody's vocabulary covers |
-| `Exited` | `reason` | The harness is gone |
+| `Exited` | `reason` | The harness is gone. One that went on its own, which no `stop` asked for, rests its agent once: a turn it was in is cut off, and the agent's next handover starts the harness again with `spec.resume`, so a driver whose harness can reopen its session needs nothing more |
 
 What changed in a workspace is not a report: the runtime looks at it itself at each turn's end, so even a harness that reports nothing
 of its files is covered, and a program that sends `changes`, which an earlier vocabulary had, gets `native` plus a gap.

@@ -115,6 +115,7 @@ PRIMITIVES = (
             lifecycle.start,
             lifecycle.instruct,
             lifecycle.retell,
+            lifecycle.rest,
             lifecycle.report,
             lifecycle.list_agents,
             lifecycle.agent_records,

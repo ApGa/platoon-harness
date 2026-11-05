@@ -745,6 +745,7 @@ async def test_an_interrupt_closes_a_wait_that_holds_and_nothing_wakes(kernel, i
         "agents": [],
         "waits": [],
         "stranded": [],
+        "resting": [],
         "due": None,
     }
 

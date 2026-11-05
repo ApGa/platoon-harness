@@ -3,12 +3,15 @@ FakeModel. Each scenario takes a team whose one role, `bob`, runs that binary, a
 its own."""
 
 import asyncio
+import os
+import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import NamedTuple
 
 from platoon_harness import Session, Team
-from platoon_harness.kernel import Delta, Event
+from platoon_harness.drivers.process import Record
+from platoon_harness.kernel import Delta, Event, ManualClock
 from platoon_harness.primitives import Contributors, Exposure, Lineage, Seen, Uses
 from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
@@ -85,6 +88,100 @@ async def an_interrupt_under_a_tokens_limit_leaves_the_session_to_go_on(team: Te
     assert refused == []
     assert (cut["spent"], cut["label"], cut["unmeasured"]) == (100_000, "estimated", 1)
     assert (usage["label"], usage["unmeasured"]) == ("estimated", 1) and usage["amount"] > 100_000
+
+
+def harness_pid(session: Session) -> int:
+    record = Record.read(session.folder / "agents" / "bob")
+    assert record is not None
+    return record.pid
+
+
+def running(pid: int) -> bool:
+    """Whether a process is there and is no zombie."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0] != "Z"
+    except OSError:
+        return False
+
+
+def rests(events: list[Event]) -> list[Event]:
+    return [event for event in events if event.data["kind"] == "rest"]
+
+
+async def in_a_second_turn(session: Session) -> None:
+    """A turn that ends, which leaves the harness's session written down, as one killed before it wrote that has none
+    to reopen, and a second turn that begins."""
+    await in_state(session, "bob", "idle")
+    await session.send("@bob", "first")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    await session.send("@bob", "go")
+
+
+def calls_held(items: list[Event]) -> int:
+    return sum(item.data["kind"] == "tool" and item.data["phase"] == "started" for item in items)
+
+
+async def killed_in_a_held_call(session: Session, model: FakeModel, held: int) -> None:
+    """`kill -9` of the harness alone once it holds its `held`th call of our `wait`, which model call `held` asked for,
+    after the first turn's."""
+    await asyncio.wait_for(model.call(held), TIMEOUT)
+    await until(lambda: of_type(session, "item.recorded"), session, lambda items: calls_held(items) >= held)
+    os.kill(harness_pid(session), signal.SIGKILL)
+
+
+async def an_idle_harness_rests_and_its_next_message_resumes_it_natively(team: Team, root: Path, model: FakeModel):
+    """Ten minutes between turns, on the session's clock, end the harness's process tree, and the next message brings
+    it back on its native session, which still holds the first message: the agent's identity outlives its process."""
+    clock = ManualClock(1000.0)
+    async with Session.start(team, root=root, cwd=root, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "remember heliotrope")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        pid = harness_pid(session)
+        await asyncio.wait_for(clock.slept_until(1600.0), TIMEOUT)
+        clock.advance(600)
+        await until(lambda: of_type(session, "effect.finished"), session, rests)
+        recorded = Record.read(session.folder / "agents" / "bob")
+        await session.send("@bob", "which word?")
+        await asyncio.wait_for(model.call(1), TIMEOUT)
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+        started, resumed = await of_type(session, "agent.started"), await of_type(session, "agent.resumed")
+        launches = [event for event in await of_type(session, "context.offered") if event.data["how"] == "launch"]
+
+    assert recorded is None and not running(pid)
+    assert len(resumed) == 1 and resumed[0].data["native"] == started[0].data["native"]
+    assert len(launches) == 1
+    assert model.calls[-1].says("remember heliotrope") and model.calls[-1].says("which word?")
+
+
+async def a_harness_killed_alone_in_a_turn_is_resumed_once_and_told(team: Team, root: Path, model: FakeModel):
+    """`kill -9` of the harness alone during a held call of ours cuts its turn off: the turn is lost with
+    `crash_window`, the harness comes back on its native session, told its turn was cut off, and its agent goes on. The
+    model's second reply is that held call."""
+    async with Session.start(team, root=root, cwd=root) as session:
+        await in_a_second_turn(session)
+        await killed_in_a_held_call(session, model, 1)
+        await asyncio.wait_for(model.call(2), TIMEOUT)
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+        lost, gaps = await of_type(session, "turn.lost"), await of_type(session, "gap.recorded")
+        exited = [rest.data["data"]["exited"] for rest in rests(await of_type(session, "effect.requested"))]
+        ending = await session.ending()
+
+    assert len(lost) == 1 and [gap.data["what"] for gap in gaps] == ["crash_window"]
+    assert exited == ["killed by signal 9"] and ending.agents[0]["status"] is None
+    assert model.calls[-1].says("Your last turn was cut off by a crash.")
+
+
+async def a_harness_killed_alone_twice_before_a_turn_ends_is_lost(team: Team, root: Path, model: FakeModel):
+    """The model's second and third replies are held calls of ours."""
+    async with Session.start(team, root=root, cwd=root) as session:
+        await in_a_second_turn(session)
+        await killed_in_a_held_call(session, model, 1)
+        await killed_in_a_held_call(session, model, 2)
+        ended = await until(lambda: of_type(session, "agent.ended"), session)
+
+    reason = "its harness exited again before a turn of its ended: killed by signal 9"
+    assert (ended[0].data["status"], ended[0].data["reason"]) == ("lost", reason)
 
 
 async def a_spawn_and_the_call_that_made_it(team: Team, root: Path) -> tuple[Event, list[Event]]:

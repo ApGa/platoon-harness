@@ -4,6 +4,12 @@
 
 ### Added
 
+- An agent's process is not its identity. An agent between turns for ten minutes on the session's clock, with no setting, rests
+  when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a runtime-only op, a `rest`
+  effect ends its process tree, and its next handover brings its harness back first, natively, or anew where it took no turn, on a
+  fresh credential and offering nothing, as a resume after a crash does. A held agent, one with a goal not begun or a finish to come,
+  never rests, and a runtime start leaves a resting agent to its handover. `delivery.ready` lists the agents to put to rest, and
+  `Agents`, at view version 13, keeps `idle_since`, `resting` and `exits`. See ADR 0045.
 - A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the SDK
   drives that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
   `platoon_harness.testing`, and keeps the result under the root, `conformance/<driver>.json`, which `write_conformance` and
@@ -293,6 +299,11 @@
 
 ### Changed
 
+- A harness that exits on its own rests its agent once instead of ending it: a turn it was in is lost, with `crash_window` naming
+  where that turn began, its agent is told its turn was cut off, which wakes it at once, and the `rest` effect ends what the harness
+  left. A second exit before a turn of its ends, an exit while the session accepts no work, or of a harness that cannot resume,
+  ends its agent `lost` as before, the second saying so. `Host.resume` brings an agent's harness back, for recovery and for a
+  handover alike. See ADR 0045.
 - A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
   opens, and writes no event, which `platoon-harness session refold` does.
 - A look's commit and rewrite name no `cause`, as the turn end that prompted the look did not cause what git holds, so a bystander's
