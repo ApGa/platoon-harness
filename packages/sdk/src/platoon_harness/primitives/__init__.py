@@ -39,12 +39,12 @@ from .common import (
     stream_of,
 )
 from .delivery import courier
+from .exposures import Exposures
 from .messages import Cursor, Deliveries, Entry
 from .provenance import (
     Calls,
     Contributors,
     Exposure,
-    Exposures,
     Lineage,
     NotSeen,
     References,

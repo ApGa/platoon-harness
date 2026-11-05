@@ -1247,7 +1247,7 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 | Evidence | Representation | Sole writer | Means only |
 |---|---|---|---|
 | **Observed exposure** | `context.offered{items:[{ref, form, digest}], boundary, how}`, payload 3, `how` one of `wake`, `steer`, `notice`, `read` and `launch`, raised by `context.delivered` | Offers: the courier's handovers and notices, the reader's own read ops, `blob.offer` and the launch offer, on the reader's own context stream. Confirmations: the host, from the harness's report alone | This content was handed over, then its harness said it took it |
-| **Declared dependency** | `based_on` on a write of content, each ref checked to name an event and its lines (§7), and a commit's `Informed-By` read into it | That write's maker | The agent claims it |
+| **Declared dependency** | `based_on` on a write of content, each ref checked to name an event and its lines (§7), and a commit's `Informed-By` read into it, an event's ref only in a commit an agent of the session made, of an event it made or was handed | That write's maker | The agent claims it |
 | **Judged attribution** | Annotation: judge, version, evidence refs, value | A `judge` principal | A versioned opinion |
 | **Validated intervention** | Annotation: design, comparison, measured result | A `program` principal | One controlled comparison |
 
@@ -1321,7 +1321,7 @@ await session.contributors("task/tasks/1@3")                                    
   call that chose it, with the tool item that joins them and how many of its agent's ops share that tool call; each citation, with the
   cited event's maker and the citer's `exposure` to it at the bound, and for a range whether those lines were shown, decided as
   exposure is: true when a confirmed offer showed them, false only beside `not_seen`, and null otherwise; a
-  commit's `Informed-By` values that cite nothing, neither a recorded commit nor an event, as written; each cause; its previous version on its own stream, or a
+  commit's `Informed-By` values that cite nothing, as written, each with why, as its record keeps it; each cause; its previous version on its own stream, or a
   commit's parents; its maker's declared coverage; and one page of what its maker was offered and the gaps in its record below the
   bound, newest first, with true totals.
 - **`uses(ref)`** is one hop forward, oldest first: what cites the event, what follows from it, its next version or the commits that name
@@ -1567,10 +1567,12 @@ another. The core gives the first three, on git and the filesystem alone, and re
   [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - **`Informed-By`** is the one way to declare what a commit rests on. A value of 4 to 40 hex digits naming one commit in the commit's
   own repository is resolved to its full SHA once, at the commit's first record, and `based_on` cites that commit's record. A value
-  that is an event's ref, such as the board entry the commit implements, is cited too, once it is checked as any citation is (§7): it
-  names an event, and a range lines of its body. Anything else, a git ref among them, is kept as written and unresolved, and never
-  refused, since git already holds it. Whether the commit's maker was handed what it cites is its exposure's to say, bounded at the
-  look that recorded the commit, as for any citation.
+  that is an event's ref, such as the board entry the commit implements, is cited too, once it is checked as any citation is (§7),
+  naming an event and a range lines of its body, and only in a commit an agent of the session made, of an event that agent made
+  or was handed by the look, as `blob.get` reads: a trailer is text git carries between clones and sessions, so a ref names this
+  session's event only in a commit this session's agent made. Anything else, a git ref among them, is kept as written and unresolved,
+  with why, never refused, since git already holds it; `repo.committed` keeps why at payload 2. What the maker was handed of what it
+  cites is its exposure's to say, bounded at the look that recorded the commit, as for any citation.
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve

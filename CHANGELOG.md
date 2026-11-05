@@ -17,9 +17,11 @@
   description says what `based_on` is and never asks, so a template without the slot asks nothing. It costs 78 bytes a request, 20
   tokens by Qwen3's tokenizer. `tests/live/test_citing.py` runs it on real models. See ADR 0042.
 - A commit's `Informed-By` trailer takes an event's ref, such as the board entry the commit implements: once checked as any
-  citation is, it joins the commit's `based_on` beside the commits its hex values name, so lineage shows it with the commit maker's
-  exposure and contributors walk from code to what informed it. A value that is neither stays as written and unresolved, never
-  refused. See ADR 0041.
+  citation is, and only in a commit an agent of the session made, of an event that agent made or was handed, it joins the commit's
+  `based_on` beside the commits its hex values name, so lineage shows it with the commit maker's exposure and contributors walk from
+  code to what informed it. A trailer travels with its commit between clones and sessions, so one made elsewhere, or by nobody the
+  record names, cites no event here. A value that cites nothing stays as written, never refused, with why, `unrecorded`, `no_event`,
+  `no_lines` or `unread`, which `repo.committed` keeps at payload 2 and lineage gives as `Unresolved.why`. See ADR 0041.
 - Pi names what landed and which call made a tool call. The `pi` driver reports an input under the id of the entry pi wrote it
   down as, asked of `get_entries` from the last entry seen once the input's message has ended, and holds whatever pi says after the
   input until it has that id, so its reports keep pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi

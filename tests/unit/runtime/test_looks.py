@@ -430,8 +430,8 @@ async def test_a_turn_s_commits_are_recorded_after_it_ends_as_its_agent_s(repo, 
 
 
 async def test_an_informed_by_value_naming_an_event_is_cited_by_the_commit_s_record(repo, tmp_path):
-    """A worker's commit cites the goal it was given, `agent/ada@1`, by its ref, which git cannot resolve and the record
-    can; a ref that names no event stays as it was written."""
+    """A worker's commit cites the goal it was handed, `agent/ada@1`, by its ref, which git cannot resolve and the
+    record can; a ref that names no event stays as it was written, saying why."""
     team = team_of(harness=working(lambda cwd: commit(cwd, "work", cites="agent/ada@1,board/notes/plan@1")))
     async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
         await session.spawn("ada", "worker", "work")
@@ -440,9 +440,33 @@ async def test_an_informed_by_value_naming_an_event_is_cited_by_the_commit_s_rec
 
     assert found.based_on == ("agent/ada@1",)
     assert found.data["informed_by"] == [
-        {"written": "agent/ada@1", "sha": None},
-        {"written": "board/notes/plan@1", "sha": None},
+        {"written": "agent/ada@1", "sha": None, "why": None},
+        {"written": "board/notes/plan@1", "sha": None, "why": "no_event"},
     ]
+
+
+async def test_a_commit_made_elsewhere_cites_no_event_of_this_session(tmp_path, monkeypatch):
+    """A commit git made in another clone a year ago, citing `agent/ada@1` of the session it came from, is fetched into
+    ada's workspace: no workspace of this session made it, so its trailer names nothing here, though this session has
+    an `agent/ada@1` ada was handed."""
+    repo = repository(tmp_path / "repo", monkeypatch, when=EARLIER - 10)
+    elsewhere = tmp_path / "elsewhere"
+    git("clone", "-q", str(repo), str(elsewhere), cwd=tmp_path)
+    old = commit(elsewhere, "old.txt", when=EARLIER, cites="agent/ada@1")
+
+    def fetch(cwd: Path) -> None:
+        git("fetch", "-q", str(elsewhere), "main", cwd=cwd)
+        git("reset", "-q", "--hard", old, cwd=cwd)
+
+    async with Session.start(team_of(harness=working(fetch)), name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "a goal of this session's")
+        await looked(session)
+        [found] = await committed(session)
+        reached = await session.contributors(f"{found.stream}@{found.version}")
+
+    assert (found.data["sha"], found.data["made_in"], found.based_on) == (old, None, ())
+    assert found.data["informed_by"] == [{"written": "agent/ada@1", "sha": None, "why": "unread"}]
+    assert [(row.maker, row.kinds) for row in reached.rows] == [(None, ())]
 
 
 async def test_the_shared_workspace_s_uncommitted_state_is_recorded_only_when_a_role_works_in_it(repo, tmp_path):

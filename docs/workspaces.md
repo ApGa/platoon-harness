@@ -164,9 +164,10 @@ Your checkout's uncommitted state is recorded only when a role works there, sinc
 a commit builds on with a trailer, `git commit --trailer Informed-By=<sha>`: a value of 4 to 40 hex digits naming one commit in its own
 repository is resolved to its full SHA, and the commit's record cites that commit's once the journal holds it. A trailer can name
 what informed it in the session too, by its ref, such as the board entry it implements, `Informed-By=board/notes/spec@3`, which the
-record cites once it is checked as any citation is: it must name an event, and a range lines of that event's body. Anything else, a
-branch name among them, is kept as written and cites nothing. [provenance.md](provenance.md) says how lineage and contributors read
-a commit's citations.
+record cites once it is checked as any citation is, it must name an event and a range lines of that event's body, and only when the
+commit is an agent's that made that event or was handed it. A trailer travels with its commit between clones and sessions, so one
+fetched from elsewhere, or made in your checkout, cites no event here. Anything else, a branch name among them, is kept as written,
+with why it cites nothing. [provenance.md](provenance.md) says how lineage and contributors read a commit's citations.
 
 The terminal's header counts what changed, `/review` lists it, and a merge stopped on conflicts waits in the dock, and under Needs you
 in the browser, saying where to resolve it, until its agent's next turn. What an agent wrote of a commit is cut to fit: its author and

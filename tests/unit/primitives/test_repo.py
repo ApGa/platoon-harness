@@ -253,7 +253,7 @@ async def test_ancestry_declared_dependency_observed_reads_and_credit_never_deri
     await looked(kernel, commits=[commit(ONE), commit(THREE), commit(TWO, ONE, informed_by=cited)])
 
     one, three, two = of_type(kernel, "repo.committed")
-    assert two.data["parents"] == [ONE] and two.data["informed_by"] == cited
+    assert two.data["parents"] == [ONE] and two.data["informed_by"] == [{**cited[0], "why": None}]
     assert two.based_on == (f"repo/app@{three.version}",)
     assert one.based_on == ()
     assert [event.type for event in events_of(kernel) if event.seq > head and event.type.startswith("context.")] == []

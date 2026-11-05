@@ -15,7 +15,7 @@ from pydantic import TypeAdapter
 from platoon_harness.drivers import claude, codex, pi
 from platoon_harness.drivers import exec as one_shot
 from platoon_harness.drivers.openhands import worker
-from platoon_harness.kernel import Kernel, ManualClock, Principal
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Principal, Txn, op
 from platoon_harness.primitives import (
     PRIMITIVES,
     Contributors,
@@ -714,8 +714,13 @@ def commit(sha: str, parents: list[str], made_in: str | None, informed_by: list[
 
 
 async def committed(kernel: Kernel, *looks: list[dict[str, Any]]) -> dict[str, str]:
-    """Each look's commits recorded as `alice`'s look finds them, and the ref of each by its sha."""
+    """Each look's commits recorded as a new agent `alice`'s look finds them, and the ref of each by its sha."""
     await spawn(kernel, "alice")
+    return await recorded(kernel, *looks)
+
+
+async def recorded(kernel: Kernel, *looks: list[dict[str, Any]]) -> dict[str, str]:
+    """Each look's commits recorded as `alice`'s look finds them, and the ref of each by its sha."""
     for commits in looks:
         report = {"agent": "alice", "workspace": "@alice", "commits": commits}
         result_of(await kernel.submit(kernel.runtime, "repo.report", report))
@@ -821,24 +826,81 @@ async def test_an_unresolvable_trailer_is_kept_and_labelled_never_in_based_on(ke
 @pytest.mark.parametrize("repo", [REPO])
 async def test_an_informed_by_event_ref_is_a_declared_citation_checked_as_based_on_is(kernel):
     """A commit cites the board entry it implements by its ref, so the walk back from the code reaches whoever wrote the
-    entry. A ref that names nothing or no lines of its body, or a body's hash, cites nothing and is never refused, as
-    git already holds it. Whether the commit's maker was handed what it cites is its exposure's to say, at the look."""
-    bob = await spawn(kernel, "bob")
+    entry. A value that names no event or no lines of its body, or a body's hash, cites nothing and is never refused, as
+    git already holds it, and its record says why."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     await channel(kernel, "notes", kind="board")
     post = {"board": "notes", "name": "spec", "gist": "the spec", "body": await stored(kernel, "one\ntwo\n")}
     spec = result_of(await kernel.submit(bob, "board.post", post))["ref"]
+    result_of(await kernel.submit(alice, "board.get", {"board": "notes", "name": "spec"}, native=tool("t1")))
     written = [spec, f"{spec}#L2-2", "board/notes/spec@9", f"{spec}#L2-5", f"sha256:{'0' * 64}", "the spec"]
     trailers = [{"written": value, "sha": None} for value in written]
-    refs = await committed(kernel, [commit(CHILD, [], "@alice", trailers)])
+    refs = await recorded(kernel, [commit(CHILD, [], "@alice", trailers)])
 
     found = lineage(kernel, refs[CHILD])
     reached = contributors(kernel, refs[CHILD])
 
     assert of_type(kernel, "repo.committed")[-1].based_on == (spec, f"{spec}#L2-2")
     assert [(edge.ref, edge.maker) for edge in found.declared] == [(spec, "agent:bob"), (f"{spec}#L2-2", "agent:bob")]
-    assert all(isinstance(edge.exposure, Unknown) and edge.exposure.handed == () for edge in found.declared)
-    assert [value.written for value in found.unresolved] == written[2:]
+    assert all(isinstance(edge.exposure, Unknown) and edge.exposure.handed for edge in found.declared)
+    assert [(value.written, value.why) for value in found.unresolved] == [
+        ("board/notes/spec@9", "no_event"),
+        (f"{spec}#L2-5", "no_lines"),
+        (f"sha256:{'0' * 64}", "no_event"),
+        ("the spec", "no_event"),
+    ]
     assert [(row.maker, row.kinds) for row in reached.rows] == [("agent:alice", ()), ("agent:bob", ("declared",))]
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_an_informed_by_event_ref_cites_only_what_the_commit_s_maker_could_read(kernel):
+    """A trailer is text git carries between clones and sessions, so a ref in it names this session's event only in a
+    commit an agent of the session made, and only one that agent made or was handed, as `blob.get` reads. A commit
+    nobody's workspace made alone has no maker who could be shown to have read anything."""
+    alice, bob, _ = await spawn(kernel, "alice"), await spawn(kernel, "bob"), await spawn(kernel, "carol")
+    await channel(kernel, "notes", kind="board")
+    own = result_of(await kernel.submit(alice, "board.post", {"board": "notes", "name": "mine", "gist": "mine"}))["ref"]
+    unread = (await send(kernel, bob, "@carol", "not for alice"))["ref"]
+    trailers = [{"written": value, "sha": None} for value in (own, unread)]
+    made_in = {ROOT: "@alice", CITED: None, CHILD: "shared"}
+    refs = await recorded(kernel, [commit(sha, [], where, trailers) for sha, where in made_in.items()])
+
+    said = {sha: [(value.written, value.why) for value in lineage(kernel, ref).unresolved] for sha, ref in refs.items()}
+
+    assert [event.based_on for event in of_type(kernel, "repo.committed")] == [(own,), (), ()]
+    assert said[ROOT] == [(unread, "unread")]
+    assert said[CITED] == said[CHILD] == [(own, "unread"), (unread, "unread")]
+
+
+@op("before.record", runtime=True)
+def record_before(txn: Txn, a: Args) -> None:
+    """A commit as a look before payload 2 recorded it, citing what its hex values named and nothing else."""
+    informed_by = [{"written": "agent/alice@1", "sha": None}, {"written": CITED[:8], "sha": CITED}]
+    data = commit(CHILD, [], "@alice", informed_by) | {"informed_by_total": 2}
+    del data["subject"]
+    txn.emit("repo.committed", "repo/app", gist=f"{CHILD[:12]} old", data=data)
+
+
+BEFORE = Extension("before", ops=[record_before])
+
+
+async def test_a_look_before_payload_2_looked_for_commits_alone(tmp_path):
+    """A record from before a trailer could cite an event says so of each value it tied to no commit."""
+    kernel = Kernel.open(tmp_path / "session", clock=ManualClock(1000.0), extensions=(*PRIMITIVES, BEFORE))
+    try:
+        repo = {**REPO, "tips": f"sha256:{await kernel.put_body(b'')}"}
+        result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": ROLES, "limits": {}, "repo": repo}))
+        await grant(kernel, "agent")
+        await spawn(kernel, "alice")
+        result_of(await kernel.submit(kernel.runtime, "before.record", {}))
+        found = lineage(kernel, ref_of(of_type(kernel, "repo.committed")[-1]))
+    finally:
+        kernel.close()
+
+    assert [(value.written, value.why) for value in found.unresolved] == [
+        ("agent/alice@1", "unchecked"),
+        (CITED[:8], "unrecorded"),
+    ]
 
 
 async def test_a_compaction_marks_only_by_the_delivered_native_id(kernel):

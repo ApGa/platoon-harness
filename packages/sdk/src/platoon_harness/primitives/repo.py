@@ -8,9 +8,10 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Txn, View, fold, op
+from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .common import BodyRef, Name, cited
+from .common import BodyRef, Name, cited, parts_of
+from .exposures import readable
 from .reports import record_gap
 from .sessions import SessionRecord
 
@@ -18,6 +19,9 @@ Sha = Annotated[str, Field(pattern=r"^([0-9a-f]{40}|[0-9a-f]{64})$")]
 Where = Annotated[str, Field(pattern=rf"^(shared|@{NAME})$")]
 """A workspace in the address grammar: `@ada` for an agent's own, and `shared` for the session's checkout."""
 UnderWay = Literal["merge", "rebase", "cherry-pick", "revert", "bisect", "sequence"]
+Uncited = Literal["unrecorded", "no_event", "no_lines", "unread"]
+"""Why an `Informed-By` value cites nothing: it names a commit the journal holds no record of, no event, no lines of
+its event's body, or an event its commit's maker had neither made nor been handed."""
 PathState = Literal["modified", "added", "deleted", "renamed", "copied", "type_changed", "untracked", "conflicted"]
 
 DROPPED_LIMIT = 64
@@ -32,7 +36,7 @@ _NAMED = 3
 class Cited(Args):
     """One `Informed-By` value of a commit as it was `written`, cut to fit, and the commit it names, or None when it
     names no one commit: only 4 to 40 hex digits naming one commit in the commit's own repository do. A value that is an
-    event's ref names no commit, and its commit cites that event as any write of content cites one."""
+    event's ref names no commit."""
 
     written: Annotated[str, Field(max_length=TEXT_LIMIT)]
     sha: Sha | None
@@ -43,7 +47,8 @@ class Commit(Args):
     cited, the workspace whose HEAD reflog records making it as `made_in`, or None when none or two do, its `author`,
     its lines `added` and `removed` against its first parent, None when a file's were not measured, as a binary file's
     are not, how many `files` it touched, and what it says it was `informed_by`, the first of its `informed_by_total`
-    values. What an agent wrote is cut to fit, so one long value cannot keep a commit from being recorded."""
+    values, which its record keeps each with `why` it cites nothing, or None where it cites. What an agent wrote is cut
+    to fit, so one long value cannot keep a commit from being recorded."""
 
     sha: Sha
     parents: tuple[Sha, ...]
@@ -171,15 +176,26 @@ def _said(where: str, reading: Reading) -> str:
     return f"{where} at {at}" + (f" on {reading.branch}" if reading.branch else "")
 
 
-def _citation(txn: Txn, looks: Looks, value: Cited) -> str | None:
-    """The ref an `Informed-By` value cites: a recorded commit's, by the commit git resolved it to, or an event's, by
-    its ref, checked as `based_on` is. Anything else cites nothing, and is never refused, since git already holds it."""
+def _citation(txn: Txn, looks: Looks, value: Cited, made_in: str | None) -> tuple[str | None, Uncited | None]:
+    """The ref an `Informed-By` value cites, or why it cites none. One git resolved cites that commit's record. An
+    event's ref cites the event once it is checked as `based_on` is and the commit's maker could read it, having made it
+    or been handed it, as `blob.get` reads: a trailer is text git carries between clones and sessions, so a ref names
+    this session's event only in a commit an agent of this session made. None is refused, since git already holds it."""
     if value.sha is not None:
-        return looks.ref(value.sha)
+        ref = looks.ref(value.sha)
+        return (None, "unrecorded") if ref is None else (ref, None)
+    parts = parts_of(value.written)
+    event = None if parts is None else txn.view(Stamps).at(parts[0], parts[1])
+    if event is None:
+        return None, "no_event"
     try:
-        return cited(txn, [value.written])[0]
+        cited(txn, [value.written])
     except Refused:
-        return None
+        return None, "no_lines"
+    agent = made_in[1:] if made_in is not None and made_in.startswith("@") else None
+    if agent is None or not readable(txn, agent, event):
+        return None, "unread"
+    return value.written, None
 
 
 @op("repo.report", runtime=True)
@@ -187,7 +203,7 @@ def report(txn: Txn, a: Report) -> None:
     """Record one page of a look, on `repo/<name>` with no agent in the envelope. A commit the journal holds is passed
     over, so a look repeated after a crash records nothing twice, a rewrite names only what the journal holds, and a
     reading is recorded only when it differs from the workspace's last. A commit's `based_on` is what its `Informed-By`
-    values cite, and the rest stay in `informed_by` alone."""
+    values cite, and the rest stay in `informed_by` alone, each saying why."""
     repo = txn.view(SessionRecord).settings().repo
     if repo is None:
         raise Refused("unsupported", "this session observes no repository")
@@ -198,10 +214,13 @@ def report(txn: Txn, a: Report) -> None:
         return
     for commit in a.commits:
         if looks.ref(commit.sha) is None:
-            citing = [ref for found in commit.informed_by if (ref := _citation(txn, looks, found))]
-            gist = f"{commit.sha[:12]} {commit.subject}"[:GIST_LIMIT]
+            cites = [_citation(txn, looks, value, commit.made_in) for value in commit.informed_by]
             data = commit.model_dump(mode="json", exclude={"subject"})
-            txn.emit("repo.committed", stream, gist=gist, based_on=list(dict.fromkeys(citing)), data=data)
+            for value, (_, why) in zip(data["informed_by"], cites, strict=True):
+                value["why"] = why
+            based_on = list(dict.fromkeys(ref for ref, _ in cites if ref is not None))
+            gist = f"{commit.sha[:12]} {commit.subject}"[:GIST_LIMIT]
+            txn.emit("repo.committed", stream, gist=gist, based_on=based_on, data=data, v=2)
     if a.rewrite is not None and (dropped := [sha for sha in a.rewrite.dropped if looks.ref(sha)]):
         rewrite = a.rewrite.model_dump(mode="json", exclude={"dropped"})
         data = {"workspace": a.workspace, **rewrite, "dropped": dropped[:DROPPED_LIMIT], "dropped_total": len(dropped)}

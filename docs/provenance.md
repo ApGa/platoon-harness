@@ -23,9 +23,11 @@ The eight writes of content take `based_on`: `message.send`, `board.post`, `boar
 `task.fail`, `agent.spawn` and `agent.finish`. A citation must name an existing event, and a range lines of that event's body, or
 the whole write is refused, so a citation says whether the event it names exists, and never what that event holds. A citation of
 something its citer was never handed is kept, and `exposure` says so beside it. A commit cites through its `Informed-By` trailers:
-a commit by its SHA, and anything in the session by its ref, such as the board entry the commit implements, checked as any citation
-is, so the walk back from code reaches the messages and entries that informed it. A value that names neither stays as written, and
-lineage lists it as unresolved.
+a commit by its SHA, and an event of the session by its ref, such as the board entry the commit implements, so the walk back from
+code reaches the messages and entries that informed it. An event's ref is checked as any citation is, and cites only in a commit an
+agent of the session made, of an event that agent made or was handed, as `blob.get` reads: a trailer is text git carries between
+clones and sessions, so a ref in a commit made elsewhere, or by nobody the record names, names nothing here. A value that cites
+nothing stays as written, never refused, and lineage lists it as unresolved, saying why.
 
 ## Asking agents to cite
 

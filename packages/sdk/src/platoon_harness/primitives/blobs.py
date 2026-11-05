@@ -17,10 +17,9 @@ from .common import (
     expose,
     expose_read,
     lines_of,
-    maker,
     size_of,
 )
-from .provenance import handed
+from .exposures import readable
 
 
 class Blob(Args):
@@ -33,8 +32,7 @@ def _carrier(txn: Txn, ref: str) -> tuple[Event, str]:
     event = event_at(txn, ref)
     body = None if event is None else body_of(event)
     me = txn.me
-    readable = me.kind != "agent" or (event is not None and (maker(event) == me.id or handed(txn, me.name, ref)))
-    if event is None or body is None or not readable:
+    if event is None or body is None or (me.kind == "agent" and not readable(txn, me.name, event)):
         raise Refused("not_found", f"no body you were handed is at {ref}")
     return event, body
 
