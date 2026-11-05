@@ -414,6 +414,9 @@
 
 ### Fixed
 
+- Another agent's stop could end its workspace while a look read that workspace's reflog to say whose a commit was, and the look
+  then failed whole and recorded a gap, losing the commit and its citations. A workspace gone while a look reads it is as gone as
+  one removed before, and one still on disk that git cannot read still fails the look, since it might have made the commit.
 - A commit that failed went on for ever: each batch answered `unavailable` and the runtime kept running, recording nothing. Now one
   failed commit ends the runtime as a kill would. The kernel takes nothing more and closes, `Kernel.failure` holds a `JournalError`
   naming the journal, `Runtime.run` and an owner's `Session` raise it, the owner's shutdown ends the process trees and records

@@ -1563,6 +1563,7 @@ another. The core gives the first three, on git and the filesystem alone, and re
 - **Whose a commit is.** A commit is the agent's whose workspace's HEAD reflog records making it, an entry moving HEAD onto it at its
   own committer time, and nobody's when that workspace is the shared one, when none records it, or when two do. Git writes that entry
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
+  Every workspace still on disk is read, and one another agent's stop removed while a look read it is gone, as one removed before is.
   It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof. See
   [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - **`Informed-By`** is the one way to declare what a commit rests on. A value of 4 to 40 hex digits naming one commit in the commit's

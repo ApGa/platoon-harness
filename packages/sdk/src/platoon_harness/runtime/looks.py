@@ -177,10 +177,17 @@ def _resolved(root: Path, values: set[str]) -> dict[str, str]:
 
 def _attribute(found: dict[str, dict[str, Any]], makers: Mapping[str, Path]) -> None:
     """Who made each commit: the workspace whose HEAD reflog records making it, and nobody when none or two do. Every
-    workspace still on disk is read, so that two which made the same commit are both seen."""
+    workspace still on disk is read, so that two which made the same commit are both seen, and one removed while this
+    look read it is gone, as one removed before is."""
     made: dict[str, list[str]] = {sha: [] for sha in found}
     for name, root in makers.items() if found else ():
-        for sha in _made(root, found):
+        try:
+            shas = _made(root, found)
+        except GitError:
+            if root.is_dir():
+                raise
+            continue
+        for sha in shas:
             made[sha].append(name)
     for sha, commit in found.items():
         commit["made_in"] = made[sha][0] if len(made[sha]) == 1 else None

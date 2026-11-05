@@ -122,6 +122,30 @@ def test_a_commit_no_workspace_made_is_nobody_s(repo, tmp_path):
     assert made_in(found) == {fetched: None}
 
 
+def test_a_workspace_removed_while_a_look_reads_is_gone_as_one_removed_before(repo, tmp_path):
+    """Another agent's stop may end its workspace while a look reads its reflog, and that is no failure of this look."""
+    opened = tips(repo)
+    (ada, base), (bob, _) = worktree(repo, tmp_path, "ada"), worktree(repo, tmp_path, "bob")
+    work = commit(bob, "work")
+    makers = {"@ada": ada, "@bob": bob, "shared": repo}
+    git("worktree", "remove", "-f", "-f", str(ada), cwd=repo)
+
+    found = seen("@bob", bob, base, opened, makers, record=False)
+
+    assert made_in(found) == {work: "@bob"}
+
+
+def test_a_maker_workspace_git_cannot_read_fails_the_look(repo, tmp_path):
+    """One still on disk that git cannot read might have made the commit, so the look cannot say whose it is."""
+    opened = tips(repo)
+    (ada, base), (bob, _) = worktree(repo, tmp_path, "ada"), worktree(repo, tmp_path, "bob")
+    commit(bob, "work")
+    (ada / ".git").write_text("gitdir: /nowhere\n")
+
+    with pytest.raises(GitError):
+        seen("@bob", bob, base, opened, {"@ada": ada, "@bob": bob, "shared": repo}, record=False)
+
+
 def test_commits_merged_from_the_checkout_are_not_the_merger_s(repo, tmp_path):
     opened = tips(repo)
     ada, base = worktree(repo, tmp_path, "ada")
