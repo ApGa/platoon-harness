@@ -39,6 +39,7 @@ from . import (
     TurnEnded,
     TurnStarted,
     Usage,
+    keys_of,
     refuse_other_effort,
     refuse_unset_model,
     text_of,
@@ -144,10 +145,10 @@ def _login() -> Login | None:
 def _provider(spec: AgentSpec) -> dict[str, Any] | None:
     """A provider of this thread's own, when access was given, so that the key pays and no saved login does. Codex
     reads no base URL from its environment, so the URL goes here too."""
-    if _KEY not in spec.access:
+    if _KEY not in (access := keys_of(spec)):
         return None
     provider = {"name": _PROVIDER, "env_key": _KEY, "wire_api": "responses"}
-    return provider | ({"base_url": spec.access[_BASE_URL].reveal()} if _BASE_URL in spec.access else {})
+    return provider | ({"base_url": access[_BASE_URL].reveal()} if _BASE_URL in access else {})
 
 
 def _thread(spec: AgentSpec, theirs: Mapping[str, Any]) -> dict[str, Any]:
@@ -270,7 +271,7 @@ class CodexDriver:
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
-        if _BASE_URL in spec.access and _KEY not in spec.access:
+        if _BASE_URL in (access := keys_of(spec)) and _KEY not in access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._folder = spec.folder
         env = harness_env(spec, *_SIGN_IN)

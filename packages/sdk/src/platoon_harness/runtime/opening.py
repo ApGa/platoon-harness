@@ -21,7 +21,6 @@ from platoon_harness.tools import instructions, surface_of
 from platoon_harness.topology import Limits, Queue, Topic, compile, scopes
 
 from . import workspaces
-from .authority import Authority, LocalAuthority
 from .paths import find_root, new_folder, sessions_of
 from .workspaces import read_repo
 
@@ -161,15 +160,10 @@ def _channel(name: str, channel: Any) -> dict[str, Any]:
     return args
 
 
-def _budget(scope: str, budget: Budget, authority: Authority) -> dict[str, Any] | None:
-    """The limits a session enforces itself, in seconds, and the estimate a turn is reserved, or nothing if it has
-    neither."""
+def _budget(scope: str, budget: Budget) -> dict[str, Any] | None:
+    """The limits a session enforces, in seconds, and the estimate a turn is reserved, or nothing if it has neither."""
     units = {unit: getattr(budget, unit) for unit in ("tokens", "usd", "turns", "agents", "wall")}
-    limits = {
-        unit: seconds(amount) if unit == "wall" else amount
-        for unit, amount in units.items()
-        if amount is not None and authority.budget_owner(unit) == "session"
-    }
+    limits = {unit: seconds(amount) if unit == "wall" else amount for unit, amount in units.items() if amount}
     return {"scope": scope, "limits": limits, "estimate": dict(budget.estimate)} if limits or budget.estimate else None
 
 
@@ -202,7 +196,6 @@ async def open_session(
     kernel: Kernel,
     team: Team,
     manifest: Manifest,
-    authority: Authority,
     text: str,
     capabilities: Mapping[str, Capabilities],
     repo: Mapping[str, Any] | None,
@@ -226,7 +219,7 @@ async def open_session(
         ("shared", team.budget),
         *((f"role:{name}", role.budget) for name, role in team.roles.items()),
     ]
-    limits = {scope: found for scope, budget in budgets if (found := _budget(scope, budget, authority))}
+    limits = {scope: found for scope, budget in budgets if (found := _budget(scope, budget))}
     await _steps(kernel, "budget.set", *((f"budget/{scope}", args) for scope, args in limits.items()))
     await _steps(kernel, "agent.spawn", *((f"spawn/{args['name']}", args) for args in _starting(team)))
 
@@ -266,7 +259,7 @@ async def _rehearsed(team: Team, capabilities: Mapping[str, Capabilities]) -> As
         try:
             manifest = Manifest(team=team.show(resolved=True), topology_hash=team.topology.hash, components=())
             text = manifest.model_dump_json()
-            await open_session(kernel, team, manifest, LocalAuthority(team), text, capabilities, None)
+            await open_session(kernel, team, manifest, text, capabilities, None)
             yield kernel
         finally:
             kernel.close()

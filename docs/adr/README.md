@@ -19,7 +19,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0010](0010-provenance.md) | Provenance | Backward references, context bounds, sole writers, three axes, gaps, `Seen`, `NotSeen` or `Unknown` |
 | [0011](0011-annotations-beside-the-journal.md) | Annotations beside the journal | Like `git notes`: rewards and judgments never enter the journal or a policy's context |
 | [0012](0012-waiting-and-the-monitor.md) | Waiting and the monitor | Park at turn end, a monitor instead of a broader return rule, a hop limit on wakes |
-| [0013](0013-platoon-bridge.md) | Platoon bridge | The function-harness seam, two admission routes, a root rule, no kernel branch |
+| [0013](0013-platoon-bridge.md) | Platoon bridge | Superseded by 0049. The function-harness seam, two admission routes, a root rule, no kernel branch |
 | [0014](0014-swarmchat-compatibility-backend.md) | SwarmChat compatibility backend | Upstream's page and our projection, one way, plus an overlay. Upstream's server never runs |
 | [0015](0015-textual-and-safetext.md) | Textual and `SafeText` | One sanitizing boundary for untrusted text, and a Line API transcript paged from the journal |
 | [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | The user's own harness under its own login. We never read a credential |
@@ -54,6 +54,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Its first failure since a run that lasted is `daemon.failed` and the next run that lasts `daemon.recovered`, so a daemon that fails on every pass stands in `attention` as a kind of its own and never passes for a quiet session |
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | An agent's read that finds nothing past its cursor names, in `next`, what the offer that last moved that cursor handed over there and the `after` that reads it again, so an empty page is never taken for an empty channel |
 | [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | `team check` refuses a `program` while none runs, and a topic's `digest`, `entry`, `requires` and `validator` and a board's `keys` are gone, so no team it accepts names something nothing does |
+| [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Model access as variables or a `Gateway` that only a sealed driver is given, the backend's ids as the admit's result and the one join key, a spawn's parent and goal, an end's report, and no `budget_owner` |
 
 ## Adding or changing one
 

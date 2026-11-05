@@ -169,7 +169,7 @@ async def test_an_authority_hears_how_an_agent_ended(tmp_path):
 
         assert await asyncio.wait_for(heard, SECONDS) == (
             AgentRef(agent="bob", role="bob"),
-            AgentOutcome(status="cancelled"),
+            AgentOutcome(status="cancelled", report="bob cancelled: cancelled by human:you"),
         )
 
 
@@ -1376,7 +1376,7 @@ async def test_a_model_other_than_the_one_pinned_fails_the_spawn(tmp_path):
 
         assert await of_type(session, "agent.started") == []
 
-    assert row["reason"] == "its spawn failed: it runs some-hosted-default, and its role pins asked"
+    assert row["reason"] == "its spawn failed: it runs some-hosted-default, and asked is pinned"
 
 
 async def test_a_model_nobody_can_name_stays_unknown_and_refuses_nothing(tmp_path):

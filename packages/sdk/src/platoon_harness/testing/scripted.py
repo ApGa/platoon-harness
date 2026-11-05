@@ -35,6 +35,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     TurnStarted,
     Usage,
+    keys_of,
     refuse_unset_model,
 )
 from platoon_harness.drivers.process import Process
@@ -384,7 +385,8 @@ class ScriptedDriver:
         spec = self._spec
         if spec.model is None:
             raise DriverError("no model was set, and this harness will not pick one")
-        url, key = spec.access[BASE_URL].reveal(), spec.access[API_KEY].reveal()
+        access = keys_of(spec)
+        url, key = access[BASE_URL].reveal(), access[API_KEY].reveal()
         system = [{"role": "system", "content": spec.instructions}] if spec.instructions else []
         body = {"model": spec.model, "messages": [*system, *self._messages], "stream": False}
         status, answer = await post(

@@ -45,6 +45,7 @@ from .. import (
     TurnStarted,
     Usage,
     Verdict,
+    keys_of,
     refuse_unset_model,
     unknown_frame,
 )
@@ -148,7 +149,7 @@ class Worker:
         environment once read, so the agent's terminal cannot read them."""
         sdk = sdk_version()
         refuse_unset_model(spec)
-        if _KEY not in spec.access:
+        if _KEY not in (access := keys_of(spec)):
             raise DriverError(
                 f"openhands signs in with a key alone: name {_KEY} in the role's auth profile, with {_URL} for an "
                 "endpoint other than OpenAI's, as a ChatGPT subscription or an OpenHands Cloud login needs a person"
@@ -168,8 +169,8 @@ class Worker:
         self._conversation = conversation = await asyncio.to_thread(
             agent.start,
             spec,
-            spec.access[_KEY],
-            spec.access.get(_URL),
+            access[_KEY],
+            access.get(_URL),
             shim,
             on_event=lambda event: self._soon(self._heard, event),
             on_token=lambda chunk: self._soon(self._spoke, chunk),

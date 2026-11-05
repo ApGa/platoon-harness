@@ -1,6 +1,6 @@
 # 0013. Platoon bridge on the function-harness seam
 
-**Status:** Accepted, 2026-11-02
+**Status:** Accepted, 2026-11-02. Superseded by [0049](0049-the-contract-a-training-authority-gets.md): the bridge is Platoon's own extension, and this repository holds the contract it builds on
 
 ## Context
 

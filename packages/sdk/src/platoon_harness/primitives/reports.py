@@ -75,7 +75,9 @@ def _unproven(txn: Txn, agent: str) -> int | None:
 
 
 class Capabilities(Model):
-    """What a driver declares of a harness. Absence means unsupported, and `levels` believes only what was verified."""
+    """What a driver declares of a harness. Absence means unsupported, and `levels` believes only what was verified.
+    `sealed` says it launches on a gateway's access with nothing of the user's, which is the one launch a gateway
+    admission gets."""
 
     persistent: bool = False
     resume: bool = False
@@ -91,6 +93,7 @@ class Capabilities(Model):
     coverage: Mapping[Surface, Literal["observed", "partial", "none"]] = {}
     measures: frozenset[Literal["tokens", "usd"]] = frozenset()
     sandboxes: frozenset[str] = frozenset()
+    sealed: bool = False
 
 
 class Ready(Args):

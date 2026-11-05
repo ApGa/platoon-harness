@@ -12,7 +12,7 @@ from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, DriverError, DriverInfo
 from platoon_harness.kernel import Event, Kernel, Refused, is_held
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.runtime import LocalAuthority, opening
+from platoon_harness.runtime import opening
 from platoon_harness.runtime.opening import PLAN_LOGIN_FIX, check, open_session, prepare
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError
@@ -266,7 +266,7 @@ async def opened(tmp_path: Path):
         resolved = Team.loads(manifest.team)
         kernel = Kernel.open(folder, extensions=PRIMITIVES)
         kernels.append(kernel)
-        await open_session(kernel, resolved, manifest, LocalAuthority(resolved), text, described(resolved), None)
+        await open_session(kernel, resolved, manifest, text, described(resolved), None)
         return kernel, resolved, manifest, text
 
     kernels: list[Kernel] = []
@@ -419,31 +419,6 @@ async def test_a_role_s_estimate_reaches_the_session_with_or_without_a_limit_of_
     assert given["role:other"]["limits"] == {"tokens": 500}
 
 
-async def test_a_resource_the_authority_owns_is_no_limit_of_the_session(opened, tmp_path):
-    class Managed(LocalAuthority):
-        def budget_owner(self, resource: str):
-            return "authority" if resource == "tokens" else "session"
-
-    team = team_of(
-        roles={
-            "lead": {
-                "harness": scripted(capabilities=MEASURING),
-                "budget": {"tokens": 5, "turns": 5, "estimate": {"tokens": 1}},
-            }
-        }
-    )
-    folder = prepare(team, name="managed", root=tmp_path)
-    text = (folder / MANIFEST).read_text()
-    manifest = Manifest.model_validate_json(text)
-    resolved = Team.loads(manifest.team)
-    kernel = Kernel.open(folder, extensions=PRIMITIVES)
-
-    await open_session(kernel, resolved, manifest, Managed(resolved), text, described(resolved), None)
-
-    assert [row["unit"] for row in query(kernel, "budget.status")] == ["turns"]
-    kernel.close()
-
-
 async def test_agents_start_with_no_goal(opened):
     roles = {"lead": {"harness": scripted()}, "worker": {"harness": scripted(), "count": 2}}
     kernel, *_ = await opened(team_of(roles=roles))
@@ -461,7 +436,7 @@ async def test_a_second_opening_changes_nothing(opened):
     kernel, team, manifest, text = await opened(full_team())
     head = kernel.head
 
-    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team), None)
+    await open_session(kernel, team, manifest, text, described(team), None)
 
     assert kernel.head == head
 
@@ -471,7 +446,7 @@ async def test_a_step_that_ran_under_an_older_sdk_stands_as_it_ran(opened, monke
     grants = compile(team)
     monkeypatch.setattr(opening, "compile", lambda _: (*grants[1:], grants[0]))
 
-    await open_session(kernel, team, manifest, LocalAuthority(team), text, described(team), None)
+    await open_session(kernel, team, manifest, text, described(team), None)
 
     assert len(events_of(kernel, "grant.added")) == len(grants)
 
@@ -490,7 +465,6 @@ async def test_a_crash_part_way_through_is_finished_by_the_next_opening(tmp_path
     text = (folder / MANIFEST).read_text()
     manifest = Manifest.model_validate_json(text)
     team = Team.loads(manifest.team)
-    authority = LocalAuthority(team)
     real = opening._steps
 
     async def dying(kernel, op, *steps):
@@ -503,11 +477,11 @@ async def test_a_crash_part_way_through_is_finished_by_the_next_opening(tmp_path
     with monkeypatch.context() as patched:
         patched.setattr(opening, "_steps", dying)
         with pytest.raises(ConnectionError):
-            await open_session(kernel, team, manifest, authority, text, described(team), None)
+            await open_session(kernel, team, manifest, text, described(team), None)
     kernel.close()
 
     kernel = Kernel.open(folder, extensions=PRIMITIVES)
-    await open_session(kernel, team, manifest, authority, text, described(team), None)
+    await open_session(kernel, team, manifest, text, described(team), None)
     events = kernel.read(kernel.runtime, after=0, limit=4096).events
     types = [event.type for event in events]
     kernel.close()

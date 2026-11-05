@@ -57,7 +57,8 @@ class Agent(BaseModel, frozen=True):
     no process, which its next handover brings back, and `exits` counts the exits of its harness on its own since a turn
     of its last ended. `login` is the kind of login its harness ran on at its latest start, or None where nobody could
     tell. `instructions` is the body of what its harness was told last, or None for nothing. `workspace` is where it
-    works, once made, and `removed` or `kept` say what its stop did with it."""
+    works, once made, and `removed` or `kept` say what its stop did with it. `backend` is the backend's ids for it, as
+    its admit recorded them, empty when its authority named none."""
 
     name: str
     role: str
@@ -102,6 +103,7 @@ class Agent(BaseModel, frozen=True):
     workspace: Workspace | None
     removed: bool
     kept: Kept | None
+    backend: dict[str, str]
 
     @property
     def id(self) -> str:
@@ -120,7 +122,7 @@ class Agent(BaseModel, frozen=True):
 class Agents(View):
     """Everyone ever spawned, live or not."""
 
-    version = 13
+    version = 14
     schema = """
     CREATE TABLE v_agents(
         name TEXT PRIMARY KEY,
@@ -165,7 +167,8 @@ class Agents(View):
         instructions TEXT,
         workspace TEXT,
         removed INTEGER NOT NULL DEFAULT 0,
-        kept TEXT
+        kept TEXT,
+        backend TEXT NOT NULL DEFAULT '{}'
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_agents_parent ON v_agents(parent);
     CREATE INDEX v_agents_state ON v_agents(state);
@@ -306,10 +309,13 @@ class Agents(View):
 
     @fold("effect.finished")
     def made(self, event: Event) -> None:
-        """Where an agent works, and what its stop did with that. A workspace from before modes was the session's cwd,
-        and a stop from before kept nothing it made."""
+        """Who an agent is to its backend, where it works, and what its stop did with that. An admit from before named
+        no backend ids, a workspace from before modes was the session's cwd, and a stop from before kept nothing it
+        made."""
         result = event.data["result"]
-        if event.data["kind"] == "workspace" and result is not None:
+        if event.data["kind"] == "admit" and result:
+            self.db.execute("UPDATE v_agents SET backend = ? WHERE name = ?", (json.dumps(result), event.agent))
+        elif event.data["kind"] == "workspace" and result is not None:
             workspace = Workspace.model_validate({"mode": "shared", **result})
             self.db.execute(
                 "UPDATE v_agents SET workspace = ? WHERE name = ?", (workspace.model_dump_json(), event.agent)
@@ -396,6 +402,7 @@ class Agents(View):
             "levels": json.loads(row["levels"]),
             "workspace": row["workspace"] and Workspace.model_validate_json(row["workspace"]),
             "kept": row["kept"] and Kept.model_validate_json(row["kept"]),
+            "backend": json.loads(row["backend"]),
         }
         return Agent(**fields)
 

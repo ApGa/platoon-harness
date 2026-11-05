@@ -12,7 +12,7 @@ from urllib.parse import quote, quote_plus
 from platoon_harness.config import Secret
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
-from . import AgentSpec, Report
+from . import AgentSpec, Gateway, Report, keys_of
 
 _INHERITED = ("PATH", "HOME")
 _MASK = b"***"
@@ -31,7 +31,7 @@ def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str,
 
 def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The whole environment of one harness process: what it inherits, a `TMPDIR` of its own, and what `spec` names.
-    Later entries win: `spec.env` over the inherited, and `spec.access` over both."""
+    Later entries win: `spec.env` over the inherited, and the variables of `spec.access` over both."""
     own = tmpdir(spec.folder)
     own.mkdir(mode=0o700, parents=True, exist_ok=True)
     env = {**inherited(*names, environ=environ), "TMPDIR": str(own)}
@@ -39,7 +39,7 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
         env["PATH"] = os.pathsep.join(filter(None, (str(spec.tools.bin), env.get("PATH"))))
         env[URL_VARIABLE] = spec.tools.url
         env[TOKEN_VARIABLE] = spec.tools.token.reveal()
-    return {**env, **spec.env, **{name: secret.reveal() for name, secret in spec.access.items()}}
+    return {**env, **spec.env, **{name: secret.reveal() for name, secret in keys_of(spec).items()}}
 
 
 def tmpdir(folder: Path) -> Path:
@@ -56,8 +56,9 @@ def private(path: Path, text: str) -> str:
 
 
 def secrets_of(spec: AgentSpec) -> tuple[Secret, ...]:
-    """Every credential a spec holds."""
-    return (*spec.access.values(), *(() if spec.tools is None else (spec.tools.token,)))
+    """Every credential a spec holds: a gateway's bearer, or each value of its access, and its token."""
+    access = (spec.access.bearer,) if isinstance(spec.access, Gateway) else tuple(spec.access.values())
+    return (*access, *(() if spec.tools is None else (spec.tools.token,)))
 
 
 def _forms(value: str) -> set[bytes]:

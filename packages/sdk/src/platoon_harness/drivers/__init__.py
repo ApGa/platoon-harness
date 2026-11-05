@@ -2,7 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Annotated, Any, Literal, Protocol, runtime_checkable
+from urllib.parse import urlsplit
+
+from pydantic import PlainSerializer, field_validator
 
 from platoon_harness.config import Secret
 from platoon_harness.primitives import (
@@ -40,6 +43,7 @@ __all__ = [
     "RAW_LIMIT",
     "SHORT_LIMIT",
     "UNREADABLE",
+    "Access",
     "AgentSpec",
     "ApprovalRequested",
     "Boundary",
@@ -53,6 +57,7 @@ __all__ = [
     "DriverInfo",
     "Exited",
     "GapReport",
+    "Gateway",
     "InputDelivered",
     "Item",
     "Login",
@@ -68,6 +73,7 @@ __all__ = [
     "TurnStarted",
     "Usage",
     "Verdict",
+    "keys_of",
     "refuse_other_effort",
     "refuse_unset_model",
     "text_of",
@@ -96,6 +102,54 @@ class ToolBinding(Model):
     bin: Path
 
 
+def _url(text: str, *, path: bool) -> str:
+    """A URL a gateway names. A credential goes by the bearer alone, so it has no user, query or fragment, which can
+    carry one, and an origin has no path either."""
+    found = urlsplit(text)
+    if found.scheme not in ("http", "https") or not found.hostname:
+        raise ValueError("a gateway's URL is http or https, with a host")
+    if found.username is not None or found.query or found.fragment or (found.path and not path):
+        raise ValueError(
+            "a credential goes by the bearer alone: a gateway's URL has no user, query or fragment, and an origin no "
+            "path"
+        )
+    return text
+
+
+class Gateway(Model):
+    """Model access through a training system's gateway: its models at `origin`, a scheme and a host with nothing more,
+    under `bearer`, serving `model`. `tools` is the URL of the environment's own MCP server under the same bearer, when
+    there is one, and `compaction_headers` go with each call a harness makes to compact its context, so that the gateway
+    tells that call apart as it is made."""
+
+    origin: str
+    bearer: Secret
+    model: str
+    tools: str | None = None
+    compaction_headers: Mapping[str, str] = {}
+
+    @field_validator("origin")
+    @classmethod
+    def _an_origin(cls, origin: str) -> str:
+        return _url(origin, path=False)
+
+    @field_validator("tools")
+    @classmethod
+    def _a_server(cls, tools: str | None) -> str | None:
+        return None if tools is None else _url(tools, path=True)
+
+
+def _refused(access: Any) -> dict[str, Any]:
+    if access:
+        raise TypeError("model access refuses serialization, as the Secret it holds does")
+    return {}
+
+
+Access = Annotated[Mapping[str, Secret] | Gateway, PlainSerializer(_refused)]
+"""Model access: variable names to values, URLs included, or a gateway. Either holds a `Secret`, so it refuses
+serialization whole, as none would be left to the union's guesses."""
+
+
 class Offered(Model):
     """One entry handed over: its ref, who sent it, what a reader sees first, and whether it has a body, which
     `blob.get` reads by its ref."""
@@ -122,9 +176,9 @@ class AgentSpec(Model):
     """One agent to start, or to resume from the native id in `resume`. `goal` is the first delivery of a fresh start,
     under the id of the offer that launched it, so its harness says it landed as it says any input did, and None when
     there is none, as on a resume. `folder` is the agent's own directory, for its record, log and native home. `access`
-    maps variable names to model access, URLs included, and reaches only the harness's environment. `effort` goes to the
-    harness as it stands, and `sandbox` is one of the values the driver declared. `allow_native_children` lets the
-    harness start agents of its own."""
+    is model access: variable names to values, URLs included, that reach only the harness's environment, or a gateway,
+    which only a driver that declares `sealed` is given. `effort` goes to the harness as it stands, and `sandbox` is one
+    of the values the driver declared. `allow_native_children` lets the harness start agents of its own."""
 
     agent: str
     role: str
@@ -136,7 +190,7 @@ class AgentSpec(Model):
     sandbox: str | None = None
     allow_native_children: bool = False
     tools: ToolBinding | None = None
-    access: Mapping[str, Secret] = {}
+    access: Access = {}
     env: Mapping[str, str] = {}
     instructions: str | None = None
     resume: str | None = None
@@ -165,6 +219,14 @@ def refuse_unset_model(spec: AgentSpec) -> None:
     """On a harness's own login its default is the user's. Where access was given, it may go somewhere nobody chose."""
     if spec.model is None and spec.access:
         raise DriverError("set a model: with access given, this harness's default may go somewhere nobody chose")
+
+
+def keys_of(spec: AgentSpec) -> Mapping[str, Secret]:
+    """A spec's model access as variables by name, which is all a driver with no sealed launch reads, so it refuses a
+    gateway."""
+    if isinstance(spec.access, Gateway):
+        raise DriverError("this harness has no sealed launch, which a gateway needs")
+    return spec.access
 
 
 def refuse_other_effort(spec: AgentSpec, effort: str | None) -> None:

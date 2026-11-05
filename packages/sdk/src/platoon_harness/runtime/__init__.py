@@ -16,7 +16,7 @@ from platoon_harness.primitives import OWNER_STOP, PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
 
-from .authority import Admission, AgentOutcome, AgentRef, Authority, LocalAuthority, SpawnRequest
+from .authority import Admission, AgentOutcome, AgentRef, Authority, Gateway, LocalAuthority, SpawnRequest
 from .control import Control
 from .host import GRACE, Host
 from .opening import open_session, repository, told
@@ -33,6 +33,7 @@ __all__ = [
     "AgentOutcome",
     "AgentRef",
     "Authority",
+    "Gateway",
     "LocalAuthority",
     "Runtime",
     "SpawnRequest",
@@ -76,7 +77,7 @@ class Runtime:
             await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
             capabilities, repo = await self.host.capabilities(), await repository(self.kernel, cwd)
-            await open_session(self.kernel, team, manifest, authority, text, capabilities, repo)
+            await open_session(self.kernel, team, manifest, text, capabilities, repo)
             await self.tools.start()
             await self._issue_credentials()
             await first(recover_agents(self.kernel, self.host, self.folder), self._stop_asked.wait())

@@ -41,6 +41,7 @@ from . import (
     TurnEnded,
     TurnStarted,
     Usage,
+    keys_of,
     refuse_other_effort,
     refuse_unset_model,
     text_of,
@@ -147,9 +148,9 @@ def _extension_config(spec: AgentSpec) -> str:
             "exposure": "direct",
             "timeout": _TOOL_TIMEOUT_S,
         }
-    if _BASE_URL in spec.access:
+    if _BASE_URL in (access := keys_of(spec)):
         model = {"id": spec.model, "reasoning": spec.effort is not None, "input": ["text"], "cost": _NO_PRICE}
-        url = spec.access[_BASE_URL].reveal()
+        url = access[_BASE_URL].reveal()
         settings = {"baseUrl": url, "apiKey": f"${_KEY}", "api": "openai-completions", "models": [model]}
         config["provider"] = [_PROVIDER, settings]
     return json.dumps(config)
@@ -230,7 +231,7 @@ class PiDriver:
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         refuse_unset_model(spec)
-        if _BASE_URL in spec.access and _KEY not in spec.access:
+        if _BASE_URL in (access := keys_of(spec)) and _KEY not in access:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._native = spec.resume or str(uuid4())
         self._folder = spec.folder
@@ -248,7 +249,7 @@ class PiDriver:
         turn cannot be found. A provider of the agent's own is named, or `--model` would pick among the user's."""
         command = [_PI, "--mode", "rpc", "--session" if spec.resume else "--session-id", self._native]
         command += ["-e", str(_EXTENSION)]
-        if _BASE_URL in spec.access:
+        if _BASE_URL in keys_of(spec):
             command += ["--provider", _PROVIDER]
         if spec.model is not None:
             command += ["--model", spec.model]

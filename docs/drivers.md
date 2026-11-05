@@ -39,7 +39,9 @@ method promises:
   starts a resting agent's harness again this way, after ten minutes between turns ended its process. A harness that exits before
   it is ready then, as one asked to reopen a session it never wrote down does, has exited on its own a second time, and its agent
   is lost. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
-  given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. `spec.effort` goes to
+  given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. That access is
+  variables by name, which `keys_of(spec)` reads and `harness_env` puts in the harness's environment, or a `Gateway`, which only a
+  driver that declares `sealed` is given, with `spec.model` the model it serves. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
   its own for starting agents: turn that off by a setting for this launch alone, and say in your docs what that cannot reach, such as
@@ -139,6 +141,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `coverage` | For each of `prompt`, `tool_results`, `shell_reads`, `files`, `native_children`, `compaction`, `external`: `observed`, `partial` or `none` |
 | `measures` | Which of `tokens` and `usd` it reports |
 | `sandboxes` | The values a role's `sandbox` may take |
+| `sealed` | Whether it launches on a gateway's access with nothing of the user's: only a driver that says so is given a `Gateway` |
 
 A declaration earns nothing by itself. See [Conformance](#conformance).
 

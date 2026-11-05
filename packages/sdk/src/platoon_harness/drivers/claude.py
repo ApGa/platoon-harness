@@ -38,6 +38,7 @@ from . import (
     TurnEnded,
     TurnStarted,
     Usage,
+    keys_of,
     refuse_other_effort,
     refuse_unset_model,
     text_of,
@@ -183,7 +184,7 @@ class ClaudeDriver:
         refuse_unset_model(spec)
         if spec.goal is not None and spec.goal.text.startswith("/"):
             raise DriverError("a goal that starts with `/` would run as a slash command: reword it")
-        named = {*spec.env, *spec.access}
+        named = {*spec.env, *keys_of(spec)}
         if _GATEWAY_URL in named and not named.intersection(_GATEWAY_CREDENTIALS):
             raise DriverError(f"{_GATEWAY_URL} with no credential would send a saved login there: name one too")
         self._native = spec.resume or str(uuid4())

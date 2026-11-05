@@ -338,7 +338,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `launch` | Native session id; pid and start time written by the launcher **before exec** | Kill the recorded group if still ours; resume if the role allows; else agent `lost` with a gap |
 | `deliver` | Input id (`uuid`, `clientUserMessageId`) | `reconcile` if capable, else redeliver: at-least-once, with the id visible for dedupe. One that landed but began no turn is redelivered too, since a harness killed before its turn will not begin one now |
 | `answer` | Approval id | `reconcile`, else `uncertain` in attention. Success is read from the harness's item event, never inferred. It bypasses per-agent ordering, since a harness blocked on an approval cannot reach the boundary a queued delivery waits for |
-| `admit` | None: Platoon mint has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume |
+| `admit` | None: a training authority's admission has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume. Its result is the backend's ids for the agent (§14) |
 | `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
 | `probe` | None | Repeat: a look records only what the journal does not hold, so a repeat records nothing twice |
 | `rest` | None | Repeat: ending a harness that has gone ends nothing, and `reap` proves what is ours |
@@ -1043,7 +1043,7 @@ class Driver(Protocol):
 
 `AgentSpec` holds agent, role, goal, cwd, which is where the journal says its agent works, so no driver knows the mode, the agent's
 own folder, model, effort (a string handed to the harness as it stands), sandbox
-(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
+(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included, or a `Gateway`, which only a driver that declares `sealed` is given, with the gateway's model as the model), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
 again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal,
 which is a `Delivery`, the first, under the id of the offer that launched it, sent as the driver sends any input, so its harness says
 it landed as it says any did. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
@@ -1126,6 +1126,7 @@ Absence means unsupported, as in ACP.
 | `coverage` | `surface → observed | partial | none`, for `prompt`, `tool_results`, `shell_reads`, `files`, `native_children`, `compaction`, `external` |
 | `measures` | Budget units it reports, of `tokens` and `usd`. The runtime counts `turns`, `agents` and `wall` for every harness |
 | `sandboxes` | The values a role's `sandbox` may take |
+| `sealed` | It launches on a gateway's access with nothing of the user's. A gateway goes to no other driver: that launch fails, naming why |
 
 ### 9.3 Verified, not believed
 
@@ -1145,7 +1146,8 @@ Absence means unsupported, as in ACP.
   the harness, so an agent's levels come from proof made on its own machine, and an upgrade of the harness or the SDK the result did
   not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
   still answers no `NotSeen`. See [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
-- **Model pinning.** The effective model must equal the requested one, so an alias a harness resolves to another name fails. The host
+- **Model pinning.** The effective model must equal the requested one, which is the gateway's when access is a gateway, and a role
+  may name only that one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
   nothing. An unset model on the harness's own login means the harness's own default, and `ready` says which. A driver refuses an unset
   model only where access was given, since the default may then go somewhere nobody chose.
@@ -1155,7 +1157,9 @@ Absence means unsupported, as in ACP.
 `levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each `met`,
 `unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent runs:
 its driver and observed harness version, its login, whether its tools were seen, and whether its role lets its harness start
-agents of its own, as opaque ones cost `trainable` only then. No driver can claim a level: the host commits
+agents of its own, as opaque ones cost `trainable` only then. Its access says its login: `gateway` exactly when its access is a
+gateway, which is never a plan login, `key` when it was given variables, and otherwise what the harness says it is signed in on.
+`trainable` needs a gateway login and a driver that declares `sealed`. No driver can claim a level: the host commits
 all of this through `agent.start`, and a report has no field for it.
 
 ### 9.5 Mappings
@@ -1626,46 +1630,61 @@ Uncommitted work is never discarded, and no branch an agent has is ever moved. G
 
 ## 14. Training
 
-The SDK owns execution and evidence. Platoon owns training-data construction, optimization and eligibility. The kernel has no
-Platoon branch: standalone and managed differ only in the `Authority` object and the role's trainable profile.
+The SDK owns execution and evidence. A training system owns training-data construction, optimization and what trains. The kernel
+has no training branch: standalone and managed differ only in the `Authority` object. The first managed authority is Platoon's
+`platoon-teams` extension, which builds on this contract alone, and nothing here names Platoon.
 
 ```python
 class Authority(Protocol):
-    async def admit(self, spawn: SpawnRequest) -> Admission: ...       # a token and model access, so far
+    async def admit(self, spawn: SpawnRequest) -> Admission: ...
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None: ...
-    def budget_owner(self, resource: str) -> Literal["session", "authority"]: ...
+
+class SpawnRequest(AgentRef):                   # agent, role
+    parent: str | None                          # who spawned it, as agent.spawned records it; None if the session did
+    goal: str
+    resumed: bool
+
+class Admission(Model):
+    token: Secret                               # ours, on the tool plane; it stays in memory
+    access: Mapping[str, Secret] | Gateway
+    backend: Mapping[str, str]                  # the backend's ids for this agent, never a key
+
+class Gateway(Model):
+    origin: str                                 # a scheme and a host, and nothing more
+    bearer: Secret
+    model: str
+    tools: str | None                           # the environment's own MCP server, under the same bearer
+    compaction_headers: Mapping[str, str]
+
+class AgentOutcome(Model):
+    status: str | None
+    report: str | None                          # the words its end keeps, the gist and then the body
 ```
 
-`LocalAuthority` issues session-scoped identity and leaves the harness's own auth alone: model access is what a role's auth profile
-names, and with none the harness signs itself in. `admit` runs for a spawn, and again with `resumed` for a harness coming back, which
-needs its access again. A limit in a resource `budget_owner` says the authority owns is no limit of the session's. `PlatoonAuthority`
-lives in the `platoon-harness-platoon` extension, built on Platoon's stable function-harness and program seam. It will add what
-`Admission` does not hold yet: tool endpoints, workspace and attribution.
-
-- **Two admission routes.** Tree children use `ctx.agents.spawn` with a member harness, which gives forks, grading and depth. Peers
-  with no fork use `POST /v1/platoon/agents`. Mint is never retried.
-- **Root.** A single-entry tree uses `ctx.endpoint`, which preserves RAO's depth and row shape. Mesh and git-swarm use a zero-call
-  root, labelled as a mapping artifact. The root samples the default policy, so `team check --trainable` refuses a mismatch.
-- **Credentials.** A path-form URL is a credential. It is normalized to origin plus bearer before a driver sees it.
-- **Eligibility** is `eligibility(agent, episode)`, a pure function of the record with no stored flag. Anything outside an episode
-  fails by default, as do frozen agents, judges, humans, shared keys and unverified profiles. Platoon still decides.
-- **Reward data** stays in `annotations.sqlite`, which no agent-reachable read opens.
-- **Codex behind the gateway has no known coordination path.** Its MCP tools do not survive the gateway's Responses dialect, and its
-  default sandbox blocks the shell client. It stays out of trainable teams unless a role grants network access as a journaled trust
-  decision.
-- **Limits at Platoon 0.5.** `AgentGraph`, `RewardEvent` and attribution levels are draft-only there, so they are not integration
-  targets. A guide will hold the bridge, the RAO golden fixture, the no-extra-rollout baseline and the proposed amendments.
+- **Admission.** `admit` runs for a spawn, with the parent and the goal its `agent.spawned` records, and again with `resumed` for a
+  harness coming back within a runtime, which needs its access again and is no second admission. Its effect records `backend` as
+  its result, the one join between an agent of ours and the training system's: no key is recorded, an admission whose backend names
+  one of its own secrets is refused, and a gateway admission names backend ids, as nothing else ties its agent to what the gateway
+  records.
+- **Model access is one value.** Variables by name reach the harness's environment: under `LocalAuthority`, which issues
+  session-scoped identity and leaves the harness's own auth alone, a role's auth profile names them, and with none the harness signs
+  itself in. A `Gateway` goes only to a driver that declares `sealed` (§9.2), its model is the one pinned, and its login is
+  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does, and a harness's words are masked of the
+  bearer in every form, as of any access value.
+- **Finish** tells the authority how an agent ended, with its report. A stop that a crash cut is said again by the next runtime, so
+  `finish` takes a second telling as the first.
+- **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
+  that counts steps counts them at its gateway.
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|
-| Spawn | Topology, budget; managed: then Platoon, whose refusal wins | Driver via `Authority.admit` | Journal: requested, then settled | Membership changes only on success |
-| Identity | Runtime; managed: Platoon | Runtime; managed: mint or spawn | Journal holds hashes and Platoon ids, never a key | No competing id |
-| Model routing, model budget | Harness login; managed: Platoon | Harness; managed: gateway | Journal: call ids. Platoon: tokens | Finalizer joins on `agent_id`; Platoon authoritative |
-| Messages, boards, queues, waits | Topology | Kernel in both | Journal | Platoon `bus` is draft: an adapter if it ships |
-| Workspace, forks | Role; managed: Platoon | Provider; managed: `EnvSession.fork` | Journal, with mode | An unavailable mode fails loudly |
-| Env tools and env boards | Environment | Environment | Tool events, exposure where reported, else a gap | Never remodeled as channels |
-| Rewards, credit | Env, judge, Platoon | Env, judge, Platoon trainer | Annotations; `Trajectory` via finalizer | `None` becomes a marker only in the finalizer |
-| Eligibility | Platoon | Converter | Export reasons | `eligibility()` gates; Platoon decides |
+| Spawn | Topology, budget; managed: then the authority, whose refusal wins | Driver via `Authority.admit` | Journal: requested, then settled | Membership changes only on success |
+| Identity | Runtime; managed: the authority | Runtime; managed: the authority | Journal holds hashes and the backend's ids, never a key | No competing id |
+| Model routing, model budget | Harness login; managed: the gateway | Harness; managed: gateway | Journal: call ids. The gateway: tokens | Joined on the backend's ids |
+| Messages, boards, queues, waits | Topology | Kernel in both | Journal | |
+| Workspace | Role | Runtime | Journal, with mode | An unavailable mode fails loudly |
+| Env tools | Environment | Environment | Tool events, exposure where reported, else a gap | Never remodeled as channels |
+| Rewards, credit | Env, judge, training system | Producers | Annotations | Absence is unscored, never zero |
 
 ## 15. Security
 

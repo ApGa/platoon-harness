@@ -26,7 +26,16 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.kernel import ManualClock, Txn, is_held
 from platoon_harness.primitives import CUT_OFF, Agents
-from platoon_harness.runtime import Admission, LocalAuthority, Runtime, SpawnRequest, host, recovery
+from platoon_harness.runtime import (
+    Admission,
+    AgentOutcome,
+    AgentRef,
+    LocalAuthority,
+    Runtime,
+    SpawnRequest,
+    host,
+    recovery,
+)
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import ConfigError, Problem
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
@@ -127,8 +136,11 @@ async def test_an_admit_in_flight_is_never_retried_and_the_spawn_fails_with_a_ga
         await in_state(session, "bob", "ended")
         ending = await session.ending()
         failed = await of_type(session, "effect.failed")
+        kernel = session._runtime.kernel  # type: ignore[union-attr]
+        [record] = kernel.query(kernel.runtime, "agent.records", {}).result
 
     assert len(calls) == 1
+    assert record["backend"] == {}
     assert (ending.agents[0]["status"], ending.reason) == ("failed", "agent_failed")
     assert "never retried" in failed[0].data["error"]
     assert ending.gaps == ({"agent": "bob", "what": "crash_window", "plane": "control", "count": 1},)
@@ -590,6 +602,42 @@ async def test_a_stop_in_flight_is_repeated_with_nothing_left_to_stop(tmp_path):
         )
 
     assert finished
+
+
+async def test_finish_is_idempotent(tmp_path, monkeypatch):
+    """An authority hears each agent's end with its report. A stop that a crash cut off once it had told is said again
+    by the next runtime, which tells the same, so `finish` takes a second telling as the first."""
+    told: list[tuple[AgentRef, AgentOutcome]] = []
+    heard = asyncio.Event()
+
+    async def finish(self: LocalAuthority, agent: AgentRef, outcome: AgentOutcome) -> None:
+        told.append((agent, outcome))
+        heard.set()
+
+    monkeypatch.setattr(LocalAuthority, "finish", finish)
+    session = await Session.start(solo_with(lambda: ScriptedDriver([[Say("all done")]])), name="s", root=tmp_path)
+    await session.send("@bob", "go")
+    await until(lambda: of_type(session, "turn.ended"), session)
+    runtime = session._runtime
+    assert runtime is not None
+    real = runtime.host._acts["stop"]
+
+    async def cut_off(effect: Any) -> None:
+        await real(effect)
+        await asyncio.Event().wait()
+
+    runtime.host._acts["stop"] = cut_off
+    await session.cancel_agent("@bob")
+    await asyncio.wait_for(heard.wait(), SECONDS)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(
+            lambda: of_type(session, "effect.finished"), session, lambda found: found[-1].data["kind"] == "stop"
+        )
+
+    outcome = AgentOutcome(status="cancelled", report="bob cancelled: cancelled by human:you\n\nall done")
+    assert told == [(AgentRef(agent="bob", role="bob"), outcome)] * 2
 
 
 # A closing session.

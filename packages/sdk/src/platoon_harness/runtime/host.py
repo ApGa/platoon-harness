@@ -24,7 +24,9 @@ from platoon_harness.drivers import (
     DriverError,
     DriverInfo,
     Exited,
+    Gateway,
     Item,
+    Login,
     Offered,
     Ready,
     Reconciled,
@@ -36,10 +38,10 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.env import Held, Redactor, secrets_of
 from platoon_harness.drivers.levels import Profile, implementation, levels, speaks_for, tool_visibility
 from platoon_harness.drivers.process import reap
-from platoon_harness.kernel import Effect, Kernel, Outcome, Refused, first, hash_token, tool_name
+from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
 from platoon_harness.schema import ConfigError, Problem
-from platoon_harness.team import Team
+from platoon_harness.team import Role, Team
 from platoon_harness.tools import (
     NAMESPACE,
     PH,
@@ -72,6 +74,15 @@ log = logging.getLogger("platoon_harness.runtime")
 __all__ = ["GRACE", "DriverLink", "Host"]
 
 
+def _pinned(role: Role, access: Mapping[str, Secret] | Gateway) -> str | None:
+    """The model an agent must run: its gateway's, which its role may name only as it is, or else its role's."""
+    if not isinstance(access, Gateway):
+        return role.model
+    if role.model not in (None, access.model):
+        raise DriverError(f"its role pins {role.model}, and its gateway serves {access.model}")
+    return access.model
+
+
 def _ends_live_text(report: Report) -> bool:
     """Whether what a harness said live is now in the journal, as an item, or gone with its turn."""
     return isinstance(report, TurnEnded) or (isinstance(report, Item) and report.kind in ("message", "thought"))
@@ -79,14 +90,19 @@ def _ends_live_text(report: Report) -> bool:
 
 class DriverLink:
     """One harness as the host holds it. Links live on the `Host` and not in the daemon, so a restarted daemon loses
-    none. `leaving` means its end is our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or
-    `refused` says why it never will. `handing` is set to drop a handover under way."""
+    none. `pinned` is the model it must run and `login` what it runs on, as its access says. `leaving` means its end is
+    our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or `refused` says why it never will.
+    `handing` is set to drop a handover under way."""
 
-    def __init__(self, agent: str, role: str, driver: Driver, info: DriverInfo) -> None:
+    def __init__(
+        self, agent: str, role: str, driver: Driver, info: DriverInfo, *, pinned: str | None, login: Login | None
+    ) -> None:
         self.agent = agent
         self.role = role
         self.driver = driver
         self.info = info
+        self.pinned = pinned
+        self.login = login
         self.leaving = False
         self.ready = asyncio.Event()
         self.refused: str | None = None
@@ -128,6 +144,7 @@ class Host:
         self._links: dict[str, DriverLink] = {}
         self._acting: dict[int, asyncio.Task[None]] = {}
         self._admitted: dict[str, Admission] = {}
+        self._gateway: set[str] = set()
         self._described: dict[str, DriverInfo] = {}
         self._closing = False
         self._looking = asyncio.Lock()
@@ -227,9 +244,16 @@ class Host:
 
     # Effects.
 
-    async def _admit(self, effect: Effect) -> None:
+    async def _admit(self, effect: Effect) -> dict[str, str]:
+        """Admit a spawned agent, and give the backend's ids for it, which its admit records as its result."""
         agent = effect.data["agent"]
-        self._admitted[agent] = await self.admit(SpawnRequest(agent=agent, role=effect.data["role"]))
+        self._admitted[agent] = admission = await self.admit(self._request(agent, effect.data["role"]))
+        return dict(admission.backend)
+
+    def _request(self, agent: str, role: str, *, resumed: bool = False) -> SpawnRequest:
+        """An agent to admit, with its parent and its goal as its `agent.spawned` records them."""
+        spawned = self._kernel.read(self._kernel.runtime, streams=[f"agent/{agent}"], limit=1).events[0].data
+        return SpawnRequest(agent=agent, role=role, parent=spawned["parent"], goal=spawned["goal"], resumed=resumed)
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
         """Admit an agent and give it its credential: the raw token stays in memory, and only its hash is journaled."""
@@ -238,6 +262,8 @@ class Host:
         issued = await self.insist("principal.issue", {"id": f"agent:{spawn.agent}", "token_hash": token_hash})
         if issued.refusal is not None:
             raise DriverError(f"{spawn.agent} has no credential: {issued.refusal.detail}")
+        if isinstance(admission.access, Gateway):
+            self._gateway.add(spawn.agent)
         return admission
 
     def _repo(self) -> Repo | None:
@@ -292,11 +318,11 @@ class Host:
     async def _launch(self, effect: Effect) -> None:
         data = effect.data
         agent, role = data["agent"], data["role"]
-        if not self._plan_login and await self._on_plan(role) and (others := await self._live_on_plans(agent)):
-            raise DriverError(f"{agent} would join {', '.join(others)} headless on one plan login: {PLAN_LOGIN_FIX}")
         admission = self._admitted.pop(agent, None)
         if admission is None:  # It finished in a runtime that has gone, and what it gave went too.
-            admission = await self.admit(SpawnRequest(agent=agent, role=role, resumed=True))
+            admission = await self.admit(self._request(agent, role, resumed=True))
+        if not self._plan_login and await self._on_plan(agent, role) and (others := await self._live_on_plans(agent)):
+            raise DriverError(f"{agent} would join {', '.join(others)} headless on one plan login: {PLAN_LOGIN_FIX}")
         await self.connect(agent, role, admission, goal=data if data["goal"] or data["body"] else None)
 
     async def connect(
@@ -309,12 +335,18 @@ class Host:
         resume: str | None = None,
     ) -> None:
         """Bring a harness up on its own binding, with `goal`, a spawn's goal and body, as its first delivery, under
-        the id of the offer that launched it. A harness that never says it is ready is a failure, not a hang."""
+        the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch. A harness
+        that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
+        access = admission.access
+        if isinstance(access, Gateway) and not info.capabilities.sealed:
+            raise DriverError(f"`{info.name}` has no sealed launch, which a gateway admission needs")
+        pinned = _pinned(self._team.roles[role], access)
+        login = "gateway" if isinstance(access, Gateway) else "key" if access else info.login
         workspace = self._workspace_of(agent)
         await asyncio.to_thread(present, workspace)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
-        link = DriverLink(agent, role, driver, info)
+        link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
         self._links[agent] = link
         spec = self._spec(link, admission, resume, Path(workspace.path))
         link.redact = Redactor(secrets_of(spec))
@@ -347,7 +379,7 @@ class Host:
         name, role, native = agent["name"], agent["role"], agent["native"]
         if native is None or not (await self.describe(role)).capabilities.resume:
             raise DriverError("its harness cannot resume")
-        admission = await self.admit(SpawnRequest(agent=name, role=role, resumed=True))
+        admission = await self.admit(self._request(name, role, resumed=True))
         await self.connect(name, role, admission, resume=native if agent["began"] else None)
 
     async def _instructed(self, agent: str, text: str | None, *, goal: bool, resumed: bool) -> int | None:
@@ -396,10 +428,10 @@ class Host:
             what = f"{', '.join(crowded)} would run headless on one plan login: {PLAN_LOGIN_FIX}"
             raise ConfigError([Problem("plan_login", what)])
 
-    async def _on_plan(self, role: str) -> bool:
-        """Whether a role's agents run on a plan login: its harness says so now, and the role names no auth profile. A
-        driver that cannot say runs nothing."""
-        if self._team.roles[role].auth is not None:
+    async def _on_plan(self, agent: str, role: str) -> bool:
+        """Whether an agent runs on a plan login: its harness says so now, its role names no auth profile, and its
+        authority admitted it through no gateway. A driver that cannot say runs nothing."""
+        if self._team.roles[role].auth is not None or agent in self._gateway:
             return False
         try:
             return (await self.describe(role)).login == "plan"
@@ -415,7 +447,9 @@ class Host:
         return [
             record["name"]
             for record in records.result
-            if record["state"] != "ended" and record["name"] != besides and await self._on_plan(record["role"])
+            if record["state"] != "ended"
+            and record["name"] != besides
+            and await self._on_plan(record["name"], record["role"])
         ]
 
     def _spec(self, link: DriverLink, admission: Admission, resume: str | None, cwd: Path) -> AgentSpec:
@@ -440,7 +474,7 @@ class Host:
             role=link.role,
             cwd=cwd,
             folder=folder,
-            model=role.model,
+            model=link.pinned,
             effort=role.effort,
             sandbox=role.sandbox,
             allow_native_children=role.allow_native_children,
@@ -629,9 +663,21 @@ class Host:
                 else:
                     ended = await asyncio.to_thread(end_snapshot, workspace, folder, top, left, retried=retried)
         finally:
-            outcome = AgentOutcome(status=record["status"])
+            outcome = AgentOutcome(status=record["status"], report=self._report_of(effect.data.get("cause")))
             await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
         return ended
+
+    def _report_of(self, ended: int | None) -> str | None:
+        """The words an agent's end keeps, the gist and then the body, by the seq of its `agent.ended`, or None when it
+        said nothing. A stop from before it named its cause has none to read."""
+        if ended is None:
+            return None
+        event: Event = self._kernel.read(self._kernel.runtime, after=ended - 1, limit=1).events[0]
+        report, body = event.data["report"], event.data["body"]
+        if body is not None:
+            said = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT).decode(errors="replace")
+            report = "\n\n".join(filter(None, (report, said)))
+        return report or None
 
     async def bundle(self) -> dict[str, Any] | None:
         """Keep the commits the journal recorded in a bundle in the session folder, or None when it recorded none, as
@@ -754,16 +800,16 @@ class Host:
         recorded only where it speaks for this harness, here. A model that is not the one pinned is refused here: the
         effective model must equal the requested one, and an unknown one stays unknown. A harness for an agent that has
         started before comes back to it, whether it reopened a session or began anew."""
-        pinned = self._team.roles[link.role].model
+        pinned = link.pinned
         if pinned is not None and ready.effective_model not in (None, pinned):
-            link.refuse(f"it runs {ready.effective_model}, and its role pins {pinned}")
+            link.refuse(f"it runs {ready.effective_model}, and {pinned} is pinned")
             return
         info, role = link.info, self._team.roles[link.role]
         profile = Profile(
             driver=info.name,
             implementation=implementation(link.driver),
             version=ready.version,
-            login="key" if role.auth else info.login,
+            login=link.login,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
             allow_native_children=role.allow_native_children,
         )

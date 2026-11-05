@@ -28,6 +28,7 @@ from . import (
     Reconciled,
     Reporter,
     ToolBinding,
+    keys_of,
 )
 from .env import harness_env, inherited
 from .process import LOG, WIRE, Process, exit_reason
@@ -47,7 +48,7 @@ def _to_frame(spec: AgentSpec) -> dict[str, Any]:
     stay apart, and `reap` finds both."""
     tools = None if spec.tools is None else spec.tools.model_dump(mode="json", exclude={"token"})
     fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder"})
-    return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": sorted(spec.access)}
+    return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": sorted(keys_of(spec))}
 
 
 def _from_frame(frame: Mapping[str, Any], environ: Mapping[str, str]) -> AgentSpec:

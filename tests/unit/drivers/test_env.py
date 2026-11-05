@@ -7,7 +7,7 @@ import os
 import pytest
 
 from platoon_harness.config import Secret
-from platoon_harness.drivers import ToolBinding
+from platoon_harness.drivers import Gateway, ToolBinding
 from platoon_harness.drivers.env import Held, Redactor, harness_env, secrets_of
 from platoon_harness.drivers.process import LOG, RECORD, Process
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
@@ -105,6 +105,18 @@ def test_secrets_of_finds_every_credential(tmp_path):
     tools = ToolBinding(url="http://x", token=token, namespace="ph", bin=tmp_path)
 
     assert set(secrets_of(make_spec(tmp_path, tools=tools, access={"K": key}))) == {token, key}
+
+
+def test_a_gateway_s_bearer_is_a_credential_its_spec_holds(tmp_path):
+    bearer, token = Secret("b"), Secret("t")
+    tools = ToolBinding(url="http://x", token=token, namespace="ph", bin=tmp_path)
+    gateway = Gateway(origin="http://127.0.0.1:9", bearer=bearer, model="m")
+    spec = make_spec(tmp_path, tools=tools, access=gateway)
+
+    assert set(secrets_of(spec)) == {bearer, token}
+    for dump in (spec.model_dump, spec.model_dump_json):
+        with pytest.raises((TypeError, ValueError), match="refuses"):
+            dump()
 
 
 def test_redaction_masks_each_form_longest_first():

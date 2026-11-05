@@ -4,6 +4,13 @@
 
 ### Added
 
+- The contract a training system's authority builds on, which names nothing after any training system. Model access is one
+  value: variables by name, or a `Gateway(origin, bearer, model, tools, compaction_headers)`, whose origin is a scheme and a
+  host and nothing more and whose bearer is masked in every form, given only to a driver that declares the new capability
+  `sealed`, with its model the one pinned and its login `gateway`, which is no plan login. `keys_of(spec)` reads variables by name
+  and refuses a gateway. `Admission.backend` is the backend's ids for its agent, never a key, which the admit effect records as its
+  result and the agent's record keeps, at view version 14, and which a gateway admission must name. `SpawnRequest` carries the
+  `parent` and the `goal` its `agent.spawned` records, and `AgentOutcome` the `report` its end keeps. See ADR 0049.
 - `examples/mixed-team`, a Claude Code lead and a Codex worker in one session, coordinating through the queue `tasks`, the
   board `notes` and messages, with a README that runs it headless, watches and steers it from the terminal UI and the page,
   reads its provenance, swaps a role's harness for pi or OpenHands with `--set`, and runs it with no keys on scripted
@@ -320,6 +327,9 @@
 
 ### Changed
 
+- A launch whose harness runs a model other than the one pinned fails saying `it runs <model>, and <pinned> is pinned`, as the
+  pinned model is a gateway's where access is one, and an agent's login is `key` when it was given variables, whatever its role
+  names. See ADR 0049.
 - `team check` refuses a `program`, naming it and what to use instead, while none runs, so `run` and `Session.start` refuse such a
   team before any cost, with exit 78 on the command line, the `map-reduce` and `git-swarm` presets among them. Before, it warned, and
   a session under `until = "program"` never ended short of its budget. See ADR 0048.
@@ -469,6 +479,8 @@
 
 ### Removed
 
+- `Authority.budget_owner`, which no authority used: every limit a team states is the session's own. `open_session` takes no
+  authority. See ADR 0049.
 - A topic's `digest` and its type, `platoon_harness.topology.Digest`, which nothing enforced: a lagging reader's digest is the
   fixed 32 entries it always was. A team that sets it is refused, as any unknown key is. See ADR 0048.
 - A topic's `entry`, `requires` and `validator`, which nothing enforced. A team that sets one is refused. See ADR 0048.
