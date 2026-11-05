@@ -32,7 +32,7 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers.levels import Conformance, Profile, levels
+from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
 from platoon_harness.primitives import Seen
@@ -128,7 +128,8 @@ async def test_the_pi_driver_conforms(tmp_path, monkeypatch):
         "one_shot_exits",
         "declared_but_unproven",
     }
-    earned = levels(PiDriver().describe().capabilities, Profile(driver="pi", version=result.version), result)
+    profile = Profile(driver="pi", implementation=implementation(PiDriver()), version=result.version)
+    earned = levels(PiDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
 

@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import signal
+import socket
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,9 +40,10 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers.levels import Check, Conformance
+from platoon_harness.drivers.levels import Check, Conformance, implementation
 from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
+from platoon_harness.version import __version__
 
 from .model import INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
 from .scripted import API_KEY, BASE_URL, SHELL
@@ -706,8 +708,8 @@ async def check_driver(
     child: ToolCall | None = None,
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
-    """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver and the
-    harness version it reported. `levels` reads the result.
+    """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver, the
+    harness version it reported, the class that implements it, this SDK and this host. `levels` reads the result.
 
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
     write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
@@ -716,11 +718,13 @@ async def check_driver(
     `child` is a tool call that starts a native child, and with none that check is skipped. `timeout` bounds each check,
     so one wedged harness costs only its own checks.
     """
-    name = factory().describe().name
+    made = factory()
+    name = made.describe().name
     options = _Options(garble, gated, shell, tool, child, timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)
         checks.append(check)
         version = version or seen
-    return Conformance(driver=name, version=version, checks=tuple(checks))
+    pinned = {"implementation": implementation(made), "sdk": __version__, "host": socket.gethostname()}
+    return Conformance(driver=name, version=version, checks=tuple(checks), **pinned)

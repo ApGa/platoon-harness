@@ -774,22 +774,20 @@ async def test_doctor_and_a_start_without_the_openhands_extra_name_one_interpret
     assert (run.code, reason) == (1, f"its spawn failed: {told.removeprefix('openhands').lstrip()}")
 
 
-async def test_doctor_check_keeps_what_each_harness_s_checks_found_where_the_runtime_reads_it(cli: Cli):
-    """A stand-in that exits at once fails nearly every check, and its result is kept all the same: what makes a level
-    is what was found, and the runtime reads it at every launch and resume."""
+async def test_doctor_check_runs_each_harness_s_checks_and_keeps_none_that_names_no_version(cli: Cli):
+    """A stand-in that exits at once fails nearly every check and says no version, so what its checks found could speak
+    for no binary: nothing is kept, and doctor says why and goes on."""
     fake_harnesses(cli, "claude")
     without_openhands(cli)
 
     checked = await cli.run("doctor", "--check", "--json")
     again = await cli.run("doctor")
 
-    kept = read_conformance(Path(cli.env["PLATOON_HARNESS_HOME"]), "claude")
     found = {harness["name"]: harness for harness in json.loads(checked.stdout)["harnesses"]}
     assert checked.code == 0 and "checking claude against a model of ours" in checked.stderr
-    assert kept is not None and kept.driver == "claude" and kept.failed
-    assert found["claude"]["checked"]["failed"] == [check.name for check in kept.failed]
-    line = next(line for line in again.stdout.splitlines() if line.startswith("claude "))
-    assert line.startswith("claude     9.9.9 (fake), login unknown, checked on a version it never said: ")
+    assert read_conformance(Path(cli.env["PLATOON_HARNESS_HOME"]), "claude") is None
+    assert found["claude"]["unchecked"] == "it said no version, so what its checks found would speak for no binary"
+    assert "claude     9.9.9 (fake), login unknown, not checked: --check checks it" in again.stdout
 
 
 async def test_doctor_with_no_harness_on_path_and_no_openhands_extra_exits_78(cli: Cli):

@@ -1,11 +1,29 @@
 """Levels: computed from what was verified, each with reasons, and claimed by nobody."""
 
+import socket
+
 import pytest
 
+from platoon_harness import __version__
 from platoon_harness.drivers import Capabilities
-from platoon_harness.drivers.levels import CHECK, Check, Conformance, Profile, levels, tool_visibility
+from platoon_harness.drivers.levels import (
+    CHECKED,
+    Check,
+    Conformance,
+    Profile,
+    implementation,
+    levels,
+    speaks_for,
+    tool_visibility,
+    unmet_by,
+)
+from platoon_harness.drivers.pi import PiDriver
+from platoon_harness.testing import harnesses
 
-PROFILE = Profile(driver="pi", version="1.4.0", login="gateway", tools="visible")
+PI = "platoon_harness.drivers.pi:PiDriver"
+PROFILE = Profile(driver="pi", implementation=PI, version="1.4.0", login="gateway", tools="visible")
+HOST = socket.gethostname()
+DOCTOR = "`platoon-harness doctor --check` checks it here and keeps what it found"
 CAPABILITIES = Capabilities(
     tool_paths={"mcp-http", "shell"},
     call_ids="call",
@@ -27,10 +45,13 @@ NEEDED = (
 )
 
 
-def conformance(*checks: Check, driver="pi", version="1.4.0") -> Conformance:
+def conformance(
+    *checks: Check, driver="pi", implementation=PI, version="1.4.0", sdk=__version__, host=HOST
+) -> Conformance:
     named = {check.name for check in checks}
     passed = tuple(Check(name=name, state="passed") for name in NEEDED if name not in named)
-    return Conformance(driver=driver, version=version, checks=(*passed, *checks))
+    pinned = {"implementation": implementation, "sdk": sdk, "host": host}
+    return Conformance(driver=driver, version=version, checks=(*passed, *checks), **pinned)
 
 
 def test_a_harness_that_proved_everything_earns_all_three():
@@ -43,15 +64,61 @@ def test_no_result_is_unverified_rather_than_unmet():
     earned = levels(CAPABILITIES, PROFILE, None)
 
     assert earned.operational.state == "unverified"
-    assert earned.operational.reasons == (f"no conformance result for pi is kept: {CHECK}",)
+    assert earned.operational.reasons == (f"no conformance result for pi is kept: {DOCTOR}",)
 
 
-@pytest.mark.parametrize(("driver", "version"), [("pi", "1.5.0"), ("codex", "1.4.0"), ("pi", None)])
-def test_a_result_pinned_elsewhere_says_nothing_of_this_agent(driver, version):
-    earned = levels(CAPABILITIES, PROFILE, conformance(driver=driver, version=version))
+@pytest.mark.parametrize(
+    ("pinned", "said"),
+    [
+        ({"version": "1.5.0"}, "conformance ran on pi 1.5.0, and this is pi 1.4.0"),
+        ({"driver": "codex"}, "conformance ran on codex 1.4.0, and this is pi 1.4.0"),
+        ({"implementation": "my_driver:Pi"}, f"conformance ran on my_driver:Pi, and this is {PI}"),
+        ({"sdk": "0.0.1"}, f"conformance ran on SDK 0.0.1, and this is SDK {__version__}"),
+        ({"host": "elsewhere"}, f"conformance ran on elsewhere, and this is {HOST}"),
+    ],
+)
+def test_a_result_pinned_elsewhere_says_nothing_of_this_agent(pinned, said):
+    """A check proves a driver's code and a binary together, where they ran, so a result made by another driver, or by
+    another class going by its name, of another version, under another SDK or on another host is no proof here."""
+    earned = levels(CAPABILITIES, PROFILE, conformance(**pinned))
 
     assert earned.operational.state == "unverified"
-    assert "conformance ran on" in earned.operational.reasons[0]
+    assert earned.operational.reasons == (f"{said}: {DOCTOR}",)
+    assert not speaks_for(PROFILE, conformance(**pinned)) and speaks_for(PROFILE, conformance())
+
+
+def test_a_result_of_an_unknown_version_vouches_for_nothing():
+    """Unknown is no version: a result that names none, or a harness that says none, pins nothing, not even to each
+    other."""
+    unknown = PROFILE.model_copy(update={"version": None})
+
+    nameless = levels(CAPABILITIES, PROFILE, conformance(version=None)).operational
+    unsaid = levels(CAPABILITIES, unknown, conformance()).operational
+    neither = levels(CAPABILITIES, unknown, conformance(version=None)).operational
+
+    assert nameless.reasons == (f"the result kept for pi names no version, so it speaks for none: {DOCTOR}",)
+    assert unsaid.reasons == neither.reasons == ("pi said no version, so no result can speak for it",)
+    assert {nameless.state, unsaid.state, neither.state} == {"unverified"}
+    assert not speaks_for(unknown, conformance(version=None))
+
+
+def test_the_fix_a_reason_names_is_doctor_only_for_a_harness_whose_check_ships():
+    """`doctor --check` checks the harnesses the SDK ships a check of, so any other driver is sent to `check_driver`."""
+    scripted = PROFILE.model_copy(update={"driver": "scripted"})
+
+    assert levels(CAPABILITIES, scripted, None).operational.reasons == (
+        "no conformance result for scripted is kept: `check_driver` checks it, and `write_conformance` keeps what it "
+        "found here",
+    )
+
+
+def test_a_failed_check_names_each_level_it_leaves_unmet():
+    def failing(*names: str) -> Conformance:
+        return conformance(*(Check(name=name, state="failed", reason="no") for name in names))
+
+    assert unmet_by(failing("runs_in_its_workspace")) == ("operational",)
+    assert unmet_by(failing("call_ids_reported")) == ("observable", "trainable")
+    assert unmet_by(failing("dialects_spoken")) == () == unmet_by(conformance())
 
 
 def test_a_declared_capability_counts_for_nothing_on_its_own():
@@ -100,7 +167,7 @@ def test_a_failed_declared_capability_is_unmet():
 
 
 def test_a_check_that_never_ran_is_named():
-    empty = Conformance(driver="pi", version="1.4.0", checks=())
+    empty = conformance().model_copy(update={"checks": ()})
 
     reasons = levels(CAPABILITIES, PROFILE, empty).operational.reasons
 
@@ -182,3 +249,11 @@ def test_a_tool_is_seen_by_its_name_and_not_by_a_name_that_holds_it():
 def test_with_no_tools_to_look_for_nothing_was_seen():
     assert tool_visibility((), ()) == "unverified"
     assert tool_visibility(("bash",), ()) == "unverified"
+
+
+def test_a_check_ships_for_exactly_the_harnesses_checked_names_by_the_class_that_drives_each():
+    assert {name: implementation(factory()) for name, (factory, _) in harnesses._HARNESSES.items()} == CHECKED
+
+
+def test_a_driver_s_implementation_is_its_class_by_module_and_name():
+    assert implementation(PiDriver()) == PI

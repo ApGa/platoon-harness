@@ -670,8 +670,9 @@ sockets live, and what is installed. It exits 0 when it can run sessions, and 78
 comes from the harness's own status command: no account name is kept, and no credential file is read.
 
 A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
-finds, on the binary that runs, against a model of ours on loopback and on no account. The runtime reads it at
-every launch and resume, and a result that ran on another version says nothing of the one that runs.
+finds that the SDK ships a check of, on the binary that runs, against a model of ours on loopback and on no account.
+The runtime reads it at every launch and resume, and a result made of another version, under another SDK or on
+another host says nothing of the one that runs. A check that cannot run keeps nothing, says why, and goes on.
 
 For example:
 
@@ -682,7 +683,7 @@ For example:
 **Parameters**:
 
 * `--json`: Say it as one JSON object.
-* `--check`: Check each harness found, and keep what its checks found.
+* `--check`: Check each harness found that a check ships for, and keep what its checks found.
 
 ### platoon-harness extension
 

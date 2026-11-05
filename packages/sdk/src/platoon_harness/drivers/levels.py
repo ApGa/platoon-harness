@@ -1,25 +1,68 @@
 """The three levels of an agent, computed from what was verified. No driver can claim one."""
 
-from collections.abc import Iterable, Iterator, Sequence
+import socket
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Literal
+
+from pydantic import Field
 
 from platoon_harness.primitives import Capabilities
 from platoon_harness.schema import Model
+from platoon_harness.version import __version__
 
 from . import Login
 
 SURFACES = ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
 
-CHECK = "`platoon-harness doctor --check` checks each harness it finds on this machine and keeps what it found"
-"""What makes a conformance result that speaks for the harness that runs."""
+CHECKED: Mapping[str, str] = {
+    "claude": "platoon_harness.drivers.claude:ClaudeDriver",
+    "codex": "platoon_harness.drivers.codex:CodexDriver",
+    "openhands": "platoon_harness.drivers.openhands:OpenHandsDriver",
+    "pi": "platoon_harness.drivers.pi:PiDriver",
+}
+"""Each harness a check of ships with the SDK, which `platoon-harness doctor --check` checks where it finds it, by the
+class that drives it."""
 
 Visibility = Literal["visible", "hidden", "unverified"]
 Standing = Literal["met", "unmet", "unverified"]
 
 _Finding = tuple[Standing, str]
 
+_STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "operational": (
+        (
+            "describe_starts_nothing",
+            "turn_end_reported",
+            "exit_reported",
+            "stop_leaves_no_process",
+            "stop_ends_a_running_tool",
+            "runs_in_its_workspace",
+        ),
+        (
+            "delivered_text_in_next_prompt",
+            "no_goal_takes_no_turn",
+            "interrupt",
+            "resume",
+            "approval_answered",
+            "denial_holds",
+            "effort_honored_or_refused",
+            "reconcile_claims_nothing_unseen",
+            "steers_at_declared_boundary",
+            "preamble_once_per_request",
+            "native_children_off_by_default",
+        ),
+    ),
+    "observable": (
+        ("turn_end_reported", "malformed_frame_is_a_gap"),
+        ("measures_reported", "call_ids_reported", "tool_item_carries_its_anchor"),
+    ),
+    "trainable": (("ready_with_pinned_model", "tool_in_first_request", "call_ids_reported"), ()),
+}
+"""The checks each level stands on: those it needs passed, and those covering what a harness may leave out, which must
+not fail."""
+
 __all__ = [
-    "CHECK",
+    "CHECKED",
     "SURFACES",
     "Check",
     "Checks",
@@ -29,8 +72,11 @@ __all__ = [
     "Profile",
     "Standing",
     "Visibility",
+    "implementation",
     "levels",
+    "speaks_for",
     "tool_visibility",
+    "unmet_by",
 ]
 
 
@@ -60,18 +106,26 @@ class Checks(Model):
 
 
 class Conformance(Checks):
-    """What `check_driver` found, pinned to one driver at one harness version."""
+    """What `check_driver` found, pinned to one driver, by the name it gave and the class that implements it, at the
+    harness version it said, under one SDK, on one host, since the checks prove the driver's code and the binary
+    together, where they ran."""
 
     driver: str
+    implementation: str
     version: str | None
+    sdk: str
+    host: str
 
 
 class Profile(Model):
-    """One agent as it runs: which driver at which harness version, on which login, whether its tools were seen, and
-    whether its role lets its harness start agents of its own."""
+    """One agent as it runs: which driver, by name and class, at which harness version, under which SDK on which host,
+    on which login, whether its tools were seen, and whether its role lets its harness start agents of its own."""
 
     driver: str
+    implementation: str
     version: str | None = None
+    sdk: str = __version__
+    host: str = Field(default_factory=socket.gethostname)
     login: Login | None = None
     tools: Visibility = "unverified"
     allow_native_children: bool = False
@@ -108,14 +162,45 @@ def _level(findings: Iterable[_Finding]) -> Level:
     return Level(state="met", reasons=tuple(reason for _, reason in found))
 
 
+def _making(profile: Profile) -> str:
+    """What makes a result that speaks for an agent's driver here."""
+    if CHECKED.get(profile.driver) == profile.implementation:
+        return "`platoon-harness doctor --check` checks it here and keeps what it found"
+    return "`check_driver` checks it, and `write_conformance` keeps what it found here"
+
+
 def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
-    """Why a result says nothing of this agent, if it does not, and what makes one that does."""
+    """Why a result says nothing of this agent, if it does not, and what makes one that does. A version nobody said
+    pins nothing, as no result can be known to have run on it."""
+    making = _making(profile)
     if conformance is None:
-        return f"no conformance result for {profile.driver} is kept: {CHECK}"
-    pin = (conformance.driver, conformance.version)
-    if pin != (profile.driver, profile.version):
-        return f"conformance ran on {pin[0]} {pin[1]}, and this is {profile.driver} {profile.version}: {CHECK}"
+        return f"no conformance result for {profile.driver} is kept: {making}"
+    if profile.version is None:
+        return f"{profile.driver} said no version, so no result can speak for it"
+    if conformance.version is None:
+        return f"the result kept for {conformance.driver} names no version, so it speaks for none: {making}"
+    for ran, runs in (
+        (f"{conformance.driver} {conformance.version}", f"{profile.driver} {profile.version}"),
+        (conformance.implementation, profile.implementation),
+        (f"SDK {conformance.sdk}", f"SDK {profile.sdk}"),
+        (conformance.host, profile.host),
+    ):
+        if ran != runs:
+            return f"conformance ran on {ran}, and this is {runs}: {making}"
     return None
+
+
+def implementation(driver: object) -> str:
+    """The class that implements a driver, by module and name, which a result is pinned to, as a name is the driver's
+    own to give."""
+    made = type(driver)
+    return f"{made.__module__}:{made.__qualname__}"
+
+
+def speaks_for(profile: Profile, conformance: Conformance | None) -> bool:
+    """Whether a result was made of the agent's driver, by name and class, at its harness version, under its SDK, on
+    its host, as only such a result counts toward a level."""
+    return _pin(profile, conformance) is None
 
 
 def _verified(
@@ -136,31 +221,7 @@ def _verified(
 
 
 def _operational(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(
-        profile,
-        conformance,
-        (
-            "describe_starts_nothing",
-            "turn_end_reported",
-            "exit_reported",
-            "stop_leaves_no_process",
-            "stop_ends_a_running_tool",
-            "runs_in_its_workspace",
-        ),
-        (
-            "delivered_text_in_next_prompt",
-            "no_goal_takes_no_turn",
-            "interrupt",
-            "resume",
-            "approval_answered",
-            "denial_holds",
-            "effort_honored_or_refused",
-            "reconcile_claims_nothing_unseen",
-            "steers_at_declared_boundary",
-            "preamble_once_per_request",
-            "native_children_off_by_default",
-        ),
-    )
+    yield from _verified(profile, conformance, *_STANDS_ON["operational"])
     if not capabilities.tool_paths:
         yield "unmet", "it has no path to our tools"
     elif profile.tools == "hidden" and "shell" not in capabilities.tool_paths:
@@ -170,12 +231,7 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
 
 
 def _observable(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(
-        profile,
-        conformance,
-        ("turn_end_reported", "malformed_frame_is_a_gap"),
-        ("measures_reported", "call_ids_reported", "tool_item_carries_its_anchor"),
-    )
+    yield from _verified(profile, conformance, *_STANDS_ON["observable"])
     blind = [surface for surface in SURFACES if capabilities.coverage.get(surface, "none") == "none"]
     if len(blind) == len(SURFACES):
         yield "unmet", "it observes no surface"
@@ -194,16 +250,20 @@ def _trainable(capabilities: Capabilities, profile: Profile, conformance: Confor
         yield "unmet", "our tools never reach the policy"
     elif profile.tools == "unverified":
         yield "unverified", "tools unverified"
-    yield from _verified(
-        profile, conformance, ("ready_with_pinned_model", "tool_in_first_request", "call_ids_reported")
-    )
+    yield from _verified(profile, conformance, *_STANDS_ON["trainable"])
 
 
 def levels(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Levels:
     """What this agent has earned. Pure: all it knows arrives as arguments, and a capability counts only as far as a
-    check pinned to this driver and this version proved it. Platoon still decides eligibility."""
+    check that speaks for this agent proved it. Platoon still decides eligibility."""
     return Levels(
         operational=_level(_operational(capabilities, profile, conformance)),
         observable=_level(_observable(capabilities, profile, conformance)),
         trainable=_level(_trainable(capabilities, profile, conformance)),
     )
+
+
+def unmet_by(conformance: Conformance) -> tuple[str, ...]:
+    """The levels a result's failed checks leave unmet for any agent it speaks for."""
+    failed = {check.name for check in conformance.failed}
+    return tuple(level for level, (needed, declared) in _STANDS_ON.items() if failed & {*needed, *declared})

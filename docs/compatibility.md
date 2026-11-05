@@ -2,7 +2,7 @@
 
 What each upstream is, how we use it, and what is known about it. Everything here was inspected or measured on 2026-11-02.
 These are **upstream facts**, not claims about our drivers. Each driver records its own verified result in the status list of
-section 3 as it lands, and a result pins to `(driver, harness version)` (architecture §9.3).
+section 3 as it lands, and a result pins to the driver, the harness version, the SDK and the host (architecture §9.3).
 
 Detail and citations live in [research/](research/README.md). Where a report and a spike disagree, the spike wins because
 it was measured later. The critic's corrections in the research index are authoritative. Section 3 lists what changed.
@@ -67,8 +67,8 @@ Consequences:
   does. The planned `[acp]` extra's `agent-client-protocol` 1.0.0rc3 cannot share that lock with the SDK's 0.12.1, so when that
   extra lands, no one environment holds both.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, checked on this machine by `doctor --check`, which keeps what it
-  found for the version it ran on, and recorded from `ready` on `agent.started` and `agent.resumed`, with that result when it is for
-  the version that runs. Adapters seen:
+  found for the version it ran on, under that SDK on that host, and recorded from `ready` on `agent.started` and `agent.resumed`, with
+  that result when it speaks for the harness that runs. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
 ## 3. Capability matrix

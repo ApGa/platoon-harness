@@ -16,7 +16,7 @@ from platoon_harness.config import Secret
 from platoon_harness.drivers import DriverError
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
-from platoon_harness.drivers.levels import Conformance
+from platoon_harness.drivers.levels import CHECKED, Conformance
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
@@ -156,8 +156,9 @@ _HARNESSES: dict[str, tuple[Factory, Callable[[Path], dict[str, Any]]]] = {
 
 async def check_harness(name: str, folder: Path) -> Conformance:
     """Run every check on the harness `name` as it is installed here, against FakeModel, in `folder`, and say what it
-    found, pinned to the driver and the harness version that answered. A harness no check ships for is refused."""
-    if name not in _HARNESSES:
+    found, pinned to the driver, the harness version that answered, this SDK and this host. A harness no check ships
+    for, which is any `CHECKED` does not name, is refused."""
+    if name not in CHECKED:
         raise DriverError(f"no check of {name} ships with the SDK: run `check_driver` on its driver")
     factory, given = _HARNESSES[name]
     options: dict[str, Any] = given(folder)

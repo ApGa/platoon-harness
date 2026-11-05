@@ -137,8 +137,8 @@ def write_conformance(root: Path, result: Conformance) -> Path:
 
 
 def read_conformance(root: Path, driver: str) -> Conformance | None:
-    """What was kept under a root of a driver's harness, or None when nothing was, or what was no longer reads, as
-    after an upgrade of the SDK, since then nothing vouches for it."""
+    """What was kept under a root for a driver, or None when nothing was or what was is no result. Whether it speaks
+    for an agent is for its pin to say."""
     if re.fullmatch(NAME, driver) is None:
         return None
     try:

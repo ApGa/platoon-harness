@@ -507,20 +507,26 @@ own checks. What a driver leaves running, the suite reaps.
 | `child` | None | A tool call that starts a native child, by the name the harness shows its model |
 | `timeout` | 10 s | How long one check may take |
 
-The result is pinned to the driver and the harness version it reported, and `levels` reads it. A result for another version says
-nothing of this one.
+The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK and the
+host it ran on, as the checks prove your driver's code and the binary together, where they ran, and `levels` reads it. A result made
+elsewhere says nothing of this agent, and nor does one of a version nobody said: a harness that reports no version earns no level
+from any result.
 
 The runtime earns an agent's levels from a result kept under the root, one for each driver: `write_conformance(root, result)`, from
-`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness the SDK drives
-that it finds, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. The host reads
-it at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body, beside the levels it gave. A level
-that has no result kept for the version that runs says so, and names the command that makes one. A wire program is checked as above,
-and its result kept the same way.
+`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness the SDK ships a
+check of that it finds, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. The
+host reads it at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body, beside the levels it gave,
+where it speaks for that harness. A level with no result that speaks for the harness that runs says so, and names what makes one:
+`doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for any other. A wire program
+is checked as above, and its result kept the same way, by the name its `describe` gives. A name is a driver's own to give, so a
+result is pinned to the class that implements the driver too, and a program calling itself `claude` earns nothing from what was kept
+of the claude driver's checks.
 
 ```python
-from platoon_harness.drivers.levels import Profile, levels
+from platoon_harness.drivers.levels import Profile, implementation, levels
 
-earned = levels(capabilities, Profile(driver="pi", version="1.5.0", login="key", tools="unverified"), result)
+profile = Profile(driver="pi", implementation=implementation(driver), version="1.5.0", login="key", tools="unverified")
+earned = levels(capabilities, profile, result)
 ```
 
 `levels` gives `operational`, `observable` and `trainable`, each `met`, `unmet` or `unverified`, with reasons. It is a pure function,

@@ -528,7 +528,7 @@ class Start(Args):
 @op("agent.start", on=lambda a: f"agent/{a.agent}", runtime=True)
 def start(txn: Txn, a: Start) -> None:
     """Record that a harness is up, with what its driver declared, what the runtime verified of it, the conformance
-    result its levels were computed from, as a body, or None for none kept, and those levels. A report cannot carry
+    result its levels were computed from, as a body, or None for none that speaks for it, and those levels. A report
     these, so no driver can claim a level. A resumed harness comes back to the agent as it stood."""
     agent = _live(txn, a.agent)
     if (agent.state != "spawning") != a.resumed:

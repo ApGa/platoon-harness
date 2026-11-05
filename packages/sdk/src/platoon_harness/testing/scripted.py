@@ -150,7 +150,7 @@ class ScriptedDriver:
         *,
         capabilities: Capabilities = _DEFAULT,
         name: str = "scripted",
-        version: str = "1",
+        version: str | None = "1",
     ) -> None:
         self.results: list[Any] = []
         self._turns: Iterator[Sequence[Step]] = iter(turns)

@@ -20,16 +20,23 @@
   fresh credential and offering nothing, as a resume after a crash does. A held agent, one with a goal not begun or a finish to come,
   never rests, and a runtime start leaves a resting agent to its handover. `delivery.ready` lists the agents to put to rest, and
   `Agents`, at view version 13, keeps `idle_since`, `resting` and `exits`. See ADR 0045.
-- A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the SDK
-  drives that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
+- A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the
+  SDK ships a check of that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
   `platoon_harness.testing`, and keeps the result under the root, `conformance/<driver>.json`, which `write_conformance` and
   `read_conformance` in `platoon_harness.runtime.paths` write and read. The host reads it at every launch and resume, so an agent's
   levels come from it, and records it on `agent.started` and `agent.resumed`, at payload 2, as `conformance`, a body beside the
-  levels; one with no result for the version that runs is `unverified`, naming the command that makes one. `doctor` says what each
-  harness's kept result found. The terminal's inspector says the login kind beside the levels, which the roster carries as `login`,
-  and `Agents` is at view version 12. The scripted harness has a `shell` tool of its own, `testing.SHELL`, which runs its `command`
-  once allowed, so it and the conformance wire program meet every shell check, and the wire program earns `operational`. No check
-  proves a coverage surface, so nothing answers `not_seen` yet. See ADR 0044.
+  levels, where it speaks for the harness that runs. A result is pinned to its driver, by name and by the class that implements it,
+  the harness version it said, the SDK and the host, as `Conformance.implementation`, `Conformance.sdk` and `Conformance.host`, which
+  `check_driver` sets, and the same fields of `Profile` say of the agent, `levels.implementation` naming a driver's class; a version
+  nobody said pins nothing. A level with no result that speaks for it is `unverified`, naming what makes one, `doctor --check` for a
+  harness a check ships for, which `levels.CHECKED` names with the class that drives it, and `check_driver` with
+  `write_conformance` for any other. `levels.speaks_for` says whether a result speaks for an agent, and `levels.unmet_by` which
+  levels its failed checks leave unmet. `doctor` says whether each harness's kept result speaks for the binary that runs, and what
+  it found, skipped and left unmet; `--check` goes on past a check that cannot run and keeps no result that names no version.
+  The terminal's inspector says the login kind beside the levels, which the roster carries as `login`, and `Agents` is at view
+  version 12. The scripted harness has a `shell` tool of its own, `testing.SHELL`, which runs its `command` once allowed, so it and
+  the conformance wire program meet every shell check, and the wire program earns `operational`. No check proves a coverage surface,
+  so nothing answers `not_seen` yet. See ADR 0044.
 - A daemon that keeps failing needs a person. The supervisor journals a daemon's first failure since a run that lasted, as
   `daemon.failed` naming it and its error, and the next run that lasts a minute, as `daemon.recovered`, through two runtime-only ops of
   the kernel's, `daemon.fail` and `daemon.recover`, so a courier or a host that fails on every pass stands in `attention` as a kind of
@@ -317,6 +324,10 @@
   left. A second exit before a turn of its ends, an exit while the session accepts no work, or of a harness that cannot resume,
   ends its agent `lost` as before, the second saying so. `Host.resume` brings an agent's harness back, for recovery and for a
   handover alike. See ADR 0045.
+- A result kept by `check_driver` is pinned to the class that implements the driver, the SDK and the host as well as the driver's
+  name and the harness version, so a result made before, which names none of them, no longer reads, and `doctor --check` makes one
+  again. `Profile` takes `implementation`. See ADR 0044.
+- `ScriptedDriver` takes `version=None`, a harness that says no version.
 - A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
   opens, and writes no event, which `platoon-harness session refold` does.
 - A look's commit and rewrite name no `cause`, as the turn end that prompted the look did not cause what git holds, so a bystander's

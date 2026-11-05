@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import shutil
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from cyclopts import App
 from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
-from platoon_harness.drivers.levels import Conformance
+from platoon_harness.drivers.levels import CHECKED, Conformance, implementation, unmet_by
 from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import status
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
@@ -60,42 +61,63 @@ def _first_line(command: list[str]) -> str | None:
 def _harness(name: str, driver: Driver, root: Path) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
     command, which is all of what it said that is kept, or why it is not here; and what its checks found, as kept."""
+    found: dict[str, Any]
     if isinstance(driver, OpenHandsDriver):
         found = _openhands(name)
     elif shutil.which(name) is None:
         found = {"name": name, "found": False, "reason": "not on PATH"}
     else:
         found = {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
-    return {**found, "checked": _checked(read_conformance(root, name))} if found["found"] else found
+    if not found["found"]:
+        return found
+    return {**found, "checked": _checked(read_conformance(root, name), found["version"], implementation(driver))}
 
 
-def _checked(result: Conformance | None) -> dict[str, Any] | None:
-    """What a kept result says, by the harness version it ran on, or None when none is kept."""
+def _checked(result: Conformance | None, version: str | None, made_by: str) -> dict[str, Any] | None:
+    """What a kept result says, by what it was made on, and whether that is what runs here, `current`: the driver's
+    class, this SDK, this host and a harness version among the words the binary's version says, or None when the binary
+    said none. None when none is kept."""
     if result is None:
         return None
     states = [check.state for check in result.checks]
-    failed = [check.name for check in result.checks if check.state == "failed"]
+    pinned = (result.implementation, result.sdk, result.host)
+    here = result.version is not None and pinned == (made_by, sdk_version, socket.gethostname())
     return {
         "version": result.version,
+        "sdk": result.sdk,
+        "host": result.host,
+        "current": None if version is None else here and result.version in version.split(),
         "passed": states.count("passed"),
-        "failed": failed,
+        "failed": [check.name for check in result.failed],
         "skipped": states.count("skipped"),
+        "unmet": list(unmet_by(result)),
     }
 
 
 def _check(found: list[dict[str, Any]], root: Path) -> None:
-    """Check each harness found, against a model of ours and on no account, and keep what its checks found under the
-    root, where the runtime reads it at every launch and resume, beside the folder the checks ran in, whose logs a
-    failed check names, until the next check of that harness."""
+    """Check each harness found that the SDK ships a check of, against a model of ours and on no account, and keep what
+    its checks found under the root, where the runtime reads it at every launch and resume, beside the folder the checks
+    ran in, whose logs a failed check names, until the next check of that harness. A check that cannot run, or a
+    harness that says no version, which no result could speak for, keeps nothing and leaves what was kept, and says
+    why."""
     for harness in found:
-        if harness["found"]:
-            note(f"checking {harness['name']} against a model of ours, which takes a few minutes and no account")
-            folder = root / CONFORMANCE / harness["name"]
-            shutil.rmtree(folder, ignore_errors=True)
-            folder.mkdir(mode=0o700, parents=True)
-            result = asyncio.run(check_harness(harness["name"], folder))
-            write_conformance(root, result)
-            harness["checked"] = _checked(result)
+        if not harness["found"] or harness["name"] not in CHECKED:
+            continue
+        name = harness["name"]
+        note(f"checking {name} against a model of ours, which takes a few minutes and no account")
+        folder = root / CONFORMANCE / name
+        shutil.rmtree(folder, ignore_errors=True)
+        folder.mkdir(mode=0o700, parents=True)
+        try:
+            result = asyncio.run(check_harness(name, folder))
+        except DriverError as error:
+            harness["unchecked"] = f"its check could not run: {error}"
+            continue
+        if result.version is None:
+            harness["unchecked"] = "it said no version, so what its checks found would speak for no binary"
+            continue
+        write_conformance(root, result)
+        harness["checked"] = _checked(result, harness["version"], CHECKED[name])
 
 
 def _openhands(name: str) -> dict[str, Any]:
@@ -159,8 +181,9 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
     comes from the harness's own status command: no account name is kept, and no credential file is read.
 
     A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
-    finds, on the binary that runs, against a model of ours on loopback and on no account. The runtime reads it at
-    every launch and resume, and a result that ran on another version says nothing of the one that runs.
+    finds that the SDK ships a check of, on the binary that runs, against a model of ours on loopback and on no account.
+    The runtime reads it at every launch and resume, and a result made of another version, under another SDK or on
+    another host says nothing of the one that runs. A check that cannot run keeps nothing, says why, and goes on.
 
     For example:
 
@@ -173,7 +196,7 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
     json
         Say it as one JSON object.
     check
-        Check each harness found, and keep what its checks found.
+        Check each harness found that a check ships for, and keep what its checks found.
     """
     report: dict[str, Any] = {
         "versions": {"cli": __version__, "sdk": sdk_version},
@@ -205,7 +228,9 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
         if harness["found"]:
             login = f"{harness['login']} login" if harness["login"] else "login unknown"
             said = f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}"
-            lines.append(f"{said}, {_said_checked(harness['checked'])}")
+            lines.append(f"{said}, {_said_checked(harness['name'], harness['checked'])}")
+            if "unchecked" in harness:
+                lines.append(f"{'':<10} --check kept nothing: {harness['unchecked']}")
         else:
             lines.append(f"{harness['name']:<10} {harness['reason']}")
     if (node := report["node"]) is not None:
@@ -223,11 +248,20 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
     say(safe("\n".join(lines)))
 
 
-def _said_checked(checked: dict[str, Any] | None) -> str:
+def _said_checked(name: str, checked: dict[str, Any] | None) -> str:
+    """What a kept result says of the binary that runs, and what makes one where none speaks for it."""
     if checked is None:
-        return "not checked: --check checks it"
-    failed = f", and {', '.join(checked['failed'])} failed" if checked["failed"] else ", none failed"
-    return f"checked on {checked['version'] or 'a version it never said'}: {checked['passed']} passed{failed}"
+        return "not checked: --check checks it" if name in CHECKED else "no check of it ships: `check_driver` checks it"
+    made = f"{checked['version'] or 'no version'} under SDK {checked['sdk']} on {checked['host']}"
+    if checked["current"] is None:
+        return f"checked on {made}, and this binary said no version, so whether that speaks for it is unknown"
+    if not checked["current"]:
+        return f"checked on {made}, which says nothing of this one: --check checks it"
+    counted = f"{checked['passed']} passed, {checked['skipped']} skipped"
+    if not checked["failed"]:
+        return f"checked on {checked['version']}: {counted}, none failed"
+    unmet = f", which leaves {' and '.join(checked['unmet'])} unmet" if checked["unmet"] else ""
+    return f"checked on {checked['version']}: {counted}, and {', '.join(checked['failed'])} failed{unmet}"
 
 
 def init() -> int:

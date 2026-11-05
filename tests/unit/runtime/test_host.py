@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import signal
+import socket
 import stat
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -11,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import ConfigError, Session, Team, told
+from platoon_harness import ConfigError, Session, Team, __version__, told
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     AgentSpec,
@@ -32,7 +33,8 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers.levels import CHECK, Check, Conformance
+from platoon_harness.drivers.claude import ClaudeDriver
+from platoon_harness.drivers.levels import Check, Conformance, implementation
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
 from platoon_harness.primitives import Verdict
@@ -41,6 +43,8 @@ from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
 from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
+
+MAKING = "`check_driver` checks it, and `write_conformance` keeps what it found here"
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -429,11 +433,11 @@ async def test_capabilities_and_levels_reach_agent_started(tmp_path):
     assert started.data["verified"]["tools"] == "visible"
     assert started.data["verified"]["allow_native_children"] is False
     assert started.data["levels"]["operational"]["state"] == "unverified"
-    assert f"no conformance result for scripted is kept: {CHECK}" in started.data["levels"]["operational"]["reasons"]
+    assert f"no conformance result for scripted is kept: {MAKING}" in started.data["levels"]["operational"]["reasons"]
 
 
-def passing(version: str) -> Conformance:
-    """A result of the scripted harness at `version` whose every check that a level needs passed."""
+def passing(version: str | None, driver: str = "scripted", made_by: object = ScriptedDriver()) -> Conformance:
+    """A result of a harness at `version`, made here by `made_by`, whose every check that a level needs passed."""
     needed = (
         "describe_starts_nothing",
         "turn_end_reported",
@@ -443,9 +447,9 @@ def passing(version: str) -> Conformance:
         "runs_in_its_workspace",
         "malformed_frame_is_a_gap",
     )
-    return Conformance(
-        driver="scripted", version=version, checks=tuple(Check(name=name, state="passed") for name in needed)
-    )
+    checks = tuple(Check(name=name, state="passed") for name in needed)
+    pinned = {"implementation": implementation(made_by), "sdk": __version__, "host": socket.gethostname()}
+    return Conformance(driver=driver, version=version, checks=checks, **pinned)
 
 
 async def test_levels_come_from_the_conformance_result_kept_for_the_harness_that_runs(tmp_path):
@@ -474,7 +478,40 @@ async def test_a_result_kept_for_another_version_says_nothing_of_the_one_that_ru
 
     reasons = started.data["levels"]["operational"]["reasons"]
     assert started.data["levels"]["operational"]["state"] == "unverified"
-    assert reasons == [f"conformance ran on scripted 0, and this is scripted 1: {CHECK}"]
+    assert reasons == [f"conformance ran on scripted 0, and this is scripted 1: {MAKING}"]
+    assert started.data["conformance"] is None
+
+
+async def test_a_result_of_an_unknown_version_vouches_for_nothing(tmp_path):
+    """A harness that says no version is known to be no binary a result ran on, even one that said none either."""
+    write_conformance(tmp_path, passing(None))
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted(version=None)}}})
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+
+    assert started.data["levels"]["operational"] == {
+        "state": "unverified",
+        "reasons": ["scripted said no version, so no result can speak for it"],
+    }
+    assert started.data["conformance"] is None
+
+
+async def test_a_driver_that_calls_itself_claude_earns_nothing_from_what_was_kept_of_claude(tmp_path):
+    """A name is a driver's own to give, so a result is pinned to the class that made it too: a driver calling itself
+    `claude` at claude's version runs, and what was kept of the claude driver's checks says nothing of it."""
+    write_conformance(tmp_path, passing("2.1.316", driver="claude", made_by=ClaudeDriver()))
+    team = Team.model_validate({"roles": {"bob": {"harness": scripted(name="claude", version="2.1.316")}}})
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+
+    ran = "platoon_harness.drivers.claude:ClaudeDriver"
+    assert started.data["levels"]["operational"] == {
+        "state": "unverified",
+        "reasons": [f"conformance ran on {ran}, and this is platoon_harness.testing.scripted:ScriptedDriver: {MAKING}"],
+    }
+    assert started.data["conformance"] is None
 
 
 async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_so(tmp_path):

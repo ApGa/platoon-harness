@@ -1131,15 +1131,17 @@ Absence means unsupported, as in ACP.
   still works through `ph` and the monitor.
 - **Conformance.** `check_driver(factory, folder=...)` runs named checks and reports all failures at once, against a loopback model
   that logs each request exactly as it arrived. So "tool in the first model request" and "delivered text in the next prompt" are tested
-  against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to
-  `(driver, harness version)`, and a result pinned elsewhere says nothing of this agent. A wire `describe` runs the program once and
-  starts no harness.
+  against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to the
+  driver, by the name it gives and the class that implements it, the harness version it said, the SDK and the host, as a check
+  proves the driver's code and the binary together where they ran, and a result pinned elsewhere, or to a version nobody said, says
+  nothing of this agent. A wire `describe` runs the program once and starts no harness.
 - **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
-  SDK drives that it finds, on the binary that runs, against `FakeModel` and on no account, and keeps what it found under the root,
-  `conformance/<driver>.json`, one for each driver, beside the folder it ran in. The host reads it at every launch and resume, so an
-  agent's levels come from proof made on its own machine, and an upgrade the result did not run on reads `unverified`, naming the
-  command that makes one. No check proves a coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
-  [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
+  SDK ships a check of that it finds, on the binary that runs, against `FakeModel` and on no account, and keeps what it found under
+  the root, `conformance/<driver>.json`, one for each driver, beside the folder it ran in; a check that cannot run, or of a harness
+  that says no version, keeps nothing and says why. The host reads it at every launch and resume, and records it where it speaks for
+  the harness, so an agent's levels come from proof made on its own machine, and an upgrade of the harness or the SDK the result did
+  not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
+  still answers no `NotSeen`. See [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - **Model pinning.** The effective model must equal the requested one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
   nothing. An unset model on the harness's own login means the harness's own default, and `ready` says which. A driver refuses an unset

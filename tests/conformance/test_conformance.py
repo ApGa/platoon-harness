@@ -7,7 +7,7 @@ import pytest
 
 from platoon_harness.drivers import Capabilities, Delivery, Offered
 from platoon_harness.drivers.exec import ExecDriver
-from platoon_harness.drivers.levels import Conformance, Profile, levels
+from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import SHELL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
 
@@ -83,7 +83,8 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
     assert (result.driver, result.version) == ("wire-scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == SCRIPTED_SKIPS
-    earned = levels(WireDriver(command).describe().capabilities, Profile(driver="wire-scripted", version="1"), result)
+    profile = Profile(driver="wire-scripted", implementation=implementation(WireDriver(command)), version="1")
+    earned = levels(WireDriver(command).describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
 
 
@@ -102,7 +103,9 @@ async def test_a_conformance_result_earns_only_what_it_proved(tmp_path):
     result = await check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=tmp_path)
     capabilities = ScriptedDriver().describe().capabilities
 
-    earned = levels(capabilities, Profile(driver="scripted", version="1", login="key", tools="visible"), result)
+    scripted = implementation(ScriptedDriver())
+    profile = Profile(driver="scripted", implementation=scripted, version="1", login="key", tools="visible")
+    earned = levels(capabilities, profile, result)
 
     assert earned.operational.state == "unverified"
     assert "stop_leaves_no_process" in earned.operational.reasons[0]
