@@ -587,7 +587,9 @@ check decides what it shows.
 `lock`, `request`, `vote`, `supervisor`, `population`, `map_reduce`, `verifier_generator`. These are compositions, never
 scheduler modes.
 
-An episode **program** is an async function holding a `program` principal, so control flow never enters config.
+An episode **program** is an async function holding a `program` principal, so control flow never enters config. None runs yet, so
+`team check` refuses a team that names one, which a session would leave waiting for what nothing does (§8). See
+[ADR 0048](adr/0048-a-setting-nothing-carries-out-is-refused.md).
 
 ## 7. Primitive semantics
 
@@ -1004,8 +1006,9 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
   from a human or program, and every event carries `topology_rev`.
 - **`team check`** runs before any cost and reports everything at once. It refuses recursive spawning without `max_depth`, whether
-  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, and an unknown
-  preset, harness, extension, role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
+  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, a
+  `program`, since none runs yet and a team left to one would get nothing it waits for, and an unknown preset, harness, extension,
+  role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
   preset is refused at load. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`,
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A parent and a child that can
   stay are the exception: a message from the parent wakes the child, and its answer wakes the parent, so `team check` warns of a cycle
@@ -1013,9 +1016,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   spawn one, can message it, and wakes with it, with no `max_hops`: a warning and not a refusal, because that is how follow-ups work.
   The `manager-worker` and `tree` presets carry `max_hops`, 8 unless given, as `mesh` and `star` do, so no shipped preset sets it off. A chain through a program
   is the program's own control flow, which `max_hops` does not bound unless it replies. It warns of a role that can never start, a role
-  with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot
-  resolve, a setting no primitive enforces yet, a limit in a unit a role's harness cannot measure, which holds on estimates, and a
-one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
+  with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a limit in a unit a role's
+  harness cannot measure, which holds on estimates, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
 and one that says it stays, and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
 It warns of a role that lets its harness start agents of its own, saying what that gives up, and of what a preamble template
 leaves out or a user's words name that a role cannot hold. A harness that reaches none of our tools is told `instructions` alone, so it

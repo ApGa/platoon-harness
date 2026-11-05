@@ -389,9 +389,10 @@ def test_a_relation_that_no_may_spawn_makes_true_is_warned():
     assert any("`parent` reaches nobody" in line for line in found)
 
 
-def test_a_program_that_cannot_be_resolved_is_warned():
+def test_team_check_refuses_a_program_it_cannot_run():
+    """No program runs yet, so a team left to one would never get what it waits for: refused, naming it."""
     team = Team(roles={"a": Role(harness="pi")}, topology=Topology(program="nope", until="program"))
-    assert "topology.program: `nope` cannot run yet: no program can be resolved" in warnings(team)
+    assert errors(team) == ["topology.program: `nope` cannot run: no program runs yet, so nothing it does happens"]
 
 
 def test_recursion_through_a_written_grant_is_seen():
@@ -578,11 +579,17 @@ def test_a_quiet_topic_never_warns_of_fan_out():
     assert not any("wake" in warning for warning in warnings(team))
 
 
-def test_settings_nothing_enforces_yet_are_labelled():
-    found = warnings(PRESET_TEAMS["git-swarm"])
-    for field in ("entry", "requires", "validator"):
-        assert f"topology.channels.contributions.{field}: recorded, but nothing enforces it yet" in found
-    assert "topology.channels.inflight.keys: recorded, but nothing enforces it yet" in found
+@pytest.mark.parametrize(
+    ("kind", "setting"),
+    [("topic", "digest"), ("topic", "entry"), ("topic", "requires"), ("topic", "validator"), ("board", "keys")],
+)
+def test_a_channel_setting_nothing_enforces_is_no_setting(kind, setting):
+    """A setting nothing would enforce is refused where it is written, as any unknown key is."""
+    written = f"[roles.a]\nharness = 'pi'\n[topology.channels.c]\nkind = '{kind}'\nreaders = 'all'\nwriters = 'all'\n"
+    with pytest.raises(ConfigError) as refused:
+        Team.loads(f"{written}{setting} = 'x'\n")
+    found = [str(problem) for problem in refused.value.problems]
+    assert found == [f"topology.channels.c.{kind}.{setting}: `{setting}` is not a key here."]
 
 
 def test_a_member_is_a_principal_id_and_never_a_glob():

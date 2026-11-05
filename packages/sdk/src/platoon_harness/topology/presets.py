@@ -129,8 +129,6 @@ def map_reduce(map: str, reduce: str, *, parallel: int | None = None, lease: str
 
 def git_swarm(role: str, *, live: int, episodes: int) -> Topology:
     """A population coordinating through a shared repository alone: no messages, only commits and nominations."""
-    published = Topic(writers=f"role:{role}", readers="all", delivery="pull", history="full")
-    contributions = {"entry": "commit", "requires": ("informed_by",), "validator": "task_publication"}
     return Topology(
         until="program",
         program=Program(
@@ -144,9 +142,8 @@ def git_swarm(role: str, *, live: int, episodes: int) -> Topology:
             },
         ),
         channels={
-            "contributions": published.model_copy(update=contributions),
-            "inflight": Board(writers="all", readers="all", keys="author"),
-            "nominations": published,
+            "inflight": Board(writers="all", readers="all"),
+            "nominations": Topic(writers=f"role:{role}", readers="all", delivery="pull", history="full"),
         },
     )
 

@@ -15,13 +15,12 @@ from .presets import (
     star,
     tree,
 )
-from .spec import Board, Channel, Digest, Group, Limits, Program, Queue, Topic, Topology, Unexpanded, union
+from .spec import Board, Channel, Group, Limits, Program, Queue, Topic, Topology, Unexpanded, union
 
 __all__ = [
     "PRESETS",
     "Board",
     "Channel",
-    "Digest",
     "Group",
     "Limits",
     "Program",

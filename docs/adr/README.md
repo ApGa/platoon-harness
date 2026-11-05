@@ -53,6 +53,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Ten minutes between turns rest an agent, its process ended and its next handover bringing it back natively; a harness that exits on its own rests its agent once, its turn lost and told, and a second exit before a turn ends loses it |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Its first failure since a run that lasted is `daemon.failed` and the next run that lasts `daemon.recovered`, so a daemon that fails on every pass stands in `attention` as a kind of its own and never passes for a quiet session |
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | An agent's read that finds nothing past its cursor names, in `next`, what the offer that last moved that cursor handed over there and the `after` that reads it again, so an empty page is never taken for an empty channel |
+| [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | `team check` refuses a `program` while none runs, and a topic's `digest`, `entry`, `requires` and `validator` and a board's `keys` are gone, so no team it accepts names something nothing does |
 
 ## Adding or changing one
 

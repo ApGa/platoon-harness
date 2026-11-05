@@ -66,13 +66,6 @@ Selectors = Annotated[
 """One selector or several: a lone one prints as a string, and order never matters."""
 
 
-class Digest(Model):
-    """What a lagging reader gets instead of every entry."""
-
-    items: Positive = 32
-    overflow: Literal["spill", "summarize"] = "spill"
-
-
 class _Channel(Model):
     kind: str
     writers: Selectors
@@ -84,16 +77,12 @@ class _Channel(Model):
 
 
 class Topic(_Channel):
-    """A log every reader follows by cursor. `entry`, `requires` and `validator` constrain what may be posted."""
+    """A log every reader follows by cursor."""
 
     kind: Literal["topic"] = "topic"
     delivery: Injection = "next-turn"
     history: Literal["from-join", "full"] = "from-join"
-    digest: Digest = Digest()
     coalesce: Duration | None = None
-    entry: str | None = None
-    requires: tuple[str, ...] = ()
-    validator: str | None = None
 
 
 class Queue(_Channel):
@@ -108,11 +97,10 @@ class Queue(_Channel):
 
 
 class Board(_Channel):
-    """Named objects with immutable versions. `keys` names the field an object is keyed by."""
+    """Named objects with immutable versions."""
 
     kind: Literal["board"] = "board"
     delivery: Injection = "pull"
-    keys: str | None = None
 
 
 Channel = Annotated[Topic | Queue | Board, Field(discriminator="kind")]

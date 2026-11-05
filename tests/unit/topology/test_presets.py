@@ -67,8 +67,11 @@ def test_a_preset_behaves_as_its_expansion(name):
 
 
 @pytest.mark.parametrize("name", PRESETS)
-def test_every_preset_passes_team_check(name):
-    assert errors(PRESET_TEAMS[name]) == []
+def test_every_preset_passes_team_check_but_for_a_program_none_runs_yet(name):
+    team = PRESET_TEAMS[name]
+    assert [problem.where for problem in errors(team)] == (
+        [] if team.topology.program is None else ["topology.program"]
+    )
 
 
 def test_toml_and_python_build_the_same_object():
@@ -223,14 +226,12 @@ def test_map_reduce_with_an_llm_reducer():
 def test_git_swarm_coordinates_through_artifacts_alone():
     topology = git_swarm("worker", live=8, episodes=64)
     assert topology.edges == {}
-    contributions = topology.channels["contributions"]
-    assert isinstance(contributions, Topic)
-    assert (contributions.writers, contributions.readers) == (("role:worker",), ("all",))
-    assert (contributions.delivery, contributions.history) == ("pull", "full")
-    assert contributions.requires == ("informed_by",)
-    assert (contributions.entry, contributions.validator) == ("commit", "task_publication")
-    assert topology.channels["inflight"] == Board(writers="all", readers="all", keys="author")
-    assert topology.channels["nominations"].writers == ("role:worker",)
+    nominations = topology.channels["nominations"]
+    assert isinstance(nominations, Topic)
+    assert (nominations.writers, nominations.readers) == (("role:worker",), ("all",))
+    assert (nominations.delivery, nominations.history) == ("pull", "full")
+    assert topology.channels.keys() == {"inflight", "nominations"}
+    assert topology.channels["inflight"] == Board(writers="all", readers="all")
     assert topology.program == Program(
         name="population",
         params={"role": "worker", "live": 8, "episodes": 64, "uncharged": ["abstained"], "readout": "plurality"},

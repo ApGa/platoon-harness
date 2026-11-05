@@ -400,7 +400,6 @@ platoon_harness.topology.blackboard
 platoon_harness.topology.Board
 platoon_harness.topology.Channel
 platoon_harness.topology.compile
-platoon_harness.topology.Digest
 platoon_harness.topology.expand
 platoon_harness.topology.git_swarm
 platoon_harness.topology.Group

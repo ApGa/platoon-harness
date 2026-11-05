@@ -42,7 +42,6 @@ from platoon_harness.topology.spec import RELATIONS, Topology
 
 _FAN_OUT = 8
 _MEASURED = ("tokens", "usd")
-_UNENFORCED = frozenset({"digest", "entry", "keys", "requires", "validator"})
 
 EnvName = Annotated[str, StringConstraints(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
 
@@ -373,10 +372,6 @@ def _warnings(team: Team) -> Iterable[Problem]:
                     what = f"`{selector}` reaches nobody: relations come from `may_spawn`, and none makes this one true"
                     yield Problem(f"topology.edges.{role}", what, "warning")
 
-    if (program := team.topology.program) is not None:
-        name = program if isinstance(program, str) else program.name
-        yield Problem("topology.program", f"`{name}` cannot run yet: no program can be resolved", "warning")
-
     for name, channel in team.topology.channels.items():
         if channel.delivery in WAKING:
             readers = {role for selector in channel.readers for role in reach(team, "", selector)}
@@ -385,8 +380,6 @@ def _warnings(team: Team) -> Iterable[Problem]:
                 how_many = "an unbounded number of" if fan_out == math.inf else fan_out
                 what = f"each entry can wake {how_many} agents. Prefer `next-turn`, or `coalesce` the wakes"
                 yield Problem(f"topology.channels.{name}.delivery", what, "warning")
-        for field in sorted(_UNENFORCED & channel.canonical().keys()):
-            yield Problem(f"topology.channels.{name}.{field}", "recorded, but nothing enforces it yet", "warning")
 
 
 def team_check(
@@ -447,6 +440,11 @@ def team_check(
                 "parent wakes its child, and each answer wakes the parent: set `max_hops` to bound them"
             )
             problems.append(Problem("topology.limits.max_hops", what, "warning"))
+    if (program := topology.program) is not None:
+        name = program if isinstance(program, str) else program.name
+        problems.append(
+            Problem("topology.program", f"`{name}` cannot run: no program runs yet, so nothing it does happens")
+        )
 
     problems += _unestimated(team.budget, "budget")
     problems += _warnings(team)

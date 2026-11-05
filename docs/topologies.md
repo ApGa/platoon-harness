@@ -3,9 +3,9 @@
 A topology says who may reach whom. It never says who acts next: control flow belongs in a Python program. Everything else is
 ordinary grants over relations such as `parent` and `children`, which stay true as agents come and go.
 
-Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team that `team check` accepts, as
-TOML and as Python, and a test checks that both forms build the same object and that `team.show()` prints what is shown. Running one
-is not implemented yet: see [STATUS.md](STATUS.md).
+Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
+checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but the two that
+need a program, map-reduce and git-swarm, which it refuses until programs run: see [STATUS.md](STATUS.md).
 
 ```python
 from platoon_harness.team import Role, Team
@@ -246,7 +246,7 @@ writer adds to queue `to-critic`; critic claims from it. Each entry wakes its re
 ### map-reduce
 
 A program holds all the control flow: it shards work to mappers and folds their results through reducers. Mappers cannot read each
-other's results, and the program, not an agent, closes the session.
+other's results, and the program, not an agent, closes the session. No program runs yet, so `team check` refuses this team, naming it.
 
 ```toml
 [roles.mapper]
@@ -276,8 +276,8 @@ The program adds to queue `map`; mappers claim from it. The program adds to queu
 
 ### git-swarm
 
-A population with no messages and no roles to speak of: commits go to a shared repository, announced on a topic, and a program tallies
-nominations at the end. `team check` labels the settings on these channels that no primitive enforces yet.
+A population with no messages and no roles to speak of: commits go to a shared repository, and a program tallies nominations at the end.
+No program runs yet, so `team check` refuses this team, naming it.
 
 ```toml
 [roles.worker]
@@ -300,7 +300,7 @@ team = Team(
 
 ```text
 Workers (codex, own worktrees) may message no one.
-Workers post to topic `contributions`; everyone reads it. Readers fetch it when they choose. Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Program `population` runs it. Closes when the program finishes.
+Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Program `population` runs it. Closes when the program finishes.
 ```
 
 ## Mixing
@@ -434,12 +434,12 @@ problems = team_check(team, capabilities=known)
 ```
 
 It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
-harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, and
-any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never start, a role with no
-path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a program it cannot resolve, a
-setting nothing enforces yet, a wake cycle that runs through a child that can stay, a role that lets its harness start agents of its
-own, saying what that gives up, a preamble that leaves out `{tools}` or `{ending}`, words that name a tool a role cannot hold, and a
-team's `preamble` that a role on a harness that reaches none of our tools is never told.
+harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, a
+program, since none runs yet, and any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role
+that can never start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a
+wake cycle that runs through a child that can stay, a role that lets its harness start agents of its own, saying what that gives up, a
+preamble that leaves out `{tools}` or `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a
+harness that reaches none of our tools is never told.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the

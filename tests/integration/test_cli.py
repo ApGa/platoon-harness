@@ -612,6 +612,19 @@ async def test_team_check_says_every_problem_at_once_and_exits_78(cli: Cli):
     assert "recursive may_spawn with no limit" in done.stdout
 
 
+async def test_team_check_and_run_refuse_a_program_none_can_run_with_78(cli: Cli):
+    """A team left to a program would never get what it waits for while no program runs, so it costs nothing."""
+    mapped = cli.write("mapped.toml", f'{solo("saying")}[topology.map-reduce]\nmap = "bob"\nreduce = "bob"\n')
+
+    checked = await cli.run("team", "check", mapped, "--trust")
+    ran = await cli.run("run", "go", "--team", mapped, "--trust")
+
+    refused = "error: topology.program: `map_reduce` cannot run: no program runs yet, so nothing it does happens"
+    assert checked.code == 78 and refused in checked.stdout
+    assert ran.code == 78 and "`map_reduce` cannot run" in ran.stderr
+    assert not (cli.folder / "home" / "sessions").exists()
+
+
 async def test_team_show_resolved_loads_back_to_the_same_team(cli: Cli):
     team = cli.write("crew.toml", crew())
 
