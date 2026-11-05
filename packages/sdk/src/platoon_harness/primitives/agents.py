@@ -55,10 +55,9 @@ class Agent(BaseModel, frozen=True):
     interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `idle_since` is
     when it was last left between turns, by a start, a turn's end or a hold's release. `resting` says its harness has
     no process, which its next handover brings back, and `exits` counts the exits of its harness on its own since a turn
-    of its last ended. `login` is the
-    kind of login its harness ran on at its latest start, or None where nobody could tell. `instructions` is the body of
-    what its harness was told last, or None for nothing. `workspace` is where it works, once made, and
-    `removed` or `kept` say what its stop did with it."""
+    of its last ended. `login` is the kind of login its harness ran on at its latest start, or None where nobody could
+    tell. `instructions` is the body of what its harness was told last, or None for nothing. `workspace` is where it
+    works, once made, and `removed` or `kept` say what its stop did with it."""
 
     name: str
     role: str

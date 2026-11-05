@@ -50,9 +50,9 @@ exit. The owner chose a fixed ten minutes idle, with no setting.
 - `Agents` is at view version 13. `delivery.ready` lists the agents to put to rest, and its `due` the next time one will be.
 - The live test that held a harness killed alone to `lost` now holds it to its resume.
 - A harness killed before it has written its own session has none to reopen, though the journal holds its turn: each relaunch fails,
-  and its agent is lost at the sixth failed handover, about a minute later. Claude Code had not written its conversation down in most kills
-  in its first turn here, during a model call or a call of ours, live run 76 among them, and had in run 77, during a shell tool, so
-  the real-binary tests kill in a second turn.
+  and its agent is lost at the sixth failed handover, about a minute later. Claude Code had not written its conversation down in
+  most kills in its first turn here, during a model call or a call of ours, live run 76 among them, and had in run 77, during a shell
+  tool, so the real-binary tests kill in a second turn.
 
 ## Evidence
 
