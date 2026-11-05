@@ -24,7 +24,8 @@
   `no_lines` or `unread`, which `repo.committed` keeps at payload 2 and lineage gives as `Unresolved.why`. See ADR 0041.
 - Pi names what landed and which call made a tool call. The `pi` driver reports an input under the id of the entry pi wrote it
   down as, asked of `get_entries` from the last entry seen once the input's message has ended, and holds whatever pi says after the
-  input until it has that id, so its reports keep pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi
+  input until it has that id, and whatever it says after a compaction until it has named what that forgot, so its reports keep
+  pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi
   extension puts pi's own id for a call of ours among its arguments as `_meta`, and the stdio shim moves a `_meta` it finds there to
   where MCP keeps it, so the call goes under `pi/toolCallId`, a harness's anchor, which pi's tool item holds: a read through pi is
   confirmed by that item, and a pi tool call joins the model call that chose it. See ADR 0040.

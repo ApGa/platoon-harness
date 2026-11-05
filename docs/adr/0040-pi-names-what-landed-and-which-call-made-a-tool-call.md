@@ -25,7 +25,10 @@ has checked a call's arguments and before the tool runs, with the arguments muta
   that no entry holds the text, the input is reported with no id, as before.
 - **Pi's order is kept.** A fast model can answer before pi answers the ask, so whatever pi says after an input waits behind it,
   at its place, until the input is named. One ask is out at a time: pi answers after what it said before, so an answer holds every
-  entry whose message ended before it. What is still waiting when pi stops goes on with no id, before the exit.
+  entry whose message ended before it. A compaction, which names what it forgot only once its own `get_entries` is answered, waits
+  in its place the same way, so an input that lands after it is never reported before it, where a compaction would seem to keep a
+  handover it never held. What is still waiting when pi stops goes on as it is known, before the exit: an input with no id, and a
+  compaction naming nothing.
 - **A tool call goes under pi's own id.** Our extension puts `{"pi/toolCallId": toolCallId}` among the arguments of a call of ours,
   as `_meta`, and the shim moves a `_meta` it finds among a call's arguments to where MCP keeps it, beside what the client put
   there. The server takes `pi/toolCallId` as a harness's anchor, beside Claude Code's `claudecode/toolUseId` and Codex's `callId`,
@@ -65,7 +68,11 @@ has checked a call's arguments and before the tool runs, with the arguments muta
   seen (`test_a_handover_a_compaction_forgot_is_marked_forgot_by_the_entry_it_landed_as`); `tool_item_carries_its_anchor` passed,
   where it had skipped; a read was confirmed by its tool item, and a spawn's anchor was its call's tool item's id.
 - On the stand-in, `tests/unit/drivers/test_pi.py`: a turn said whole before the driver's ask was answered kept pi's order, and an
-  ask refused, a pi that exited, or a message rewritten as it ended left the input with no id in its place.
+  ask refused, a pi that exited, or a message rewritten as it ended left the input with no id in its place. A compaction kept its
+  place before an input that landed while its listing was asked for
+  (`test_a_compaction_keeps_its_place_before_an_input_that_landed_after_it`), and both went on as known when pi exited before
+  answering (`test_what_waits_on_an_answer_pi_never_gives_goes_on_as_it_is_known_before_the_exit`). A review found the compaction
+  reported behind such an input, which exposure then read as `kept`.
 - Pi's source, read and not copied: `AgentSession._handleAgentEvent` emits `message_end` and then appends the entry with no await
   between; `validateToolArguments` clones what a tool is handed; the MCP client's `callTool` sends `_meta` with `progressToken` alone.
 - [compatibility.md](../compatibility.md), pi and Provenance per harness. [Architecture sections 6 and 9.5](../architecture.md).

@@ -921,6 +921,54 @@ async def test_a_compaction_whose_listing_does_not_read_is_still_reported(tmp_pa
     assert compacted.forgotten is None
 
 
+async def test_a_compaction_keeps_its_place_before_an_input_that_landed_after_it(tmp_path, stand):
+    """Pi names what a compaction forgot only when asked, and an input may land before it answers: the compaction waits
+    in its place, so no report says a handover that came after it was there for it to keep."""
+    entries = [
+        entry("u1", None),
+        entry("kept", "u1"),
+        entry("c1", "kept", "compaction", role=None, firstKeptEntryId="kept"),
+    ]
+    stand.install(turns=[[BEGAN, compaction(), *user("New message"), message_end(), ENDED]], entries=entries, leaf="c1")
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await driver.deliver(delivery())
+        await heard.until(TurnEnded)
+
+    assert kinds(heard.reports[1:9]) == [
+        TurnStarted,
+        ModelCall,
+        Usage,
+        Compacted,
+        InputDelivered,
+        ModelCall,
+        Usage,
+        TurnEnded,
+    ]
+    assert heard.of(Compacted)[0].forgotten == ("u1",)
+    assert heard.of(InputDelivered)[0].native_id == "entry-4"
+
+
+async def test_what_waits_on_an_answer_pi_never_gives_goes_on_as_it_is_known_before_the_exit(tmp_path, stand):
+    stand.install(turns=[[BEGAN, compaction(), *user("New message"), message_end()]], gone_at="get_entries")
+
+    async with running(make_spec(tmp_path, goal="")) as (driver, heard):
+        await driver.deliver(delivery())
+        await heard.until(Exited)
+
+    assert kinds(heard.reports[1:]) == [
+        TurnStarted,
+        ModelCall,
+        Usage,
+        Compacted,
+        InputDelivered,
+        ModelCall,
+        Usage,
+        Exited,
+    ]
+    assert (heard.of(Compacted)[0].forgotten, heard.of(InputDelivered)[0].native_id) == (None, None)
+
+
 async def test_a_run_pi_aborted_with_nobody_interrupting_reads_as_aborted(tmp_path, stand):
     reports = await played(stand, tmp_path, ABORTED)
 

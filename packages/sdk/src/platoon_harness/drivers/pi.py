@@ -179,14 +179,26 @@ def _forgotten(entries: Sequence[Mapping[str, Any]], leaf: str, first_kept: str)
     return tuple(entry["id"] for entry in left if entry.get("message", {}).get("role") != "system")
 
 
+class _Place:
+    """Where a report goes among pi's while it waits on pi's answer to an ask, holding what is known of it so far,
+    which is what goes on if pi never answers."""
+
+    def __init__(self, report: Report) -> None:
+        self.report = report
+        self.waiting = True
+
+    def fill(self, report: Report) -> None:
+        self.report, self.waiting = report, False
+
+
 class PiDriver:
     """One `pi --mode rpc` process. A turn runs from the first `agent_start` to `agent_settled`, since retries, a
     compaction and queued input can each follow an `agent_end`.
 
     Frames are translated on the read loop, which never waits, so the pipe drains. An agent is parked at turn end, which
-    is the runtime's to do. An input that lands is reported under the id of the entry pi wrote it down as, which pi
-    gives only when asked, once the message has ended, so whatever pi says after the input waits behind it: the reports
-    keep pi's order.
+    is the runtime's to do. An input that lands is reported under the id of the entry pi wrote it down as, and a
+    compaction with what it forgot, which pi gives only when asked, so whatever pi says after either waits behind it:
+    the reports keep pi's order.
     """
 
     def __init__(self) -> None:
@@ -200,9 +212,9 @@ class PiDriver:
         self._opening = False
         self._failure: str | None = None
         self._inputs: dict[str, str] = {}
-        self._landed_as: dict[str, InputDelivered] = {}
+        self._landed_as: dict[str, _Place] = {}
         self._written: list[str] = []
-        self._behind: deque[Report | str] = deque()
+        self._behind: deque[Report | _Place] = deque()
         self._naming: str | None = None
         self._last_entry: str | None = None
         self._calls: dict[str, str | None] = {}
@@ -330,19 +342,29 @@ class PiDriver:
         task.add_done_callback(self._later.discard)
 
     async def _read(self, process: Process) -> None:
-        """Hear pi until it stops. An input it never named the entry of goes on with no id, before the exit after it."""
+        """Hear pi until it stops. What waits on an answer pi never gave goes on as it is known, before the exit after
+        it: an input with no id, and a compaction naming nothing."""
         try:
             await self._lines.run(process.stdout, self._heard)
         finally:
-            self._written = list(self._landed_as)
-            self._named({})
+            self._naming = None
+            self._landed_as.clear()
+            self._written.clear()
+            for held in self._behind:
+                if isinstance(held, _Place):
+                    held.waiting = False
+            self._pass_on()
 
-    def _report(self, *reports: Report) -> None:
-        """Pass reports on in pi's order: behind an input waiting for its entry's id, they wait too."""
-        if self._behind:
-            self._behind.extend(reports)
-        else:
-            self._process.put(*reports)
+    def _report(self, *reports: Report | _Place) -> None:
+        """Pass reports on in pi's order: behind one waiting on pi's answer, they wait too."""
+        self._behind.extend(reports)
+        self._pass_on()
+
+    def _pass_on(self) -> None:
+        """Pass on what waited, up to a report still waiting on pi."""
+        while self._behind and not (isinstance(head := self._behind[0], _Place) and head.waiting):
+            self._behind.popleft()
+            self._process.put(head.report if isinstance(head, _Place) else head)
 
     def _unknown(self, kind: str, raw: str) -> None:
         self._report(*unknown_frame(self._process.reason(kind), self._process.redact(raw)))
@@ -421,8 +443,8 @@ class PiDriver:
         boundary: Boundary = "turn" if self._opening else "model_call"
         self._opening = False
         if (input := self._inputs.pop(text, None)) is not None:
-            self._landed_as[text] = InputDelivered(input=input, boundary=boundary, evidence="message_start")
-            self._behind.append(text)
+            self._landed_as[text] = _Place(InputDelivered(input=input, boundary=boundary, evidence="message_start"))
+            self._report(self._landed_as[text])
 
     def _written_down(self) -> None:
         """A user message has ended, and its end follows its start, so pi has written down each input that landed, as an
@@ -454,15 +476,10 @@ class PiDriver:
             }
         finally:
             for text in self._written:
-                landed = self._landed_as.pop(text).model_copy(update={"native_id": ids.get(text)})
-                self._behind[self._behind.index(text)] = landed
+                place = self._landed_as.pop(text)
+                place.fill(place.report.model_copy(update={"native_id": ids.get(text)}))
             self._written.clear()
-            while self._behind:
-                head = self._behind[0]
-                if isinstance(head, str):
-                    break
-                self._behind.popleft()
-                self._process.put(head)
+            self._pass_on()
 
     def _said(self, message: Mapping[str, Any], blocks: Sequence[Any]) -> None:
         """A model call has ended. Only now is its id known, and a call the harness stopped hearing may have none."""
@@ -517,19 +534,24 @@ class PiDriver:
         self._report(item)
 
     def _compaction(self, result: Mapping[str, Any] | None) -> None:
-        """One or two model calls whose usage comes as one, with no id. One that came to nothing says what it spent."""
+        """One or two model calls whose usage comes as one, with no id. One that came to nothing says what it spent, and
+        one that came to something waits in its place for what it forgot."""
         self._report(ModelCall(purpose="compaction"))
         self._spent((result or {}).get("usage") or {}, None)
         if result is not None:
-            self._soon(self._compacted(result))
+            place = _Place(Compacted(forgotten=None, summary=result.get("summary")))
+            self._report(place)
+            self._soon(self._compacted(result, place))
 
-    async def _compacted(self, result: Mapping[str, Any]) -> None:
-        """Name what left the context, by asking. So this can follow the turn's end, and it says nothing of the turn."""
+    async def _compacted(self, result: Mapping[str, Any], place: _Place) -> None:
+        """Name what left the context, by asking, and pass on what waited behind it."""
         forgotten = None
         with contextlib.suppress(DriverError, *UNREADABLE):
             listing = await self._ask("get_entries")
             forgotten = _forgotten(listing["entries"], listing["leafId"], result["firstKeptEntryId"])
-        self._report(Compacted(forgotten=forgotten, summary=result.get("summary")))
+        if place.waiting:
+            place.fill(Compacted(forgotten=forgotten, summary=result.get("summary")))
+            self._pass_on()
 
     def _ended(self, *, aborted: bool) -> None:
         """Pi will do nothing more on its own. Approvals of the turn go moot with it. No run takes what a turn that
