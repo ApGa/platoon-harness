@@ -318,7 +318,8 @@ async def test_a_read_right_after_a_wake_names_what_the_wake_handed_over(kernel)
 
 async def test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_show(kernel, ada):
     """What a read of an agent's own showed, what its filter leaves out, what it asked for by `after` and a person's
-    read are each told no more than the entries they hold."""
+    read are each told no more than the entries they hold, and a read whose filter passed over something new is never
+    told that nothing is new."""
     alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
     carol = await spawn(kernel, "carol")
     await send(kernel, alice, "@bob", "from alice")
@@ -327,6 +328,8 @@ async def test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_
     await confirm(kernel, "bob", handed["input"])
 
     filtered = await read(kernel, bob, "@bob", sender="@carol")
+    await send(kernel, alice, "@bob", "new from alice")
+    passed_over = await read(kernel, bob, "@bob", sender="@carol")
     asked = await read(kernel, bob, "@bob", after=kernel.head)
     by_a_person = await read(kernel, ada, "@bob", after=kernel.head)
     await read(kernel, bob, "@bob", after=0)
@@ -338,6 +341,7 @@ async def test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_
         "handed to you: inbox/bob@2. To read that again here, call `message.read` with `after` 0."
     )
     assert "next" not in asked and "next" not in by_a_person and "next" not in after_its_own_read
+    assert gists(passed_over) == [] and passed_over["behind"] == 1 and "next" not in passed_over
 
 
 async def test_a_read_defaults_to_your_own_inbox(kernel):

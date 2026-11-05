@@ -840,7 +840,7 @@ def read(txn: Txn, a: Read) -> dict[str, Any]:
         cursor = left[-1].seq
         left = list(window(cursor))
     page = {"entries": [item.row for item in shown], "cursor": cursor, "behind": len(left)}
-    if entries or reader is None or a.after is not None:
+    if entries or left or reader is None or a.after is not None:  # What a filter passed over is new.
         return page
     before, handed = deliveries.handed(reader, stream)
     refs = [entry.ref for entry in handed if wanted(entry)]

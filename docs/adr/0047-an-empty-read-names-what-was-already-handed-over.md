@@ -16,7 +16,8 @@ the channel was not. Claude Code did this in none of 17 woken turns.
   the refs of the entries the offer that last moved that cursor handed over on that stream, by the refs the agent was shown them by,
   which its filter would have shown, and the `after` that reads them again, in the words of its surface. One that a read of its own
   moved names nothing, as that read showed what it gave. So does a read with `after`, which asked for what it got, and a person's,
-  who holds no cursor.
+  who holds no cursor. A read whose filter passed over a new entry found something past its cursor, so it is told nothing of the
+  kind, and `behind` counts what it passed over.
 - **A cursor keeps the offer that last moved it on,** a column of `Deliveries`, at view version 12, and loses it when a failed
   handover steps the cursor back, as that queues the entries again and the next read shows them.
 - **Nothing else changes.** The handover's text, the preamble and every description stay as they were: the preamble and the tool
@@ -41,7 +42,8 @@ the channel was not. Claude Code did this in none of 17 woken turns.
 ## Evidence
 
 - `tests/unit/primitives/test_messages.py`, `test_a_read_right_after_a_wake_names_what_the_wake_handed_over` and
-  `test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_show`.
+  `test_an_empty_read_names_only_what_a_handover_gave_and_the_read_would_show`, which a filtered read that passed over a new entry
+  is among.
 - `tests/unit/tools/test_mcp.py`, `test_an_empty_read_after_a_wake_names_what_it_handed_over_as_its_surface_does`, on the `mcp`,
   `mcp__<ns>` and `ph` surfaces.
 - `tests/live/test_reads.py`, live, run 79, on `gpt-6-luna` at low effort, 7 calls: woken by a memo and asked to read `#memo`,

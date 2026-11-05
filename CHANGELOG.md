@@ -10,10 +10,10 @@
   stand-ins. The test suite runs the file with those stand-ins, from the command line and from the page with the terminal UI
   attached, and on the real binaries against FakeModel, a Claude Code lead beside each of Codex, pi and OpenHands.
 - An empty read names what was already handed over. An agent's read that finds nothing past its own cursor answers with `next`,
-  naming what the offer that last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that
-  reads it again, in the words of its surface, unless that offer was a read of its own: a wake moves the cursor past what it
-  hands over, so a read right after found nothing, and a Codex model took that for an empty channel. `Deliveries` is at view
-  version 12, keeping the offer that last moved each cursor. See ADR 0047.
+  naming what the offer that last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that reads
+  it again, in the words of its surface, unless that offer was a read of its own or the read's filter passed over something new: a
+  wake moves the cursor past what it hands over, so a read right after found nothing, and a Codex model took that for an empty
+  channel. `Deliveries` is at view version 12, keeping the offer that last moved each cursor. See ADR 0047.
 - An agent's process is not its identity. Any agent between turns for ten minutes on the session's clock, with no setting, rests
   when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a runtime-only op, a `rest`
   effect ends its process tree, and its next handover brings its harness back first, natively, or anew where it took no turn, on a
