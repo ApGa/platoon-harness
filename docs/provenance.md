@@ -146,5 +146,8 @@ $ platoon-harness annotate fix-auth --target task/tasks/1@3 --kind credit --prod
 $ platoon-harness annotations fix-auth --target task/tasks/1@3
 ```
 
+[examples/mixed-team](../examples/mixed-team/README.md) runs a team whose writes cite what they rest on, and asks `uses` and
+`contributors` of its lead's answer.
+
 A session closed before an upgrade changed a view refuses a query, naming the views behind its journal. `platoon-harness session
 refold fix-auth` brings them up to it while no runtime holds the session, as a runtime does as it opens, and writes no event.

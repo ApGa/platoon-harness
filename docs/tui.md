@@ -306,6 +306,7 @@ before the session's. `^` is Ctrl.
 
 Disabled where a control for it would be, or absent from the palette: diffs and review comments, search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
-switching, taking over an agent's native terminal, an approval and who answered it in the transcript, forking a session, copying
-a selection from the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who
-contributed, and refs in a message's text followed. [STATUS.md](STATUS.md) says what each is.
+switching, taking over an agent's native terminal, an approval and who answered it in the transcript, copying a selection from
+the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in
+a message's text followed. [STATUS.md](STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+leases and credentials do not, so no control will offer it.

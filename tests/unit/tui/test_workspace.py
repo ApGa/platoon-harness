@@ -24,6 +24,7 @@ from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock
 
 from ..runtime.support import harness, in_state, of_type, until
+from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
 from .support import at_once, drawn, workspace
 
 pytestmark = pytest.mark.timeout(60)
@@ -608,6 +609,35 @@ async def test_a_daemon_that_keeps_failing_is_a_place_in_the_dock(root, monkeypa
 
         assert "⚠ daemon daemon courier failed and is restarted with backoff: RuntimeError: no luck" in text
         assert [place["kind"] for place in workspace(app)._places(workspace(app).live)] == ["daemon"]
+
+
+async def test_an_uncertain_effect_is_settled_from_the_dock_once(root):
+    """An answer a crash left in flight, which its harness cannot say landed, waits in the dock with what settles it,
+    and `/yes` there says it happened, once."""
+    unknown = type("Unknown", (HangsOnAnswers,), {"answer_found": "unknown"})
+    await asked_then_crashed(root, lambda: unknown([[Ask("may I?")]]))
+
+    async with Session.resume("s", root=root) as owner:
+        rows = await until(owner.attention, owner, lambda rows: _effects(rows))
+        app = TerminalUI("s")
+        async with app.run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "answer uncertain: the runtime restarted" in text)
+            while dock_of(app).cursor not in _effects(rows):
+                await pilot.press(*"/next-place", "enter")
+            await drawn(pilot, lambda text: "/yes It happened  /no It did not  answer uncertain" in text)
+            await pilot.press(*"/yes", "enter")
+            settled = await until(lambda: of_type(owner, "effect.finished"), owner, lambda found: _said_so(found))
+            await until(owner.attention, owner, lambda rows: not _effects(rows))
+
+    assert _said_so(settled) == ["answer finished: human:you says so"]
+
+
+def _effects(rows: list[dict]) -> list[str]:
+    return [row["id"] for row in rows if row["id"].startswith("effect/")]
+
+
+def _said_so(events: list) -> list[str]:
+    return [event.gist for event in events if event.gist.endswith("says so")]
 
 
 async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_screen_cuts_only_the_gist(root):
