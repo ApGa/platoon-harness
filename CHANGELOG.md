@@ -85,7 +85,7 @@
   system reads: `Session.agents` and `Session.leave`, `Eligibility`, `CallEligibility` and `Bar` with their words,
   `AgentOutcome.status`, `Annotation`, and `FakeModel` and `Request` members.
 - Each agent's `said`, in `Session.agents()` and `Session.status(agent)`: the ref of its last words, its latest turn's last message
-  or a finished agent's end, which a training system closes an episode on.
+  or what a finished agent's end's report carries, which a training system closes an episode on.
 - `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
   closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See [RFC
@@ -685,6 +685,12 @@
 
 ### Fixed
 
+- A finished agent's `said` named its end even where that end's report carried the agent's own `agent.finished` or its last
+  message, so an episode closed on it walked from an event that cites nothing and that no model call chose, and a finish's
+  citations carried no credit. `said` is now the ref the end's report carries, which
+  `agent.ended`, payload 2, records as `carries`: the `agent.finished` of an `agent.finish` with a report in a turn, the end itself
+  for one with a gist out of a turn, and else the latest turn's last message, whose words the report took, or the end where that
+  turn said nothing. An end written before payload 2 says itself, as it did.
 - A tree of agents that do not stay could sit until a person ended it, as one did for 19 minutes on the first GPU run of a team on
   OpenHands: a child reported and never called `agent.finish`, so it stayed live and idle, and its parent, woken by the report,
   ended its turn and parked again on a wait on that child's end, which nothing would bring. An agent that does not stay now finishes

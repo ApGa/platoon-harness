@@ -1800,7 +1800,9 @@ class AgentOutcome(Model):
 - **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody
   else can act (§12), and which cannot detach, at a start or a resume. It sends its task to `Team.recipients()`, every agent the
   session starts, ends every agent, deepest first, retiring one at rest and cancelling one at work, and closes the episode on each
-  starting agent's `said`, the ref of its last words that `Session.agents()` and `Session.status(agent)` give (§6).
+  starting agent's `said`, the ref of its last words that `Session.agents()` and `Session.status(agent)` give (§6): for a finished
+  agent what its end's report carries and records as `carries`, a finish's `agent.finished` or the message whose words that report
+  took, and else its own end, and for any other its latest turn's last message.
 - **Trainable is checked before any harness launches.** `trainable_problems(team)` reads the team alone, as a training system's load
   check reads it with no driver to ask: a model or an auth profile a role names, approvals left to `ask`, a harness's own agents
   allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches, with approvals judged by the

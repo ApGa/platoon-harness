@@ -209,7 +209,8 @@ def end(
 ) -> Event:
     """The ended transition: one event every view folds, then what no fold may do. Any open turn ends with it, whoever
     spawned the agent hears how it ended, by the ref of what said it, and what it had still to start never does. Only a
-    turn is charged. A finish's report is the agent's, so `based_on` is its claim."""
+    turn is charged. A finish's report is the agent's, so `based_on` is its claim. The end records the ref its report
+    carries as `carries`: a finish's `agent.finished`, the latest turn's last message, or None for the end itself."""
     name = agent.name
     owned = txn.view(Tasks).owned(agent.id)
     if txn.view(Stamps).turn(name) is not None or txn.view(Budgets).turn_usage(name):
@@ -220,27 +221,30 @@ def end(
     body = body or agent.final_body
     wake = False if txn.me.id == agent.parent else _wakes(txn, agent, ended=True, badly=status != "finished")
     follows = txn.view(Deliveries).heard(name)
+    carries = None
+    if status == "finished" and agent.finishing and (gist or body):
+        carries = _said(txn, agent.finish_ref)
+    elif status == "finished" and gist is None:
+        carries = _said(txn, agent.final_ref)
+    carried = None if carries is None else f"{carries.stream}@{carries.version}"
     ended = txn.emit(
         "agent.ended",
         f"agent/{name}",
         gist=(f"{name} finished: {report}" if status == "finished" and report else ending)[:GIST_LIMIT],
         agent=name,
         based_on=based_on,
-        refs=[body] if body else (),
+        refs=[ref for ref in (body, carried) if ref is not None],
         data={
             "status": status,
             "reason": reason,
             "report": report,
             "body": body,
             "heard": _hearer(txn, agent) is not None,
+            "carries": carried,
         },
+        v=2,
     )
-    carries = ended
-    if status == "finished" and agent.finishing and (gist or body):
-        carries = _said(txn, agent.finish_ref) or ended
-    elif status == "finished" and gist is None:
-        carries = _said(txn, agent.final_ref) or ended
-    _monitor(txn, agent, carries, report, body, wake=wake, follows=follows)
+    _monitor(txn, agent, carries or ended, report, body, wake=wake, follows=follows)
     if txn.view(Stamps).turn(name) is not None:
         txn.emit("turn.ended", f"turn/{name}", gist=f"turn ended: {status}", agent=name, data={"reason": status})
     if agent.finishing:
@@ -833,8 +837,8 @@ def _public(agent: Agent) -> dict[str, Any]:
 @op("agent.list", query=True)
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
     """List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by, with
-    `said`, the ref of what said its last words: its latest turn's last message, or a finished agent's end, and None
-    when it has said nothing since its latest turn began."""
+    `said`, the ref of what said its last words: for a finished agent what its end's report carries, and else its
+    latest turn's last message, or None when it has said nothing since that turn began."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
 
 

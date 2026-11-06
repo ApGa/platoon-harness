@@ -251,11 +251,12 @@ async def tree(tmp_path, name: str, on: str) -> tuple[dict[str, str], dict[str, 
 
 
 async def test_a_tree_that_does_not_stay_credits_each_agent_alike_on_its_said_or_its_last_message(tmp_path):
-    """Each `said` names its agent's end, which follows from nothing and cites nothing, as its harness's last message
-    does not either, so each agent keeps all its ref was handed, the child as the root."""
+    """Each ends with a turn whose last words are its report, so its `said` is what its end carries, that turn's last
+    message, which follows from nothing and cites nothing, and each agent keeps all its ref was handed, the child as
+    the root."""
     on_said, by_said = await tree(tmp_path, "said", "said")
     on_last, by_last = await tree(tmp_path, "last", "last")
 
-    assert {ref.partition("/")[0] for ref in on_said.values()} == {"agent"}
-    assert {ref.partition("/")[0] for ref in on_last.values()} == {"turn"}
+    assert {ref.partition("@")[0] for ref in on_said.values()} == {"turn/crafter", "turn/kid"}
+    assert on_said == on_last
     assert by_said == by_last == {"crafter": 0.5, "kid": 0.5}

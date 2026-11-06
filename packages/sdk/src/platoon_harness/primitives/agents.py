@@ -48,17 +48,17 @@ class Agent(BaseModel, frozen=True):
     told to stay after its task for the next message. `asked` says its parent is owed an answer: the spawn asks, and so
     does each new message from the parent once it lands in a turn, until a report answers. `native` is the id its
     harness resumes by, when it gave one. `unbegun` says it was given a goal and no turn has begun on it. `final_ref` is
-    the ref of what said its last words: its turn's last message, or a finished agent's end. `finishing` says it called
-    `agent.finish` in a turn that has not ended, and `finish_ref` is that call's `agent.finished`. `stopped` says why
-    its last turn did not stop on its own, until the next begins. `failure` is what the last effect to fail for it said,
-    `failures` counts handovers failed in a row, and the next waits until `retry_at`. `quieted` is the seq of the last
-    interrupt of it or owner's stop, and a handover asked for before it is no failure of its harness's. `idle_since` is
-    when it was last left between turns, by a start, a turn's end or a hold's release. `resting` says its harness has
-    no process, which its next handover brings back, and `exits` counts the exits of its harness on its own since a turn
-    of its last ended. `login` is the kind of login its harness ran on at its latest start, or None where nobody could
-    tell. `instructions` is the body of what its harness was told last, or None for nothing. `workspace` is where it
-    works, once made, and `removed` or `kept` say what its stop did with it. `backend` is the backend's ids for it, as
-    its admit recorded them, empty when its authority named none."""
+    the ref of what said its last words: its latest turn's last message, or for a finished agent what its end's report
+    carries. `finishing` says it called `agent.finish` in a turn that has not ended, and `finish_ref` is that call's
+    `agent.finished`. `stopped` says why its last turn did not stop on its own, until the next begins. `failure` is what
+    the last effect to fail for it said, `failures` counts handovers failed in a row, and the next waits until
+    `retry_at`. `quieted` is the seq of the last interrupt of it or owner's stop, and a handover asked for before it is
+    no failure of its harness's. `idle_since` is when it was last left between turns, by a start, a turn's end or a
+    hold's release. `resting` says its harness has no process, which its next handover brings back, and `exits` counts
+    the exits of its harness on its own since a turn of its last ended. `login` is the kind of login its harness ran on
+    at its latest start, or None where nobody could tell. `instructions` is the body of what its harness was told last,
+    or None for nothing. `workspace` is where it works, once made, and `removed` or `kept` say what its stop did with
+    it. `backend` is the backend's ids for it, as its admit recorded them, empty when its authority named none."""
 
     name: str
     role: str
@@ -371,6 +371,8 @@ class Agents(View):
 
     @fold("agent.ended")
     def ended(self, event: Event) -> None:
+        """A finished agent's last words are what its end's report carries, or the end itself. An end before v2
+        recorded nothing it carried, so it says itself."""
         data = event.data
         self.db.execute(
             """
@@ -380,9 +382,10 @@ class Agents(View):
             (data["status"], data["reason"], event.agent),
         )
         if data["status"] == "finished":
+            said = (data["carries"] if event.v >= 2 else None) or f"{event.stream}@{event.version}"
             self.db.execute(
                 "UPDATE v_agents SET final_gist = ?, final_body = ?, final_ref = ? WHERE name = ?",
-                (data["report"], data["body"], f"{event.stream}@{event.version}", event.agent),
+                (data["report"], data["body"], said, event.agent),
             )
 
     @fold("item.recorded")

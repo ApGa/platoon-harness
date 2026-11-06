@@ -99,11 +99,14 @@ async with Session.start(
   as a `retire` of it is refused `conflict`. An agent with no end is `no_end`, so none of its calls can train, and `finish` hears of
   an agent only once it has ended: leaving a session stops it, and an agent still live then keeps no end. One that does not stay
   has ended already, `finished`, at a turn that stopped with nothing more to come for it, its last words its report, so a team whose
-  roles do not stay settles on its own. Its `said` names that end, from which credit walks back as it would from its last message.
+  roles do not stay settles on its own. Its `said` names the message that said those words, which its end carries.
 - **Close the episode** on what each agent that started came to, with `close_episode(based_on=...)`: its `said`, in its row of
-  `session.agents()` or in `session.status(agent)`, is the ref of its last words, its latest turn's last message or a finished
-  agent's end, and None while it has said nothing since its latest turn began. Credit walks back from these refs, so an episode
-  closed on an end the session wrote, or on nothing, credits nobody's work. What it was worth is an annotation's to say.
+  `session.agents()` or in `session.status(agent)`, is the ref of its last words. For a finished agent it is what its end's report
+  carries: the `agent.finished` of an `agent.finish` with a report in a turn, its `agent.ended` for one with a gist out of a turn,
+  and else the latest turn's last message, whose words the report took, or its `agent.ended` where that turn said nothing. For any
+  other it is its latest turn's last message, and None while it has said nothing since that turn began. Credit walks back from
+  these refs, so an episode closed on an end the session wrote, or on nothing, credits nobody's work. What it was worth is an
+  annotation's to say.
 
 A session started trainable, or whose agents your authority admitted, is never resumed, as their keys went with it, even one a stop
 cut short while an admit was under way. Read it as history.

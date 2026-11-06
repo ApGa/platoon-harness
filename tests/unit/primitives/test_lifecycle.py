@@ -1046,7 +1046,8 @@ async def test_a_child_that_does_not_stay_ends_with_a_turn_that_leaves_nothing_t
     kernel,
 ):
     """It reported and never called `agent.finish`, so it finishes as that call with no report would have it: its
-    last words are its report, shown to its parent by the ref of what said them, and `said` names its end."""
+    last words are its report, shown to its parent by the ref of what said them, which its end carries and `said`
+    names."""
     await parked_on(kernel, "a")
     await start_turn(kernel, "a")
     await report(kernel, "a", "item", kind="message", gist="the ingredient chain")
@@ -1059,7 +1060,7 @@ async def test_a_child_that_does_not_stay_ends_with_a_turn_that_leaves_nothing_t
     posted = of_type(kernel, "message.sent")[-1]
     assert (state_of(kernel, "a")["status"], ended.data["report"]) == ("finished", "the ingredient chain")
     assert (posted.gist, posted.data["carries"], posted.data["delivery"]) == ("the ingredient chain", said, "next-turn")
-    assert state_of(kernel, "a")["said"] == f"{ended.stream}@{ended.version}"
+    assert ended.data["carries"] == state_of(kernel, "a")["said"] == said
     assert of_type(kernel, "turn.ended")[-1].data["reason"] == "finished"
     [held] = ready(kernel)["waits"]
     result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": held}))
@@ -1640,11 +1641,12 @@ V1 = {
 }
 
 
-def written_at_v1(folder: Path) -> None:
-    """Leave a journal's payloads as an SDK wrote them before agents could stay, with its views to be folded again."""
+def written_at_v1(folder: Path, payloads: dict[str, str] = V1) -> None:
+    """Leave the payloads of a journal's events of each type `payloads` names as an SDK wrote them at v1, by default
+    before agents could stay, with its views to be folded again."""
     db = sqlite3.connect(folder / "journal.sqlite")
     db.execute("DROP TRIGGER events_no_update")
-    for type, data in V1.items():
+    for type, data in payloads.items():
         db.execute(f"UPDATE events SET v = 1, data = {data} WHERE type = ?", (type,))
     db.execute("CREATE TRIGGER events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT, 'immutable'); END")
     db.execute("DELETE FROM v_folds")
@@ -2813,6 +2815,75 @@ async def test_a_one_shot_agent_s_end_tells_its_parent_once(kernel):
     await end_turn(kernel, "bob")
 
     assert [event.gist for event in of_type(kernel, "message.sent")] == ["all done"]
+
+
+async def test_a_finished_agents_said_is_what_its_report_carries(kernel):
+    """A finish with a report in a turn says those words by its `agent.finished`, which holds what it cites, so its
+    end, its parent's report of it and `said` all carry that ref, and not the message before it."""
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="nearly there")
+    finish = {"gist": "all done", "based_on": ["agent/bob@1"]}
+    finished = result_of(await kernel.submit(bob, "agent.finish", finish))["ref"]
+
+    await end_turn(kernel, "bob")
+
+    ended, posted = of_type(kernel, "agent.ended")[-1], of_type(kernel, "message.sent")[-1]
+    assert state_of(kernel, "bob")["said"] == ended.data["carries"] == posted.data["carries"] == finished
+    assert of_type(kernel, "agent.finished")[-1].based_on == ("agent/bob@1",)
+
+
+async def test_an_empty_finish_and_a_one_shot_stop_say_their_last_message(kernel):
+    """Neither has words of its own, so each end's report takes its turn's last message, and carries that."""
+    bob = await spawn(kernel, "bob")
+    await spawn(kernel, "one", ready={"persistent": False})
+    for name in ("bob", "one"):
+        await start_turn(kernel, name)
+        await report(kernel, name, "item", kind="message", gist=f"{name} is done")
+    result_of(await kernel.submit(bob, "agent.finish", {}))
+
+    for name in ("bob", "one"):
+        await end_turn(kernel, name)
+
+    messages = {event.agent: f"{event.stream}@{event.version}" for event in of_type(kernel, "item.recorded")}
+    ends = {event.agent: event.data for event in of_type(kernel, "agent.ended")}
+    assert {name: state_of(kernel, name)["said"] for name in ends} == messages
+    assert {name: (end["carries"], end["report"]) for name, end in ends.items()} == {
+        name: (ref, f"{name} is done") for name, ref in messages.items()
+    }
+
+
+async def test_a_finish_out_of_a_turn_says_its_end_which_holds_its_citations(kernel):
+    """Out of a turn a finish ends its agent at once, so its end holds its report and what it cites, and carries
+    nothing else."""
+    bob = await spawn(kernel, "bob")
+
+    finished = result_of(await kernel.submit(bob, "agent.finish", {"gist": "all done", "based_on": ["agent/bob@1"]}))
+
+    ended = of_type(kernel, "agent.ended")[-1]
+    assert state_of(kernel, "bob")["said"] == finished["ref"] == f"{ended.stream}@{ended.version}"
+    assert (ended.data["carries"], ended.data["report"], ended.based_on) == (None, "all done", ("agent/bob@1",))
+
+
+async def test_an_end_recorded_before_carries_says_itself(kernel, folder, clock):
+    """An end written before it recorded what its report carries said a finished agent's last words by itself, and a
+    journal of one folds as it was written."""
+    bob = await spawn(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="all done")
+    result_of(await kernel.submit(bob, "agent.finish", {}))
+    await end_turn(kernel, "bob")
+    carried = state_of(kernel, "bob")["said"]
+    kernel.close()
+    written_at_v1(folder, {"agent.ended": "json_remove(data, '$.carries')"})
+
+    reopened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    [message], [ended] = of_type(reopened, "item.recorded"), of_type(reopened, "agent.ended")
+    said = state_of(reopened, "bob")["said"]
+    reopened.close()
+    assert carried == f"{message.stream}@{message.version}"
+    assert (ended.v, said) == (1, f"{ended.stream}@{ended.version}")
 
 
 async def test_a_one_shot_that_exits_in_its_turn_is_lost(kernel):
