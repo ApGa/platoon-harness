@@ -1,4 +1,9 @@
 # platoon-harness-cli
 
-The `platoon-harness` command: a terminal UI and headless commands for durable multi-agent sessions.
-See the project README for documentation.
+The terminal UI and command line of platoon-harness: run the agent harnesses you already use, such as Claude Code,
+Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back.
+
+Nothing is published to PyPI yet. From a checkout of [the repository](https://github.com/ApGa/platoon-harness),
+`uv sync` installs it with the SDK, as the `platoon-harness` command.
+[The project's README](https://github.com/ApGa/platoon-harness#readme) says what it gives you and how to start, and
+[its documentation](https://github.com/ApGa/platoon-harness/tree/main/docs) the rest.

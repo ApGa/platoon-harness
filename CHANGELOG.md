@@ -472,6 +472,13 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The README follows Platoon's outline: the project's one sentence, what it gives you, each point as STATUS has it, the
+  nine words of architecture section 2, installing from a checkout, a quickstart that begins with the mixed team on no
+  keys, the SDK in a script, the milestones, the documentation, the layout, contributing and the license.
+  `tests/unit/docs/test_readme.py` holds its words to architecture section 2, its milestones to STATUS and its Python
+  to `examples/sdk-script/run.py`, and `tests/integration/test_examples.py` runs its first steps. The mixed team's
+  README has a goal, what it needs, a table of its files and numbered steps, the output to expect from the run with no
+  keys among them, and each package's README says what it is and links the project.
 - The mixed team's scripted stand-ins live in the example, `examples/mixed-team/stand_ins.py`, on public names alone, so its
   no-keys run imports no test code: `PYTHONPATH=examples/mixed-team`, and `stand_ins:lead` and `stand_ins:worker` as the
   harnesses. Its tests run the README's command as the README shows it, and load the stand-ins' turns from that file.

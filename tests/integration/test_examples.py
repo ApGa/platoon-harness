@@ -72,6 +72,12 @@ def ref(event: dict) -> str:
     return f"{event['stream']}@{event['version']}"
 
 
+def expected(page: Path, holding: str) -> str:
+    """The output `page` says to expect: its first text block that holds `holding`."""
+    blocks = re.findall(r"^```text\n(.*?)^```$", page.read_text(), re.MULTILINE | re.DOTALL)
+    return next(block for block in blocks if holding in block)
+
+
 async def journal(cli: Cli, session: str) -> list[dict[str, Any]]:
     """A session's events, as `events --json` prints them, every one in `seq` order."""
     read = await cli.run("events", session, "--json")
@@ -89,6 +95,7 @@ async def test_the_mixed_team_example_runs_with_no_keys_through_a_queue_a_board_
     done = await cli.as_shown(command)
 
     assert done.code == 0, done.stderr
+    assert done.stdout.endswith(expected(README, "settled")), done.stdout[-400:]
     events = await journal(cli, "dns")
     cited = {ref(event): event["based_on"] for event in events if event["based_on"]}
     sent = [event for event in events if event["type"] == "message.sent"]
@@ -121,6 +128,24 @@ async def test_the_mixed_team_example_says_who_contributed_to_the_lead_s_answer(
 
     rows = [(row["maker"], row["kinds"]) for row in json.loads(reached.stdout)["rows"]]
     assert rows == [(maker, ["declared"]) for maker in ("agent:lead", "agent:w", "human:you")], reached.stdout
+
+
+async def test_the_readme_s_first_steps_run_the_mixed_team_with_no_keys_and_read_it_back(cli: Cli):
+    """The README's quickstart runs the example's own no-key command, then reads the closed session: the sessions
+    there are, the task on its queue, the note on its board, and what cites the note, the lead's finish among it."""
+    run, *reads = shown(ROOT / "README.md", where="stand_ins:lead")
+
+    done = [await cli.as_shown(command) for command in [run, *reads]]
+
+    assert run == shown(README, where="stand_ins:lead")[0]
+    assert [step.code for step in done] == [0] * len(done), [step.stderr for step in done]
+    listed, queued, posted, cited = (step.stdout for step in done[1:])
+    assert re.search(r"^dns\s.*closed$", listed, re.MULTILINE), listed
+    assert [task["state"] for task in json.loads(queued)["tasks"]] == ["done"]
+    assert json.loads(posted)["ref"] == STAND_INS.NOTE
+    assert ("agent:lead", "agent.finished") in {
+        (row.get("maker"), row.get("type")) for row in json.loads(cited)["rows"]
+    }
 
 
 def prefixed(tool: str, id: str, arguments: dict[str, Any]) -> ToolCall:

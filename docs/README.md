@@ -1,11 +1,13 @@
 # platoon-harness documentation
 
-This page is the table of contents. New here? [Try it](../README.md#try-it) from a checkout, then run
-[the mixed team](../examples/mixed-team/README.md), which works with no keys too.
+This page is the table of contents. New here? [Install](../README.md#install) from a checkout, then follow
+[the quickstart](../README.md#quickstart), which starts with [the mixed team](../examples/mixed-team/README.md) on no
+keys.
 
 ## Getting started
 
-- [Try it](../README.md#try-it): what you need, and the first commands, from a checkout.
+- [Install](../README.md#install) and [the quickstart](../README.md#quickstart): what you need, and the first
+  commands, from a checkout.
 - [Changelog](../CHANGELOG.md): what changed.
 
 ## Tutorials
