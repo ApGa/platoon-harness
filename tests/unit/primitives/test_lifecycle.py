@@ -15,6 +15,7 @@ from ..kernel.support import supervised, until
 from .support import (
     agent,
     channel,
+    confirm,
     end_turn,
     enroll,
     events_of,
@@ -1104,7 +1105,16 @@ async def test_a_turn_that_does_not_stop_on_its_own_is_no_finish_for_an_agent_th
 
 @pytest.mark.parametrize(
     "still",
-    ["a person holding it", "a wait", "a message", "a handover under way", "a handover taken", "a child at work"],
+    [
+        "a person holding it",
+        "a wait",
+        "a message",
+        "a handover under way",
+        "a handover taken",
+        "a child at work",
+        "a child parked on a wait",
+        "a child a person holds",
+    ],
 )
 async def test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come(kernel, ada, still):
     lead = await spawn(kernel, "lead", role="lead", goal="")
@@ -1125,6 +1135,14 @@ async def test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come(kern
             await settle_effects(kernel, "bob")
     elif still == "a child at work":
         await spawn(kernel, "cy", role="linked", by=bob)
+    elif still == "a child parked on a wait":
+        cy = await spawn(kernel, "cy", role="linked", by=bob, goal="")
+        await start_turn(kernel, "cy")
+        result_of(await kernel.submit(cy, "wait", {"channels": ["#news"], "timeout": 60}))
+        await end_turn(kernel, "cy")
+    elif still == "a child a person holds":
+        await spawn(kernel, "cy", role="linked", by=bob, goal="", ready=declared)
+        result_of(await kernel.submit(ada, "agent.takeover", {"agent": "cy"}))
 
     await end_turn(kernel, "bob")
 
@@ -1142,6 +1160,90 @@ async def test_a_parent_s_message_keeps_a_child_that_does_not_stay_and_the_turn_
 
     assert await answers(kernel, bob, "t2") == "wake"
     assert state_of(kernel, "bob")["status"] == "finished"
+
+
+@pytest.mark.parametrize("interrupt", ["under way", "done", "on its way"])
+async def test_a_turn_an_interrupt_was_asked_in_is_no_finish_though_it_stopped_first(kernel, ada, interrupt):
+    """Its harness stopped before the interrupt reached it, and the interrupt quieted the message that would have kept
+    it: it lives on, and that message waits unread for its next turn. One asked of the turn it was on its way to, by a
+    handover that landed all the same, is the same while it is under way."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", by=lead, goal="")
+    if interrupt == "on its way":
+        await send(kernel, lead, "@bob", "go on")
+        handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+    else:
+        await start_turn(kernel, "bob")
+        await send(kernel, ada, "@bob", "one more thing")
+    result_of(await kernel.submit(ada, "agent.interrupt", {"agent": "bob"}))
+    if interrupt == "done":
+        await settle_effects(kernel, "bob")
+    elif interrupt == "on its way":
+        [deliver] = [
+            row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["kind"] == "deliver"
+        ]
+        started = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": deliver["id"]}))
+        result_of(await kernel.submit(kernel.runtime, "effect.finish", {"id": deliver["id"], "attempt": started}))
+        await start_turn(kernel, "bob")
+        await confirm(kernel, "bob", handed["input"])
+
+    await end_turn(kernel, "bob")
+
+    unread = result_of(kernel.query(kernel.runtime, "agent.unread", {"agent": "bob"}))["total"]
+    assert (state_of(kernel, "bob")["state"], state_of(kernel, "bob")["status"]) == ("idle", None)
+    assert unread == (0 if interrupt == "on its way" else 1)
+
+
+async def test_a_child_s_end_wakes_a_parent_that_does_not_stay_though_it_asked_nothing(kernel):
+    """`c`'s first report answered its spawn while `g` kept it at work, and `g` kept `p` too, so the end of `c` answers
+    nothing, and only it can bring `p` to the end of a turn, where `p` ends."""
+    p = await spawn(kernel, "p", role="leaver", goal="")
+    await start_turn(kernel, "p")
+    c = await spawn(kernel, "c", role="linked", by=p)
+    await end_turn(kernel, "p")
+    await start_turn(kernel, "c")
+    await spawn(kernel, "g", role="linked", by=c)
+    await end_turn(kernel, "c")
+    assert last_report(kernel) == "wake"
+    await start_turn(kernel, "p", "t2")
+    await read(kernel, p, "@p")
+    await end_turn(kernel, "p")
+    await start_turn(kernel, "g")
+    await end_turn(kernel, "g")
+    await settle_effects(kernel, "g")
+    await start_turn(kernel, "c", "t2")
+    await read(kernel, c, "@c")
+    await end_turn(kernel, "c")
+    await settle_effects(kernel, "c")
+
+    assert [state_of(kernel, name)["status"] for name in "pcg"] == [None, "finished", "finished"]
+    assert (last_report(kernel), ready(kernel)["agents"]) == ("wake", ["p"])
+    await start_turn(kernel, "p", "t3")
+    await read(kernel, p, "@p")
+    await end_turn(kernel, "p")
+    assert state_of(kernel, "p")["status"] == "finished"
+
+
+@pytest.mark.parametrize("working", [False, True], ids=["idle", "in a turn"])
+async def test_a_parent_that_does_not_stay_hears_each_child_s_end_before_its_own(kernel, ada, working):
+    """`c` answered the spawn with a turn a person's message kept it after, so its end answers nothing. It wakes `p`
+    all the same, and one in a turn takes one more to read it."""
+    p = await spawn(kernel, "p", role="leaver", goal="")
+    c = await spawn(kernel, "c", role="linked", by=p, goal="")
+    await start_turn(kernel, "c")
+    await send(kernel, ada, "@c", "one more thing")
+    await end_turn(kernel, "c")
+    await start_turn(kernel, "p")
+    await read(kernel, p, "@p")
+    if not working:
+        await end_turn(kernel, "p")
+    await answers(kernel, c, "t2")
+    await settle_effects(kernel, "c")
+    assert (state_of(kernel, "c")["status"], last_report(kernel)) == ("finished", "wake")
+
+    if working:
+        await end_turn(kernel, "p")
+    assert (state_of(kernel, "p")["status"], ready(kernel)["agents"]) == (None, ["p"])
 
 
 # Interrupt and takeover.

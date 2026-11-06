@@ -31,11 +31,18 @@ stopped with nothing more to come for it, has said all it will.
   finished agent's does, and that end's report holds those words. The turn ends `finished`, as a finish's turn does, and its look is
   its stop's.
 - **Nothing more to come** means no person holds it, no wait of its own is open, no entry would wake it, no handover to it is under
-  way or taken and not landed, and no child that would end with it is at work. Each would start its next turn or be cut off by its
-  end, and the last is what the working-children rule (§7) refuses a finish over. A handover taken and not landed lands in the turn
-  that follows (ADR 0022), so a harness that never says what landed never finishes this way: unknown is not nothing.
+  way or taken and not landed, and no one who would end with it is at work or has more to come, by the same reckoning, as a child
+  parked on a wait or one a person holds. Each would start its next turn or be cut off by its end. A handover taken and not landed
+  lands in the turn that follows (ADR 0022), so a harness that never says what landed never finishes this way: unknown is not
+  nothing.
 - **A turn that does not stop on its own is no finish.** One an interrupt, the owner's stop or a failure cut leaves the agent as
-  before, and its parent hears of that turn as before.
+  before, and its parent hears of that turn as before. So does one an interrupt was asked in, or is under way for, though its
+  harness said it stopped: the interrupt came too late to cut it, it quieted what would have kept the agent, and `agent.interrupt`
+  is the stop that keeps one.
+- **A child's end wakes a parent that does not stay and has no wait open,** whatever that parent asked, within `max_hops`, as
+  nothing else may bring it to the end of a turn, where it ends. Without this a parent kept by a grandchild at work never woke: its
+  child's first report had answered the spawn, so that child's end answered nothing. So such a parent hears each child's end before
+  its own.
 - **An agent that stays is unchanged,** and so is one with more to come. A parent's message that comes in its child's turn keeps the
   child, asks once it lands, as every parent's message does, and the turn that answers it ends the child.
 - **What it is told says so.** One that does not stay is told to make `agent.finish` its last call, with its report, and that a turn
@@ -48,23 +55,31 @@ stopped with nothing more to come for it, has said all it will.
 | Alternative | Why not |
 |---|---|
 | Count an idle agent with nothing to come as nobody, so the session says stalled | It ends `needs_human` on a tree that did its work, with no end for any agent, and an idle agent can still be messaged, so the check would lie |
+| Count only those at work below it, as the working-children rule does | A child parked on a wait, as a merge-queue worker is on its merge, would be retired mid-wait by its parent's turn end, which nobody asked for: that rule guards a deliberate `agent.finish` |
+| Wake the parent at every report of a child | A report of a child still kept, as a manager is while its workers work, would cost the parent a turn that leaves it kept again, and only an end can leave less below it |
+| Wake only a parent out of a turn | One in a turn when its child ended would end with that turn without reading that end |
 | End it at every turn's end, as a one-shot agent | A child at work would end with it, a message that came in its turn would go unread, and a `wait` it placed for something named would never wake it |
 | End it later, once the courier finds it idle with nothing to come | A second place an agent ends, an op and a duty for the courier, to reach the same end at a moment no event marks, with its turn's report posted first and its end's after |
 | End it `retired` | Retiring is someone taking an agent out of the team. This one did what it was told, and its parent would hear two reports of one end |
-| Leave `said` on the turn's last message | A finished agent's `said` names its end, whose report carries its last words, as one that called `agent.finish` with no report already has; a second meaning would be one more thing a training system reads |
+| Leave `said` on the turn's last message | A finished agent's `said` names its end, whose report carries its last words, as one that called `agent.finish` with no report already has; a second meaning would be one more thing a training system reads. Credit is alike either way: neither that end nor a harness's message follows from or cites anything, so `propagate@1` leaves each agent all its ref is handed, a child as a root |
 | Tell it harder to finish | It leans on the model, and the run that showed this was told already |
 | Only in a session no person can enter | A person in the terminal sees the same idle child, and the kernel has no headless branch |
 
 ## Consequences
 
-- A tree whose agents do not stay settles on its own once its last turn ends, whether or not each called `agent.finish`, and each
-  of its agents keeps an end, `finished`, so a training authority hears of each by `finish`, and its calls can train. The trainable
-  check, which tells a team whose `until` role stays to set `stays = false`, now names what brings that session to its `until`
-  whatever its model does with `agent.finish`.
+- A tree whose agents do not stay settles on its own once its last turn ends with nothing more to come, whether or not each called
+  `agent.finish`, and each of its agents keeps an end, `finished`, so a training authority hears of each by `finish`, and its calls
+  can train. The trainable check, which tells a team whose `until` role stays to set `stays = false`, now names what brings that
+  session to its `until` whatever its model does with `agent.finish`.
 - An agent that does not stay and wants something before it goes on waits for it, as it is taught: a message it expects and does not
   wait for finds it ended, and its sender is refused `undeliverable`.
-- One whose turn stops with a child at work stays idle, to be woken by that child's report. A report that wakes nothing, as one from
-  a child set to work again by someone else, leaves it idle as before.
+- One whose turn stops with anyone below it at work or parked stays idle, and the end of each child wakes it, so it hears each end,
+  and the turn that leaves nothing to come ends it. A merge-queue lead that does not stay is kept while a worker of its waits on its
+  merge. One below it parked on a wait that never holds keeps it idle, and the session says stalled, as before.
+- A few ways still leave an agent that does not stay idle with no turn to end it, each saying stalled, which ends `needs_human`, as
+  before, and none ending it unseen: a person releasing it with nothing to come, a wait that kept it closing with nothing held back,
+  a wake of it refused past `max_hops`, an interrupt, which keeps it by design, and a report of a child that stays and answers
+  nothing its parent asked, as one from a child set to work again by someone else.
 - A team whose root takes turn after turn with a person keeps `stays` true for it, which is the default for an agent the session
   started.
 - Tests whose child takes turn after turn spawn it to stay, as ADR 0023's rules for reports are every child's.
@@ -81,7 +96,13 @@ stopped with nothing more to come for it, has said all it will.
   parent's message's, each failing on the code before this record, and the guards that pass on it and fail on a rule that ignores
   `stays`, the turn's reason or any one thing still to come: `test_an_agent_that_stays_is_left_idle_by_a_turn_that_only_ends`,
   `test_a_turn_that_does_not_stop_on_its_own_is_no_finish_for_an_agent_that_does_not_stay` and
-  `test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come`.
+  `test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come`. Beside them, each failing on a rule without the clause it
+  guards: a child parked on a wait and one a person holds in that last test,
+  `test_a_turn_an_interrupt_was_asked_in_is_no_finish_though_it_stopped_first`, and
+  `test_a_child_s_end_wakes_a_parent_that_does_not_stay_though_it_asked_nothing`, a tree three deep whose root, kept by its
+  grandchild, would otherwise sit idle with no end, and `test_a_parent_that_does_not_stay_hears_each_child_s_end_before_its_own`.
+- [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py),
+  `test_a_tree_that_does_not_stay_credits_each_agent_alike_on_its_said_or_its_last_message`.
 - On pi 1.5.0 and the OpenHands worker against FakeModel, in the slow pass,
   `test_a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing` in
   [tests/integration/test_pi.py](../../tests/integration/test_pi.py) and

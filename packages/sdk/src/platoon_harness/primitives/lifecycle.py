@@ -178,12 +178,17 @@ def _others_at_work(txn: Txn, agent: Agent) -> bool:
 
 def _wakes(txn: Txn, agent: Agent, *, ended: bool = False, badly: bool = False) -> bool | None:
     """Whether a report wakes the parent: True whatever its chain has spent, False not at all, None as its inbox says.
-    What went badly breaks in on a parent with a wait open, which may now never hold. Else a wait that is counting this
-    agent wakes the parent when it holds, so a join of N costs one turn. But one that has only counted something of its
-    doing, such as a task it settled, may need what nobody is left to do, so that takes someone else still at work."""
+    An end wakes a parent that does not stay and has no wait open, as nothing else may bring it to the end of a turn,
+    where it ends. What went badly breaks in on a parent with a wait open, which may now never hold. Else a wait that is
+    counting this agent wakes the parent when it holds, so a join of N costs one turn. But one that has only counted
+    something of its doing, such as a task it settled, may need what nobody is left to do, so that takes someone else
+    still at work."""
     if agent.parent is None:
         return None
     waits = txn.view(Waits).open_for(agent.parent)
+    parent = txn.view(Agents).get(name_of(agent.parent))
+    if ended and not waits and parent is not None and not parent.stays:
+        return True
     if badly:
         return True if waits else None
     if any(wait.awaits(agent.name, ended=ended) for wait in waits):
@@ -697,27 +702,37 @@ def _look(txn: Txn, agent: str, cause: int) -> None:
         txn.effect("probe", {"agent": agent, "cause": cause}, on_uncertain="retry", agent=agent)
 
 
-def _more_to_come(txn: Txn, agent: Agent) -> bool:
-    """Whether anything is still to come for an agent whose turn is ending: a person holding it, a wait of its own, an
-    entry that would wake it, a handover to it under way or taken and not landed, or a child at work that would end
-    with it."""
+def _on_its_own(txn: Txn, agent: Agent, reason: str) -> bool:
+    """Whether a turn that is ending stopped on its own: its harness says so, and no interrupt of it was asked in that
+    turn or is under way, which its harness may not have reached before it stopped."""
+    interrupt = txn.view(Effects).last(agent.name, "interrupt")
+    began = txn.view(Stamps).began(agent.name) or 0
+    cut = interrupt is not None and (interrupt.id > began or interrupt.state in ("requested", "started"))
+    return reason == "stopped" and not cut
+
+
+def _more_to_come(txn: Txn, agent: Agent, at_work: set[str]) -> bool:
+    """Whether anything is still to come for an agent: a person holding it, a wait of its own, an entry that would wake
+    it, a handover to it under way or taken and not landed, or someone who would end with it at work or with more to
+    come."""
     name, deliveries = agent.name, txn.view(Deliveries)
     handover = txn.view(Effects).last(name, "deliver")
+    below = [child for child in txn.view(Agents).children(agent.id) if child.on_parent_exit != "adopt"]
     return bool(
         agent.state == "held"
         or txn.view(Waits).open_for(agent.id)
         or any(reader == name for reader, _, _ in deliveries.waking())
         or (handover is not None and handover.state in ("requested", "started"))
         or deliveries.unlanded(name)
-        or _working(txn, agent, _at_work(txn))
+        or any(child.name in at_work or _more_to_come(txn, child, at_work) for child in below)
     )
 
 
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools. A
     one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished. One that
-    does not stay finishes with a turn that stops with nothing more to come for it, as `agent.finish` with no report
-    would have it, so its last words are its report."""
+    does not stay finishes with a turn that stops on its own with nothing more to come for it, as `agent.finish` with
+    no report would have it, so its last words are its report."""
     name = agent.name
     if txn.view(Stamps).turn(name) is None:
         return
@@ -728,7 +743,7 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
         finished = reason == "stopped"
         end(txn, agent, "finished" if finished else "failed", reason=None if finished else reason)
         return
-    if not agent.stays and reason == "stopped" and not _more_to_come(txn, agent):
+    if not agent.stays and _on_its_own(txn, agent, reason) and not _more_to_come(txn, agent, _at_work(txn)):
         end(txn, agent, "finished")
         return
     parked = bool(txn.view(Waits).open_for(agent.id))

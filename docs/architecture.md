@@ -670,8 +670,10 @@ A report also waits for the next turn when waking would tell the parent nothing.
 report the parent is counting does not wake it: the wait wakes it when it holds, so a join of N costs one turn. A parent counts a
 child when a wait of its stands on the child's end or on a message from it. It also counts one whose doing it has already counted,
 such as a task it settled, but only while someone else below it is at work, or it would sleep on what nobody is left to do. A turn
-end is no end, so a child that ends a turn with no `finish` still wakes a join on its end, as only that can rescue it, when its parent
-asked, like any report.
+end with more to come is no end, so a child that ends such a turn with no `finish` still wakes a join on its end, as only that can
+rescue it, when its parent asked, like any report. One end wakes more than was asked: a child's end wakes a parent that does not stay
+and has no wait open, whatever that parent asked, as nothing else may bring it to the end of a turn, where it ends (Lifecycle,
+below).
 
 A turn that did not stop on its own says so, `<name> turn <reason>: <text>`, or it would read as a final answer. One that an
 interrupt or its owner's stop ended was someone's own doing, so the monitor wakes nobody for it, and a wait counts what it names, so a
@@ -785,10 +787,12 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   stay finishes with a turn that stops on its own with nothing more to come for it, as `agent.finish` with no report in that turn
   would have it, so its last words are its report, its parent hears of it as of any finish, a wait on its end holds, and a root that
   does not stay reaches `until`. Nothing more to come means no person holds it, no wait of its own is open, no entry would wake it,
-  no handover to it is under way or taken and not landed, and no child that would end with it is at work. A turn that does not stop
-  on its own ends no agent, and one that stays is left idle by every turn that only ends. It is resolved once, at the spawn: what
-  `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness that
-  is not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it
+  no handover to it is under way or taken and not landed, and no one who would end with it is at work or has more to come, as a
+  child parked on a wait has. A turn that does not stop on its own ends no agent, nor does one an interrupt was asked in or is under
+  way for, though its harness said it stopped, and one that stays is left idle by every turn that only ends. A child's end wakes a
+  parent that does not stay and has no wait open, whatever it asked (The monitor, above). `stays` is resolved once, at the spawn:
+  what `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness
+  that is not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it
   `unsupported`, from what each role's driver said when the session opened. The result of a spawn that stays says so, that its
   answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has not
   ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
@@ -811,7 +815,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   An ended agent has no open turn. Only a turn is charged, so a failed spawn or an agent ended between turns spends nothing. A harness
   that exits on its own puts its agent to rest once, below. One that cannot come back ends its agent `lost`, or `failed` if it never
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
-  its turn: `finished` if that turn `stopped`, and `failed` otherwise.
+  its turn: `finished` if that turn `stopped`, and `failed` otherwise. An agent that does not stay finishes with a turn that stops on
+  its own with nothing more to come for it (Agents that stay, above).
 - **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, even
   when a step before fails, and nothing reaches its parent while that stop is under way: no wake, steer or notice is handed to it,
   and a `wait` it holds open in a call does not answer `released`, so neither its report, the notice of a wait that holds on its end
