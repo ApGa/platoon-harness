@@ -5,11 +5,20 @@ build-backend = "hatchling.build"
 [project]
 name = "platoon-harness-cli"
 version = "0.1.0"
-description = "Terminal UI and command line for platoon-harness."
+description = "The terminal UI and command line of platoon-harness: run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Apurva Gandhi", email = "apurvasgandhi@gmail.com" }]
+keywords = ["agents", "claude-code", "codex", "llm", "multi-agent", "openhands"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = [
     "cyclopts>=4,<5",
     "platoon-harness-sdk>=0.1,<0.2",
@@ -17,6 +26,12 @@ dependencies = [
     "swarmchat==0.1.0",
     "textual>=8.2,<9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ApGa/platoon-harness"
+Documentation = "https://github.com/ApGa/platoon-harness/tree/main/docs"
+Changelog = "https://github.com/ApGa/platoon-harness/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ApGa/platoon-harness/issues"
 
 [project.scripts]
 platoon-harness = "platoon_harness_cli.main:main"

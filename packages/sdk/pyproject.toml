@@ -5,15 +5,16 @@ build-backend = "hatchling.build"
 [project]
 name = "platoon-harness-sdk"
 version = "0.1.0"
-description = "Harness-agnostic multi-agent runtime: durable sessions, explicit distributed primitives, honest provenance."
+description = "The Python SDK of platoon-harness: run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Apurva Gandhi", email = "apurvasgandhi@gmail.com" }]
+keywords = ["agents", "claude-code", "codex", "llm", "multi-agent", "openhands"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
@@ -22,6 +23,12 @@ dependencies = ["pydantic>=2.10,<3"]
 
 [project.optional-dependencies]
 openhands = ["openhands-sdk==1.59.0", "openhands-tools==1.59.0"]
+
+[project.urls]
+Homepage = "https://github.com/ApGa/platoon-harness"
+Documentation = "https://github.com/ApGa/platoon-harness/tree/main/docs"
+Changelog = "https://github.com/ApGa/platoon-harness/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ApGa/platoon-harness/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/platoon_harness"]

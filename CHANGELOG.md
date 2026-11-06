@@ -466,6 +466,9 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- Each package's description is the project's one sentence, after what the package is, and each wheel ships the MIT license
+  as `LICENSE`. The SDK no longer names macOS, where nothing has run, the command line has the SDK's classifiers, and both name
+  the project's URLs and keywords.
 - The architecture decision records are RFCs, in [docs/rfcs](docs/rfcs/README.md) under the same numbers, with
   [a template](docs/rfcs/0000-template.md) and a process for proposing one. The guides moved to `docs/how-to/`,
   `docs/extending/` and `docs/reference/`, and [docs/README.md](docs/README.md) lists every page.
