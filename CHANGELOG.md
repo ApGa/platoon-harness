@@ -11,6 +11,10 @@
   count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
   answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`. See
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+- [docs/reference/team-file.md](docs/reference/team-file.md), the team file's reference, made from its schema by
+  `uv run python -m platoon_harness_cli.team_file > docs/reference/team-file.md`: each table from `Team` down, where it
+  goes, its model's docstring and each key's type and default, a channel's `kind` among the required, then every
+  preset's arguments. `tests/unit/cli/test_team_file.py` holds it to the generator and to pydantic's own schema.
 - [examples/sdk-script](examples/sdk-script/README.md), a headless script on the SDK alone: a team of one role on a
   command the `exec` driver runs, two agents spawned with a goal each, the session waited on until it settles and what
   each said read from the journal, with no key and no model. A test runs its README's commands as shown.

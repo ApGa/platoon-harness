@@ -40,6 +40,8 @@ Each example has a README that says what it does and how to run it.
 
 - [Command line](reference/cli.md): every command, the exit codes and the JSONL shape, made from the command
   definitions.
+- [Team file](reference/team-file.md): every table and key of a team file, with its type and default, and every preset,
+  made from the schema.
 - [Compatibility](reference/compatibility.md): what each upstream is, how we use it, and what is known about it.
 - [Status](STATUS.md): what is implemented, what is tested and how, and what is planned.
 

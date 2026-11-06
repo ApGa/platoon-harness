@@ -524,6 +524,7 @@ installed wheels.
 | Capability | State | Evidence |
 |---|---|---|
 | Precedence across six layers, mappings merge, lists replace, every problem at once | tested | `test_config.py` |
+| `docs/reference/team-file.md`, made from the schema: each table a team file holds, from `Team` down, where its tables go, its model's docstring, and each key's type and default, then every preset's arguments | tested | `tests/unit/cli/test_team_file.py`, against the generator, and each key of each model in pydantic's own schema of `Team` against the page |
 | What a project file needs trust for: a `command` harness, a `module:attr` reference, an auth profile | tested | `test_config.py` |
 | `Secret`: refuses json, pickle, copy and pydantic, keeps its state to itself, prints as a mask | tested | `test_config.py` |
 | Input kept out of configuration errors and their tracebacks | tested | `test_config.py` |

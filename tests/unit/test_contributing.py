@@ -23,6 +23,7 @@ DEFAULT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf", "refacto
 """The types conventional-pre-commit v4.0.0 and the title check each accept when given none."""
 GENERATED = {
     "docs/reference/cli.md": "uv run python -m platoon_harness_cli.reference > docs/reference/cli.md",
+    "docs/reference/team-file.md": "uv run python -m platoon_harness_cli.team_file > docs/reference/team-file.md",
     "docs/how-to/tui.md": "uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md",
 }
 """Each generated page, and the command that makes it again, which the page names."""

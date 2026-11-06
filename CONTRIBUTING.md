@@ -280,10 +280,12 @@ to the code, and names the command when they differ.
 | Page | Made from | Held by |
 |---|---|---|
 | [docs/reference/cli.md](docs/reference/cli.md) | The command definitions | `tests/unit/cli/test_commands.py` |
+| [docs/reference/team-file.md](docs/reference/team-file.md) | The team file's schema, from `Team` down, and the presets | `tests/unit/cli/test_team_file.py` |
 | The key table in [docs/how-to/tui.md](docs/how-to/tui.md) | The terminal UI's bindings | `tests/unit/tui/test_keymap.py` |
 
 ```bash
 uv run python -m platoon_harness_cli.reference > docs/reference/cli.md
+uv run python -m platoon_harness_cli.team_file > docs/reference/team-file.md
 uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md
 ```
 
