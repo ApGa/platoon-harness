@@ -1744,7 +1744,8 @@ class AgentOutcome(Model):
   citer, and work nobody cites earns nothing from it. See [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
   no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session whose
-  admit results name the backend's ids is never resumed, as its keys went with its authority (§4).
+  admit results name the backend's ids is never resumed, as its keys went with its authority (§4). See
+  [ADR 0055](adr/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority admitting
   each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to `Team.recipients()`, a

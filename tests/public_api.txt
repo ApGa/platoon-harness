@@ -417,10 +417,10 @@ platoon_harness.testing.ENVIRONMENT_TOOL
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.testing.Exit
 platoon_harness.testing.Fail
-platoon_harness.testing.FakeModel.gateway(bearer)
-platoon_harness.testing.FakeModel(*replies)
 platoon_harness.testing.goal
 platoon_harness.testing.FakeModel
+platoon_harness.testing.FakeModel(*replies)
+platoon_harness.testing.FakeModel.gateway(bearer)
 platoon_harness.testing.FakeTools
 platoon_harness.testing.Hang
 platoon_harness.testing.NAMESPACE

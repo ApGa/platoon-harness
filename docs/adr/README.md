@@ -60,6 +60,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | `scored`, `invalid`, `error`, `timeout` or `cancelled`, no row meaning unscored; `eligibility` answering attribution and every bar from the levels starts recorded; a team checked for training from its file alone, then on the machine as its session starts |
 | [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Nothing of the user's, the environment's tools as a second server, the bearer by environment alone, and each compaction call sent with the gateway's headers and reported with its id, by ScriptedDriver, wire programs, OpenHands and pi, earned by two checks in the one kept result |
 | [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | One producer signature, and a heuristic that splits a team's reward back along citations, causes and ancestry, each maker keeping `retained`, an agent it never reached unscored |
+| [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Closed or stopped, with its annotations beside its journal, read through `Session.attach`, holding no key; a session an authority admitted is never resumed |
 
 ## Adding or changing one
 

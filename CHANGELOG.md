@@ -30,7 +30,6 @@
 - The hand-off contract, `test_a_managed_session_runs_as_a_training_authority_drives_it`, on ScriptedDriver in the fast pass and on pi
   and OpenHands in the slow pass. `tests/public_api.txt` now writes each frozen member's parameters, as `name(parameters)`, and a
   closed set of words, as `name[words]`, which a test holds to the code.
-
 - `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
   closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR
@@ -385,7 +384,7 @@
 - `episode.close` closes on `based_on`, the refs of what the episode came to, checked as any citation is, in place of a free
   `outcome`, which an annotation says now; `episode.closed` is at payload version 2. `Session.close_episode(based_on=)` follows.
 - `Session.resume` takes no authority, as a resume runs under `LocalAuthority`, and refuses a session whose admit results name the
-  backend's ids before anything runs: an authority that has gone admitted its agents, so it stays history. See ADR 0049.
+  backend's ids before anything runs: an authority that has gone admitted its agents, so it stays history. See ADR 0055.
 - A launch whose harness runs a model other than the one pinned fails saying `it runs <model>, and <pinned> is pinned`, as the
   pinned model is a gateway's where access is one, and an agent's login is `key` when it was given variables, whatever its role
   names. See ADR 0049.
