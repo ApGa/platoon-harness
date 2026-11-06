@@ -60,9 +60,11 @@ $ uv sync
 
 `uv sync` installs both packages with the `dev` group, which holds the tests' tools and the SDK's `openhands` extra. To
 leave the group out, set `UV_NO_DEV=1` for `uv sync` and for every `uv run` after it, as `uv run` installs the group
-otherwise.
+otherwise. [Install](docs/getting-started/install.md) has the rest: OpenHands, and what `doctor` says.
 
 ## Quickstart
+
+[Your first session](docs/getting-started/first-session.md) takes these steps one at a time, with what to expect.
 
 **1. See a team work, with no keys.** In [the mixed team](examples/mixed-team/README.md), a lead puts a task on a queue
 and starts a worker, which writes a note on a board and reports back. Scripted stand-ins play both, with no model at

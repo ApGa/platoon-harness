@@ -380,12 +380,7 @@ interpreter, so nothing is looked up on `PATH` and nothing else is installed. It
 `PYTHONPATH`, `PYTHONUSERBASE` and the rest of what tells Python where they are pass by name, and `-P` keeps the workspace it
 runs in off its path. The worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and
 `openhands-tools` at 1.59.0 exactly. Install it beside the SDK, for the interpreter that runs the runtime, which is the command
-line's when it starts a session:
-
-```console
-$ pip install 'platoon-harness-sdk[openhands]'
-$ uv tool install platoon-harness-cli --with 'platoon-harness-sdk[openhands]'
-```
+line's when it starts a session, as [Install](../getting-started/install.md#openhands) says for a checkout.
 
 `doctor` shows it with the version of the OpenHands SDK, from its metadata, and its login unknown, as OpenHands keeps none and
 only a role's auth profile gives it a key. Without the extra, `doctor` names the interpreter to install it for, and an agent's
@@ -394,13 +389,7 @@ start is refused in the same words. Nothing else changes: the SDK, the runtime a
 **A proprietary dependency.** `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own
 terms ("All rights reserved"), so the extra installed from an index brings it in unless you exclude it. Nothing the worker runs
 imports it, as only `lmnr`'s instrumentation of the Claude Agent SDK does, and the worker runs without it: this repository's lock
-leaves it out with `exclude-dependencies`, so no test here has it. With uv, `--excludes` takes a file that names it, and `uv tool
-install` takes it too:
-
-```console
-$ echo lmnr-claude-code-proxy > excludes.txt
-$ uv pip install 'platoon-harness-sdk[openhands]' --excludes excludes.txt
-```
+leaves it out with `exclude-dependencies`, so no test here has it, and a checkout never installs it.
 
 **An environment of its own.** OpenHands' pins share an environment with little, `mcp` 2.3.0 not among it. Where yours cannot hold
 them, install the SDK with the extra in an environment of its own, and name its interpreter and the module as a wire command:

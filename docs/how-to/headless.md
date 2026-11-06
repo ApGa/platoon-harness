@@ -7,9 +7,9 @@ From a terminal or CI, with harnesses you already use and their own logins. [cli
 ```console
 $ platoon-harness doctor
 platoon-harness 0.1.0, SDK 0.1.0
-claude     2.1.316 (Claude Code), plan login, checked on 2.1.316: 26 passed, 2 skipped, none failed
-codex      codex-cli 0.164.0, plan login, not checked: --check checks it
-openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness-cli/bin/python: install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`
+claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 skipped, none failed
+codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
+openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed
 pi         not on PATH
 root       ~/.local/state/platoon-harness, on xfs
 sockets    /run/user/1000/platoon-harness
@@ -22,7 +22,7 @@ when the machine can run sessions and 78 when it cannot. `doctor --check` runs e
 ships for against a model of ours on loopback, on no account, and keeps what it found under the root, where the runtime reads it at
 each launch and resume: an agent's levels come from it, and say `unverified` for a harness, an SDK or a host no result was made on.
 `doctor` says whether a kept result speaks for the binary that runs, and what it found. `openhands` is there once the SDK's
-`openhands` extra is installed for the interpreter it names, as [drivers.md](../extending/drivers.md#openhands-a-wire-worker) says.
+`openhands` extra is installed for the interpreter it names, as [Install](../getting-started/install.md#openhands) says.
 
 ## Write a team
 

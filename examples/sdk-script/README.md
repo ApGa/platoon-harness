@@ -41,8 +41,8 @@ counter-2: 4 words
 - **Agents.** `session.spawn(name, role, goal)` starts an agent in a role with a goal.
 - **Settling.** `session.settled(timeout="30s")` waits until the session is done and says what it came to: `settled`
   here, or `timed_out` past the timeout.
-- **The journal.** `session.events()` reads each event the session journaled. What an agent says is an
-  `item.recorded` event, and its `gist` is the words.
+- **The journal.** `session.events()` reads each event the session journaled. Each item a harness reports, what its
+  agent says among them, is an `item.recorded` event, and its `gist` is the words.
 
 ## 3. Read it back
 

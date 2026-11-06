@@ -1,7 +1,7 @@
-"""The examples as their READMEs run them, with no keys. The mixed team: the README's own command, which swaps the
-scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, and on the real binaries against
-FakeModel, each model saying what a stand-in does; real models run it in `tests/live/test_examples.py`. The SDK script:
-its README's commands, on the `exec` driver."""
+"""The examples as their pages run them, with no keys. The mixed team: its README's own command, which swaps the
+scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, as the project's README and the first
+session's guide run it too, and on the real binaries against FakeModel, each model saying what a stand-in does; real
+models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver."""
 
 import asyncio
 import importlib.util
@@ -27,6 +27,7 @@ pytestmark = pytest.mark.timeout(120)
 EXAMPLE = ROOT / "examples" / "mixed-team"
 README = EXAMPLE / "README.md"
 SCRIPT = ROOT / "examples" / "sdk-script"
+FIRST = ROOT / "docs" / "getting-started" / "first-session.md"
 
 
 def loaded(path: Path) -> ModuleType:
@@ -146,6 +147,27 @@ async def test_the_readme_s_first_steps_run_the_mixed_team_with_no_keys_and_read
     assert ("agent:lead", "agent.finished") in {
         (row.get("maker"), row.get("type")) for row in json.loads(cited)["rows"]
     }
+
+
+async def test_the_first_session_s_steps_run_with_no_keys_and_read_the_record_back(cli: Cli):
+    """The guide's first three steps as it shows them: the run with no keys and how it ends, the reads of the closed
+    session with what `session show` says, and whose work reached the lead's answer, by the ref `uses` names."""
+    [run] = shown(FIRST, where="stand_ins:lead")
+    reads = shown(FIRST, where="session show")
+    uses, contributors = shown(FIRST, where="contributors")
+
+    ran = await cli.as_shown(run)
+    done = {command: await cli.as_shown(command) for command in reads}
+
+    assert ran.code == 0 and ran.stdout.endswith(expected(FIRST, "settled")), ran.stderr
+    assert [step.code for step in done.values()] == [0] * len(reads)
+    assert next(step.stdout for command, step in done.items() if "session show" in command) == expected(
+        FIRST, "no runtime"
+    )
+    rows = json.loads((await cli.as_shown(uses)).stdout)["rows"]
+    answer = next(row["ref"] for row in rows if (row.get("maker"), row.get("type")) == ("agent:lead", "agent.finished"))
+    reached = await cli.as_shown(contributors.replace("REF", answer))
+    assert [row["maker"] for row in json.loads(reached.stdout)["rows"]] == ["agent:lead", "agent:w", "human:you"]
 
 
 def prefixed(tool: str, id: str, arguments: dict[str, Any]) -> ToolCall:

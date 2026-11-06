@@ -1,13 +1,16 @@
 # platoon-harness documentation
 
-This page is the table of contents. New here? [Install](../README.md#install) from a checkout, then follow
-[the quickstart](../README.md#quickstart), which starts with [the mixed team](../examples/mixed-team/README.md) on no
-keys.
+This page is the table of contents. New here? [Install](getting-started/install.md) from a checkout, then run
+[your first session](getting-started/first-session.md), which starts with
+[the mixed team](../examples/mixed-team/README.md) on no keys.
 
 ## Getting started
 
-- [Install](../README.md#install) and [the quickstart](../README.md#quickstart): what you need, and the first
-  commands, from a checkout.
+- [Install](getting-started/install.md): what you need, installing from a checkout, OpenHands, and what `doctor` says.
+- [Concepts](getting-started/concepts.md): what platoon-harness is and is not, a session on disk, and one session traced.
+- [Your first session](getting-started/first-session.md): a team with no keys, read back and opened, then a team of
+  your own.
+- [The quickstart](../README.md#quickstart): the first commands, on one page.
 - [Changelog](../CHANGELOG.md): what changed.
 
 ## Tutorials
@@ -28,6 +31,7 @@ Each example has a README that says what it does and how to run it.
 - [Workspaces](how-to/workspaces.md): where each agent works, a worktree of its own among them, and what becomes of it.
 - [Provenance](how-to/provenance.md): what reached each agent, what it rests on, whose work an outcome reaches, and
   credit beside the journal.
+- [Troubleshooting](how-to/troubleshooting.md): what a common refusal says, why, and what to do.
 
 ## Extending
 

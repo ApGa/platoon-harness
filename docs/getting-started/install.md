@@ -1,0 +1,109 @@
+# Install
+
+**Goal:** a checkout where `platoon-harness` runs, with what the harnesses you use need.
+
+## Requirements
+
+- **Linux.** Continuous integration runs on Ubuntu, and nothing has run on macOS ([STATUS](../STATUS.md)).
+- **Python 3.12 or 3.13**, the two that CI tests, and [uv](https://docs.astral.sh/uv/), which finds one or downloads it.
+- **The harnesses you want, on your PATH,** signed in as you usually are: `claude`, `codex` or `pi`. OpenHands needs no
+  binary: see [OpenHands](#openhands).
+- **git**, for an agent in a worktree or a snapshot of its own. A git workspace refuses a git older than 2.36, and
+  2.47.3 is the only git the tests have run on.
+- **Optionally, [bubblewrap](https://github.com/containers/bubblewrap)**, whose `bwrap` the experimental `isolated`
+  workspace confines an agent with ([workspaces](../how-to/workspaces.md#where-an-isolated-agent-runs)).
+
+No model key is needed to try it: [your first session](first-session.md) starts with a team of scripted stand-ins.
+
+## Install from a checkout
+
+Nothing is published to PyPI yet, so clone the repository and install from its lock file:
+
+```console
+$ git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
+$ uv sync
+```
+
+`uv sync` installs the two packages of the workspace, the SDK, `platoon-harness-sdk`, and the command line,
+`platoon-harness-cli`, at the versions `uv.lock` names, with the `dev` group. The dev group holds the tests' tools,
+Playwright and the SDK's `openhands` extra: what you need to work on platoon-harness, which
+[CONTRIBUTING.md](../../CONTRIBUTING.md) goes on from.
+
+To leave the dev group out, set `UV_NO_DEV=1` in your shell before `uv sync`, and keep it set: `uv run` brings the
+environment in step with the lock file before it runs anything, with the dev group unless the variable says otherwise.
+
+```console
+$ export UV_NO_DEV=1
+$ uv sync
+```
+
+| You want | Run | It installs |
+|---|---|---|
+| To use it, and to work on it | `uv sync` | Both packages, and the dev group with the SDK's `openhands` extra among it |
+| To use it alone | `UV_NO_DEV=1 uv sync` | Both packages |
+| To use it with OpenHands | `UV_NO_DEV=1 uv sync --all-packages --extra openhands` | Both packages, and the SDK's `openhands` extra |
+
+## OpenHands
+
+`harness = "openhands"` runs a worker per agent on the runtime's own interpreter, so nothing is looked up on PATH. The
+worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and `openhands-tools` at
+1.59.0 exactly. Install the extra for the interpreter that runs the runtime, which is the command line's when it starts
+a session: in a checkout, that is the checkout's own, and `uv sync` installs the extra with the dev group. Without the
+dev group, name the extra across the workspace:
+
+```console
+$ UV_NO_DEV=1 uv sync --all-packages --extra openhands
+```
+
+`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own terms. The
+checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it, and the worker runs without
+it. [Drivers](../extending/drivers.md#openhands-a-wire-worker) says why, and how to run the worker on an interpreter of
+its own. OpenHands keeps no login, so its role needs an auth profile that names its key.
+
+## Check the installation
+
+```console
+$ uv run platoon-harness --version
+platoon-harness 0.1.0, SDK 0.1.0
+$ uv run platoon-harness doctor
+```
+
+`doctor` says what this machine has, and whether it can run a session. On a machine with `claude` and `codex` signed in
+and no `pi`, after `uv sync` and `platoon-harness doctor --check`:
+
+```text
+platoon-harness 0.1.0, SDK 0.1.0
+claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 skipped, none failed
+codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
+openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed
+pi         not on PATH
+root       ~/.local/state/platoon-harness, on xfs
+sockets    /run/user/1000/platoon-harness
+...
+usable
+```
+
+Each harness's line says its version and the kind of its login, from the harness's own status command, and never an
+account, and whether a kept result of its checks speaks for the binary that runs: `platoon-harness doctor --check` runs
+them, against a model of ours on loopback and on no account. Then come the root, where sessions live, and where their
+sockets do, each driver and extension installed, and the verdict.
+
+`doctor` exits 0 with `usable` when this machine can run a session, and 78 with `not usable` after a `problem` line for
+each reason. With the dev group, or the `openhands` extra, it says `usable` even with no harness on PATH, as OpenHands
+runs on the runtime's own interpreter. Without either, and with no harness on PATH, it ends:
+
+```text
+problem    no harness is on PATH
+not usable
+```
+
+The root is `$PLATOON_HARNESS_HOME` if you set it, else `$XDG_STATE_HOME/platoon-harness`, which is
+`~/.local/state/platoon-harness` by default. If that default is on a network filesystem, sessions live in
+`/var/tmp/platoon-harness-<uid>` instead, and `doctor` says so under its root line.
+[Troubleshooting](../how-to/troubleshooting.md) says what to do about each problem.
+
+## Next steps
+
+- [Concepts](concepts.md): the nine words, and what happens in a session.
+- [Your first session](first-session.md): a team with no keys, read back, then your own harnesses.
+- [The headless quickstart](../how-to/headless.md): running teams from a terminal or CI.

@@ -11,6 +11,13 @@
   count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
   answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`. See
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+- Getting started for a newcomer, in [docs/getting-started](docs/getting-started/install.md): installing from a
+  checkout, with and without the `dev` group, OpenHands' extra and what `doctor` says; what platoon-harness is and is
+  not, a session on disk and one session traced; and a first session, with no keys, read back, opened and then set up
+  on your own harnesses, whose first steps a test runs as shown. [Troubleshooting](docs/how-to/troubleshooting.md)
+  gives each common refusal's real message, why and what to do. The OpenHands install text moved from the drivers
+  guide to the install page, for a checkout, with no index's package name, and the headless guide's `doctor` sample
+  is a checkout's.
 - [docs/reference/team-file.md](docs/reference/team-file.md), the team file's reference, made from its schema by
   `uv run python -m platoon_harness_cli.team_file > docs/reference/team-file.md`: each table from `Team` down, where it
   goes, its model's docstring and each key's type and default, a channel's `kind` among the required, then every
