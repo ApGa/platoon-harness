@@ -120,7 +120,7 @@ the journal: it names its producer and version, the events it is about and rests
 trace, and each of those events lies at or below that head. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`,
 and a value is given when it is `scored` and only then, so no other is ever zero; an event nobody said anything of is unscored,
 which no status says. A team's reward targets its episode's `episode.closed`, an agent's its first `agent.started`, never the
-spawn its spawner made, a turn's a `turn.started` and a call's its `model.called`. A second estimator, or a second version, writes
+spawn its spawner made, and a span's the `model.called` of its last call, which names it. A second estimator, or a second version, writes
 beside the first. This one is a toy, labelled as one, and its target is an event of each agent's own, the first the walk reached,
 never a spawn:
 
@@ -148,13 +148,17 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
-The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@1`, and it is a heuristic, run only when someone runs it.
+The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@2`, and it is a heuristic, run only when someone runs it.
 It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
 `retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
-and its citations, an agent's only where its exposure says `seen`, never along an offer. It writes one local `credit` row per agent it
-reached, on that agent's first `agent.started`, and none for an agent it never reached, which stays unscored. Citing gives away all
-but `retained` of what reaches the citer, and work nobody cites earns nothing from it, so training on it pulls against the default
-template's request to cite. [training.md](../extending/training.md) shows it run.
+and its citations, an agent's only where its exposure says `seen`, never along an offer. What an agent's event keeps is also its
+span's when the event lies in one: the span holding the model call that made it, for an entry that carries an event, as a child's
+report does, that event's, and for an event tied to no call its turn's, when that turn is one span. It writes one local `credit` row
+per span it reached, on the span's name, and one per agent it reached, on that agent's first `agent.started`, holding all its events
+kept, and none for a span or an agent it never reached, which stays unscored. An agent's row is its spans' rows and what it kept in
+no span, such as its end out of a turn. Its agent rows are those `propagate@1` wrote. Citing gives away all but `retained` of what
+reaches the citer, and work nobody cites earns nothing from it, so training on it pulls against the default template's request to
+cite. [training.md](../extending/training.md) shows it run.
 
 ## What can train
 

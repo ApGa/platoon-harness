@@ -65,7 +65,7 @@ For extension and training authors:
 | **Grant** | `(who, ops, on)`, the only authorization input for an op. Absence means deny. |
 | **Driver** | The adapter that presents one harness session to the runtime. |
 | **Episode** | An explicitly opened part of a session with one outcome. Only events inside one can become training data. |
-| **Span** | A stretch of one turn of one agent: the turn is cut after each model call that chose a write of content, and a trailing piece with no write joins the span before it (§11). |
+| **Span** | A stretch of one turn of one agent: the turn is cut after each model call that chose a write of content, and a trailing piece with no write joins the span before it (§11). The unit of credit. |
 | **Evidence** | Why a dependency is believed: observed, declared, judged or validated. |
 | **Annotation** | A versioned statement about the record (reward, judgment, credit), stored beside the journal, never in it. |
 
@@ -1441,13 +1441,13 @@ producer, version and params, never summed. See [RFC 0043](rfcs/0043-a-person-fo
 producer, version, params, target and kind. `kind` is `reward` or `credit`, and `scope` is `local` or `team`. `status` is required,
 `scored`, `invalid`, `error`, `timeout` or `cancelled`, and `value` is given when it is `scored` and only then, so nothing but a
 score has a value, and a target with no statement is unscored, which no status says. A team's row targets the episode's
-`episode.closed`, an agent's its first `agent.started`, never the spawn its spawner made, a turn's a `turn.started`, and a call's
-its `model.called`. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
+`episode.closed`, an agent's its first `agent.started`, never the spawn its spawner made, and a span's the `model.called` of its
+last call. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
 `annotate` command write one, checked against the journal, with no runtime and no lock but the file's own, on a live session or a
 closed one, and `Session.annotations` reads them: the one way in and out. The file keeps a write-ahead log, so a reader never holds
 a writer up, and finds statements by target through an index. The same statement again is answered with the first, and another under the same key is refused
 `conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and nothing in the
-runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@1`, a heuristic run
+runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@2`, a heuristic run
 only when someone runs it (§14), and a client shows a value only with its producer and version, beside any other estimate of the
 same target, never summed. See
 [RFC 0038](rfcs/0038-provenance-is-answered-from-the-record.md), [RFC 0039](rfcs/0039-estimators-write-beside-the-journal-at-m2.md)
@@ -1473,7 +1473,10 @@ write with no join cuts nothing, and a turn with no joined write, or with joined
 it stands on the agent's own report stream between that turn's `turn.started` and its end: order on one agent's report stream places
 a call in a span as it places one below a bound, and never joins identity. A call reported out of a turn lies in none, a turn with
 no call has no span, and a crash that loses a turn ends its spans. A span is named by the ref of its last call's `model.called`.
-`spans(agent)` is a query op that is no agent's tool, a `Session` method and a command, as `eligibility` is: each span of an agent,
+An event lies in the span holding the call `lineage` says made it, an entry that carries an event, as an announce or a child's
+report does, where that event lies, and an event tied to no call in its turn's span when that turn is one span; any other event,
+such as an end out of a turn, lies in no span. Which span an event lies in is the record's to say, and that a span's calls made
+what lies in it is an estimator's to claim. `spans(agent)` is a query op that is no agent's tool, a `Session` method and a command, as `eligibility` is: each span of an agent,
 oldest first, a page beside its true count, with its first call, its turn and the writes the record ties to its calls, which one of
 them chose, and `open` while its latest turn has not ended, as a tool item reported late can still join a write and cut that turn
 again. It is worked out from the views as it is asked, so it answers alike after a rebuild and on a closed copy, and it refuses a
@@ -1835,13 +1838,16 @@ class AgentOutcome(Model):
 - **Rewards and credit are annotations,** of five statuses on the targets §11 names, written after the session has ended, so no
   context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named by
   `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,
-  `platoon_harness.credit.propagate`, `propagate@1`, a heuristic: it splits an episode's one team reward over the refs the episode
+  `platoon_harness.credit.propagate`, `propagate@2`, a heuristic: it splits an episode's one team reward over the refs the episode
   closed on, refusing an episode closed on none, and each event it reaches keeps `retained` of what reached it for its maker and
   passes the rest equally along its causes, ancestry and citations, an agent's only where exposure says Seen, newest first and at
-  most 4,096 events, writing one local `credit` row per agent it reached, on its first `agent.started`. An agent it never reached
-  has no row, a team reward not scored passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all
-  but `retained` of what reaches the citer, and work nobody cites earns nothing from it. See
-  [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
+  most 4,096 events. What an agent's event keeps is that agent's, and also its span's when the event lies in one (§11). It writes
+  one local `credit` row per span it reached, on the span's name, and one per agent it reached, on its first `agent.started`,
+  holding all that agent's events kept. A span or an agent it never reached has no row, a team reward not scored passes its status
+  on, and a walk cut short makes every row `invalid`. The reward is the agents' rows and what nobody's events kept; an agent's row is
+  its spans' rows and what it kept in no span, which no span's row holds. Its agent rows are `propagate@1`'s on every journal: the
+  walk is the same. Citing gives away all but `retained` of what reaches the citer, and work nobody cites earns nothing from it.
+  See [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
   no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
   trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
@@ -1851,7 +1857,7 @@ class AgentOutcome(Model):
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
   admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
   `Team.recipients()`, a compaction, `settled`, a cancel and a retirement, the close on each `said`, eligibility `exact` from a kept
-  result, a reward of each status, and `propagate@1`'s rows. Beside it,
+  result, a reward of each status, and `propagate`'s rows, for each agent and for the span its last words lie in. Beside it,
   `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs one agent `isolated` under `bwrap` in the slow pass, as
   every confined session runs, on a scripted harness on the wire, as a harness in the runtime's own process cannot be confined,
   and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is

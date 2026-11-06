@@ -483,9 +483,9 @@ class Contributors(Model):
 
 
 class Span(Model):
-    """A stretch of one turn of an agent, named by `ref`, the `model.called` of its last call: its calls are those its
-    harness reported on its turn stream from `first` to `ref`, in the turn named `turn`, and `writes` are the writes of
-    content the record ties to them, which one of them chose."""
+    """A stretch of one turn of an agent, named by `ref`, the `model.called` of its last call, which a credit row about
+    it targets: its calls are those its harness reported on its turn stream from `first` to `ref`, in the turn named
+    `turn`, and `writes` are the writes of content the record ties to them, which one of them chose."""
 
     ref: str
     first: str

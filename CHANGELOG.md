@@ -437,6 +437,12 @@
 
 ### Changed
 
+- `propagate` is `propagate@2`: the walk of `propagate@1`, unchanged, with what each event keeps booked to the span it lies in
+  too, the span holding the model call that made it, for an entry that carries an event, as a child's report does, that event's,
+  and for an event tied to no call its turn's, when that turn is one span. Beside one local `credit` row per agent reached, on its
+  first `agent.started`, it writes one per span reached, on the span's name, the `model.called` of its last call. An agent's row is
+  its spans' rows and what it kept in no span, and its agent rows are `propagate@1`'s on every journal. A span's row is now the one
+  annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were targets nothing wrote.
 - "Span" means one thing, a stretch of one turn of an agent: `primitives.Lines.span`, the `#L<first>-<last>` a result shows of a
   body, is `Lines.range`, as the read tools' argument already was, `schema.seconds` takes a `duration`, the facade's own alias for a
   duration is gone in favour of `schema.Duration | float`, and an episode is a part of a session.

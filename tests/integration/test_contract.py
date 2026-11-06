@@ -255,8 +255,15 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     making = "doctor --check" if harness.named in CHECKED else "write_conformance"
     assert making in str(unproven.value)
     credited = [row for row in await history.annotations() if row.producer == PROPAGATE]
+    targets = {row.target: (await history.lineage(row.target)).event for row in credited}
+    spans = {agent: {span.ref for span in (await history.spans(f"@{agent}")).spans} for agent in AGENTS}
     assert {row.status for row in await history.annotations()} == {"scored", *STATUSES}
-    assert len(credited) == len(AGENTS) and {row.status for row in credited} == {"scored"}
+    assert {row.status for row in credited} == {"scored"}
+    assert sorted((targets[row.target].agent, targets[row.target].type) for row in credited) == [
+        (agent, kind) for agent in AGENTS for kind in ("agent.started", "model.called")
+    ]
+    named = [(targets[row.target].agent, row.target) for row in credited if targets[row.target].type == "model.called"]
+    assert all(target in spans[agent or ""] for agent, target in named)
     told = {agent.agent: outcome for agent, outcome in authority.told}
     assert {agent: outcome.status for agent, outcome in told.items()} == {"alice": "cancelled", "bob": "retired"}
     assert all(outcome.report for outcome in told.values())

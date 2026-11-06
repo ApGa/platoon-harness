@@ -159,7 +159,8 @@ one fails, naming why.
 Every reward and credit is an annotation, written through `Session.annotate` once the session has ended, on the session attached
 with no runtime, so no context a policy could see held one. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`, a
 value is given when it is `scored` alone, and a target with no statement is unscored. A team's reward targets the episode's
-`episode.closed`, and an agent's its first `agent.started`.
+`episode.closed`, an agent's its first `agent.started`, and a span's the `model.called` of its last call, which names it in
+`session.spans(agent)`.
 
 A producer writes what it estimates of one episode, and is one function, named by `module:attr`:
 
@@ -168,7 +169,7 @@ async def produce(session: Session, episode: str, *, judge: Gateway | None, **pa
 ```
 
 `judge` is model access for a producer that asks a model, or None. The SDK ships one, `platoon_harness.credit:propagate`,
-`propagate@1`, a heuristic:
+`propagate@2`, a heuristic:
 
 ```python
 from platoon_harness.credit import propagate
@@ -180,15 +181,27 @@ async with Session.attach(rollout_id) as ended:
 It reads the one team reward on the episode's close, and splits it over the refs the episode closed on, refusing `invalid` an
 episode that closed on none. Each event it reaches keeps `retained` of what reached it for its maker, and the rest goes equally
 along the event's causes, its previous version or a commit's parents, and its citations, an agent's only where its exposure says
-Seen. It walks newest first, at most 4,096 events, and writes one local `credit` row per agent it reached, on that agent's first
-`agent.started`, under the producer `platoon_harness.credit:propagate`. An agent it never reached gets no row, so is unscored; a
-team reward that is not scored passes its status to each row; and a walk cut short makes every row `invalid`. What reached the
-events of no agent is the reward less the rows.
+Seen. It walks newest first, at most 4,096 events. What an agent's event keeps is that agent's, and also its span's when the
+event lies in one: the span holding the model call that made it, for an entry that carries an event, as a child's report does, that
+event's, and for an event tied to no call its turn's, when that turn is one span. It writes, under the producer
+`platoon_harness.credit:propagate`, one local `credit` row per span it reached, on the span's name, and one per agent it reached, on
+that agent's first `agent.started`, holding all that agent's events kept. A span or an agent it never reached gets no row, so is
+unscored; a team reward that is not scored passes its status to each row; and a walk cut short makes every row `invalid`. What
+reached the events of no agent is the reward less the agents' rows, and what an agent kept in no span, such as an end out of a
+turn, is its row less its spans' rows, and no span's row holds it. Its agent rows are those `propagate@1` wrote, on every
+journal.
+
+A worker that claims and completes three tasks in one turn, a model call for each step, closed on the three results, has three
+spans of a quarter each: each result keeps a sixth for the span of the call that completed it, and its claim a twelfth for the span
+of the call that made it, and the rest reaches the task you added, which is nobody's. A call that completes one task and claims the
+next puts the next one's claim in the first one's span, which keeps that claim's share.
 
 Its incentive: citing gives away all but `retained` of what reaches the citer, and work nobody cites earns nothing from it. The
 default template asks every agent to cite, so training under it pulls against that request: watch the citation rate. Rows like
 these are fractions of the team reward, so a training system centres them per role, as Platoon's keyed credit does at a group size
-above one.
+above one. A span's row is a slice of its agent's, so pooling spans as agents of their own would tie an agent's advantage to how
+many spans it was cut into: centre agents' rows per role, train each scored span's calls on its row less its agent's baseline shared
+equally by that agent's scored spans, and the calls no scored span holds on nothing.
 
 ## The export
 
