@@ -149,9 +149,8 @@ def _login() -> Login | None:
 
 
 def _command(spec: AgentSpec) -> tuple[str, ...]:
-    """How this agent launches: where access was given, on a provider of its own, so that the key pays and no saved
-    login does. From 0.167.0 a thread runs only on the provider its app-server started on, so the provider is chosen
-    here, and argv, which any process can read, names only the key's variable."""
+    """How this agent launches: where access was given, on a provider of its own that argv names by the key's variable
+    alone, so the key pays and no saved login does."""
     return (_CODEX, "app-server", *(_KEYED if _KEY in keys_of(spec) else ()))
 
 

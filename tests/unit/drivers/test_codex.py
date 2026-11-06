@@ -244,7 +244,9 @@ async def test_access_is_a_provider_the_app_server_starts_on_so_the_key_pays(tmp
         await heard.until(Ready)
 
     assert stand.launch["argv"] == KEYED
-    assert stand.asked("thread/start")["config"][URL] == "http://127.0.0.1:1/v1"
+    thread = stand.asked("thread/start")
+    assert "modelProvider" not in thread
+    assert thread["config"][URL] == "http://127.0.0.1:1/v1"
     assert stand.launch["env"]["OPENAI_API_KEY"] == "dummy"
 
 
@@ -255,7 +257,9 @@ async def test_a_key_alone_is_a_provider_on_the_default_url(tmp_path, stand):
         await heard.until(Ready)
 
     assert stand.launch["argv"] == KEYED
-    assert URL not in stand.asked("thread/start")["config"]
+    thread = stand.asked("thread/start")
+    assert "modelProvider" not in thread
+    assert URL not in thread["config"]
 
 
 async def test_with_access_given_an_unset_model_is_refused(tmp_path, stand):
