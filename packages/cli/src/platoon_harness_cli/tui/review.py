@@ -1,6 +1,6 @@
 """What changed, as a list a person reads: each workspace's commits and uncommitted paths, from the `changes` view."""
 
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any
 
 from textual.app import ComposeResult
@@ -26,6 +26,11 @@ def _lines(added: int | None, removed: int | None) -> str:
 def _owner(commit: Mapping[str, Any]) -> str:
     made_in = commit["made_in"] or ""
     return made_in if made_in.startswith("@") else NOBODY
+
+
+def snapshots_of(roster: Iterable[Mapping[str, Any]]) -> set[str]:
+    """The workspaces whose commits are in a repository of their own: each snapshot's, an isolated one's among them."""
+    return {f"@{row['agent']}" for row in roster if (row["workspace"] or {}).get("mode") in ("snapshot", "isolated")}
 
 
 def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:

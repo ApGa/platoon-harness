@@ -28,7 +28,7 @@ from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
 from .provenance import Provenance
-from .review import Review
+from .review import Review, snapshots_of
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .transcript import PAGE, Focus, Transcript
@@ -947,8 +947,7 @@ class Workspace(Screen[None]):
             self.marks[stream] = seq
             self.run_worker(self._mark_one(live.session, stream, seq), group="marks")
 
-        snapshots = {f"@{row['agent']}" for row in live.roster if (row["workspace"] or {}).get("mode") == "snapshot"}
-        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, snapshots))
+        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, snapshots_of(live.roster)))
 
     def action_provenance(self) -> None:
         """Show the chosen line's provenance. Every line is an event, and one that carries another's words opens on what

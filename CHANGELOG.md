@@ -591,6 +591,7 @@
 
 ### Fixed
 
+- The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.
 - Codex 0.167.0 refused every turn of an agent given access, "This chat uses platoon-harness, but your current provider is
   openai", as it holds a thread to the provider its app-server started on, and the driver had named a provider for the thread
   alone. The app-server now starts on a provider of the agent's own that `-c` names, and the thread gives it its URL, which no

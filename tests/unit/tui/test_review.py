@@ -11,7 +11,7 @@ import pytest
 
 from platoon_harness import Session, Team
 from platoon_harness_cli.tui.app import TerminalUI
-from platoon_harness_cli.tui.review import rows_of
+from platoon_harness_cli.tui.review import rows_of, snapshots_of
 
 from ..runtime.gitting import commit, git, repository, working
 from ..runtime.support import in_state, of_type, until
@@ -120,6 +120,20 @@ async def test_a_conflict_in_the_dock_says_where_to_resolve_it(root, repo):
     line = next(line for line in text.splitlines() if "conflict @lead" in line)
     assert "conflict @lead merge stopped on conflicts in 1 file, README: resolve it in" in line
     assert path[:20] in line
+
+
+def test_an_isolated_workspace_s_commits_are_said_to_be_in_a_repository_of_its_own():
+    roster = [
+        {"agent": "ada", "workspace": {"mode": "isolated", "path": "/s/agents/ada/workspace", "branch": "b"}},
+        {"agent": "bob", "workspace": {"mode": "worktree", "path": "/s/agents/bob/workspace", "branch": "c"}},
+        {"agent": "cy", "workspace": None},
+    ]
+    changes = {row["id"]: row for row in (commit_of("aaaa", "@ada", 3), commit_of("bbbb", "@bob", 4))}
+
+    lines = [row.line.plain.rstrip() for row in rows_of(changes, mark=4, snapshots=snapshots_of(roster))]
+
+    assert lines[0] == "@ada, a snapshot, whose commits are in its own repository"
+    assert lines[2] == "@bob"
 
 
 def test_review_groups_commits_by_the_workspace_that_made_them():
