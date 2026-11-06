@@ -5,24 +5,32 @@ environment's tools and compaction headers. A program opens the session on a rep
 training before any harness launches, and drives it as a training system does. Then, with no runtime, the record says
 what can train, and rewards and credit go in beside it. ScriptedDriver runs it in the fast pass, and pi and OpenHands,
 each on its real binary or SDK, in the slow pass.
+
+The same session with one agent isolated, confined by the `bwrap` extension, still reaches its gateway on loopback. A
+harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it in the fast pass.
 """
 
 import itertools
 import shutil
+import sys
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
 from platoon_harness import ConfigError, Refused, Session, Team
+from platoon_harness.bwrap import Bubblewrap
 from platoon_harness.config import Secret, forms
 from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.drivers.levels import CHECKED, Conformance
+from platoon_harness.drivers.process import Record
+from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.primitives import CallEligibility
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, Gateway, SpawnRequest
-from platoon_harness.runtime.paths import write_conformance
+from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
     AskModel,
@@ -47,6 +55,7 @@ pytestmark = pytest.mark.timeout(1800)
 AGENTS = ("alice", "bob")
 PROGRAM = "program:trainer"
 STATUSES = ("invalid", "error", "timeout", "cancelled")
+SEALED = [sys.executable, str(Path(__file__).with_name("sealed_program.py"))]
 
 
 @dataclass(frozen=True)
@@ -54,7 +63,7 @@ class Harness:
     """What a role's `harness` names, what the model says in each agent's one turn, which ends on a compaction its
     harness made, how a result that proves it is kept, and how long a wait on it may take."""
 
-    named: str
+    named: str | dict[str, Any]
     replies: Sequence[Any]
     proves: Callable[[Path], Awaitable[Conformance]]
     seconds: float = support.SECONDS
@@ -65,6 +74,15 @@ def _scripted() -> Harness:
     made = support.harness(lambda: ScriptedDriver(itertools.repeat(turn)))
     return Harness(
         made, (), lambda folder: check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=folder)
+    )
+
+
+def _wire() -> Harness:
+    """A scripted harness on the wire, which says where it is installed, as an isolation needs to confine it."""
+    return Harness(
+        {"command": SEALED, "mode": "wire"},
+        (),
+        lambda folder: check_driver(lambda: WireDriver([*SEALED, "checked"]), folder=folder, timeout=20),
     )
 
 
@@ -238,3 +256,86 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     told = {agent.agent: outcome for agent, outcome in authority.told}
     assert {agent: outcome.status for agent, outcome in told.items()} == {"alice": "cancelled", "bob": "retired"}
     assert all(outcome.report for outcome in told.values())
+
+
+def files_of(folder: Path, *besides: Path) -> dict[Path, bytes]:
+    """What each file under `folder` holds, but those under `besides`."""
+    found = (path for path in folder.rglob("*") if path.is_file() and not path.is_symlink())
+    return {path: path.read_bytes() for path in found if not any(path.is_relative_to(other) for other in besides)}
+
+
+def leader_of(folder: Path) -> bytes:
+    """The command line of the process group a harness leads, as the agent's folder records it."""
+    record = Record.read(folder)
+    assert record is not None
+    return Path(f"/proc/{record.pid}/cmdline").read_bytes()
+
+
+@pytest.mark.parametrize(
+    "made",
+    [
+        pytest.param(_wire, id="wire"),
+        pytest.param(_pi, id="pi", marks=pytest.mark.slow),
+        pytest.param(_openhands, id="openhands", marks=pytest.mark.slow),
+    ],
+)
+async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path, monkeypatch, made):
+    """Confined by `bwrap`, which binds only its folder to write and passes its environment, an agent launched sealed
+    calls its gateway on loopback with its own bearer, compacts with the headers and reports each compaction by its id,
+    and is eligible from the result kept where it ran unconfined. No form of its bearer is in any file or in its
+    command line, so its environment alone carried it, and nothing outside the session's folder was written."""
+    harness: Harness = made()
+    if harness.named == "pi" and shutil.which("pi") is None:
+        pytest.skip("pi is not installed, so no isolated harness met its gateway here")
+    if (why := Bubblewrap().refusal()) is not None:
+        pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why}")
+    monkeypatch.setattr(support, "SECONDS", harness.seconds)
+    root, cwd = tmp_path / "root", repository(tmp_path / "work", monkeypatch)
+    write_conformance(root, await harness.proves(tmp_path / "check"))
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    alice = {"harness": harness.named, "workspace": "isolated", "approvals": "allow"}
+    team = Team.model_validate({"extensions": ["bwrap"], "roles": {"alice": alice}})
+    before = files_of(tmp_path)
+
+    async with FakeModel() as model:
+        authority = Training(model)
+        start: dict[str, Any] = {"principal": PROGRAM, "authority": authority, "trainable": True, "cwd": cwd}
+        async with Session.start(team, name="rollout", root=root, **start) as session:
+            await in_state(session, "alice", "idle")
+            folder = agent_folder(session.folder, "alice")
+            leader = leader_of(folder)
+            await session.open_episode("task")
+            model.script(harness.replies)
+            await session.send("@alice", "the task")
+            await until(lambda: of_type(session, "context.compacted"), session)
+            await in_state(session, "alice", "idle")
+            await session.settled()
+            await session.retire("@alice")
+            await session.close_episode(based_on=[row["said"] for row in await session.agents()])
+            if (await session.status())["state"] == "open":
+                await session.close()
+
+    history = await Session.attach("rollout", root=root)
+    started = await of_type(history, "agent.started")
+    eligible, calls = await history.eligibility("@alice", "task"), await every_call(history, "alice")
+    argv = leader.decode().split("\0")[:-1]
+    gateway, bearer = authority.gateways["alice"], bearer_of("alice")
+    by_id = {request.response_id: request for request in model.calls if request.response_id}
+    compacting = [request for request in model.calls if request.carries(gateway.compaction_headers)]
+    assert Path(argv[0]).name == "bwrap"
+    assert [argv[at + 1] for at, part in enumerate(argv) if part == "--bind"] == [str(folder.resolve())]
+    assert [(event.data["assurance"], event.data["levels"]["trainable"]["state"]) for event in started] == [
+        ("isolated", "met")
+    ]
+    assert urlsplit(gateway.origin).hostname == "127.0.0.1"
+    assert {request.bearer for request in (*model.calls, *model.tool_calls)} == {bearer} and model.tool_calls
+    for call in calls:
+        if call.call_id is not None:
+            assert by_id[call.call_id].carries(gateway.compaction_headers) == (call.purpose == "compaction")
+    reported = {call.call_id for call in calls if call.purpose == "compaction"}
+    assert compacting and {request.response_id for request in compacting} <= reported
+    assert (eligible.attribution, eligible.verdict, eligible.reasons) == ("exact", "eligible", ()), eligible
+    assert all(call.verdict == "eligible" for call in calls), calls
+    assert holding(tmp_path, [bearer]) == [] and not any(form in leader for form in forms(Secret(bearer)))
+    assert files_of(tmp_path, root / "sessions") == before
