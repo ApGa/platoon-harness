@@ -694,9 +694,9 @@ async def environment_tools_in_first_request(rig: _Rig) -> None:
 
 
 def _by_its_server(name: str, tool: str) -> bool:
-    """Whether `name` shows the environment's `tool` named by the environment's server, never bare."""
-    prefix = name.removesuffix(tool)
-    return prefix != name and ENVIRONMENT in prefix
+    """Whether `name` shows the environment's `tool` named by the environment's server, never bare: the server's name
+    and a separator before it, as `mcp__environment__<tool>` or `environment_<tool>`."""
+    return re.fullmatch(rf"(.*_)?{ENVIRONMENT}_+{re.escape(tool)}", name) is not None
 
 
 def _unproven(capabilities: Capabilities) -> str | None:

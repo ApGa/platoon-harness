@@ -724,6 +724,18 @@ async def test_a_sealed_launch_that_shows_the_environment_s_tools_bare_fails(tmp
     assert result.get("sealed_first_request_holds_only_ours").state == "failed"
 
 
+async def test_a_sealed_launch_that_names_the_environment_s_tools_with_no_separator_fails(tmp_path):
+    class Glued(Filtered):
+        def _servers_given(self):
+            for prefix, server in super()._servers_given():
+                yield prefix and "environment", server
+
+    result = await check(Glued, tmp_path)
+
+    assert result.get("environment_tools_in_first_request").state == "failed"
+    assert result.get("sealed_first_request_holds_only_ours").state == "failed"
+
+
 async def test_a_sealed_launch_that_reads_the_project_s_instructions_fails(tmp_path):
     class Reading(Filtered):
         async def start(self, spec, report):

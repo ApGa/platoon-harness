@@ -62,8 +62,8 @@
   condenser, a wire program from its frame, and pi through our extension, which takes `session_before_compact` and runs pi's own
   `compact`, and says each of its one or two calls to the driver, by its id or with none where it never answered, before pi says
   the compaction ended, even when it was cut. See ADR 0053.
-- `FakeModel.gateway(bearer)`: FakeModel as a training system's gateway, its models and an MCP server of the environment's one tool,
-  `ENVIRONMENT_TOOL`, at `/mcp`, answering only a bearer it gave. `Request.bearer`, `Request.carries(headers)`, `FakeModel.tool_calls`,
+- `FakeModel.gateway(bearer)`: FakeModel as a training system's gateway, its models and an MCP server of the environment's tools,
+  `ENVIRONMENT_TOOLS`, at `/mcp`, answering only a bearer it gave. `Request.bearer`, `Request.carries(headers)`, `FakeModel.tool_calls`,
   and `Overflow`, a reply that refuses a request as too long in each dialect's own error form.
 - Two conformance checks of a sealed launch, `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`, kept in
   the one result per driver, which `trainable` now stands on; `check_driver(kept=)` names the tools of a harness's own that a sealed
@@ -619,12 +619,12 @@
 - Every OpenHands agent of a sealed launch on an environment with a tool named `finish`, as TextCraft's is, was refused at launch,
   "Duplicate tool names found: {'finish'}": OpenHands keeps its own `finish` and `think`, and showed the environment's tools bare.
   One rule now holds for every harness: an environment's tools reach the model named by their server, never bare, so none can
-  collide with a harness's own. OpenHands shows them as `environment_<tool>`, as its SDK names a server's tools, and calls the
-  server by the names it lists; pi already showed them as `mcp__environment__<tool>`, and ScriptedDriver now does too, its `Call`
-  step naming a tool as the model is shown it. `environment_tools_in_first_request` now asks for each of the environment's tools
-  named by its server, and FakeModel's environment serves `finish` and `think` beside `environment_ping`, all three as
-  `testing.ENVIRONMENT_TOOLS`, so a harness that shows them bare fails it. A result kept before was earned on the weaker check:
-  `doctor --check` again.
+  collide with a harness's own. OpenHands shows them as `environment_<tool>`, as its SDK's client of two servers names a server's
+  tools, and calls the server by the names it lists; pi already showed them as `mcp__environment__<tool>`, and ScriptedDriver now
+  does too, its `Call` step naming a tool as the model is shown it. `environment_tools_in_first_request` now asks for each of the
+  environment's tools named by its server, with the server's name and a separator before it, and FakeModel's environment serves
+  `finish` and `think` beside `ping`, all three as `testing.ENVIRONMENT_TOOLS`, so a harness that shows them bare fails it. A result
+  kept before was earned on the weaker check: `doctor --check` again.
 - A session root given relatively, as `Session.attach(name, root="home")`, failed every read of its annotations, "relative path can't
   be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.

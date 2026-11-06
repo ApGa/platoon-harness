@@ -30,6 +30,7 @@ from platoon_harness.drivers import (
     Exited,
     GapReport,
     InputDelivered,
+    Item,
     ModelCall,
     Ready,
     TurnEnded,
@@ -876,3 +877,22 @@ async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compacti
     assert set(model.calls[0].tools) == set(ready.tools_visible or ()) == {TOOL, "finish", "think", *environment}
     assert [call.json["params"]["name"] for call in model.tool_calls] == [ENVIRONMENT_TOOL] * 40
 
+
+async def test_openhands_reports_the_environment_s_finish_and_think_as_tool_calls_on_the_environment(tmp_path):
+    """Named by their server, the environment's `finish` and `think` are called on it by the names it lists, and each is
+    reported as a tool, never as OpenHands' own last message or thought."""
+    calls = [ToolCall(f"environment_{tool}", {"note": tool}, id=f"call_{tool}") for tool in ("finish", "think")]
+    async with FakeModel(*calls, "done") as model:
+        spec = on_fake_model(tmp_path, model, goal="finish and think", access=model.gateway("bearer-of-ada"))
+        driver = OpenHandsDriver()
+        heard = Allowing(driver)
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    assert [call.json["params"]["name"] for call in model.tool_calls] == ["finish", "think"]
+    items = [(item.kind, item.phase, item.native_id) for item in heard.of(Item) if item.kind != "message"]
+    assert items == [
+        ("tool", phase, f"call_{tool}") for tool in ("finish", "think") for phase in ("started", "completed")
+    ]
+    assert [item.body for item in heard.of(Item) if item.kind == "message"] == ["done"]
