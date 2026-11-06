@@ -65,6 +65,12 @@ _SIGN_IN = (
 _BASE_URL = "OPENAI_BASE_URL"
 _KEY = "OPENAI_API_KEY"
 _PROVIDER = "platoon-harness"
+_KEYED = (
+    "-c",
+    f'model_provider="{_PROVIDER}"',
+    "-c",
+    f'model_providers.{_PROVIDER}={{name="{_PROVIDER}", env_key="{_KEY}", wire_api="responses"}}',
+)
 _LOGINS: Mapping[str, Login] = {"Logged in using ChatGPT": "plan", "API key configured": "key"}
 _ASKS = "on-request"
 _TOOL_TIMEOUT_S = 300.0
@@ -142,13 +148,11 @@ def _login() -> Login | None:
     return next((login for phrase, login in _LOGINS.items() if phrase in said), None)
 
 
-def _provider(spec: AgentSpec) -> dict[str, Any] | None:
-    """A provider of this thread's own, when access was given, so that the key pays and no saved login does. Codex
-    reads no base URL from its environment, so the URL goes here too."""
-    if _KEY not in (access := keys_of(spec)):
-        return None
-    provider = {"name": _PROVIDER, "env_key": _KEY, "wire_api": "responses"}
-    return provider | ({"base_url": access[_BASE_URL].reveal()} if _BASE_URL in access else {})
+def _command(spec: AgentSpec) -> tuple[str, ...]:
+    """How this agent launches: where access was given, on a provider of its own, so that the key pays and no saved
+    login does. From 0.167.0 a thread runs only on the provider its app-server started on, so the provider is chosen
+    here, and argv, which any process can read, names only the key's variable."""
+    return (_CODEX, "app-server", *(_KEYED if _KEY in keys_of(spec) else ()))
 
 
 def _thread(spec: AgentSpec, theirs: Mapping[str, Any]) -> dict[str, Any]:
@@ -179,9 +183,10 @@ def _thread(spec: AgentSpec, theirs: Mapping[str, Any]) -> dict[str, Any]:
         excluded = (theirs.get("shell_environment_policy") or {}).get("exclude") or ()
         config["mcp_servers"] = {tools.namespace: server}
         config["shell_environment_policy"] = {"exclude": [*excluded, TOKEN_VARIABLE]}
-    if (provider := _provider(spec)) is not None:
-        fields["modelProvider"] = _PROVIDER
-        config["model_providers"] = {_PROVIDER: provider}
+    if _BASE_URL in (access := keys_of(spec)):
+        # Codex reads no base URL from its environment. A dotted key sets one field of the provider it launched on,
+        # where a table would have to be a whole provider.
+        config[f"model_providers.{_PROVIDER}.base_url"] = access[_BASE_URL].reveal()
     return fields
 
 
@@ -275,7 +280,7 @@ class CodexDriver:
             raise DriverError(f"{_BASE_URL} with no {_KEY} would reach nobody's model: name one too")
         self._folder = spec.folder
         env = harness_env(spec, *_SIGN_IN)
-        self._launched = await Process.launch((_CODEX, "app-server"), spec, report, read=self._read, env=env)
+        self._launched = await Process.launch(_command(spec), spec, report, read=self._read, env=env)
         await self._handshake(spec)
         if spec.goal is not None and spec.resume is None:
             await self.deliver(spec.goal)

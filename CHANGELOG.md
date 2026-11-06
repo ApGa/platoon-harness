@@ -382,6 +382,7 @@
 
 ### Changed
 
+- Codex's conformance test pins 0.167.0, the version its checks last passed on, against FakeModel, as they had on 0.164.0.
 - Claude Code's conformance test pins 2.1.318, the version its checks last passed on, against FakeModel, as they had on 2.1.316.
 - `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
   `call_ids_reported`. See ADR 0053.
@@ -566,6 +567,10 @@
 
 ### Fixed
 
+- Codex 0.167.0 refused every turn of an agent given access, "This chat uses platoon-harness, but your current provider is
+  openai", as it holds a thread to the provider its app-server started on, and the driver had named a provider for the thread
+  alone. The app-server now starts on a provider of the agent's own that `-c` names, and the thread gives it its URL, which no
+  argv holds, so the driver runs on 0.164.0 and 0.167.0 alike.
 - Two stops of one agent at once, as a shutdown's and the agent's own, could both read its process record, and the second to remove
   it failed, so its stop effect failed and its authority was never told how it ended. A record the other stop removed is gone.
 - Another agent's stop could end its workspace while a look read that workspace's reflog to say whose a commit was, and the look

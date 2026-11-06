@@ -43,7 +43,8 @@ method promises:
   is lost. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. That access is
   variables by name, which `keys_of(spec)` reads and `harness_env` puts in the harness's environment, or a `Gateway`, which only a
-  driver that declares `sealed` is given, with `spec.model` the model it serves. `spec.effort` goes to
+  driver that declares `sealed` is given, with `spec.model` the model it serves. Any process on the machine can read a command line,
+  so one may name a variable of that access and never hold its value. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
   its own for starting agents: turn that off by a setting for this launch alone, and say in your docs what that cannot reach, such as

@@ -43,6 +43,14 @@ pytestmark = pytest.mark.timeout(30)
 
 GRACE = 5.0
 FAKE = Path(__file__).with_name("fake_codex.py")
+KEYED = [
+    "app-server",
+    "-c",
+    'model_provider="platoon-harness"',
+    "-c",
+    'model_providers.platoon-harness={name="platoon-harness", env_key="OPENAI_API_KEY", wire_api="responses"}',
+]
+URL = "model_providers.platoon-harness.base_url"
 
 
 def notice(method: str, **params: Any) -> dict[str, Any]:
@@ -229,20 +237,14 @@ async def test_a_role_s_sandbox_is_sent_as_it_stands(tmp_path, stand):
     assert stand.asked("thread/start")["sandbox"] == "workspace-write"
 
 
-async def test_access_is_a_provider_of_the_thread_s_own_so_the_key_pays(tmp_path, stand):
+async def test_access_is_a_provider_the_app_server_starts_on_so_the_key_pays(tmp_path, stand):
     access = {"OPENAI_BASE_URL": Secret("http://127.0.0.1:1/v1"), "OPENAI_API_KEY": Secret("dummy")}
 
     async with running(make_spec(tmp_path, goal="", model="m", access=access)) as (_, heard):
         await heard.until(Ready)
 
-    thread = stand.asked("thread/start")
-    assert thread["modelProvider"] == "platoon-harness"
-    assert thread["config"]["model_providers"]["platoon-harness"] == {
-        "name": "platoon-harness",
-        "env_key": "OPENAI_API_KEY",
-        "wire_api": "responses",
-        "base_url": "http://127.0.0.1:1/v1",
-    }
+    assert stand.launch["argv"] == KEYED
+    assert stand.asked("thread/start")["config"][URL] == "http://127.0.0.1:1/v1"
     assert stand.launch["env"]["OPENAI_API_KEY"] == "dummy"
 
 
@@ -252,7 +254,8 @@ async def test_a_key_alone_is_a_provider_on_the_default_url(tmp_path, stand):
     async with running(spec) as (_, heard):
         await heard.until(Ready)
 
-    assert "base_url" not in stand.asked("thread/start")["config"]["model_providers"]["platoon-harness"]
+    assert stand.launch["argv"] == KEYED
+    assert URL not in stand.asked("thread/start")["config"]
 
 
 async def test_with_access_given_an_unset_model_is_refused(tmp_path, stand):

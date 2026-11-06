@@ -61,7 +61,7 @@ MODEL = "fake-model"
 TIMEOUT = 60.0
 ESCALATED = {"sandbox_permissions": "require_escalated", "justification": "needs an approval"}
 GATED = ToolCall("exec_command", {"cmd": "touch gated", **ESCALATED}, id="call_gated")
-PINNED = "0.164.0"
+PINNED = "0.167.0"
 CHILD = ToolCall("spawn_agent", {"message": "say so"}, id="call_child", namespace="multi_agent_v1")
 
 
