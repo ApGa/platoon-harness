@@ -608,6 +608,62 @@
 - The writer resolves a batch's acks before it wakes followers, so what a caller does on its ack comes before a follower on its loop
   looks.
 
+- `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
+  argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
+- `Session`: boards and queues take their tool's name, `board_post`, `task_claim` and so on, and `agent.release` is plain `release`.
+  `cancel()` stops the session and `cancel_agent(agent)` one agent. `finish`, `join`, `wait_any` and `broadcast` are gone, as `wait` and
+  `send` state them. `spawn` says `role`. `put_body` returns a ref, and `get_body` and `tombstone` take one.
+- `Link.submit` takes no `expected_version`. Ops that need one take it as an argument.
+- `ConfigError` is at the top of the package, and `testing` no longer exports `API_KEY` and `BASE_URL`.
+- `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
+- `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do, and `parent` and
+  `held_by` the same way, so a client can walk them.
+- `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.
+- `reap` returns what it left alone in words, and `Process` masks stderr and leaves reports to the host.
+- `agent.records` takes an `agent`.
+- The view `primitives.Session` is now `SessionRecord`, leaving the name to the facade.
+- An agent has no goal unless given one: `agent.spawn` takes none, such an agent holds no turn's reservation, and a driver waits for
+  a delivery. `check_driver` has `no_goal_takes_no_turn`, and the `exec` driver refuses a start with no goal.
+- A one-shot agent ends with its turn: `finished` if that turn `stopped`, and `failed` otherwise. It used to be lost.
+- `Delivery.text` is a field the host renders in the words of an agent's surface, and `Offered` carries `sender` and `body`.
+- `agent.start` takes `resumed`, which journals `agent.resumed` and leaves the agent as it stood. `Agent` has `native`.
+- `Manifest` holds `human`, `approvals` and `cwd`, so a folder is all a runtime needs.
+- `team_check` takes capabilities by a role's own name too, since a command decides them and a driver's name does not.
+- `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
+- `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
+
+- `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
+  page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
+- `check_driver` has `preamble_once_per_request`, `tool_item_carries_its_anchor` and `stop_ends_a_running_tool`, for which it takes
+  `shell`, and `operational` needs that last one. `measures_reported` holds `tokens` to what the model said, `call_ids_reported` holds an
+  item and a call's usage to the id, and `interrupt` holds a turn's reason to `interrupted`.
+- `ScriptedDriver` sends `spec.instructions` as a system message, and says which call made an item.
+- `runtime.start` takes `drift`, and `Kernel.recover` takes it as arguments. `Manifest.drift()` says what differs from a manifest.
+- `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
+- `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have
+  `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`. An
+  id, a reason and a purpose hold 256 characters, `Item.native_id` among them.
+- `Compacted.forgotten` holds native ids, and the host stores it and `summary` as bodies. With `None` the runtime records
+  `compaction_opaque`, so a driver no longer reports that gap itself.
+- A `roster` row has `parent`, `stopped`, why the last turn did not stop on its own until the next begins, and `held_by`.
+- `session.status` says `stalled`, and `Session.settle_effect` says whether an uncertain effect happened.
+- `agent.retell` also tells a resumed harness its last turn was cut off, from `stopped`, and with nothing to tell it says nothing.
+- `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.
+  `CUT_OFF` holds the reasons only the runtime gives, and a driver that says one has sent an unknown frame.
+- An agent that has finished can spawn nothing.
+- `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
+- `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.
+- `message.send` takes no `cause`: a program carries a chain with `reply_to`.
+- `load_team(trust_commands=)` is now `trust_project=`, and covers `module:attr` references and auth profiles.
+- `Kernel.submit` takes `native`, stamped on a command's events, and `Kernel.get_body` takes `limit`.
+- `blob.get` takes one `ref`, which can name lines. A cut body says `rest`, and `text` is null where an op could not read a body.
+- `agent.status` names the open `turn`.
+- `ready` holds only what a driver knows. A harness commits through the new runtime op `agent.start`, with what was declared and
+  verified and the levels, so a report cannot claim one. `agent.report` refuses `ready` and `delta`.
+- `agent.report` takes `input.delivered`, `approval.requested`, `model.call`, `child.seen` and `native`, and `usage` has a `scope`.
+- A report's `body` is text until the host stores it, as ingress does for a tool's body argument.
+- `Capabilities` holds every field of architecture section 9.2, and absence means unsupported.
+
 ### Removed
 
 - `runtime.workspaces.NOT_YET`, as `isolated` is given where an extension gives an isolation. See ADR 0034.
@@ -908,61 +964,3 @@
 
 - Ctrl+C while `run` prepared could leave a session folder behind after `run` said no session was made. A start cancelled while it
   prepares takes its folder back.
-
-### Changed
-
-- `check_driver` has rows for a denial that holds, an effort honored or refused, and `reconcile` after a restart, and its `gated`
-  argument turns a command into a call that asks approval, as `shell` turns one into a call that runs it.
-- `Session`: boards and queues take their tool's name, `board_post`, `task_claim` and so on, and `agent.release` is plain `release`.
-  `cancel()` stops the session and `cancel_agent(agent)` one agent. `finish`, `join`, `wait_any` and `broadcast` are gone, as `wait` and
-  `send` state them. `spawn` says `role`. `put_body` returns a ref, and `get_body` and `tombstone` take one.
-- `Link.submit` takes no `expected_version`. Ops that need one take it as an argument.
-- `ConfigError` is at the top of the package, and `testing` no longer exports `API_KEY` and `BASE_URL`.
-- `primitives.Delivery` is now `Injection`, the word of architecture section 7, and `Policy` names the approval policies.
-- `agent.list` and `agent.status` rows name an agent as `agent`, the bare name, as `session.ending` and `roster` do, and `parent` and
-  `held_by` the same way, so a client can walk them.
-- `Peer` takes no `limit`, a `Stray` takes the line alone, and `strict_loads` is the one way to refuse a NaN.
-- `reap` returns what it left alone in words, and `Process` masks stderr and leaves reports to the host.
-- `agent.records` takes an `agent`.
-- The view `primitives.Session` is now `SessionRecord`, leaving the name to the facade.
-- An agent has no goal unless given one: `agent.spawn` takes none, such an agent holds no turn's reservation, and a driver waits for
-  a delivery. `check_driver` has `no_goal_takes_no_turn`, and the `exec` driver refuses a start with no goal.
-- A one-shot agent ends with its turn: `finished` if that turn `stopped`, and `failed` otherwise. It used to be lost.
-- `Delivery.text` is a field the host renders in the words of an agent's surface, and `Offered` carries `sender` and `body`.
-- `agent.start` takes `resumed`, which journals `agent.resumed` and leaves the agent as it stood. `Agent` has `native`.
-- `Manifest` holds `human`, `approvals` and `cwd`, so a folder is all a runtime needs.
-- `team_check` takes capabilities by a role's own name too, since a command decides them and a driver's name does not.
-- `session.status` says how many approvals are left to `ask`. A lost turn raises `uncertain` in `attention`.
-- `Effect.data` is `Any`, as `Event.data` is. `__version__` lives in `platoon_harness.version`.
-
-- `agent.list` and `task.renew` are no longer tools. Agents have `peers`, and the host renews leases. `peers` and `channel.list` return a
-  page, `{peers, total, cursor}` and `{channels, total, cursor}`, and take `after`.
-- `check_driver` has `preamble_once_per_request`, `tool_item_carries_its_anchor` and `stop_ends_a_running_tool`, for which it takes
-  `shell`, and `operational` needs that last one. `measures_reported` holds `tokens` to what the model said, `call_ids_reported` holds an
-  item and a call's usage to the id, and `interrupt` holds a turn's reason to `interrupted`.
-- `ScriptedDriver` sends `spec.instructions` as a system message, and says which call made an item.
-- `runtime.start` takes `drift`, and `Kernel.recover` takes it as arguments. `Manifest.drift()` says what differs from a manifest.
-- `tool_name` lives in the kernel, which claims tool names at load. `tools` adds `held_tools`.
-- `Item.phase` is one of `started`, `completed`, `final` and `decided`, and anything else is an unknown frame. `Item` and `Usage` have
-  `call_id`, which goes on the envelope, `ModelCall` has `purpose`, `Compacted` has `summary`, and `InputDelivered` has `native_id`. An
-  id, a reason and a purpose hold 256 characters, `Item.native_id` among them.
-- `Compacted.forgotten` holds native ids, and the host stores it and `summary` as bodies. With `None` the runtime records
-  `compaction_opaque`, so a driver no longer reports that gap itself.
-- A `roster` row has `parent`, `stopped`, why the last turn did not stop on its own until the next begins, and `held_by`.
-- `session.status` says `stalled`, and `Session.settle_effect` says whether an uncertain effect happened.
-- `agent.retell` also tells a resumed harness its last turn was cut off, from `stopped`, and with nothing to tell it says nothing.
-- `OWNER_STOP` is the reason a turn ended by a shutdown gives. A host reports a turn interrupted while it closes under that reason.
-  `CUT_OFF` holds the reasons only the runtime gives, and a driver that says one has sent an unknown frame.
-- An agent that has finished can spawn nothing.
-- `agent.spawn` adds the principal, and a host issues its credential with `principal.issue`.
-- `lease_lost` and `blob.put` are gone, and `task.claim` at `max_inflight` refuses `conflict`.
-- `message.send` takes no `cause`: a program carries a chain with `reply_to`.
-- `load_team(trust_commands=)` is now `trust_project=`, and covers `module:attr` references and auth profiles.
-- `Kernel.submit` takes `native`, stamped on a command's events, and `Kernel.get_body` takes `limit`.
-- `blob.get` takes one `ref`, which can name lines. A cut body says `rest`, and `text` is null where an op could not read a body.
-- `agent.status` names the open `turn`.
-- `ready` holds only what a driver knows. A harness commits through the new runtime op `agent.start`, with what was declared and
-  verified and the levels, so a report cannot claim one. `agent.report` refuses `ready` and `delta`.
-- `agent.report` takes `input.delivered`, `approval.requested`, `model.call`, `child.seen` and `native`, and `usage` has a `scope`.
-- A report's `body` is text until the host stores it, as ingress does for a tool's body argument.
-- `Capabilities` holds every field of architecture section 9.2, and absence means unsupported.
