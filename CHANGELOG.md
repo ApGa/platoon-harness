@@ -431,6 +431,9 @@
 
 ### Changed
 
+- The architecture decision records are RFCs, in [docs/rfcs](docs/rfcs/README.md) under the same numbers, with
+  [a template](docs/rfcs/0000-template.md) and a process for proposing one. The guides moved to `docs/how-to/`,
+  `docs/extending/` and `docs/reference/`, and [docs/README.md](docs/README.md) lists every page.
 - Nothing reaches an agent while a stop of a child of its is under way: no handover, and no `released` from a `wait` it holds open
   in a call. So a parent hears of a child's end, by its report, by the notice of a wait that holds on it or by a held call's
   answer, only once the authority's `finish` for that child has returned, and is on its way to a turn until then. A call it makes
