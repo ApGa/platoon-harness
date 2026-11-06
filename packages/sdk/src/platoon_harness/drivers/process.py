@@ -402,8 +402,8 @@ class Process:
         quota: int = REPORT_QUOTA,
     ) -> "Process":
         """Start `command` in its own group, on the allowlisted environment, or on `env`, which a driver builds from
-        that one. The harness cannot exec until its record is on disk: `sh` waits for one line on stdin, and exits
-        unexecuted if we die first."""
+        that one, under `spec.wrap`, whose program is then the group's leader. The harness cannot exec until its record
+        is on disk: `sh` waits for one line on stdin, and exits unexecuted if we die first."""
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         env = harness_env(spec) if env is None else env
         _check_program(command, spec, env)
@@ -415,6 +415,7 @@ class Process:
             "-c",
             _TRAMPOLINE,
             "sh",
+            *spec.wrap,
             *command,
             stdin=PIPE,
             stdout=PIPE,

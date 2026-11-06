@@ -4,6 +4,10 @@
 
 ### Added
 
+- `DriverInfo.installed`, the paths a harness reads to run, declared by every driver, and by a wire program in its description;
+  `AgentSpec.wrap`, the argv of the isolation a harness runs in, which `Process` puts before its command; and a `HOME` in `spec.env` is
+  the harness's home, so `harness_env` passes none of the variables that keep a harness's state elsewhere. `drivers.env.on_path` and
+  `drivers.env.PYTHON` name where `PATH` finds a program and what the runtime's own Python reads.
 - Sealed launches. On a gateway, ScriptedDriver, pi, OpenHands and a wire program that declares `sealed` launch with nothing of the
   user's: the gateway's model under its bearer, which goes by environment alone, under `BEARER_VARIABLE`,
   `PLATOON_HARNESS_BEARER`, a file the launch writes naming it as `${PLATOON_HARNESS_BEARER}`; ours and the environment's tools, the

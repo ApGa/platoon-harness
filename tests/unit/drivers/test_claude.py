@@ -392,6 +392,14 @@ def test_a_harness_that_is_not_installed_describes_no_login(monkeypatch, tmp_pat
     assert ClaudeDriver().describe().login is None
 
 
+def test_it_declares_where_its_harness_is_installed(stand, monkeypatch, tmp_path):
+    found = ClaudeDriver().describe().installed
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+
+    assert found == (stand.folder / "claude",)
+    assert ClaudeDriver().describe().installed == ()
+
+
 def test_describing_runs_no_harness_and_answers_alike(stand):
     stand.install(status=json.dumps({"authMethod": "api_key"}))
     driver = ClaudeDriver()

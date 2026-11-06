@@ -97,12 +97,14 @@ class DriverError(Exception):
 class DriverInfo(Model):
     """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one, and
     `version` is the harness version it would run, None when it cannot tell without starting one: `ready` says the
-    version that runs."""
+    version that runs. `installed` is the paths its harness reads to run, as it reaches them, which an isolation shows
+    it of what it hides: none for a harness in this process, which nothing can confine."""
 
     name: str
     login: Login | None = None
     version: str | None = None
     capabilities: Capabilities = Capabilities()
+    installed: tuple[Path, ...] = ()
 
 
 class ToolBinding(Model):
@@ -206,7 +208,9 @@ class AgentSpec(Model):
     there is none, as on a resume. `folder` is the agent's own directory, for its record, log and native home. `access`
     is model access: variable names to values, URLs included, that reach only the harness's environment, or a gateway,
     which only a driver that declares `sealed` is given. `effort` goes to the harness as it stands, and `sandbox` is one
-    of the values the driver declared. `allow_native_children` lets the harness start agents of its own."""
+    of the values the driver declared. `allow_native_children` lets the harness start agents of its own. A `HOME` in
+    `env` is the harness's home. `wrap` is the argv of the isolation it runs in, which `Process` puts before its
+    command, so that all it starts is confined with it, and is empty for a harness that runs unconfined."""
 
     agent: str
     role: str
@@ -222,6 +226,7 @@ class AgentSpec(Model):
     env: Mapping[str, str] = {}
     instructions: str | None = None
     resume: str | None = None
+    wrap: tuple[str, ...] = ()
 
 
 @runtime_checkable

@@ -52,7 +52,7 @@ from .. import (
     refuse_unset_model,
     unknown_frame,
 )
-from ..env import Redactor, secrets_of
+from ..env import PYTHON, Redactor, secrets_of
 
 _NAME = "openhands"
 _SDK = "openhands-sdk"
@@ -165,8 +165,8 @@ class Worker:
 
     def describe(self) -> DriverInfo:
         with contextlib.suppress(DriverError):
-            return DriverInfo(name=_NAME, version=sdk_version(), capabilities=_CAPABILITIES)
-        return DriverInfo(name=_NAME, capabilities=_CAPABILITIES)
+            return DriverInfo(name=_NAME, version=sdk_version(), capabilities=_CAPABILITIES, installed=PYTHON)
+        return DriverInfo(name=_NAME, capabilities=_CAPABILITIES, installed=PYTHON)
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         """Open the conversation, ready its agent, and say so. The key, the endpoint, a gateway's bearer and our token

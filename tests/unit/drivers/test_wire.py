@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -146,6 +147,38 @@ async def test_describe_starts_no_harness_and_is_asked_once(tmp_path):
     assert driver.describe().capabilities.persistent
     assert driver.describe().name == "raw"
     assert count.read_text() == "x"
+
+
+async def test_a_program_is_installed_where_path_finds_it_and_where_it_says(tmp_path):
+    command = raw_program(
+        tmp_path,
+        """
+        for frame in frames():
+            reply(frame, {"protocol": 2, "name": "raw", "installed": ["/opt/my-agent"]})
+    """,
+    )
+
+    assert WireDriver(command).describe().installed == (Path(sys.executable), Path("/opt/my-agent"))
+
+
+async def test_a_program_runs_inside_what_wraps_it_and_its_frame_names_no_wrap(tmp_path):
+    log, marker = tmp_path / "frames.jsonl", tmp_path / "wrapped"
+    command = raw_program(
+        tmp_path,
+        f"""
+        for frame in frames():
+            with open({str(log)!r}, "a") as file:
+                file.write(json.dumps(frame) + "\\n")
+            reply(frame, None)
+    """,
+    )
+    wrap = ("/bin/sh", "-c", 'echo wrapped > "$0"; exec "$@"', str(marker))
+    driver, _ = await started(tmp_path, command, wrap=wrap)
+    await driver.stop(2)
+
+    start = json.loads(log.read_text().splitlines()[0])
+    assert marker.read_text() == "wrapped\n"
+    assert start["method"] == "start" and "wrap" not in start["params"]["spec"]
 
 
 async def test_a_program_takes_what_its_driver_names_of_ours_to_describe_itself_as_to_start(tmp_path, monkeypatch):

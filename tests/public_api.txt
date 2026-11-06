@@ -23,6 +23,7 @@ platoon_harness.credit.PROPAGATE
 platoon_harness.credit.propagate(session,episode,*,judge,retained)
 platoon_harness.drivers.Access
 platoon_harness.drivers.AgentSpec
+platoon_harness.drivers.AgentSpec.wrap
 platoon_harness.drivers.ApprovalRequested
 platoon_harness.drivers.BEARER_VARIABLE
 platoon_harness.drivers.Boundary
@@ -36,9 +37,12 @@ platoon_harness.drivers.Delta
 platoon_harness.drivers.Driver
 platoon_harness.drivers.DriverError
 platoon_harness.drivers.DriverInfo
+platoon_harness.drivers.DriverInfo.installed
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.inherited
+platoon_harness.drivers.env.on_path
+platoon_harness.drivers.env.PYTHON
 platoon_harness.drivers.ENVIRONMENT
 platoon_harness.drivers.env.private
 platoon_harness.drivers.env.Redactor

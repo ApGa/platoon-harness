@@ -17,7 +17,7 @@ There are three ways in, cheapest first.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities. Starts nothing
+    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities, installed. Starts nothing
     async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
     async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
@@ -33,7 +33,9 @@ method promises:
   from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
   tell. `prepare` reads it to refuse several agents on one plan login. `version` is the harness version it would run, where it can tell
   without starting one, which a trainable session's check holds a kept result to before any harness launches; `ready` says the version
-  that runs.
+  that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its binary, and what that
+  resolves into, such as a release folder or the `node_modules` it imports from. An isolation shows it those, read-only, and nothing
+  else of your home. A harness in the runtime's own process declares none, as nothing can confine it.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
@@ -51,6 +53,12 @@ method promises:
   an extension's tool. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
   them over once, as they are, through the harness's supported path, and never per turn. A resume gives the same text again, as
   Claude Code and Codex keep what a session began with whatever a resume passes. The runtime journals them as what the agent was told.
+  A `HOME` in `spec.env` is the harness's home: `harness_env` then passes
+  none of the variables that keep a harness's state elsewhere, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR` and
+  `PI_CODING_AGENT_SESSION_DIR`, so the harness keeps its state there, and the driver reads it there. `spec.wrap` is the argv of the
+  isolation it runs in, empty for a harness that runs unconfined. `Process.launch` puts it between the trampoline and the command, so
+  the confiner is the group's leader and what the harness starts is confined with it. A driver that starts its harness otherwise must
+  do the same.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
   answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
   after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
@@ -217,7 +225,8 @@ the reason is in the agent's `stderr.log`, which the error names.
 
 A driver runs its harness in `spec.cwd`. That is where the journal says its agent works, which the host takes from the agent's
 workspace, so no driver knows the mode. Nothing checks that a wire program's own harness runs there, and `runs_in_its_workspace` in
-`check_driver` is how to show it does.
+`check_driver` is how to show it does. A program runs inside what wraps it, so its frames name no wrap, and its `installed` is
+where `PATH` finds it, with any paths its description adds for what it reads beside.
 
 ### In Python
 

@@ -92,6 +92,22 @@ def test_later_entries_win(tmp_path):
     assert (env["HOME"], env["X"]) == ("/from/spec", "2")
 
 
+def test_a_home_the_spec_names_is_the_harness_s_home(tmp_path):
+    """So none of the variables that keep a harness's state elsewhere than under its home is inherited over it, and
+    what signs it in from your shell, as a proxy, still is."""
+    spec = make_spec(tmp_path, env={"HOME": str(tmp_path / "home")})
+    state = ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "PI_CODING_AGENT_SESSION_DIR")
+    yours = {name: f"/yours/{name}" for name in state} | {"HOME": "/yours", "HTTPS_PROXY": "http://proxy:3128"}
+
+    env = harness_env(spec, *state, "HTTPS_PROXY", environ=yours)
+    unset = harness_env(make_spec(tmp_path), *state, environ=yours)
+
+    assert env["HOME"] == str(tmp_path / "home")
+    assert env["HTTPS_PROXY"] == "http://proxy:3128"
+    assert not set(state) & set(env)
+    assert {name: unset[name] for name in state} == {name: f"/yours/{name}" for name in state}
+
+
 def test_a_spec_refuses_to_serialize_a_credential(tmp_path):
     spec = make_spec(tmp_path, access={"MODEL_KEY": Secret("the-key")})
 

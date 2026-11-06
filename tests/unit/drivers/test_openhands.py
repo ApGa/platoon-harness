@@ -15,6 +15,7 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Driver, DriverError, Exited, openhands
+from platoon_harness.drivers.env import PYTHON
 from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import Record
 from platoon_harness.extensions import DRIVERS, load
@@ -104,6 +105,10 @@ async def test_the_openhands_harness_is_its_worker_as_a_module_on_the_runtime_s_
     assert isinstance(driver, OpenHandsDriver) and isinstance(driver, Driver)
     assert driver.describe().name == "openhands"
     assert ran == [os.fsencode(part) for part in (sys.executable, "-P", "-m", "platoon_harness.drivers.openhands")]
+
+
+def test_it_declares_the_python_its_worker_runs_on():
+    assert OpenHandsDriver().describe().installed == PYTHON
 
 
 async def test_no_module_of_the_workspace_it_runs_in_stands_in_for_one_of_the_worker_s(tmp_path):

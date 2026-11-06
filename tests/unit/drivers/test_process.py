@@ -102,6 +102,21 @@ async def test_a_harness_leads_its_own_group(tmp_path):
     await process.stop(1)
 
 
+async def test_a_wrap_runs_the_command_and_leads_its_group(tmp_path):
+    """What an isolation runs a harness under is what the record names, so the group it leads ends with the harness."""
+    marker = tmp_path / "wrapped"
+    spec = make_spec(tmp_path, wrap=("/bin/sh", "-c", 'echo "$$" > "$0"; exec "$@"', str(marker)))
+    found: list[bytes] = []
+    process = await launch(tmp_path, "sh", "-c", 'echo "$$"', read=lines_into(found), spec=spec)
+    record = Record.read(spec.folder)
+
+    await process.exited()
+    await process.stop(1)
+
+    assert record is not None
+    assert int(marker.read_text()) == record.pid == int(found[0])
+
+
 async def test_the_exit_is_reported_after_what_it_wrote_last(tmp_path):
     heard = Heard()
 

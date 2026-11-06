@@ -1,6 +1,8 @@
 """The exec driver: a one-shot CLI from config, with no code, and nothing claimed that an exit cannot show."""
 
+import shutil
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -45,6 +47,11 @@ def test_it_is_a_driver_and_describes_itself_with_nothing_started():
     assert not info.capabilities.persistent
     assert info.capabilities.boundaries == frozenset()
     assert info.capabilities.tool_paths == {"shell"}
+
+
+def test_it_declares_where_its_program_is_installed():
+    assert ExecDriver(["sh", "-c", "true"]).describe().installed == (Path(str(shutil.which("sh"))),)
+    assert ExecDriver(["no-such-program"]).describe().installed == ()
 
 
 def test_a_command_harness_means_the_exec_driver():

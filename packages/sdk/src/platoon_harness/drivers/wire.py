@@ -32,7 +32,7 @@ from . import (
     Reporter,
     ToolBinding,
 )
-from .env import harness_env, inherited
+from .env import harness_env, inherited, on_path
 from .process import LOG, WIRE, Process, exit_reason
 
 DRIVER_ERROR = -32001
@@ -47,9 +47,10 @@ __all__ = ["DRIVER_ERROR", "UNKNOWN_PROTOCOL", "WireDriver", "serve"]
 
 def _to_frame(spec: AgentSpec) -> dict[str, Any]:
     """A spec with credentials by name: the variables of its access, or its gateway with the bearer's. The program's
-    own folder sits inside the agent's, so that its record and ours stay apart, and `reap` finds both."""
+    own folder sits inside the agent's, so that its record and ours stay apart, and `reap` finds both. It runs inside
+    what wraps it, so its frame names no wrap."""
     tools = None if spec.tools is None else spec.tools.model_dump(mode="json", exclude={"token"})
-    fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder"})
+    fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder", "wrap"})
     if isinstance(spec.access, Gateway):
         access: Any = {**spec.access.model_dump(mode="json", exclude={"bearer"}), "bearer": BEARER_VARIABLE}
     else:
@@ -82,10 +83,13 @@ class WireDriver:
         self._log = LOG
 
     def describe(self) -> DriverInfo:
-        """Ask the program, which stays up only long enough to answer, so no harness starts. This blocks, as the method
-        is synchronous, and the answer is kept."""
+        """Ask the program, which stays up only long enough to answer, so no harness starts, and add where `PATH` finds
+        it to the paths it says its harness reads. This blocks, as the method is synchronous, and the answer is
+        kept."""
         if self._info is None:
-            self._info = self._ask_for_description()
+            said = self._ask_for_description()
+            installed = tuple(dict.fromkeys((*on_path(self._command[0]), *said.installed)))
+            self._info = said.model_copy(update={"installed": installed})
         return self._info
 
     def _ask_for_description(self) -> DriverInfo:

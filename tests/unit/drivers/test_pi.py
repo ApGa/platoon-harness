@@ -33,6 +33,7 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
+from platoon_harness.drivers.env import PYTHON, on_path
 from platoon_harness.drivers.pi import PiDriver, _forgotten
 from platoon_harness.tools import SHIM, delivery_heading
 
@@ -396,6 +397,21 @@ def test_a_status_that_hangs_is_cut_short(tmp_path, stand, monkeypatch):
     stand.install(status_seconds=5)
 
     assert PiDriver().describe().login is None
+
+
+def test_it_declares_where_its_harness_is_installed_with_what_it_imports_and_runs_on(stand, monkeypatch, tmp_path):
+    """Pi, the `node_modules` its package is in, node, and the Python our shim runs on."""
+    package = tmp_path / "lib" / "node_modules" / "@earendil-works" / "pi-coding-agent" / "dist"
+    package.mkdir(parents=True)
+    (package / "cli.js").write_bytes((stand.folder / "pi").read_bytes())
+    (package / "cli.js").chmod(0o700)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "pi").symlink_to(package / "cli.js")
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
+
+    installed = PiDriver().describe().installed
+
+    assert installed == (tmp_path / "bin" / "pi", tmp_path / "lib" / "node_modules", *on_path("node"), *PYTHON)
 
 
 def test_a_harness_that_is_not_installed_describes_no_login(tmp_path, monkeypatch):

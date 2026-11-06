@@ -44,10 +44,11 @@ from . import (
     refuse_unset_model,
     text_of,
 )
-from .env import harness_env, inherited
+from .env import harness_env, inherited, on_path
 from .process import LOG, Process, status
 
 _CODEX = "codex"
+_RELEASE = "codex-package.json"
 _SIGN_IN = (
     "CODEX_HOME",
     "CODEX_CA_CERTIFICATE",
@@ -146,6 +147,14 @@ def _login() -> Login | None:
     done = status((_CODEX, "login", "status"), inherited(*_SIGN_IN))
     said = "" if done is None else done.stderr.decode(errors="replace")
     return next((login for phrase, login in _LOGINS.items() if phrase in said), None)
+
+
+def _installed() -> tuple[Path, ...]:
+    """Codex as `PATH` finds it, and the release it resolves into, which `codex-package.json` names, as it holds what
+    Codex runs beside itself: the bwrap of its own sandbox, `rg` and its exec server."""
+    found = on_path(_CODEX)
+    releases = [folder for path in found for folder in path.resolve().parents if (folder / _RELEASE).is_file()]
+    return (*found, *releases[:1])
 
 
 def _command(spec: AgentSpec) -> tuple[str, ...]:
@@ -270,7 +279,7 @@ class CodexDriver:
 
     def describe(self) -> DriverInfo:
         if self._info is None:
-            self._info = DriverInfo(name=_CODEX, login=_login(), capabilities=_CAPABILITIES)
+            self._info = DriverInfo(name=_CODEX, login=_login(), capabilities=_CAPABILITIES, installed=_installed())
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:

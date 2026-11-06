@@ -386,6 +386,22 @@ def test_the_cap_on_one_tool_call_is_declared_so_a_hold_past_it_is_refused_up_fr
     assert CodexDriver().describe().capabilities.tool_timeout_s == 300.0
 
 
+def test_it_declares_where_its_harness_is_installed_with_the_release_it_resolves_into(stand, monkeypatch, tmp_path):
+    """A standalone release names itself in `codex-package.json`, and holds the bwrap of Codex's own sandbox."""
+    release = tmp_path / "releases" / "0.167.0"
+    (release / "bin").mkdir(parents=True)
+    (release / "codex-package.json").write_text("{}")
+    (release / "bin" / "codex").write_bytes((stand.folder / "codex").read_bytes())
+    (release / "bin" / "codex").chmod(0o700)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "codex").symlink_to(release / "bin" / "codex")
+    alone = CodexDriver().describe().installed
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
+
+    assert alone == (stand.folder / "codex",)
+    assert CodexDriver().describe().installed == (tmp_path / "bin" / "codex", release)
+
+
 def test_describe_cannot_tell_with_no_binary(monkeypatch):
     monkeypatch.setenv("PATH", "")
 

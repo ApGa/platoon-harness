@@ -43,7 +43,7 @@ from . import (
     refuse_unset_model,
     text_of,
 )
-from .env import harness_env, inherited, private
+from .env import harness_env, inherited, on_path, private
 from .process import LOG, Process, status
 
 _CLAUDE = "claude"
@@ -177,7 +177,9 @@ class ClaudeDriver:
 
     def describe(self) -> DriverInfo:
         if self._info is None:
-            self._info = DriverInfo(name=_CLAUDE, login=_login(), capabilities=_CAPABILITIES)
+            self._info = DriverInfo(
+                name=_CLAUDE, login=_login(), capabilities=_CAPABILITIES, installed=on_path(_CLAUDE)
+            )
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:

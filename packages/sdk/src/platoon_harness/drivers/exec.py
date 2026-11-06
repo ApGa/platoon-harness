@@ -19,7 +19,7 @@ from . import (
     TurnEnded,
     TurnStarted,
 )
-from .env import Held
+from .env import Held, on_path
 from .process import Process, exit_reason
 
 GOAL = "{goal}"
@@ -42,7 +42,7 @@ class ExecDriver:
         self._interrupted = False
 
     def describe(self) -> DriverInfo:
-        return DriverInfo(name="exec", capabilities=_CAPABILITIES)
+        return DriverInfo(name="exec", capabilities=_CAPABILITIES, installed=on_path(self._command[0]))
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.resume is not None:

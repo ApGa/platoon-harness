@@ -2,6 +2,8 @@
 
 import os
 import re
+import shutil
+import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, overload
@@ -12,11 +14,17 @@ from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 from . import BEARER_VARIABLE, AgentSpec, Gateway, Report
 
 _INHERITED = ("PATH", "HOME")
+_STATE = ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "PI_CODING_AGENT_SESSION_DIR")
+"""Where a harness keeps its state when told to keep it elsewhere than under its home."""
 _MASK = b"***"
 _CONTINUATION = 0b1000_0000
 _CONTINUATION_MASK = 0b1100_0000
 
-__all__ = ["Held", "Redactor", "harness_env", "inherited", "private", "secrets_of", "tmpdir"]
+PYTHON = tuple(dict.fromkeys(map(Path, (sys.executable, sys.prefix, sys.base_prefix, Path(__file__).parents[2]))))
+"""What the runtime's own Python reads to run our modules, as our shim and the OpenHands worker do: the interpreter,
+its environment, the installation that is made from, and the folder our package is in."""
+
+__all__ = ["PYTHON", "Held", "Redactor", "harness_env", "inherited", "on_path", "private", "secrets_of", "tmpdir"]
 
 
 def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
@@ -29,9 +37,11 @@ def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str,
 def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The whole environment of one harness process: what it inherits, a `TMPDIR` of its own, and what `spec` names.
     Later entries win: `spec.env` over the inherited, and model access over both, each variable it names or a gateway's
-    bearer under `BEARER_VARIABLE`."""
+    bearer under `BEARER_VARIABLE`. A `HOME` that `spec.env` names is the harness's home, so none of `names` that would
+    keep its state elsewhere is inherited."""
     own = tmpdir(spec.folder)
     own.mkdir(mode=0o700, parents=True, exist_ok=True)
+    names = tuple(name for name in names if name not in _STATE) if "HOME" in spec.env else names
     env = {**inherited(*names, environ=environ), "TMPDIR": str(own)}
     if spec.tools is not None:
         env["PATH"] = os.pathsep.join(filter(None, (str(spec.tools.bin), env.get("PATH"))))
@@ -39,6 +49,11 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
         env[TOKEN_VARIABLE] = spec.tools.token.reveal()
     access = {BEARER_VARIABLE: spec.access.bearer} if isinstance(spec.access, Gateway) else spec.access
     return {**env, **spec.env, **{name: secret.reveal() for name, secret in access.items()}}
+
+
+def on_path(*programs: str) -> tuple[Path, ...]:
+    """Where `PATH` finds each of `programs`, as a harness reaches it, for those it finds."""
+    return tuple(Path(found) for program in programs if (found := shutil.which(program)) is not None)
 
 
 def tmpdir(folder: Path) -> Path:

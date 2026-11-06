@@ -54,7 +54,7 @@ from . import (
     text_of,
     unknown_frame,
 )
-from .env import harness_env, inherited, private
+from .env import PYTHON, harness_env, inherited, on_path, private
 from .process import LOG, Process, status
 
 _PI = "pi"
@@ -156,6 +156,14 @@ def _login() -> Login | None:
         return None if done is None else _LOGINS.get(json.loads(done.stdout).get("authType"))
     except (OSError, *UNREADABLE):
         return None
+
+
+def _installed() -> tuple[Path, ...]:
+    """Pi and node as `PATH` finds them, the `node_modules` pi's package is in, which holds what it and our extension
+    import, and the Python our shim runs on."""
+    pi = on_path(_PI)
+    modules = [folder for found in pi for folder in found.resolve().parents if folder.name == "node_modules"][:1]
+    return (*pi, *modules, *on_path("node"), *PYTHON)
 
 
 def _version(env: Mapping[str, str]) -> str | None:
@@ -275,7 +283,9 @@ class PiDriver:
     def describe(self) -> DriverInfo:
         if self._info is None:
             version = _version(inherited(*_SIGN_IN))
-            self._info = DriverInfo(name=_PI, login=_login(), version=version, capabilities=_CAPABILITIES)
+            self._info = DriverInfo(
+                name=_PI, login=_login(), version=version, capabilities=_CAPABILITIES, installed=_installed()
+            )
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
