@@ -11,6 +11,9 @@
   count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
   answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`. See
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+- [examples/sdk-script](examples/sdk-script/README.md), a headless script on the SDK alone: a team of one role on a
+  command the `exec` driver runs, two agents spawned with a goal each, the session waited on until it settles and what
+  each said read from the journal, with no key and no model. A test runs its README's commands as shown.
 - [CONTRIBUTING.md](CONTRIBUTING.md), the workflow: setting up a checkout, the tests and what each needs, the hooks, commits
   and pull requests, what CI runs, and adding a driver, an extension, a preset, an op or an example. AGENTS.md keeps the rules
   every change follows.

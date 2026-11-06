@@ -14,6 +14,8 @@ Each example has a README that says what it does and how to run it.
 
 - [A mixed team](../examples/mixed-team/README.md): a Claude Code lead and a Codex worker in one session, run, watched,
   steered and read back, with no keys too.
+- [A headless script](../examples/sdk-script/README.md): a team run from Python on the SDK alone, waited on and read back,
+  with no key and no model.
 
 ## How-to guides
 

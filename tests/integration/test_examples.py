@@ -1,10 +1,12 @@
-"""The mixed-team example as its README runs it, with no keys: the README's own command, which swaps the scripted
-stand-ins of its `stand_ins.py` in for its harnesses through `--set`, and on the real binaries against FakeModel, each
-model saying what a stand-in does. Real models run it in `tests/live/test_examples.py`."""
+"""The examples as their READMEs run them, with no keys. The mixed team: the README's own command, which swaps the
+scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, and on the real binaries against
+FakeModel, each model saying what a stand-in does; real models run it in `tests/live/test_examples.py`. The SDK script:
+its README's commands, on the `exec` driver."""
 
 import asyncio
 import importlib.util
 import json
+import re
 import shutil
 from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
@@ -24,6 +26,7 @@ pytestmark = pytest.mark.timeout(120)
 
 EXAMPLE = ROOT / "examples" / "mixed-team"
 README = EXAMPLE / "README.md"
+SCRIPT = ROOT / "examples" / "sdk-script"
 
 
 def loaded(path: Path) -> ModuleType:
@@ -40,11 +43,29 @@ STAND_INS = loaded(EXAMPLE / "stand_ins.py")
 
 @pytest.fixture
 async def cli(tmp_path: Path) -> AsyncIterator[Cli]:
-    """The command line in a folder holding a copy of the example where a checkout has it, as its README runs there."""
-    shutil.copytree(EXAMPLE, tmp_path / "examples" / "mixed-team", ignore=shutil.ignore_patterns("__pycache__"))
+    """The command line in a folder holding a copy of the examples where a checkout has them, as their READMEs run
+    there."""
+    shutil.copytree(ROOT / "examples", tmp_path / "examples", ignore=shutil.ignore_patterns("__pycache__"))
     made = Cli(tmp_path)
     yield made
     await asyncio.to_thread(made.end)
+
+
+async def test_the_sdk_script_runs_a_team_with_no_keys_and_the_command_line_reads_it_back(cli: Cli):
+    """The script's two agents each say what the README shows, the session settles, and `session list` and `events`
+    read it back by the name the script printed."""
+    [command] = shown(SCRIPT / "README.md", where="run.py")
+    listing, reading = shown(SCRIPT / "README.md", where="session list")
+
+    done = await cli.as_shown(command)
+
+    first, *said = done.stdout.splitlines()
+    match = re.fullmatch(r"session (\S+): settled", first)
+    assert done.code == 0 and match, done.stderr
+    assert len(said) == 2 and "\n".join(said) in (SCRIPT / "README.md").read_text()
+    assert match[1] in (await cli.as_shown(listing)).stdout
+    read = await cli.as_shown(reading.replace("NAME", match[1]))
+    assert read.code == 0 and "counter-2" in read.stdout, read.stderr
 
 
 def ref(event: dict) -> str:

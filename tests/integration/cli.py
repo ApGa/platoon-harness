@@ -65,10 +65,15 @@ class Cli:
         return name
 
     async def start(
-        self, *args: str, stdin: int = asyncio.subprocess.DEVNULL, stdout: int = PIPE, **env: str
+        self,
+        *args: str,
+        stdin: int = asyncio.subprocess.DEVNULL,
+        stdout: int = PIPE,
+        program: Path = EXECUTABLE,
+        **env: str,
     ) -> asyncio.subprocess.Process:
         process = await asyncio.create_subprocess_exec(
-            EXECUTABLE,
+            program,
             *args,
             cwd=self.folder,
             env={**self.env, **env},
@@ -85,14 +90,15 @@ class Cli:
         return await finished(process, input)
 
     async def as_shown(self, command: str) -> Done:
-        """A `uv run platoon-harness` command as a page shows it, run here with the variables it sets in front."""
+        """A `uv run` command as a page shows it, run here on this environment's program of its name, with the variables
+        it sets in front."""
         words = shlex.split(command, comments=True)
         env = {}
         while re.fullmatch(r"[A-Z_]+=.*", words[0]):
             name, _, value = words.pop(0).partition("=")
             env[name] = value
-        assert words[:3] == ["uv", "run", "platoon-harness"], command
-        return await finished(await self.start(*words[3:], **env))
+        assert words[:2] == ["uv", "run"], command
+        return await finished(await self.start(*words[3:], program=EXECUTABLE.with_name(words[2]), **env))
 
     def end(self) -> None:
         """End each process this started that is still there, with its group."""
