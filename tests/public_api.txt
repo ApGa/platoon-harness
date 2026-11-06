@@ -44,6 +44,7 @@ platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.inherited
 platoon_harness.drivers.env.on_path
+platoon_harness.drivers.env.open_beneath
 platoon_harness.drivers.env.PYTHON
 platoon_harness.drivers.ENVIRONMENT
 platoon_harness.drivers.env.private
@@ -254,6 +255,7 @@ platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Seen
 platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
+platoon_harness.primitives.Settings.test
 platoon_harness.primitives.SHORT_LIMIT
 platoon_harness.primitives.stream_of
 platoon_harness.primitives.Task
@@ -426,6 +428,7 @@ platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
 platoon_harness.team.Team.recipients(to)
+platoon_harness.team.Team.test
 platoon_harness.team.Test
 platoon_harness.team.trainable_problems
 platoon_harness.team.trainable_problems(team,*,approvals)

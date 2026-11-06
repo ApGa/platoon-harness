@@ -244,15 +244,18 @@ def confining() -> None:
 
 
 @pytest.mark.usefixtures("confining")
-async def test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation(repo, tmp_path):
+async def test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation(repo, tmp_path, monkeypatch):
     """An agent's own config names a filter, which the runtime's look runs as your git would: inside the isolation,
-    where what it would write outside its folder is not there to be written."""
+    where what it would write outside its folder is not there to be written, and on the allowlist its harness gets, so
+    a variable only the runtime's environment holds never reaches it."""
+    monkeypatch.setenv("PH_RUNTIME_ONLY", "leaked")
     outside = tmp_path / "outside"
     outside.mkdir()
 
     def configure(cwd: Path) -> None:
         folder = cwd.parent
-        clean = f"sh -c 'printenv GIT_OPTIONAL_LOCKS >> {folder}/filtered; : > {outside}/escaped; cat'"
+        seen = f'echo "locks=$GIT_OPTIONAL_LOCKS runtime=$PH_RUNTIME_ONLY" >> {folder}/filtered'
+        clean = f"sh -c '{seen}; : > {outside}/escaped; cat'"
         with (cwd / ".git" / "config").open("a") as config:
             config.write(f'[filter "fence"]\n\tclean = "{clean}"\n\tsmudge = cat\n')
         (cwd / ".git" / "info" / "attributes").write_text("* filter=fence\n")
@@ -266,5 +269,5 @@ async def test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation
         await until(lambda: looked_at(session, "@bob"), session)
     folder = agent_folder(session.folder, "bob")
 
-    assert "0" in (folder / "filtered").read_text().split()
+    assert (folder / "filtered").read_text().splitlines()[-1] == "locks=0 runtime="
     assert not (outside / "escaped").exists()

@@ -10,12 +10,14 @@
   exit, its seconds, `passed`, `failed` or `error`, why where the exit does not say, and the last 64 KiB of what it printed as its
   body. The checkout is a repository of its own in the session folder's `tests/<effect>/`, borrowing the objects of your repository
   and each workspace's own but an isolated one's, and goes once recorded. A timeout is an `error` and ends all the test started. A
-  commit made in an isolated workspace, or built on one, is refused, naming why. A `test` from a project or team file needs the trust
+  commit a look of an isolated workspace found, or one built on it, is refused, naming why — the look that found the code decides
+  this, not the reflog an isolated agent writes and could clear. A `test` from a project or team file needs the trust
   step. `Team.test` and `team.Test`, `Settings.test`, the runtime-only `repo.record`, the `test` effect, `Session.repo_test`,
   `drivers.process.run`, which runs a command in a group recorded before it can exec and ends what it leaves, `Record.of`,
   `runtime.workspaces.checkout` and `runtime.paths.TESTS`. See ADR 0056.
-- The `changes` view's commit rows carry `tests`, the latest runtime test's outcome or None, and, when the team names a test, an act
-  saying 'Test: runs @ada's commit as you, unconfined', or disabled, saying why. The terminal's `/review` shows each commit's outcome,
+- The `changes` view's commit rows carry `tests`, the latest runtime test's outcome or None, its `tested` record ref and
+  `tests_why`/`tests_exit` why it failed or erred, and, when the team names a test, an act saying 'Test: runs @ada's commit as you,
+  unconfined', or disabled, saying why. The terminal's `/review` shows each commit's outcome and the reason it failed or erred,
   `untested` where none ran, and tests the chosen commit with Enter once you say yes. `repo.test` is among the acts both clients ask
   about first. The view is at version 3.
 - `repo.commit{sha}`, an agent read every agent holds: a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or its first
@@ -27,7 +29,9 @@
 - `isolated` workspaces, experimental. An isolated workspace is a snapshot whose harness, and everything the runtime runs in its tree,
   one extension's isolation confines: its looks, the check at a launch or a resume, the stop's reading of what removal would lose,
   making a kept snapshot whole, and finding its objects for `commits.bundle`, so a filter an agent writes into its own config runs
-  inside. Inside, it writes only its agent's folder and a private /tmp; finds your home, as `HOME` names it and as your account
+  inside, on the same allowlist the harness gets and no variable the runtime holds besides. The runtime's own bookkeeping in the
+  agent's folder — its process record, log, instructions and `ph` shim — it writes and reads following no symlink the confined
+  harness could plant there, so none of it lands outside the tree. Inside, it writes only its agent's folder and a private /tmp; finds your home, as `HOME` names it and as your account
   does, the session root and the runtime directory empty and read-only, but for your repository's objects and where its harness is
   installed; and sees only its own processes, which all end with it. It still reads what you can read outside those folders, and
   reaches the network, every loopback service, every abstract socket and every socket file outside them. Only such a launch records
@@ -41,7 +45,8 @@
 - `DriverInfo.installed`, the paths a harness reads to run, declared by every driver, and by a wire program in its description;
   `AgentSpec.wrap`, the argv of the isolation a harness runs in, which `Process` puts before its command; and a `HOME` in `spec.env` is
   the harness's home, so `harness_env` passes none of the variables that keep a harness's state elsewhere. `drivers.env.on_path` and
-  `drivers.env.PYTHON` name where `PATH` finds a program and what the runtime's own Python reads.
+  `drivers.env.PYTHON` name where `PATH` finds a program and what the runtime's own Python reads. `drivers.env.open_beneath` opens a
+  file beneath a folder following no symlink below it, which the runtime's writes into a confined agent's folder go through.
 - Sealed launches. On a gateway, ScriptedDriver, pi, OpenHands and a wire program that declares `sealed` launch with nothing of the
   user's: the gateway's model under its bearer, which goes by environment alone, under `BEARER_VARIABLE`,
   `PLATOON_HARNESS_BEARER`, a file the launch writes naming it as `${PLATOON_HARNESS_BEARER}`; ours and the environment's tools, the

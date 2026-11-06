@@ -37,7 +37,7 @@ from platoon_harness.drivers import (
     TurnEnded,
     unknown_frame,
 )
-from platoon_harness.drivers.env import Held, Redactor, inherited, secrets_of, tmpdir
+from platoon_harness.drivers.env import Held, Redactor, inherited, open_beneath, secrets_of, tmpdir
 from platoon_harness.drivers.levels import Profile, implementation, levels, speaks_for, tool_visibility
 from platoon_harness.drivers.process import exit_reason, reap, run
 from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
@@ -410,7 +410,10 @@ class Host:
         workspace = self._workspace_of(agent)
         wrap = await self._wrap(agent, role, workspace)
         if wrap and not access and info.login is not None:
-            raise DriverError(f"`isolated` gives `{info.name}` a home of its own, where its {info.login} login is not")
+            raise DriverError(
+                f"`isolated` gives `{info.name}` a home of its own, where its {info.login} login is not: "
+                "give the role an auth profile"
+            )
         await asyncio.to_thread(present, workspace, wrap)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
@@ -569,8 +572,10 @@ class Host:
     def _binding(self, folder: Path, token: Secret, *, surface: str) -> ToolBinding:
         bin = folder / "bin"
         bin.mkdir(mode=0o700, parents=True, exist_ok=True)
-        shutil.copyfile(PH, bin / "ph")
-        (bin / "ph").chmod(0o700)
+        fd = open_beneath(folder, bin / "ph", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o700)
+        with os.fdopen(fd, "wb") as ph:
+            os.fchmod(ph.fileno(), 0o700)
+            ph.write(PH.read_bytes())
         return ToolBinding(url=f"{self._tools.url}?surface={surface}", token=token, namespace=NAMESPACE, bin=bin)
 
     def _required(self, effect: Effect) -> DriverLink:

@@ -1527,7 +1527,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 |---|---|---|
 | `roster` | `agent, role, harness, model, parent, state, resting, group, activity, stopped, held_by, why, unread, levels, login, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict`, `daemon` |
-| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, tests, dropped`, `recorded` being the seq that recorded it and `tests` the outcome of the latest runtime test at it, None while none ran, with `actions[]` when the team names a `test`, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed. A commit's act, `repo.test`, says whose code it runs as you, unconfined, or is disabled, saying why, for a commit whose code runs only in an isolation |
+| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, tests, tested, tests_why, tests_exit, dropped`, `recorded` being the seq that recorded it, `tests` the outcome of the latest runtime test at it, None while none ran, with `tested` that test's record ref and `tests_why`/`tests_exit` why it failed or erred, and `actions[]` when the team names a `test`, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed. A commit's act, `repo.test`, says whose code it runs as you, unconfined, or is disabled, saying why, for a commit whose code runs only in an isolation |
 
 **What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry
 with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
@@ -1604,7 +1604,10 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   last, so it is whole or absent, and a retry adopts a whole one.
 - **`isolated`** is a snapshot whose harness, and everything the runtime runs in its tree, one extension's isolation confines
   (`Extension.isolation`, §17): its looks, the check at a launch or a resume that the tree is a work tree of its repository, the stop's
-  reading of what removal would lose, making a kept snapshot whole, and finding its objects for the bundle. The core says what it may
+  reading of what removal would lose, making a kept snapshot whole, and finding its objects for the bundle. That git runs on the same
+  allowlist the harness gets, `PATH` and `HOME`, so a program the agent's own config names cannot read a variable the runtime holds.
+  The runtime's own bookkeeping in the agent's folder it writes and reads following no symlink the confined harness could plant, so
+  none of it lands outside the tree. The core says what it may
   do and the isolation makes it so. It writes only its agent's folder, which holds its workspace and its harness's home, `home/`, given
   as `HOME`, and a private /tmp. It finds your home, as `HOME` names it and as your account does, the session root and the runtime
   directory empty and read-only, but for your repository's objects and the paths its driver declares installed, read-only. It sees
@@ -1678,8 +1681,8 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   `command` harness does, in a clean detached checkout of that commit in the session's subfolder, as you and unconfined, on what every
   process inherits. The checkout is a repository of its own in `tests/<effect>/` that borrows the objects of your repository and of
   each workspace's own but an isolated one's, so nothing is written into any of them and none of their own config applies; it goes
-  once the test is recorded. A commit the journal records as made in an isolated workspace, or built on one, is refused, naming why,
-  as its code runs only there. `repo.tested` on `repo/<name>` names the commit, the command, its exit, None when it never exited on
+  once the test is recorded. A commit a look of an isolated workspace found, or one built on it, is refused, naming why, as its code
+  runs only there; the look that found a commit decides this, not the HEAD reflog an isolated agent writes and could clear. `repo.tested` on `repo/<name>` names the commit, the command, its exit, None when it never exited on
   its own, the seconds it took, None when it never started, its outcome, `passed`, `failed` or `error`, why where its exit does not
   say, and as its body the last of what it printed, of how many bytes in all, which `blob.get` reads by the record's ref. A test past
   its timeout is an `error`, and nothing it started runs on. The `test` effect is owned by no agent, keeps the session from settling until it ends, finishes from the journal when its `repo.tested` is held, and otherwise

@@ -216,7 +216,8 @@ class ClaudeDriver:
             command += ["--mcp-config", json.dumps({"mcpServers": {tools.namespace: server}})]
             command += ["--allowedTools", f"mcp__{tools.namespace}__*"]
         if spec.instructions is not None:
-            command += ["--append-system-prompt-file", private(spec.folder / _INSTRUCTIONS, spec.instructions)]
+            path = private(spec.folder, spec.folder / _INSTRUCTIONS, spec.instructions)
+            command += ["--append-system-prompt-file", path]
         return command
 
     async def _handshake(self, spec: AgentSpec) -> None:

@@ -33,6 +33,16 @@ end. Building it showed the design wrong in a few details, each changed below in
   of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, and finding its objects for the
   session's bundle. The design listed the look, the stop and making whole. The code also ran git there for the presence check and for
   the bundle's `rev-parse`, so those run through the wrap too. Building the snapshot does not, since no agent has run there yet.
+- **The runtime's git in an isolated tree runs on the allowlist its harness gets,** `PATH` and `HOME` plus the three git settings
+  the runner always sets, never the runtime's whole environment. A program the agent's own git config names, a `filter.*.clean`
+  among them, runs inside the isolation on that allowlist, so it cannot read a variable the runtime holds that §15 keeps from the
+  harness. Outside an isolated tree the runner passes the environment as before.
+- **The runtime's own writes into the agent folder follow no symlink the agent could plant.** The whole agent folder is the isolated
+  harness's to write, so it could leave a symlink where the runtime next writes its own files — the process record, the stderr log,
+  the instructions file, the `ph` shim, pi's sealed settings — or reads them back, and the runtime runs those unconfined. Each such
+  open goes through `open_beneath`, which opens every component below the agent folder with `O_NOFOLLOW`, so a planted symlink is
+  refused, never followed out of the tree. A log whose path was made a symlink is dropped, not followed and not a stall; a record a
+  symlink shadows is named and removed in place. The agent folder itself is the runtime's, reached through its own path.
 - **The harness's home is `<agent folder>/home`,** given as `HOME` in `spec.env`. A driver given a `HOME` there inherits none of the
   variables that keep a harness's state elsewhere: `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR` and, beyond the design's
   three, `PI_CODING_AGENT_SESSION_DIR`. So the harness keeps its state there, and the driver's own reads, such as Claude's
@@ -69,6 +79,8 @@ end. Building it showed the design wrong in a few details, each changed below in
 | Alternative | Why not |
 |---|---|
 | The design's `wrap(spec, workspace, installed)` | Each provider would learn the session folder's layout, and the runtime's own git, which has no spec, would need another call |
+| Make only `workspace/` and `home/` writable in the wrap, moving the runtime's files out of the folder | The harness writes its home, workspace, `/tmp`, and pi's and OpenHands' state across the folder; binding each writable subtree would couple the provider to the layout. Hardening the runtime's own writes with `O_NOFOLLOW` is smaller and keeps the one writable bind |
+| Pass the runtime's whole environment to git in an isolated tree | A program the agent's git config names would read a variable §15 keeps from the harness |
 | A network namespace of its own | It cuts the tool plane, which is on loopback, and a training system's gateway on loopback with it |
 | The look unconfined, with risky settings overridden | Filter names cannot be known in advance, and the safety review saw a filter and an fsmonitor run unconfined |
 | Hiding only `$HOME` | A runtime started with `HOME` elsewhere would leave your real home readable |
@@ -81,6 +93,10 @@ end. Building it showed the design wrong in a few details, each changed below in
 - An isolated workspace stays `experimental` in STATUS. It rests on unprivileged user namespaces, which a kernel setting, AppArmor or a
   container's seccomp can block. Its escape tests have passed on one Linux host, on bubblewrap 0.4.1. A provider on another host
   says why it cannot confine before anything is spent.
+- A session's folder lives under a test's `tmp_path`, which is under the system temp dir, and the wrap mounts a private /tmp, so an
+  integration test cannot show a hidden session folder is hidden on its own there. The bwrap unit test shows the per-folder masking
+  and the read-only root on folders outside the system temp dir, where the private /tmp cannot be what hides them; where no such
+  directory is writable it says so and does not pretend to have shown it.
 - Neither the harness's git nor the runtime's git in an isolated tree reads your global git config, so your global excludes do not
   apply there. A file only they would ignore shows as untracked, and the stop keeps the workspace for it.
 - Each git call in an isolated tree pays the confiner's start: about 0.05 s on the host it ran on, a dozen times in a look.
@@ -91,17 +107,24 @@ end. Building it showed the design wrong in a few details, each changed below in
   gone after `SIGTERM` and said nothing of the kill.
 - A harness installed by a route its driver does not declare, such as an npm install of Claude Code, has not run isolated. If what
   it needs lies in a hidden folder, its spawn fails, as any harness that cannot start does.
-- The agent's record keeps its workspace's `mode`, `isolated`, which `repo.test`, still to come, reads to refuse running such a commit
-  outside its isolation.
+- The agent's record keeps its workspace's `mode`, `isolated`, which marks the launch's assurance. Whether a commit's code is
+  confined is decided elsewhere, by the look that found it: the `Looks` view marks a commit found in an isolated workspace, and one
+  built on such a commit, and `repo.test` (ADR 0056) refuses to run either outside its isolation. Attribution does not decide it,
+  since an isolated agent writes its own reflog.
 
 ## Evidence
 
 - `tests/unit/runtime/test_isolation.py`: the refusals before any cost, `test_isolated_on_a_plan_login_is_refused`,
   `test_isolated_assurance_is_recorded_only_for_a_confined_launch`, `test_an_isolated_harness_keeps_its_state_in_its_own_home`,
   `test_the_runtime_s_git_in_an_isolated_tree_runs_under_its_wrap` and, on real bubblewrap,
-  `test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation`.
-- `tests/unit/runtime/test_bwrap.py`: what a wrapped command can write, read and see, that nothing it starts outlives it, and that
-  it still reaches loopback, on the machine's bubblewrap.
+  `test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation`, which also shows a variable only the runtime's
+  environment holds does not reach a program the agent's git config names.
+- `tests/unit/drivers/test_env.py`, `test_a_write_beneath_a_folder_does_not_follow_a_symlink_planted_in_it`, and
+  `tests/unit/drivers/test_process.py`, `test_a_symlink_planted_where_the_log_goes_is_not_followed`: the runtime's own writes into
+  the agent folder follow no symlink the agent could plant.
+- `tests/unit/runtime/test_bwrap.py`: what a wrapped command can write, read and see, that nothing it starts outlives it, that it
+  still reaches loopback, and, on folders outside the system temp dir, that a hidden folder and the read-only root hold where the
+  private /tmp does not reach, on the machine's bubblewrap.
 - `tests/integration/test_isolated.py`, slow: Claude Code 2.1.319, Codex 0.167.0 with its own sandbox nested inside, pi 1.5.0 and the
   OpenHands worker on SDK 1.59.0, each isolated against FakeModel with your home hidden. From its own shell each tried the ways out
   its probe names, committed, left a process in a session of its own, set a git filter the look then ran, and called our tools.

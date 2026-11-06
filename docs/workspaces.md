@@ -91,10 +91,14 @@ keeps the workspace for it.
 
 Everything the runtime runs in that tree goes through the same isolation: each look, the check at a launch or a resume that the tree
 is still a work tree of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, and finding its
-objects for `commits.bundle`. So a filter or an fsmonitor an agent writes into its own repository's config runs
-inside, never as you. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. Only a launch inside the
-isolation records assurance `isolated`; every other agent's is `cooperative`. A [runtime test](#testing-a-commit) of a commit made
-there, or built on one, is refused, as its code runs only there, and no test reads an isolated workspace's objects.
+objects for `commits.bundle`. So a filter or an fsmonitor an agent writes into its own repository's config runs inside, never as you,
+and on the same allowlist its harness gets, `PATH` and `HOME` alone, never a variable the runtime's environment holds that the
+harness does not. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. The runtime's own
+bookkeeping files in the agent's folder — its process record, its log, its instructions, the `ph` shim — it writes and reads
+following no symlink the confined harness could plant there, so none of them can be made to land outside the tree. Only a launch
+inside the isolation records assurance `isolated`; every other agent's is `cooperative`. A [runtime test](#testing-a-commit) of a
+commit a look of such a workspace found, or one built on it, is refused, as its code runs only there, and no test reads an isolated
+workspace's objects.
 
 Before any cost, besides wherever a snapshot is refused, `isolated` is refused when no extension the team names gives an isolation,
 when two do, naming both, when the isolation cannot confine here, as `bwrap` cannot where a kernel setting, AppArmor or a container's
@@ -270,7 +274,8 @@ $ platoon-harness repo test fix-auth --commit 3f9c2a1
 This runs that commit's maker's code as you, unconfined: whatever the commit holds that the command loads, a `conftest.py` or a
 `Makefile` among it, runs with everything you can reach. So an agent can never ask for it, as a tool or otherwise, whatever its grants;
 a `test` from a project or team file needs the trust step, `--trust` or `trust_project`, as a `command` harness does; the terminal asks
-before it runs one; and a commit made in an isolated workspace, or built on one, is refused, saying why. `timeout` is required.
+before it runs one; and a commit a look of an isolated workspace found, or one built on it, is refused, saying why — the look that
+found the code decides this, not the reflog an isolated agent writes and could clear. `timeout` is required.
 
 It runs in a clean detached checkout of that commit, in the session's subfolder of it: a repository of its own in the session folder's
 `tests/<effect>/`, which borrows the objects of your repository and of each workspace's own but an isolated one's, so nothing is written
@@ -280,8 +285,8 @@ into any of them and none of their own config applies. The command gets what eve
 `repo.tested` on `repo/<name>` says what it came to: `passed` for exit 0, `failed` for another exit or a signal of its own, and `error`
 when it could not run to its end, as when its timeout came first, which ends everything it started. It names the command, its exit, the
 seconds it took and the bytes it printed, and carries the last 64 KiB of that as its body, which `platoon-harness blob get <session>
---ref repo/<name>@<version>` reads, a page at a time. The `changes` view's commit row gives the latest outcome as `tests`, and the terminal's `/review`
-shows it and tests the chosen commit with Enter. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
+--ref repo/<name>@<version>` reads, a page at a time. The `changes` view's commit row gives the latest outcome as `tests`, with why it failed or
+erred and the ref of its record, and the terminal's `/review` shows the outcome and the reason and tests the chosen commit with Enter. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
 session resumes. [ADR 0056](adr/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
 

@@ -8,7 +8,7 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Gateway, ToolBinding
-from platoon_harness.drivers.env import Held, Redactor, harness_env, secrets_of
+from platoon_harness.drivers.env import Held, Redactor, harness_env, open_beneath, private, secrets_of
 from platoon_harness.drivers.process import LOG, RECORD, Process
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
@@ -70,6 +70,29 @@ async def test_a_credential_stays_out_of_every_file_of_the_agent(tmp_path):
     for path in spec.folder.rglob("*"):
         if path.is_file():
             assert b"the-key-value" not in path.read_bytes(), path
+
+
+def test_a_write_beneath_a_folder_does_not_follow_a_symlink_planted_in_it(tmp_path):
+    """Neither one at the file's own name, nor one where a folder on the way should be: so a confined agent cannot
+    redirect the runtime's write to a path outside its folder."""
+    folder, outside = tmp_path / "folder", tmp_path / "outside"
+    (folder / "sub").mkdir(parents=True)
+    outside.write_text("canary")
+    (folder / "at-name").symlink_to(outside)
+    (folder / "sub" / "deep").symlink_to(outside)
+    (folder / "as-dir").symlink_to(tmp_path / "elsewhere")
+
+    with pytest.raises(OSError):
+        open_beneath(folder, folder / "at-name", os.O_WRONLY | os.O_TRUNC)
+    with pytest.raises(OSError):
+        private(folder, folder / "sub" / "deep", "hello")
+    with pytest.raises(OSError):
+        private(folder, folder / "as-dir" / "file", "hello")
+
+    assert outside.read_text() == "canary"
+    assert not (tmp_path / "elsewhere").exists()
+    assert private(folder, folder / "fresh", "ok") == str(folder / "fresh")
+    assert (folder / "fresh").read_text() == "ok"
 
 
 def test_the_tool_binding_reaches_ph_and_nothing_prints_it(tmp_path):

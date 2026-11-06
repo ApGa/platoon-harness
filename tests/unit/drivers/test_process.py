@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import contextlib
+import errno
 import json
 import os
 import signal
@@ -25,6 +26,7 @@ from platoon_harness.drivers.process import (
     Process,
     Record,
     _gone,
+    _Log,
     _started,
     reap,
     run,
@@ -741,10 +743,28 @@ async def test_the_log_stays_bounded_and_keeps_the_newest(tmp_path):
 
 
 @pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs a device that is always full")
-async def test_a_full_disk_cannot_stall_a_harness_through_its_log(tmp_path):
+def test_a_full_disk_cannot_stall_a_harness_through_its_log(tmp_path, monkeypatch):
+    """A write the disk will not take is dropped, so a log never stalls the harness that writes it."""
+    (tmp_path / "f").mkdir()
+    log = _Log(tmp_path / "f", LOG)
+
+    def full(_fd, _data):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(os, "write", full)
+    log.write(b"x" * 1000)  # Does not raise.
+    monkeypatch.undo()
+    log.close()
+
+
+async def test_a_symlink_planted_where_the_log_goes_is_not_followed(tmp_path):
+    """A confined agent cannot send its stderr outside its folder by planting a symlink at its log: the runtime does
+    not follow it, drops the log, and the harness runs on."""
     spec = make_spec(tmp_path)
     spec.folder.mkdir(parents=True)
-    (spec.folder / LOG).symlink_to("/dev/full")
+    outside = tmp_path / "outside"
+    outside.write_text("canary")
+    (spec.folder / LOG).symlink_to(outside)
     heard = Heard()
     script = "import sys\nsys.stderr.write('x' * 1_000_000)"
 
@@ -752,6 +772,7 @@ async def test_a_full_disk_cannot_stall_a_harness_through_its_log(tmp_path):
 
     assert (await heard.until(Exited)).reason == "exited with code 0"
     await process.stop(1)
+    assert outside.read_text() == "canary"
 
 
 async def test_a_log_that_cannot_open_leaves_no_harness(tmp_path):

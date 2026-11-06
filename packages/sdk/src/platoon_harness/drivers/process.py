@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import errno
 import json
 import os
 import shutil
@@ -20,7 +21,7 @@ from platoon_harness.primitives import Delta, Exited, GapReport, Native, Report
 from platoon_harness.schema import Model
 
 from . import RAW_LIMIT, SHORT_LIMIT, AgentSpec, DriverError, Reporter, unknown_frame
-from .env import Held, Redactor, harness_env, secrets_of, tmpdir
+from .env import Held, Redactor, harness_env, open_beneath, secrets_of, tmpdir
 
 RECORD = "proc.json"
 LOG = "stderr.log"
@@ -123,9 +124,10 @@ class Record(Model):
         return None if started is None else cls(pid=pid, started=started)
 
     def write(self, folder: Path) -> None:
-        """Replace the record in one step, on disk before this returns."""
+        """Replace the record in one step, on disk before this returns, following no symlink a confined agent could
+        plant in its folder."""
         scratch = folder / f"{RECORD}.tmp"
-        with scratch.open("w") as file:
+        with os.fdopen(open_beneath(folder, scratch, os.O_WRONLY | os.O_CREAT | os.O_TRUNC), "w") as file:
             json.dump(self.model_dump(), file)
             file.flush()
             os.fsync(file.fileno())
@@ -138,8 +140,12 @@ class Record(Model):
 
     @classmethod
     def read(cls, folder: Path) -> Self | None:
-        path = folder / RECORD
-        return cls.model_validate_json(path.read_bytes()) if path.exists() else None
+        try:
+            fd = open_beneath(folder, folder / RECORD, os.O_RDONLY)
+        except FileNotFoundError:
+            return None
+        with os.fdopen(fd, "rb") as file:
+            return cls.model_validate_json(file.read())
 
     def state(self) -> GroupState:
         """Whether this group is still ours. A leader with the recorded start time proves it, and one without shows the
@@ -242,22 +248,52 @@ def _note(loop: asyncio.AbstractEventLoop, pidfd: int, exited: asyncio.Future[No
         exited.set_result(None)
 
 
+def _unlink_beneath(folder: Path, path: Path) -> None:
+    """Remove `path` beneath `folder`, following no symlink an agent could plant: a symlink at the name is removed, not
+    what it points to, and a symlink where a folder should be is removed in its place."""
+    *parts, name = path.relative_to(folder).parts
+    dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in parts:
+            try:
+                step = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+            except OSError:
+                with contextlib.suppress(OSError):
+                    os.unlink(part, dir_fd=dir_fd)
+                return
+            os.close(dir_fd)
+            dir_fd = step
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(name, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 async def reap(folder: Path, grace: float) -> tuple[str, ...]:
     """End what a crash left in an agent's `folder` and return what was left alone, in words: a group not provably ours,
     or a record that cannot be read. A reused pid can never make this signal a stranger. Only the driver's own record
-    and a wire program's are read, because a harness can write under its folder. What left a group is found by the
-    `TMPDIR` it inherited, which proves it ours, so a group that outlived its leader is named for what that misses."""
-    left, unproven = [], []
-    records = (folder / RECORD, folder / WIRE / RECORD)
-    recorded = any(path.exists() for path in records)
-    for path in records:
+    and a wire program's are read, following no symlink a confined agent could plant, because a harness can write under
+    its folder. What left a group is found by the `TMPDIR` it inherited, which proves it ours, so a group that outlived
+    its leader is named for what that misses."""
+    left, unproven, recorded = [], [], False
+    for path in (folder / RECORD, folder / WIRE / RECORD):
         try:
-            record = Record.model_validate_json(path.read_bytes())
+            fd = open_beneath(folder, path, os.O_RDONLY)
         except FileNotFoundError:
             continue
+        except OSError:  # A symlink planted where a record goes: refused, named, and removed.
+            recorded = True
+            left.append(f"{path.relative_to(folder)} cannot be read")
+            _unlink_beneath(folder, path)
+            continue
+        recorded = True
+        with os.fdopen(fd, "rb") as file:
+            raw = file.read()
+        try:
+            record = Record.model_validate_json(raw)
         except ValueError:
             left.append(f"{path.relative_to(folder)} cannot be read")
-            path.unlink()
+            _unlink_beneath(folder, path)
             continue
         match record.state():
             case "ours":
@@ -267,12 +303,12 @@ async def reap(folder: Path, grace: float) -> tuple[str, ...]:
                 continue
             case "gone":
                 pass
-        path.unlink(missing_ok=True)  # A stop of the same agent under way, as a shutdown runs, may remove it first.
+        _unlink_beneath(folder, path)  # A stop of the same agent under way, as a shutdown runs, may remove it first.
     if recorded:  # A stop that ran to its end left no record, and nothing.
         await _end_marked((folder, folder / WIRE), grace)
     for path, record in unproven:
         if record.state() == "gone":
-            path.unlink(missing_ok=True)
+            _unlink_beneath(folder, path)
         else:
             left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
     return tuple(left)
@@ -338,26 +374,39 @@ class _Streams(SubprocessStreamProtocol):
 
 
 class _Log:
-    """A bounded pair of files: past `LOG_LIMIT` the current one becomes `.1`, so the newest text survives. What a full
-    disk will not take is dropped, since a log must never stall the harness that writes it."""
+    """A bounded pair of files in an agent's `folder`: past `LOG_LIMIT` the current one becomes `.1`, so the newest
+    text survives. What a full disk will not take is dropped, since a log must never stall the harness that writes it.
+    It follows no symlink a confined agent could plant where its log goes, so its words never land outside its tree."""
 
-    def __init__(self, path: Path) -> None:
-        self._path = path
+    def __init__(self, folder: Path, name: str) -> None:
+        self._folder = folder
+        self._path = folder / name
         self._descriptor = self._open()
 
-    def _open(self) -> int:
-        return os.open(self._path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    def _open(self) -> int | None:
+        """The log's descriptor, or None where a symlink was planted at its path: it is not followed and the log is
+        dropped, since following it would write outside the folder and refusing the launch would stall the harness."""
+        try:
+            return open_beneath(self._folder, self._path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+        except OSError as error:
+            if error.errno == errno.ELOOP:
+                return None
+            raise
 
     def write(self, data: bytes) -> None:
+        if self._descriptor is None:
+            return
         with contextlib.suppress(OSError):
             if os.fstat(self._descriptor).st_size + len(data) > LOG_LIMIT:
                 self._path.replace(self._path.with_suffix(".log.1"))
                 os.close(self._descriptor)
                 self._descriptor = self._open()
-            os.write(self._descriptor, data[-LOG_LIMIT:])
+            if self._descriptor is not None:
+                os.write(self._descriptor, data[-LOG_LIMIT:])
 
     def close(self) -> None:
-        os.close(self._descriptor)
+        if self._descriptor is not None:
+            os.close(self._descriptor)
 
 
 def _kill(record: Record) -> None:
@@ -461,7 +510,7 @@ class Process:
         spec.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         env = harness_env(spec) if env is None else env
         _check_program(command, spec, env)
-        log = _Log(spec.folder / LOG)
+        log = _Log(spec.folder, LOG)
         loop = asyncio.get_running_loop()
         transport, streams = await loop.subprocess_exec(
             lambda: _Streams(_BUFFER, loop),

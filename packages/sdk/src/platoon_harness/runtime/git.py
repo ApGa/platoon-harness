@@ -8,6 +8,8 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from platoon_harness.drivers.env import inherited
+
 SECONDS = 300.0
 
 _SETTINGS = (
@@ -55,11 +57,12 @@ def git(
     """Run git in `cwd` and return what it printed, or raise `GitError` with what it said for an exit not in `ok`. Your
     config applies, as it would to your own git, but for the settings that would run something or start a gc. `env`
     is what this one call sets besides, such as the index and object store a snapshot's capture writes instead. `wrap`
-    is the isolation git runs in, in an isolated agent's tree, whose config the agent writes."""
+    is the isolation git runs in, in an isolated agent's tree, whose config the agent writes: there it runs on the same
+    allowlist its harness gets, never the runtime's whole environment, since the agent's config may name a program to
+    run on it."""
     settings = [part for setting in _SETTINGS for part in ("-c", setting)]
-    env = (
-        {name: value for name, value in os.environ.items() if name not in _LOCAL} | dict(_ENVIRONMENT) | dict(env or {})
-    )
+    base = inherited() if wrap else {name: value for name, value in os.environ.items() if name not in _LOCAL}
+    env = base | dict(_ENVIRONMENT) | dict(env or {})
     try:
         done = subprocess.run(
             [*wrap, "git", *settings, *args],

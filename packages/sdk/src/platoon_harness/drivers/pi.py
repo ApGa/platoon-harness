@@ -179,7 +179,7 @@ def _extension_config(spec: AgentSpec) -> str:
     come too, each naming the variable the bearer is in, never its value."""
     config: dict[str, Any] = {}
     if spec.instructions is not None:
-        config["instructions"] = private(spec.folder / _INSTRUCTIONS, spec.instructions)
+        config["instructions"] = private(spec.folder, spec.folder / _INSTRUCTIONS, spec.instructions)
     if spec.tools is not None:
         config["namespace"] = spec.tools.namespace
         config["server"] = {
@@ -310,7 +310,7 @@ class PiDriver:
             return harness_env(spec, *_SIGN_IN)
         home = spec.folder / "pi"
         home.mkdir(mode=0o700, exist_ok=True)
-        (home / "settings.json").write_text(json.dumps(_SEALED_SETTINGS))
+        private(spec.folder, home / "settings.json", json.dumps(_SEALED_SETTINGS))
         return {**harness_env(spec), _AGENT_DIR: str(home)}
 
     def _command(self, spec: AgentSpec) -> list[str]:

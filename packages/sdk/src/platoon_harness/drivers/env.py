@@ -24,7 +24,18 @@ PYTHON = tuple(dict.fromkeys(map(Path, (sys.executable, sys.prefix, sys.base_pre
 """What the runtime's own Python reads to run our modules, as our shim and the OpenHands worker do: the interpreter,
 its environment, the installation that is made from, and the folder our package is in."""
 
-__all__ = ["PYTHON", "Held", "Redactor", "harness_env", "inherited", "on_path", "private", "secrets_of", "tmpdir"]
+__all__ = [
+    "PYTHON",
+    "Held",
+    "Redactor",
+    "harness_env",
+    "inherited",
+    "on_path",
+    "open_beneath",
+    "private",
+    "secrets_of",
+    "tmpdir",
+]
 
 
 def inherited(*names: str, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
@@ -61,11 +72,28 @@ def tmpdir(folder: Path) -> Path:
     return folder / "tmp"
 
 
-def private(path: Path, text: str) -> str:
-    """Write a file nobody else may read, and return where."""
-    path.touch(mode=0o600)
-    path.chmod(0o600)
-    path.write_text(text)
+def open_beneath(folder: Path, path: Path, flags: int, mode: int = 0o600) -> int:
+    """Open `path`, which lies at or beneath `folder`, following no symlink below `folder`, and return the descriptor.
+    So a confined agent that plants a symlink in its own folder cannot send the runtime's read or write through it to a
+    path outside the folder. `folder`'s own path is the runtime's and is opened as it reads, symlinks and all."""
+    dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        *parts, name = path.relative_to(folder).parts
+        for part in parts:
+            step = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+            os.close(dir_fd)
+            dir_fd = step
+        return os.open(name, flags | os.O_NOFOLLOW, mode, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def private(folder: Path, path: Path, text: str) -> str:
+    """Write a file under `folder` that nobody else may read, following no symlink an agent could plant below `folder`,
+    and return where."""
+    fd = open_beneath(folder, path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as file:
+        file.write(text)
     return str(path)
 
 
