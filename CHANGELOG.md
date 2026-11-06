@@ -370,6 +370,7 @@
 
 ### Changed
 
+- Claude Code's conformance test pins 2.1.318, the version its checks last passed on, against FakeModel, as they had on 2.1.316.
 - `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
   `call_ids_reported`. See ADR 0053.
 - OpenHands' condenser calls are reported with the purpose `compaction`, where they were `condenser`. Its `describe` says the

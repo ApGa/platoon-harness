@@ -58,7 +58,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
 
 BASH = "Bash"
 MODEL = "fake-model"
-PINNED = "2.1.316"
+PINNED = "2.1.318"
 TIMEOUT = 60.0
 CHILD = ToolCall("Agent", {"description": "a child", "prompt": "say so", "subagent_type": "general-purpose"})
 
