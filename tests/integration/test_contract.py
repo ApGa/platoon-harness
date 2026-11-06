@@ -12,7 +12,6 @@ harness in the runtime's own process cannot be confined, so a scripted one on th
 
 import itertools
 import shutil
-import sys
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,13 +48,13 @@ from platoon_harness.testing import (
 from ..unit.runtime import support
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
+from .scripts import wire
 
 pytestmark = pytest.mark.timeout(1800)
 
 AGENTS = ("alice", "bob")
 PROGRAM = "program:trainer"
 STATUSES = ("invalid", "error", "timeout", "cancelled")
-SEALED = [sys.executable, str(Path(__file__).with_name("sealed_program.py"))]
 
 
 @dataclass(frozen=True)
@@ -80,9 +79,9 @@ def _scripted() -> Harness:
 def _wire() -> Harness:
     """A scripted harness on the wire, which says where it is installed, as an isolation needs to confine it."""
     return Harness(
-        {"command": SEALED, "mode": "wire"},
+        wire("sealed"),
         (),
-        lambda folder: check_driver(lambda: WireDriver([*SEALED, "checked"]), folder=folder, timeout=20),
+        lambda folder: check_driver(lambda: WireDriver(wire("sealed_checked")["command"]), folder=folder, timeout=20),
     )
 
 

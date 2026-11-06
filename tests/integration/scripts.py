@@ -12,10 +12,22 @@ from typing import Any
 
 from platoon_harness import Team
 from platoon_harness.drivers import AgentSpec, Capabilities, Delivery, Delta, DriverInfo, Item, Reporter
+from platoon_harness.drivers.env import PYTHON
 from platoon_harness.drivers.wire import serve
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.kernel.writer import Writer
-from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
+from platoon_harness.testing import (
+    ENVIRONMENT_TOOL,
+    Ask,
+    AskModel,
+    Call,
+    Compact,
+    Exit,
+    Hang,
+    Say,
+    ScriptedDriver,
+    every_turn_asks_the_model,
+)
 
 PROGRAM = str(Path(__file__))
 TOLD = "Begin every reply with the word kestrel, then use `peers`."
@@ -163,6 +175,13 @@ class OnAPlan(ScriptedDriver):
         return super().describe().model_copy(update={"login": "plan"})
 
 
+class Installed(ScriptedDriver):
+    """It says where it is installed, our Python and this file, as an isolation needs to confine it."""
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"installed": (*PYTHON, Path(PROGRAM))})
+
+
 class Returning(ScriptedDriver):
     """Once back, it never comes up, and says on stderr that it is on its way, which is the runtime's own."""
 
@@ -198,6 +217,8 @@ def _gone(db: Any) -> int:
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
+SEALED = [Call(ENVIRONMENT_TOOL, {"note": "looked"}), AskModel(), Compact()]
+"""A sealed turn: the environment's tool, the model, and a compaction."""
 
 HARNESSES = {
     "lead": lambda: Lead([FIX_THE_TEST]),
@@ -220,6 +241,8 @@ HARNESSES = {
     "breaking": lambda: Breaking([[Say("on it"), Hang()]], [[Say("back")]]),
     "mixed_lead": lambda: ScriptedDriver(MIXED_LEAD),
     "mixed_worker": lambda: ScriptedDriver(MIXED_WORKER),
+    "sealed": lambda: Installed(itertools.repeat(SEALED), name="wire-sealed"),
+    "sealed_checked": lambda: Installed(every_turn_asks_the_model(), name="wire-sealed"),
 }
 
 
