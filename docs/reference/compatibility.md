@@ -576,7 +576,10 @@ Claude Code and Codex, which name nothing they forgot, on OpenHands, whose deliv
 is `forgot` or `kept` for a handover. Each of these ran on the real binary against FakeModel, a read then a cited write, in
 `tests/integration` [L]. `spans` cuts a turn only at a write the record joins to its call, so where each harness's turns are cut
 follows from those joins: ScriptedDriver's, whose model-chosen tool calls go under `scripted/toolCallId`, are cut at writes in
-`tests/unit/primitives/test_spans.py`, and `spans` has run on no real binary [S]. A read through `ph` stays unconfirmed on every harness, and is labelled so: `ph` would have to send the id of
+`tests/unit/primitives/test_spans.py`, and `spans` has run on no real binary [S]. `propagate@3` counts an offer its harness took
+while a call ran as a take of that call where the harness reports a call at its end, as pi and ScriptedDriver do, and of the next
+where it reports one at its start, as Claude Code does, so at a span's edge the same take can fall in neighbouring spans on the two
+[S]. A read through `ph` stays unconfirmed on every harness, and is labelled so: `ph` would have to send the id of
 the shell call that runs it, and neither Claude Code 2.1.316 nor pi 1.5.0 hands a shell command any such id, by its environment on
 FakeModel [L]; Codex's shell does not run on the machine this was checked on. `exec` reports no tool item at all. Every harness here has a
 shell, and no stored conformance result proves a surface yet, so a negative answer is `unknown` on each. The terminal's `/provenance`

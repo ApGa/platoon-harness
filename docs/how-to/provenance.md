@@ -110,7 +110,8 @@ reports let the runtime confirm and join.
 `contributors` follows citations, causes and ancestry back from an outcome, at most 4,096 events, and names each maker in the order
 it reached them, with the kinds of edge that reached each. A maker whose work was only handed to one of them is listed apart, as
 being handed something is not using it, and the walk does not go through them. Nobody is weighed or ranked: that is an estimate, and
-an estimate is an annotation.
+an estimate is an annotation. `propagate@3`, an estimate, also follows what a span's harness confirmed taking, so a maker listed
+apart here can still earn credit there.
 
 ## Writing credit
 
@@ -148,17 +149,20 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
-The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@2`, and it is a heuristic, run only when someone runs it.
+The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@3`, and it is a heuristic, run only when someone runs it.
 It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
 `retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
-and its citations, an agent's only where its exposure says `seen`, never along an offer. What an agent's event keeps is also its
-span's when the event lies in one: the span holding the model call that made it, for an entry that carries an event, as a child's
-report does, that event's, and for an event tied to no call its turn's, when that turn is one span. It writes one local `credit` row
-per span it reached, on the span's name, and one per agent it reached, on that agent's first `agent.started`, holding all its events
-kept, and none for a span or an agent it never reached, which stays unscored. An agent's row is its spans' rows and what it kept in
-no span, such as its end out of a turn. Its agent rows are those `propagate@1` wrote. Citing gives away all but `retained` of what
-reaches the citer, and work nobody cites earns nothing from it, so training on it pulls against the default template's request to
-cite. [training.md](../extending/training.md) shows it run.
+its citations, an agent's only where its exposure says `seen`, and what its span took: the events, but its own agent's, that offers
+its harness confirmed taking showed before that span's calls, below the event's bound, never along an unconfirmed offer.
+What an agent's event keeps is also its span's when the event lies in one: the span holding the model call that made it, for an
+entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is
+one span. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on that agent's
+first `agent.started`, holding all its events kept, and none for a span or an agent it never reached, which stays unscored. An
+agent's row is its spans' rows and what it kept in no span, such as its end out of a turn. Where no span took another principal's
+event its rows are those `propagate@2` wrote, whose agent rows were `propagate@1`'s. Citing or taking gives away all but `retained`
+of what reaches the event, and work nobody cites or takes earns nothing from it, so training on it pulls against the default
+template's request to cite. [training.md](../extending/training.md) shows it run, and
+[RFC 0061](../rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) says why.
 
 ## What can train
 

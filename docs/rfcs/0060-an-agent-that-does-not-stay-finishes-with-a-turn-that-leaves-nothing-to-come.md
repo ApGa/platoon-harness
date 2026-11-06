@@ -2,7 +2,11 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-07 |
+| Status | Accepted, 2026-11-07; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
+
+**Amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md)**: a finished agent's `said` is the ref its
+end's report carries, so one that finishes with a turn that leaves nothing to come says its last words by the message that said
+them, which that end's report holds, and not by its end.
 
 ## Summary
 

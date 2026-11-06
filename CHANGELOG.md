@@ -9,7 +9,8 @@
   item's call, with a trailing piece that has no write joining the span before it. Each span is named by its last call's
   `model.called`, with its first call, its turn and the writes the record ties to its calls, oldest first, a page beside its true
   count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
-  answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`.
+  answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`. See
+  [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - The integration test, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`: one agent `isolated` under `bwrap` and
   launched sealed on a training authority's gateway, in the slow pass, on a scripted harness on the wire, as a harness in the
   runtime's own process cannot be confined, and on pi and OpenHands. Confined, it calls the gateway on loopback with its own bearer,
@@ -437,15 +438,21 @@
 
 ### Changed
 
-- `propagate` is `propagate@2`: the walk of `propagate@1`, unchanged, with what each event keeps booked to the span it lies in
-  too, the span holding the model call that made it, for an entry that carries an event, as a child's report does, that event's,
-  and for an event tied to no call its turn's, when that turn is one span. Beside one local `credit` row per agent reached, on its
-  first `agent.started`, it writes one per span reached, on the span's name, the `model.called` of its last call. An agent's row is
-  its spans' rows and what it kept in no span, and its agent rows are `propagate@1`'s on every journal. A span's row is now the one
-  annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were targets nothing wrote.
+- `propagate` is `propagate@3`, in place, under the same name and function. Version 2 kept `propagate@1`'s walk, unchanged, and
+  booked what each event keeps to the span it lies in too: the span holding the model call that made it, for an entry that
+  carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is one
+  span. Beside one local `credit` row per agent reached, on its first `agent.started`, it writes one per span reached, on the
+  span's name, the `model.called` of its last call; an agent's row is its spans' rows and what it kept in no span, and version 2's
+  agent rows were `propagate@1`'s on every journal. Version 3 adds one edge, the take: the events, but its own agent's, shown by
+  offers its agent's harness confirmed taking before a call of its span, since the call before and its latest start or resume,
+  and below the event's bound, so it walks offers its harness confirmed and never an unconfirmed one; a walk that meets an edge to
+  an event no older than its own makes every row `invalid`. Where no span took another principal's event, its rows are version
+  2's. A span's row is now the one annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were
+  targets nothing wrote. See [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - "Span" means one thing, a stretch of one turn of an agent: `primitives.Lines.span`, the `#L<first>-<last>` a result shows of a
   body, is `Lines.range`, as the read tools' argument already was, `schema.seconds` takes a `duration`, the facade's own alias for a
-  duration is gone in favour of `schema.Duration | float`, and an episode is a part of a session.
+  duration is gone in favour of `schema.Duration | float`, and an episode is a part of a session. See
+  [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - `ScriptedDriver` sends each tool call a model chose under the id the model gave it, as `scripted/toolCallId` in MCP's `_meta`,
   which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and two identical calls one
   model call chose are two ops, where the tool plane took the second for a repeat. The key is among the tool server's
@@ -711,6 +718,7 @@
   `agent.ended`, payload 2, records as `carries`: the `agent.finished` of an `agent.finish` with a report in a turn, the end itself
   for one with a gist out of a turn, and else the latest turn's last message, whose words the report took, or the end where that
   turn said nothing. An end written before payload 2 says itself, as it did.
+  [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) amends RFC 0060 so.
 - A tree of agents that do not stay could sit until a person ended it, as one did for 19 minutes on the first GPU run of a team on
   OpenHands: a child reported and never called `agent.finish`, so it stayed live and idle, and its parent, woken by the report,
   ended its turn and parked again on a wait on that child's end, which nothing would bring. An agent that does not stay now finishes

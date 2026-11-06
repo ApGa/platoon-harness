@@ -53,7 +53,7 @@ amended or extended an RFC.
 | [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Accepted |
 | [0036](0036-one-ref-names-what-a-model-is-shown.md) | One ref names what a model is shown, and a citation is checked and kept as a claim | Accepted; extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) and [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
 | [0037](0037-an-offer-is-confirmed-only-by-its-harness.md) | An offer is confirmed only by its harness, and the record claims nothing more than it holds | Accepted; extended by [RFC 0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) |
-| [0038](0038-provenance-is-answered-from-the-record.md) | Provenance is answered from the record, one hop at a time, and never as credit | Accepted; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
+| [0038](0038-provenance-is-answered-from-the-record.md) | Provenance is answered from the record, one hop at a time, and never as credit | Accepted; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) and [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0039](0039-estimators-write-beside-the-journal-at-m2.md) | Estimators write rewards and credit beside the journal from M2 | Accepted |
 | [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) | Pi names what landed and which call made a tool call | Accepted |
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
@@ -67,15 +67,16 @@ amended or extended an RFC.
 | [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Accepted |
 | [0050](0050-a-script-is-a-person-or-a-program.md) | A script is a person or a program | Accepted |
 | [0051](0051-one-rule-for-whom-a-prompt-goes-to.md) | One rule for whom a session's prompt goes to | Accepted |
-| [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted |
+| [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted; extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06 |
-| [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted |
+| [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted; superseded in part by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted |
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | Accepted |
 | [0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) | An agent cites a commit by the ref the journal gives | Accepted |
 | [0058](0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md) | A merge queue is a queue and a merger, written out | Accepted |
 | [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Accepted |
-| [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted |
+| [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
+| [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

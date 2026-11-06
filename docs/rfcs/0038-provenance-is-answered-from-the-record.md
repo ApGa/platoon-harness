@@ -2,10 +2,12 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
+| Status | Accepted, 2026-11-05; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) and [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 
 **Extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md)**: a commit's
-`Informed-By` cites an event its maker could read, and an unresolved value says why.
+`Informed-By` cites an event its maker could read, and an unresolved value says why. Extended by
+[RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md): `spans(agent)`, a query of the same kind, cuts an agent's turns at the
+model calls that chose its writes, as lineage joins them.
 
 ## Summary
 

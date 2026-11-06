@@ -169,7 +169,7 @@ async def produce(session: Session, episode: str, *, judge: Gateway | None, **pa
 ```
 
 `judge` is model access for a producer that asks a model, or None. The SDK ships one, `platoon_harness.credit:propagate`,
-`propagate@2`, a heuristic:
+`propagate@3`, a heuristic:
 
 ```python
 from platoon_harness.credit import propagate
@@ -179,29 +179,47 @@ async with Session.attach(rollout_id) as ended:
 ```
 
 It reads the one team reward on the episode's close, and splits it over the refs the episode closed on, refusing `invalid` an
-episode that closed on none. Each event it reaches keeps `retained` of what reached it for its maker, and the rest goes equally
-along the event's causes, its previous version or a commit's parents, and its citations, an agent's only where its exposure says
-Seen. It walks newest first, at most 4,096 events. What an agent's event keeps is that agent's, and also its span's when the
-event lies in one: the span holding the model call that made it, for an entry that carries an event, as a child's report does, that
-event's, and for an event tied to no call its turn's, when that turn is one span. It writes, under the producer
-`platoon_harness.credit:propagate`, one local `credit` row per span it reached, on the span's name, and one per agent it reached, on
-that agent's first `agent.started`, holding all that agent's events kept. A span or an agent it never reached gets no row, so is
-unscored; a team reward that is not scored passes its status to each row; and a walk cut short makes every row `invalid`. What
-reached the events of no agent is the reward less the agents' rows, and what an agent kept in no span, such as an end out of a
-turn, is its row less its spans' rows, and no span's row holds it. Its agent rows are those `propagate@1` wrote, on every
-journal.
+episode that closed on none. Each event it reaches keeps `retained` of what reached it for its maker, and the rest goes equally,
+one share each, along the event's causes, its previous version or a commit's parents, its citations, an agent's only where its
+exposure says Seen, and its takes: the events, but its own agent's, shown by offers its agent's harness confirmed taking before a
+call of its span, since the call before and the agent's latest start or resume, and below the event's own bound. An event in no
+span takes nothing, and an offer the harness never said it took is no edge. It walks newest first, at most 4,096 events. What an
+agent's event keeps is that agent's, and also its span's when the event lies in one: the span holding the model call that made it,
+for an entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that
+turn is one span. It writes, under the producer `platoon_harness.credit:propagate`, one local `credit` row per span it reached, on
+the span's name, and one per agent it reached, on that agent's first `agent.started`, holding all that agent's events kept. A span
+or an agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a
+walk cut short, or one that meets an edge to an event no older than its own, makes every row `invalid`. What reached the events of
+no agent is the reward less the agents' rows, and what an agent kept in no span, such as an end out of a turn, is its row less its
+spans' rows, and no span's row holds it. Where no span took another principal's event, its rows are those `propagate@2` wrote,
+whose agent rows were `propagate@1`'s; pin an earlier SDK to run an earlier version.
+
+What credit reaches depends on what you close on, so close each topology on what its team came to:
+
+- **A tree:** its root's `said`, what its finish's report carries. Its citations of its children's reports carry credit where it
+  was shown them, and so do the reports its finishing span took. A helper's report that a credited span took is reached cited or
+  not, and keeps all that reaches it on the span that wrote it unless it cites something. An agent's citation carries credit only
+  where its harness took what it cites, and nothing hands an agent its own post unless it reads it back, so a helper that wants its
+  crafting span reached reads its post back and cites it.
+- **A mesh whose peers never finish:** each starting peer's `said`, the last message of its last turn, which cites nothing. It
+  keeps `retained` and passes the rest along what its span took: other peers' messages, board entries, children's reports.
+- **A queue:** each task's result, which a program closes on. A result keeps a share for the span whose call completed it and
+  passes the rest to its claim, as its cause and its previous version, and to what its span took. A queue closed on its worker's
+  last words credits only the worker's last span.
 
 A worker that claims and completes three tasks in one turn, a model call for each step, closed on the three results, has three
-spans of a quarter each: each result keeps a sixth for the span of the call that completed it, and its claim a twelfth for the span
-of the call that made it, and the rest reaches the task you added, which is nobody's. A call that completes one task and claims the
-next puts the next one's claim in the first one's span, which keeps that claim's share.
+spans, each holding its own task's result and claim. Under `propagate@2` each held a quarter, and the rest reached the task you
+added, which is nobody's; under `propagate@3` the task statement each claim showed, and the message that began the turn, take a
+share each, for nobody, and the spans hold 5/24, 2/9 and 2/9. A call that completes one task and claims the next puts the next
+one's claim in the first one's span, which keeps that claim's share.
 
-Its incentive: citing gives away all but `retained` of what reaches the citer, and work nobody cites earns nothing from it. The
-default template asks every agent to cite, so training under it pulls against that request: watch the citation rate. Rows like
-these are fractions of the team reward, so a training system centres them per role, as Platoon's keyed credit does at a group size
-above one. A span's row is a slice of its agent's, so pooling spans as agents of their own would tie an agent's advantage to how
-many spans it was cut into: centre agents' rows per role, train each scored span's calls on its row less its agent's baseline shared
-equally by that agent's scored spans, and the calls no scored span holds on nothing.
+Its incentives: citing, and taking, give away all but `retained` of what reaches the event, being cited or taken by a credited
+span earns credit, broadcasting draws more takes, reading in a last turn costs, and work nobody cites or takes earns nothing from
+it. The default template asks every agent to cite, so training under it pulls against that request: watch the citation rate, and
+what each span read and sent. Rows like these are fractions of the team reward, so a training system centres them per role, as
+Platoon's keyed credit does at a group size above one. A span's row is a slice of its agent's, so pooling spans as agents of their
+own would tie an agent's advantage to how many spans it was cut into: centre agents' rows per role, train each scored span's calls
+on its row less its agent's baseline shared equally by that agent's scored spans, and the calls no scored span holds on nothing.
 
 ## The export
 

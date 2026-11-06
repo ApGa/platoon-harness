@@ -1,7 +1,8 @@
-"""`propagate@2`: an episode's team reward split back along the record's own edges and kept per agent and per span, on
-an ended session, by a named producer at a version, and never a fact."""
+"""`propagate@3`: an episode's team reward split back along the record's own edges and what each span took, and kept per
+agent and per span, on an ended session, by a named producer at a version, and never a fact."""
 
 import asyncio
+import contextlib
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
@@ -17,6 +18,7 @@ from platoon_harness.config import Manifest
 from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequest
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
 
@@ -107,7 +109,7 @@ async def test_propagate_conserves_the_reward_over_agents_and_nobody(tmp_path):
     unassigned = 1.0 - sum(row.value or 0.0 for row in rows.values())
     assert unassigned == 0.25 and (await session.lineage("inbox/alice@1")).made.maker == PROGRAM
     assert {row.status for row in rows.values()} == {"scored"}
-    assert {(row.kind, row.scope, row.producer_version) for row in rows.values()} == {("credit", "local", "2")}
+    assert {(row.kind, row.scope, row.producer_version) for row in rows.values()} == {("credit", "local", "3")}
 
 
 async def test_propagation_sums_reconverging_paths_once(tmp_path):
@@ -295,14 +297,29 @@ async def called(kernel: Kernel, name: str, call_id: str) -> str:
     return f"{found.stream}@{found.version}"
 
 
-async def ran(kernel: Kernel, name: str, call_id: str | None, op: str, args: dict[str, Any]) -> dict[str, Any]:
-    """An op `name` runs by a tool call its model call `call_id` chose, after the tool item its harness reports of that
-    tool call, or with no `call_id` by none."""
+async def ran(
+    kernel: Kernel, name: str, call_id: str | None, op: str, args: dict[str, Any], *, tool: str | None = None
+) -> dict[str, Any]:
+    """An op `name` runs by the tool call `tool` its model call `call_id` chose, after the tool item its harness reports
+    of that tool call, or with no `call_id` by none."""
     if call_id is None:
         return driven.result_of(await kernel.submit(driven.agent(name), op, args))
-    tool = f"tool-{len(driven.of_type(kernel, 'item.recorded'))}"
+    tool = tool or f"tool-{len(driven.of_type(kernel, 'item.recorded'))}"
     await driven.report(kernel, name, "item", kind="tool", phase="started", gist=op, native_id=tool, call_id=call_id)
     return driven.result_of(await kernel.submit(driven.agent(name), op, args, native={"claudecode/toolUseId": tool}))
+
+
+async def returned(kernel: Kernel, name: str, tool: str) -> None:
+    """A tool item came back `completed`, holding what its call returned, which confirms a read made under it."""
+    item = {"kind": "tool", "phase": "completed", "gist": "a tool", "native_id": tool, "outcome": "completed"}
+    await driven.report(kernel, name, "item", **item)
+
+
+async def woken(kernel: Kernel, name: str, turn: str = "t1") -> None:
+    """`name` is handed what waits for it, its harness says it took it, and a turn begins on it."""
+    offer = driven.result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name}))
+    await driven.confirm(kernel, name, offer["input"], evidence="message_start")
+    await driven.start_turn(kernel, name, turn)
 
 
 async def sent(kernel: Kernel, name: str, call_id: str | None, to: str, **fields: Any) -> str:
@@ -343,7 +360,7 @@ async def test_propagate_keeps_each_events_share_for_the_span_holding_the_call_t
         refs["c1"]: (0.125, (refs["first"],)),
         refs["c3"]: (0.5, (refs["last"],)),
     }
-    assert {(row.kind, row.scope, row.producer_version) for row in spans.values()} == {("credit", "local", "2")}
+    assert {(row.kind, row.scope, row.producer_version) for row in spans.values()} == {("credit", "local", "3")}
 
 
 async def test_a_span_propagate_never_reaches_gets_no_row(tmp_path):
@@ -478,9 +495,9 @@ moves = st.lists(
     max_size=16,
 )
 """What two agents, each in a turn to begin with, and the program do: a turn ended or begun; a turn ended, if one was
-under way, and the next begun on what waits, which its harness took; or a message or a board entry's next version,
-after a model call or not, by the agent's latest call or by none, citing what was sent to its writer, and answering
-it."""
+under way, and the next begun on what waits, which no harness says it took, so no span takes anything; or a message or
+a board entry's next version, after a model call or not, by the agent's latest call or by none, citing what was sent to
+its writer, and answering it."""
 
 
 async def played(kernel: Kernel, script: list[tuple[Any, ...]]) -> list[str]:
@@ -506,9 +523,7 @@ async def played(kernel: Kernel, script: list[tuple[Any, ...]]) -> list[str]:
         elif move == "wake":
             if turns[name]:
                 await driven.end_turn(kernel, name)
-            offer = (await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name})).result
-            if offer:
-                await driven.confirm(kernel, name, offer["input"], evidence="message_start")
+            await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name})
             await driven.start_turn(kernel, name, f"{name}-{number}")
             turns[name] = True
         else:
@@ -572,9 +587,9 @@ async def propagated_play(
 
 @settings(max_examples=25, deadline=None)
 @given(script=moves)
-def test_propagate_2_writes_the_agent_rows_propagate_1_wrote(tmp_path_factory, script) -> None:
-    """Whatever the journal, an agent's row is what its events kept on `propagate@1`'s walk, which keeping a share per
-    span leaves as it was."""
+def test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event(tmp_path_factory, script):
+    """Where no span took anything, the rows are `propagate@2`'s: an agent's row is what its events kept on
+    `propagate@1`'s walk, and a span's what its own events kept there."""
 
     async def body() -> None:
         session, kept, makers = await propagated_play(tmp_path_factory.mktemp("credit"), script)
@@ -583,6 +598,8 @@ def test_propagate_2_writes_the_agent_rows_propagate_1_wrote(tmp_path_factory, s
             if (makers[ref] or "").startswith("agent:"):
                 rows[(makers[ref] or "").removeprefix("agent:")] += share
         assert values(await credited(session)) == rows
+        for span in (await spanned(session)).values():
+            assert span.value == sum(kept[ref] for ref in span.evidence)
         await session.leave()
 
     asyncio.run(body())
@@ -660,49 +677,358 @@ def task(number: int) -> set[str]:
 @pytest.mark.parametrize("turns", ["one", "three"])
 async def test_a_persistent_worker_credits_each_task_to_the_span_whose_call_completed_it(tmp_path, turns):
     """The owner's case: a worker claims and completes three tasks, a model call for each step, in one turn or in a turn
-    each. Each result keeps a sixth for the span of the call that completed it, and its claim, which that span's first
-    call made, a twelfth, passing the rest to the program's task, which is nobody's: three spans of a quarter."""
+    each. Each result keeps a sixth for the span of the call that completed it, and passes the rest to its claim, as its
+    cause and its previous version, and to what that span took before it: the task its claim showed, and in a turn's
+    first span the program's message that began the turn, each nobody's. Its claim keeps half of what reaches it, in the
+    same span: a span holds 2/9, or 5/24 where it took the message."""
     if turns == "one":
         replies = [[claim(1), complete(1), claim(2), complete(2), claim(3), complete(3), "all three are done"]]
-        ends = (1, 3, 6)
+        ends, shares = (1, 3, 6), (5 / 24, 2 / 9, 2 / 9)
     else:
         replies = [[claim(number), complete(number), f"task {number} is done"] for number in (1, 2, 3)]
-        ends = (2, 5, 8)
+        ends, shares = (2, 5, 8), (5 / 24, 5 / 24, 5 / 24)
 
     session, calls = await worker(tmp_path, *replies)
 
     spans = await spanned(session)
-    assert {target: (row.value, set(row.evidence)) for target, row in spans.items()} == {
-        calls[end]: (0.25, task(number)) for number, end in zip((1, 2, 3), ends, strict=True)
+    assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
+        calls[end]: (pytest.approx(share), task(number))
+        for number, end, share in zip((1, 2, 3), ends, shares, strict=True)
     }
-    assert values(await credited(session)) == {"w": 0.75}
+    assert values(await credited(session)) == {"w": pytest.approx(sum(shares))}
 
 
 async def test_a_claim_made_in_the_call_that_completed_the_previous_task_gives_that_span_its_share(tmp_path):
     """One call completes the first task and claims the second: the second's claim lies in the first's span, which
-    keeps the claim's twelfth of the second's credit beside its own quarter."""
+    keeps the claim's share of the second's credit beside its own, 1/18 of 19/72."""
     replies = [claim(1), [complete(1), claim(2)], [complete(2), claim(3)], complete(3), "all three are done"]
 
     session, calls = await worker(tmp_path, replies)
 
     spans = await spanned(session)
     assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
-        calls[1]: (pytest.approx(1 / 3), task(1) | {"task/tasks/2@2"}),
-        calls[2]: (pytest.approx(1 / 4), {"task/tasks/2@3", "task/tasks/3@2"}),
+        calls[1]: (pytest.approx(19 / 72), task(1) | {"task/tasks/2@2"}),
+        calls[2]: (pytest.approx(2 / 9), {"task/tasks/2@3", "task/tasks/3@2"}),
         calls[4]: (pytest.approx(1 / 6), {"task/tasks/3@3"}),
     }
 
 
 async def test_two_claims_open_at_once_give_the_span_that_made_them_their_share(tmp_path):
-    """One call claims two tasks, so the span holding it keeps both claims' share, and the second task's result its
-    own."""
+    """One call claims two tasks, so the span holding it keeps both claims' share, 17/60 in all, and the second task's
+    result its own sixth."""
     replies = [[claim(1), claim(2)], complete(1), complete(2), claim(3), complete(3), "all three are done"]
 
     session, calls = await worker(tmp_path, replies)
 
     spans = await spanned(session)
     assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
-        calls[1]: (pytest.approx(1 / 3), task(1) | {"task/tasks/2@2"}),
+        calls[1]: (pytest.approx(17 / 60), task(1) | {"task/tasks/2@2"}),
         calls[2]: (pytest.approx(1 / 6), {"task/tasks/2@3"}),
-        calls[5]: (pytest.approx(1 / 4), task(3)),
+        calls[5]: (pytest.approx(2 / 9), task(3)),
     }
+
+
+# Takes.
+
+
+async def test_propagate_passes_credit_along_another_principals_event_its_span_took(tmp_path):
+    """`w`'s harness took `peer`'s message as its turn began, and `w`'s answer, which cites nothing, keeps half for its
+    span and passes half along that take."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    told = (await driven.send(kernel, driven.agent("peer"), "@w", "the plan"))["ref"]
+    await woken(kernel, "w")
+    named = await called(kernel, "w", "c1")
+    answer = await sent(kernel, "w", "c1", "@peer")
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    agents = await credited(session)
+    assert values(agents) == {"w": 0.5, "peer": 0.5} and agents["peer"].evidence == (told,)
+    assert {target: (row.value, row.evidence) for target, row in (await spanned(session)).items()} == {
+        named: (0.5, (answer,))
+    }
+
+
+async def test_propagate_passes_nothing_along_a_take_confirmed_after_the_events_bound(tmp_path):
+    """One model call chose a read of `peer`'s message and an answer: the read's result came back after that call, so
+    the answer took nothing, while the span's last words, said by the next call, took the message."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    told = (await driven.send(kernel, driven.agent("peer"), "@w", "the plan"))["ref"]
+    await driven.start_turn(kernel, "w")
+    await called(kernel, "w", "c1")
+    await ran(kernel, "w", "c1", "message.read", {}, tool="read")
+    answer = await sent(kernel, "w", "c1", "@peer")
+    await returned(kernel, "w", "read")
+    named = await called(kernel, "w", "c2")
+    await driven.report(kernel, "w", "item", kind="message", gist="done", call_id="c2")
+    said = driven.of_type(kernel, "item.recorded")[-1]
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer, f"{said.stream}@{said.version}"])
+
+    agents = await credited(session)
+    assert values(agents) == {"w": 0.75, "peer": 0.25} and agents["peer"].evidence == (told,)
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {named: 0.75}
+
+
+async def test_propagate_passes_nothing_along_a_take_of_its_own_agents_event(tmp_path):
+    """`w` read back its own board entry before it answered: what it made is already its own, so that read is no take
+    and the entry's span is never reached."""
+    kernel = await journal(tmp_path)
+    await driven.channel(kernel, "notes", kind="board")
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    await driven.start_turn(kernel, "w")
+    await called(kernel, "w", "c1")
+    await ran(kernel, "w", "c1", "board.post", {"board": "notes", "name": "plan", "gist": "the plan"})
+    await called(kernel, "w", "c2")
+    await ran(kernel, "w", "c2", "board.get", {"board": "notes", "name": "plan"}, tool="get")
+    await returned(kernel, "w", "get")
+    named = await called(kernel, "w", "c3")
+    answer = await sent(kernel, "w", "c3", "@peer")
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert values(await credited(session)) == {"w": 1.0}
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {named: 1.0}
+
+
+async def test_propagate_never_passes_credit_along_an_unconfirmed_offer(tmp_path):
+    """`peer`'s message was offered to `w`, whose harness never said it took it: being handed something is no edge."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    await driven.send(kernel, driven.agent("peer"), "@w", "the plan")
+    driven.result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "w"}))
+    await driven.start_turn(kernel, "w")
+    await called(kernel, "w", "c1")
+    answer = await sent(kernel, "w", "c1", "@peer")
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert values(await credited(session)) == {"w": 1.0}
+
+
+async def test_a_take_confirmed_before_its_agents_latest_start_or_resume_is_no_take(tmp_path):
+    """`w`'s harness took `peer`'s message, then came back as a new process, which never held what the one before took:
+    the call after is no take of it."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    await driven.send(kernel, driven.agent("peer"), "@w", "the plan")
+    offer = driven.result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "w"}))
+    await driven.confirm(kernel, "w", offer["input"], evidence="message_start")
+    back = {"agent": "w", "ready": {}, "declared": {"persistent": True, "boundaries": ["turn"]}, "resumed": True}
+    driven.result_of(await kernel.submit(kernel.runtime, "agent.start", back))
+    await driven.start_turn(kernel, "w", "t2")
+    await called(kernel, "w", "c1")
+    answer = await sent(kernel, "w", "c1", "@peer")
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert values(await credited(session)) == {"w": 1.0}
+
+
+async def test_a_take_counts_every_event_its_offer_showed_gist_or_body(tmp_path):
+    """One read showed `peer`'s message by its gist and its body and `carol`'s by its gist: each is one take, so each
+    gets an equal share of what `w`'s answer passed on."""
+    kernel = await journal(tmp_path)
+    for name in ("peer", "carol", "w"):
+        await driven.spawn(kernel, name)
+    body = f"sha256:{await kernel.put_body(b'the whole plan')}"
+    await driven.send(kernel, driven.agent("peer"), "@w", "the plan", body=body)
+    await driven.send(kernel, driven.agent("carol"), "@w", "a note")
+    await driven.start_turn(kernel, "w")
+    await called(kernel, "w", "c1")
+    await ran(kernel, "w", "c1", "message.read", {"bodies": True}, tool="read")
+    await returned(kernel, "w", "read")
+    await called(kernel, "w", "c2")
+    answer = await sent(kernel, "w", "c2", "@peer")
+    await driven.end_turn(kernel, "w")
+    read = driven.of_type(kernel, "context.offered")[-1]
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert sorted(item["form"] for item in read.data["items"]) == ["body", "gist", "gist"]
+    assert values(await credited(session)) == {"w": 0.5, "peer": 0.25, "carol": 0.25}
+
+
+async def test_a_take_newer_than_its_event_makes_every_row_invalid(tmp_path):
+    """`w`'s answer committed before its harness reported the call that chose it, and before that report a read under
+    the same call showed a message sent after the answer: a take that points forward, which the walk refuses rather
+    than lose what it passes."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    await driven.start_turn(kernel, "w")
+    answer = await sent(kernel, "w", "c1", "@peer")
+    await driven.send(kernel, driven.agent("peer"), "@w", "and then")
+    await ran(kernel, "w", "c1", "message.read", {}, tool="read")
+    await returned(kernel, "w", "read")
+    named = await called(kernel, "w", "c1")
+    await driven.end_turn(kernel, "w")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    rows = {**(await credited(session)), **(await spanned(session))}
+    assert {key: (row.status, row.value) for key, row in rows.items()} == {
+        "w": ("invalid", None),
+        named: ("invalid", None),
+    }
+
+
+async def handed_report(kernel: Kernel, *, crafted: bool) -> dict[str, str]:
+    """`kid`, spawned by `lead`, posts what it crafted in a call of its own if `crafted`, then finishes, citing nothing,
+    in its next; `lead` reads the runtime's report of it, shown by the finish it carries, and answers on a topic by its
+    next call, citing nothing."""
+    await driven.channel(kernel, "notes", kind="board")
+    await driven.channel(kernel, "log", kind="topic")
+    lead = await driven.spawn(kernel, "lead", role="lead")
+    await driven.spawn(kernel, "kid", by=lead)
+    await driven.start_turn(kernel, "kid")
+    crafting = await called(kernel, "kid", "k1")
+    if crafted:
+        await ran(kernel, "kid", "k1", "board.post", {"board": "notes", "name": "plan", "gist": "the plan"})
+        await called(kernel, "kid", "k2")
+    finished = (await ran(kernel, "kid", f"k{1 + crafted}", "agent.finish", {"gist": "the plan is up"}))["ref"]
+    reporting = driven.of_type(kernel, "model.called")[-1]
+    await driven.end_turn(kernel, "kid")
+    await driven.start_turn(kernel, "lead")
+    await called(kernel, "lead", "c1")
+    await ran(kernel, "lead", "c1", "message.read", {}, tool="read")
+    await returned(kernel, "lead", "read")
+    leading = await called(kernel, "lead", "c2")
+    answer = await sent(kernel, "lead", "c2", "#log")
+    await driven.end_turn(kernel, "lead")
+    return {
+        "finished": finished,
+        "answer": answer,
+        "crafting": crafting,
+        "reporting": f"{reporting.stream}@{reporting.version}",
+        "leading": leading,
+    }
+
+
+async def test_propagate_reaches_a_helper_whose_report_a_credited_span_of_its_parent_took(tmp_path):
+    """`lead`'s answer cites nothing, and its span took `kid`'s report: half of the reward reaches `kid`'s finish."""
+    kernel = await journal(tmp_path)
+    refs = await handed_report(kernel, crafted=False)
+
+    session = await propagated(kernel, tmp_path, [refs["answer"]])
+
+    agents = await credited(session)
+    assert values(agents) == {"lead": 0.5, "kid": 0.5} and agents["kid"].evidence == (refs["finished"],)
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {
+        refs["leading"]: 0.5,
+        refs["reporting"]: 0.5,
+    }
+
+
+async def test_an_uncited_report_keeps_what_reaches_it_on_the_span_that_wrote_it(tmp_path):
+    """`kid` crafted in one span and reported in another, citing nothing: all that reaches its report stays on the
+    report's span, and the crafting span is never reached."""
+    kernel = await journal(tmp_path)
+    refs = await handed_report(kernel, crafted=True)
+
+    session = await propagated(kernel, tmp_path, [refs["answer"]])
+
+    spans = await spanned(session)
+    assert {target: row.value for target, row in spans.items()} == {refs["leading"]: 0.5, refs["reporting"]: 0.5}
+    assert refs["crafting"] not in spans
+
+
+async def test_propagate_credits_a_spawn_through_the_goal_its_child_took(tmp_path):
+    """`lead`'s spawn of `kid` is the goal `kid`'s launch offered, which its harness took: `kid`'s message passes half
+    along that take, to the span of `lead`'s that spawned it, and nothing to its own instructions."""
+    kernel = await journal(tmp_path)
+    await driven.channel(kernel, "log", kind="topic")
+    await driven.spawn(kernel, "lead", role="lead")
+    await driven.start_turn(kernel, "lead")
+    spawning = await called(kernel, "lead", "c1")
+    spawn = {"name": "kid", "child_role": "worker", "goal": "craft the plan"}
+    goal = (await ran(kernel, "lead", "c1", "agent.spawn", spawn))["ref"]
+    await driven.end_turn(kernel, "lead")
+    await driven.settle_effects(kernel, "kid")
+    instructions = f"sha256:{await kernel.put_body(b'You are a worker.')}"
+    launch = {"agent": "kid", "body": instructions, "goal": True}
+    launched = driven.result_of(await kernel.submit(kernel.runtime, "agent.instruct", launch))
+    await driven.start(kernel, "kid")
+    await driven.confirm(kernel, "kid", launched, evidence="command_lifecycle")
+    await driven.start_turn(kernel, "kid")
+    crafting = await called(kernel, "kid", "k1")
+    made = await sent(kernel, "kid", "k1", "#log")
+    await driven.end_turn(kernel, "kid")
+
+    session = await propagated(kernel, tmp_path, [made])
+
+    agents = await credited(session)
+    assert values(agents) == {"kid": 0.5, "lead": 0.5} and agents["lead"].evidence == (goal,)
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {
+        crafting: 0.5,
+        spawning: 0.5,
+    }
+
+
+class OwnModels:
+    """An authority that admits each agent through a FakeModel of its own as its gateway, so each agent's replies come
+    in its own order, however the agents' turns interleave."""
+
+    def __init__(self, models: dict[str, FakeModel]) -> None:
+        self.models = models
+
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        return await Gateways(self.models[spawn.agent]).admit(spawn)
+
+    async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+        return None
+
+
+async def test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took(tmp_path):
+    """The GPU run's failure, scripted: peers that stay and never finish, closed on what each said last, which follows
+    from and cites nothing. `a` spawns `h`, which posts its plan and reports; `a`, woken by the report, tells `b`, whose
+    last words follow. Each closing message keeps half its share and passes the rest along what its span took: `b`'s
+    along `a`'s message, and `a`'s along `h`'s report, which passes along `h`'s goal, `a`'s spawn, which passes along
+    the program's first message. Without takes each peer kept its half, and `h` nothing."""
+    spawning = ToolCall("agent_spawn", {"name": "h", "child_role": "helper", "goal": "craft the plan"}, id="spawn")
+    posting = ToolCall("board_post", {"board": "notes", "name": "plan", "gist": "the plan"}, id="post")
+    telling = ToolCall("message_send", {"to": "@b", "gist": "the plan is on the board"}, id="tell")
+    models = {
+        "a": FakeModel(spawning, "h is crafting the plan", telling, "b knows of the plan"),
+        "h": FakeModel(posting, "the plan is on the board"),
+        "b": FakeModel("I have the plan"),
+    }
+    roles = {
+        "a": {"harness": scripted([AskModel()], [AskModel()]), "may_spawn": ["helper"]},
+        "b": {"harness": scripted([AskModel()])},
+        "helper": {"harness": scripted([AskModel()]), "count": 0},
+    }
+    notes = {"kind": "board", "writers": "all", "readers": "all"}
+    topology = {"edges": {"a": ["all"], "b": ["all"]}, "channels": {"notes": notes}, "limits": {"max_hops": 8}}
+    team = Team.model_validate({"roles": roles, "topology": topology})
+    start: dict[str, Any] = {"root": tmp_path, "principal": PROGRAM, "authority": OwnModels(models)}
+    async with contextlib.AsyncExitStack() as stack:
+        for model in models.values():
+            await stack.enter_async_context(model)
+        session = await stack.enter_async_context(Session.start(team, name="mesh", **start))
+        await session.open_episode("e")
+        await session.send("@a", "make a plan, and tell b of it")
+        await asyncio.wait_for(session.settled(), SECONDS)
+        said = {row["agent"]: row["said"] for row in await session.agents()}
+        await session.close_episode(based_on=[said["a"], said["b"]])
+    attached = await Session.attach("mesh", root=tmp_path)
+    await rewarded(attached, ("scored", 1.0))
+    await propagate(attached, "e", judge=None, retained=0.5)
+
+    agents = await credited(attached)
+    assert values(agents) == {"a": pytest.approx(15 / 32), "b": 0.25, "h": pytest.approx(3 / 16)}
+    rows = (await spanned(attached)).values()
+    spans = [((await attached.lineage(row.target)).event.agent, row.value) for row in rows]
+    assert sorted(spans) == [("a", 3 / 32), ("a", 3 / 8), ("b", 0.25), ("h", 3 / 16)]

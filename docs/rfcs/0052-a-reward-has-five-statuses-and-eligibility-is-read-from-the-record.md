@@ -2,7 +2,10 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05 |
+| Status | Accepted, 2026-11-05; extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
+
+**Extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md)**: a span's row targets the
+`model.called` of its last call.
 
 ## Summary
 
