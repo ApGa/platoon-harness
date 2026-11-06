@@ -13,9 +13,9 @@ sessions with explicit coordination primitives, a terminal UI, a browser client,
 ## Status
 
 Milestone 1, a working vertical slice, is done on Linux: a team of real harnesses, started, watched and steered from the
-terminal UI, the browser or the command line. Milestone 2 is under way, and 3 (training with Platoon) and 4 (production
-polish) are planned. [docs/STATUS.md](docs/STATUS.md) says what is implemented, what is tested and how, and what is
-planned. Nothing is published to PyPI yet.
+terminal UI, the browser or the command line. Milestones 2 (dependable coordination) and 3 (training with Platoon) are in
+progress, and 4 (production polish) is planned. [docs/STATUS.md](docs/STATUS.md) says what is implemented, what is tested
+and how, and what is planned. Nothing is published to PyPI yet.
 
 ## Try it
 
