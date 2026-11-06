@@ -35,4 +35,4 @@ async def test_a_failed_commit_ends_a_run_even_when_its_printer_was_refused(monk
     monkeypatch.setattr(running, "printing", refused)
 
     with pytest.raises(JournalError):
-        await running.own(_Failing(), span=None, json=True)  # ty: ignore[invalid-argument-type]
+        await running.own(_Failing(), within=None, json=True)  # ty: ignore[invalid-argument-type]

@@ -74,6 +74,18 @@ while the turn its event was made in has not ended, since a later report can sti
 says whether its lines were shown as exposure says whether its event was: true when a confirmed offer showed them, and otherwise
 null, as no answer can say they were not.
 
+## Spans
+
+`spans(agent)` cuts each turn of an agent where its model calls chose its writes: a turn is cut after each call that chose one of the
+eight writes of content, and a trailing piece with no write joins the span before it, so every call its harness reported in a turn
+lies in one span, and no span crosses a turn. A call chose a write only where the record joins them, as `lineage` names the call that
+chose an event: a write whose op came under no tool call's id, or whose tool item names no call, cuts nothing, and a claim, a read
+and an announce of a write are no writes. Each span is named by its last call's `model.called`, with its first call, its turn's name
+and the writes the record ties to its calls, oldest first and a page at a time beside its true count, and the answer is `open` while
+the agent's latest turn has not ended, as a tool item reported late can still join a write and cut that turn again. A worker that
+claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
+last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
+
 ## In the terminal and the browser
 
 A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen
@@ -177,6 +189,7 @@ $ platoon-harness lineage fix-auth --ref task/tasks/1@3
 $ platoon-harness contributors fix-auth --ref task/tasks/1@3
 $ platoon-harness exposure fix-auth --agent @lead --ref task/tasks/1@3
 $ platoon-harness eligibility fix-auth --agent @lead --episode task-17
+$ platoon-harness spans fix-auth --agent @lead
 $ platoon-harness annotate fix-auth --target task/tasks/1@3 --kind credit --producer mine --producer-version 1 \
     --scope local --status scored --value 0.5 --head-seq 812
 $ platoon-harness annotations fix-auth --target task/tasks/1@3

@@ -50,7 +50,7 @@ RESULT_LIMIT = (
 LINE_RANGE = r"L([1-9]\d*)-([1-9]\d*)"
 REF = rf"^[^\s@#]+@[1-9]\d{{0,17}}(#{LINE_RANGE})?$"
 """A ref, `stream@version`, with `#La-b` naming lines of that event's body: the one form a citation takes."""
-_REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>[1-9]\d{0,17})(?:#(?P<span>.*))?", re.DOTALL)
+_REF = re.compile(r"(?P<stream>[^\s@#]+)@(?P<version>[1-9]\d{0,17})(?:#(?P<range>.*))?", re.DOTALL)
 _GIVEN = "cite a `ref` you were given, or leave it out"
 
 _ADDRESS = re.compile(rf"([@#+])({NAME})")
@@ -75,7 +75,7 @@ def body_of(event: Event) -> str | None:
 def parts_of(ref: str) -> tuple[str, int, str | None] | None:
     """A ref's stream, version and what follows its `#`, or None for what is no ref."""
     match = _REF.fullmatch(ref)
-    return None if match is None else (match["stream"], int(match["version"]), match["span"])
+    return None if match is None else (match["stream"], int(match["version"]), match["range"])
 
 
 def event_at(txn: Txn, ref: str) -> Event | None:
@@ -104,8 +104,8 @@ def cited(txn: Txn, refs: Iterable[str]) -> tuple[str, ...]:
         event = txn.view(Stamps).at(match["stream"], int(match["version"]))
         if event is None:
             raise Refused("not_found", f"nothing is {named}: {_GIVEN}")
-        if match["span"] is not None:
-            _cited_lines(named, event, match["span"], lines_in)
+        if match["range"] is not None:
+            _cited_lines(named, event, match["range"], lines_in)
     return refs
 
 
@@ -116,8 +116,8 @@ def _lines_in(txn: Txn, body: str) -> int | None:
     return None if data is None else len(data.decode().splitlines())
 
 
-def _cited_lines(ref: str, event: Event, span: str, lines_in: Callable[[str], int | None]) -> None:
-    lines = re.fullmatch(LINE_RANGE, span)
+def _cited_lines(ref: str, event: Event, wanted: str, lines_in: Callable[[str], int | None]) -> None:
+    lines = re.fullmatch(LINE_RANGE, wanted)
     if lines is None or int(lines[1]) > int(lines[2]):
         raise Refused("invalid", f"{ref} names no lines, as a range is `#La-b` from a first line to a later one")
     body = body_of(event)
@@ -188,11 +188,11 @@ def paged(rows: Iterable[dict[str, Any]], name: str, key: str, after: str | None
 
 class Lines(NamedTuple):
     """What a result can show of a text body. `text` is None if one line alone will not fit, `total` counts every line,
-    `span` is `#L<first>-<last>` unless this is the whole body, and `rest` is the ref of the lines after these."""
+    `range` is `#L<first>-<last>` unless this is the whole body, and `rest` is the ref of the lines after these."""
 
     text: str | None
     total: int
-    span: str = ""
+    range: str = ""
     rest: str | None = None
 
     def shown(self) -> dict[str, Any]:

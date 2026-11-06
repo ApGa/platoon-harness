@@ -230,7 +230,7 @@ def get(txn: Txn, a: Get) -> dict[str, Any]:
             cut = lines_of(ref, text, a.range, RESULT_LIMIT - size_of(shown))
             shown |= cut.shown()
             if cut.text is not None:
-                ref = shown["ref"] = f"{ref}{cut.span}"
+                ref = shown["ref"] = f"{ref}{cut.range}"
                 exposed.append(Exposed.of(ref, "body", cut.text))
     expose_read(txn, exposed, positions={f"board/{a.board}/{a.name}": row["seq"]})
     return shown

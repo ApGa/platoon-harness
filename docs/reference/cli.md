@@ -148,6 +148,7 @@ For example:
 - [`repo`](#platoon-harness-repo)
     - [`commit`](#platoon-harness-repo-commit)
     - [`test`](#platoon-harness-repo-test)
+- [`spans`](#platoon-harness-spans)
 - [`task`](#platoon-harness-task)
     - [`add`](#platoon-harness-task-add)
     - [`claim`](#platoon-harness-task-claim)
@@ -195,6 +196,7 @@ For example:
 * [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
 * [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 * [`repo`](#platoon-harness-repo): The `repo` ops, each on one session, with the arguments an agent's `ph repo.<op>` takes as flags.
+* [`spans`](#platoon-harness-spans): Cut each turn of an agent into spans, oldest first: a turn is cut after each model call that chose a write of content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece with no write joins the span before it, so each call its harness reported in a turn lies in one span.
 * [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
 * [`uses`](#platoon-harness-uses): Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
 * [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
@@ -1392,7 +1394,7 @@ For example:
 
 **Parameters**:
 
-* `--based-on`: The refs of what the span came to.
+* `--based-on`: The refs of what this part of the session came to.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness episode open
@@ -1401,7 +1403,7 @@ For example:
 platoon-harness episode open --episode STR [OPTIONS] SESSION
 ```
 
-Open a span of this session with one outcome.
+Open a part of this session with one outcome.
 
 Only events inside one can become training data.
 
@@ -1415,7 +1417,7 @@ For example:
 
 **Parameters**:
 
-* `--episode`: A name for the span. **[required]**
+* `--episode`: A name for this part of the session. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness exposure
@@ -1615,6 +1617,29 @@ For example:
 
 * `--commit`: A commit's SHA, or its first 4 or more hex digits. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
+
+### platoon-harness spans
+
+```console
+platoon-harness spans --agent STR [OPTIONS] SESSION
+```
+
+Cut each turn of an agent into spans, oldest first: a turn is cut after each model call that chose a write of content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece with no write joins the span before it, so each call its harness reported in a turn lies in one span.
+
+Each is named by its last call's `model.called`, with its first call, its turn and the writes the record ties to its calls. Pass `cursor` as `--after` for the next page. Refused `invalid` for a person or a program, whose turns no harness reports, and `not_found` for no such agent.
+
+For example:
+
+    platoon-harness spans SESSION --agent AGENT
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--agent`: The agent, as `@agent`. **[required]**
+* `--after`: A `cursor` from an earlier answer.
 
 ### platoon-harness task
 

@@ -1,13 +1,14 @@
 """Provenance: what reached an agent, what an event rests on, what rests on it, and whose work an outcome reaches.
 
-The graph is not stored. Three views index the references events already hold, `Exposures` among them, and four queries
-answer from them, for people and programs and never as an agent's tool. A query reads the journal alone, and never an
-annotation. See architecture section 11.
+The graph is not stored. Three views index the references events already hold, `Exposures` among them, and the queries
+answer from them, for people and programs and never as an agent's tool: four about events, and `spans`, which cuts an
+agent's turns where its model calls chose its writes. A query reads the journal alone, and never an annotation. See
+architecture section 11.
 """
 
 import json
 import sqlite3
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import cache, partial
 from typing import Annotated, Any, Literal, NamedTuple, get_args
@@ -34,6 +35,21 @@ _UNCARRIED = tuple(what for what, kind in GAPS.items() if not kind.carries)
 Back = Literal["declared", "cause", "ancestry"]
 """The edges that lead back from an event and are no exposure: a citation, a stated cause, and a previous version or a
 commit's parent."""
+
+_WRITES = frozenset(
+    {
+        "message.sent",
+        "board.posted",
+        "board.revised",
+        "task.added",
+        "task.completed",
+        "task.failed",
+        "agent.spawned",
+        "agent.finished",
+    }
+)
+"""The events that hold an agent's writes of content, the eight ops that take `based_on`, but `agent.finish` out of a
+turn, whose event is its agent's own end."""
 
 
 def _ref(event: Event) -> str:
@@ -115,6 +131,11 @@ class References(View):
         rows = self.db.execute(
             "SELECT seq FROM v_references_anchors WHERE agent = ? AND anchor = ? ORDER BY seq", (agent, anchor)
         )
+        return [row["seq"] for row in rows]
+
+    def under_ids(self, agent: str) -> list[int]:
+        """The seqs of an agent's events that came under any tool call's id, oldest first."""
+        rows = self.db.execute("SELECT seq FROM v_references_anchors WHERE agent = ? ORDER BY seq", (agent,))
         return [row["seq"] for row in rows]
 
 
@@ -461,6 +482,30 @@ class Contributors(Model):
     open: bool
 
 
+class Span(Model):
+    """A stretch of one turn of an agent, named by `ref`, the `model.called` of its last call: its calls are those its
+    harness reported on its turn stream from `first` to `ref`, in the turn named `turn`, and `writes` are the writes of
+    content the record ties to them, which one of them chose."""
+
+    ref: str
+    first: str
+    turn: str
+    writes: tuple[str, ...]
+
+
+class Spans(Model):
+    """Each span of an agent, oldest first: a page of them, `total` in all, with `cursor` to pass as `after` for the
+    next page, `open` while its latest turn has not ended, as a late report can still join a write to a call and cut
+    that turn again, and `head` where the record was read."""
+
+    agent: str
+    spans: tuple[Span, ...]
+    total: int
+    cursor: str | None
+    head: int
+    open: bool
+
+
 # Deciding exposure.
 
 
@@ -526,8 +571,8 @@ def _asked(txn: Txn, ref: str) -> Event:
     parts = parts_of(ref)
     if parts is None:
         raise Refused("invalid", f"{ref[:80]!r} is no ref, which is `stream@version`")
-    stream, version, span = parts
-    if span is not None:
+    stream, version, lines = parts
+    if lines is not None:
         raise Refused(
             "invalid", f"these ask about events, and {ref[:80]} names lines of one: ask by {stream}@{version}"
         )
@@ -740,14 +785,14 @@ def _node(event: Event) -> Node:
     return Node(ref=_ref(event), **{field: getattr(event, field) for field in fields})
 
 
-def _covers(shown: str, span: str) -> bool:
+def _covers(shown: str, wanted: str) -> bool:
     """Whether the lines one item of an offer showed hold the lines a range names: a whole body holds every line."""
     parts = parts_of(shown)
     held = None if parts is None else parts[2]
     if held is None:
         return True
     first, last = (int(n) for n in held.removeprefix("L").split("-"))
-    wanted_first, wanted_last = (int(n) for n in span.removeprefix("L").split("-"))
+    wanted_first, wanted_last = (int(n) for n in wanted.removeprefix("L").split("-"))
     return first <= wanted_first and wanted_last <= last
 
 
@@ -757,11 +802,12 @@ def _declared(txn: Txn, ref: str, citer: str | None, bound: Bound, open: bool) -
     if citer is None:
         return Declared(ref=ref, maker=maker(cited), gist=cited.gist, exposure=None, lines_shown=None)
     answer, facts = _exposed(txn, citer, cited, bound, open)
-    span = (parts_of(ref) or ("", 0, None))[2]
+    wanted = (parts_of(ref) or ("", 0, None))[2]
     lines = None
-    if span is not None:
+    if wanted is not None:
         held = [item.ref for edge in facts.edges for item in edge.shown if item.form == "body"]
-        lines = True if any(_covers(shown, span) for shown in held) else False if isinstance(answer, NotSeen) else None
+        covered = any(_covers(shown, wanted) for shown in held)
+        lines = True if covered else False if isinstance(answer, NotSeen) else None
     return Declared(ref=ref, maker=maker(cited), gist=cited.gist, exposure=answer, lines_shown=lines)
 
 
@@ -1035,4 +1081,83 @@ def _handed_only(txn: Txn, makers: dict[str | None, dict[str, Any]]) -> tuple[Ha
     ordered = sorted(handed.items(), key=lambda entry: entry[1][1])
     return tuple(
         HandedOnly(maker=who, to=tuple(sorted(to)), first=exposures.ref_of(first)) for who, (to, first) in ordered
+    )
+
+
+# Spans.
+
+
+class OfAgent(Args):
+    agent: Annotated[AgentName, Field(description="The agent, as `@agent`.")]
+    after: Annotated[str | None, Field(max_length=64, description="A `cursor` from an earlier answer.")] = None
+
+
+def _written(event: Event, agent: str) -> bool:
+    """Whether an event of an agent's own command holds one of its writes of content: its own end, for an
+    `agent.finish` out of a turn, and no entry that carries another event, as an announce of a write does."""
+    if event.type == "agent.ended":
+        return event.stream == f"agent/{agent}" and event.data["status"] == "finished"
+    return event.type in _WRITES and not (event.type == "message.sent" and event.data.get("carries"))
+
+
+def _turns(txn: Txn, agent: str) -> list[tuple[str, list[Event]]]:
+    """Each turn of an agent, by its name, with the model calls its harness reported in it, in the order reported. A
+    call reported out of any turn lies in none."""
+    turns: list[tuple[str, list[Event]]] = []
+    calls: list[Event] | None = None
+    for event in txn.view(Stamps).events(f"turn/{agent}"):
+        if event.type == "turn.started":
+            calls = []
+            turns.append((event.data["turn"], calls))
+        elif event.type in ("turn.ended", "turn.lost"):
+            calls = None
+        elif event.type == "model.called" and calls is not None:
+            calls.append(event)
+    return turns
+
+
+def _cut(turn: str, calls: Sequence[Event], chose: Mapping[int, Sequence[str]]) -> list[tuple[int, Span]]:
+    """A turn's spans, each with the seq of its last call: cut after each call that chose a write, but the last, whose
+    span runs on to the turn's end. A turn with no call has none."""
+    if not calls:
+        return []
+    cuts = [index for index, call in enumerate(calls) if call.seq in chose][:-1]
+    found, first = [], 0
+    for last in (*cuts, len(calls) - 1):
+        writes = tuple(ref for call in calls[first : last + 1] for ref in chose.get(call.seq, ()))
+        span = Span(ref=_ref(calls[last]), first=_ref(calls[first]), turn=turn, writes=writes)
+        found.append((calls[last].seq, span))
+        first = last + 1
+    return found
+
+
+@op("spans", query=True)
+def spans(txn: Txn, a: OfAgent) -> Spans:
+    """Cut each turn of an agent into spans, oldest first: a turn is cut after each model call that chose a write of
+    content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece
+    with no write joins the span before it, so each call its harness reported in a turn lies in one span. Each is named
+    by its last call's `model.called`, with its first call, its turn and the writes the record ties to its calls. Pass
+    `cursor` as `after` for the next page. Refused `invalid` for a person or a program, whose turns no harness reports,
+    and `not_found` for no such agent."""
+    if txn.view(Agents).get(a.agent) is None:
+        found = txn.view(Principals).named(a.agent)
+        if found is not None:
+            raise Refused("invalid", f"{a.agent} is a {found.kind}, whose turns no harness reports")
+        raise Refused("not_found", f"no agent {a.agent}")
+    if a.after is not None and not a.after.isdecimal():
+        raise Refused("invalid", "`after` is a `cursor` from an earlier answer")
+    stamps, chose = txn.view(Stamps), defaultdict[int, list[str]](list)
+    for seq in txn.view(References).under_ids(a.agent):
+        event = _at(stamps, seq)
+        if _written(event, a.agent) and (call := _join(txn, event).call) is not None:
+            chose[call.seq].append(_ref(event))
+    cut = [span for turn, calls in _turns(txn, a.agent) for span in _cut(turn, calls, chose)]
+    page = [(seq, span) for seq, span in cut if seq > int(a.after or 0)][:_PAGE]
+    return Spans(
+        agent=a.agent,
+        spans=tuple(span for _, span in page),
+        total=len(cut),
+        cursor=str(page[-1][0]) if page and page[-1][0] != cut[-1][0] else None,
+        head=stamps.head(),
+        open=stamps.turn(a.agent) is not None,
     )

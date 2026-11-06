@@ -44,19 +44,20 @@ def _duration(text: str) -> str:
     return f"{seconds // _UNITS[unit]}{unit}"
 
 
-def seconds(span: str | float) -> float:
+Duration = Annotated[str, AfterValidator(_duration)]
+"""A duration such as `30m`, held in its largest exact unit, so `60m` and `1h` are one value."""
+
+
+def seconds(duration: Duration | float) -> float:
     """A duration as seconds. A number already is one."""
-    if isinstance(span, str):
-        _duration(span)
-        return float(int(span[:-1]) * _UNITS[span[-1]])
-    return float(span)
+    if isinstance(duration, str):
+        _duration(duration)
+        return float(int(duration[:-1]) * _UNITS[duration[-1]])
+    return float(duration)
 
 
 Sorted = AfterValidator(_sorted)
 """Keeps a mapping in key order, so that equal configurations print alike."""
-
-Duration = Annotated[str, AfterValidator(_duration)]
-"""A span such as `30m`, held in its largest exact unit, so `60m` and `1h` are one value."""
 
 
 class Model(BaseModel):

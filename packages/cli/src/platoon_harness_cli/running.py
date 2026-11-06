@@ -81,7 +81,7 @@ def _prompt(prompt: str | None, prompt_file: Path | None) -> str:
     return text.strip()
 
 
-def _span(timeout: str | None) -> float | None:
+def _seconds(timeout: str | None) -> float | None:
     try:
         return None if timeout is None else seconds(timeout)
     except ValueError as error:
@@ -124,12 +124,13 @@ async def _ending(name: str, reason: Reason, json: bool) -> int:
 
 
 async def own(
-    session: Session, *, span: float | None, json: bool, message: tuple[tuple[str, ...], str] | None = None
+    session: Session, *, within: float | None, json: bool, message: tuple[tuple[str, ...], str] | None = None
 ) -> int:
     """Own a session in the foreground: enter it, print what its runtime does, send `message`, a person's, as `(to,
-    text)`, to each of `to`, wait for it to settle, then run the owner's shutdown and print how it ended, last. Ctrl+C
-    or SIGTERM at any point cancels what is under way, and the shutdown still runs, so it ends `cancelled` and stays
-    resumable. One stopped while its runtime starts has printed nothing yet, so it prints its ending alone.
+    text)`, to each of `to`, wait for it to settle, `within` seconds at most, then run the owner's shutdown and print
+    how it ended, last. Ctrl+C or SIGTERM at any point cancels what is under way, and the shutdown still runs, so it
+    ends `cancelled` and stays resumable. One stopped while its runtime starts has printed nothing yet, so it prints
+    its ending alone.
 
     The events print from a thread of their own, as a guest of this runtime, so a reader of stdout that falls behind
     holds up nothing here: the runtime drops a guest that stops reading, and it comes back where it was."""
@@ -148,7 +149,7 @@ async def own(
                 follow = printing(session.name, await _incarnation(session), json=json)
                 printed = asyncio.ensure_future(asyncio.to_thread(asyncio.run, follow))
                 if message is None or await first(_send(session, *message), stop.wait()):
-                    settling = asyncio.ensure_future(session.settled(span))
+                    settling = asyncio.ensure_future(session.settled(within))
                     if await first(settling, stop.wait()):
                         reason = settling.result().reason
             finally:
@@ -233,11 +234,11 @@ async def run(
     json
         Print JSONL on stdout.
     """
-    text, span = _prompt(prompt, prompt_file), _span(timeout)
+    text, within = _prompt(prompt, prompt_file), _seconds(timeout)
     loaded = source.load(team)
     recipients = _recipients(loaded, to)
     session = Session.start(loaded, name=name, approvals=approvals, plan_login=plan_login, cwd=Path.cwd())
-    return await own(session, span=span, json=json, message=(recipients, text))
+    return await own(session, within=within, json=json, message=(recipients, text))
 
 
 async def resume(
@@ -266,11 +267,11 @@ async def resume(
     json
         Print JSONL on stdout.
     """
-    span = _span(timeout)
+    within = _seconds(timeout)
     with as_given():
         session_folder(find_root(), session)
     note(f"resuming session {session}: its harnesses come back, and can spend money")
-    return await own(Session.resume(session), span=span, json=json)
+    return await own(Session.resume(session), within=within, json=json)
 
 
 async def serve(

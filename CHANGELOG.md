@@ -4,6 +4,12 @@
 
 ### Added
 
+- `spans(agent)`, a query op with `Session.spans` and the command `spans`: each turn of an agent cut after each model call that
+  chose a write of content, one of the eight it made itself, as the record joins the op's anchor, the tool item holding it and that
+  item's call, with a trailing piece that has no write joining the span before it. Each span is named by its last call's
+  `model.called`, with its first call, its turn and the writes the record ties to its calls, oldest first, a page beside its true
+  count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
+  answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`.
 - The integration test, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`: one agent `isolated` under `bwrap` and
   launched sealed on a training authority's gateway, in the slow pass, on a scripted harness on the wire, as a harness in the
   runtime's own process cannot be confined, and on pi and OpenHands. Confined, it calls the gateway on loopback with its own bearer,
@@ -431,6 +437,9 @@
 
 ### Changed
 
+- "Span" means one thing, a stretch of one turn of an agent: `primitives.Lines.span`, the `#L<first>-<last>` a result shows of a
+  body, is `Lines.range`, as the read tools' argument already was, `schema.seconds` takes a `duration`, the facade's own alias for a
+  duration is gone in favour of `schema.Duration | float`, and an episode is a part of a session.
 - `ScriptedDriver` sends each tool call a model chose under the id the model gave it, as `scripted/toolCallId` in MCP's `_meta`,
   which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and two identical calls one
   model call chose are two ops, where the tool plane took the second for a repeat. The key is among the tool server's
@@ -927,7 +936,7 @@
 - `wait(on=...)` works for a guest, a mistyped agent is refused by `wait` and `deltas` instead of hanging, and attaching says a refusal
   such as a protocol mismatch at once instead of blaming the runtime after a minute.
 - Awaiting a session that was left starts nothing, and one never entered says how to start it.
-- `leave` takes a span and stops nothing halfway if it cannot read one.
+- `leave` takes a duration and stops nothing halfway if it cannot read one.
 - The control socket aborts every connection at a stop, so a client that stopped reading cannot hold one up, and a connection accepted
   during a stop is dropped. A socket belongs to a folder, so a copied session cannot take a live one's.
 - No client can grow the live text rings by naming agents that do not exist, and a `Link` raises only `Refused` and `Closed`.

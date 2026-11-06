@@ -43,6 +43,7 @@ from platoon_harness.primitives import (
     NotSeen,
     Policy,
     Seen,
+    Spans,
     Unknown,
     Uses,
     Verdict,
@@ -52,7 +53,7 @@ from platoon_harness.runtime import GRACE, Authority, Runtime
 from platoon_harness.runtime.control import History, Link, Local, Remote
 from platoon_harness.runtime.opening import prepare
 from platoon_harness.runtime.paths import LOG, MANIFEST, MARKS, find_root, open_log, read_running, session_folder
-from platoon_harness.schema import seconds
+from platoon_harness.schema import Duration, seconds
 from platoon_harness.team import Team
 
 _ATTACH_SECONDS = 60.0
@@ -89,7 +90,6 @@ CREATE TABLE IF NOT EXISTS annotations(
 _ANNOTATIONS_INDEX = "CREATE INDEX IF NOT EXISTS annotations_target ON annotations(target, id)"
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
-Span = str | float
 _EXPOSURE: TypeAdapter[Seen | NotSeen | Unknown] = TypeAdapter(Exposure)
 
 __all__ = ["Ending", "Reason", "Session"]
@@ -117,8 +117,8 @@ def _result(outcome: Outcome) -> Any:
     return outcome.result
 
 
-def _optional_seconds(span: Span | None) -> float | None:
-    return None if span is None else seconds(span)
+def _optional_seconds(duration: Duration | float | None) -> float | None:
+    return None if duration is None else seconds(duration)
 
 
 async def _pauses(total: float) -> AsyncIterator[None]:
@@ -347,7 +347,7 @@ class Session:
         """Whether leaving stops the agents."""
         return self._runtime is not None
 
-    async def leave(self, grace: Span = GRACE) -> None:
+    async def leave(self, grace: Duration | float = GRACE) -> None:
         """Go. An owner interrupts turns, waits `grace` and ends the process trees, keeping the folder resumable. A
         guest only disconnects, and changes nothing."""
         grace = seconds(grace)
@@ -472,7 +472,7 @@ class Session:
         queue: Sequence[str] = (),
         mode: Literal["all", "any"] = "all",
         after: int | None = None,
-        timeout: Span | None = None,  # noqa: ASYNC109  The service keeps this, not this call.
+        timeout: Duration | float | None = None,  # noqa: ASYNC109  The service keeps this, not this call.
     ) -> dict[str, Any]:
         """Wait until the condition holds or `timeout` passes, and say how it closed. The wait lives in the service, so
         losing this client loses nothing."""
@@ -525,7 +525,7 @@ class Session:
                     await self._do("session.close", if_done=True)
         raise Refused("unavailable", f"the runtime of session {self.name} went before it settled")
 
-    async def settled(self, timeout: Span | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.
+    async def settled(self, timeout: Duration | float | None = None) -> Ending:  # noqa: ASYNC109  It is part of what this reports.
         """Wait for `session.status` to say done, close at `until`, and say what the session came to. Past `timeout` it
         says `timed_out`, and with something only a person can move it says `needs_human`. Both leave it as it is."""
         clock = self._current().clock
@@ -868,6 +868,12 @@ class Session:
         or None, and its verdict with every bar, and the same for a page of its model calls. It reads the levels its
         starts recorded, never a result kept since. Pass `cursor` as `after` for the next page."""
         return Eligibility.model_validate(await self._ask("eligibility", agent=agent, episode=episode, after=after))
+
+    async def spans(self, agent: str, *, after: str | None = None) -> Spans:
+        """Each span of an agent, oldest first: each turn of it cut after each model call that chose a write of
+        content, as the record joins them, each span named by its last call's `model.called`, with its first call, its
+        turn and its writes. Pass `cursor` as `after` for the next page."""
+        return Spans.model_validate(await self._ask("spans", agent=agent, after=after))
 
     async def annotate(
         self,

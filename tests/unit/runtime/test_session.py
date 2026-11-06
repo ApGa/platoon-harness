@@ -64,6 +64,7 @@ COVERED = {
     "session.ending": "ending",
     "session.manifest": "manifest",
     "session.status": "status",
+    "spans": "spans",
     "task.add": "task_add",
     "task.claim": "task_claim",
     "task.complete": "task_complete",

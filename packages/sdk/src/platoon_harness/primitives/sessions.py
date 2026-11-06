@@ -123,16 +123,16 @@ def show_manifest(txn: Txn, a: Args) -> dict[str, Any]:
 
 
 class OpenEpisode(Args):
-    episode: Annotated[Name, Field(description="A name for the span.")]
+    episode: Annotated[Name, Field(description="A name for this part of the session.")]
 
 
 class CloseEpisode(Args):
-    based_on: Annotated[BasedOn, Field(description="The refs of what the span came to.")] = ()
+    based_on: Annotated[BasedOn, Field(description="The refs of what this part of the session came to.")] = ()
 
 
 @op("episode.open", on=lambda a: f"episode/{a.episode}")
 def open_episode(txn: Txn, a: OpenEpisode) -> None:
-    """Open a span of this session with one outcome. Only events inside one can become training data."""
+    """Open a part of this session with one outcome. Only events inside one can become training data."""
     txn.emit("episode.opened", f"episode/{a.episode}", gist=f"episode {a.episode} opened", data=a)
 
 

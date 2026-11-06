@@ -43,16 +43,16 @@ def get(txn: Txn, a: Blob) -> dict[str, Any]:
     or wrote. A long body comes back cut: `lines` says how many exist and `rest` is the ref to read on with. `text` is
     null for a binary body. Refused `not_found` when there is no such body to read, or it was redacted. `invalid`, with
     `lines`, for a range past the end."""
-    ref, _, span = a.ref.partition("#")
+    ref, _, wanted = a.ref.partition("#")
     _, body = _carrier(txn, ref)
     data = txn.view(Tombstones).inline(body.removeprefix("sha256:"))
     text = None if data is None else decoded(data)
     if text is None:
         return {"ref": a.ref, "text": None}  # A surface fetches what an op may not read.
-    cut = lines_of(ref, text, span or None, RESULT_LIMIT - size_of(a.ref))
+    cut = lines_of(ref, text, wanted or None, RESULT_LIMIT - size_of(a.ref))
     if cut.text is None:
         return {"ref": a.ref, **cut.shown()}
-    shown = f"{ref}{cut.span}"
+    shown = f"{ref}{cut.range}"
     expose_read(txn, [Exposed.of(shown, "body", cut.text)])
     return {"ref": shown, **cut.shown()}
 

@@ -492,13 +492,13 @@ class Kernel:
         if match is not None and not match.isprintable():
             raise Refused("invalid", "match is a glob over stream names")
         named = None if streams is None else _named(streams)
-        span = limit if match is None and named is None else _SCAN_LIMIT
+        window = limit if match is None and named is None else _SCAN_LIMIT
         with self._reading() as db:
             if principal.kind != "runtime":
                 Principals(db).live(principal.id)
             last = last_seq(db)
-            high = min(last, after + span) if before is None else min(last, before - 1)
-            low = after if before is None else max(after, high - span)
+            high = min(last, after + window) if before is None else min(last, before - 1)
+            low = after if before is None else max(after, high - window)
             rows = db.execute(
                 "SELECT * FROM events WHERE seq > ? AND seq <= ? AND (? IS NULL AND ? IS NULL "
                 "OR ? IS NOT NULL AND matches(stream, ?) OR stream IN (SELECT value FROM json_each(?))) "

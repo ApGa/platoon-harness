@@ -295,7 +295,7 @@ class ToolServer(Server[_Request]):
             ref = _unread(row)
             if ref is None or room <= 0:
                 continue
-            event, _, span = ref.partition("#")
+            event, _, wanted = ref.partition("#")
             body = kernel.query(kernel.runtime, "blob.hash", {"ref": event})
             if body.refusal is not None:
                 continue
@@ -303,12 +303,12 @@ class ToolServer(Server[_Request]):
                 text = kernel.get_body(body.result.removeprefix("sha256:"), limit=_BODY_READ_LIMIT).decode()
             except (Refused, UnicodeDecodeError):
                 continue  # Binary, redacted or too large: `text` stays null, which is true.
-            cut = lines_of(event, text, span or arguments.get("range"), room)
-            if cut.text is None or await self._offered(principal, f"{event}{cut.span}", cut.text, native):
+            cut = lines_of(event, text, wanted or arguments.get("range"), room)
+            if cut.text is None or await self._offered(principal, f"{event}{cut.range}", cut.text, native):
                 row |= cut.shown()
                 room -= _size(cut.text)
                 if "body" not in row:
-                    row["ref"] = f"{event}{cut.span}"
+                    row["ref"] = f"{event}{cut.range}"
 
     async def _offered(self, principal: Principal, ref: str, text: str, native: Any) -> bool:
         """Record what is about to be shown, under the call that shows it, because an agent's read is evidence and an

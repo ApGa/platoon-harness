@@ -52,6 +52,8 @@ from .provenance import (
     NotSeen,
     References,
     Seen,
+    Span,
+    Spans,
     Unknown,
     Uses,
 )
@@ -154,6 +156,7 @@ PRIMITIVES = (
     Extension("uses", ops=[provenance.uses], views=[References]),
     Extension("contributors", ops=[provenance.contributors]),
     Extension("eligibility", ops=[eligibility.eligibility]),
+    Extension("spans", ops=[provenance.spans]),
 )
 
 __all__ = [
@@ -221,6 +224,8 @@ __all__ = [
     "Seen",
     "SessionRecord",
     "Settings",
+    "Span",
+    "Spans",
     "Task",
     "Tasks",
     "TurnEnded",

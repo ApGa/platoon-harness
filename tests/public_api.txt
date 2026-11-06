@@ -233,6 +233,7 @@ platoon_harness.primitives.Item
 platoon_harness.primitives.Kept
 platoon_harness.primitives.Lineage
 platoon_harness.primitives.Lines
+platoon_harness.primitives.Lines(text,total,range,rest)
 platoon_harness.primitives.lines_of
 platoon_harness.primitives.Looks
 platoon_harness.primitives.maker
@@ -257,6 +258,10 @@ platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
 platoon_harness.primitives.Settings.test
 platoon_harness.primitives.SHORT_LIMIT
+platoon_harness.primitives.Span
+platoon_harness.primitives.Span(*,ref,first,turn,writes)
+platoon_harness.primitives.Spans
+platoon_harness.primitives.Spans(*,agent,spans,total,cursor,head,open)
 platoon_harness.primitives.stream_of
 platoon_harness.primitives.Task
 platoon_harness.primitives.Tasks
@@ -418,6 +423,7 @@ platoon_harness.session.Session.resume(name,*,detach,root,clock)
 platoon_harness.session.Session.retire(agent)
 platoon_harness.session.Session.send(to,gist,*,body,thread,reply_to,based_on)
 platoon_harness.session.Session.settled(timeout)
+platoon_harness.session.Session.spans(agent,*,after)
 platoon_harness.session.Session.start(team,*,name,principal,approvals,authority,detach,cwd,root,clock,plan_login,trainable)
 platoon_harness.session.Session.status(agent)
 platoon_harness.Team

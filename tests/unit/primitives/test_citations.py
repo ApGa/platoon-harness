@@ -397,7 +397,7 @@ async def test_an_offered_item_s_digest_covers_what_was_shown(kernel):
 
 
 def test_every_write_of_content_takes_based_on():
-    """So does `episode.close`, which writes no content and cites what its span came to."""
+    """So does `episode.close`, which writes no content and cites what its part of the session came to."""
     takes = {
         operation.name
         for extension in PRIMITIVES
@@ -412,7 +412,7 @@ def test_every_write_of_content_takes_based_on():
     }
 
     assert takes == WRITES | {"episode.close"}
-    assert described == {"Refs this write rests on.", "The refs of what the span came to."}
+    assert described == {"Refs this write rests on.", "The refs of what this part of the session came to."}
     assert not [op.name for ext in PRIMITIVES for op in ext.ops if op.tool and "Cite" in (op.fn.__doc__ or "")]
 
 

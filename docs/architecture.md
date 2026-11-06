@@ -64,7 +64,8 @@ For extension and training authors:
 | **Principal** | An authenticated actor (`agent`, `human`, `program`, `judge`, `runtime`), resolved from a credential. A name is unique across kinds and safe as a path part. |
 | **Grant** | `(who, ops, on)`, the only authorization input for an op. Absence means deny. |
 | **Driver** | The adapter that presents one harness session to the runtime. |
-| **Episode** | An explicitly opened span of a session with one outcome. Only events inside one can become training data. |
+| **Episode** | An explicitly opened part of a session with one outcome. Only events inside one can become training data. |
+| **Span** | A stretch of one turn of one agent: the turn is cut after each model call that chose a write of content, and a trailing piece with no write joins the span before it (§11). |
 | **Evidence** | Why a dependency is believed: observed, declared, judged or validated. |
 | **Annotation** | A versioned statement about the record (reward, judgment, credit), stored beside the journal, never in it. |
 
@@ -572,7 +573,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
-| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` |
+| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` |
 | Evidence, kernel | `body.tombstone` | |
 | Repository | `repo.test` `repo.commit` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
@@ -1462,6 +1463,24 @@ person's entry handed to its agent, which exposure then never answers `not_seen`
 `compaction`, as a call it gave none is its turn's. A program's message is no person's. It reads the levels the starts recorded,
 never a result kept since, so it answers alike after a rebuild, on a closed copy and with the conformance store gone. Humans,
 programs and judges are never agents here, and what trains is the training system's to decide.
+
+**Spans.** A span is a stretch of one turn of one agent: the turn is cut after each model call that chose a write of content, and a
+trailing piece with no write joins the span before it. The writes are the eight that take `based_on` (§7), made by the agent itself,
+`agent.finish` out of a turn among them as its end; a claim, a read and an announce of a write cut nothing. A call chose a write
+only where the record joins them, as `lineage` does, by the op's anchor, the tool item holding it and that item's `call_id`, so a
+write with no join cuts nothing, and a turn with no joined write, or with joined writes from one call alone, is one span. Every
+`model.called` an agent's harness reported in a turn lies in exactly one span, a compaction's and one with no id among them, by where
+it stands on the agent's own report stream between that turn's `turn.started` and its end: order on one agent's report stream places
+a call in a span as it places one below a bound, and never joins identity. A call reported out of a turn lies in none, a turn with
+no call has no span, and a crash that loses a turn ends its spans. A span is named by the ref of its last call's `model.called`.
+`spans(agent)` is a query op that is no agent's tool, a `Session` method and a command, as `eligibility` is: each span of an agent,
+oldest first, a page beside its true count, with its first call, its turn and the writes the record ties to its calls, which one of
+them chose, and `open` while its latest turn has not ended, as a tool item reported late can still join a write and cut that turn
+again. It is worked out from the views as it is asked, so it answers alike after a rebuild and on a closed copy, and it refuses a
+person or a program `invalid`. Where a harness's turns are cut follows from what it reports: pi, Claude Code and ScriptedDriver join a
+tool call to the model call that chose it, so theirs are cut at writes; OpenHands reports its calls and joins no tool call to one,
+so each of its turns is one span; Codex gives no id per model call, so its spans name calls nothing can join to a training system's
+record; and `exec` reports no call, so it has none ([compatibility.md](reference/compatibility.md)).
 
 [provenance.md](how-to/provenance.md) is the guide.
 

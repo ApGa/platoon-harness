@@ -196,7 +196,7 @@ def _channel(name: str, channel: Any) -> dict[str, Any]:
         args |= {"history": channel.history, "coalesce": seconds(channel.coalesce or 0)}
     elif isinstance(channel, Queue):
         args |= {"max_attempts": channel.max_attempts, "max_inflight": channel.max_inflight}
-        args |= {key: seconds(span) for key in ("lease", "lease_max") if (span := getattr(channel, key)) is not None}
+        args |= {key: seconds(given) for key in ("lease", "lease_max") if (given := getattr(channel, key)) is not None}
     return args
 
 

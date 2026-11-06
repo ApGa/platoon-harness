@@ -228,8 +228,8 @@ def _forgotten(entries: Sequence[Mapping[str, Any]], leaf: str, first_kept: str)
     if first_kept not in ids or first_kept not in kept:
         return None
     earlier = kept[: kept.index(first_kept)]
-    span = path[ids.index(earlier[-1]) if earlier else 0 : ids.index(first_kept)]
-    left = (entry for entry in span if entry["type"] in _IN_CONTEXT)
+    taken = path[ids.index(earlier[-1]) if earlier else 0 : ids.index(first_kept)]
+    left = (entry for entry in taken if entry["type"] in _IN_CONTEXT)
     return tuple(entry["id"] for entry in left if entry.get("message", {}).get("role") != "system")
 
 
