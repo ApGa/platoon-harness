@@ -5,12 +5,12 @@ These RFCs say why, and what else was on the table. Each one names the alternati
 behind it.
 
 Until 2026-11-07, RFCs 0001 to 0060 were architecture decision records in `docs/adr`; earlier commits and other repositories
-cite them as ADR NNNN, under the same numbers. They give only their status and date, and each Summary is its old one-line
-index entry.
+cite them as ADR NNNN, under the same numbers. Their status tables give only their status and date, and each Summary is
+its old one-line index entry.
 
 ## Index
 
-Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
+Each of RFCs 0001 to 0060 was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
 A status below is the one the RFC gives, with its note and without its date, so the index shows what superseded,
 amended or extended an RFC.
 
