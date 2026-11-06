@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from platoon_harness import Session, Team
+from platoon_harness import Refused, Session, Team
 from platoon_harness.drivers import Driver
 from platoon_harness.kernel import Extension, Kernel
 from platoon_harness.primitives import PRIMITIVES
@@ -103,7 +103,17 @@ async def state_of(session: Session, agent: str) -> str:
 
 
 async def in_state(session: Session, agent: str, *states: str) -> None:
-    await until(lambda: state_of(session, agent), session, lambda state: state in states)
+    """Until `agent` exists and is in one of `states`: one its parent has yet to spawn is not there yet."""
+
+    async def state() -> str | None:
+        try:
+            return await state_of(session, agent)
+        except Refused as error:
+            if error.refusal.code != "not_found":
+                raise
+            return None
+
+    await until(state, session, lambda state: state in states)
 
 
 async def journal(session: Session, match: str | None = None) -> list[Any]:
