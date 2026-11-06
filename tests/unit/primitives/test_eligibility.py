@@ -102,6 +102,24 @@ async def test_attribution_is_exact_only_where_trainable_is_met_and_the_backend_
     assert [call.verdict for call in found["ada"].calls] == ["eligible"]
 
 
+async def test_any_backend_entry_another_admission_shares_bars_both(kernel):
+    """Each entry of `backend` names one agent alone, so ids of something the agents share, such as their rollout, are
+    no backend ids: an entry two admissions share bars both."""
+    await episode(kernel)
+    for name in ("ada", "bob"):
+        await admitted(kernel, name, backend={"agent_id": f"id-of-{name}", "rollout": "r1"})
+        await worked(kernel, name, ("c1", None))
+        await finish(kernel, name)
+    await close(kernel)
+
+    found = {name: eligibility(kernel, name) for name in ("ada", "bob")}
+
+    assert {name: (answer.attribution, reasons(answer)) for name, answer in found.items()} == {
+        "ada": (None, ["shared_key"]),
+        "bob": (None, ["shared_key"]),
+    }
+
+
 async def test_attribution_is_forked_once_a_native_child_is_seen(kernel):
     await episode(kernel)
     await admitted(kernel, "ada")
@@ -167,13 +185,16 @@ async def test_a_compaction_call_is_eligible_and_a_call_of_an_undeclared_purpose
 
 
 async def test_a_person_entry_handed_below_a_call_makes_it_ineligible_unless_not_seen(kernel, ada):
-    """A person's entry handed over is seen or unknown, never `not_seen`, so each call after it is a person's, and a
-    call before it is not. A program's word is no person's, and a turn a person held is a person's."""
-    program = Principal(id="program:platoon")
+    """A person's entry handed over is seen or unknown, never `not_seen`, as exposure answers that only where nothing
+    offered it, so each call after it is a person's, and a call before it is not. A person's entry never handed to the
+    agent bars nothing of its, a program's word is no person's, and a turn a person held is a person's."""
+    program = Principal(id="program:trainer")
     await enroll(kernel, program)
     await grant(kernel, "program")
     await episode(kernel)
     await admitted(kernel, "bob")
+    await admitted(kernel, "di")
+    await send(kernel, ada, "@di", "a person's word to another")
     await send(kernel, program, "@bob", "a program's word")
     await worked(kernel, "bob", ("after the program", None), read=True)
     await send(kernel, ada, "@bob", "a person's word")

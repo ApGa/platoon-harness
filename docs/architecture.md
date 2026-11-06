@@ -850,13 +850,14 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
 
 ### Completion
 
-`settled` means, checkably: no agent on its way to a turn, no open turn, no deliverable delivery, no requested or started effect,
-no due timer. A wait the runtime could close counts as a deliverable delivery, and so does a wake not yet due. A human
-message can un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so
-a message that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would
-reach anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
-A team with no root uses `"settled"`. A close ends no agent: one left idle keeps no end in the journal, which is unknown and not
-`cancelled`, until M3 closes idle children before a rollout returns.
+`settled` means, checkably: no agent on its way to a turn, no open turn, no deliverable delivery, no requested or started effect, no
+due timer. A wait the runtime could close counts as a deliverable delivery, and so does a wake not yet due. A human message can
+un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so a message
+that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would reach
+anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion. A
+team with no root uses `"settled"`. A session's prompt goes to the agent it names, or else to every agent the session starts, as
+`Team.recipients` says. A close ends no agent: one left idle keeps no end in the journal, which is unknown and not `cancelled`, so a
+training system retires or cancels each of its agents before a rollout returns (§14).
 
 A session has **stalled** when it is open and settled short of `until` with nothing scheduled: no timer, no wait deadline to come and
 no lease held. So a lease or a wait's `timeout` is waited for, and a lease's timer counts only while its claim does. A timer that
@@ -1153,11 +1154,12 @@ Absence means unsupported, as in ACP.
   not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
   still answers no `NotSeen`. See [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - **A sealed launch is earned too.** On a driver that declares `sealed`, two checks run on `FakeModel` acting as a gateway, its
-  models and an MCP server of the environment's one tool each under a bearer it gave: `sealed_first_request_holds_only_ours`, that the
-  first request goes under the gateway's bearer, holds none of the instructions a project's `AGENTS.md` or `CLAUDE.md` gives, and
-  shows no tool but ours, the environment's and those the harness keeps that act on nothing, which its check names; and
+  models and an MCP server of the environment's one tool each under a bearer it gave: `sealed_first_request_holds_only_ours`, that
+  the first request goes under the gateway's bearer, holds none of the instructions a project's `AGENTS.md` or `CLAUDE.md` gives,
+  and shows no tool but ours, the environment's and those the harness keeps that act on nothing, which its check names; and
   `environment_tools_in_first_request`. Both go in the one result kept for the driver, as there is one result per driver and
-  version, never a second per mode.
+  version, never a second per mode. They run as a rollout would, on the machine's own home, so what else a sealed launch keeps out
+  of the user's, settings, extensions and skills, is how its driver builds the launch (§9.5), which no check proves.
 - **Model pinning.** The effective model must equal the requested one, which is the gateway's when access is a gateway, and a role
   may name only that one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
@@ -1422,14 +1424,14 @@ and [ADR 0052](adr/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-
 
 **Eligibility.** `eligibility(agent, episode)` is a query op that is no agent's tool, a `Session` method and a command, as the four
 are: whether an agent's work in one episode can train, from the record alone. It answers the agent's attribution, `exact` where
-every start of it recorded its trainable level met and no other agent's admission names its backend ids, `forked` once a
+every start of it recorded its trainable level met and no other agent's admission names any of its backend ids, `forked` once a
 `child.seen` names it, and None otherwise, and its verdict, eligible when nothing bars it, with every bar of a closed set:
 `not_trainable`, with the level a start recorded, `shared_key`, `forked` and `no_end`. It answers the same for a page of its calls,
 each eligible when its agent is and it has no bar of its own: `outside_episode`; `person`, in a turn a person held or below a
-person's entry handed to its agent, which exposure then never answers `not_seen`; and `purpose`, one neither its turn's nor
-`compaction`. A program's message is no person's. It reads the levels the starts recorded, never a result kept since, so it
-answers alike after a rebuild, on a closed copy and with the conformance store gone. Humans, programs and judges are never agents
-here, and what trains is the training system's to decide.
+person's entry handed to its agent, which exposure then never answers `not_seen`; and `purpose`, one a harness gave other than
+`compaction`, as a call it gave none is its turn's. A program's message is no person's. It reads the levels the starts recorded,
+never a result kept since, so it answers alike after a rebuild, on a closed copy and with the conformance store gone. Humans,
+programs and judges are never agents here, and what trains is the training system's to decide.
 
 [provenance.md](provenance.md) is the guide.
 
@@ -1727,36 +1729,40 @@ class AgentOutcome(Model):
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
   that counts steps counts them at its gateway.
 - **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody
-  else can act (§12). It sends its task to `Team.recipients()`, every agent the session starts, and closes an episode on the refs
-  of what each starting agent reported (§6).
-- **Trainable is checked before any harness launches.** `trainable_problems(team)` reads the team alone, as a training system's
-  load check reads it with no driver to ask: a model or an auth profile a role names, approvals left to `ask`, a harness's own
-  agents allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches. `Session.start(trainable=True)`,
-  which needs an authority, passes the flag to `check`, as `plan_login` passes, and `check(team, trainable=True)` adds those to
-  each role's driver: a sealed launch, and a result kept under the root that proves trainable for the harness it would run, naming
-  `doctor --check` where it ships. `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so
-  no plan login is theirs.
+  else can act (§12), and which cannot detach, at a start or a resume. It sends its task to `Team.recipients()`, every agent the
+  session starts, ends every agent, deepest first, retiring one at rest and cancelling one at work, and closes the episode on each
+  starting agent's `said`, the ref of its last words that `Session.agents()` and `Session.status(agent)` give (§6).
+- **Trainable is checked before any harness launches.** `trainable_problems(team)` reads the team alone, as a training system's load
+  check reads it with no driver to ask: a model or an auth profile a role names, approvals left to `ask`, a harness's own agents
+  allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches, with approvals judged by the
+  session's own `approvals` where it states one. `Session.start(trainable=True)`, which needs an authority, passes the flag to
+  `check`, as `plan_login` passes, and `check(team, trainable=True)` adds those to each role's driver: a sealed launch, and a result
+  kept under the root that proves trainable for the harness it would run, naming `doctor --check` where it ships.
+  `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so no plan login is theirs.
 - **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11): a call is
-  eligible for its turn's purpose or for `compaction`, and for no other. What trains is the training system's to decide.
+  eligible for its turn's purpose, which a call reported with none has, or for `compaction`, and for no other. What trains is the
+  training system's to decide.
 - **Rewards and credit are annotations,** of five statuses on the targets §11 names, written after the session has ended, so no
-  context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named
-  by `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,
+  context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named by
+  `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,
   `platoon_harness.credit.propagate`, `propagate@1`, a heuristic: it splits an episode's one team reward over the refs the episode
-  closed on, and each event it reaches keeps `retained` of what reached it for its maker and passes the rest equally along its
-  causes, ancestry and citations, an agent's only where exposure says Seen, newest first and at most 4,096 events, writing one local
-  `credit` row per agent it reached, on its first `agent.started`. An agent it never reached has no row, a team reward not scored
-  passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all but `retained` of what reaches the
-  citer, and work nobody cites earns nothing from it. See [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
+  closed on, refusing an episode closed on none, and each event it reaches keeps `retained` of what reached it for its maker and
+  passes the rest equally along its causes, ancestry and citations, an agent's only where exposure says Seen, newest first and at
+  most 4,096 events, writing one local `credit` row per agent it reached, on its first `agent.started`. An agent it never reached
+  has no row, a team reward not scored passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all
+  but `retained` of what reaches the citer, and work nobody cites earns nothing from it. See
+  [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
   no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
   trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
   and an admit a stop cut short named ids nobody knows (§4). See
   [ADR 0055](adr/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
-  of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority admitting
-  each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to `Team.recipients()`, a
-  compaction, `settled`, retirement, the close on each report, eligibility `exact` from a kept result, a reward of each status, and
-  `propagate@1`'s rows. See [ADR 0053](adr/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
+  of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
+  admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
+  `Team.recipients()`, a compaction, `settled`, a cancel and a retirement, the close on each `said`, eligibility `exact` from a kept
+  result, a reward of each status, and `propagate@1`'s rows. See [ADR 0053](adr/0053-a-gateway-admission-launches-sealed.md) and
+  [training.md](training.md).
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|

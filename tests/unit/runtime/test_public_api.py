@@ -65,7 +65,8 @@ def test_a_runtime_keeps_nothing_at_module_level_that_could_change():
 
 
 def resolved(dotted: str) -> Any:
-    """What a dotted name names: the longest module it begins with, then each attribute."""
+    """What a dotted name names: the longest module it begins with, then each attribute, where a model's field is the
+    type it holds."""
     parts = dotted.split(".")
     for cut in range(len(parts), 0, -1):
         try:
@@ -73,9 +74,15 @@ def resolved(dotted: str) -> Any:
         except ImportError:
             continue
         for part in parts[cut:]:
-            found = getattr(found, part)
+            fields = getattr(found, "model_fields", {})
+            found = fields[part].annotation if part in fields else getattr(found, part)
         return found
     raise AssertionError(f"{dotted} names nothing")
+
+
+@pytest.mark.parametrize("line", WRITTEN)
+def test_every_recorded_name_names_something(line):
+    resolved(line.partition("(")[0].partition("[")[0])
 
 
 def signature_of(thing: Any) -> str:

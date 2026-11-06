@@ -58,7 +58,8 @@ A refusal of yours wins: `admit` raises, and the spawn fails with your words. An
 
 ## Who starts it
 
-Start each rollout's session as a program, with the authority, and with `trainable=True`:
+Start each rollout's session as a program, with the authority, and with `trainable=True`, and end every agent before you close
+the episode:
 
 ```python
 async with Session.start(
@@ -68,7 +69,16 @@ async with Session.start(
     for agent in team.recipients():
         await session.send(agent, instruction)
     await session.settled()
-    ...
+    for row in sorted(await session.agents(), key=lambda row: row["depth"], reverse=True):
+        if row["state"] != "ended":
+            try:
+                await session.retire(f"@{row['agent']}")
+            except Refused as refused:  # `conflict`: it is at work, which only a cancel ends.
+                if refused.refusal.code != "conflict":
+                    raise
+                await session.cancel_agent(f"@{row['agent']}")
+    said = [row["said"] for row in await session.agents() if f"@{row['agent']}" in team.recipients()]
+    await session.close_episode(based_on=[ref for ref in said if ref is not None])
 ```
 
 - **A program is no person.** Its message goes as its reader's setting says, and its session issues no owner credential, so anyone
@@ -98,10 +108,13 @@ cut short while an admit was under way. Read it as history.
 `session.eligibility(agent, episode)` answers from the record alone, alike after a rebuild, on a closed copy and with the
 conformance store gone:
 
-- **Attribution:** `exact` where every start of the agent recorded its trainable level met and no other agent's admission names its
-  backend ids, `forked` once a native child of its harness is seen, whose calls go on its key, and None otherwise.
+- **Attribution:** `exact` where every start of the agent recorded its trainable level met and no other agent's admission names any
+  of its backend ids, `forked` once a native child of its harness is seen, whose calls go on its key, and None otherwise.
 - **Verdict:** eligible when nothing bars it. An agent's bars are `not_trainable`, `shared_key`, `forked` and `no_end`, and a call's
   own are `outside_episode`, `person` and `purpose`; a call is eligible when its agent is and it has none.
+- **Purpose:** a call reported with none is its turn's, and one reported for `compaction` is a compaction's; any other purpose bars
+  it. A sealed launch makes no call but these: it retries nothing, warms no cache, and labels each compaction call as it makes it.
+  A call your gateway recorded that no harness reported has no call id to join, so it never trains.
 
 [provenance.md](provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
 
@@ -109,8 +122,9 @@ conformance store gone:
 
 A gateway goes only to a driver that declares `sealed`, and that driver launches its harness on the gateway's model with nothing of
 the user's: no settings, extensions, skills or project instructions of theirs, no tool of the harness's own that acts, no native
-agents and no retries. ScriptedDriver, pi, OpenHands and a wire program that declares it launch sealed; Claude Code, Codex, `exec`
-and ACP do not, and a gateway admission to one fails, naming why.
+agents and no retries. How each driver keeps these out is [drivers.md](drivers.md#a-sealed-launch)'s to say. ScriptedDriver, pi,
+OpenHands and a wire program that declares it launch sealed; Claude Code, Codex, `exec` and ACP do not, and a gateway admission to
+one fails, naming why.
 
 - **The bearer goes only by environment,** under `PLATOON_HARNESS_BEARER`. A file the launch writes names the variable, as
   `${PLATOON_HARNESS_BEARER}`, never its value, so the session folder, which is your export, holds no key. A wire program finds the
@@ -124,7 +138,10 @@ and ACP do not, and a gateway admission to one fails, naming why.
   Pi compacts when your gateway refuses a request as longer than its window, in its dialect's own words, and retries it once.
 - **A sealed launch is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance` for a driver it ships
   no check of, runs `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request` beside the rest, on `FakeModel`
-  acting as a gateway, and keeps them in the one result an agent's levels read.
+  acting as a gateway, and keeps them in the one result an agent's levels read. They prove, on the machine they ran on and its own
+  home, that the first request goes under the gateway's bearer, holds none of the project's instructions, and shows only our tools,
+  the environment's and those the harness keeps that act on nothing. What else a sealed launch keeps out, the user's settings,
+  extensions and skills, is how each driver builds its launch, which the slow tests read and no check proves.
 
 ## Rewards and credit
 
@@ -149,12 +166,13 @@ async with Session.attach(rollout_id) as ended:
     await propagate(ended, "task", judge=None, retained=0.5)
 ```
 
-It reads the one team reward on the episode's close, and splits it over the refs the episode closed on. Each event it reaches keeps
-`retained` of what reached it for its maker, and the rest goes equally along the event's causes, its previous version or a commit's
-parents, and its citations, an agent's only where its exposure says Seen. It walks newest first, at most 4,096 events, and writes one
-local `credit` row per agent it reached, on that agent's first `agent.started`, under the producer `platoon_harness.credit:propagate`.
-An agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a walk
-cut short makes every row `invalid`. What reached the events of no agent is the reward less the rows.
+It reads the one team reward on the episode's close, and splits it over the refs the episode closed on, refusing `invalid` an
+episode that closed on none. Each event it reaches keeps `retained` of what reached it for its maker, and the rest goes equally
+along the event's causes, its previous version or a commit's parents, and its citations, an agent's only where its exposure says
+Seen. It walks newest first, at most 4,096 events, and writes one local `credit` row per agent it reached, on that agent's first
+`agent.started`, under the producer `platoon_harness.credit:propagate`. An agent it never reached gets no row, so is unscored; a
+team reward that is not scored passes its status to each row; and a walk cut short makes every row `invalid`. What reached the
+events of no agent is the reward less the rows.
 
 Its incentive: citing gives away all but `retained` of what reaches the citer, and work nobody cites earns nothing from it. The
 default template asks every agent to cite, so training under it pulls against that request: watch the citation rate. Rows like

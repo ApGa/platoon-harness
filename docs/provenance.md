@@ -161,11 +161,12 @@ async def what_can_train(session, agent, episode):
         answer = await session.eligibility(agent, episode, after=answer.cursor)
 ```
 
-An agent is `exact` where every start of it recorded its trainable level met and no other agent's admission names its backend ids,
-and `forked` once a native child of its harness is seen. Its bars are `not_trainable`, with the level its start recorded,
-`shared_key`, `forked` and `no_end`, and a call's own are `outside_episode`, `person`, for a turn a person held or a person's entry
-its agent was handed before it, and `purpose`, for a call made for something other than its turn or a compaction. A program's
-message is no person's. It reads the levels each start recorded, so a result kept or lost since changes no answer.
+An agent is `exact` where every start of it recorded its trainable level met and no other agent's admission names any of its backend
+ids, and `forked` once a native child of its harness is seen. Its bars are `not_trainable`, with the level its start recorded,
+`shared_key`, for an entry of its backend ids another admission names too, `forked` and `no_end`, and a call's own are
+`outside_episode`, `person`, for a turn a person held or a person's entry its agent was handed before it, and `purpose`, for a
+purpose its harness gave other than `compaction`: a call reported with no purpose is its turn's. A program's message is no
+person's. It reads the levels each start recorded, so a result kept or lost since changes no answer.
 
 ## From the command line
 

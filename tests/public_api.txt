@@ -1,5 +1,6 @@
 platoon_harness.annotations.Annotate
 platoon_harness.annotations.Annotation
+platoon_harness.annotations.Annotation(*,id,target,kind,producer,producer_version,params_hash,scope,status,value,evidence,head_seq,wall_time)
 platoon_harness.annotations.ANNOTATIONS
 platoon_harness.annotations.Status
 platoon_harness.annotations.Status[scored,invalid,error,timeout,cancelled]
@@ -177,13 +178,18 @@ platoon_harness.primitives.ApprovalRequested
 platoon_harness.primitives.Approvals
 platoon_harness.primitives.Attention
 platoon_harness.primitives.Attribution
+platoon_harness.primitives.Attribution[exact,forked]
 platoon_harness.primitives.Bar
+platoon_harness.primitives.Bar(*,reason,refs,level)
+platoon_harness.primitives.Bar.reason[not_trainable,shared_key,forked,no_end,outside_episode,person,purpose]
 platoon_harness.primitives.Boards
 platoon_harness.primitives.body_of
 platoon_harness.primitives.BODY_REF
 platoon_harness.primitives.Boundary
 platoon_harness.primitives.Budgets
 platoon_harness.primitives.CallEligibility
+platoon_harness.primitives.CallEligibility(*,call,call_id,purpose,attribution,verdict,reasons)
+platoon_harness.primitives.CallEligibility.verdict[eligible,ineligible]
 platoon_harness.primitives.Calls
 platoon_harness.primitives.Capabilities
 platoon_harness.primitives.Changes
@@ -199,6 +205,8 @@ platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.Deliveries
 platoon_harness.primitives.Delta
 platoon_harness.primitives.Eligibility
+platoon_harness.primitives.Eligibility(*,agent,episode,attribution,verdict,reasons,calls,total,cursor,head)
+platoon_harness.primitives.Eligibility.verdict[eligible,ineligible]
 platoon_harness.primitives.Entry
 platoon_harness.primitives.Exited
 platoon_harness.primitives.Exposure
@@ -276,6 +284,7 @@ platoon_harness.runtime.authority.Admission
 platoon_harness.runtime.authority.Admission(*,token,access,backend)
 platoon_harness.runtime.authority.AgentOutcome
 platoon_harness.runtime.authority.AgentOutcome(*,status,report)
+platoon_harness.runtime.authority.AgentOutcome.status[finished,cancelled,retired,lost,failed]
 platoon_harness.runtime.authority.AgentRef
 platoon_harness.runtime.authority.AgentRef(*,agent,role)
 platoon_harness.runtime.authority.Authority
@@ -374,6 +383,7 @@ platoon_harness.Session
 platoon_harness.session.Ending
 platoon_harness.session.Reason
 platoon_harness.session.Session
+platoon_harness.session.Session.agents()
 platoon_harness.session.Session.annotate(target,*,kind,producer,producer_version,scope,status,head_seq,value,params,evidence)
 platoon_harness.session.Session.annotations(target)
 platoon_harness.session.Session.attach(name,*,view,root)
@@ -384,6 +394,7 @@ platoon_harness.session.Session.eligibility(agent,episode,*,after)
 platoon_harness.session.Session.events(after,match,*,streams,follow)
 platoon_harness.session.Session.exposure(agent,ref,*,before)
 platoon_harness.session.Session.head()
+platoon_harness.session.Session.leave(grace)
 platoon_harness.session.Session.lineage(ref,*,after)
 platoon_harness.session.Session.open_episode(episode)
 platoon_harness.session.Session.page(*,after,before,match,streams,limit)
@@ -422,12 +433,18 @@ platoon_harness.testing.Fail
 platoon_harness.testing.goal
 platoon_harness.testing.FakeModel
 platoon_harness.testing.FakeModel(*replies)
+platoon_harness.testing.FakeModel.calls
 platoon_harness.testing.FakeModel.gateway(bearer)
+platoon_harness.testing.FakeModel.script(replies)
+platoon_harness.testing.FakeModel.tool_calls
 platoon_harness.testing.FakeTools
 platoon_harness.testing.Hang
 platoon_harness.testing.NAMESPACE
 platoon_harness.testing.Overflow
 platoon_harness.testing.Request
+platoon_harness.testing.Request.bearer
+platoon_harness.testing.Request.carries(headers)
+platoon_harness.testing.Request.response_id
 platoon_harness.testing.Say
 platoon_harness.testing.ScriptedDriver
 platoon_harness.testing.ScriptedDriver(turns,*,capabilities,name,version)

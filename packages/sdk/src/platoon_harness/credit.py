@@ -31,8 +31,8 @@ async def propagate(session: Session, episode: str, *, judge: Gateway | None, re
     once, and it stops at 4,096 events, when every row is `invalid`. A team reward that is not scored passes its status
     to each row, and an agent it never reaches gets no row, so is unscored. What nobody's events kept is the reward
     less the rows, and is no row. Citing gives away all but `retained` of what reaches the citer, and work nobody cites
-    earns nothing from it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] and `conflict` for
-    several team rewards."""
+    earns nothing from it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a reward on an
+    episode that closed on no ref, and `conflict` for several team rewards."""
     if not 0 <= retained <= 1:
         raise Refused("invalid", f"`retained` is a share, from 0 to 1, and {retained} is not")
     closed = await _closed(session, episode)
@@ -97,6 +97,8 @@ async def _walk(
         reaching[ref] += share
 
     cited = [declared.ref.partition("#")[0] for declared in outcome.declared]
+    if not cited:
+        raise Refused("invalid", f"{closed} closed on no ref, so its reward has nothing to split over")
     for ref in cited:
         await hand(ref, reward / len(cited))
     kept: dict[str, float] = {}

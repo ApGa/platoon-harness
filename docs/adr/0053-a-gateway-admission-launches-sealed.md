@@ -33,7 +33,9 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
   reports both calls and never one.
 - **A sealed launch is earned, never declared.** Two checks, `sealed_first_request_holds_only_ours` and
   `environment_tools_in_first_request`, run on FakeModel acting as a gateway, inside the one result `doctor --check` keeps, and
-  `trainable` stands on them.
+  `trainable` stands on them. They run as a rollout would, on the machine's own home, and prove what the first request holds: the
+  gateway's bearer, none of the project's instructions, and only ours, the environment's and the tools a harness keeps that act on
+  nothing. The rest of what a launch keeps out is how each driver builds it, which its slow tests read and no check proves.
 
 ## Alternatives considered
 
@@ -44,6 +46,7 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
 | Writing our own summarizer for pi | It would train on a compaction pi never makes |
 | A private config directory outside the session folder, removed on stop | One more place to bind under isolation and to clean after a cut rollout, whose stop may never run |
 | A second kept result per mode | Part 3 keeps one result per driver, pinned to its harness version |
+| A home of the check's own for the sealed checks, with a user's setup planted in it | Each harness reads a user's setup from places of its own, which a generic check would have to know; a rollout runs on the machine's own home, which the checks then test |
 | The environment's server beside ours in OpenHands' own MCP config | The SDK's client of two servers names each tool by its server, so ours would lose the names we teach |
 | OpenHands' `finish` and `think` taken away | It ends a run and notes a thought with them, and neither acts on anything; a harness check names the tools a sealed launch keeps |
 | The ids of pi's calls in the details pi keeps of a compaction | A compaction that fails keeps no details, so the calls it made would be one call with no id |

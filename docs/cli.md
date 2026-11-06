@@ -819,7 +819,7 @@ For example:
 platoon-harness agent list SESSION
 ```
 
-List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by.
+List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by, with `said`, the ref of what said its last words: its latest turn's last message, or a finished agent's end, and None when it has said nothing since its latest turn began.
 
 For example:
 

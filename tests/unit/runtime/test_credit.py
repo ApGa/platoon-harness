@@ -187,6 +187,17 @@ async def test_propagation_refuses_several_team_rewards(tmp_path):
     assert refused.value.refusal.code == "conflict" and await credited(session) == {}
 
 
+async def test_propagation_refuses_a_reward_on_an_episode_that_closed_on_no_ref(tmp_path):
+    """Its reward would reach nobody's event, so every agent would be unscored for nothing it did: that is said."""
+    session = await ended(tmp_path, CHAIN, 3, [])
+    await rewarded(session, ("scored", 1.0))
+
+    with pytest.raises(Refused, match="closed on no ref") as refused:
+        await propagate(session, "e", judge=None, retained=0.5)
+
+    assert refused.value.refusal.code == "invalid" and await credited(session) == {}
+
+
 async def test_propagation_with_no_team_reward_writes_nothing_and_refuses_a_share_past_one(tmp_path):
     session = await ended(tmp_path, CHAIN, 3, ["inbox/alice@2"])
 

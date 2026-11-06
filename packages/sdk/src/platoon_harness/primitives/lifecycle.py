@@ -787,15 +787,18 @@ def report(txn: Txn, a: AgentReport) -> None:
 
 
 def _public(agent: Agent) -> dict[str, Any]:
-    """An agent as any peer may see it: its goal and activity are content, and reading content is evidence."""
+    """An agent as any peer may see it: its goal and activity are content, and reading content is evidence, so what it
+    said last is shown by its ref, `said`, and never in its words."""
     parent = agent.parent and name_of(agent.parent)
     shown = agent.model_dump(include={"role", "depth", "stays", "state", "status"})
-    return {**shown, "agent": agent.name, "parent": parent}
+    return {**shown, "agent": agent.name, "parent": parent, "said": agent.final_ref}
 
 
 @op("agent.list", query=True)
 def list_agents(txn: Txn, a: Args) -> list[dict[str, Any]]:
-    """List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by."""
+    """List every agent of this session, live or ended, as `agent`, which is what the ops that take one go by, with
+    `said`, the ref of what said its last words: its latest turn's last message, or a finished agent's end, and None
+    when it has said nothing since its latest turn began."""
     return [_public(agent) for agent in txn.view(Agents).listed()]
 
 

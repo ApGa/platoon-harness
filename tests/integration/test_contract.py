@@ -17,11 +17,11 @@ from typing import Any
 import pytest
 
 from platoon_harness import ConfigError, Refused, Session, Team
-from platoon_harness.config import Secret
+from platoon_harness.config import Secret, forms
 from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.drivers.levels import CHECKED, Conformance
 from platoon_harness.primitives import CallEligibility
-from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequest
+from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, Gateway, SpawnRequest
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
@@ -37,7 +37,6 @@ from platoon_harness.testing import (
     check_harness,
     every_turn_asks_the_model,
 )
-from platoon_harness.testing.model import COMPACTION_HEADERS, Reply
 
 from ..unit.runtime import support
 from ..unit.runtime.gitting import repository
@@ -56,7 +55,7 @@ class Harness:
     harness made, how a result that proves it is kept, and how long a wait on it may take."""
 
     named: str
-    replies: Sequence[Reply]
+    replies: Sequence[Any]
     proves: Callable[[Path], Awaitable[Conformance]]
     seconds: float = support.SECONDS
 
@@ -83,10 +82,11 @@ def _pi() -> Harness:
 
 
 def _openhands() -> Harness:
-    """Forty calls of the environment's tool, past which OpenHands' condenser forgets, with the compaction headers."""
+    """Forty calls of the environment's tool, past which OpenHands' condenser forgets, with the compaction headers. Each
+    agent's turn has taken a little over 300 seconds beside another slow test, so a wait on it may take twice that."""
     calls = [ToolCall(ENVIRONMENT_TOOL, {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
     return Harness(
-        "openhands", [*calls, "the summary", "done"], lambda folder: check_harness("openhands", folder), 300.0
+        "openhands", [*calls, "the summary", "done"], lambda folder: check_harness("openhands", folder), 600.0
     )
 
 
@@ -97,11 +97,12 @@ class Training:
     def __init__(self, model: FakeModel) -> None:
         self.model = model
         self.admitted: list[SpawnRequest] = []
+        self.gateways: dict[str, Gateway] = {}
         self.told: list[tuple[AgentRef, AgentOutcome]] = []
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
         self.admitted.append(spawn)
-        gateway = self.model.gateway(bearer_of(spawn.agent))
+        self.gateways[spawn.agent] = gateway = self.model.gateway(bearer_of(spawn.agent))
         return Admission(
             token=Secret(f"token-{len(self.admitted)}"), access=gateway, backend={"agent_id": f"id-{spawn.agent}"}
         )
@@ -129,9 +130,10 @@ async def every_call(session: Session, agent: str) -> list[CallEligibility]:
 
 
 def holding(folder: Path, secrets: Sequence[str]) -> list[Path]:
-    """Each file under `folder` that holds one of `secrets`."""
+    """Each file under `folder` that holds one of `secrets`, in any form text may carry it."""
+    held = {form for secret in secrets for form in forms(Secret(secret))}
     found = (path for path in folder.rglob("*") if path.is_file() and not path.is_symlink())
-    return [path for path in found if any(secret.encode() in path.read_bytes() for secret in secrets)]
+    return [path for path in found if any(form in path.read_bytes() for form in held)]
 
 
 @pytest.mark.parametrize(
@@ -171,14 +173,12 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
                 )
                 await in_state(session, agent[1:], "idle")
             await session.settled()
-            for agent in reversed(recipients):
+            first, *rest = recipients
+            await session.cancel_agent(first)
+            for agent in rest:
                 await session.retire(agent)
-            items = await of_type(session, "item.recorded")
-            reports = [
-                [item for item in items if item.agent == agent[1:] and item.data["kind"] == "message"][-1]
-                for agent in recipients
-            ]
-            await session.close_episode(based_on=[f"{item.stream}@{item.version}" for item in reports])
+            said = [row["said"] for row in await session.agents() if f"@{row['agent']}" in recipients]
+            await session.close_episode(based_on=said)
             if (await session.status())["state"] == "open":  # `settled` closes it at its `until`.
                 await session.close()
 
@@ -216,13 +216,14 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
         eligible = await history.eligibility(f"@{agent}", "task")
         assert (eligible.attribution, eligible.verdict, eligible.reasons) == ("exact", "eligible", ()), eligible
         assert all(call.verdict == "eligible" for call in calls[agent]), calls[agent]
+    headers = authority.gateways["alice"].compaction_headers
     by_id = {request.response_id: request for request in model.calls if request.response_id}
     for agent, made_calls in calls.items():
         for call in made_calls:
             if call.call_id is not None:
                 assert by_id[call.call_id].bearer == bearers[agent]
-                assert by_id[call.call_id].carries(COMPACTION_HEADERS) == (call.purpose == "compaction")
-    compacting = [request for request in model.calls if request.carries(COMPACTION_HEADERS)]
+                assert by_id[call.call_id].carries(headers) == (call.purpose == "compaction")
+    compacting = [request for request in model.calls if request.carries(headers)]
     reported = {call.call_id for agent in AGENTS for call in calls[agent] if call.purpose == "compaction"}
     assert compacting and {request.response_id for request in compacting} <= reported
     assert {request.bearer for request in model.calls} == set(bearers.values())
@@ -234,7 +235,6 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     credited = [row for row in await history.annotations() if row.producer == PROPAGATE]
     assert {row.status for row in await history.annotations()} == {"scored", *STATUSES}
     assert len(credited) == len(AGENTS) and {row.status for row in credited} == {"scored"}
-    assert [(agent.agent, outcome.status) for agent, outcome in authority.told] == [
-        ("bob", "retired"),
-        ("alice", "retired"),
-    ]
+    told = {agent.agent: outcome for agent, outcome in authority.told}
+    assert {agent: outcome.status for agent, outcome in told.items()} == {"alice": "cancelled", "bob": "retired"}
+    assert all(outcome.report for outcome in told.values())

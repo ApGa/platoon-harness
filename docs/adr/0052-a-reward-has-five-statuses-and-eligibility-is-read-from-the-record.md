@@ -22,7 +22,11 @@ driver and the result kept for it.
   reads the levels the agent's starts recorded, never the conformance store, so a closed session's answer never changes.
 - **`exact` needs a met trainable level and backend ids of the agent's own.** A met level already means a gateway login, call ids
   reported, a sealed launch and no opaque native children allowed, so uniqueness of the admit results is all that is added, and no
-  key is ever recorded to compare.
+  key is ever recorded to compare. Each entry of an admission's `backend` names its agent alone, so one entry another admission
+  names too bars both; the host refuses two agents on one bearer before either is admitted.
+- **A call reported with no purpose is its turn's.** A sealed launch makes no call but its turns' and its compactions', as it
+  retries nothing, warms no cache and labels each compaction call as it makes it, so `purpose` bars a purpose a harness gave other
+  than `compaction`, and a call no harness reported has no id to join.
 - **`person` counts what was handed, not what was seen.** A person's entry handed to an agent below a call is either seen or
   unknown, never `not_seen`, and counting only `seen` would read unknown as no. A turn a person held is a person's too.
 - **What a team decides is checked from its file, and what a machine decides when the session starts.** `trainable_problems(team)`

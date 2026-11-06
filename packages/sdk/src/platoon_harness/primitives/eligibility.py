@@ -18,8 +18,8 @@ _PAGE = DIGEST_ITEMS
 
 Attribution = Literal["exact", "forked"]
 """How well an agent's model calls are tied to it: `exact` where every start of it recorded its trainable level met and
-no other agent's admission names its backend ids, and `forked` once a native child of its harness is seen, whose calls
-go on its key. Neither is None."""
+no other agent's admission names any of its backend ids, and `forked` once a native child of its harness is seen, whose
+calls go on its key. Neither is None."""
 
 Verdict = Literal["eligible", "ineligible"]
 
@@ -31,10 +31,11 @@ def _ref(event: Event) -> str:
 class Bar(Model):
     """One reason an agent, or one of its calls, cannot train, of a closed set, with the refs of the events that show
     it. An agent's: `not_trainable`, a start that recorded its trainable `level` short of met, or with no ref, that no
-    start recorded one; `shared_key`, the spawns of other agents whose admissions name its backend ids; `forked`, the
-    native children seen; and `no_end`, as it has not ended. A call's: `outside_episode`; `person`, the start of its
-    turn, which a person held, or a person's entry its agent was handed below it, which exposure then never answers
-    `not_seen`; and `purpose`, a purpose neither its turn's nor `compaction`."""
+    start recorded one; `shared_key`, the spawns of other agents whose admissions name any of its backend ids, each of
+    which names one agent alone; `forked`, the native children seen; and `no_end`, as it has not ended. A call's:
+    `outside_episode`; `person`, the start of its turn, which a person held, or a person's entry its agent was handed
+    below it, which exposure then never answers `not_seen`; and `purpose`, a purpose its harness gave other than
+    `compaction`, as a call reported with none is its turn's."""
 
     reason: Literal["not_trainable", "shared_key", "forked", "no_end", "outside_episode", "person", "purpose"]
     refs: tuple[str, ...] = ()

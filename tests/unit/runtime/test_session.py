@@ -325,7 +325,7 @@ async def test_a_script_is_a_person_or_a_program_in_the_journal(tmp_path):
     """Each acts under its own name, and a person's message steers while a program's goes as its reader's setting
     says."""
     said = {}
-    for principal in ("human:ada", "program:platoon"):
+    for principal in ("human:ada", "program:trainer"):
         async with Session.start(solo(), principal=principal, root=tmp_path) as session:
             await in_state(session, "bob", "idle")
             await session.send("@bob", "hello")
@@ -334,14 +334,14 @@ async def test_a_script_is_a_person_or_a_program_in_the_journal(tmp_path):
 
     assert said == {
         "human:ada": ("human:ada", "@ada", "steer"),
-        "program:platoon": ("program:platoon", "@platoon", "wake"),
+        "program:trainer": ("program:trainer", "@trainer", "wake"),
     }
 
 
 async def test_a_session_a_program_opens_gives_attachers_a_view_credential_only(tmp_path):
     """Nobody holds an owner credential to act as the program: a guest of its runtime reads and never writes, and once
     the runtime has gone its history is read, and written beside, as any session's is."""
-    async with Session.start(solo(), name="s", principal="program:platoon", root=tmp_path) as session:
+    async with Session.start(solo(), name="s", principal="program:trainer", root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         async with Session.attach("s", root=tmp_path) as guest:
             with pytest.raises(Refused) as refused:
@@ -651,18 +651,24 @@ def worker_team(**fields: Any) -> Team:
 
 
 async def test_an_episode_closes_on_the_event_each_starting_agents_report_carries(tmp_path):
-    """Each agent the session starts is prompted, says what it came to in a message of its own, and the episode closes
-    on those, so the edges a walk back from its close starts on are each made by its own agent."""
+    """Each agent the session starts is prompted and says what it came to in a message of its own, which `said` names,
+    and once each has ended the episode closes on those, so the edges a walk back from its close starts on are each made
+    by its own agent."""
     team = Team.model_validate({"roles": {"bob": {"harness": scripted([Say("done")]), "count": 2}}})
     async with Session.start(team, root=tmp_path) as session:
         await in_state(session, "bob-2", "idle")
         await session.open_episode("e")
         for recipient in team.recipients():
             await session.send(recipient, "go")
-        said = await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
-        await session.close_episode(based_on=[f"{event.stream}@{event.version}" for event in said])
+        messages = await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        for recipient in team.recipients():
+            await in_state(session, recipient[1:], "idle")
+            await session.retire(recipient)
+        said = [row["said"] for row in await session.agents()]
+        await session.close_episode(based_on=said)
         lineage = await session.lineage("episode/e@2")
 
+    assert sorted(said) == sorted(f"{event.stream}@{event.version}" for event in messages)
     assert sorted(declared.maker for declared in lineage.declared) == ["agent:bob-1", "agent:bob-2"]
 
 

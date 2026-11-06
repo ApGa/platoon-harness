@@ -159,19 +159,19 @@ async def test_a_view_token_reads(viewer):
 
 
 async def test_a_view_token_can_never_submit_and_a_try_writes_nothing(viewer, owner):
-    kernel = owner._runtime.kernel
-    head = kernel.head
+    """The runtime goes on recording its own work, such as the end of the launch that started bob, so what a try wrote
+    is whatever anyone else did."""
+    head = owner._runtime.kernel.head
 
     outcome = await viewer.submit("message.send", to="@bob", gist="from a viewer")
-
-    assert outcome.refusal is not None and outcome.refusal.code == "not_permitted"
-    assert kernel.head == head
     with pytest.raises(Refused) as refused:
         await viewer.send("@bob", "typed")
-    assert refused.value.refusal.code == "not_permitted"
     with pytest.raises(Refused):
         await viewer.put_body(b"a body")
-    assert kernel.head == head
+
+    assert outcome.refusal is not None and outcome.refusal.code == "not_permitted"
+    assert refused.value.refusal.code == "not_permitted"
+    assert [event.type async for event in owner.events(after=head) if event.actor != "runtime"] == []
 
 
 @pytest.mark.parametrize("op", ["session.status", "message.read", "task.list"])

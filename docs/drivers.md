@@ -175,7 +175,10 @@ How each harness here does it:
 | `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
 
 A driver with no sealed launch reads access through `keys_of(spec)`, which refuses a gateway, and the host refuses one before that.
-Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver.
+Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver. They prove, on the machine's own
+home as a rollout runs, that the first request goes under the gateway's bearer, holds none of the project's instructions and shows
+only ours, the environment's and the tools `check_driver(kept=)` names. What else of the user's a launch keeps out is how it is
+built, as the table says, which the slow tests read and no check proves.
 
 ## A one-shot CLI: `exec`
 

@@ -69,7 +69,9 @@ def test_every_public_primitive_name_is_written_down():
     ]
     prefix = "platoon_harness.primitives."
 
-    assert {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)} == set(primitives.__all__)
+    listed = {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)}
+
+    assert {name for name in listed if "." not in name} == set(primitives.__all__)
 
 
 def test_a_view_that_changes_shape_changes_version(tmp_path):
