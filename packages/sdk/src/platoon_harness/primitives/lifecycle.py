@@ -697,9 +697,27 @@ def _look(txn: Txn, agent: str, cause: int) -> None:
         txn.effect("probe", {"agent": agent, "cause": cause}, on_uncertain="retry", agent=agent)
 
 
+def _more_to_come(txn: Txn, agent: Agent) -> bool:
+    """Whether anything is still to come for an agent whose turn is ending: a person holding it, a wait of its own, an
+    entry that would wake it, a handover to it under way or taken and not landed, or a child at work that would end
+    with it."""
+    name, deliveries = agent.name, txn.view(Deliveries)
+    handover = txn.view(Effects).last(name, "deliver")
+    return bool(
+        agent.state == "held"
+        or txn.view(Waits).open_for(agent.id)
+        or any(reader == name for reader, _, _ in deliveries.waking())
+        or (handover is not None and handover.state in ("requested", "started"))
+        or deliveries.unlanded(name)
+        or _working(txn, agent, _at_work(txn))
+    )
+
+
 def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     """Park on an open wait, else report to the parent. Only now: a harness can batch `wait` with sibling tools. A
-    one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished."""
+    one-shot harness has nothing after its turn, so its agent ends with it, and `stopped` means it finished. One that
+    does not stay finishes with a turn that stops with nothing more to come for it, as `agent.finish` with no report
+    would have it, so its last words are its report."""
     name = agent.name
     if txn.view(Stamps).turn(name) is None:
         return
@@ -709,6 +727,9 @@ def _turn_ended(txn: Txn, agent: Agent, reason: str) -> None:
     if agent.persistent is False:
         finished = reason == "stopped"
         end(txn, agent, "finished" if finished else "failed", reason=None if finished else reason)
+        return
+    if not agent.stays and reason == "stopped" and not _more_to_come(txn, agent):
+        end(txn, agent, "finished")
         return
     parked = bool(txn.view(Waits).open_for(agent.id))
     follows = txn.view(Deliveries).heard(name)

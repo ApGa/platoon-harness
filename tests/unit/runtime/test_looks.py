@@ -422,8 +422,9 @@ def test_a_look_changes_no_ref_index_or_file(repo, tmp_path):
 
 
 def team_of(**worker: Any) -> Team:
-    """A lead and workers, each in a workspace of the mode the workers' role names, a worktree unless it says."""
-    worker = {"count": 0, "workspace": "worktree", **worker}
+    """A lead and workers, each in a workspace of the mode the workers' role names, a worktree unless it says. Workers
+    stay unless it says, so a probe looks at each turn's end, as a stop looks at an agent that ends."""
+    worker = {"count": 0, "workspace": "worktree", "stays": True, **worker}
     roles = {"lead": {"harness": scripted(), "workspace": worker["workspace"]}, "worker": worker}
     return Team.model_validate({"roles": roles})
 
@@ -516,7 +517,7 @@ async def test_the_probe_covers_a_harness_that_reports_nothing(repo, tmp_path):
     program.write_text("#!/bin/sh\necho done > done.txt && git add done.txt && git commit -q -m 'one shot'\n")
     program.chmod(program.stat().st_mode | stat.S_IXUSR)
     harnessed = {"command": [str(program)], "mode": "oneshot"}
-    async with Session.start(team_of(harness=harnessed), name="s", root=tmp_path, cwd=repo) as session:
+    async with Session.start(team_of(harness=harnessed, stays=False), name="s", root=tmp_path, cwd=repo) as session:
         await session.spawn("ada", "worker", "go")
         await in_state(session, "ada", "ended")
         await until(lambda: committed(session), session)

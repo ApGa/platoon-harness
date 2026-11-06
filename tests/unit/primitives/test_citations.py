@@ -220,7 +220,7 @@ async def test_a_retold_goal_is_handed_over_by_its_spawn_s_ref(kernel):
 
 async def test_a_reply_to_a_carried_message_finds_it_by_the_ref_it_was_shown_by(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    await spawn(kernel, "bob", by=lead)
+    await spawn(kernel, "bob", by=lead, stays=True)
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "item", kind="message", gist="a question")
     await end_turn(kernel, "bob")

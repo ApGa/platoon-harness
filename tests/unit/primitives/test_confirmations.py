@@ -200,7 +200,7 @@ async def test_a_tool_item_finds_its_unconfirmed_offers_by_anchor_through_the_in
 
 async def test_a_confirmed_read_moves_no_cursor_and_asks_nothing_again(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await send(kernel, lead, "@bob", "a question")
     await start_turn(kernel, "bob")
     result_of(await kernel.submit(bob, "message.read", {}, native=ANCHOR))

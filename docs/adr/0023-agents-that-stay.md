@@ -1,6 +1,7 @@
 # 0023. Agents that stay
 
-**Status:** Accepted, 2026-11-03
+**Status:** Accepted, 2026-11-03. Amended by [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md):
+an agent that does not stay finishes with a turn that stops on its own with nothing more to come for it, and is told so.
 
 ## Context
 

@@ -23,7 +23,7 @@ from platoon_harness_cli.tui.transcript import Focus, Transcript
 
 from ..unit.runtime.support import in_state, journal, of_type, until
 from ..unit.tui.support import drawn, workspace
-from .scripts import over
+from .scripts import crafting_tree, over
 
 TIMEOUT = 60.0
 SPAWN = {"name": "w", "child_role": "bob"}
@@ -54,6 +54,18 @@ async def a_tail_joined_to_what_was_committed_is_the_text(team: Team, root: Path
         text = (await session.get_body(item.data["body"])).decode()
 
     assert said.strip() and text == SAID and text.startswith(said)
+
+
+async def a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing(team: Team, root: Path) -> None:
+    """The child, woken by its parent's message on the real binary, reports and never calls `agent.finish`, so it ends
+    with that turn, the lead's wait on it holds, and the lead's next turn ends the session at its `until`."""
+    async with Session.start(crafting_tree(team), root=root, cwd=root) as session:
+        await session.send("@lead", "craft three")
+        ending = await session.settled(timeout=TIMEOUT)
+
+    statuses = {row["agent"]: (row["status"], (row["report"] or {}).get("gist")) for row in ending.agents}
+    assert ending.reason == "settled", ending
+    assert statuses == {"lead": ("finished", "all three are crafted"), "kid": ("finished", "the ingredient chain")}
 
 
 async def stop_below_stops_the_turns_of_a_lead_and_its_child_and_keeps_both(team: Team, root: Path, model: FakeModel):

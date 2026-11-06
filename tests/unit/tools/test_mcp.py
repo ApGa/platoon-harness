@@ -606,14 +606,15 @@ async def test_a_call_repeated_under_one_id_is_no_repeat_to_the_model(kernel, le
     assert len(retry["content"]) == 1
 
 
-async def test_a_new_turn_is_a_new_call(kernel, lead, worker):
-    await start_turn(kernel, "w1", "t1")
-    await worker[1].call("message_send", {"to": "@lead", "gist": "same words"})
-    await end_turn(kernel, "w1")
-    await start_turn(kernel, "w1", "t2")
-    await worker[1].call("message_send", {"to": "@lead", "gist": "same words"})
+async def test_a_new_turn_is_a_new_call(kernel, server, lead):
+    _, keeper = await enrolled(kernel, server, "w2", by=lead[0], stays=True)
+    await start_turn(kernel, "w2", "t1")
+    await keeper.call("message_send", {"to": "@lead", "gist": "same words"})
+    await end_turn(kernel, "w2")
+    await start_turn(kernel, "w2", "t2")
+    await keeper.call("message_send", {"to": "@lead", "gist": "same words"})
 
-    assert [event.turn for event in of_type(kernel, "message.sent") if event.actor == "agent:w1"] == ["t1", "t2"]
+    assert [event.turn for event in of_type(kernel, "message.sent") if event.actor == "agent:w2"] == ["t1", "t2"]
 
 
 async def test_out_of_a_turn_a_call_with_no_id_has_no_key(kernel, lead, worker):

@@ -626,6 +626,15 @@
 
 ### Fixed
 
+- A tree of agents that do not stay could sit until a person ended it, as one did for 19 minutes on the first GPU run of a team on
+  OpenHands: a child reported and never called `agent.finish`, so it stayed live and idle, and its parent, woken by the report,
+  ended its turn and parked again on a wait on that child's end, which nothing would bring. An agent that does not stay now finishes
+  with a turn that stops on its own with nothing more to come for it, no person holding it, no wait of its own, no entry that would
+  wake it, no handover to it under way or taken and not landed and no child at work that would end with it, as `agent.finish` with
+  no report would have it: its last words are its report, its parent hears of it as of any finish, a wait on its end holds, and a
+  root that does not stay reaches `until`. A turn an interrupt, the owner's stop or a failure cut ends no agent, and one that stays
+  is as it was. One that does not stay is told that a turn that ends with nothing left to wait for ends it, with what it said last
+  as its report, where it was told such a turn left it idle. See ADR 0060.
 - Every OpenHands agent of a sealed launch on an environment with a tool named `finish`, as TextCraft's is, was refused at launch,
   "Duplicate tool names found: {'finish'}": OpenHands keeps its own `finish` and `think`, and showed the environment's tools bare.
   One rule now holds for every harness: an environment's tools reach the model named by their server, never bare, so none can

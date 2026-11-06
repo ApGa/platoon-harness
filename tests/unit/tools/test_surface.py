@@ -485,20 +485,23 @@ async def test_a_template_fills_its_slots_with_values_and_sentences(kernel, serv
     assert lines[1:] == [
         "",
         "Write to @lead on notes (board), tasks (queue).",
-        "End: When your goal is done, make `mcp__coord__agent_finish` your last call, with your report: a turn that "
-        "only ends leaves you idle, and whoever waits on you still waiting.",
+        "End: When your goal is done, make `mcp__coord__agent_finish` your last call, with your report. A turn that "
+        "ends with nothing left to wait for ends you, and what you said last is your report.",
     ]
 
 
 async def test_a_line_whose_slots_all_come_out_empty_is_left_out_words_and_all(kernel, server, lead):
     """A line with no slot is never dropped, and its words name a tool as the surface does. One with a slot that says
-    something is kept whole."""
+    something is kept whole, and how an agent that does not stay ends names no tool once it holds no `agent.finish`."""
     narrow, _ = await enrolled(kernel, server, "n1", role="narrow", by=lead[0])
     template = "Call `task.claim`, then `wait`.\nIn French: {peers} {channels}\nYou are {name}. {help}\n{ending}"
 
     text = preamble(kernel, narrow, harness_name("coord"), template)
 
-    assert text == "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nYou are n1. "
+    assert text == (
+        "Call `mcp__coord__task_claim`, then `mcp__coord__wait`.\nYou are n1. \n"
+        "A turn that ends with nothing left to wait for ends you, and what you said last is your report."
+    )
 
 
 async def test_a_value_with_nothing_to_name_is_empty_so_a_line_around_it_goes(kernel, lead, monkeypatch):

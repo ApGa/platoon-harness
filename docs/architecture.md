@@ -780,14 +780,20 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   Its command's `native` holds the anchor of the call that made it, which that call's tool item holds as its `native_id`, so a
   client can join a child to its call. A spawn is its spawner's, so `agent.spawned` carries the spawner's turn and context version,
   and the child's ref, `agent/<name>@1`, is what the spawn returns.
-- **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. The
-  runtime keeps every agent alike, so it changes only what the agent is told, a spawn's result, and who may wait on its end. It is
-  resolved once, at the spawn: what `agent.spawn` said, else what its role says, else true for an agent the session started and false
-  for one spawned. A harness that is not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses
-  `stays` for it `unsupported`, from what each role's driver said when the session opened. The result of a spawn that stays says so,
-  that its answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has
-  not ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
-  [ADR 0023](adr/0023-agents-that-stay.md).
+- **Agents that stay.** `stays` says whether an agent is told to stay after its task for the next message, rather than to finish. It
+  changes what the agent is told, a spawn's result, who may wait on its end, and what its turn's end does: an agent that does not
+  stay finishes with a turn that stops on its own with nothing more to come for it, as `agent.finish` with no report in that turn
+  would have it, so its last words are its report, its parent hears of it as of any finish, a wait on its end holds, and a root that
+  does not stay reaches `until`. Nothing more to come means no person holds it, no wait of its own is open, no entry would wake it,
+  no handover to it is under way or taken and not landed, and no child that would end with it is at work. A turn that does not stop
+  on its own ends no agent, and one that stays is left idle by every turn that only ends. It is resolved once, at the spawn: what
+  `agent.spawn` said, else what its role says, else true for an agent the session started and false for one spawned. A harness that
+  is not persistent cannot stay, so `team check` refuses a role that says so, and `agent.spawn` refuses `stays` for it
+  `unsupported`, from what each role's driver said when the session opened. The result of a spawn that stays says so, that its
+  answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has not
+  ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
+  [ADR 0023](adr/0023-agents-that-stay.md) and
+  [ADR 0060](adr/0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md).
 - **Interrupt.** `agent.interrupt` stops an agent's turn, or the turn it is on its way to, by a wake that is due, a handover under
   way or a wait that holds, and quiets what was waiting for it: what arrived before the interrupt wakes nothing and stays unread for
   its next turn, and a wait that already holds closes with no notice, while what comes after wakes it as usual. Nothing is handed
@@ -1252,8 +1258,9 @@ harness, so the preamble is a snapshot of who could be reached then, and `peers`
 own session is handed that text again, as Claude Code and Codex keep what a session began with whatever a resume passes, and one that
 starts anew is told afresh. Besides the tools and who can
 be reached, the preamble names the roles an agent may start, since a model guessed a harness's name there and gave up. It says how
-to end too, by whether the agent stays: one that does not is told to make `agent.finish` its last call, or a join on it never holds;
-one the session started is told to stay unless told to finish, since a human talks to it over many turns; and a child that stays is
+to end too, by whether the agent stays: one that does not is told to make `agent.finish` its last call, with its report, and that a
+turn that ends with nothing left to wait for ends it, with what it said last as its report; one the session started is told to stay
+unless told to finish, since a human talks to it over many turns; and a child that stays is
 told to answer by ending its turn, which sends what it said last to its parent and leaves it there for the next message, and to
 finish only when told to. It teaches `wait` as how to wait for something named, and never as what to do with nothing to do: a child
 that waited on its parent instead would keep its answer from it, as a Codex model did when told it stayed for the next message, and

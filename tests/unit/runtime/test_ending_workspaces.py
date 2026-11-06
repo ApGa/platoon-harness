@@ -356,7 +356,7 @@ async def test_a_commit_the_agent_rewrote_and_git_then_pruned_is_still_in_the_bu
 
     team = team_of(harness=working(lambda cwd: commit(cwd, "work", message="first try"), amend))
     async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
-        await session.spawn("ada", "worker", "work")
+        await session.spawn("ada", "worker", "work", stays=True)
         await until(lambda: of_type(session, "repo.committed"), session)
         await session.send("@ada", "amend it")
         await until(lambda: of_type(session, "repo.rewritten"), session)

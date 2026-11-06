@@ -97,7 +97,9 @@ async with Session.start(
   reaches.
 - **End every agent, deepest first,** by `depth` and `state` from `session.agents()`: retire one at rest, and cancel one at work,
   as a `retire` of it is refused `conflict`. An agent with no end is `no_end`, so none of its calls can train, and `finish` hears of
-  an agent only once it has ended: leaving a session stops it, and an agent still live then keeps no end.
+  an agent only once it has ended: leaving a session stops it, and an agent still live then keeps no end. One that does not stay
+  has ended already, `finished`, at a turn that stopped with nothing more to come for it, its last words its report, so a team whose
+  roles do not stay settles on its own.
 - **Close the episode** on what each agent that started came to, with `close_episode(based_on=...)`: its `said`, in its row of
   `session.agents()` or in `session.status(agent)`, is the ref of its last words, its latest turn's last message or a finished
   agent's end, and None while it has said nothing since its latest turn began. Credit walks back from these refs, so an episode

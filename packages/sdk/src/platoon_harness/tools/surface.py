@@ -44,8 +44,8 @@ _PARKING = (
 _CITING = "When what you write rests on something you read, put its `ref` in `based_on`."
 """The one place agents are asked to cite: tool descriptions say what `based_on` is and never ask."""
 _FINISHING = (
-    "When your goal is done, make `agent.finish` your last call, with your report: a turn that only ends leaves you "
-    "idle, and whoever waits on you still waiting."
+    "When your goal is done, make `agent.finish` your last call, with your report. A turn that ends with nothing left "
+    "to wait for ends you, and what you said last is your report."
 )
 _STAYING = (
     "When told to finish, make `agent.finish` your last call, or your session never closes. Told nothing of the kind, "

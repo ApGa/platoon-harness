@@ -49,8 +49,9 @@ ENDING_STEPS = [
 
 
 def team(mode: str = "worktree") -> Team:
+    """`ada` stays, so its workspace outlives its turn until the test ends it."""
     says = wire("saying")
-    worker = {"harness": says, "count": 0, "workspace": mode}
+    worker = {"harness": says, "count": 0, "workspace": mode, "stays": True}
     return Team.model_validate({"roles": {"bob": {"harness": says}, "ada": worker}})
 
 

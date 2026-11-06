@@ -371,8 +371,9 @@ add to and a `merger` role claims from, the merger in a worktree of its own. It 
 preset. The runtime never merges: the merger merges each branch a task names into its own branch with git, and the look after its turn
 records the merge commit as the merger's, or the merge under way and its conflicted paths, which put the merger under Needs you while
 it rests on them. On a conflict the merger completes the task with a result naming the paths, and the worker reads it from its task,
-by `task.list` or by a `wait` on `task/merges/<id>`, which whoever adds to a queue may do. `task.fail` is no way back to the worker: it
-returns the task to the queue's readers, the merger, until it dies. Each role's `instructions` say this to its agents: a worker adds a
+by `task.list` or by a `wait` on `task/merges/<id>`, which whoever adds to a queue may do. A worker that does not stay waits so, as a
+turn that ends with nothing left to wait for ends it. `task.fail` is no way back to the worker: it returns the task to the queue's
+readers, the merger, until it dies. Each role's `instructions` say this to its agents: a worker adds a
 task naming its branch, and a merger merges what it claims and completes it with what came of that.
 
 ```toml

@@ -217,6 +217,16 @@ def _gone(db: Any) -> int:
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
+CRAFTING = [
+    [
+        Call("agent_spawn", {"name": "kid", "child_role": "bob"}),
+        Call("message_send", {"to": "@kid", "gist": "Craft three, then say what you found."}),
+        Call("wait", {"agents": ["@kid"]}),
+    ],
+    [Say("all three are crafted")],
+]
+"""A root that does not stay, as the first GPU run's was: it hands its child the task, waits on its end, and ends its
+next turn without finishing."""
 SEALED = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
 """A sealed turn: the environment's tool, the model, and a compaction."""
 
@@ -231,6 +241,7 @@ HARNESSES = {
     "saying": lambda: ScriptedDriver(itertools.repeat([Say("done")])),
     "asks_more": lambda: ScriptedDriver(FOLLOWING_UP),
     "spawning": lambda: ScriptedDriver(SPAWNING),
+    "crafting": lambda: ScriptedDriver(CRAFTING),
     "exiting": lambda: ScriptedDriver([[Exit()]]),
     "listening": lambda: ScriptedDriver(LISTENING),
     "returning": lambda: Returning([[Hang()]]),
@@ -277,6 +288,16 @@ def over(team: Team) -> Team:
     given = team.canonical()
     lead = {"harness": inside("spawning"), "may_spawn": ["bob"]}
     return Team.model_validate({**given, "roles": {**given["roles"], "lead": lead}, "topology": {"edges": {}}})
+
+
+def crafting_tree(team: Team) -> Team:
+    """`team`, whose one role is `bob`, under a scripted lead that does not stay and spawns `bob`, which does not stay
+    either, as `kid`, closing when the lead ends."""
+    given = team.canonical()
+    bob = {**given["roles"]["bob"], "count": 0}
+    lead = {"harness": inside("crafting"), "may_spawn": ["bob"], "stays": False}
+    topology = {"edges": {"lead": ["children"]}, "until": "role:lead", "limits": {"max_hops": 8}}
+    return Team.model_validate({**given, "roles": {"bob": bob, "lead": lead}, "topology": topology})
 
 
 def manager_worker(lead: Any, worker: Any, **roles: Any) -> Team:

@@ -538,6 +538,14 @@ class Deliveries(View):
         )
         return [row["input"] for row in rows]
 
+    def unlanded(self, reader: str) -> bool:
+        """Whether the harness of `reader` took a handover it has not said landed, which a turn that stopped on its own
+        lands in the turn that follows."""
+        row = self.db.execute(
+            "SELECT 1 FROM v_deliveries_offers WHERE reader = ? AND taken = 1 AND delivered = 0 LIMIT 1", (reader,)
+        ).fetchone()
+        return row is not None
+
     def launch(self, reader: str) -> int | None:
         """The offer that launched the harness `reader` runs now, while its harness has not said it took any input."""
         row = self.db.execute("SELECT input FROM v_deliveries_launch WHERE agent = ?", (reader,)).fetchone()

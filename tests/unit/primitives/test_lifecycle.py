@@ -290,7 +290,7 @@ async def test_a_report_that_reached_a_parent_asks_no_human(kernel, ada):
 
 async def test_the_monitor_posts_this_turns_final_text_and_no_earlier_one(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    await spawn(kernel, "bob", by=lead)
+    await spawn(kernel, "bob", by=lead, stays=True)
     await start_turn(kernel, "bob")
     await report(kernel, "bob", "item", kind="message", gist="the result of turn one")
     await end_turn(kernel, "bob")
@@ -543,7 +543,7 @@ async def test_finishing_is_refused_over_a_child_whose_wait_holds(kernel):
 async def test_finishing_goes_through_over_a_child_the_budget_will_not_wake(kernel):
     result_of(await kernel.submit(kernel.runtime, "budget.set", {"scope": "role:linked", "limits": {"turns": 1}}))
     lead = await spawn(kernel, "lead", role="lead", goal="")
-    await spawn(kernel, "bob", role="linked", by=lead)
+    await spawn(kernel, "bob", role="linked", by=lead, stays=True)
     await start_turn(kernel, "bob")
     await end_turn(kernel, "bob")
     await send(kernel, lead, "@bob", "more")
@@ -1041,6 +1041,109 @@ async def test_a_child_that_stays_takes_task_after_task_and_retires(kernel):
     assert last_report(kernel) == "next-turn"
 
 
+async def test_a_child_that_does_not_stay_ends_with_a_turn_that_leaves_nothing_to_come_and_its_parent_s_wait_holds(
+    kernel,
+):
+    """It reported and never called `agent.finish`, so it finishes as that call with no report would have it: its
+    last words are its report, shown to its parent by the ref of what said them, and `said` names its end."""
+    await parked_on(kernel, "a")
+    await start_turn(kernel, "a")
+    await report(kernel, "a", "item", kind="message", gist="the ingredient chain")
+    said = state_of(kernel, "a")["said"]
+
+    await end_turn(kernel, "a")
+    await settle_effects(kernel, "a")
+
+    ended = of_type(kernel, "agent.ended")[-1]
+    posted = of_type(kernel, "message.sent")[-1]
+    assert (state_of(kernel, "a")["status"], ended.data["report"]) == ("finished", "the ingredient chain")
+    assert (posted.gist, posted.data["carries"], posted.data["delivery"]) == ("the ingredient chain", said, "next-turn")
+    assert state_of(kernel, "a")["said"] == f"{ended.stream}@{ended.version}"
+    assert of_type(kernel, "turn.ended")[-1].data["reason"] == "finished"
+    [held] = ready(kernel)["waits"]
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": held}))
+    assert ready(kernel)["agents"] == ["lead"]
+
+
+async def test_a_root_that_does_not_stay_ends_with_a_turn_that_leaves_nothing_to_come(kernel):
+    await spawn(kernel, "lead", role="leaver", goal="")
+    await start_turn(kernel, "lead")
+    await report(kernel, "lead", "item", kind="message", gist="all three are crafted")
+
+    await end_turn(kernel, "lead")
+
+    assert state_of(kernel, "lead")["status"] == "finished"
+    assert of_type(kernel, "agent.ended")[-1].data["report"] == "all three are crafted"
+
+
+@pytest.mark.parametrize("spawned", [False, True], ids=["root", "child"])
+async def test_an_agent_that_stays_is_left_idle_by_a_turn_that_only_ends(kernel, spawned):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", by=lead if spawned else None, stays=True if spawned else None)
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="an answer")
+
+    await end_turn(kernel, "bob")
+
+    assert (state_of(kernel, "bob")["state"], state_of(kernel, "bob")["status"]) == ("idle", None)
+    assert of_type(kernel, "agent.ended") == []
+
+
+@pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP, "rate limited"])
+async def test_a_turn_that_does_not_stop_on_its_own_is_no_finish_for_an_agent_that_does_not_stay(kernel, reason):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    await spawn(kernel, "bob", by=lead)
+    await start_turn(kernel, "bob")
+    await report(kernel, "bob", "item", kind="message", gist="half an answer")
+
+    await end_turn(kernel, "bob", reason)
+
+    assert (state_of(kernel, "bob")["state"], state_of(kernel, "bob")["status"]) == ("idle", None)
+    assert of_type(kernel, "agent.ended") == []
+
+
+@pytest.mark.parametrize(
+    "still",
+    ["a person holding it", "a wait", "a message", "a handover under way", "a handover taken", "a child at work"],
+)
+async def test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come(kernel, ada, still):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    declared = {"boundaries": ["model_call", "turn"], "resume": True}
+    bob = await spawn(kernel, "bob", role="steerer", by=lead, goal="", ready=declared)
+    await channel(kernel, "news")
+    if still == "a person holding it":
+        result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    await start_turn(kernel, "bob")
+    if still == "a wait":
+        result_of(await kernel.submit(bob, "wait", {"channels": ["#news"]}))
+    elif still == "a message":
+        await send(kernel, ada, "@bob", "one more thing")
+    elif still.startswith("a handover"):
+        await send(kernel, lead, "@bob", "and also this")
+        result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+        if still == "a handover taken":
+            await settle_effects(kernel, "bob")
+    elif still == "a child at work":
+        await spawn(kernel, "cy", role="linked", by=bob)
+
+    await end_turn(kernel, "bob")
+
+    assert state_of(kernel, "bob")["status"] is None
+    assert of_type(kernel, "agent.ended") == []
+
+
+async def test_a_parent_s_message_keeps_a_child_that_does_not_stay_and_the_turn_that_answers_it_ends_it(kernel):
+    lead = await spawn(kernel, "lead", role="lead")
+    bob = await spawn(kernel, "bob", by=lead)
+    await start_turn(kernel, "bob")
+    await send(kernel, lead, "@bob", "and then?")
+    await end_turn(kernel, "bob")
+    assert (state_of(kernel, "bob")["status"], last_report(kernel)) == (None, "wake")
+
+    assert await answers(kernel, bob, "t2") == "wake"
+    assert state_of(kernel, "bob")["status"] == "finished"
+
+
 # Interrupt and takeover.
 
 
@@ -1247,7 +1350,7 @@ async def answers(kernel: Kernel, child: Principal, turn: str, *, reads: bool = 
 
 async def test_a_parent_s_message_to_its_own_child_re_arms_its_report(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     assert await answers(kernel, bob, "t1", reads=False) == "wake"
 
     await send(kernel, lead, "@bob", "and then?")
@@ -1259,7 +1362,7 @@ async def test_a_parent_s_message_to_its_own_child_re_arms_its_report(kernel):
 @pytest.mark.parametrize("sender", ["ada", "sibling"])
 async def test_a_message_from_a_peer_or_a_human_does_not_re_arm(kernel, ada, sender):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     sibling = await spawn(kernel, "sibling", by=lead)
     assert await answers(kernel, bob, "t1", reads=False) == "wake"
 
@@ -1270,7 +1373,7 @@ async def test_a_message_from_a_peer_or_a_human_does_not_re_arm(kernel, ada, sen
 
 async def test_a_broadcast_from_the_parent_does_not_re_arm(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await channel(kernel, "all-hands", "topic", delivery="wake")
     assert await answers(kernel, bob, "t1", reads=False) == "wake"
 
@@ -1284,7 +1387,7 @@ async def test_a_broadcast_from_the_parent_does_not_re_arm(kernel):
 
 async def test_two_messages_one_turn_heard_are_one_question(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
 
     await send(kernel, lead, "@bob", "first")
@@ -1296,7 +1399,7 @@ async def test_two_messages_one_turn_heard_are_one_question(kernel):
 
 async def test_a_message_sent_while_its_child_works_is_answered_by_the_turn_that_hears_it(kernel):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
     await send(kernel, lead, "@bob", "first")
     await start_turn(kernel, "bob", "t2")
@@ -1311,7 +1414,7 @@ async def test_a_message_sent_while_its_child_works_is_answered_by_the_turn_that
 
 async def test_a_turn_that_parks_leaves_its_parent_s_question_open(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await channel(kernel, "news")
     await answers(kernel, bob, "t1", reads=False)
     await send(kernel, lead, "@bob", "find out, then tell me")
@@ -1330,7 +1433,7 @@ async def test_a_turn_that_parks_leaves_its_parent_s_question_open(kernel, ada):
 @pytest.mark.parametrize("reason", ["interrupted", OWNER_STOP])
 async def test_a_turn_stopped_on_purpose_leaves_its_parent_s_question_open(kernel, ada, reason):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
     await send(kernel, lead, "@bob", "a long job")
     await start_turn(kernel, "bob", "t2")
@@ -1345,7 +1448,7 @@ async def test_a_turn_stopped_on_purpose_leaves_its_parent_s_question_open(kerne
 
 async def test_a_report_answers_its_parent_s_question_though_a_wait_counts_it(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
     await start_turn(kernel, "lead", "l1")
     await read(kernel, lead, "@lead")
@@ -1365,7 +1468,7 @@ async def test_a_report_answers_its_parent_s_question_though_a_wait_counts_it(ke
 
 async def test_re_reading_a_parent_s_message_asks_nothing_new(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead, goal="")
+    bob = await spawn(kernel, "bob", by=lead, goal="", stays=True)
     await send(kernel, lead, "@bob", "the question")
     assert await answers(kernel, bob, "t1") == "wake"
     await send(kernel, ada, "@bob", "a word of my own")
@@ -1379,7 +1482,7 @@ async def test_re_reading_a_parent_s_message_asks_nothing_new(kernel, ada):
 
 async def test_a_parent_s_message_handed_over_again_after_a_failed_handover_still_asks(kernel, clock):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
     await send(kernel, lead, "@bob", "and then?")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
@@ -1449,7 +1552,7 @@ def written_at_v1(folder: Path) -> None:
 
 async def test_a_journal_written_at_v1_folds_as_it_was_written_and_goes_on(kernel, folder, clock):
     lead = await spawn(kernel, "lead", role="lead")
-    bob = await spawn(kernel, "bob", by=lead)
+    bob = await spawn(kernel, "bob", by=lead, stays=True)
     await answers(kernel, bob, "t1", reads=False)
     await send(kernel, lead, "@bob", "and then?")
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
@@ -1671,6 +1774,7 @@ async def test_a_join_on_tasks_costs_one_wake(kernel):
     result_of(await kernel.submit(second, "task.claim", {"queue": "q"}))
     result_of(await kernel.submit(second, "task.complete", {"queue": "q"}))
     await end_turn(kernel, "b")
+    await settle_effects(kernel, "b")
 
     assert ready(kernel)["waits"] == [placed["id"]]
     result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"]}))
@@ -1719,14 +1823,15 @@ async def test_a_report_the_wait_does_not_count_wakes_the_parent(kernel):
     assert ready(kernel)["agents"] == ["lead"]
 
 
-async def test_a_turn_end_is_no_end_so_a_join_on_that_child_is_woken_by_it(kernel):
-    """A child that ends a turn with no finish has not ended, and only this wake can rescue the join."""
+async def test_a_turn_end_with_more_to_come_is_no_end_so_a_join_on_that_child_is_woken_by_it(kernel, ada):
+    """A child kept by a message that came in its turn has not ended, and only this wake can rescue the join."""
     await parked_on(kernel, "a", "b")
 
     await start_turn(kernel, "a")
+    await send(kernel, ada, "@a", "one more thing")
     await end_turn(kernel, "a")
 
-    assert ready(kernel)["agents"] == ["lead"]
+    assert "lead" in ready(kernel)["agents"]
 
 
 async def test_a_turn_the_parent_was_waiting_to_hear_of_does_not_wake_it(kernel):
@@ -1769,6 +1874,7 @@ async def test_the_last_worker_at_work_wakes_a_join_on_tasks_it_left_open(kernel
     await on_two_tasks(kernel, "b")
 
     await end_turn(kernel, "a")
+    await settle_effects(kernel, "a")
 
     assert ready(kernel)["agents"] == ["lead"]
 
@@ -1789,6 +1895,7 @@ async def test_someone_at_work_elsewhere_is_no_reason_to_stay_quiet(kernel):
     await start_turn(kernel, "stranger")
 
     await end_turn(kernel, "a")
+    await settle_effects(kernel, "a")
 
     assert ready(kernel)["agents"] == ["lead"]
 
@@ -1907,7 +2014,7 @@ async def test_a_report_of_a_child_the_wait_did_not_name_waits_for_the_next_turn
     """`b` answered its spawn, and a human set it to work again, so its report asks to wake nobody."""
     lead = await spawn(kernel, "lead", role="lead", goal="")
     await spawn(kernel, "a", by=lead, goal="")
-    await spawn(kernel, "b", by=lead, goal="")
+    await spawn(kernel, "b", by=lead, goal="", stays=True)
     await start_turn(kernel, "b")
     await end_turn(kernel, "b")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
@@ -1941,17 +2048,18 @@ async def test_a_wait_cancelled_with_nothing_held_back_wakes_nobody(kernel):
 
 
 async def asked_nothing(kernel: Kernel, human: Principal) -> None:
-    """A child whose report answered its spawn, at work again for a human, and a lead parked on its end."""
+    """A child whose report answered its spawn, kept by a human's message that came in that turn and at work on it
+    now, and a lead parked on its end."""
     lead = await spawn(kernel, "lead", role="lead", goal="")
     await spawn(kernel, "a", by=lead, goal="")
     await start_turn(kernel, "a")
     await report(kernel, "a", "item", kind="message", gist="first go")
+    await send(kernel, human, "@a", "one more thing")
     await end_turn(kernel, "a")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
     await start_turn(kernel, "lead")
     result_of(await kernel.submit(lead, "wait", {"agents": ["a"]}))
     await end_turn(kernel, "lead")
-    await send(kernel, human, "@a", "one more thing")
     result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "a"}))
     await start_turn(kernel, "a", "t2")
 
@@ -1966,10 +2074,12 @@ async def test_a_failed_turn_breaks_in_on_a_parked_parent_that_asked_nothing(ker
 
 async def test_a_turn_that_went_well_and_answers_nothing_waits_for_the_parent_s_next_turn(kernel, ada):
     await asked_nothing(kernel, ada)
+    await send(kernel, ada, "@a", "and one more")
 
     await end_turn(kernel, "a")
 
-    assert ready(kernel)["agents"] == []
+    assert ready(kernel)["agents"] == ["a"]
+    assert last_report(kernel) == "next-turn"
 
 
 @pytest.mark.parametrize("limits", [{"max_hops": 0}])

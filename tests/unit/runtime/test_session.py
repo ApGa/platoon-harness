@@ -1047,6 +1047,35 @@ async def test_a_child_that_stays_answers_a_task_a_follow_up_and_a_question_on_o
     assert statuses == {"lead": "finished", "helper": "retired"}
 
 
+async def test_a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing(tmp_path):
+    """The first GPU run of a team on OpenHands, rebuilt: a root that does not stay spawns a child and waits on it, with
+    a timeout no test reaches, and the child reports and never calls `agent.finish`. Each ends with its turn, so the
+    root's wait holds, its next turn is its last, and the session closes at its `until`, where before it sat idle until
+    that timeout, which only a person could end."""
+    clock = ManualClock(1000.0)
+    spawned = Call("agent_spawn", {"name": "kid", "child_role": "helper", "goal": "craft three"})
+    crafter = [[spawned, Call("wait", {"agents": ["@kid"], "timeout": 1200})], [Say("all three are crafted")]]
+    team = Team.model_validate(
+        {
+            "roles": {
+                "crafter": {"harness": scripted(*crafter), "stays": False, "may_spawn": ["helper"]},
+                "helper": {"harness": scripted([Say("the ingredient chain")]), "count": 0},
+            },
+            "topology": {"edges": {"crafter": ["children"]}, "until": "role:crafter"},
+        }
+    )
+
+    async with Session.start(team, root=tmp_path, clock=clock) as session:
+        await session.send("@crafter", "craft three")
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+        rows = {row["agent"]: row for row in await session.agents()}
+
+    statuses = {row["agent"]: (row["status"], (row["report"] or {}).get("gist")) for row in ending.agents}
+    assert ending.reason == "settled"
+    assert statuses == {"crafter": ("finished", "all three are crafted"), "kid": ("finished", "the ingredient chain")}
+    assert rows["crafter"]["said"] is not None and rows["kid"]["said"] is not None
+
+
 async def test_timing_out_is_exit_3_and_leaves_the_session_as_it_is(tmp_path):
     clock = ManualClock(1000.0)
 
@@ -1114,6 +1143,19 @@ async def test_a_session_settled_short_of_until_is_exit_4_and_never_a_hang(tmp_p
         ending = await asyncio.wait_for(session.settled(), SECONDS)
 
     assert (ending.state, ending.reason) == ("open", "needs_human")
+
+
+async def test_a_root_that_does_not_stay_ends_with_its_turn_and_its_session_closes_at_until(tmp_path):
+    roles = {"lead": {"harness": scripted([Say("I think we are done")]), "stays": False}}
+    team = Team.model_validate({"roles": roles, "topology": {"until": "role:lead"}})
+
+    async with Session.start(team, root=tmp_path) as session:
+        await session.send("@lead", "go")
+
+        ending = await asyncio.wait_for(session.settled(), SECONDS)
+
+    assert (ending.state, ending.reason) == ("closing", "settled")
+    assert [(row["status"], row["report"]["gist"]) for row in ending.agents] == [("finished", "I think we are done")]
 
 
 async def test_two_agents_waiting_on_each_other_is_exit_4_and_never_a_hang(tmp_path):

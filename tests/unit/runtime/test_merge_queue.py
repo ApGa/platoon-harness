@@ -89,7 +89,7 @@ async def test_the_written_out_merge_queue_tells_the_worker_of_a_conflict(repo, 
     heard: list[Any] = []
     async with Session.start(merge_queue(heard), name="s", root=tmp_path, cwd=repo) as session:
         for name in ("ada", "bob"):
-            await session.spawn(name, "worker", "add your line")
+            await session.spawn(name, "worker", "add your line", stays=True)
         await until(lambda: of_type(session, "task.added"), session, lambda found: len(found) == 2)
         for count in (1, 2):
             await session.send("@merger", "merge the next")

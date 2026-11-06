@@ -486,7 +486,7 @@ async def test_a_snapshot_agent_s_commits_are_its_own_and_its_end_keeps_them(rep
     worker = {"harness": working(lambda cwd: commit(cwd, "work")), "workspace": "snapshot", "count": 0}
     team = Team.model_validate({"roles": {"lead": {"harness": scripted(), "workspace": "snapshot"}, "worker": worker}})
     async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
-        await session.spawn("ada", "worker", "work")
+        await session.spawn("ada", "worker", "work", stays=True)
         await until(lambda: of_type(session, "repo.committed"), session)
         [found] = await of_type(session, "repo.committed")
         workspace = (await session.status("ada"))["workspace"]

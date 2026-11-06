@@ -805,6 +805,12 @@ async def test_a_harness_killed_alone_twice_before_a_turn_ends_is_lost(tmp_path,
         await clients.a_harness_killed_alone_twice_before_a_turn_ends_is_lost(team, tmp_path, model)
 
 
+async def test_a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing(tmp_path, monkeypatch):
+    async with FakeModel("the ingredient chain") as model:
+        team = keyed(tmp_path / "home", model, monkeypatch)
+        await clients.a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing(team, tmp_path)
+
+
 async def test_stop_below_stops_the_turns_of_a_lead_and_its_child_and_keeps_both(tmp_path, monkeypatch):
     async with FakeModel([Stall()]) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
