@@ -258,10 +258,17 @@ uv run pytest -q -m e2e
 
 The slow tests need harness binaries that CI does not have, so CI never runs them, and it never runs the live ones.
 
-**The pull request.** Push your branch and open a pull request into `main`. Say what changes and why, and how you tested
-it: the tests you added, the commands you ran with what they showed, and which live tests ran with their budget, or
-none. Link what it belongs to: `Fixes #123`, or `Implements RFC NNNN, milestone M2`
-([Linking an RFC to its implementation](docs/rfcs/README.md#linking-an-rfc-to-its-implementation)).
+**The pull request.** Push your branch and open a pull request into `main`. The
+[pull request template](.github/pull_request_template.md) asks for each of these:
+
+- What changes and why, and how you tested it: the tests you added, the commands you ran with what they showed, and
+  which live tests ran with their budget, or none.
+- A test for every fix and feature; a fix's test fails without the fix.
+- The docs, examples, command-line help, STATUS and `tests/public_api.txt` that the change affects, updated, and
+  generated docs made again.
+- No secrets, local paths, cluster names or account details in code, configs, docs or tests.
+- A link to what it belongs to: `Fixes #123`, or `Implements RFC NNNN, milestone M2`
+  ([Linking an RFC to its implementation](docs/rfcs/README.md#linking-an-rfc-to-its-implementation)).
 
 platoon-harness is released under the [MIT license](LICENSE), and contributions are accepted under the same license.
 

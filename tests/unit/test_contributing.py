@@ -1,7 +1,7 @@
 """CONTRIBUTING.md stays true: each command it shows is one CI or a hook runs, one that makes a generated page, or one
 it runs by hand for a stated reason; it shows every command CI runs and every hook; its commit types are the ones the
-hook and the title check accept; the ruff hook runs the ruff the dev group pins; and the paths it names and the version
-it shows are real."""
+hook and the title check accept; the ruff hook runs the ruff the dev group pins; the paths it names and the version it
+shows are real; and the pull request template asks for what it asks."""
 
 import re
 import tomllib
@@ -17,6 +17,7 @@ ROOT = Path(__file__).parents[2]
 GUIDE = ROOT / "CONTRIBUTING.md"
 TEXT = GUIDE.read_text()
 HOOKS = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
+TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 TITLE_CHECK = "amannn/action-semantic-pull-request"
 DEFAULT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test")
 """The types conventional-pre-commit v4.0.0 and the title check each accept when given none."""
@@ -182,3 +183,21 @@ def test_the_version_shown_is_the_one_the_command_line_prints():
     version = f"platoon-harness {platoon_harness_cli.__version__}, SDK {platoon_harness.__version__}"
 
     assert version in blocks("text")
+
+
+def test_the_pull_request_template_asks_for_what_the_guide_asks():
+    template = TEMPLATE.read_text()
+    sections = re.findall(r'CONTRIBUTING\.md, (?:under )?"([^"]+)"', template)
+    both = (" ".join(template.split()), " ".join(TEXT.split()))
+
+    assert "](.github/pull_request_template.md)" in TEXT
+    for heading in ("Summary", "Why", "Links", "Tests", "Checklist"):
+        assert f"\n## {heading}\n" in template
+    for asked in ("`<type>: <summary>`", "no scope", "sentence case", "final period", "live tests", "BREAKING CHANGE:"):
+        assert all(asked in text for text in both), asked
+    for asked in ("Fixes #123", "Implements RFC NNNN, milestone M2", "`tests/public_api.txt`"):
+        assert all(asked in text for text in both), asked
+    assert sections and [section for section in sections if f"\n## {section}\n" not in TEXT] == []
+    commands = re.findall(r"`(uv run [^`]+)`", template)
+    unrun = [command for command in commands if not any(run.startswith(command) for run in ci_runs())]
+    assert commands and unrun == []
