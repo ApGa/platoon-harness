@@ -2,4 +2,4 @@
 python-version = "3.12"
 
 [src]
-include = ["packages", "extensions"]
+include = ["packages"]

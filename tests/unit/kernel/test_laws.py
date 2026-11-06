@@ -267,8 +267,9 @@ def test_nothing_has_a_private_api():
         path = kernel_folder / f"{name}.py"
         assert private_reaches(ast.parse(path.read_text())) == [], path.name
 
-    root = Path(__file__).parents[3]
-    for path in (*root.glob("packages/*/src/**/*.py"), *root.glob("extensions/**/*.py")):
+    code = sorted(Path(__file__).parents[3].glob("packages/*/src/**/*.py"))
+    assert code, "packages/*/src/**/*.py matches nothing"
+    for path in code:
         if kernel_folder in path.parents:
             continue
         tree = ast.parse(path.read_text())
