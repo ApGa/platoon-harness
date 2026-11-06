@@ -56,7 +56,7 @@ printf %s "$PLATOON_HARNESS_TOKEN" | base64
 
 
 def git(work: Path, *args: str) -> str:
-    identity = ("-c", "user.name=test", "-c", "user.email=test@example.com")
+    identity = ("-c", "user.name=test", "-c", "user.email=test@example.invalid")
     done = subprocess.run(("git", *identity, *args), cwd=work, capture_output=True, text=True, check=True, timeout=30)
     return done.stdout
 

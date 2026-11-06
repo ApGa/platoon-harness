@@ -1,7 +1,6 @@
-"""The SDK stands alone, and what is public stays free of anything local or secret."""
+"""The SDK stands alone."""
 
 import ast
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -14,21 +13,6 @@ ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_
 OPENHANDS = {"openhands", "litellm"}
 """What the SDK's `openhands` extra brings, which only the OpenHands worker loads, in its own process."""
 WORKER = SDK / "drivers" / "openhands" / "agent.py"
-PUBLIC = (
-    *ROOT.glob("packages/*/src/**/*.py"),
-    *ROOT.glob("*.md"),
-    *ROOT.glob("packages/*/README.md"),
-    *(path for path in (ROOT / "docs").rglob("*") if path.is_file()),
-    *(path for path in (ROOT / "examples").rglob("*") if path.is_file() and "__pycache__" not in path.parts),
-    *(ROOT / "tests" / "conformance").glob("*.py"),
-)
-LOCAL = re.compile(
-    r"(?<![\w.-])/(home|groups|Users)/[A-Za-z]|/gs/|gai\d{5}|aci\d{5}|\bR9920261300\b|(?i:\babci\b)"
-    r"|ANTHROPIC_API_KEY=sk-|sk-ant-"
-    r"|[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(?!invalid\b)[A-Za-z]{2,}\b"
-)
-"""An absolute path under a home or a group, this cluster's names, a key, or an email address but one under `.invalid`,
-which IETF RFC 2606 keeps from ever naming an account."""
 
 
 def roots_of(path: Path) -> set[str]:
@@ -91,24 +75,3 @@ def test_nothing_but_a_team_that_names_it_loads_bwrap():
 
     assert done.returncode == 0, done.stderr
     assert done.stdout.split() == ["[]"]
-
-
-@pytest.mark.parametrize("path", PUBLIC, ids=lambda path: str(path.relative_to(ROOT)))
-def test_nothing_public_holds_a_local_path_or_an_account(path):
-    assert [line for line in path.read_text().splitlines() if LOCAL.search(line)] == []
-
-
-@pytest.mark.parametrize(
-    ("line", "caught"),
-    [
-        ("see /home/someone/notes", True),
-        ("see /Users/Someone/notes", True),
-        ("ssh login1.abci.ai", True),
-        ("(/groups/somegroup/scratch)", True),
-        ("write to someone@example.com", True),
-        ("opencode@ff90ed91607c:packages/protocol/src/groups/event.ts:69", False),
-        ("`claude-agent-acp@0.99.1`", False),
-    ],
-)
-def test_the_scan_tells_a_local_path_from_a_path_in_a_repository(line, caught):
-    assert bool(LOCAL.search(line)) == caught

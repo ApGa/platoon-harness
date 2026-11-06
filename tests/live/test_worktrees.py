@@ -72,7 +72,7 @@ async def test_an_agent_commits_in_its_worktree_is_killed_and_resumes_there(harn
         pytest.skip(f"{harness} is not installed")
     work, root = seeded(tmp_path / "work"), tmp_path / "root"
     git(work, "config", "user.name", "test")
-    git(work, "config", "user.email", "test@example.com")
+    git(work, "config", "user.email", "test@example.invalid")
     team = Team(roles={"bob": ROLES[harness]}, budget=LIMIT)
     guest = await Session.start(team, name="wt", root=root, cwd=work, detach=True, plan_login=True)
     try:
@@ -131,7 +131,7 @@ async def test_an_agent_commits_in_its_snapshot_and_its_end_keeps_it_whole(harne
         pytest.skip(f"{harness} is not installed")
     work, root = seeded(tmp_path / "work"), tmp_path / "root"
     git(work, "config", "user.name", "test")
-    git(work, "config", "user.email", "test@example.com")
+    git(work, "config", "user.email", "test@example.invalid")
     (work / "uncommitted.txt").write_text("yours, uncommitted\n")
     team = Team(roles={"bob": ROLES[harness].model_copy(update={"workspace": "snapshot"})}, budget=LIMIT)
     async with Session.start(team, name="snap", root=root, cwd=work, plan_login=True) as session:

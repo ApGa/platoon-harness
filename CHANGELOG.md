@@ -483,6 +483,11 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The scan for local paths and account details is `tests/unit/test_no_internal_references.py`, after Platoon's, and reads
+  every text file git tracks, every new one it does not ignore outside hidden folders, and the name of each, the tests and
+  the configuration among them. It holds the site's words only as SHA-256 digests, so it no longer spells them out, and
+  takes a numbered host, account or group by the letters before its first digit. Each exemption says why; the only one
+  is the author's contact each package publishes. `test_boundaries.py` keeps the import boundaries.
 - The README follows Platoon's outline: the project's one sentence, what it gives you, each point as STATUS has it, the
   nine words of architecture section 2, installing from a checkout, a quickstart that begins with the mixed team on no
   keys, the SDK in a script, the milestones, the documentation, the layout, contributing and the license.

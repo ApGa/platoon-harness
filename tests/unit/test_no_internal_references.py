@@ -1,0 +1,194 @@
+"""Nothing the repository holds names the machines it was built on or anyone's account: no site, host, reservation,
+account or group of theirs, no path into a home directory, group storage or a per-user data directory, no key, and no
+email address but one under `.invalid`, which IETF RFC 2606 keeps from ever naming an account.
+
+The scan covers every text file git tracks and every new file it does not ignore outside hidden directories, and the
+names of all of them. A file is text when its first 8000 bytes hold no NUL byte, as git judges it. A file may hold what
+the scan catches only in a text that `ALLOWED` lists, with the reason.
+
+Banned words are stored as SHA-256 digests, so that this file does not publish them itself. A line has its camelCase
+words split (`FooBar` reads as `foo_bar`), is lower-cased and is split into words of letters and digits. A word matches
+when it is banned, or is once cut at its first digit (a numbered host, account or group), either also without a
+trailing `s` (a plural). To ban another word, add `hashlib.sha256(word.lower().encode()).hexdigest()`.
+"""
+
+import hashlib
+import re
+import subprocess
+import tomllib
+from collections.abc import Iterable, Iterator
+from functools import cache
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parents[2]
+BANNED_DIGESTS = frozenset(
+    {
+        "691c1224a07863335713b1c9f6b5d345529a6519636b7d52428234b0fef76b2e",  # the site
+        "092bf25babc151516ee10f1a279ee6ff18c985232ce50922039e6160af87bc20",  # the prefix of its hosts' names
+        "09a23692b3d972ae19593ac7d765c589f058f4ed0ad8c76d48b23bafd7d590e1",  # a reservation there
+        "9f10f645170216d32bff57fe46f386ad5a3f46e30db179411561bfbbcdb279fe",  # the prefix of its accounts
+        "ad99ee823dce531770957d20a75e6a5c052b2f18acfd291aa186eccb9182cbed",  # the prefix of its groups
+    }
+)
+BANNED_PATTERNS = (
+    re.compile(r"(?<![\w.~$-])/(?:home|Users)/(?!<)[\w.-]+"),
+    re.compile(r"(?<![\w.~$-])/(?:groups|gs)(?=/)"),
+    re.compile(r"(?<![\w.-])user_data/(?!<)[\w.-]+"),
+    re.compile(r"ANTHROPIC_API_KEY=s[k]-|s[k]-ant-"),
+    re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?!invalid\b)[A-Za-z]{2,}\b"),
+)
+"""A path into a home directory, group storage or a per-user data directory, whoever it belongs to, but a URL's path and
+a `<placeholder>` for the account; a key, its letters bracketed so that this file does not match itself; and an email
+address."""
+AUTHOR = tomllib.loads((ROOT / "packages/sdk/pyproject.toml").read_text())["project"]["authors"][0]["email"]
+ALLOWED: dict[tuple[str, str], str] = {
+    (f"packages/{package}/pyproject.toml", AUTHOR): "the author's contact, which each package publishes"
+    for package in ("sdk", "cli")
+}
+"""(file, text) -> why the file may hold that text although the scan catches it. Every entry must still be needed (see
+the last test). Keep the list short: reword the file instead wherever its readers lose nothing."""
+
+_WORD = re.compile(r"[a-z0-9]+")
+_CAMEL_CASE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+@cache
+def _banned(word: str) -> bool:
+    """Whether a lower-case word is banned, or is once cut at its first digit, either also without a trailing `s`."""
+    cut = re.split(r"\d", word, maxsplit=1)[0]
+    candidates = {word, cut, word.removesuffix("s"), cut.removesuffix("s")} - {""}
+    return any(hashlib.sha256(candidate.encode()).hexdigest() in BANNED_DIGESTS for candidate in candidates)
+
+
+def _hits(text: str, allowed: Iterable[str] = ()) -> list[str]:
+    """`line N: 'match'` for each banned word, path, key or email address in `text`, outside the `allowed` texts."""
+    for exempt in allowed:
+        text = text.replace(exempt, "")
+    hits = []
+    for number, line in enumerate(text.split("\n"), 1):
+        found = [word for word in _WORD.findall(_CAMEL_CASE.sub("_", line).lower()) if _banned(word)]
+        found += [match.group(0) for pattern in BANNED_PATTERNS for match in pattern.finditer(line)]
+        hits += [f"line {number}: {item!r}" for item in found]
+    return hits
+
+
+def _git_files(root: Path, *options: str) -> list[Path]:
+    listed = subprocess.run(["git", "ls-files", "-z", *options], cwd=root, capture_output=True, check=True, text=True)
+    return [Path(name) for name in listed.stdout.split("\0") if name]
+
+
+def _is_text(path: Path) -> bool:
+    with path.open("rb") as file:
+        return b"\0" not in file.read(8000)
+
+
+def scanned(root: Path, *, text_only: bool = True) -> list[Path]:
+    """The files git tracks under `root`, and the new ones it does not ignore outside hidden directories (environments,
+    caches, an editor's settings), but `.github`; only the text files, unless `text_only` is false."""
+    new = _git_files(root, "--others", "--exclude-standard")
+    hidden = {path for path in new if any(part.startswith(".") and part != ".github" for part in path.parts[:-1])}
+    candidates = set(_git_files(root, "--cached")) | (set(new) - hidden)
+    return sorted(path for path in candidates if (root / path).is_file() and (not text_only or _is_text(root / path)))
+
+
+FILES = scanned(ROOT)
+
+
+def test_the_scan_covers_every_text_file():
+    names = {path.as_posix() for path in FILES}
+
+    assert {"README.md", "AGENTS.md", "CONTRIBUTING.md", "pyproject.toml", "uv.lock"} <= names
+    assert {".pre-commit-config.yaml", "docs/README.md", "packages/sdk/pyproject.toml"} <= names
+    assert "tests/unit/test_no_internal_references.py" in names
+    for prefix in ("packages/sdk/src/", "packages/cli/src/", "docs/research/", "examples/", "tests/", ".github/"):
+        assert any(name.startswith(prefix) for name in names), prefix
+
+
+MADE_UP_BANS = ("zorbix", "qnode", "qac")
+"""A site, the prefix of its hosts' names and that of its accounts that nothing real is called: the matcher's tests ban
+them, so that they need no banned word."""
+
+
+@pytest.fixture
+def made_up_bans(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Ban `MADE_UP_BANS` as well, for one test."""
+    digests = {hashlib.sha256(word.encode()).hexdigest() for word in MADE_UP_BANS}
+    monkeypatch.setitem(globals(), "BANNED_DIGESTS", BANNED_DIGESTS | digests)
+    _banned.cache_clear()
+    yield
+    _banned.cache_clear()
+
+
+def test_the_matcher_finds_a_word_a_numbered_host_and_an_account(made_up_bans):
+    site, host, account = MADE_UP_BANS
+
+    assert _banned(site) and _banned(f"{site}s") and not _banned(f"g{site}") and not _banned("platoon")
+    assert _banned(f"{host}042") and _banned(f"{host}s") and not _banned(f"{host}x") and not _banned("q1")
+    assert _banned(f"{account}12345xy") and not _banned(f"{account}x1")
+    assert _hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}'"]
+    assert _hits(f"x\nssh login1.{site}.example") == [f"line 2: '{site}'"]
+    assert _hits(f"x {site} y", allowed=[f"{site} y"]) == []
+
+
+HOME, USERS, GROUPS = ("/".join(("", top, "someone", "notes")) for top in ("home", "Users", "groups"))
+
+
+@pytest.mark.parametrize(
+    ("line", "caught"),
+    [
+        (f"see {HOME}", True),
+        (f"see {USERS}", True),
+        (f"({GROUPS})", True),
+        ("/".join(("", "gs", "team", "cache")), True),
+        ("log_path: ./data/" + "/".join(("user_data", "someone")), True),
+        ("ANTHROPIC_API_KEY=" + "sk-x", True),
+        ("sk-" + "ant-x", True),
+        ("write to someone" + "@example.com", True),
+        ("write to tester@example.invalid", False),
+        ("opencode@ff90ed91607c:packages/protocol/src/groups/event.ts:69", False),
+        ("`claude-agent-acp@0.99.1`", False),
+        (f"https://example.com{HOME} and ~{HOME}", False),
+        ("/".join(("", "home", "<user>", "notes")), False),
+    ],
+)
+def test_the_scan_tells_a_local_path_from_a_path_in_a_repository(line, caught):
+    assert bool(_hits(line)) == caught
+
+
+def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(tmp_path, made_up_bans):
+    site = MADE_UP_BANS[0]
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("ignored.md\n")
+    (tmp_path / "tracked.md").write_text(f"see {GROUPS}\n")
+    subprocess.run(["git", "add", "tracked.md"], cwd=tmp_path, check=True)
+    (tmp_path / "new.md").write_text(f"ssh login1.{site}.example\n")
+    (tmp_path / "ignored.md").write_text(f"{site}\n")
+    (tmp_path / ".editor").mkdir()
+    (tmp_path / ".editor" / "settings.md").write_text(f"{site}\n")
+
+    found = {path.as_posix(): _hits((tmp_path / path).read_text()) for path in scanned(tmp_path)}
+
+    assert found == {".gitignore": [], "new.md": [f"line 1: '{site}'"], "tracked.md": ["line 1: '/groups'"]}
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda path: path.as_posix())
+def test_no_internal_references(path):
+    text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
+    hits = _hits(text, [exempt for (file, exempt) in ALLOWED if file == path.as_posix()])
+
+    assert not hits, f"{path} names a site, an account, a local path, a key or an email address:\n" + "\n".join(hits)
+
+
+def test_no_file_name_names_a_site_or_an_account():
+    hits = {path.as_posix(): _hits(path.as_posix()) for path in scanned(ROOT, text_only=False)}
+
+    assert {path: found for path, found in hits.items() if found} == {}
+
+
+def test_every_allowed_text_is_still_needed():
+    for (file, exempt), reason in ALLOWED.items():
+        assert reason.strip(), f"say why {file} may hold {exempt!r}"
+        assert exempt in (ROOT / file).read_text(encoding="utf-8", errors="replace"), f"{file} no longer holds it"
+        assert _hits(exempt), f"{exempt!r} is caught by nothing: drop its ALLOWED entry"
