@@ -1,11 +1,14 @@
 # RFCs
 
-[architecture.md](../architecture.md) says what the system is. These RFCs say why, and what else was on the table. Each one
-names the alternatives considered and the research or spike behind it.
+An RFC (request for comments) is a design document. [architecture.md](../architecture.md) says what the system is.
+These RFCs say why, and what else was on the table. Each one names the alternatives considered and the research or spike
+behind it.
 
 Until 2026-11-07, RFCs 0001 to 0060 were architecture decision records in `docs/adr`; earlier commits and other repositories
 cite them as ADR NNNN, under the same numbers. They give only their status and date, and each Summary is its old one-line
 index entry.
+
+## Index
 
 Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
 
@@ -72,10 +75,108 @@ Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own d
 | [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Accepted |
 | [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted |
 
-## Adding or changing one
+`tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
+add the row in the same pull request as the RFC.
 
-- One decision per file, named `NNNN-short-title.md`, with the next free number.
-- Sections, in order: Summary, Motivation, Proposal, Alternatives, Consequences, Evidence.
-- Write why, not what. If the content is a description of the system, it belongs in the architecture.
-- Cite evidence by repo-relative link. A decision with no evidence says so.
-- RFCs are not rewritten when a decision changes. Add a new RFC, and mark the old one superseded by RFC NNNN.
+## When to write an RFC
+
+Write an RFC before the code when a change touches any of these:
+
+- a public name of the kernel;
+- the semantics of the op table ([architecture section 6](../architecture.md#6-operations));
+- an event type, or the journal's schema;
+- the driver contract or the wire protocol ([section 9](../architecture.md#9-drivers));
+- the tool plane ([section 10](../architecture.md#10-tool-plane));
+- the schema of the team file or the config ([section 17](../architecture.md#17-extensions-and-configuration));
+- the [command line](../cli.md);
+- the training contract ([section 14](../architecture.md#14-training));
+- a new required dependency, or a new layer;
+- a name in `tests/public_api.txt`, renamed or removed;
+- a law of [section 3](../architecture.md#3-laws).
+
+Bug fixes, tests, docs and internal refactors need none. If you are unsure, open an issue that describes the problem and
+ask.
+
+## How to propose a change
+
+1. **Start a discussion (optional).** For a large idea, open an issue first that states the problem and the rough
+   direction, so you learn early whether the maintainers want it.
+2. **Take a number.** Use the next free number: one more than the highest number in this directory and in the open pull
+   requests that add RFCs. `0000` is the template. If two open RFCs collide, the one that merges second takes the next
+   free number before it merges.
+3. **Write it.** Copy the template and fill it in:
+
+   ```bash
+   cp docs/rfcs/0000-template.md docs/rfcs/NNNN-short-title.md
+   ```
+
+   The file name is the number and a few lower-case words joined by hyphens. Set `Status` to `Draft` and `Created` to
+   today's date.
+4. **Add it to the index.** Add a row to the table above with the status `Draft`.
+5. **Open a pull request** that holds only the RFC and its index row, titled in the commit form
+   [AGENTS.md](../../AGENTS.md#commits) gives, such as `docs: Add RFC NNNN on <topic>`.
+6. **Review.** Discussion happens on the pull request. Answer comments by revising the text; questions that stay open go
+   into the RFC's **Open questions**. A maintainer merges the RFC as a `Draft` once it is complete and coherent, so that
+   issues, pull requests and other RFCs can link to it. Merging a draft does not accept it.
+7. **Decide.** A maintainer accepts, rejects or defers the RFC in a pull request that changes its `Status` and its index
+   row. A rejected or deferred RFC keeps its text and gets a short **Decision** paragraph under its status table: why,
+   and for a deferred one, what would bring it back.
+8. **Implement.** Implementation pull requests link the RFC, as below. When the last milestone merges, a final pull
+   request updates the RFC to match the code that landed and sets its status to `Implemented`.
+
+## Lifecycle
+
+```text
+Draft ──> Accepted ──> Implemented
+  │
+  ├────> Rejected
+  └────> Deferred ──> Draft (when it is picked up again)
+```
+
+| Status | Meaning | Who changes it |
+|---|---|---|
+| `Draft` | Proposed and open for comments. A draft may be merged so others can link it. | The author, when the RFC is first added |
+| `Accepted` | The maintainers agree with the design; implementation can start, milestone by milestone. | A maintainer |
+| `Implemented` | Every milestone has merged and the RFC describes the code that landed. | The author or a maintainer, in the last pull request |
+| `Rejected` | The design will not be adopted. The **Decision** paragraph says why. | A maintainer |
+| `Deferred` | Not now: the problem is real, but something else must happen first. The **Decision** paragraph says what. | A maintainer |
+
+A status may carry a note after it, such as superseded by RFC NNNN or amended on a date, with the full note under the
+table.
+
+An Accepted RFC is revised as implementation changes course; once it is Implemented, a changed decision is a new RFC
+that supersedes it, noted in the old one's Status cell.
+
+## Linking an RFC to its implementation
+
+- **In each implementation pull request**, say which RFC and milestone it implements, with a link, for example
+  `Implements RFC NNNN, milestone M2`. A pull request that departs from an Accepted RFC revises it in the same pull
+  request, and says why.
+- **In the RFC**, list the pull requests as they merge: in the `Implementation` row of the status table, and in the
+  `Pull requests` column of the rollout plan.
+- **When it is done**, the RFC is updated to the names and behavior that shipped, and its status becomes `Implemented`.
+  From then on the code and [architecture.md](../architecture.md) are authoritative; the RFC records why.
+
+## Format
+
+One decision per file. Every RFC follows [the template](0000-template.md). It opens with a status table (`Status`,
+`Created`, `Authors`, `Builds on`, `Discussion`, `Implementation`), then has these sections, in order:
+
+1. **Summary**: the proposal in a paragraph.
+2. **Motivation**: what platoon-harness cannot do today, and who needs it.
+3. **Proposal**: the design, with typed sketches of new interfaces.
+4. **The hard parts** (optional): the problems it expects to be difficult.
+5. **Alternatives**: what else was considered, and why not.
+6. **Consequences**: what becomes true once it lands, what gets easier and harder, and what it costs.
+7. **Rollout plan** (optional): milestones, each with an exit check.
+8. **Open questions** (optional): what needs a decision, and by when.
+9. **Evidence**: the research, spikes, measurements and tests it rests on.
+
+An RFC written before its code includes Rollout plan and Open questions. An RFC numbered 0061 or above has all six
+rows of the status table; RFCs 0001 to 0060 have only `Status`.
+
+Write why, not what. If the content is a description of the system, it belongs in the architecture. Cite evidence by
+repo-relative link. A decision with no evidence says so. Typed sketches show shape, not final names; the code that lands
+is authoritative. EST marks an estimate and UNVERIFIED a claim nobody has checked yet. Citations of other projects name
+the project, the commit read and a path inside it, as the research notes do, for example
+`platoon@efe3b277c82c:docs/rfcs/0000-template.md`.

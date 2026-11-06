@@ -1,5 +1,6 @@
-"""The RFCs: the index lists each with the title and status it gives itself, each holds the sections the index names,
-every RFC the repository cites exists, and the name they had before is gone but for the sentence that tells it."""
+"""The RFCs: the index lists each with the title and status it gives itself and explains every status, each holds the
+sections the index names, the template holds every section and row, every RFC the repository cites exists, and the name
+they had before is gone but for the sentence that tells it."""
 
 import re
 from pathlib import Path
@@ -8,7 +9,12 @@ from .support import ROOT, prose, tracked
 
 RFCS = ROOT / "docs" / "rfcs"
 INDEX = RFCS / "README.md"
+TEMPLATE = RFCS / "0000-template.md"
 STATUSES = ("Draft", "Accepted", "Implemented", "Rejected", "Deferred")
+ROWS = ("Status", "Created", "Authors", "Builds on", "Discussion", "Implementation")
+WHOLE_TABLE_FROM = 61
+"""The first number taken after the template, from which an RFC's status table has every row."""
+LISTED = re.compile(r"^\d+\. \*\*(?P<name>.+?)\*\*(?P<optional> \(optional\))?:", re.M)
 ROW = re.compile(r"^\| \[(?P<number>\d{4})\]\((?P<link>[^)]+)\) \| (?P<title>.+?) \| (?P<status>[^|]+?) \|$", re.M)
 FILE_NAME = re.compile(r"^\d{4}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 CITATION = re.compile(
@@ -28,8 +34,8 @@ NAMING_IT = {"tests/unit/docs/test_rfcs.py": "it names the old name to look for 
 
 
 def rfcs() -> dict[str, Path]:
-    """Every RFC by number."""
-    files = sorted(path for path in RFCS.glob("*.md") if path != INDEX)
+    """Every RFC by number, the template aside."""
+    files = sorted(path for path in RFCS.glob("*.md") if path not in (INDEX, TEMPLATE))
     numbers = [path.name[:4] for path in files]
     assert files, "docs/rfcs holds no RFC"
     assert len(numbers) == len(set(numbers)), f"two RFCs share a number: {numbers}"
@@ -44,6 +50,28 @@ def title_and_status(path: Path) -> tuple[str, str]:
     status = re.search(r"^\| Status \| (.+?) \|$", text, re.M)
     assert status, f"{path.name} gives no status"
     return title[1], status[1]
+
+
+def headings(path: Path) -> list[str]:
+    return [line.removeprefix("## ") for _, line in prose(path) if line.startswith("## ")]
+
+
+def status_rows(path: Path) -> list[str]:
+    """The rows of the status table under the title, by name."""
+    return re.findall(r"^\| (\w[\w ]*?) \| ", path.read_text().partition("\n## ")[0], re.M)
+
+
+def format_section() -> str:
+    index = INDEX.read_text()
+    assert "\n## Format\n" in index, "the index has no Format section"
+    return index[index.index("\n## Format\n") :]
+
+
+def sections() -> tuple[list[str], list[str]]:
+    """The sections the index's format list names, in order, and those of them it does not call optional."""
+    listed = list(LISTED.finditer(format_section()))
+    assert listed, "the index's Format section lists no sections"
+    return [item["name"] for item in listed], [item["name"] for item in listed if not item["optional"]]
 
 
 def text_of(path: Path) -> str | None:
@@ -65,7 +93,7 @@ def cited(text: str) -> list[str]:
 
 
 def test_rfc_file_names_are_numbered_and_hyphenated():
-    for path in rfcs().values():
+    for path in [TEMPLATE, *rfcs().values()]:
         assert FILE_NAME.match(path.name), f"{path.name} is not NNNN-lower-case-words.md"
 
 
@@ -86,13 +114,38 @@ def test_the_index_lists_every_rfc_with_its_title_and_status():
         assert re.match(rf"{row['status']}\b", status), f"RFC {number}: the index says {row['status']}, it {status}"
 
 
+def test_the_index_explains_every_status():
+    text = INDEX.read_text()
+
+    for status in STATUSES:
+        assert f"| `{status}` |" in text, f"the lifecycle table does not explain {status}"
+
+
 def test_every_rfc_has_the_sections_the_index_names_in_order():
-    listed = re.search(r"^- Sections, in order: (.+)\.$", INDEX.read_text(), re.M)
-    assert listed, "the index names no sections"
+    names, required = sections()
 
     for number, path in rfcs().items():
-        headings = [line.removeprefix("## ") for _, line in prose(path) if line.startswith("## ")]
-        assert headings == listed[1].split(", "), f"RFC {number} has the sections {headings}"
+        found = headings(path)
+        assert found == [name for name in names if name in found], f"RFC {number} has the sections {found}"
+        assert set(required) <= set(found), f"RFC {number} has no {sorted(set(required) - set(found))}"
+
+
+def test_the_template_has_every_section_and_row_the_index_names():
+    names, _ = sections()
+    text = TEMPLATE.read_text()
+
+    assert text.startswith("# RFC NNNN: ")
+    assert headings(TEMPLATE) == names, f"the template has the sections {headings(TEMPLATE)}, the index {names}"
+    assert re.search(r"^\| Status \| Draft \|$", text, re.M)
+    for row in ROWS:
+        assert f"`{row}`" in format_section(), f"the index's Format section does not name the {row} row"
+
+
+def test_the_template_and_every_rfc_numbered_from_0061_have_the_whole_status_table():
+    later = [path for number, path in rfcs().items() if int(number) >= WHOLE_TABLE_FROM]
+
+    for path in [TEMPLATE, *later]:
+        assert status_rows(path) == list(ROWS), f"{path.name} has the rows {status_rows(path)}"
 
 
 def test_a_citation_names_every_number_of_a_list_across_line_breaks():
