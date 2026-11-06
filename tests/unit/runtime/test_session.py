@@ -429,6 +429,28 @@ async def test_with_no_runtime_a_write_is_refused_naming_what_restarts_it(tmp_pa
     assert stored.value.refusal.code == "unavailable"
 
 
+async def test_a_root_given_relatively_finds_the_session_and_its_annotations(tmp_path, monkeypatch):
+    async with Session.start(solo(), name="s", root=tmp_path / "home"):
+        pass
+    monkeypatch.chdir(tmp_path)
+
+    async with Session.attach("s", root="home") as history:
+        head = await history.head()
+        await history.annotate(
+            "agent/bob@1",
+            kind="reward",
+            producer="p",
+            producer_version="1",
+            scope="local",
+            status="invalid",
+            head_seq=head,
+        )
+        read = await history.annotations()
+
+    assert history.folder == tmp_path / "home" / "sessions" / "s"
+    assert [row.status for row in read] == ["invalid"]
+
+
 async def test_history_pages_back_as_a_runtime_does(tmp_path):
     async with Session.start(solo([Say("said")]), name="s", root=tmp_path) as session:
         await session.send("@bob", "go")

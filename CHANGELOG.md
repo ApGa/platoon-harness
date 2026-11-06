@@ -616,6 +616,8 @@
 
 ### Fixed
 
+- A session root given relatively, as `Session.attach(name, root="home")`, failed every read of its annotations, "relative path can't
+  be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.
 - Codex 0.167.0 refused every turn of an agent given access, "This chat uses platoon-harness, but your current provider is
   openai", as it holds a thread to the provider its app-server started on, and the driver had named a provider for the thread

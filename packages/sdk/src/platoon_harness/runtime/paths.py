@@ -65,7 +65,8 @@ __all__ = [
 def find_root(
     chosen: str | os.PathLike[str] | None = None, environ: Mapping[str, str] = os.environ, *, writing: bool = False
 ) -> Path:
-    """Where sessions live: `chosen`, then `$PLATOON_HARNESS_HOME`, then `$XDG_STATE_HOME/platoon-harness`.
+    """Where sessions live: `chosen`, then `$PLATOON_HARNESS_HOME`, then `$XDG_STATE_HOME/platoon-harness`. One given
+    relatively is made absolute here, against the folder it was given in.
 
     A default on a network filesystem falls back to a local directory, with a notice. A root someone chose stays theirs,
     so `writing` there is refused: a closed session is portable, and a live journal is not. To write, a root must be
@@ -73,7 +74,7 @@ def find_root(
     """
     explicit = chosen or environ.get(HOME_VARIABLE)
     if explicit:
-        root = Path(explicit)
+        root = Path(explicit).absolute()
         found = filesystem(root)
         if writing and found.kind == "network":
             what = f"{root} is on {found.name}, a network filesystem, where a live journal is not safe"
