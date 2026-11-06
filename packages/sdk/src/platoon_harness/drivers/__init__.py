@@ -3,11 +3,11 @@
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol, Self, runtime_checkable
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
 from pydantic import PlainSerializer, field_validator, model_validator
 
-from platoon_harness.config import Secret
+from platoon_harness.config import Secret, forms
 from platoon_harness.primitives import (
     RAW_LIMIT,
     SHORT_LIMIT,
@@ -130,9 +130,9 @@ def _url(text: str, *, path: bool) -> str:
 
 class Gateway(Model):
     """Model access through a training system's gateway: its models at `origin`, a scheme and a host with nothing more,
-    under `bearer`, serving `model`. `tools` is the URL of the environment's own MCP server under the same bearer, when
-    there is one, and `compaction_headers` go with each call a harness makes to compact its context, so that the gateway
-    tells that call apart as it is made."""
+    under `bearer`, serving `model`. `tools` is the URL of the environment's own MCP server at the same origin under the
+    same bearer, when there is one, and `compaction_headers` go with each call a harness makes to compact its context,
+    so that the gateway tells that call apart as it is made."""
 
     origin: str
     bearer: Secret
@@ -152,9 +152,18 @@ class Gateway(Model):
 
     @model_validator(mode="after")
     def _bearer_alone(self) -> Self:
-        bearer = self.bearer.reveal()
-        if self.tools is not None and (bearer in self.tools or quote(bearer, safe="") in self.tools):
-            raise ValueError("a credential goes by the bearer alone, and the tools' URL holds it")
+        """A credential goes by the bearer alone, to the origin alone: no URL or header holds it in any form, no header
+        authorizes a call, and the tools are at the origin."""
+        if not self.bearer.reveal():
+            raise ValueError("a gateway's bearer is its credential, and this one is empty")
+        held = forms(self.bearer)
+        said = [self.tools or "", *self.compaction_headers, *self.compaction_headers.values()]
+        if any(form in text.encode() for text in said for form in held):
+            raise ValueError("a credential goes by the bearer alone, and the tools' URL or a compaction header has it")
+        if any(name.lower() == "authorization" for name in self.compaction_headers):
+            raise ValueError("a credential goes by the bearer alone, and a compaction header would authorize the call")
+        if self.tools is not None and urlsplit(self.tools)[:2] != urlsplit(self.origin)[:2]:
+            raise ValueError("a gateway's bearer goes to its origin alone, and its tools' URL is elsewhere")
         return self
 
 

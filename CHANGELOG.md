@@ -7,9 +7,10 @@
 - Sealed launches. On a gateway, ScriptedDriver, pi, OpenHands and a wire program that declares `sealed` launch with nothing of the
   user's: the gateway's model under its bearer, which goes by environment alone, under `BEARER_VARIABLE`,
   `PLATOON_HARNESS_BEARER`, a file the launch writes naming it as `${PLATOON_HARNESS_BEARER}`; ours and the environment's tools, the
-  environment's a second MCP server, `ENVIRONMENT`, at `Gateway.tools`; no tool of the harness's own that acts, no project
-  instructions and no retries. A wire frame carries a gateway as an object naming the bearer's variable. A gateway whose tools' URL
-  holds its bearer is refused. ScriptedDriver declares `sealed`. Pi gets an agent directory of its own in the agent's folder, and a
+  environment's a second MCP server, `ENVIRONMENT`, at `Gateway.tools`; no tool of the harness's own that acts, so a call of one
+  runs nothing, no project instructions and no retries. A wire frame carries a gateway as an object naming the bearer's variable. A
+  gateway whose URLs or compaction headers hold its bearer in any form, whose headers would authorize a call, whose tools are at
+  another origin, or whose bearer is empty, is refused. ScriptedDriver declares `sealed`. Pi gets an agent directory of its own in the agent's folder, and a
   context window no context reaches, as it took an unstated one as none and compacted after every turn once its history passed what a
   compaction keeps; OpenHands none of its coding tools, the environment's from an MCP client of their own, so ours keep their names.
   See ADR 0053.
@@ -34,7 +35,8 @@
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
   closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR
   0052.
-- `trainable_problems(team)`, what keeps a team from training, read from the team alone, and `check(team, trainable=True)`, which
+- `trainable_problems(team, approvals=None)`, what keeps a team from training, read from the team alone, with approvals judged by a
+  session's own `approvals` where it is given one, and `check(team, trainable=True)`, which
   adds each role's driver, a sealed launch and a result kept under the root that proves trainable, and which
   `Session.start(trainable=True)`, `prepare(trainable=True)` and `platoon-harness team check --trainable` run. A trainable start needs
   an authority. `DriverInfo.version` says the harness version a driver would run, where it can tell without starting one, and
@@ -43,16 +45,21 @@
 - A session's principal is a person or a program: `Session.start(principal=)` and `prepare(principal=)` take `human:<name>` or
   `program:<name>`, and `Manifest.principal` names it, a manifest from before reading its `human` as one. A program's message goes
   as its reader's setting says, and a session a program starts issues no owner credential, so a guest of its runtime holds a view
-  credential, and it cannot detach. See ADR 0050.
+  credential, and it cannot detach, at a start or a resume. See ADR 0050.
 - `Team.recipients(to=None)`, the one rule for whom a session's prompt goes to: the agent `to` names, or else every agent the
   session starts. See ADR 0051.
 - The contract a training system's authority builds on, which names nothing after any training system. Model access is one
   value: variables by name, or a `Gateway(origin, bearer, model, tools, compaction_headers)`, whose origin is a scheme and a
   host and nothing more and whose bearer is masked in every form, given only to a driver that declares the new capability
   `sealed`, with its model the one pinned and its login `gateway`, which is no plan login. `keys_of(spec)` reads variables by name
-  and refuses a gateway. `Admission.backend` is the backend's ids for its agent, never a key, which the admit effect records as its
-  result and the agent's record keeps, at view version 14, and which a gateway admission must name. `SpawnRequest` carries the
-  `parent` and the `goal` its `agent.spawned` records, and `AgentOutcome` the `report` its end keeps. See ADR 0049.
+  and refuses a gateway. `Admission.backend` is the backend's ids for its agent, each entry its alone, holding no secret of the
+  admission's own as a key or a value in any form, which the admit effect records as its result and the agent's record keeps, at
+  view version 14, and which a gateway admission must name. A gateway's bearer is one agent's, so a second agent admitted on it is
+  refused, and a resumed admission that gives other backend ids or other access than its agent had loses the agent. `SpawnRequest`
+  carries the `parent` and the `goal` its `agent.spawned` records, and `AgentOutcome` the `report` its end keeps and a `status` of
+  the five ends. See ADR 0049.
+- `config.forms(secret)`, the forms text may carry a secret in, which the `Redactor` masks and a gateway, an admission and a
+  training system's tests look for; and a `Secret` equals another of the same value.
 - `examples/mixed-team`, a Claude Code lead and a Codex worker in one session, coordinating through the queue `tasks`, the
   board `notes` and messages, with a README that runs it headless, watches and steers it from the terminal UI and the page,
   reads its provenance, swaps a role's harness for pi or OpenHands with `--set`, and runs it with no keys on scripted
@@ -383,8 +390,9 @@
   and refuses a team that starts none. See ADR 0051.
 - `episode.close` closes on `based_on`, the refs of what the episode came to, checked as any citation is, in place of a free
   `outcome`, which an annotation says now; `episode.closed` is at payload version 2. `Session.close_episode(based_on=)` follows.
-- `Session.resume` takes no authority, as a resume runs under `LocalAuthority`, and refuses a session whose admit results name the
-  backend's ids before anything runs: an authority that has gone admitted its agents, so it stays history. See ADR 0055.
+- `Session.resume` takes no authority, as a resume runs under `LocalAuthority`, and refuses a session started trainable, which
+  `Manifest.trainable` records, or whose admit results name the backend's ids, before anything runs: an authority that has gone
+  admitted its agents, so it stays history, even when a stop cut an admit short. See ADR 0055.
 - A launch whose harness runs a model other than the one pinned fails saying `it runs <model>, and <pinned> is pinned`, as the
   pinned model is a gateway's where access is one, and an agent's login is `key` when it was given variables, whatever its role
   names. See ADR 0049.

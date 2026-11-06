@@ -99,9 +99,9 @@ def check(
     role's driver what it is and git what the session's `cwd` is in. `root` and `name` say where the session's folder
     would be. A team that cannot be resolved raises `ConfigError`.
 
-    `trainable` checks it as a training system starts it: what keeps the team from training, `trainable_problems`, and
-    each role's driver for a sealed launch and a result kept under `root` that proves trainable. Its agents run on the
-    authority's gateway, so no plan login is theirs.
+    `trainable` checks it as a training system starts it: what keeps the team from training, `trainable_problems`, under
+    the `approvals` it would run, and each role's driver for a sealed launch and a result kept under `root` that proves
+    trainable. Its agents run on the authority's gateway, so no plan login is theirs.
 
     This blocks, because a driver may describe itself by running something, and git runs.
     """
@@ -114,7 +114,10 @@ def check(
     checked = team_check(resolved, capabilities=capabilities, extensions=extensions)
     problems += [problem for problem in checked if problem.where not in named]
     if trainable:
-        problems += [*trainable_problems(resolved), *_untrainable(resolved, known, cwd, find_root(root))]
+        problems += [
+            *trainable_problems(resolved, approvals=approvals),
+            *_untrainable(resolved, known, cwd, find_root(root)),
+        ]
     elif not plan_login:
         problems += _on_a_plan_login(resolved, known)
     folder = sessions_of(find_root(root)) / (name or "")
@@ -150,7 +153,12 @@ def prepare(
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(
-        team.resolved(Installed()), principal=principal, approvals=approvals, cwd=str(cwd), plan_login=plan_login
+        team.resolved(Installed()),
+        principal=principal,
+        approvals=approvals,
+        cwd=str(cwd),
+        plan_login=plan_login,
+        trainable=trainable,
     )
     return new_folder(find_root(root, writing=True), manifest.model_dump_json(), name)
 

@@ -1,15 +1,12 @@
 """The environment of a harness: an allowlist, and redaction of what it had to hold."""
 
-import base64
-import json
 import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, overload
-from urllib.parse import quote, quote_plus
 
-from platoon_harness.config import Secret
+from platoon_harness.config import Secret, forms
 from platoon_harness.tools.ph import TOKEN_VARIABLE, URL_VARIABLE
 
 from . import BEARER_VARIABLE, AgentSpec, Gateway, Report
@@ -63,29 +60,15 @@ def secrets_of(spec: AgentSpec) -> tuple[Secret, ...]:
     return (*access, *(() if spec.tools is None else (spec.tools.token,)))
 
 
-def _forms(value: str) -> set[bytes]:
-    """A secret as text may carry it: plain, JSON-escaped, URL-quoted, and base64 in either alphabet."""
-    raw = value.encode()
-    encoded = {base64.b64encode(raw), base64.urlsafe_b64encode(raw)}
-    return {
-        raw,
-        json.dumps(value)[1:-1].encode(),
-        quote(value, safe="").encode(),
-        quote_plus(value).encode(),
-        *encoded,
-        *(form.rstrip(b"=") for form in encoded),
-    }
-
-
 class Redactor:
     """Masks secrets, in their encoded forms too, wherever a harness's words go next. `reach` is one byte short of the
     longest form, so holding that much back keeps a secret from straddling two chunks, and `Held` does."""
 
     def __init__(self, secrets: Iterable[Secret]) -> None:
-        forms = {form for secret in secrets if (value := secret.reveal()) for form in _forms(value)}
-        longest_first = sorted(forms, key=len, reverse=True)
-        self._pattern = re.compile(b"|".join(map(re.escape, longest_first))) if forms else None
-        self.reach = max(map(len, forms), default=1) - 1
+        found = {form for secret in secrets if secret.reveal() for form in forms(secret)}
+        longest_first = sorted(found, key=len, reverse=True)
+        self._pattern = re.compile(b"|".join(map(re.escape, longest_first))) if found else None
+        self.reach = max(map(len, found), default=1) - 1
 
     @overload
     def __call__(self, text: bytes) -> bytes: ...

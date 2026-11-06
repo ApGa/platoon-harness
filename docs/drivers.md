@@ -159,7 +159,7 @@ declares `sealed` is given one. Such a driver launches its harness with nothing 
   export.
 - **Ours and the environment's tools.** `Gateway.tools`, when there is one, is the environment's own MCP server, under the same bearer:
   give it to the harness beside ours, named `ENVIRONMENT`, `environment`. No tool of the harness's own that acts on the world stays:
-  no shell, no file tool, no agents of its own.
+  no shell, no file tool, no agents of its own, and a call of one the model makes runs nothing.
 - **Nothing of the user's.** None of their settings, extensions, skills or project instructions, and no retries, as a retry is a
   call a gateway records twice.
 - **Compaction on, labelled.** Each call the harness makes to compact its context carries `Gateway.compaction_headers`, and is
@@ -169,7 +169,7 @@ How each harness here does it:
 
 | Harness | Sealed launch | Compaction calls |
 |---|---|---|
-| ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours | A `Compact` step: one call, with the headers, reported with its id |
+| ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours; a call of its `shell`, or of any tool neither lists, is told there is no such tool and runs nothing | A `Compact` step: one call, with the headers, reported with its id |
 | A wire program | It finds the gateway in its launch frame, and the bearer in the variable the frame names | It sends the headers from its frame, and reports each call with its id |
 | `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; the ids reach the driver in the details pi keeps of the compaction |
 | `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |

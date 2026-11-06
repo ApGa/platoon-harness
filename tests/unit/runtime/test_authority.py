@@ -43,14 +43,24 @@ async def test_the_admit_result_records_backend_ids_and_never_a_key(tmp_path):
     assert "bearer-of-bob" not in text and "token-1" not in text
 
 
-@pytest.mark.parametrize("backend", [{"agent_id": "the-key"}, {"agent_id": "the-bearer"}])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        {"agent_id": "the-key"},
+        {"agent_id": "the bearer"},
+        {"route": "https://gateway/s/the%20bearer/v1"},
+        {"agent_id": "dGhlIGJlYXJlcg"},
+        {"the bearer": "a1"},
+    ],
+)
 def test_an_admission_whose_backend_names_a_key_is_refused(backend):
-    gateway = Gateway(origin=ORIGIN, bearer=Secret("the-bearer"), model="m")
+    """A secret of its own in a backend's id or name, in any form, would reach the journal and so the export."""
+    gateway = Gateway(origin=ORIGIN, bearer=Secret("the bearer"), model="m")
 
     with pytest.raises(ValidationError, match="never a key") as refused:
         Admission(token=Secret("the-key"), access=gateway, backend=backend)
 
-    assert "the-key" not in str(refused.value) and "the-bearer" not in str(refused.value)
+    assert "the-key" not in str(refused.value) and "the bearer" not in str(refused.value)
 
 
 def test_a_gateway_admission_names_the_backend_ids_of_its_agent():
@@ -152,6 +162,74 @@ async def test_a_resumed_admission_keeps_its_model_access_and_never_mints(tmp_pa
         (True, None, ""),
     ]
     assert [spec.access.bearer.reveal() for spec in specs if isinstance(spec.access, Gateway)] == ["bearer-of-bob"] * 2
+    assert results == {"bob": {"agent_id": "id-of-bob"}}
+
+
+@pytest.mark.parametrize(
+    ("bearers", "ids", "why"),
+    [
+        (("bearer-1", "bearer-2"), ("id-1", "id-2"), "bob came back under other backend ids than its admit recorded"),
+        (("bearer-1", "bearer-2"), ("id-1", "id-1"), "bob came back on other model access than it was admitted on"),
+    ],
+)
+async def test_a_resumed_admission_that_mints_anew_loses_its_agent(tmp_path, bearers, ids, why):
+    """An authority that mints again when a harness comes back would put its calls on an identity the record does not
+    name, so the agent is lost, saying why, and its harness never comes back on that access."""
+    specs: list[AgentSpec] = []
+    turns = iter([[Exit("killed by signal 9")], [Say("back")]])
+
+    class Kept(Sealed):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            specs.append(spec)
+            await super().start(spec, report)
+
+    class Minting(Gating):
+        async def admit(self, spawn: SpawnRequest) -> Admission:
+            self.asked.append(spawn)
+            n = len(self.asked) - 1
+            gateway = Gateway(origin=ORIGIN, bearer=Secret(bearers[n]), model=self.model)
+            return Admission(token=Secret(f"token-{n}"), access=gateway, backend={"agent_id": ids[n]})
+
+    team = team_on(lambda: Kept(turns))
+    authority = Minting(team)
+    async with Session.start(team, authority=authority, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.lost"), session)
+        await session.send("@bob", "again")
+        await in_state(session, "bob", "ended")
+        row = (await session.ending()).agents[0]
+        results = await admitted(session)
+
+    assert [spawn.resumed for spawn in authority.asked] == [False, True]
+    assert [spec.access.bearer.reveal() for spec in specs if isinstance(spec.access, Gateway)] == ["bearer-1"]
+    assert (row["status"], row["reason"]) == ("lost", why)
+    assert results == {"bob": {"agent_id": "id-1"}}
+    assert [(agent.agent, outcome.status) for agent, outcome in authority.told] == [("bob", "lost")]
+
+
+async def test_two_agents_on_one_key_are_refused(tmp_path):
+    """A gateway records every call on a bearer as one agent's, so a second agent admitted on a bearer another holds
+    fails its spawn, in words that name no key, whatever backend ids it names."""
+
+    class Sharing(Gating):
+        async def admit(self, spawn: SpawnRequest) -> Admission:
+            admission = await super().admit(spawn)
+            gateway = Gateway(origin=ORIGIN, bearer=Secret("one-shared-bearer"), model=self.model)
+            return admission.model_copy(update={"access": gateway})
+
+    team = team_on(Sealed)
+    async with Session.start(team, authority=Sharing(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.spawn("ada", "bob")
+        await in_state(session, "ada", "ended")
+        rows = {row["agent"]: row for row in (await session.ending()).agents}
+        results = await admitted(session)
+
+    assert rows["ada"]["status"] == "failed"
+    assert rows["ada"]["reason"] == (
+        "its spawn failed: ada's gateway bearer is another agent's, so no call on it is tied to one agent"
+    )
     assert results == {"bob": {"agent_id": "id-of-bob"}}
 
 

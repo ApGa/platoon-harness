@@ -1,10 +1,13 @@
 """Where a team comes from: layered configuration, credentials by name, and the reproducibility manifest."""
 
+import base64
+import json
 import os
 import tomllib
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NoReturn, Self
+from urllib.parse import quote, quote_plus
 
 from pydantic import GetCoreSchemaHandler, ValidationError, model_validator
 from pydantic_core import CoreSchema, core_schema
@@ -27,6 +30,7 @@ __all__ = [
     "Manifest",
     "Secret",
     "credentials",
+    "forms",
     "load_team",
     "merge",
     "sanitized",
@@ -34,7 +38,8 @@ __all__ = [
 
 
 class Secret:
-    """A credential value. It prints as a mask, leaves only through `reveal`, and refuses every serialization."""
+    """A credential value. It prints as a mask, leaves only through `reveal`, refuses every serialization, and equals a
+    secret of the same value."""
 
     __slots__ = ("_value",)
 
@@ -46,6 +51,12 @@ class Secret:
 
     def __repr__(self) -> str:
         return "Secret(***)"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Secret) and other.reveal() == self._value
+
+    def __hash__(self) -> int:
+        return hash(self._value)
 
     def _refuse(self, *_: Any) -> NoReturn:
         raise TypeError("a Secret refuses serialization")
@@ -59,6 +70,21 @@ class Secret:
         return core_schema.is_instance_schema(
             cls, serialization=core_schema.plain_serializer_function_ser_schema(cls._refuse)
         )
+
+
+def forms(secret: Secret) -> set[bytes]:
+    """A secret as text may carry it: plain, JSON-escaped, URL-quoted, and base64 in either alphabet."""
+    value = secret.reveal()
+    raw = value.encode()
+    encoded = {base64.b64encode(raw), base64.urlsafe_b64encode(raw)}
+    return {
+        raw,
+        json.dumps(value)[1:-1].encode(),
+        quote(value, safe="").encode(),
+        quote_plus(value).encode(),
+        *encoded,
+        *(form.rstrip(b"=") for form in encoded),
+    }
 
 
 def merge(low: Mapping[str, Any], high: Mapping[str, Any]) -> dict[str, Any]:
@@ -192,8 +218,8 @@ def sanitized(team: Team, environ: Mapping[str, str] = os.environ) -> str:
 class Manifest(Model):
     """What reproduces a session, and all a runtime needs to take one up: `team` is the sanitized resolved form, which
     reloads alone, `principal` the person or the program who started it, `approvals` a policy stated over every role's
-    own, `cwd` where a shared workspace is, and `plan_login` whether its owner said several agents may run on one plan
-    login."""
+    own, `cwd` where a shared workspace is, `plan_login` whether its owner said several agents may run on one plan
+    login, and `trainable` whether it was started as a training system starts one."""
 
     team: str
     topology_hash: str
@@ -202,6 +228,7 @@ class Manifest(Model):
     approvals: Literal["ask", "deny", "allow"] | None = None
     cwd: str = "."
     plan_login: bool = False
+    trainable: bool = False
     sdk_version: str = __version__
     team_schema: int = TEAM_SCHEMA
     wire_protocol: int = WIRE_PROTOCOL

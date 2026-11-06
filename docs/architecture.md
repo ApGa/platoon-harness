@@ -171,8 +171,8 @@ can both be watched. Leaving only disconnects.
   and so answer from the journal when they have already happened, then per agent reap, resume and reconcile. A crash part of the way
   through opening is finished by the next runtime. A resume under an SDK or component version other than the manifest's is labelled
   on `runtime.started`, in its `gist` and whole in its `drift`, and never refused, since a session survives an upgrade. A session
-  whose admit results name the backend's ids is refused before anything runs: an authority that has gone admitted its agents, and
-  their keys went with it (§14). It stays history.
+  started trainable, which its manifest records, or whose admit results name the backend's ids, is refused before anything runs: an
+  authority that has gone admitted its agents, and their keys went with it (§14). It stays history.
 - **Detached.** `python -m platoon_harness.runtime <folder>` leads its own session with its log in the folder. `Session.start(team,
   detach=True)` starts one and gives a guest, from the folder and with `-P`, so a module in the caller's working directory cannot stand
   in for one it imports. It takes no authority or clock from its parent, since it is another process. It exits
@@ -1448,7 +1448,7 @@ async with Session.start(team, name="fix-auth") as session:   # owner: leaving s
 owner, as its own verb because restarting can spend money. Who starts a session is its principal, a person, `human:you` unless `start`
 says otherwise, or a program, `program:<name>`, and the manifest names it. That is a name in the journal and not a claim: identity
 still comes from the credential. A program's session has no person: it issues no owner credential, as whoever held it would act as
-that program, so a guest of its runtime holds a view credential, and it cannot detach.
+that program, so a guest of its runtime holds a view credential, and it cannot detach, at a start or a resume.
 
 A `Session` has exactly one internal link, in two forms: the kernel in-process (`Local`, or `History` on a read-only kernel, which
 answers a command its journal answered under the same key and refuses any other write `unavailable`, naming the resume command), and
@@ -1690,28 +1690,32 @@ class Gateway(Model):
     compaction_headers: Mapping[str, str]
 
 class AgentOutcome(Model):
-    status: str | None
+    status: Status                              # finished, cancelled, retired, lost or failed
     report: str | None                          # the words its end keeps, the gist and then the body
 ```
 
 - **Admission.** `admit` runs for a spawn, with the parent and the goal its `agent.spawned` records, and again with `resumed` for a
-  harness coming back within a runtime, which needs its access again and is no second admission. Its effect records `backend` as
-  its result, the one join between an agent of ours and the training system's: no key is recorded, an admission whose backend names
-  one of its own secrets is refused, and a gateway admission names backend ids, as nothing else ties its agent to what the gateway
-  records.
+  harness coming back within a runtime, which is no second admission: it must give the backend ids the agent's admit recorded and
+  the access this runtime admitted it on, or the agent is lost, saying why. Its effect records `backend` as its result, the one join
+  between an agent of ours and the training system's: each entry names that agent alone, so one two admissions share bars both as
+  `shared_key`; no key or value holds a secret of the admission's own, in any form; and a gateway admission names backend ids, as
+  nothing else ties its agent to what the gateway records. A gateway's bearer is one agent's, so an admission on a bearer another
+  agent of the runtime holds is refused.
 - **Model access is one value.** Variables by name reach the harness's environment: under `LocalAuthority`, which issues
   session-scoped identity and leaves the harness's own auth alone, a role's auth profile names them, and with none the harness signs
   itself in. A `Gateway` goes only to a driver that declares `sealed` (§9.2), its model is the one pinned, and its login is
-  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does: an origin with a path, or a tools URL
-  that holds the bearer, is refused, and a harness's words are masked of the bearer in every form, as of any access value.
+  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does, to the origin alone: an origin with a
+  path, a URL or a compaction header that holds the bearer in any form, a header that would authorize a call, or tools at another
+  origin, is refused, and a harness's words are masked of the bearer in every form, as of any access value. A secret it cannot
+  know, such as another agent's key in a tools path, is the authority's to keep out.
 - **A gateway admission launches sealed.** The harness runs on the gateway's model under its bearer with nothing of the user's: none
-  of their settings, extensions, skills or project instructions, no tool of its own that acts, no native agents and no retries, and
-  its compaction on. Our tools and the environment's reach it, the environment's as a second MCP server, `environment`, at
-  `Gateway.tools` under the same bearer. The bearer goes only by environment, as `PLATOON_HARNESS_BEARER`, and a file a launch
-  writes names it as `${PLATOON_HARNESS_BEARER}`: the agent's folder lies inside the session's, which is its export, and a cut
-  rollout's stop may never run. A wire frame names the variable, with the gateway's origin, model, tools and compaction headers in
-  the clear. ScriptedDriver, wire programs that declare it, pi and OpenHands launch sealed (§9.5), and two checks in the one kept
-  result earn it (§9.3).
+  of their settings, extensions, skills or project instructions, no tool of its own that acts, so a call of one runs nothing, no
+  native agents and no retries, and its compaction on. Our tools and the environment's reach it, the environment's as a second MCP
+  server, `environment`, at `Gateway.tools` under the same bearer. The bearer goes only by environment, as `PLATOON_HARNESS_BEARER`,
+  and a file a launch writes names it as `${PLATOON_HARNESS_BEARER}`: the agent's folder lies inside the session's, which is its
+  export, and a cut rollout's stop may never run. A wire frame names the variable, with the gateway's origin, model, tools and
+  compaction headers in the clear. ScriptedDriver, wire programs that declare it, pi and OpenHands launch sealed (§9.5), and two
+  checks in the one kept result earn it (§9.3).
 - **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
   compact a context, and reports that call as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's
   `Compact` step, a wire program from its launch spec, OpenHands' condenser, and pi through our extension, which runs pi's own
@@ -1743,8 +1747,9 @@ class AgentOutcome(Model):
   passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all but `retained` of what reaches the
   citer, and work nobody cites earns nothing from it. See [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
-  no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session whose
-  admit results name the backend's ids is never resumed, as its keys went with its authority (§4). See
+  no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
+  trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
+  and an admit a stop cut short named ids nobody knows (§4). See
   [ADR 0055](adr/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority admitting

@@ -134,7 +134,8 @@ class Hang:
 @dataclass(frozen=True)
 class AskModel:
     """Behave like a harness: ask the model at `spec.access`, run what it calls, and go on until it only talks. A tool
-    that is neither ours nor the environment's is gated, as a harness gates its shell."""
+    that is neither ours nor the environment's is gated, as a harness gates its shell, and on a gateway is no tool at
+    all, as a sealed launch has none of its own."""
 
 
 @dataclass(frozen=True)
@@ -384,6 +385,8 @@ class ScriptedDriver:
         if name in self._servers:
             result = await self._call(name, arguments, native_id=call["id"], call_id=call_id)
             output = json.dumps(result)
+        elif isinstance(self._spec.access, Gateway):
+            output = f"there is no tool {name}"
         else:
             output = await self._gate(name, arguments)
         return {"role": "tool", "tool_call_id": call["id"], "content": output}

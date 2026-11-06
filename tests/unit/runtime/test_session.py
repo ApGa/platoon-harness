@@ -16,7 +16,7 @@ from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN
+from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN, read_running
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 from ...integration.scripts import wire
@@ -367,11 +367,18 @@ async def test_a_session_a_program_opens_gives_attachers_a_view_credential_only(
     assert written.status == "invalid"
 
 
-def test_a_program_s_session_cannot_detach(tmp_path):
-    with pytest.raises(Refused, match="only its own process acts") as refused:
-        Session.start(solo(), principal="program:platoon", detach=True, root=tmp_path)
+async def test_a_program_s_session_cannot_detach(tmp_path):
+    """Neither at its start nor at a resume, as the guest it would give back could only read, and nothing could stop
+    the runtime it would leave."""
+    with pytest.raises(Refused, match="only its own process acts") as started:
+        Session.start(solo(), principal="program:trainer", detach=True, root=tmp_path)
+    async with Session.start(solo(), name="s", principal="program:trainer", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+    with pytest.raises(Refused, match="only its own process acts") as resumed:
+        await Session.resume("s", detach=True, root=tmp_path)
 
-    assert refused.value.refusal.code == "unsupported"
+    assert started.value.refusal.code == resumed.value.refusal.code == "unsupported"
+    assert read_running(tmp_path / "sessions" / "s") is None
 
 
 async def test_a_human_cannot_take_a_name_that_is_taken(tmp_path):

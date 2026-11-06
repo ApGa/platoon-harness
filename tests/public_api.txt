@@ -5,6 +5,8 @@ platoon_harness.annotations.Status
 platoon_harness.annotations.Status[scored,invalid,error,timeout,cancelled]
 platoon_harness.config.credentials
 platoon_harness.config.ENVIRONMENT_VARIABLE
+platoon_harness.config.forms
+platoon_harness.config.forms(secret)
 platoon_harness.ConfigError
 platoon_harness.config.load_team
 platoon_harness.config.load_team(path,*,cwd,environ,sets,trust_project)
@@ -401,7 +403,7 @@ platoon_harness.team.Team
 platoon_harness.team.team_check
 platoon_harness.team.Team.recipients(to)
 platoon_harness.team.trainable_problems
-platoon_harness.team.trainable_problems(team)
+platoon_harness.team.trainable_problems(team,*,approvals)
 platoon_harness.testing.Ask
 platoon_harness.testing.AskModel
 platoon_harness.testing.Call

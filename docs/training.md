@@ -34,17 +34,24 @@ class MyAuthority:
 
 - **`spawn`** names the agent, its role, the principal that spawned it, as its `agent.spawned` records it, or None for one the
   session started, and its goal. `resumed` asks again for an agent this runtime admitted, whose harness comes back: give it the
-  access it had, as a resume is no second admission.
+  backend ids and the access it had, as a resume is no second admission. One that gives others loses the agent, saying why, as its
+  calls would go on an identity the record does not name.
 - **`Gateway`** is the agent's model access. Its `origin` is a scheme and a host and nothing more, as no URL of a gateway's carries
-  a credential: the bearer alone does, and the harness's words are masked of it in every form. Its `model` is the one pinned, which
-  a role may name only as it is. `tools` is the URL of the environment's own MCP server, under the same bearer, and
-  `compaction_headers` are what each call a harness makes to compact its context carries, so the gateway can tell such a call apart
-  when it is made. Only a driver that declares the capability `sealed` is given a gateway, and its agent's login is `gateway`.
+  a credential: the bearer alone does, to the origin alone, and the harness's words are masked of it in every form. Its `model` is
+  the one pinned, which a role may name only as it is. `tools` is the URL of the environment's own MCP server, at the origin under
+  the same bearer, and `compaction_headers` are what each call a harness makes to compact its context carries, so the gateway can
+  tell such a call apart when it is made. No URL or header of it may hold the bearer in any form, and no header may authorize a
+  call. A secret the SDK cannot know, such as another agent's key in a path, is yours to keep out of every URL. Only a driver that
+  declares the capability `sealed` is given a gateway, and its agent's login is `gateway`.
+- **A bearer is one agent's.** Your gateway records each call on a bearer as one agent's, so an admission on a bearer another agent
+  of the session holds is refused, and the spawn fails, in words that name no key.
 - **`backend`** is your ids for the agent. The admit effect records them as its result, which is the one join between an agent of
-  the session and yours: no key is recorded, an admission whose backend names one of its own secrets is refused, and a gateway
-  admission must name backend ids.
-- **`finish`** tells you how an agent ended, with its report, the gist and then the body its end keeps. A stop that a crash cut is
-  said again, alike, so take a second telling as the first.
+  the session and yours. Each entry names this agent alone: an id of something agents share, such as their rollout, bars every
+  agent that names it from training, as `shared_key`. No key or value may hold a secret of the admission's own, in any form, and a
+  gateway admission must name backend ids.
+- **`finish`** tells you how an agent ended: its `status`, `finished`, `cancelled`, `retired`, `lost` or `failed`, and its
+  report, the gist, which is the agent's own for a finish and the session's words for any other end, and then the body, its last
+  words. A stop that a crash cut is said again, alike, so take a second telling as the first.
 - **Budgets** stay the session's. Count steps at your gateway.
 
 A refusal of yours wins: `admit` raises, and the spawn fails with your words. An admission is never retried.
@@ -72,12 +79,19 @@ async with Session.start(
   the root that proves trainable for the harness it would run. `platoon-harness team check --trainable` runs the same check, so run
   it, and `platoon-harness doctor --check`, on each machine that runs rollouts before you spend anything.
 - **What `trainable_problems` refuses:** a model or an auth profile a role names, as your gateway gives both; approvals left to
-  `ask`, which nobody answers; a harness's own agents allowed, whose calls go on their parent's key; a workspace other than `shared`
-  or `isolated`; and an `until` only a person reaches.
-- **Close the episode** on the refs of what each agent that started reported, with `close_episode(based_on=...)`. What it was worth
-  is an annotation's to say.
+  `ask`, which nobody answers, by the session's own `approvals` where it states one and else by each role's; a harness's own agents
+  allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`; and an `until` only a person
+  reaches.
+- **End every agent, deepest first,** by `depth` and `state` from `session.agents()`: retire one at rest, and cancel one at work,
+  as a `retire` of it is refused `conflict`. An agent with no end is `no_end`, so none of its calls can train, and `finish` hears of
+  an agent only once it has ended: leaving a session stops it, and an agent still live then keeps no end.
+- **Close the episode** on what each agent that started came to, with `close_episode(based_on=...)`: its `said`, in its row of
+  `session.agents()` or in `session.status(agent)`, is the ref of its last words, its latest turn's last message or a finished
+  agent's end, and None while it has said nothing since its latest turn began. Credit walks back from these refs, so an episode
+  closed on an end the session wrote, or on nothing, credits nobody's work. What it was worth is an annotation's to say.
 
-A session whose agents your authority admitted is never resumed, as their keys went with it. Read it as history.
+A session started trainable, or whose agents your authority admitted, is never resumed, as their keys went with it, even one a stop
+cut short while an admit was under way. Read it as history.
 
 ## What can train
 

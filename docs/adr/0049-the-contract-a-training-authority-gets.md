@@ -23,11 +23,19 @@ budget unit, which no authority uses: a training system limits steps per agent a
 - **A gateway goes only to a driver that declares `sealed`,** and the launch of any other fails, naming why. Its model is the one
   pinned, a role may name only that one, and its login is `gateway`, which is no plan login. `keys_of(spec)` reads variables by
   name and refuses a gateway, so each driver that has no sealed launch says so in the same words.
-- **`Admission.backend` is the backend's ids for its agent**, the admit effect's result and the one join key: no key is recorded, an
-  admission whose backend names one of its own secrets is refused, and a gateway admission must name backend ids, as nothing else
-  ties its agent to what the gateway records.
+- **`Admission.backend` is the backend's ids for its agent**, the admit effect's result and the one join key: each entry names that
+  agent alone, no key is recorded, an admission whose backend holds one of its own secrets, as a key or a value and in any form text
+  carries one, is refused, and a gateway admission must name backend ids, as nothing else ties its agent to what the gateway
+  records.
+- **An admission holds its agent to one identity.** The host keeps the access each agent was admitted on for the runtime's life.
+  A gateway's bearer is one agent's, so an admission on a bearer another agent holds is refused and its spawn fails. A resumed
+  admission must give the backend ids the agent's admit recorded and the access this runtime admitted it on; one that gives others
+  loses the agent, saying why, as its calls would go on an identity the record does not name. The design left keeping access to the
+  authority; a review showed an authority that mints again makes eligibility answer `exact` for calls on a key the record never
+  names, so the host holds it, and a `Secret` equals another of the same value so that access compares by what it gives.
 - **`SpawnRequest` carries `parent` and `goal`**, read from the agent's `agent.spawned`, which is what a parent's spawn recorded, so
-  adoption does not change it. **`AgentOutcome` carries `report`**, the words the agent's end keeps, its gist and then its body.
+  adoption does not change it. **`AgentOutcome` carries `report`**, the words the agent's end keeps, its gist and then its body,
+  and its `status` is one of the five ends.
 - **`budget_owner` is deleted**, with its use in opening, so every limit a team states is the session's.
 - **`finish` may be told twice:** a stop a crash cut is said again by the next runtime, alike, so an authority takes a second
   telling as the first.
@@ -41,6 +49,8 @@ budget unit, which no authority uses: a training system limits steps per agent a
 | `Admission.native` for the backend's ids | `native` already names a harness's own ids and agents here |
 | Recording a trajectory id beside the agent id | A second key for one join, and a minted agent's is not known when it is admitted |
 | The host refusing a gateway alone, with drivers reading access as before | A driver that declared `sealed` by mistake would read a gateway as variables; `keys_of` makes each driver's reading say what it takes |
+| Reusing an agent's first admission on a resume, without asking the authority | `LocalAuthority` reads its access again, and an authority hears that a harness came back; holding what it gives to what the agent had keeps both |
+| Leaving a resumed admission's access to the authority | Nothing would hold it, and an authority that mints again would put calls on an identity the record never names |
 | Keeping `budget_owner` for tokens and usd | No authority owns either, and a limit the session silently does not enforce is a promise nothing keeps |
 | Keeping a Platoon extension of ours | The owner's decision: the bridge is Platoon's first-party extension, and ours stays Platoon-agnostic |
 
@@ -58,7 +68,8 @@ budget unit, which no authority uses: a training system limits steps per agent a
 - `tests/unit/runtime/test_authority.py`: `test_the_admit_result_records_backend_ids_and_never_a_key`,
   `test_an_admission_whose_backend_names_a_key_is_refused`, `test_a_gateway_admission_names_the_backend_ids_of_its_agent`,
   `test_a_gateway_s_origin_is_an_origin_and_nothing_more`, `test_an_agent_is_admitted_with_its_parent_and_its_goal`,
-  `test_a_resumed_admission_keeps_its_model_access_and_never_mints`, `test_a_driver_without_a_sealed_launch_refuses_a_gateway`,
+  `test_a_resumed_admission_keeps_its_model_access_and_never_mints`, `test_a_resumed_admission_that_mints_anew_loses_its_agent`,
+  `test_two_agents_on_one_key_are_refused`, `test_a_driver_without_a_sealed_launch_refuses_a_gateway`,
   `test_a_gateway_admission_is_a_gateway_login_and_no_plan_login`, `test_the_pinned_model_is_checked_against_the_gateways`.
 - `tests/unit/runtime/test_recovery.py`: `test_finish_is_idempotent`, and
   `test_an_admit_in_flight_is_never_retried_and_the_spawn_fails_with_a_gap`, whose agent names no backend ids.

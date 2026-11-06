@@ -74,7 +74,7 @@ class Runtime:
         self.control = Control(self.kernel, self.principal, self.folder)
         incarnation = None
         try:
-            self._refuse_a_managed_session()
+            self._refuse_a_managed_session(manifest)
             await self.host.check_plan_login()
             incarnation = (await self.kernel.recover(*manifest.drift())).result
             capabilities, repo = await self.host.capabilities(), await repository(self.kernel, cwd)
@@ -100,13 +100,22 @@ class Runtime:
                 raise failure from error
             raise
 
-    def _refuse_a_managed_session(self) -> None:
-        """A session whose agents an authority admitted with the backend's ids never runs again: their keys went with
-        that authority, and no other can admit them as the same agents."""
+    def _refuse_a_managed_session(self, manifest: Manifest) -> None:
+        """A session that has run never runs again once it was started trainable or its agents' admit results name the
+        backend's ids: their keys went with the authority that gave them, no other can admit them as the same agents,
+        and an admit a stop cut short named ids nobody knows."""
+        if not self.kernel.head:
+            return
         if admitted := [record["name"] for record in self._records() if record["backend"]]:
-            names = ", ".join(admitted)
-            what = f"session {self.folder.name} is never resumed: an authority that has gone admitted {names}"
-            raise Refused("unsupported", f"{what}, so it is history, which `Session.attach` reads")
+            why = f"an authority that has gone admitted {', '.join(admitted)}"
+        elif manifest.trainable:
+            why = "it was started trainable, and its authority has gone"
+        else:
+            return
+        raise Refused(
+            "unsupported",
+            f"session {self.folder.name} is never resumed: {why}, so it is history, which `Session.attach` reads",
+        )
 
     async def _issue_credentials(self) -> None:
         """Fresh credentials each incarnation, so the last one's stop working. The owner's hash is in the journal, and a

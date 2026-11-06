@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     BEARER_VARIABLE,
+    ApprovalRequested,
     Compacted,
     Driver,
     DriverError,
@@ -26,6 +27,7 @@ from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
+    SHELL,
     TOOL,
     AskModel,
     Compact,
@@ -100,6 +102,22 @@ async def test_a_sealed_scripted_harness_shows_the_environment_s_tools_beside_ou
     assert driver.results[0]["content"][0]["text"] == "pong"
 
 
+async def test_a_sealed_scripted_harness_runs_no_tool_of_its_own(tmp_path):
+    """On a gateway its shell is no tool at all: a model that calls it is told so, nothing asks an approval and nothing
+    runs, so the bearer in its environment never reaches a file."""
+    shell = ToolCall(SHELL, {"command": f"printenv {BEARER_VARIABLE} > leaked"})
+    async with FakeModel(shell, "done") as model:
+        gateway = model.gateway(BEARER)
+        driver, heard = ScriptedDriver([[AskModel()]]), Heard()
+        await driver.start(make_spec(tmp_path, model=gateway.model, access=gateway), heard)
+        ended = await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    assert ended.reason == "stopped" and not heard.of(ApprovalRequested)
+    assert not list(tmp_path.rglob("leaked"))
+    assert model.calls[1].says(f"there is no tool {SHELL}")
+
+
 async def test_a_harness_with_no_sealed_launch_refuses_a_gateway(tmp_path):
     unsealed = ScriptedDriver().describe().capabilities.model_copy(update={"sealed": False})
     gateway = Gateway(origin="http://127.0.0.1:9", bearer=Secret(BEARER), model="m")
@@ -109,18 +127,25 @@ async def test_a_harness_with_no_sealed_launch_refuses_a_gateway(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("origin", "tools"),
+    ("origin", "tools", "headers"),
     [
-        ("http://127.0.0.1:9/s/the-bearer", None),
-        ("http://127.0.0.1:9", "http://127.0.0.1:9/s/the-bearer/mcp"),
-        ("http://127.0.0.1:9", "http://127.0.0.1:9/mcp?key=the-bearer"),
+        ("http://127.0.0.1:9/s/the-bearer", None, {}),
+        ("http://127.0.0.1:9", "http://127.0.0.1:9/s/the-bearer/mcp", {}),
+        ("http://127.0.0.1:9", "http://127.0.0.1:9/s/dGhlLWJlYXJlcg/mcp", {}),
+        ("http://127.0.0.1:9", "http://127.0.0.1:9/mcp?key=the-bearer", {}),
+        ("http://127.0.0.1:9", "http://10.0.0.1:9/mcp", {}),
+        ("http://127.0.0.1:9", None, {"X-Call-Purpose": "the-bearer"}),
+        ("http://127.0.0.1:9", None, {"the-bearer": "compaction"}),
+        ("http://127.0.0.1:9", None, {"Authorization": "Bearer another"}),
     ],
 )
-def test_a_path_form_url_never_reaches_a_driver(origin, tools):
-    """A secret in a gateway's URL would route its calls by that secret, whoever's bearer came with them, so a gateway
-    whose origin has a path, or whose tools' URL holds its bearer, is refused before any driver sees it."""
-    with pytest.raises(ValidationError, match="bearer alone"):
-        Gateway(origin=origin, bearer=Secret("the-bearer"), model="m", tools=tools)
+def test_a_gateway_whose_urls_or_headers_carry_a_credential_never_reaches_a_driver(origin, tools, headers):
+    """A credential goes by the bearer alone, to the gateway's origin alone: a gateway whose origin has a path, whose
+    URLs or compaction headers hold its bearer in any form, whose headers would authorize a call, or whose tools are
+    elsewhere, is refused before any driver sees it. A secret it cannot know, such as another agent's key in a tools
+    path, is its authority's to keep out."""
+    with pytest.raises(ValidationError, match=r"bearer (goes|alone)"):
+        Gateway(origin=origin, bearer=Secret("the-bearer"), model="m", tools=tools, compaction_headers=headers)
 
 
 def _stand(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:

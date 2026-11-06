@@ -7,8 +7,9 @@ from typing import Protocol, Self, runtime_checkable
 
 from pydantic import model_validator
 
-from platoon_harness.config import Secret, credentials
+from platoon_harness.config import Secret, credentials, forms
 from platoon_harness.drivers import Access, Gateway
+from platoon_harness.primitives.lifecycle import Status
 from platoon_harness.schema import Model
 from platoon_harness.team import Team
 
@@ -34,9 +35,10 @@ class SpawnRequest(AgentRef):
 
 class Admission(Model):
     """What admission gives an agent: its token on the tool plane, which stays in memory, and its model access, as
-    variables by name or as a gateway. `backend` is the backend's ids for this agent, which its admit records: they name
-    the agent and never a key, and a gateway admission names them, as nothing else ties the agent to what its gateway
-    records of it."""
+    variables by name or as a gateway. `backend` is the backend's ids for this agent, which its admit records: each
+    entry is this agent's alone, so one another admission of the session shares bars both from training, no key or
+    value holds a secret of its own in any form, and a gateway admission names them, as nothing else ties the agent to
+    what its gateway records of it."""
 
     token: Secret
     access: Access = {}
@@ -45,7 +47,8 @@ class Admission(Model):
     @model_validator(mode="after")
     def _named(self) -> Self:
         held = {self.token, *((self.access.bearer,) if isinstance(self.access, Gateway) else self.access.values())}
-        if {secret.reveal() for secret in held} & set(self.backend.values()):
+        found = {form for secret in held if secret.reveal() for form in forms(secret)}
+        if any(form in text.encode() for text in (*self.backend, *self.backend.values()) for form in found):
             raise ValueError("a backend id names an agent, never a key")
         if isinstance(self.access, Gateway) and not self.backend:
             raise ValueError("a gateway admission names the backend's ids for its agent")
@@ -53,10 +56,11 @@ class Admission(Model):
 
 
 class AgentOutcome(Model):
-    """How an agent ended: its `status`, and its `report`, the words its end keeps, the gist and then the body, or None
-    when it said nothing."""
+    """How an agent ended: its `status`, and its `report`, the words its end keeps, or None when it said nothing: the
+    gist, which is the agent's own for a finish and the session's for any other end, and then the body, its last
+    words."""
 
-    status: str | None
+    status: Status
     report: str | None = None
 
 

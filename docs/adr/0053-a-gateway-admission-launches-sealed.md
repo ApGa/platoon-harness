@@ -15,12 +15,14 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
 ## Decision
 
 - **A sealed launch has nothing of the user's.** On a gateway, a driver launches its harness with the gateway's model under its
-  bearer, ours and the environment's tools, no tool of its own that acts, none of the user's settings, extensions, skills or project
-  instructions, no retries, and its compaction on. A driver with no sealed launch refuses a gateway.
+  bearer, ours and the environment's tools, no tool of its own that acts, so a call of one runs nothing, none of the user's
+  settings, extensions, skills or project instructions, no retries, and its compaction on. A driver with no sealed launch refuses a
+  gateway.
 - **A bearer goes only by environment,** under `PLATOON_HARNESS_BEARER`, and a file a launch writes names that variable, as
   `${PLATOON_HARNESS_BEARER}`, never its value. A wire frame names it, with the gateway's origin, model, tools and compaction
-  headers in the clear. A gateway whose origin has a path, or whose tools' URL holds its bearer, is refused, as a credential goes by
-  the bearer alone.
+  headers in the clear. A gateway whose origin has a path, whose URLs or compaction headers hold its bearer in any form, whose
+  headers would authorize a call, or whose tools are at another origin, is refused, as a credential goes by the bearer alone, to
+  the origin alone.
 - **The environment's tools are a second MCP server,** at `Gateway.tools`, named `environment`, under the same bearer.
 - **Each compaction call carries the gateway's `compaction_headers` and is reported with its id,** as `ModelCall(purpose=
   "compaction", call_id=...)`, by every sealed driver: ScriptedDriver's `Compact` step, a wire program from its launch spec,
@@ -55,7 +57,8 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
 ## Evidence
 
 - [tests/unit/drivers/test_sealed.py](../../tests/unit/drivers/test_sealed.py): each sealed driver's compaction headers and ids, the
-  bearer in the environment alone, and a path-form URL refused.
+  bearer in the environment alone, a gateway whose URLs or headers carry a credential refused, and a sealed scripted harness that
+  runs no tool of its own.
 - [tests/integration/test_pi.py](../../tests/integration/test_pi.py): on pi 1.5.0, each body id is its call id, the first request
   holds no built-in tool, an overflow refusal is compacted and retried, and a compaction of two calls carries the headers on each and
   reports both ids.

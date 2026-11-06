@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
+    Access,
     AgentSpec,
     ApprovalRequested,
     Capabilities,
@@ -74,7 +75,7 @@ log = logging.getLogger("platoon_harness.runtime")
 __all__ = ["GRACE", "DriverLink", "Host"]
 
 
-def _pinned(role: Role, access: Mapping[str, Secret] | Gateway) -> str | None:
+def _pinned(role: Role, access: Access) -> str | None:
     """The model an agent must run: its gateway's, which its role may name only as it is, or else its role's."""
     if not isinstance(access, Gateway):
         return role.model
@@ -144,7 +145,7 @@ class Host:
         self._links: dict[str, DriverLink] = {}
         self._acting: dict[int, asyncio.Task[None]] = {}
         self._admitted: dict[str, Admission] = {}
-        self._gateway: set[str] = set()
+        self._access: dict[str, Access] = {}
         self._described: dict[str, DriverInfo] = {}
         self._closing = False
         self._looking = asyncio.Lock()
@@ -256,15 +257,38 @@ class Host:
         return SpawnRequest(agent=agent, role=role, parent=spawned["parent"], goal=spawned["goal"], resumed=resumed)
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
-        """Admit an agent and give it its credential: the raw token stays in memory, and only its hash is journaled."""
+        """Admit an agent and give it its credential: the raw token stays in memory, and only its hash is journaled. The
+        access it was admitted on is kept for this runtime's life, as a resume gives it back and no other agent shares a
+        gateway's bearer. A resumed admission that would not hold its agent to what it was is refused, and the agent is
+        lost, since its calls would go on an identity its record does not name."""
         admission = await self._authority.admit(spawn)
+        if (why := self._unheld(spawn, admission)) is not None:
+            if spawn.resumed:
+                await self.insist("agent.report", {"agent": spawn.agent, "report": Exited(reason=why)})
+            raise DriverError(why)
         token_hash = hash_token(admission.token.reveal())
         issued = await self.insist("principal.issue", {"id": f"agent:{spawn.agent}", "token_hash": token_hash})
         if issued.refusal is not None:
             raise DriverError(f"{spawn.agent} has no credential: {issued.refusal.detail}")
-        if isinstance(admission.access, Gateway):
-            self._gateway.add(spawn.agent)
+        self._access[spawn.agent] = admission.access
         return admission
+
+    def _unheld(self, spawn: SpawnRequest, admission: Admission) -> str | None:
+        """Why an admission does not hold its agent to one identity of its own: its gateway's bearer is another agent's,
+        or, on a resume, the backend's ids are not those its admit recorded, or its access is not what this runtime
+        admitted it on. None when it holds."""
+        name, access = spawn.agent, admission.access
+        bearers = {held.bearer for agent, held in self._access.items() if agent != name and isinstance(held, Gateway)}
+        if isinstance(access, Gateway) and access.bearer in bearers:
+            return f"{name}'s gateway bearer is another agent's, so no call on it is tied to one agent"
+        if not spawn.resumed:
+            return None
+        record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
+        if dict(admission.backend) != record["backend"]:
+            return f"{name} came back under other backend ids than its admit recorded"
+        if name in self._access and access != self._access[name]:
+            return f"{name} came back on other model access than it was admitted on"
+        return None
 
     def _repo(self) -> Repo | None:
         """The repository the session opened on, as the journal holds it: a resume's own reading never replaces it."""
@@ -431,7 +455,7 @@ class Host:
     async def _on_plan(self, agent: str, role: str) -> bool:
         """Whether an agent runs on a plan login: its harness says so now, its role names no auth profile, and its
         authority admitted it through no gateway. A driver that cannot say runs nothing."""
-        if self._team.roles[role].auth is not None or agent in self._gateway:
+        if self._team.roles[role].auth is not None or isinstance(self._access.get(agent), Gateway):
             return False
         try:
             return (await self.describe(role)).login == "plan"

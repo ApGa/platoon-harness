@@ -183,6 +183,12 @@ def test_a_secret_prints_as_a_mask():
     assert secret.reveal() == "hunter2"
 
 
+def test_a_secret_equals_a_secret_of_the_same_value_and_nothing_else():
+    """So two accesses compare by what they give, which a resumed admission is held to."""
+    assert Secret("hunter2") == Secret("hunter2") and len({Secret("hunter2"), Secret("hunter2")}) == 1
+    assert Secret("hunter2") != Secret("hunter3") and Secret("hunter2") != "hunter2"
+
+
 @pytest.mark.parametrize(
     "serialize",
     [

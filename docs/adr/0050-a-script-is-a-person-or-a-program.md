@@ -18,9 +18,9 @@ program did it.
   else is a configuration error.
 - **A program's message is a program's**, as the journal already treats one: it goes as its reader's setting says, as any agent's
   does, and starts a chain of hops of its own.
-- **A session a program starts issues no owner credential.** A guest of its runtime holds the view credential, which reads and
-  never writes, and a program's session cannot detach, as the guest it would hand back could act on nothing. Once its runtime has
-  gone, attaching gives its history, as for any session, which an estimator writes annotations beside.
+- **A session a program starts issues no owner credential.** A guest of its runtime holds the view credential, which reads and never
+  writes, and a program's session cannot detach, at a start or a resume, as the guest it would hand back could act on nothing. Once
+  its runtime has gone, attaching gives its history, as for any session, which an estimator writes annotations beside.
 - **A manifest from before names its person `human`**, which loading reads as its principal, so a session survives the upgrade.
 
 ## Alternatives considered
@@ -36,7 +36,7 @@ program did it.
 
 - The training system's bridge starts each rollout's session as `program:<its name>`, and anyone can watch it and nobody can steer it.
 - The TUI and the browser show a program's session with the program where the person would be, read-only.
-- A detached start under a program is refused `unsupported`.
+- A detached start or resume under a program is refused `unsupported`, as a runtime it left would answer nobody.
 
 ## Evidence
 

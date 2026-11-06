@@ -199,8 +199,7 @@ class Session:
         _refuse_across_processes(detach, authority, clock)
         if trainable and authority is None:
             raise Refused("invalid", "a trainable session's agents reach their model through an authority's gateway")
-        if detach and principal.startswith("program:"):
-            raise Refused("unsupported", "a program's session issues no owner credential, so only its own process acts")
+        _refuse_a_program_detached(detach, principal)
 
         async def enter(self: Session) -> None:
             options: dict[str, Any] = {"name": name, "root": root, "principal": principal, "approvals": approvals}
@@ -221,12 +220,16 @@ class Session:
         cls, name: str, *, detach: bool = False, root: str | Path | None = None, clock: Clock | None = None
     ) -> Self:
         """Restart a session whose runtime has gone. This is its own verb because restarting can spend money. Harnesses
-        come back on fresh credentials, which the session issues, or their agents are lost, with a gap. A session whose
-        agents an authority admitted with the backend's ids is refused: their keys went with it."""
+        come back on fresh credentials, which the session issues, or their agents are lost, with a gap. A session
+        started trainable, or whose agents an authority admitted with the backend's ids, is refused: their keys went
+        with it. A program's session cannot detach, as at its start."""
         _refuse_across_processes(detach, None, clock)
 
         async def enter(self: Session) -> None:
-            await self._take_up(session_folder(find_root(root, writing=True), name), detach, None, clock)
+            folder = session_folder(find_root(root, writing=True), name)
+            with contextlib.suppress(ValidationError):  # A manifest that does not read is the runtime's to report.
+                _refuse_a_program_detached(detach, _principal_of(folder))
+            await self._take_up(folder, detach, None, clock)
 
         return cls(enter)
 
@@ -1000,6 +1003,13 @@ def _unclaim(folder: Path) -> None:
 
 def _resume_command(folder: Path) -> str:
     return f'`platoon-harness session resume {folder.name}`, or `Session.resume("{folder.name}")`,'
+
+
+def _refuse_a_program_detached(detach: bool, principal: str) -> None:
+    """A program's session issues no owner credential, so a detached runtime of one would give back a guest that could
+    only read, and leave a runtime nothing could stop."""
+    if detach and principal.startswith("program:"):
+        raise Refused("unsupported", "a program's session issues no owner credential, so only its own process acts")
 
 
 def _refuse_across_processes(detach: bool, authority: Authority | None, clock: Clock | None) -> None:

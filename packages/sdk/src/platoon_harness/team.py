@@ -482,12 +482,14 @@ def _reached_alone(team: Team) -> str | None:
     return None
 
 
-def trainable_problems(team: Team) -> tuple[Problem, ...]:
+def trainable_problems(team: Team, *, approvals: Policy | None = None) -> tuple[Problem, ...]:
     """What keeps a team from training, read from the team alone, with no driver to ask: a model or an auth profile a
-    role names, as a training system's gateway gives both; approvals left to `ask`, which nobody answers in a rollout; a
-    harness's own agents allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`;
-    and an `until` only a person reaches."""
-    problems = []
+    role names, as a training system's gateway gives both; approvals left to `ask`, which nobody answers in a rollout,
+    by `approvals`, a session's policy over every role's own, or else by a role's; a harness's own agents allowed, whose
+    calls go on their parent's key; a workspace other than `shared` or `isolated`; and an `until` only a person
+    reaches."""
+    asking = "approvals left to `ask` wait for a person, and nobody answers in a rollout: say `allow` or `deny`"
+    problems = [Problem("approvals", asking)] if approvals == "ask" else []
     for name, role in team.roles.items():
         where = f"roles.{name}"
         if role.model is not None:
@@ -495,9 +497,8 @@ def trainable_problems(team: Team) -> tuple[Problem, ...]:
         if role.auth is not None:
             what = "a trainable team names no auth profile: its gateway is its access"
             problems.append(Problem(f"{where}.auth", what))
-        if role.approvals == "ask":
-            what = "approvals left to `ask` wait for a person, and nobody answers in a rollout: say `allow` or `deny`"
-            problems.append(Problem(f"{where}.approvals", what))
+        if approvals is None and role.approvals == "ask":
+            problems.append(Problem(f"{where}.approvals", asking))
         if role.allow_native_children:
             what = "a harness's own agents call on their parent's key, so no call of theirs is tied to an agent"
             problems.append(Problem(f"{where}.allow_native_children", what))

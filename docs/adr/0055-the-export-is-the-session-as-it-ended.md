@@ -20,8 +20,10 @@ under `LocalAuthority`, though the keys its agents ran on went with the authorit
   and the admit result records the backend's ids, never a key.
 - **Rewards and credit go into it after the session has ended,** through `Session.annotate`, so no context a policy could see held
   one.
-- **A session whose admit results name the backend's ids is never resumed.** It is history: `Session.resume` takes no authority, and
-  `Runtime.start` refuses such a session before anything runs, naming `Session.attach`.
+- **A session started trainable, or whose admit results name the backend's ids, is never resumed once it has run.** It is history:
+  `Session.resume` takes no authority, and `Runtime.start` refuses such a session before anything runs, naming `Session.attach`.
+  The manifest records `trainable`, as an admit a stop cut short leaves no result, so the backend's ids it named are unknown, and
+  unknown is not none: without the flag such a session resumed under `LocalAuthority`, and its export changed.
 
 ## Alternatives considered
 
@@ -29,7 +31,8 @@ under `LocalAuthority`, though the keys its agents ran on went with the authorit
 |---|---|
 | A file of what trains, written at the end | A second format to keep in step with a journal that already answers every question on a closed copy |
 | Copies of attribution, reasons or rewards in the training system's records | Copies drift; the session's name, the backend's ids and the row's id join the two |
-| A `Manifest.authority` naming who admitted the agents | The admit results already say it, and a manifest field would be a second record of one fact |
+| A `Manifest.authority` naming who admitted the agents | The admit results say it of every admit that finished, and `trainable` says the rest of what a training system's session is: a second field would record one fact twice |
+| Refusing any session with an admit a stop cut short | A session of a person's own, under `LocalAuthority`, survives a crash at any point, and its admit then named no ids |
 | Resuming under a new authority | A new authority admits new agents; the backend knows them by the keys that went with the old one |
 
 ## Consequences
@@ -46,4 +49,5 @@ under `LocalAuthority`, though the keys its agents ran on went with the authorit
   `test_eligibility_answers_alike_after_rebuild_on_a_closed_copy_and_without_the_conformance_store`.
 - [tests/unit/runtime/test_authority.py](../../tests/unit/runtime/test_authority.py),
   `test_a_session_whose_admissions_name_backend_ids_is_never_resumed` and
-  `test_the_admit_result_records_backend_ids_and_never_a_key`.
+  `test_the_admit_result_records_backend_ids_and_never_a_key`; `tests/unit/runtime/test_training.py`,
+  `test_a_trainable_session_is_never_resumed_even_when_a_stop_cut_its_admits_short`.

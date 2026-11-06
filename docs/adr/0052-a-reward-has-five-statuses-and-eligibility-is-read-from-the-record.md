@@ -26,7 +26,8 @@ driver and the result kept for it.
 - **`person` counts what was handed, not what was seen.** A person's entry handed to an agent below a call is either seen or
   unknown, never `not_seen`, and counting only `seen` would read unknown as no. A turn a person held is a person's too.
 - **What a team decides is checked from its file, and what a machine decides when the session starts.** `trainable_problems(team)`
-  is pure, so a training system's load check runs it with no driver to ask. `check(team, trainable=True)`, which
+  is pure, so a training system's load check runs it with no driver to ask, and judges approvals by a session's own `approvals` when
+  it is given them, as that policy overrules every role's. `check(team, trainable=True)`, which
   `Session.start(trainable=True)` passes the flag to as it passes `plan_login`, adds each role's driver: a sealed launch, and a result
   kept under the root that proves trainable for the harness it would run, by the version its `describe` gives, which
   `DriverInfo.version` now carries. A trainable start needs an authority.
