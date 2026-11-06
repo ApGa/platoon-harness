@@ -25,6 +25,7 @@ _BASE = (
     Grant(who="agent", ops="blob.*"),
     Grant(who="agent", ops="channel.list"),
     Grant(who="agent", ops="message.read", on="inbox/{self}"),
+    Grant(who="agent", ops="repo.commit"),
     Grant(who="agent", ops="session.status"),
     Grant(who="agent", ops="wait", on="inbox/{self}"),
     Grant(who="agent", ops="wait.*"),

@@ -3,6 +3,7 @@ journal holds, and each workspace's head and uncommitted state. A look is the ru
 agent's, so none of its events names an agent in its envelope, and none claims a turn or a context."""
 
 import json
+import sqlite3
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
@@ -10,12 +11,16 @@ from pydantic import Field
 
 from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .common import BodyRef, Name, cited, parts_of
+from .common import BodyRef, Exposed, Name, cited, event_at, expose_read, parts_of
 from .exposures import readable
 from .reports import record_gap
 from .sessions import SessionRecord
 
 Sha = Annotated[str, Field(pattern=r"^([0-9a-f]{40}|[0-9a-f]{64})$")]
+Given = Annotated[
+    str, Field(pattern=r"^[0-9a-f]{4,64}$", description="A commit's SHA, or its first 4 or more hex digits.")
+]
+"""A recorded commit as a person or an agent names it: its SHA, or the first 4 or more of its hex digits, naming one."""
 Where = Annotated[str, Field(pattern=rf"^(shared|@{NAME})$")]
 """A workspace in the address grammar: `@ada` for an agent's own, and `shared` for the session's checkout."""
 UnderWay = Literal["merge", "rebase", "cherry-pick", "revert", "bisect", "sequence"]
@@ -23,6 +28,8 @@ Uncited = Literal["unrecorded", "no_event", "no_lines", "unread"]
 """Why an `Informed-By` value cites nothing: it names a commit the journal holds no record of, no event, no lines of
 its event's body, or an event its commit's maker had neither made nor been handed."""
 PathState = Literal["modified", "added", "deleted", "renamed", "copied", "type_changed", "untracked", "conflicted"]
+
+NOT_RECORDED = "not recorded yet: a commit is recorded at the look after the turn that made it"
 
 DROPPED_LIMIT = 64
 TEXT_LIMIT = 256
@@ -145,6 +152,12 @@ class Looks(View):
         row = self.db.execute("SELECT ref FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
         return None if row is None else row["ref"]
 
+    def named(self, given: str) -> list[sqlite3.Row]:
+        """The recorded commits whose SHA begins with `given`, two at most, as one is all a name may name."""
+        return self.db.execute(
+            "SELECT * FROM v_looks_commits WHERE substr(sha, 1, ?) = ? ORDER BY sha LIMIT 2", (len(given), given)
+        ).fetchall()
+
     def reading(self, workspace: str) -> dict[str, Any] | None:
         row = self.db.execute("SELECT reading FROM v_looks WHERE workspace = ?", (workspace,)).fetchone()
         return None if row is None else json.loads(row["reading"])
@@ -232,6 +245,35 @@ def report(txn: Txn, a: Report) -> None:
         txn.emit(
             "workspace.changed", stream, gist=gist, cause=cause, refs=refs, data={"workspace": a.workspace, **reading}
         )
+
+
+def _recorded(txn: Txn, given: str) -> Event:
+    """The `repo.committed` of the one recorded commit `given` names. Refused `unsupported` when the session observes
+    no repository, `not_found` while the journal holds no such commit, and `invalid` when `given` names several."""
+    if txn.view(SessionRecord).settings().repo is None:
+        raise Refused("unsupported", "this session observes no repository")
+    named = txn.view(Looks).named(given)
+    if not named:
+        raise Refused("not_found", NOT_RECORDED)
+    if len(named) > 1:
+        raise Refused("invalid", f"{given} names more than one recorded commit: give more of its hex digits")
+    event = event_at(txn, named[0]["ref"])
+    assert event is not None
+    return event
+
+
+class Which(Args):
+    sha: Given
+
+
+@op("repo.commit", exposes=True, tool=True)
+def commit(txn: Txn, a: Which) -> dict[str, Any]:
+    """Give a commit's `ref`, which `based_on` cites, its `sha`, `gist`, and the workspace it was `made_in`. Refused
+    `not_found` until the look after the turn that made it records it, and `invalid` when `sha` names several."""
+    event = _recorded(txn, a.sha)
+    ref, sha, made_in = f"{event.stream}@{event.version}", event.data["sha"], event.data["made_in"]
+    expose_read(txn, [Exposed.gist(ref, event.gist, {"sha": sha, "made_in": made_in})])
+    return {"ref": ref, "sha": sha, "gist": event.gist, "made_in": made_in}
 
 
 @op("repo.looks", query=True, runtime=True)

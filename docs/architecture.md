@@ -572,10 +572,11 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` |
 | Evidence, kernel | `body.tombstone` | |
+| Repository | `repo.commit` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
-An agent's `board.get`, `board.query`, `message.read`, `task.list` and `blob.get` are commands; for a human or a program they
-run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+An agent's `board.get`, `board.query`, `message.read`, `task.list`, `blob.get` and `repo.commit` are commands; for a human or a
+program they run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
 `episode.close` closes the open episode on `based_on`, the refs of what it came to, checked as a citation is (§7), and what it was
 worth is an annotation's to say (§11), never the episode's.
 Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
@@ -1311,7 +1312,9 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 Git ancestry, declared `informed_by`, observed reads and credit are four relations, and none is derived from another: a commit's
 `parents` are ancestry, its `Informed-By` trailers are its one declaration, which `based_on` cites, an agent's read is exposure, and
 credit is an annotation. Commits, rewrites and each workspace's state are events on `repo/<name>`, which a look records with no agent
-in the envelope, since a look is the runtime's observation and claims no turn or context (§13). **Three axes never merge:** evidence type
+in the envelope, since a look is the runtime's observation and claims no turn or context (§13). An agent's `repo.commit` turns a SHA
+into the ref of its record, which is how `based_on` cites a commit, and is an observed read, while one read with `git log` stays
+unobserved. **Three axes never merge:** evidence type
 says why an edge is believed; **attribution** (`exact` or `forked`, and None otherwise) says how well a model call is tied to an
 agent, which `eligibility` answers and nothing stores; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
@@ -1666,6 +1669,10 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   session's event only in a commit this session's agent made. Anything else, a git ref among them, is kept as written and unresolved,
   with why, never refused, since git already holds it; `repo.committed` keeps why at payload 2. What the maker was handed of what it
   cites is its exposure's to say, bounded at the look that recorded the commit, as for any citation.
+- **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
+  its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit
+  is recorded at the look after the turn that made it', until then. Every agent holds it. See
+  [ADR 0057](adr/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve

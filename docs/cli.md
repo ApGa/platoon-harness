@@ -145,6 +145,8 @@ For example:
 - [`ops`](#platoon-harness-ops)
     - [`list`](#platoon-harness-ops-list)
 - [`peers`](#platoon-harness-peers)
+- [`repo`](#platoon-harness-repo)
+    - [`commit`](#platoon-harness-repo-commit)
 - [`task`](#platoon-harness-task)
     - [`add`](#platoon-harness-task-add)
     - [`claim`](#platoon-harness-task-claim)
@@ -191,6 +193,7 @@ For example:
 * [`message`](#platoon-harness-message): The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
 * [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
 * [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
+* [`repo`](#platoon-harness-repo): The `repo` ops, each on one session, with the arguments an agent's `ph repo.<op>` takes as flags.
 * [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
 * [`uses`](#platoon-harness-uses): Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
 * [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
@@ -1562,6 +1565,32 @@ For example:
 **Parameters**:
 
 * `--after`: A `cursor` from an earlier call.
+
+### platoon-harness repo
+
+The `repo` ops, each on one session, with the arguments an agent's `ph repo.<op>` takes as flags.
+
+#### platoon-harness repo commit
+
+```console
+platoon-harness repo commit --sha STR SESSION
+```
+
+Give a commit's `ref`, which `based_on` cites, its `--sha`, `gist`, and the workspace it was `made_in`.
+
+Refused `not_found` until the look after the turn that made it records it, and `invalid` when `--sha` names several.
+
+For example:
+
+    platoon-harness repo commit SESSION --sha SHA
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--sha`: A commit's SHA, or its first 4 or more hex digits. **[required]**
 
 ### platoon-harness task
 

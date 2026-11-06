@@ -4,6 +4,9 @@
 
 ### Added
 
+- `repo.commit{sha}`, an agent read every agent holds: a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or its first
+  4 or more hex digits, the read recorded as exposure, refused 'not recorded yet: a commit is recorded at the look after the turn that
+  made it' until then. `Session.repo_commit`. See ADR 0057.
 - The merge queue for worktree teams, written out in `docs/topologies.md`: a `merges` queue and a merger in a worktree, the look
   recording each merge or conflict, and a conflict going back to its worker as its task's result. `docs/research/landscape.md` now puts
   the merge-queue role there, and not in `git-swarm`, which never merges. See ADR 0058.

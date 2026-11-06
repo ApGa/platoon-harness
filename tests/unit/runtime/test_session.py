@@ -57,6 +57,7 @@ COVERED = {
     "message.send": "send",
     "ops.list": "ops",
     "peers": "peers",
+    "repo.commit": "repo_commit",
     "session.cancel": "cancel",
     "session.close": "close",
     "session.ending": "ending",

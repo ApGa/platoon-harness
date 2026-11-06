@@ -462,3 +462,38 @@ async def test_a_session_outside_a_git_repository_says_changes_are_not_observed(
     assert probes(kernel) == []
     assert refusal(outcome).code == "unsupported"
     assert result_of(kernel.query(kernel.runtime, "session.ending", {}))["unobserved"] == []
+
+
+# An agent's read of a commit.
+
+
+async def test_repo_commit_gives_a_recorded_commit_s_ref_or_says_not_recorded_yet(kernel, ada):
+    """An agent's read of it records exposure, and a person's records nothing. A prefix names the one commit it
+    begins, or is refused for naming several."""
+    bob = await spawn(kernel, "bob")
+    twin = "1111" + "5" * 36
+    await looked(kernel, commits=[commit(ONE), commit(twin, ONE)], reading=reading(twin))
+    [recorded, _] = of_type(kernel, "repo.committed")
+    head = kernel.head
+
+    given = result_of(await kernel.submit(bob, "repo.commit", {"sha": ONE}))
+    asked = result_of(kernel.query(ada, "repo.commit", {"sha": ONE[:5]}))
+    missing, several = [await kernel.submit(bob, "repo.commit", {"sha": sha}) for sha in (TWO, "1111")]
+
+    ref = f"{recorded.stream}@{recorded.version}"
+    assert given == asked == {"ref": ref, "sha": ONE, "gist": f"{ONE[:12]} make 1111", "made_in": "@bob"}
+    [offered] = of_type(kernel, "context.offered", after=head)
+    assert offered.agent == "bob" and offered.data["how"] == "read"
+    assert [item["ref"] for item in offered.data["items"]] == [ref]
+    assert refusal(missing).code == "not_found"
+    assert refusal(missing).detail == "not recorded yet: a commit is recorded at the look after the turn that made it"
+    assert refusal(several).code == "invalid"
+
+
+@pytest.mark.parametrize("repo", [None])
+async def test_repo_commit_says_a_session_with_no_repository_observes_none(kernel):
+    bob = await spawn(kernel, "bob")
+
+    outcome = await kernel.submit(bob, "repo.commit", {"sha": ONE})
+
+    assert refusal(outcome).code == "unsupported"

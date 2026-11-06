@@ -257,7 +257,10 @@ back to its worker through the task.
 ## From a script
 
 `platoon-harness view watch <session> --name changes` gives the `changes` view's rows: each recorded commit, each workspace's last
-reading and each uncommitted path, with the `seq` that last moved it. `platoon-harness session ending <session>` gives the Ending,
+reading and each uncommitted path, with the `seq` that last moved it. An agent turns a commit's SHA into the ref its `based_on` cites
+with `repo.commit`, which records the read as its exposure and says 'not recorded yet' until the look after the turn that made it; a
+person or a program reads the same with `platoon-harness repo commit <session> --sha <sha>`. `platoon-harness session ending
+<session>` gives the Ending,
 whose `workspaces` are the kept ones with their reasons and any `release`, and whose `unobserved` names the agents whose last look
 never finished.
 

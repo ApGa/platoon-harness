@@ -828,6 +828,13 @@ class Session:
         """Redact a body: reads stop now, and its bytes follow. Events citing its hash stay whole."""
         await self._do("body.tombstone", sha256=ref.removeprefix("sha256:"))
 
+    # The repository.
+
+    async def repo_commit(self, sha: str) -> dict[str, Any]:
+        """A recorded commit's `ref`, which `based_on` cites, its full `sha`, its `gist` and the workspace it was
+        `made_in`, by its SHA or its first 4 or more hex digits."""
+        return await self._ask("repo.commit", sha=sha)
+
     # Provenance.
 
     async def exposure(self, agent: str, ref: str, *, before: str | None = None) -> Seen | NotSeen | Unknown:
