@@ -1670,7 +1670,10 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve
   it. For your checkout it is open
-  while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`.
+  while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`. A merge queue
+  for worktree teams is a queue and a merger in a worktree, written out in [topologies.md](topologies.md), not a preset: the merger
+  merges with git, the look records the merge or the conflict, and the merger completes the task naming any conflict, which reaches
+  its worker through the task. See [ADR 0058](adr/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
 - **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
   HEAD, replacing the last and holding what it held, so a commit an agent rewrote outlives git's pruning. Nothing is written into your
   repository for it.

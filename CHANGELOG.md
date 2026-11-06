@@ -4,6 +4,9 @@
 
 ### Added
 
+- The merge queue for worktree teams, written out in `docs/topologies.md`: a `merges` queue and a merger in a worktree, the look
+  recording each merge or conflict, and a conflict going back to its worker as its task's result. `docs/research/landscape.md` now puts
+  the merge-queue role there, and not in `git-swarm`, which never merges. See ADR 0058.
 - `isolated` workspaces, experimental. An isolated workspace is a snapshot whose harness, and everything the runtime runs in its tree,
   one extension's isolation confines: its looks, the check at a launch or a resume, the stop's reading of what removal would lose,
   making a kept snapshot whole, and finding its objects for `commits.bundle`, so a filter an agent writes into its own config runs

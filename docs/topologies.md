@@ -364,6 +364,59 @@ Three rules keep this safe:
 To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls, and give each a different channel name.
 Presets with fixed names (`pipeline`, `ring`, `map-reduce`, `git-swarm`) cannot be used twice over the same stage: write the second out.
 
+## A merge queue for worktrees
+
+Workers in worktrees of their own hand their branches to one merger, rather than merge each other's: a `merges` queue the workers
+add to and a `merger` role claims from, the merger in a worktree of its own. It is a queue and a role, so it is written out and is no
+preset. The runtime never merges: the merger merges each branch a task names into its own branch with git, and the look after its turn
+records the merge commit as the merger's, or the merge under way and its conflicted paths, which put the merger under Needs you while
+it rests on them. On a conflict the merger completes the task with a result naming the paths, and the worker reads it from its task,
+by `task.list` or by a `wait` on `task/merges/<id>`, which whoever adds to a queue may do. `task.fail` is no way back to the worker: it
+returns the task to the queue's readers, the merger, until it dies. Each role's `instructions` say this to its agents: a worker adds a
+task naming its branch, and a merger merges what it claims and completes it with what came of that.
+
+```toml
+[roles.lead]
+harness = "claude"
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "codex"
+workspace = "worktree"
+
+[roles.merger]
+harness = "claude"
+workspace = "worktree"
+
+[topology.manager-worker]
+manager = "lead"
+workers = "worker"
+
+[topology.channels.merges]
+kind = "queue"
+writers = "role:worker"
+readers = "role:merger"
+```
+
+```python
+team = Team(
+    roles={
+        "lead": Role(harness="claude", may_spawn=["worker"]),
+        "worker": Role(harness="codex", workspace="worktree"),
+        "merger": Role(harness="claude", workspace="worktree"),
+    },
+    topology=(
+        manager_worker("lead", "worker")
+        | Topology(channels={"merges": Queue(writers="role:worker", readers="role:merger")})
+    ),
+)
+```
+
+```text
+lead (claude) may message its workers and you. merger (claude, own worktree) may message no one. Workers (codex, own worktrees) may message lead.
+Workers add to queue `merges`; merger claims from it. lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.
+```
+
 ## Writing it out
 
 A preset is a macro. Anything it does, you can write yourself, and `team.show(resolved=True)` prints exactly what it expanded to, as

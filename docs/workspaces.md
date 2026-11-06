@@ -249,7 +249,10 @@ $ git merge platoon-harness/fix-auth/ada
 
 A snapshot agent's commits are in the snapshot's own repository until you fetch its branch, as its `release` does, and `/review` says
 so of its group. A fetch runs your git in that repository, outside any isolation, so read an isolated agent's `<path>/.git/config`
-before you fetch from it, as you would any repository you did not make. The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
+before you fetch from it, as you would any repository you did not make. The runtime never merges, rebases or resolves a conflict,
+and never moves a branch an agent has. For a team whose workers hand their branches to one merger, [topologies.md](topologies.md#a-merge-queue-for-worktrees)
+writes out the merge queue: a queue and a merger in a worktree, whose look records each merge or conflict, and a conflict that goes
+back to its worker through the task.
 
 ## From a script
 
