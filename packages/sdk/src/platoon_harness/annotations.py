@@ -1,7 +1,7 @@
 """Annotations: what an estimator says of the record, a reward or a credit, kept in `annotations.sqlite` beside the
 journal and never in it, as `git notes` attach to commits. Each is one producer's statement at one version about one
 event at one head, never a fact. `Session.annotate` writes one, checked against the journal, and `Session.annotations`
-reads them: the one way in and out. Nothing an agent can reach opens the file. See ADR 0011.
+reads them: the one way in and out. Nothing an agent can reach opens the file. See RFC 0011.
 """
 
 from typing import Annotated, Literal

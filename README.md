@@ -34,7 +34,7 @@ $ uv run platoon-harness            # the terminal UI
 
 | Read | For |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | The design of record, and [docs/adr/](docs/adr/) for why each decision was made |
+| [docs/architecture.md](docs/architecture.md) | The design of record, and [docs/rfcs/](docs/rfcs/) for why each decision was made |
 | [docs/tui.md](docs/tui.md), [docs/web.md](docs/web.md), [docs/headless.md](docs/headless.md), [docs/cli.md](docs/cli.md) | The terminal UI, the browser, headless runs, and every command |
 | [docs/topologies.md](docs/topologies.md) | Teams and topologies, with a worked example per preset |
 | [docs/workspaces.md](docs/workspaces.md) | Where each agent works, a worktree of its own among them, and what becomes of it |

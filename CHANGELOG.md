@@ -20,7 +20,7 @@
   this, not the reflog an isolated agent writes and could clear. A `test` from a project or team file needs the trust
   step. `Team.test` and `team.Test`, `Settings.test`, the runtime-only `repo.record`, the `test` effect, `Session.repo_test`,
   `drivers.process.run`, which runs a command in a group recorded before it can exec and ends what it leaves, `Record.of`,
-  `runtime.workspaces.checkout` and `runtime.paths.TESTS`. See ADR 0056.
+  `runtime.workspaces.checkout` and `runtime.paths.TESTS`. See [RFC 0056](docs/rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md).
 - The `changes` view's commit rows carry `tests`, the latest runtime test's outcome or None, its `tested` record ref and
   `tests_why`/`tests_exit` why it failed or erred, and, when the team names a test, an act saying 'Test: runs @ada's commit as you,
   unconfined', or disabled, saying why. The terminal's `/review` shows each commit's outcome and the reason it failed or erred,
@@ -28,10 +28,10 @@
   about first. The view is at version 3.
 - `repo.commit{sha}`, an agent read every agent holds: a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or its first
   4 or more hex digits, the read recorded as exposure, refused 'not recorded yet: a commit is recorded at the look after the turn that
-  made it' until then. `Session.repo_commit`. See ADR 0057.
+  made it' until then. `Session.repo_commit`. See [RFC 0057](docs/rfcs/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
 - The merge queue for worktree teams, written out in `docs/topologies.md`: a `merges` queue and a merger in a worktree, the look
   recording each merge or conflict, and a conflict going back to its worker as its task's result. `docs/research/landscape.md` now puts
-  the merge-queue role there, and not in `git-swarm`, which never merges. See ADR 0058.
+  the merge-queue role there, and not in `git-swarm`, which never merges. See [RFC 0058](docs/rfcs/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
 - `isolated` workspaces, experimental. An isolated workspace is a snapshot whose harness, and everything the runtime runs in its tree,
   one extension's isolation confines: its looks, the check at a launch or a resume, the stop's reading of what removal would lose,
   making a kept snapshot whole, and finding its objects for `commits.bundle`, so a filter an agent writes into its own config runs
@@ -47,7 +47,7 @@
   that gives an isolation, two, one that cannot confine here, a harness that declares no installed path, and a role with no auth
   profile whose harness signs itself in. Its escape tests pass on Claude Code, Codex with its own sandbox nested inside, pi and the
   OpenHands worker against FakeModel. A stop gives an isolated harness the end of its stdin and its grace, then `SIGKILL`, labelled
-  `crash_window`, since bubblewrap passes no `SIGTERM` on. See ADR 0034.
+  `crash_window`, since bubblewrap passes no `SIGTERM` on. See [RFC 0034](docs/rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
 - `DriverInfo.installed`, the paths a harness reads to run, declared by every driver, and by a wire program in its description;
   `AgentSpec.wrap`, the argv of the isolation a harness runs in, which `Process` puts before its command; and a `HOME` in `spec.env` is
   the harness's home, so `harness_env` passes none of the variables that keep a harness's state elsewhere. `drivers.env.on_path` and
@@ -62,23 +62,23 @@
   another origin, or whose bearer is empty, is refused. ScriptedDriver declares `sealed`. Pi gets an agent directory of its own in the agent's folder, and a
   context window no context reaches, as it took an unstated one as none and compacted after every turn once its history passed what a
   compaction keeps; OpenHands none of its coding tools, the environment's from an MCP client of their own, so ours keep their names.
-  See ADR 0053.
+  See [RFC 0053](docs/rfcs/0053-a-gateway-admission-launches-sealed.md).
 - Compaction labelled at call time: each compaction call of a sealed launch carries the gateway's `compaction_headers` and is
   reported as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's new `Compact` step, OpenHands'
   condenser, a wire program from its frame, and pi through our extension, which takes `session_before_compact` and runs pi's own
   `compact`, and says each of its one or two calls to the driver, by its id or with none where it never answered, before pi says
-  the compaction ended, even when it was cut. See ADR 0053.
+  the compaction ended, even when it was cut. See [RFC 0053](docs/rfcs/0053-a-gateway-admission-launches-sealed.md).
 - `FakeModel.gateway(bearer)`: FakeModel as a training system's gateway, its models and an MCP server of the environment's tools,
   `ENVIRONMENT_TOOLS`, at `/mcp`, answering only a bearer it gave. `Request.bearer`, `Request.carries(headers)`, `FakeModel.tool_calls`,
   and `Overflow`, a reply that refuses a request as too long in each dialect's own error form.
 - Two conformance checks of a sealed launch, `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`, kept in
   the one result per driver, which `trainable` now stands on; `check_driver(kept=)` names the tools of a harness's own that a sealed
-  launch keeps, each acting on nothing, as OpenHands' `finish` and `think`. See ADR 0053.
+  launch keeps, each acting on nothing, as OpenHands' `finish` and `think`. See [RFC 0053](docs/rfcs/0053-a-gateway-admission-launches-sealed.md).
 - `platoon_harness.credit.propagate`, `propagate@1`, a heuristic producer in the one producer signature, `produce(session, episode,
   *, judge, **params)`, which splits an episode's one team reward back along causes, ancestry and seen citations, each maker keeping
   `retained`, and writes one local `credit` row per agent it reached, on its first `agent.started`. `primitives.WALK_LIMIT` names the
-  4,096 events a walk reaches. It refuses a reward on an episode that closed on no ref, which would credit nobody's work. See ADR
-  0054.
+  4,096 events a walk reaches. It refuses a reward on an episode that closed on no ref, which would credit nobody's work. See [RFC
+  0054](docs/rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - The hand-off contract, `test_a_managed_session_runs_as_a_training_authority_drives_it`, on ScriptedDriver in the fast pass and on pi
   and OpenHands in the slow pass. `tests/public_api.txt` now writes each frozen member's parameters, as `name(parameters)`, and a
   closed set of words, as `name[words]`, a model's field by its name, which a test holds to the code, with every name a training
@@ -88,21 +88,21 @@
   or a finished agent's end, which a training system closes an episode on.
 - `eligibility(agent, episode)`, a query op with `Session.eligibility` and the command `eligibility`: whether an agent's work in
   one episode can train, from the record alone, with its attribution, `exact`, `forked` or None, and a verdict with every bar of a
-  closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See ADR
-  0052.
+  closed set, for the agent and a page of its calls. It reads the levels its starts recorded, never the conformance store. See [RFC
+  0052](docs/rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
 - `trainable_problems(team, approvals=None)`, what keeps a team from training, read from the team alone, with approvals judged by a
   session's own `approvals` where it is given one, and `check(team, trainable=True)`, which
   adds each role's driver, a sealed launch and a result kept under the root that proves trainable, and which
   `Session.start(trainable=True)`, `prepare(trainable=True)` and `platoon-harness team check --trainable` run. A trainable start needs
   an authority. `DriverInfo.version` says the harness version a driver would run, where it can tell without starting one, and
-  `levels.unearned` why a result does not prove a level. See ADR 0052.
+  `levels.unearned` why a result does not prove a level. See [RFC 0052](docs/rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
 - `docs/training.md`, the guide for a training system building on the contract.
 - A session's principal is a person or a program: `Session.start(principal=)` and `prepare(principal=)` take `human:<name>` or
   `program:<name>`, and `Manifest.principal` names it, a manifest from before reading its `human` as one. A program's message goes
   as its reader's setting says, and a session a program starts issues no owner credential, so a guest of its runtime holds a view
-  credential, and it cannot detach, at a start or a resume. See ADR 0050.
+  credential, and it cannot detach, at a start or a resume. See [RFC 0050](docs/rfcs/0050-a-script-is-a-person-or-a-program.md).
 - `Team.recipients(to=None)`, the one rule for whom a session's prompt goes to: the agent `to` names, or else every agent the
-  session starts. See ADR 0051.
+  session starts. See [RFC 0051](docs/rfcs/0051-one-rule-for-whom-a-prompt-goes-to.md).
 - The contract a training system's authority builds on, which names nothing after any training system. Model access is one
   value: variables by name, or a `Gateway(origin, bearer, model, tools, compaction_headers)`, whose origin is a scheme and a
   host and nothing more and whose bearer is masked in every form, given only to a driver that declares the new capability
@@ -112,7 +112,7 @@
   view version 14, and which a gateway admission must name. A gateway's bearer is one agent's, so a second agent admitted on it is
   refused, and a resumed admission that gives other backend ids or other access than its agent had loses the agent. `SpawnRequest`
   carries the `parent` and the `goal` its `agent.spawned` records, and `AgentOutcome` the `report` its end keeps and a `status` of
-  the five ends. See ADR 0049.
+  the five ends. See [RFC 0049](docs/rfcs/0049-the-contract-a-training-authority-gets.md).
 - `config.forms(secret)`, the forms text may carry a secret in, which the `Redactor` masks and a gateway, an admission and a
   training system's tests look for; and a `Secret` equals another of the same value.
 - `examples/mixed-team`, a Claude Code lead and a Codex worker in one session, coordinating through the queue `tasks`, the
@@ -124,7 +124,7 @@
   naming what the offer that last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that reads
   it again, in the words of its surface, unless that offer was a read of its own or the read's filter passed over something new: a
   wake moves the cursor past what it hands over, so a read right after found nothing, and a Codex model took that for an empty
-  channel. `Deliveries` is at view version 12, keeping the offer that last moved each cursor. See ADR 0047.
+  channel. `Deliveries` is at view version 12, keeping the offer that last moved each cursor. See [RFC 0047](docs/rfcs/0047-an-empty-read-names-what-was-already-handed-over.md).
 - An agent's process is not its identity. Any agent between turns for ten minutes on the session's clock, with no setting, rests
   when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a runtime-only op, a `rest`
   effect ends its process tree, and its next handover brings its harness back first, natively, or anew where it took no turn, on a
@@ -133,7 +133,7 @@
   its turn cut off and told, an exit telling nothing else but a goal not begun that waits nowhere already, and a second exit before a
   turn of its ends loses the agent, a harness brought back from rest that exits before it is ready among them. `delivery.ready`
   lists the agents to put to rest, `Agents`, at view version 13, keeps `idle_since`, `resting` and `exits`, the roster carries
-  `resting`, and the terminal's inspector says an agent rests and what brings it back. See ADR 0045.
+  `resting`, and the terminal's inspector says an agent rests and what brings it back. See [RFC 0045](docs/rfcs/0045-an-agent-s-process-is-not-its-identity.md).
 - A level is earned on the machine that runs it. `platoon-harness doctor --check` runs every conformance check on each harness the
   SDK ships a check of that it finds, on the binary that runs, against FakeModel and on no account, through `check_harness` in
   `platoon_harness.testing`, and keeps the result under the root, `conformance/<driver>.json`, which `write_conformance` and
@@ -150,13 +150,13 @@
   The terminal's inspector says the login kind beside the levels, which the roster carries as `login`, and `Agents` is at view
   version 12. The scripted harness has a `shell` tool of its own, `testing.SHELL`, which runs its `command` once allowed, so it and
   the conformance wire program meet every shell check, and the wire program earns `operational`. No check proves a coverage surface,
-  so nothing answers `not_seen` yet. See ADR 0044.
+  so nothing answers `not_seen` yet. See [RFC 0044](docs/rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - A daemon that keeps failing needs a person. The supervisor journals a daemon's failure when it begins a run of them or says another
   error than the last, as `daemon.failed` naming it and its error, and the next run that lasts a minute, as `daemon.recovered`,
   through two runtime-only ops of the kernel's, `daemon.fail` and `daemon.recover`, so a courier or a host that fails on every pass
   stands in `attention` as a kind of its own, `daemon`, saying where its traceback is, what starts it anew and its latest error,
   until it runs a minute or a new runtime starts, and the terminal's dock and the browser's Needs you say so where a quiet session
-  would show. The kernel takes the namespace `daemon`. `Attention` is at view version 4. See ADR 0046.
+  would show. The kernel takes the namespace `daemon`. `Attention` is at view version 4. See [RFC 0046](docs/rfcs/0046-a-daemon-that-keeps-failing-needs-a-person.md).
 - A person follows provenance from where they read. In the terminal, `/provenance`, or `p` with the transcript in focus, opens the
   chosen line's provenance in a panel; in the browser, Provenance among a message's actions opens a pane, on a view link too, from
   `x_provenance`, a read of ours beside SwarmChat's. Both show one event at a time, worded once for both: its sources, its uses, its
@@ -169,24 +169,24 @@
   message's actions show while focus is in it, so the keyboard reaches both. The browser's projection, at version 6, keeps the ref
   of the event each line shows, so a link a chat shows opens that chat too. `lineage` names, for a harness's report of an item, the
   call that report names, and for a tool item the first event of each command its agent made under its id, as `Made.commands`. See
-  ADR 0043.
+  [RFC 0043](docs/rfcs/0043-a-person-follows-provenance-from-where-they-read.md).
 - Agents are asked to cite. The preamble template has a ninth slot, `citing`, which asks an agent holding a write of content to
   put the `ref` of what its write rests on in `based_on`, and the default template fills it, so asking is on by default; a tool's
   description says what `based_on` is and never asks, so a template without the slot asks nothing. It costs 78 bytes a request, 20
-  tokens by Qwen3's tokenizer. `tests/live/test_citing.py` runs it on real models. See ADR 0042.
+  tokens by Qwen3's tokenizer. `tests/live/test_citing.py` runs it on real models. See [RFC 0042](docs/rfcs/0042-agents-are-asked-to-cite-by-their-template.md).
 - A commit's `Informed-By` trailer takes an event's ref, such as the board entry the commit implements: once checked as any
   citation is, and only in a commit an agent of the session made, of an event that agent made or was handed, it joins the commit's
   `based_on` beside the commits its hex values name, so lineage shows it with the commit maker's exposure and contributors walk from
   code to what informed it. A trailer travels with its commit between clones and sessions, so one made elsewhere, or by nobody the
   record names, cites no event here. A value that cites nothing stays as written, never refused, with why, `unrecorded`, `no_event`,
-  `no_lines` or `unread`, which `repo.committed` keeps at payload 2 and lineage gives as `Unresolved.why`. See ADR 0041.
+  `no_lines` or `unread`, which `repo.committed` keeps at payload 2 and lineage gives as `Unresolved.why`. See [RFC 0041](docs/rfcs/0041-a-commit-cites-what-informed-it-by-its-ref.md).
 - Pi names what landed and which call made a tool call. The `pi` driver reports an input under the id of the entry pi wrote it
   down as, asked of `get_entries` from the last entry seen once the input's message has ended, and holds whatever pi says after the
   input until it has that id, and whatever it says after a compaction until it has named what that forgot, so its reports keep
   pi's order; a compaction then marks a handover pi took `forgot` or `kept`. Our pi
   extension puts pi's own id for a call of ours among its arguments as `_meta`, and the stdio shim moves a `_meta` it finds there to
   where MCP keeps it, so the call goes under `pi/toolCallId`, a harness's anchor, which pi's tool item holds: a read through pi is
-  confirmed by that item, and a pi tool call joins the model call that chose it. See ADR 0040.
+  confirmed by that item, and a pi tool call joins the model call that chose it. See [RFC 0040](docs/rfcs/0040-pi-names-what-landed-and-which-call-made-a-tool-call.md).
 - Provenance queries for people and programs, none an agent's tool: `exposure(agent, ref, before)` answers `seen`, with each offer
   its harness said it took and each compaction since marked `forgot`, `kept` or `unsaid`, `not_seen` or `unknown`, with every
   reason, and never a boolean; `lineage(ref)` is one hop back, with the model call that chose the event, each citation with its
@@ -197,7 +197,7 @@
   that chose it, on its own report stream, at its commit, or for a git commit at the look that recorded it, said; it says its `head`
   and whether its turn is `open`; each list in it is a page beside its true count; and it is the same after a rebuild and on a
   closed copy. A ranged citation's lines are shown true, or null when nothing confirmed shows them. A client's query runs off the
-  runtime's event loop. No check proves coverage yet, so nothing answers `not_seen`. See ADR 0038.
+  runtime's event loop. No check proves coverage yet, so nothing answers `not_seen`. See [RFC 0038](docs/rfcs/0038-provenance-is-answered-from-the-record.md).
 - `platoon-harness session refold`, which brings a session's views up to its journal while no runtime holds it, writing no event,
   so its history and the queries answer again after an upgrade changed a view.
 - The views behind them: `Exposures`, `References` and `Calls`, and `Gaps` at version 2 as an index of each gap by where it began.
@@ -207,12 +207,12 @@
   on a live session or a closed one with no runtime, and `Session.annotations` and `annotations` read them: the one way in and out,
   each statement checked against the journal. The same statement again is answered with the first, and another under the same
   producer, version, params, target and kind is refused `conflict`. The file keeps a write-ahead log and an index on the target.
-  Nothing an agent can reach opens the file, and no estimator ships. See ADR 0039.
+  Nothing an agent can reach opens the file, and no estimator ships. See [RFC 0039](docs/rfcs/0039-estimators-write-beside-the-journal-at-m2.md).
 - Refs on everything a model is shown. A ref is `stream@version`, with `#La-b` for lines of that event's body, and every result,
   handover, notice and refusal names what it shows by one: a message row says `body: true` and gives no hash, `rest` is an event
   ref with a range, and `blob.get` takes the ref of the event that carries a body. Every write of content returns the ref it made,
   `task.claim` and `task.list` name a task by its `task.added` ref and a result by `result_ref`, and `agent.spawn` returns
-  `agent/<name>@1`. See ADR 0036.
+  `agent/<name>@1`. See [RFC 0036](docs/rfcs/0036-one-ref-names-what-a-model-is-shown.md).
 - A message that repeats another event's words is shown and handed over by that event's ref, and names it as its cause: a board's
   or queue's announce by the write, a child's report by its `agent.finished`, its turn's last message, or else its end, and a goal
   told again by its spawn. `reply_to` finds an entry by the ref it was shown by. `message.sent` is at payload version 3, and its
@@ -227,7 +227,7 @@
   it sends any input. The first input a harness says it took confirms its own launch, and never one a harness before it was
   offered. A native resume offers nothing.
   `platoon_harness.testing.goal` makes one for a test, and the conformance check `delivered_text_in_next_prompt` holds a driver to
-  saying its goal landed under the launch's id. See ADR 0037.
+  saying its goal landed under the launch's id. See [RFC 0037](docs/rfcs/0037-an-offer-is-confirmed-only-by-its-harness.md).
 - A tool item that came back `completed`, whose `native_id` is the anchor a read went under, confirms that read, with the evidence
   `tool_item`, and one that `failed` confirms nothing: an offer is confirmed only from its harness's own report. The surface hands a
   steer notice and a body only it could read under the call's anchor too.
@@ -239,14 +239,14 @@
   post's vote control disabled, saying why. A queue's or a board's chat draws Tasks or Entries disabled, as the tasks and board
   views are planned. A post's thread is followed by an index on each message's parent, so the Board's time grows with a
   session's messages and not with their square; the projection is version 4, which `web` folds again from the journal when
-  it starts. See `docs/web.md` and ADR 0035.
+  it starts. See `docs/web.md` and [RFC 0035](docs/rfcs/0035-the-board-and-the-map-over-messages.md).
 - The look: at each turn's end and each resume the lifecycle asks the host for a `probe`, and an agent's stop looks once more before
   it ends the workspace. Looks run one at a time, change no ref, index or file, and record on `repo/<name>`, with no agent in the
   envelope, `repo.committed` once per new commit, parents first, `repo.rewritten` for what a branch no longer reaches of what the
   journal holds, and `workspace.changed` for a workspace's head, branch and uncommitted state when they differ. A commit is the
   agent's whose workspace's HEAD reflog records making it at its committer time, and an `Informed-By` trailer is resolved once from
   hex alone. A look that fails records the gap `workspace_unobserved`, and the Ending names the agents whose last look never
-  finished as `unobserved`. `repo.report` and `repo.looks` are runtime-only ops. See ADR 0032.
+  finished as `unobserved`. `repo.report` and `repo.looks` are runtime-only ops. See [RFC 0032](docs/rfcs/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - The `changes` view rebuilt on the look, with a row per commit, per workspace reading and per uncommitted path, each with the `seq`
   that last moved it; a `conflict` attention row while an agent rests on a conflict its look found; the roster's `workspace`,
   `agent.status`'s workspace and why it was kept, and `session.status`'s `repo`.
@@ -264,7 +264,7 @@
 - `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
   `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
   a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume
-  whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/workspaces.md` and ADR 0031.
+  whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/workspaces.md` and [RFC 0031](docs/rfcs/0031-a-workspace-is-a-place-git-already-knows.md).
 - Refused before any cost: a git mode outside a work tree, in a bare repository or one with no commit, on git older than 2.36, with
   LFS files and no filter, from a subfolder the workspace would not hold, or where a session's branches exist, naming another session
   name first; a session folder unignored in its repository's work tree, in every mode. Warned of: submodules, uncommitted changes,
@@ -286,7 +286,7 @@
   approvals as cards with Allow and Deny, Needs you with its count, from the runtime's `attention`, and an agent's interrupt, stop
   below, retire and cancel and the session's close and cancel, each asking first where the terminal does. Each act keeps its key
   until answered, across a lost connection and a reload, so a retry is one operation, and a refusal shows its reason. Every control
-  the person cannot use says why. See `docs/web.md` and ADR 0028.
+  the person cannot use says why. See `docs/web.md` and [RFC 0028](docs/rfcs/0028-acting-from-the-page.md).
 - `view_info`'s `x` says `body_limit`, the most bytes a body may be.
 - The browser suite, `tests/e2e/`, in Chromium's headless shell: a message in an agent's input path once, on a wire harness and on
   the real `claude` binary against FakeModel, the browser and the terminal attached at once, approvals raced from two clients,
@@ -296,7 +296,7 @@
   one way into `swarmchat.sqlite`, with ids a rebuild gives again, and serves the page's `view_*` replies from it, with "Delivered to"
   from delivery evidence in place of "Read by". A view link and a control link, each opening once for a session token that expires;
   `Host` and `Origin` checked; loopback unless `--host` names another address with TLS. `/x/command`, `/x/body` and `/x/link` take what
-  the page will send. The page reads in this stage, and every act is drawn disabled, saying why. See `docs/web.md` and ADR 0027.
+  the page will send. The page reads in this stage, and every act is drawn disabled, saying why. See `docs/web.md` and [RFC 0027](docs/rfcs/0027-the-browser-on-our-backend.md).
 - `platoon_harness.runtime.control.BODY_LIMIT` and `platoon_harness.primitives.IN_A_RESULT` are public.
 - `platoon_harness.http`: the tool server's bounded HTTP, as a module of its own with public names. `Origin`, when a request has
   one, must now be the origin of its `Host`.
@@ -345,7 +345,7 @@
 - `stays` on `Role`, on `agent.spawn` and on `Session.spawn`: an agent that stays takes a follow-up task or a question by message
   after its first, on the same harness, until it is told to finish, retired or cancelled. It is resolved once, at the spawn, from the
   spawn, then the role, then whether the session started it, and refused for a harness that is not persistent. `agent.status` shows it,
-  and the result of a spawn that stays says how to end it. See ADR 0023.
+  and the result of a spawn that stays says how to end it. See [RFC 0023](docs/rfcs/0023-agents-that-stay.md).
 - `preamble` on `Team` and `Role`: the generated part of what an agent is told is a template, a role's in place of its team's, with
   eight slots the runtime fills per agent and per surface, and `PREAMBLE`, the default, renders what it said before byte for byte.
   `name` and `tools` are values and the rest sentences of ours, a line that holds a slot and comes out blank is left out, so no word
@@ -410,7 +410,7 @@
   Tab and Shift+Tab go round the parts in the order they are on screen. The dock takes focus with no place chosen, so its `y`
   and `n` answer only a place chosen there with the arrows. The sessions screen has a plain key for each act, `?` the help, `p`
   the palette and `q` quitting among them. `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep
-  keys. ADR 0026.
+  keys. [RFC 0026](docs/rfcs/0026-every-act-from-any-terminal.md).
 
 - `tool_names` on `Capabilities`: a harness that shows our MCP tools by their own names, as OpenHands does, says `bare`, and its
   agents are told them by those names, in their instructions, handovers and refusals, through `?surface=mcp`.
@@ -418,7 +418,7 @@
   `platoon-harness-sdk[openhands]`, pins exactly, and which `harness = "openhands"` runs as `python -P -m
   platoon_harness.drivers.openhands` on the runtime's own interpreter, finding its modules where the runtime does, `PYTHONPATH`
   among them. Only the worker loads OpenHands, in its own process, and an environment that cannot hold its pins runs the worker
-  from one of its own as a wire command. ADR 0030. It drives one conversation through `arun()`, signs in with a key from the
+  from one of its own as a wire command. [RFC 0030](docs/rfcs/0030-openhands-is-an-extra-of-the-sdk.md). It drives one conversation through `arun()`, signs in with a key from the
   role's auth profile alone, through the shell's proxies, gives the agent OpenHands' coding tools and ours through the stdio shim,
   asks the runtime before every action but ours, hands a delivery to the conversation only between runs with no action pending,
   pausing a run under way for it, leaves no action pending at a turn's end, says what a request carried from the SDK's completion
@@ -434,7 +434,7 @@
 - Nothing reaches an agent while a stop of a child of its is under way: no handover, and no `released` from a `wait` it holds open
   in a call. So a parent hears of a child's end, by its report, by the notice of a wait that holds on it or by a held call's
   answer, only once the authority's `finish` for that child has returned, and is on its way to a turn until then. A call it makes
-  once the child has ended reads the journal as it stands. See ADR 0059.
+  once the child has ended reads the journal as it stands. See [RFC 0059](docs/rfcs/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md).
 - Claude Code's conformance test pins 2.1.319, which it updated itself to on the machines that run the slow pass, and on which its
   checks pass against FakeModel, 26 passed and 4 skipped, as on 2.1.318.
 - A snapshot's refusals say `a snapshot` where they said `` `snapshot` ``, as they hold for an isolated workspace too.
@@ -443,36 +443,36 @@
 - Codex's conformance test pins 0.167.0, the version its checks last passed on, against FakeModel, as they had on 0.164.0.
 - Claude Code's conformance test pins 2.1.318, the version its checks last passed on, against FakeModel, as they had on 2.1.316.
 - `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
-  `call_ids_reported`. See ADR 0053.
+  `call_ids_reported`. See [RFC 0053](docs/rfcs/0053-a-gateway-admission-launches-sealed.md).
 - OpenHands' condenser calls are reported with the purpose `compaction`, where they were `condenser`. Its `describe` says the
   SDK's version, and pi's says what `pi --version` said.
 - Pi's driver waits at start for our extension to say which tools pi declares, once ours have connected, so `ready.tools_visible` is
   pi's own list, and a server that never connects leaves our tools hidden rather than unverified.
 - An annotation's status is one of five, `scored`, `invalid`, `error`, `timeout` or `cancelled`: `timeout` is new, and `unscored` is
-  gone, as no statement is what unscored is. See ADR 0052.
-- `trainable` needs a driver that declares `sealed`, as well as a gateway login. See ADR 0052.
+  gone, as no statement is what unscored is. See [RFC 0052](docs/rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
+- `trainable` needs a driver that declares `sealed`, as well as a gateway login. See [RFC 0052](docs/rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
 - `run` sends its prompt to every agent the session starts unless `--to` names one, where it refused a team that started several,
-  and refuses a team that starts none. See ADR 0051.
+  and refuses a team that starts none. See [RFC 0051](docs/rfcs/0051-one-rule-for-whom-a-prompt-goes-to.md).
 - `episode.close` closes on `based_on`, the refs of what the episode came to, checked as any citation is, in place of a free
   `outcome`, which an annotation says now; `episode.closed` is at payload version 2. `Session.close_episode(based_on=)` follows.
 - `Session.resume` takes no authority, as a resume runs under `LocalAuthority`, and refuses a session started trainable, which
   `Manifest.trainable` records, or whose admit results name the backend's ids, before anything runs: an authority that has gone
-  admitted its agents, so it stays history, even when a stop cut an admit short. See ADR 0055.
+  admitted its agents, so it stays history, even when a stop cut an admit short. See [RFC 0055](docs/rfcs/0055-the-export-is-the-session-as-it-ended.md).
 - A launch whose harness runs a model other than the one pinned fails saying `it runs <model>, and <pinned> is pinned`, as the
   pinned model is a gateway's where access is one, and an agent's login is `key` when it was given variables, whatever its role
-  names. See ADR 0049.
+  names. See [RFC 0049](docs/rfcs/0049-the-contract-a-training-authority-gets.md).
 - `team check` refuses a `program`, naming it and what to use instead, while none runs, so `run` and `Session.start` refuse such a
   team before any cost, with exit 78 on the command line, the `map-reduce` and `git-swarm` presets among them. Before, it warned, and
-  a session under `until = "program"` never ended short of its budget. See ADR 0048.
+  a session under `until = "program"` never ended short of its budget. See [RFC 0048](docs/rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
 - A harness that exits on its own rests its agent once instead of ending it: a turn it was in is lost, with `crash_window` naming
   where that turn began, its agent is told its turn was cut off, which wakes it at once, and the `rest` effect ends what the harness
   left. A second exit before a turn of its ends, an exit while the session accepts no work, or of a harness that cannot resume,
   ends its agent `lost` as before, the second saying so, and a harness brought back from rest that exits before it is ready has
   exited so, rather than failing six handovers. `Host.resume` brings an agent's harness back, for recovery and for a handover alike.
-  See ADR 0045.
+  See [RFC 0045](docs/rfcs/0045-an-agent-s-process-is-not-its-identity.md).
 - A result kept by `check_driver` is pinned to the class that implements the driver, the SDK and the host as well as the driver's
   name and the harness version, so a result made before, which names none of them, no longer reads, and `doctor --check` makes one
-  again. `Profile` takes `implementation`. See ADR 0044.
+  again. `Profile` takes `implementation`. See [RFC 0044](docs/rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - `ScriptedDriver` takes `version=None`, a harness that says no version.
 - A read-only kernel whose views are behind its journal refuses a query naming those views and the fix: a writer refolds them as it
   opens, and writes no event, which `platoon-harness session refold` does.
@@ -504,7 +504,7 @@
   named so is refused as no longer valid, naming the folder to rename while no runtime holds it.
 - A relative program in a `command` harness resolves against the session's cwd, for the harness and for `describe` alike.
 - Claude Code's `EnterWorktree` and `ExitWorktree` are off on every launch, and a Codex thread naming a `cwd` other than its
-  workspace is refused. See ADR 0033.
+  workspace is refused. See [RFC 0033](docs/rfcs/0033-a-harness-s-own-worktrees-are-off.md).
 - `make_driver` takes the session's cwd, `open_session` the repository it opens on, `check` the session's cwd, root, name and
   approvals, and `session.stop` the bundle it left.
 - `tools.surface_of` takes a harness's `Capabilities`, where it took its tool paths, as how a harness names our tools is
@@ -535,7 +535,7 @@
 - The preamble template's `peers`, `roles` and `channels` are values, `@a, @b` for `peers`, and the default carries our words around
   them. A line whose slots all come out empty is left out, words and all. A line with no slot, and every word of a role's
   `instructions`, is never dropped. An empty `peers` or `channels` is an empty value, where `nobody yet` and `none yet` were words of
-  ours in it, so the default renders byte for byte as before but for a line that would name no peer or no channel. ADR 0025 is
+  ours in it, so the default renders byte for byte as before but for a line that would name no peer or no channel. [RFC 0025](docs/rfcs/0025-what-an-agent-is-told-is-a-template.md) is
   amended.
 - A session that was closing reads `closed` once its owner has stopped, where it read `closing` for good.
 - A root another user owns or can write, a sessions folder or a socket directory not this user's, and no socket directory at all are
@@ -666,17 +666,17 @@
 
 ### Removed
 
-- `runtime.workspaces.NOT_YET`, as `isolated` is given where an extension gives an isolation. See ADR 0034.
-- `Session.start(human=)`, `prepare(human=)` and `Manifest.human`, which `principal` replaces. See ADR 0050.
+- `runtime.workspaces.NOT_YET`, as `isolated` is given where an extension gives an isolation. See [RFC 0034](docs/rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
+- `Session.start(human=)`, `prepare(human=)` and `Manifest.human`, which `principal` replaces. See [RFC 0050](docs/rfcs/0050-a-script-is-a-person-or-a-program.md).
 - `Authority.budget_owner`, which no authority used: every limit a team states is the session's own. `open_session` takes no
-  authority. See ADR 0049.
+  authority. See [RFC 0049](docs/rfcs/0049-the-contract-a-training-authority-gets.md).
 - A topic's `digest` and its type, `platoon_harness.topology.Digest`, which nothing enforced: a lagging reader's digest is the
-  fixed 32 entries it always was. A team that sets it is refused, as any unknown key is. See ADR 0048.
-- A topic's `entry`, `requires` and `validator`, which nothing enforced. A team that sets one is refused. See ADR 0048.
-- A board's `keys`, which nothing enforced. A team that sets it is refused. See ADR 0048.
+  fixed 32 entries it always was. A team that sets it is refused, as any unknown key is. See [RFC 0048](docs/rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
+- A topic's `entry`, `requires` and `validator`, which nothing enforced. A team that sets one is refused. See [RFC 0048](docs/rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
+- A board's `keys`, which nothing enforced. A team that sets it is refused. See [RFC 0048](docs/rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
 - The `git-swarm` preset's `contributions` topic, which held only those settings: the repository is the contribution log, and
   `Informed-By` the declaration. A session whose resolved team holds it can no longer be resumed, and its journal still reads. See
-  ADR 0048.
+  [RFC 0048](docs/rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
 - `delivery.confirm`, which only tests used: a driver's `input.delivered`, through `agent.report`, is the one way to confirm a
   handover.
 
@@ -692,7 +692,7 @@
   does not stay and has no wait open, whatever that parent asked, so one kept by a grandchild is not left idle. A turn an interrupt,
   the owner's stop or a failure cut ends no agent, nor does one an interrupt was asked in though its harness stopped first, and one
   that stays is as it was. One that does not stay is told that a turn that ends with nothing left to wait for ends it, with what it
-  said last as its report, where it was told such a turn left it idle. See ADR 0060.
+  said last as its report, where it was told such a turn left it idle. See [RFC 0060](docs/rfcs/0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md).
 - Every OpenHands agent of a sealed launch on an environment with a tool named `finish`, as TextCraft's is, was refused at launch,
   "Duplicate tool names found: {'finish'}": OpenHands keeps its own `finish` and `think`, and showed the environment's tools bare.
   One rule now holds for every harness: an environment's tools reach the model named by their server, never bare, so none can
@@ -705,7 +705,7 @@
 - A session root given relatively, as `Session.attach(name, root="home")`, failed every read of its annotations, "relative path can't
   be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
 - A stop whose driver's `stop` raised or ran past its time never told the authority how its agent ended: `finish` now comes last
-  whatever failed before it (ADR 0059).
+  whatever failed before it ([RFC 0059](docs/rfcs/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md)).
 - A caller that sent again as soon as it heard its commands were recorded could be refused `busy` over those very commands: the
   journal's writer took a batch out of flight only after answering it, and now does so first.
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.
@@ -735,8 +735,8 @@
   page's requests must name it.
 - An act left unanswered went again from a view link opened over the page, which refused it, so the page called refused an
   act that may have been done. A view link now sends none of it and says it waits for a control link opened in that tab.
-- ADR 0016 and the compatibility map said `web --remote` refuses a second person on a plan-login session, which no code did
-  and no such flag exists; ADR 0027 amends it, as the architecture already said, and refusing another address to such a
+- [RFC 0016](docs/rfcs/0016-plan-logins-and-credentials.md) and the compatibility map said `web --remote` refuses a second person on a plan-login session, which no code did
+  and no such flag exists; [RFC 0027](docs/rfcs/0027-the-browser-on-our-backend.md) amends it, as the architecture already said, and refusing another address to such a
   session is planned. The guide now says that while `web` runs a run's approval waits for you instead of ending
   `needs_human`, and the architecture names `web` among the entry points with signal handlers and among what writes beside
   the journal when it reads. `web` on a page file that is not the one pinned exits 78, which nothing tested before.
@@ -924,7 +924,7 @@
 - A held wait closes as told only once its answer has left, so an answer that is lost costs no wake.
 - A query's answer past 32 KiB is refused with its size, and a refusal names no tool its token does not hold, in its reason either.
 - `ph <tool> --help` for an unknown tool shows what there is.
-- An effect left `uncertain` can be settled by a person with `effect.settle`, as ADR 0005 promised. Nothing could settle one under
+- An effect left `uncertain` can be settled by a person with `effect.settle`, as [RFC 0005](docs/rfcs/0005-daemons-and-effects.md) promised. Nothing could settle one under
   `surface`. Saying it did not happen lowers its row in `attention`, as saying it did does.
 - The host retries under one key, since a failed commit may have landed. It used to retry with none, and could run a command twice.
 - A turn a crash or the owner's stop cut off is told to its agent on resume, at-least-once, with a wake, and the words keep the two

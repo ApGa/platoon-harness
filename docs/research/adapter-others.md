@@ -283,8 +283,8 @@ Versions: OpenCode 2.2.5, pi 1.4.0, Prime Agent 0.10.2. Section evidence above a
 ## Platoon definitions
 
 - **No code definitions** for pi, OpenCode or Prime Agent. Built-in harness modules are `codeact`, `openhands`, `oracle`, `platoon_bash`, `react` (platoon@efe3b277c82c:platoon/harness/builtin/__init__.py), and the built-in specs are `mini-swe-agent`, `openhands`, `platoon-bash`.
-- Mentions are in Draft RFCs only. RFC 0005 lists `pi` and `opencode` as OpenAI Chat clients (platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:29). This matches the plain chat-completions traffic I observed. The dialect module exists at `platoon/gateway/dialects/openai_chat.py`.
-- RFC 0001 says "pi subagent extension ... exact: the extension calls the agent API" (platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:202). That extension does not exist in Platoon or upstream pi. Pi's example spawns plain `pi` processes and calls no Platoon API, so treat the row as a design intent.
+- Mentions are in Draft RFCs only. Platoon RFC 0005 lists `pi` and `opencode` as OpenAI Chat clients (platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:29). This matches the plain chat-completions traffic I observed. The dialect module exists at `platoon/gateway/dialects/openai_chat.py`.
+- Platoon RFC 0001 says "pi subagent extension ... exact: the extension calls the agent API" (platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:202). That extension does not exist in Platoon or upstream pi. Pi's example spawns plain `pi` processes and calls no Platoon API, so treat the row as a design intent.
 - Platoon's table rates header-derived native child identity as `inferred`. OpenCode's child headers belong in that level, not `exact`.
 
 ## Implications for platoon-harness

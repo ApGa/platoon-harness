@@ -1,39 +1,15 @@
 """Every relative link in the repository's Markdown names a file inside it, and every anchor a heading there."""
 
 import re
-import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).parents[3]
-FENCE = re.compile(r"^\s*(```|~~~)")
+from .support import ROOT, prose, tracked
+
 CODE_SPAN = re.compile(r"`[^`]*`")
 LINK = re.compile(r"\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s+(?P<title>.+?)\s*#*$")
 HTML_ANCHOR = re.compile(r"<a (?:id|name)=\"(?P<anchor>[^\"]+)\"")
 SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:")
-
-
-def markdown() -> list[Path]:
-    """Every Markdown file git tracks, or would track once added."""
-    listed = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    return sorted({ROOT / name for name in listed.split("\0") if name and (ROOT / name).is_file()})
-
-
-def prose(path: Path) -> list[tuple[int, str]]:
-    """The lines outside fenced code, with their numbers."""
-    lines, fenced = [], False
-    for number, line in enumerate(path.read_text().splitlines(), 1):
-        if FENCE.match(line):
-            fenced = not fenced
-        elif not fenced:
-            lines.append((number, line))
-    return lines
 
 
 def slug(title: str) -> str:
@@ -77,13 +53,13 @@ def broken(page: Path) -> list[str]:
 
 def test_github_s_anchors_are_derived_from_headings(tmp_path):
     page = tmp_path / "page.md"
-    page.write_text("# 3. Laws\n## `platoon-harness session list`\n## [ADR 0006](x.md), again\n## Notes\n## Notes\n")
+    page.write_text("# 3. Laws\n## `platoon-harness session list`\n## [RFC 0006](x.md), again\n## Notes\n## Notes\n")
 
-    assert anchors(page) == {"3-laws", "platoon-harness-session-list", "adr-0006-again", "notes", "notes-1"}
+    assert anchors(page) == {"3-laws", "platoon-harness-session-list", "rfc-0006-again", "notes", "notes-1"}
 
 
 def test_every_relative_link_and_anchor_resolves():
-    pages = markdown()
+    pages = tracked("*.md")
 
     assert ROOT / "README.md" in pages
     assert [line for page in pages for line in broken(page)] == []

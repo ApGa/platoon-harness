@@ -1,7 +1,7 @@
 # Provenance
 
 A session's journal says what each agent was handed, what it claimed to rest on, and what followed from what. This guide is how to
-ask it. Architecture section 11 is the design of record, and [ADR 0038](adr/0038-provenance-is-answered-from-the-record.md) the
+ask it. Architecture section 11 is the design of record, and [RFC 0038](rfcs/0038-provenance-is-answered-from-the-record.md) the
 decision.
 
 Three things stay apart in every answer, and none is ever drawn as another:

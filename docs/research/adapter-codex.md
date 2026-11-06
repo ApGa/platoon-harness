@@ -246,7 +246,7 @@ Interrupt scope (PROBE-STUB, v1 and v2): `turn/interrupt` on a parent ended the 
 
 There is **no dedicated Codex harness**. `platoon/harness/builtin/specs/` holds `mini-swe-agent`, `openhands`, `platoon-bash`; the RFC's "Codex HarnessSpec" is planned work (`platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:165`, Status Draft). What exists:
 - IMPLEMENTED/experimental: `POST /v1/responses` dialect (`platoon@efe3b277c82c:platoon/gateway/dialects/responses.py:1`), reasoning round-trip via `pg1:` handles (`:37`), and `dialect = "openai_responses"` in `HarnessSpec` (`platoon/harness/spec.py:78`).
-- DRAFT: `NativeAgentMap` selectors for `thread-id` and `x-codex-parent-thread-id` (RFC 0001:199). No code matches.
+- DRAFT: `NativeAgentMap` selectors for `thread-id` and `x-codex-parent-thread-id` (Platoon RFC 0001:199). No code matches.
 - Gap: `function_tools` keeps only `type:"function"` entries (`responses.py:127`). Codex 0.164.0 sends `namespace` tools for MCP and collab, and `custom` for `exec`, so these are **dropped**, and a policy behind the gateway would not see coordination tools. `INPUT_ITEM_TYPES` (`:41`) refuses `custom_tool_call`, and the `namespace` on `function_call` is not preserved. Confirmed end to end by the critic: real Codex on a minted child key recorded exact calls and its MCP server connected, but the tool never reached the policy prompt, while `exec_command` did. Over the gateway, Codex coordination must therefore use the shell client.
 
 ## Implications for platoon-harness

@@ -199,7 +199,7 @@ V1 and Prime Agent have, and case E records an end the child did nothing to earn
 
 ## Implications for platoon-harness
 
-The owner's design follows, to be recorded as ADR 0023, "Agents that stay".
+The owner's design follows, to be recorded as RFC 0023, "Agents that stay".
 
 - **`stays` on a role, and an optional `stays` on `agent.spawn` that overrides it either way.** This is the per-spawn choice no
   system offers, stated outright rather than derived, as Claude Code derives a teammate from a name.

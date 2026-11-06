@@ -148,7 +148,7 @@ Agents come from `register_agent()` or `.agents/agents/*.md` and `.openhands/age
 - Parent stats gain `task:task_00000001` with the child's combined metrics (`software-agent-sdk@988494576218:openhands-tools/openhands/tools/task/manager.py:500`). Do not add this to child-recorded usage: it double-counts.
 - `MessageEvent.sender` for the child comes from the parent's visualizer name, so with `visualizer=None` it is None (`software-agent-sdk@988494576218:openhands-tools/openhands/tools/task/manager.py:415`).
 
-**Exact child credentials work.** The agent factory receives the LLM and may replace it. A factory setting `api_key` and `extra_headers` on `llm.model_copy(...)` produced `Bearer child-key` on child calls and `Bearer parent-key` on parent calls (probe). Pairing this with Platoon's `POST /v1/platoon/agents` mint (`platoon@efe3b277c82c:platoon/gateway/server.py:22`, `:238`) gives exact attribution. Platoon's RFC 0001 proposes this as an option and classifies the header route as "inferred" (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:201`); that RFC is Draft, and Platoon's gateway does not read `x-litellm-session-id` today (grep of `platoon/gateway/`).
+**Exact child credentials work.** The agent factory receives the LLM and may replace it. A factory setting `api_key` and `extra_headers` on `llm.model_copy(...)` produced `Bearer child-key` on child calls and `Bearer parent-key` on parent calls (probe). Pairing this with Platoon's `POST /v1/platoon/agents` mint (`platoon@efe3b277c82c:platoon/gateway/server.py:22`, `:238`) gives exact attribution. Platoon's Platoon RFC 0001 proposes this as an option and classifies the header route as "inferred" (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:201`); that RFC is Draft, and Platoon's gateway does not read `x-litellm-session-id` today (grep of `platoon/gateway/`).
 
 ## 5. LLM config
 
@@ -267,7 +267,7 @@ Fixture: `docs/research/fixtures/openhands-events-sample.json` holds stream and 
 6. **Approvals:** synthesize a pending-approval event from `WAITING_FOR_CONFIRMATION` and unmatched actions. Headless runs must use `NeverConfirm` or an explicit reject policy, and never hang.
 7. **Native subagents:**
    - Trainable runs: disable `task` by default, and let delegation go through our `spawn`.
-   - Everyday runs: allow it; ingest `<parent>/subagents/<hex>/events/` as a labelled observed-after-completion source, identity `inferred` (a child with no credential of its own; RFC 0001 rates the header route `inferred`).
+   - Everyday runs: allow it; ingest `<parent>/subagents/<hex>/events/` as a labelled observed-after-completion source, identity `inferred` (a child with no credential of its own; Platoon RFC 0001 rates the header route `inferred`).
    - Advanced trainable path: keyed factory with a minted child credential, identity exact, unique factory name per role.
    - Reconcile stats so `task:*` is not added to child records.
 8. **Training profile:** `num_retries` 0 or 1, `api_mode="chat"`, condenser `aux` header, no `ask_agent`, no autotitle, fixed tool set, pinned version. Eligibility must check these in a manifest rather than assume them.

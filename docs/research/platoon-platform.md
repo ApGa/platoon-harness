@@ -42,17 +42,17 @@ RFC headers lag the code, so status below comes from code. All seven RFCs in sco
 | Discovery without import | `importlib.metadata.entry_points()` once per process, cached; `select(group=...)`. Listing reads metadata only | `platoon@efe3b277c82c:platoon/extensions.py:255`, `:828` |
 | Lazy loading | Only the entry point named exactly as the reference is imported, on first use. No lock is held during import; a second thread waits on an event | `platoon@efe3b277c82c:platoon/extensions.py:270`, `:467` |
 | Legacy escape | A harness name that matches nothing loads every unloaded harness entry point, with a warning. Harnesses only | `platoon@efe3b277c82c:platoon/harness/registry/__init__.py:238` |
-| Explicit selection | Config names a component (`harness:`, `program:`, `env:`, `reward_processor:`). Installing changes nothing until named | RFC 0013 s.1; `platoon@efe3b277c82c:tests/test_core_boundary.py:30` |
+| Explicit selection | Config names a component (`harness:`, `program:`, `env:`, `reward_processor:`). Installing changes nothing until named | Platoon RFC 0013 s.1; `platoon@efe3b277c82c:tests/test_core_boundary.py:30` |
 | Resolution order | `.toml` path, then `module:attr`, then `name[@version]`: core built-ins, entry point, `package:` registrations, then an error listing registered, installed, nearest and failed names | `platoon@efe3b277c82c:platoon/extensions.py:590` |
 | Versions | `name@version`; prefix matches at dots (`@2` matches `2.4.6`); a bare name needs exactly one registered version | `platoon@efe3b277c82c:platoon/extensions.py:182` (`matching`) |
 | Names | `[a-z0-9]+([._-][a-z0-9]+)*`; owner is the first `-` word; `platoon`, `platoon-*` and `CORE_NAMES` are reserved | `platoon@efe3b277c82c:platoon/extensions.py:92`, `:86`, `:144` |
-| Duplicates | `name@version` from two sources raises "defined twice" at registration, so only when named. No metadata preflight: `check_extensions` does not detect it, and RFC 0017 lists that as a gap. A TOML spec beats a function harness of the same ref, with a warning | `platoon@efe3b277c82c:platoon/harness/registry/__init__.py:85`, `platoon@efe3b277c82c:platoon/harness/function.py:119`, `platoon@efe3b277c82c:platoon/programs.py:213`, `platoon@efe3b277c82c:platoon/envs/named.py:268` |
+| Duplicates | `name@version` from two sources raises "defined twice" at registration, so only when named. No metadata preflight: `check_extensions` does not detect it, and Platoon RFC 0017 lists that as a gap. A TOML spec beats a function harness of the same ref, with a warning | `platoon@efe3b277c82c:platoon/harness/registry/__init__.py:85`, `platoon@efe3b277c82c:platoon/harness/function.py:119`, `platoon@efe3b277c82c:platoon/programs.py:213`, `platoon@efe3b277c82c:platoon/envs/named.py:268` |
 | Failure isolation | A failed entry point is recorded; only a lookup of that name fails | `platoon@efe3b277c82c:platoon/extensions.py:515` |
 | Compatibility | The distribution's requirement on `platoon` is read from metadata, extras included, and refused before import. `PLATOON_IGNORE_EXTENSION_REQUIREMENTS=1` overrides with a warning | `platoon@efe3b277c82c:platoon/extensions.py:343`, `:392`, `:96` |
 | Provenance | `Origin(distribution, version, entry_point, module)`; `run_components` resolves everything at run start and fills `lock.json` | `platoon@efe3b277c82c:platoon/extensions.py:1121`, `:1429` |
 | Static checks | `platoon extensions check [DIST...] [--load]`: names, owners (warning), range incompatibility (error), no requirement or no upper bound (warning), retired groups; exit 78 on error | `platoon@efe3b277c82c:platoon/extensions.py:1003` |
 
-Known provenance gaps: components named while a run is under way (a program spawning a harness by name) are not in the lock (RFC 0013 s.7); import-string origin is best effort.
+Known provenance gaps: components named while a run is under way (a program spawning a harness by name) are not in the lock (Platoon RFC 0013 s.7); import-string origin is best effort.
 
 **Conformance, `platoon.testing`.** Ships in the core wheel. Opt-in pytest plugin (`pytest -p platoon.testing`, no autoload).
 
@@ -68,7 +68,7 @@ So no conformance suite exists today for harnesses, environments, programs or sa
 
 | Topic | From code | Status |
 |---|---|---|
-| Schema | Stdlib dataclasses plus a hand-written strict validator of 1807 lines; pydantic fields are understood where they occur. RFC 0008's pydantic rewrite is not built | IMPLEMENTED, `platoon@efe3b277c82c:platoon/utils/config.py:600` |
+| Schema | Stdlib dataclasses plus a hand-written strict validator of 1807 lines; pydantic fields are understood where they occur. Platoon RFC 0008's pydantic rewrite is not built | IMPLEMENTED, `platoon@efe3b277c82c:platoon/utils/config.py:600` |
 | Unknown keys | Dotted path plus did-you-mean; every problem reported at once (`ConfigError.problems`) | IMPLEMENTED, `platoon@efe3b277c82c:platoon/utils/config.py:525` |
 | File format | YAML for configs, TOML for harness specs | IMPLEMENTED |
 | `extends:` | One path or a list, relative to the file; bases first, cycles rejected. Mappings deep-merge; everything else, lists included, replaces | IMPLEMENTED, `platoon@efe3b277c82c:platoon/utils/config.py:116` |
@@ -100,7 +100,7 @@ So no conformance suite exists today for harnesses, environments, programs or sa
 | `POST /v1/platoon/agents` | Mint a child: `{role, goal?}` to `{agent_id, api_key, base_url}` | IMPLEMENTED |
 | `/mcp` | The agent's env tools over streamable HTTP | IMPLEMENTED |
 
-RFC 0005's token ledger, TITO bridge, call-kind classifier and shards are DRAFT/RFC. SSE is synthetic: the whole completion is sampled, then emitted, with `: keepalive` comments.
+Platoon RFC 0005's token ledger, TITO bridge, call-kind classifier and shards are DRAFT/RFC. SSE is synthetic: the whole completion is sampled, then emitted, with `: keepalive` comments.
 
 **Auth and per-agent secrets.** `Authorization: Bearer`, `x-api-key`, or path `/s/<secret>/v1/...` (`platoon@efe3b277c82c:platoon/gateway/server.py:497`). `open_agent` mints `secrets.token_urlsafe(32)` per agent (`platoon@efe3b277c82c:platoon/gateway/core.py:1532`). Unknown key 401, closed agent 410. `serve_rollout` scopes a server to its rollouts, on TCP and Unix socket. There is no user or TLS layer: the agent key is the only access control, on loopback (`platoon@efe3b277c82c:platoon/harness/rollout.py:72`). `GatewayServer.start` itself defaults to `0.0.0.0`, so a direct caller must pass a host.
 
@@ -120,7 +120,7 @@ Not recorded: request headers, native session or thread ids, native tool executi
 
 **Hosted streaming is buffered.** The stream is read whole before relay, so a broken stream can retry and the record is complete. PROBED: a provider emitting four events over 1.5 s reached the client at 1.50 s, all at once.
 
-**CPU and fake backends.** Yes, PROBED, but `platoon.gateway` imports `tinker` at module load (`platoon@efe3b277c82c:platoon/gateway/core.py:43`), which brought in `tinker_cookbook` and `torch` (8.9 s import). `make_gateway(ScriptedPolicy(...))` served all three dialects, count_tokens, minting (201) and the path form; a child got its own record. The hosted path also needs that import, because RFC 0015 M3 is not built. A `GET /v1/responses` WebSocket upgrade returned 405, where RFC 0005 says 426; custom Codex providers default to no WebSockets, so this is harmless (`codex@05c08d765523:codex-rs/model-provider-info/src/lib.rs:227`).
+**CPU and fake backends.** Yes, PROBED, but `platoon.gateway` imports `tinker` at module load (`platoon@efe3b277c82c:platoon/gateway/core.py:43`), which brought in `tinker_cookbook` and `torch` (8.9 s import). `make_gateway(ScriptedPolicy(...))` served all three dialects, count_tokens, minting (201) and the path form; a child got its own record. The hosted path also needs that import, because Platoon RFC 0015 M3 is not built. A `GET /v1/responses` WebSocket upgrade returned 405, where Platoon RFC 0005 says 426; custom Codex providers default to no WebSockets, so this is harmless (`codex@05c08d765523:codex-rs/model-provider-info/src/lib.rs:227`).
 
 ### Pointing harnesses at it
 
@@ -164,18 +164,18 @@ Placement rule: in the task sandbox when one exists; otherwise local, with built
 | `openhands@1.54.0.post1` | spec + `run_openhands.py` | Chat | IMPLEMENTED; live test opt-in via `PLATOON_TEST_TOOLCHAINS`, not run here | **Yes**, root only; native delegation off by construction |
 | Codex | **No spec**; dialect and fixtures only | Responses | Dialect EXPERIMENTAL; harness DOCUMENTED-ONLY | Mechanically yes in my probe; no supported path |
 | Claude Code | **No spec**; dialect and fixtures only | Messages | Dialect EXPERIMENTAL, fails with 2.1.316 | **No** |
-| pi, opencode, Prime Agent | **No spec** | Chat (RFC 0005 table) | DRAFT/RFC | No |
+| pi, opencode, Prime Agent | **No spec** | Chat (Platoon RFC 0005 table) | DRAFT/RFC | No |
 | Any custom agent | your own TOML or function | any of three | IMPLEMENTED | Yes, when it uses only its own key |
 
 `platoon@efe3b277c82c:README.md:15` says harnesses such as "openhands, codex, pi" are specs; the built-in spec directory holds only `mini-swe-agent`, `openhands` and `platoon-bash`.
 
 **Adapter choice, from these facts: OpenHands SDK.** It is the only third-party real agent with a built-in spec, the stable Chat dialect, a pinned closure, retries off (`num_retries=0`, so a retry cannot record a call twice), condenser calls marked `aux` by its runner, and reasoning replay so prompts extend. Limits to carry over: the spec has no `[mcp]` table, so it receives no MCP tools from the spec path; its tools are `terminal`, `file_editor`, `task_tracker`, `finish`, `think`; it runs without skills or delegation (`platoon@efe3b277c82c:platoon/harness/builtin/openhands/run_openhands.py:12`). Our driver will likely use the SDK directly with the same LLM settings. Codex is the second candidate: it worked in a probe, but rests on an experimental dialect and has no Platoon spec. Critic addendum: Codex's MCP tools never reach a policy behind the gateway, because `namespace` tools are dropped, and pi also passed the full child-key path, so see `README.md` before ranking these.
 
-**Claude Code is not a training path.** RFC 0005 leaves terms of use open (`platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:172`), and Anthropic says it does not support routing Claude Code to non-Claude models through any gateway (https://code.claude.com/docs/en/llm-gateway, retrieved 2026-11-02). Treat it as Operational and Observable only.
+**Claude Code is not a training path.** Platoon RFC 0005 leaves terms of use open (`platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:172`), and Anthropic says it does not support routing Claude Code to non-Claude models through any gateway (https://code.claude.com/docs/en/llm-gateway, retrieved 2026-11-02). Treat it as Operational and Observable only.
 
 **Native subagents.** Nothing is implemented. Native children share the parent's key, so their calls collapse into the parent (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:25`). `Attribution`, `AgentGraph`, `[native]` selectors, `NativeAgentMap`, `X-Platoon-Agent` and `credit.train_attribution` have zero hits under `platoon/`: all DRAFT/RFC.
 
-| RFC 0001 mapping | Header | Check |
+| Platoon RFC 0001 mapping | Header | Check |
 |---|---|---|
 | Codex | `thread-id`, `x-codex-parent-thread-id` | Headers exist; `thread-id` observed in my probe |
 | Claude Code | `x-claude-code-agent-id`, `x-claude-code-parent-agent-id` | Exist in its changelog; gateway ignores them |
@@ -192,11 +192,11 @@ The only exact-identity path for an external agent today is one key per agent: `
 | ORS hooks | `platoon_fork`, `platoon_copy`; `copy` refused without them where teardown exists | IMPLEMENTED | Documented |
 | Live-env gate | serial, concurrent, exclusive classes through `platoon/envs/gate.py` | IMPLEMENTED | Internal |
 | Needs | `SessionNeeds(upstreams, mounts, extra_memory_mb)` | IMPLEMENTED, `platoon@efe3b277c82c:platoon/envs/service.py:148` | Public |
-| Sandbox | `SandboxSpec`, `Sandbox` (`exec`, `upload`, `download`, `snapshot`, `kill_processes`, `stop`, `routes`), `SandboxProvider` (`start`, `restore`), `CAPABILITIES` | IMPLEMENTED, `platoon@efe3b277c82c:platoon/sandbox/base.py:77`, `:160`, `:206`, `:64` | Private by the current rule: not in `PUBLIC_MODULES`. RFC 0017 proposes stable |
+| Sandbox | `SandboxSpec`, `Sandbox` (`exec`, `upload`, `download`, `snapshot`, `kill_processes`, `stop`, `routes`), `SandboxProvider` (`start`, `restore`), `CAPABILITIES` | IMPLEMENTED, `platoon@efe3b277c82c:platoon/sandbox/base.py:77`, `:160`, `:206`, `:64` | Private by the current rule: not in `PUBLIC_MODULES`. Platoon RFC 0017 proposes stable |
 | Providers | `process` (no isolation), `docker`, `singularity`, `enroot` (the `hpc` extra) | IMPLEMENTED | Selected by name or `module:Class` |
-| Stacks | Multi-container tasks; `copy` forks refused | IMPLEMENTED (RFC 0010) | Internal |
+| Stacks | Multi-container tasks; `copy` forks refused | IMPLEMENTED (Platoon RFC 0010) | Internal |
 
-There is no dedicated forking RFC. The contract is `platoon@efe3b277c82c:docs/architecture.md:299`, the `fork_mode` field and `snapshot_async` of RFC 0001 (DRAFT/RFC there), and RFC 0010's forks section. Harbor's `copy` restores a snapshot through the provider (`platoon@efe3b277c82c:platoon/envs/harbor/session.py:582`).
+There is no dedicated forking RFC. The contract is `platoon@efe3b277c82c:docs/architecture.md:299`, the `fork_mode` field and `snapshot_async` of Platoon RFC 0001 (DRAFT/RFC there), and Platoon RFC 0010's forks section. Harbor's `copy` restores a snapshot through the provider (`platoon@efe3b277c82c:platoon/envs/harbor/session.py:582`).
 
 Reusable boundary: `EnvSession` and `pt.ForkMode` in Platoon-managed mode, with Platoon authorizing and executing forks. We should not write snapshot, copy, sandbox runtime, route or reaping code, and we should not import `platoon.sandbox` from the SDK. Minted agents get no fork: a child that needs one must come through `spawn`, or an upstream extension to the agent API.
 
@@ -261,7 +261,7 @@ Method: `git grep -i -E "platoon[_-]harness"` over every tracked file, parse of 
 6. Record `lock.json`-style provenance per run: component ref, resolved, source, distribution, version, entry point, `direct_url`, plus schema and protocol versions. Leave `hostname` and `argv` out of exports by default.
 
 **Configuration**
-7. Use pydantic v2 frozen models with `extra="forbid"`, and TOML through stdlib `tomllib`. A new project should not grow an 1800-line validator; RFC 0008 reached the same conclusion, and pydantic gives the JSON schema the protocol layer needs anyway.
+7. Use pydantic v2 frozen models with `extra="forbid"`, and TOML through stdlib `tomllib`. A new project should not grow an 1800-line validator; Platoon RFC 0008 reached the same conclusion, and pydantic gives the JSON schema the protocol layer needs anyway.
 8. Copy these semantics: mappings merge, lists replace, typed overrides, every problem at once, did-you-mean, a resolved snapshot that reloads alone.
 9. Build a real sanitizer. Platoon relies on configs never holding secrets; adopt that rule (env var names only) and add an export-time redaction pass, because our traces hold prompts. `redact` and `secret_forms` in `hosted.py` show that a key's escaped and percent-encoded forms need redacting too.
 10. Use cyclopts in the CLI package only, with imports inside commands, and adopt exit code 78 for configuration errors.
@@ -287,7 +287,7 @@ Method: `git grep -i -E "platoon[_-]harness"` over every tracked file, parse of 
 - Worth copying: absence stays honest. `Outcome.infra` is never a reward of 0, and a fork mode that cannot be provided fails rather than degrades.
 - Worth copying: tests that keep prose true (doc snippets run, the API snapshot, an index test) and lists of exceptions that fail when stale.
 - Worth copying: a harness as data, with secrets allowed only in specific template fields, checked at load.
-- Avoid: one configuration schema with 1800 lines of custom validation, or dataclass fields that exist for one extension (RFC 0016 calls these out).
+- Avoid: one configuration schema with 1800 lines of custom validation, or dataclass fields that exist for one extension (Platoon RFC 0016 calls these out).
 - Avoid: module docstrings that carry design history. Keep docstrings short and put rationale in RFCs.
 - Avoid: `platoon-*` trust by name prefix, process-global registries and patching class attributes in test helpers (`serve_policy` patches `EvalPolicy.install`).
 
@@ -296,10 +296,10 @@ Method: `git grep -i -E "platoon[_-]harness"` over every tracked file, parse of 
 - **Claude Code result is one version and one setup** (2.1.316, `--setting-sources=`, isolated home, `-p`). No other flags were tried for suppressing the `system` message. The hosted path was not probed with it.
 - **Codex was probed for one tool round trip only**: no compaction, no parallel calls, no native subagent, no long run. The model-metadata warning may degrade behavior.
 - **OpenHands probe used SDK 1.59.0**, not the pinned 1.54.0, and the runner overrides private SDK methods. Platoon's live test was not run (it needs a 600 MB toolchain). A driver on a newer SDK needs its own pin.
-- **Prefix extension failed in both tool probes** under the toy tokenizer: the second prompt diverged inside the first completion, so calls will not merge into one datum there. Platoon's trainer tolerates this by starting a new datum. I did not test a real model's renderer. RFC 0005's ledger, which would fix re-rendering, is unbuilt.
+- **Prefix extension failed in both tool probes** under the toy tokenizer: the second prompt diverged inside the first completion, so calls will not merge into one datum there. Platoon's trainer tolerates this by starting a new datum. I did not test a real model's renderer. Platoon RFC 0005's ledger, which would fix re-rendering, is unbuilt.
 - **Dialects can break silently.** Responses and Messages are EXPERIMENTAL, with hand-written fixtures and no pinned harness version. Harness releases change request shapes, as the Claude Code failure shows.
-- **Side calls are unclassified.** Any call without the header is `policy`. RFC 0005's classifier is unbuilt, and static headers cannot mark individual calls, so Codex or Claude background calls would train as policy turns if they occur.
-- **`platoon.sandbox`, `platoon.extensions` and `/v1/platoon/agents` lack a stated stability promise.** RFC 0017 would cover them, but it is a Draft with no code. Pin `<0.6`.
+- **Side calls are unclassified.** Any call without the header is `policy`. Platoon RFC 0005's classifier is unbuilt, and static headers cannot mark individual calls, so Codex or Claude background calls would train as policy turns if they occur.
+- **`platoon.sandbox`, `platoon.extensions` and `/v1/platoon/agents` lack a stated stability promise.** Platoon RFC 0017 would cover them, but it is a Draft with no code. Pin `<0.6`.
 - **Heavy pins in the bridge**: `tinker==0.16.1` and `tinker-cookbook<0.4` apply to the training extension, and must stay out of the SDK's dependencies.
 - **Platoon classifiers are Linux-only**; macOS behavior of the bridge is unknown.
 - **Clean room**: searches stayed inside this clone. `platoon-harness` strings found there are Platoon's own (listed in section 7). No external project of that name was surfaced or opened.

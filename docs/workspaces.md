@@ -13,7 +13,7 @@ workspace = "worktree"            # "shared" (the default) | "worktree" | "snaps
 ```
 
 There is no branch, path, base, lock or removal option. The mode recorded is the one that ran: a mode that cannot be given fails
-loudly, before any cost where that can be seen, and never becomes another. [ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md)
+loudly, before any cost where that can be seen, and never becomes another. [RFC 0031](rfcs/0031-a-workspace-is-a-place-git-already-knows.md)
 has the decisions behind this page, and [compatibility.md](compatibility.md#workspaces) what each harness sees.
 
 ## What each mode promises
@@ -104,8 +104,8 @@ Before any cost, besides wherever a snapshot is refused, `isolated` is refused w
 when two do, naming both, when the isolation cannot confine here, as `bwrap` cannot where a kernel setting, AppArmor or a container's
 seccomp blocks user namespaces, when a harness declares no path it is installed at, as one in the runtime's own process cannot, and
 for a role with no auth profile whose harness signs itself in, since that login is in your home. A spawn asks the isolation again
-before it builds the snapshot. [compatibility.md](compatibility.md#workspaces) says what each harness declares, and [ADR
-0034](adr/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) why.
+before it builds the snapshot. [compatibility.md](compatibility.md#workspaces) says what each harness declares, and [RFC
+0034](rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) why.
 
 ## Before any cost
 
@@ -140,7 +140,7 @@ A worktree holds what is committed at its base and nothing else: untracked proje
 hooks run for agents' commits there, while `post-checkout` does not run when the runtime makes one. Claude Code's auto memory is keyed
 on the repository and shared by every worktree of it, a channel no topology binds.
 
-Claude Code's own worktree tools are off on every launch ([ADR 0033](adr/0033-a-harness-s-own-worktrees-are-off.md)). A worktree an
+Claude Code's own worktree tools are off on every launch ([RFC 0033](rfcs/0033-a-harness-s-own-worktrees-are-off.md)). A worktree an
 agent makes with git from a shell is its own affair, and outside what the runtime records.
 
 **Codex** keeps `.git` read-only under its `workspace-write` and `read-only` sandboxes, so each commit asks for an approval that runs
@@ -288,7 +288,7 @@ seconds it took and the bytes it printed, and carries the last 64 KiB of that as
 --ref repo/<name>@<version>` reads, a page at a time. The `changes` view's commit row gives the latest outcome as `tests`, with why it failed or
 erred and the ref of its record, and the terminal's `/review` shows the outcome and the reason and tests the chosen commit with Enter. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
-session resumes. [ADR 0056](adr/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
+session resumes. [RFC 0056](rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
 
 ## From a script
 

@@ -23,7 +23,7 @@ The owner asked for very good taste. In practice:
 - **No speculation.** No abstraction with one user and no second in sight. No options nobody asked for. No compatibility shims.
   Delete dead code; do not comment it out.
 - **Read the neighbors.** Match the surrounding code's comment density, naming and idiom. Docstrings are short and say what a
-  thing is; design history belongs in `docs/adr/`.
+  thing is; design history belongs in `docs/rfcs/`.
 
 ## Layers
 

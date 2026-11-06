@@ -24,7 +24,7 @@ Milestone 0 research for `platoon-harness`, reviewed adversarially on 2026-11-02
 | [swarm-patterns.md](swarm-patterns.md) | DeLM, Agensh, GitSwarm, Prime, RAO/DAO, example scenarios, tool surface | Examples, tool design |
 | [pi-durable.md](pi-durable.md) | Pi Durable against our design, decisions, defects found in ours, spike | What to adopt and when, pi driver notes |
 | [distributed-primitives.md](distributed-primitives.md) | Primitive families, topology grammar, presets, core and library split | Owner addendum, coordination core |
-| [persistent-agents.md](persistent-agents.md) | Spawned agents that take follow-ups: who chooses, the follow-up, the answer, the end, and Platoon's limits | ADR 0023, agents that stay |
+| [persistent-agents.md](persistent-agents.md) | Spawned agents that take follow-ups: who chooses, the follow-up, the answer, the end, and Platoon's limits | RFC 0023, agents that stay |
 | [landscape.md](landscape.md) | Projects like ours on four axes, the closest ten, licenses, ideas to borrow | Positioning, what to borrow and when |
 
 Fixtures are in [fixtures/](fixtures/). `prime-agent-sample.md` states that it holds no capture.
@@ -61,7 +61,7 @@ Date is the commit date of the inspected revision, or the retrieval date for a p
 
 | Observation | Verdict | Evidence and nuance |
 |---|---|---|
-| RFC 0021's `CreditEstimator` partly supersedes RFC 0001's credit section, with per-token advantages | **Verified** | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:5`, `platoon@efe3b277c82c:platoon/train/credit/api.py:244`, `:82`, `platoon@efe3b277c82c:platoon/train/credit/reverse_kl.py:126`. It is EXPERIMENTAL. RFC 0021's header still says "Implementation: None yet" (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:10`), so trust the code |
+| Platoon RFC 0021's `CreditEstimator` partly supersedes Platoon RFC 0001's credit section, with per-token advantages | **Verified** | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:5`, `platoon@efe3b277c82c:platoon/train/credit/api.py:244`, `:82`, `platoon@efe3b277c82c:platoon/train/credit/reverse_kl.py:126`. It is EXPERIMENTAL. Platoon RFC 0021's header still says "Implementation: None yet" (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:10`), so trust the code |
 | SwarmChat's browser viewer is read-only | **Verified** | `swarmchat@fb5aa6a05b40:swarmchat/server.py:38`, `swarmchat@fb5aa6a05b40:README.md:63`. Probe below. Read-only is a property of the `view_*` requests, not the link: the admin token also opens them |
 | Toad uses ACP and is a design reference | **Verified** | Own ACP client with `PROTOCOL_VERSION = 1` and no ACP SDK dependency (`toad@dd4f90e8b370:src/toad/acp/agent.py:32`). AGPL-3.0 means copying is ruled out, not just unnecessary |
 | Platoon extensions: explicit selection, lazy loading, provenance, conformance checks | **Partly verified** | First three hold (`platoon@efe3b277c82c:platoon/extensions.py:70`, `:270`, `:1121`). Conformance exists only for experimental sampler, admission, trainer and credit APIs (`platoon@efe3b277c82c:platoon/testing/credit.py:48`), plus static `platoon extensions check`. No harness or environment suite exists (`platoon@efe3b277c82c:docs/rfcs/0017-public-surface-and-conformance.md:10`) |
@@ -103,7 +103,7 @@ Also confirmed: Textual 8.2.8 passes ST-terminated OSC 0, CSI 2J and RIS through
 | Identity from `_meta` | adapter-codex derived the caller from it; acp-mcp forbids that | Fixed: token only, `_meta` is evidence |
 | `x-platoon-call-id` | Platform said every response; training said non-streaming | Fixed: streams lack it (probe) |
 | Claude through the gateway | adapter-claude-code left it open; platform said 400 | Fixed: exit 1, zero records (probe) |
-| Native child level | adapter-openhands said `declared`; others `inferred` | Fixed: `inferred`, per RFC 0001 |
+| Native child level | adapter-openhands said `declared`; others `inferred` | Fixed: `inferred`, per Platoon RFC 0001 |
 | Prime Agent ACP | acp-mcp said none; adapter-others said v1 | Fixed: native v1 in source |
 | Lease renewal | swarm-patterns has agent `task_renew`; primitives has the runtime renew | **Open:** keep the operation, runtime calls it by default |
 | Barriers | swarm-patterns exposes `barrier_arrive`; primitives puts barriers in the library tier | **Open:** library over `wait`, exposed through the tool seam |

@@ -1,4 +1,4 @@
-"""Annotations: what an estimator says of the record, beside the journal and never in it (ADR 0011)."""
+"""Annotations: what an estimator says of the record, beside the journal and never in it (RFC 0011)."""
 
 import asyncio
 import contextlib

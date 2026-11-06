@@ -33,7 +33,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 
 | Observation | Verdict | Note |
 |---|---|---|
-| RFC 0021's `CreditEstimator` partly supersedes RFC 0001's credit section, with per-token advantages | **Verified** | EXPERIMENTAL. RFC 0021's header still says "Implementation: None yet", so the code is what counts. Only `reverse_kl` uses per-token advantages |
+| Platoon RFC 0021's `CreditEstimator` partly supersedes Platoon RFC 0001's credit section, with per-token advantages | **Verified** | EXPERIMENTAL. Platoon RFC 0021's header still says "Implementation: None yet", so the code is what counts. Only `reverse_kl` uses per-token advantages |
 | SwarmChat's browser viewer is read-only | **Verified** | Enforced on the server. Read-only is a property of the `view_*` requests, not the link: the admin token opens them too. Eight mutating requests with a view token gave 401 |
 | Toad uses ACP and is a design reference | **Verified** | Own client with `PROTOCOL_VERSION = 1`, no ACP SDK dependency |
 | Platoon extensions: explicit selection, lazy loading, provenance, conformance checks | **Partly verified** | The first three hold. Conformance exists only for experimental sampler, admission, trainer and credit APIs, plus static `platoon extensions check`. No harness or environment suite exists |
@@ -229,7 +229,7 @@ by a driver landing; only the row below changes.
   landed in the helper's first turn; with the steps in an order no reading can mistake it passed in run 38, in 24 calls, the lead
   taking each answer in its one turn by a held `wait` with `from`. In runs 34 to 39 no agent opened a turn with a `wait` that named
   nothing, and a helper's woken turn opened with a `message_read` that showed nothing new in 4 of 6 [R]. With the shell in `read-only` it reported the failure and did not ask to escalate until told to [R].
-- An empty read names what was already handed over (ADR 0047): woken three times by a memo on a `wake` topic and asked to read
+- An empty read names what was already handed over (RFC 0047): woken three times by a memo on a `wake` topic and asked to read
   `#memo`, it read right after the first wake, was told nothing was new past `channel/memo@1` and given the `after` that reads it,
   read again with it, and answered from the memo; in the next two turns it read with `after` at once, in 7 calls, run 79 [R].
 - The mixed-team example: a Codex worker under a Claude Code lead claimed the task, posted the note, completed the task and
@@ -384,7 +384,7 @@ by a driver landing; only the row below changes.
 ### SwarmChat on our backend
 
 `platoon-harness web` serves SwarmChat 0.1.0's page, from source commit `fb5aa6a05b40`, over a projection of the journal, as
-[ADR 0027](adr/0027-the-browser-on-our-backend.md) says and [web.md](web.md) guides. These are the page files it serves, read from
+[RFC 0027](rfcs/0027-the-browser-on-our-backend.md) says and [web.md](web.md) guides. These are the page files it serves, read from
 the installed package and held to these SHA-256 values when it starts. A file that differs stops it before anything is served.
 
 | File | SHA-256 |
@@ -585,7 +585,7 @@ script made is said to have returned to that script, which may never have shown 
 
 ### Workspaces
 
-What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), ADR 0031), and what git does that the runtime's
+What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), RFC 0031), and what git does that the runtime's
 own git relies on or works around. Git 2.47.3 is the only version run; [V] verified here, [S] read in source, [U] unverified. In a
 snapshot each sees the same, but that the repository's own `.git/hooks` are new and empty there, while a `core.hooksPath` your global
 or system config sets still runs for an agent's commits [V].

@@ -1,7 +1,7 @@
 # Architecture
 
 This is the design of record. When code and this page disagree, one of them has a bug. Status lives in
-[STATUS.md](STATUS.md); decisions and their alternatives live in [adr/](adr/); upstream facts live in
+[STATUS.md](STATUS.md); decisions and their alternatives live in [rfcs/](rfcs/); upstream facts live in
 [compatibility.md](compatibility.md).
 
 ## 1. The whole thing in one paragraph
@@ -369,7 +369,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   and its error, and the next run that lasts is `daemon.recovered`, so a daemon that fails on every pass with one error is said once
   and stands in `attention`, with where its traceback is, what starts it anew and its latest error, until it runs a minute or a new
   runtime starts, and never passes for a quiet session. See
-  [ADR 0046](adr/0046-a-daemon-that-keeps-failing-needs-a-person.md).
+  [RFC 0046](rfcs/0046-a-daemon-that-keeps-failing-needs-a-person.md).
 - **Tool side effects inside a harness are observed, not ours.** We do not perform them, so we do not retry them.
 - **A kind of an extension's own.** The host starts only the kinds in this table, and recovery settles only those. An extension that
   requests another brings the daemon that performs it, and that daemon settles its rows, after a crash and past a `timeout` alike:
@@ -599,7 +599,7 @@ scheduler modes.
 
 An episode **program** is an async function holding a `program` principal, so control flow never enters config. None runs yet, so
 `team check` refuses a team that names one, which a session would leave waiting for what nothing does (§8). See
-[ADR 0048](adr/0048-a-setting-nothing-carries-out-is-refused.md).
+[RFC 0048](rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
 
 ## 7. Primitive semantics
 
@@ -629,7 +629,7 @@ Each statement here is a promise with a test.
 - **An empty page is no empty channel.** An agent's read that finds nothing past its own cursor names in `next` what the offer that
   last moved that cursor handed over on that stream, by the refs it was shown, and the `after` that reads it again, unless that
   offer was a read of its own, which showed what it gave: a wake moves the cursor past what it hands over, so a read right after
-  finds nothing, which a model took for an empty channel. See [ADR 0047](adr/0047-an-empty-read-names-what-was-already-handed-over.md).
+  finds nothing, which a model took for an empty channel. See [RFC 0047](rfcs/0047-an-empty-read-names-what-was-already-handed-over.md).
 - **Broadcast.** One entry plus a recorded member list and group generation. That snapshot is its audience, and a sender
   is not in its own. Late joiners see history only if the channel says `history = "full"`.
 - **Entries** are a capped `gist` plus an optional body, which a row says it has with `body: true` and `blob.get` reads by the
@@ -664,7 +664,7 @@ one from a turn an interrupt or the owner's stop cut. A message lands at once in
 the turn after the one it was offered in. So a parent is woken once for the spawn and once more for each message it sent that child,
 and a turn a peer or a human started, or a parent's broadcast, asks nothing. A turn that parks posts no report, so it answers nothing
 yet. It stops at `max_hops`; past either, its message waits for the next turn. So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in. See
-[ADR 0023](adr/0023-agents-that-stay.md).
+[RFC 0023](rfcs/0023-agents-that-stay.md).
 
 A report also waits for the next turn when waking would tell the parent nothing. A parent that ended the child itself did it. A
 report the parent is counting does not wake it: the wait wakes it when it holds, so a join of N costs one turn. A parent counts a
@@ -796,8 +796,8 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   `unsupported`, from what each role's driver said when the session opened. The result of a spawn that stays says so, that its
   answers come back at the end of each of its turns, and how to end it. An agent's `wait` for the end of one that stays and has not
   ended is refused `invalid`, naming `from` for its answers, since that end comes only when someone ends it. See
-  [ADR 0023](adr/0023-agents-that-stay.md) and
-  [ADR 0060](adr/0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md).
+  [RFC 0023](rfcs/0023-agents-that-stay.md) and
+  [RFC 0060](rfcs/0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md).
 - **Interrupt.** `agent.interrupt` stops an agent's turn, or the turn it is on its way to, by a wake that is due, a handover under
   way or a wait that holds, and quiets what was waiting for it: what arrived before the interrupt wakes nothing and stays unread for
   its next turn, and a wait that already holds closes with no notice, while what comes after wakes it as usual. Nothing is handed
@@ -823,7 +823,7 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   nor a held call's answer. The parent is on its way to a turn until then. A call it makes once the child has ended reads the
   journal as it stands, so a `wait` that holds as it is placed, `message.read` or `agent.status` can say the child has ended first:
   only a parent at work on its own when its child ended can learn of it that way. See
-  [ADR 0059](adr/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md).
+  [RFC 0059](rfcs/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md).
 - **Rest: an agent's process is not its identity.** Any agent between turns for ten minutes on the session's clock, with no setting,
   rests, when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a `rest` effect ends its
   process tree, and its next handover brings its harness back first, on its native session, or anew where it took no turn, on a fresh
@@ -835,7 +835,7 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   saying so, and a harness its handover brings back that exits before it is ready has exited so. One that could not come back for
   another reason is lost after six handovers fail. A runtime start leaves a resting agent to its next handover, and the roster says an
   agent is `resting`. See
-  [ADR 0045](adr/0045-an-agent-s-process-is-not-its-identity.md).
+  [RFC 0045](rfcs/0045-an-agent-s-process-is-not-its-identity.md).
 - **Finishing** is like parking: `agent.finish` in an open turn records the report as `agent.finished`, and `agent.ended` commits when
   the turn ends, because a harness reports usage and its last message at turn end. Out of a turn it ends the agent at once. A turn
   still going a minute later is cut off, so what it had yet to report goes unmeasured. A harness that exits has finished all the same.
@@ -1030,7 +1030,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   of ours, since its calls reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's
   token. A driver turns them off for one launch by the harness's own setting, and what a harness keeps out of reach of that is in
   [compatibility.md](compatibility.md). Its approvals still come to the runtime, under its parent's role. See
-  [ADR 0024](adr/0024-a-harness-s-own-agents-are-off.md).
+  [RFC 0024](rfcs/0024-a-harness-s-own-agents-are-off.md).
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so the preamble
   lists them at launch and `peers` as they stand; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
@@ -1106,7 +1106,7 @@ way, a worker per agent from the SDK's `openhands` extra on the runtime's own in
 runtime does, as the session's one writer is no place for a library that takes seconds and some 200 MB to load, keeps one
 registry of agents a process, holds its lock while a tool runs and starts processes a group must own. So the custom-driver
 path is real and exercised, and where OpenHands' pins cannot share an environment, the worker runs from one of its own as a
-wire command. See [ADR 0030](adr/0030-openhands-is-an-extra-of-the-sdk.md).
+wire command. See [RFC 0030](rfcs/0030-openhands-is-an-extra-of-the-sdk.md).
 
 ```jsonc
 > {"jsonrpc":"2.0","id":1,"method":"start","params":{"protocol":2,"spec":{"agent":"ada","role":"worker","goal":{"input":"7","boundary":"turn","text":"...","items":[{"ref":"agent/ada@1","gist":"...","sender":null,"body":false}],"behind":0},"access":["OPENAI_API_KEY"],"resume":null}}}
@@ -1134,7 +1134,7 @@ masked. A driver that cuts text masks it first, since a cut can split a secret. 
 what carries the harness's own `TMPDIR`, which everything it starts inherits, whichever group it left for:
 on Linux, `stop` and `reap` find those in `/proc` and end them too. What clears its environment escapes, as does anything on macOS, and a
 stop that came to `SIGKILL` reports `crash_window`, because a harness gets no chance to end what it started. See
-[ADR 0018](adr/0018-who-owns-a-process.md) and [ADR 0021](adr/0021-what-a-harness-leaves-behind.md).
+[RFC 0018](rfcs/0018-who-owns-a-process.md) and [RFC 0021](rfcs/0021-what-a-harness-leaves-behind.md).
 
 ### 9.2 Capabilities
 
@@ -1146,7 +1146,7 @@ Absence means unsupported, as in ACP.
 | `resume` | Native resume available |
 | `boundaries` | Subset of `turn`, `tool`, `model_call` |
 | `tool_paths` | `mcp-http`, `mcp-stdio`, `shell` |
-| `tool_names` | `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`. Our words, a tool's URL and a handover name our tools as the model sees them: [ADR 0029](adr/0029-a-harness-names-our-tools-as-it-shows-them.md) |
+| `tool_names` | `namespaced`, as `mcp__<ns>__<tool>`, unless said, or `bare`. Our words, a tool's URL and a handover name our tools as the model sees them: [RFC 0029](rfcs/0029-a-harness-names-our-tools-as-it-shows-them.md) |
 | `tool_timeout_s` | The harness's cap on one tool call |
 | `interrupt` | A turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
@@ -1177,7 +1177,7 @@ Absence means unsupported, as in ACP.
   that says no version, keeps nothing and says why. The host reads it at every launch and resume, and records it where it speaks for
   the harness, so an agent's levels come from proof made on its own machine, and an upgrade of the harness or the SDK the result did
   not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
-  still answers no `NotSeen`. See [ADR 0044](adr/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
+  still answers no `NotSeen`. See [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
 - **A sealed launch is earned too.** On a driver that declares `sealed`, two checks run on `FakeModel` acting as a gateway, its
   models and an MCP server of the environment's tools each under a bearer it gave, two of them named `finish` and `think` as
   harnesses name tools of their own: `sealed_first_request_holds_only_ours`, that the first request goes under the gateway's bearer,
@@ -1208,7 +1208,7 @@ the host commits all of this through `agent.start`, and a report has no field fo
 
 | Harness | Path | Notes that matter |
 |---|---|---|
-| `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `EnterWorktree` and `ExitWorktree`, which would move the agent out of its workspace, always ([ADR 0033](adr/0033-a-harness-s-own-worktrees-are-off.md)), and `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
+| `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `EnterWorktree` and `ExitWorktree`, which would move the agent out of its workspace, always ([RFC 0033](rfcs/0033-a-harness-s-own-worktrees-are-off.md)), and `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
 | `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. A thread whose `thread/start` or `thread/resume` names a `cwd` other than `spec.cwd` is refused. Under `workspace-write` and `read-only` its sandbox keeps `.git` read-only, so a commit outside the session's checkout waits on an approval, and `team check` names the three postures. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the agent's own, so no saved login pays: `-c` names it as the app-server starts, as from 0.167.0 a thread runs on no other, and the thread gives it its URL, as argv names no secret |
 | `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. An input is said to land under the id of the entry pi wrote it down as, which `get_entries` names from the last entry seen once its message has ended, and what pi says after it waits behind it, so the reports keep pi's order. The extension puts pi's own id for a call of ours among its arguments as `_meta`, which the shim moves to where MCP keeps it, so the call's op goes under `pi/toolCallId`, which its tool item holds. `message_end` gives `model.call`, with `responseId`, which is the response's own id. `compaction_end` gives a `model.call` of purpose `compaction`, one by each id our extension kept or one with none for pi's own, and `forgotten` from `get_entries`. Our extension says, as a status `ready` waits for, which tools pi declares once ours have connected, as pi says nothing when a server's tools arrive. Sealed, on a gateway: a context window stated that no context reaches, as pi takes one unstated as none and would compact after every turn, an agent directory of its own, `PI_CODING_AGENT_DIR` in the agent's folder, whose settings retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve` and `--offline`, and the environment's server beside ours; our extension takes `session_before_compact` and runs pi's own `compact` with the gateway's compaction headers and a stream function that keeps each of its one or two calls' ids, which reach the driver in the details pi keeps of the compaction |
 | `openhands` | Wire worker on SDK `arun()`, from the SDK's `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers` |
@@ -1298,7 +1298,7 @@ shows what every agent was told, and on each real binary a test finds that text 
 after a resume. The harness's own system prompt and the user's own configuration, such as Codex's `developer_instructions` and Claude
 Code's settings and `CLAUDE.md` files, are theirs: we neither record nor change them. `told(team)` renders what an agent of each role
 would be told, on a session of its own in a folder thrown away after, which starts no harness and has no limit or budget, as no text
-says one. Tool descriptions, refusals and handovers stay fixed. See [ADR 0025](adr/0025-what-an-agent-is-told-is-a-template.md).
+says one. Tool descriptions, refusals and handovers stay fixed. See [RFC 0025](rfcs/0025-what-an-agent-is-told-is-a-template.md).
 
 ## 11. Provenance
 
@@ -1433,7 +1433,7 @@ and followed into its own event, a hop at a time; each answer says its head, whe
 what its page left out, naming the command that reads on; and why a link opens nothing is said in its place. A harness's report of
 a tool item names the call its report names and opens what each command of its agent's under that item's id made. What an answer
 does not hold below its bound is said as not held there, never as never. Credit is shown only as each estimator's statement, by
-producer, version and params, never summed. See [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md).
+producer, version and params, never summed. See [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md).
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
 `(id, target, kind, producer, producer_version, params_hash, value, status, evidence, head_seq, wall_time)` with a `scope`, unique on
@@ -1449,8 +1449,8 @@ a writer up, and finds statements by target through an index. The same statement
 runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@1`, a heuristic run
 only when someone runs it (§14), and a client shows a value only with its producer and version, beside any other estimate of the
 same target, never summed. See
-[ADR 0038](adr/0038-provenance-is-answered-from-the-record.md), [ADR 0039](adr/0039-estimators-write-beside-the-journal-at-m2.md)
-and [ADR 0052](adr/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
+[RFC 0038](rfcs/0038-provenance-is-answered-from-the-record.md), [RFC 0039](rfcs/0039-estimators-write-beside-the-journal-at-m2.md)
+and [RFC 0052](rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
 
 **Eligibility.** `eligibility(agent, episode)` is a query op that is no agent's tool, a `Session` method and a command, as the four
 are: whether an agent's work in one episode can train, from the record alone. It answers the agent's attribution, `exact` where
@@ -1600,8 +1600,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   that a view link reaches too, in the terminal's words, and the projection keeps the ref of the event each line shows, which the
   pane opens on, and following a link a chat shows opens that chat there. Each link in the pane is a button, and a message's
   actions show while focus is in it, so the keyboard reaches both. [web.md](web.md) is its guide, and
-  [ADR 0027](adr/0027-the-browser-on-our-backend.md), [ADR 0028](adr/0028-acting-from-the-page.md),
-  [ADR 0035](adr/0035-the-board-and-the-map-over-messages.md) and [ADR 0043](adr/0043-a-person-follows-provenance-from-where-they-read.md)
+  [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
+  [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md) and [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
   its decisions.
 
 ## 13. Workspaces
@@ -1610,7 +1610,7 @@ A role's `workspace` is a ladder, each step promising one thing more: `shared`, 
 is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
 another. The core gives the first three, on git and the filesystem alone, and `isolated` where one extension the team names gives an
 isolation. A trainable team works in `shared` or `isolated` (§14). See
-[ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
+[RFC 0031](rfcs/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
 
 - **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
 - **`worktree`** is a linked git worktree of the cwd's repository at `agents/<agent>/workspace`, on a new branch
@@ -1638,7 +1638,7 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   launch records assurance `isolated`. Before any cost it is refused, besides where a snapshot is, when no extension the team names
   gives an isolation, when two do, naming both, when the isolation cannot confine here, when a harness declares no installed path,
   and for a role with no auth profile whose harness signs itself in, as that login is in your home. The SDK's `bwrap` extension gives
-  one on Linux. It is experimental. See [ADR 0034](adr/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
+  one on Linux. It is experimental. See [RFC 0034](rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
 - **Where an agent works.** In the same subfolder of its workspace as the session's cwd is of its repository. The path never changes
   while the agent lives, every launch and resume runs its harness there, and a resume whose folder has gone, or is no longer a work tree
   of the recorded repository, ends its agent `lost`, naming the fix.
@@ -1688,7 +1688,7 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
   Every workspace still on disk is read, and one another agent's stop removed while a look read it is gone, as one removed before is.
   It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof. See
-  [ADR 0032](adr/0032-the-runtime-looks-and-never-moves-a-branch.md).
+  [RFC 0032](rfcs/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - **`Informed-By`** is the one way to declare what a commit rests on. A value of 4 to 40 hex digits naming one commit in the commit's
   own repository is resolved to its full SHA once, at the commit's first record, and `based_on` cites that commit's record. A value
   that is an event's ref, such as the board entry the commit implements, is cited too, once it is checked as any citation is (§7),
@@ -1709,11 +1709,11 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   say, and as its body the last of what it printed, of how many bytes in all, which `blob.get` reads by the record's ref. A test past
   its timeout is an `error`, and nothing it started runs on. The `test` effect is owned by no agent, keeps the session from settling until it ends, finishes from the journal when its `repo.tested` is held, and otherwise
   runs again from the start. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ from the agent's
-  own run. See [ADR 0056](adr/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md).
+  own run. See [RFC 0056](rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
   its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit
   is recorded at the look after the turn that made it', until then. Every agent holds it. See
-  [ADR 0057](adr/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
+  [RFC 0057](rfcs/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve
@@ -1721,7 +1721,7 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`. A merge queue
   for worktree teams is a queue and a merger in a worktree, written out in [topologies.md](topologies.md), not a preset: the merger
   merges with git, the look records the merge or the conflict, and the merger completes the task naming any conflict, which reaches
-  its worker through the task. See [ADR 0058](adr/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
+  its worker through the task. See [RFC 0058](rfcs/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
 - **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
   HEAD, replacing the last and holding what it held, so a commit an agent rewrote outlives git's pruning. Nothing is written into your
   repository for it.
@@ -1820,12 +1820,12 @@ class AgentOutcome(Model):
   most 4,096 events, writing one local `credit` row per agent it reached, on its first `agent.started`. An agent it never reached
   has no row, a team reward not scored passes its status on, and a walk cut short makes every row `invalid`. Citing gives away all
   but `retained` of what reaches the citer, and work nobody cites earns nothing from it. See
-  [ADR 0054](adr/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
+  [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
   no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
   trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
   and an admit a stop cut short named ids nobody knows (§4). See
-  [ADR 0055](adr/0055-the-export-is-the-session-as-it-ended.md).
+  [RFC 0055](rfcs/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
   admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
@@ -1836,7 +1836,7 @@ class AgentOutcome(Model):
   and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is
   eligible from the result kept where it ran unconfined, the closed session's `agent.started` says assurance `isolated`, and no
   form of its bearer or its token is in a file or in the command line of any process of its harness. See
-  [ADR 0053](adr/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
+  [RFC 0053](rfcs/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|
