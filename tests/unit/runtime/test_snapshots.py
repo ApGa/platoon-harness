@@ -197,10 +197,10 @@ def test_a_snapshot_is_refused_where_its_git_would_see_another_tree(repo, tmp_pa
     found = problems_of(snapshot_team(), repo, tmp_path / "home")
 
     assert found["error"] == [
-        "roles.bob.workspace: `snapshot` cannot hold 1 file a filter cleans and smudges, key.secret, as only your "
+        "roles.bob.workspace: a snapshot cannot hold 1 file a filter cleans and smudges, key.secret, as only your "
         "config runs that filter: use `worktree`",
-        "roles.bob.workspace: `snapshot` would hold the whole of your sparse checkout: use `worktree`",
-        "roles.bob.workspace: `snapshot` would leave out the untracked repositories vendor/lib/: use `worktree`",
+        "roles.bob.workspace: a snapshot would hold the whole of your sparse checkout: use `worktree`",
+        "roles.bob.workspace: a snapshot would leave out the untracked repositories vendor/lib/: use `worktree`",
     ]
 
 
@@ -226,7 +226,7 @@ def test_a_snapshot_of_a_checkout_mid_merge_is_refused_before_any_cost(repo, tmp
     found = problems_of(snapshot_team(), repo, tmp_path / "home")
 
     assert found["error"] == [
-        "roles.bob.workspace: `snapshot` would take a merge under way and 1 conflicted path in your checkout as "
+        "roles.bob.workspace: a snapshot would take a merge under way and 1 conflicted path in your checkout as "
         "settled: finish or abort it first, or use `worktree`"
     ]
 
@@ -310,7 +310,7 @@ def test_a_look_in_one_snapshot_ignores_commits_only_another_holds(repo, tmp_pat
         base=opened[0],
         tips=[*opened, theirs],
         last={"head": theirs, "branch": "platoon-harness/s/ada"},
-        makers={"@ada": ada, "@bob": bob, "shared": repo},
+        makers={"@ada": (ada, ()), "@bob": (bob, ()), "shared": (repo, ())},
         record=True,
     )
 

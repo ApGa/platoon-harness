@@ -4,6 +4,20 @@
 
 ### Added
 
+- `isolated` workspaces, experimental. An isolated workspace is a snapshot whose harness, and everything the runtime runs in its tree,
+  one extension's isolation confines: its looks, the check at a launch or a resume, the stop's reading of what removal would lose,
+  making a kept snapshot whole, and finding its objects for `commits.bundle`, so a filter an agent writes into its own config runs
+  inside. Inside, it writes only its agent's folder and a private /tmp; finds your home, as `HOME` names it and as your account
+  does, the session root and the runtime directory empty and read-only, but for your repository's objects and where its harness is
+  installed; and sees only its own processes, which all end with it. It still reads what you can read outside those folders, and
+  reaches the network, every loopback service, every abstract socket and every socket file outside them. Only such a launch records
+  assurance `isolated`. `Extension.isolation` carries an isolation, with `refusal()` and `wrap(writable, readable, hidden)`, and
+  `platoon_harness.runtime.isolation` says what an isolated agent may do. The SDK ships `bwrap`, on Linux's bubblewrap, as the module
+  `platoon_harness.bwrap`, registered as an extension and loaded only by a team that names it. Refused before any cost: no extension
+  that gives an isolation, two, one that cannot confine here, a harness that declares no installed path, and a role with no auth
+  profile whose harness signs itself in. Its escape tests pass on Claude Code, Codex with its own sandbox nested inside, pi and the
+  OpenHands worker against FakeModel. A stop gives an isolated harness the end of its stdin and its grace, then `SIGKILL`, labelled
+  `crash_window`, since bubblewrap passes no `SIGTERM` on. See ADR 0034.
 - `DriverInfo.installed`, the paths a harness reads to run, declared by every driver, and by a wire program in its description;
   `AgentSpec.wrap`, the argv of the isolation a harness runs in, which `Process` puts before its command; and a `HOME` in `spec.env` is
   the harness's home, so `harness_env` passes none of the variables that keep a harness's state elsewhere. `drivers.env.on_path` and
@@ -388,6 +402,9 @@
 
 - Claude Code's conformance test pins 2.1.319, which it updated itself to on the machines that run the slow pass, and on which its
   checks pass against FakeModel, 26 passed and 4 skipped, as on 2.1.318.
+- A snapshot's refusals say `a snapshot` where they said `` `snapshot` ``, as they hold for an isolated workspace too.
+  `runtime.looks.look` takes each workspace's tree with the wrap git runs under there, and a `wrap` of its own, as
+  `runtime.workspaces.present`, `end_snapshot` and `operations` take one, and `write_bundle` takes each repository with its wrap.
 - Codex's conformance test pins 0.167.0, the version its checks last passed on, against FakeModel, as they had on 0.164.0.
 - Claude Code's conformance test pins 2.1.318, the version its checks last passed on, against FakeModel, as they had on 2.1.316.
 - `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
@@ -558,6 +575,7 @@
 
 ### Removed
 
+- `runtime.workspaces.NOT_YET`, as `isolated` is given where an extension gives an isolation. See ADR 0034.
 - `Session.start(human=)`, `prepare(human=)` and `Manifest.human`, which `principal` replaces. See ADR 0050.
 - `Authority.budget_owner`, which no authority used: every limit a team states is the session's own. `open_session` takes no
   authority. See ADR 0049.

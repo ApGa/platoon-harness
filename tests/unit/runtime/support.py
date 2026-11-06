@@ -1,4 +1,5 @@
-"""Teams made in a test. A role's harness is a name, so a driver built here is reached as an attribute of this file."""
+"""Teams made in a test. A role's harness and a team's extension are names, so a driver or an extension built here is
+reached as an attribute of this file."""
 
 import asyncio
 import sqlite3
@@ -8,7 +9,7 @@ from typing import Any
 
 from platoon_harness import Session, Team
 from platoon_harness.drivers import Driver
-from platoon_harness.kernel import Kernel
+from platoon_harness.kernel import Extension, Kernel
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.testing import ScriptedDriver
 
@@ -16,20 +17,27 @@ from ..kernel.support import dump
 
 SECONDS = 15.0
 
-_HARNESSES: dict[str, Callable[[], Driver]] = {}
+_NAMED: dict[str, Callable[[], Driver] | Extension] = {}
 
 
-def __getattr__(name: str) -> Callable[[], Driver]:
+def __getattr__(name: str) -> Callable[[], Driver] | Extension:
     try:
-        return _HARNESSES[name]
+        return _NAMED[name]
     except KeyError:
         raise AttributeError(name) from None
 
 
 def harness(make: Callable[[], Driver]) -> str:
     """The `harness` of a role whose driver `make` builds, one per agent."""
-    key = f"driver_{len(_HARNESSES)}"
-    _HARNESSES[key] = make
+    key = f"driver_{len(_NAMED)}"
+    _NAMED[key] = make
+    return f"{__name__}:{key}"
+
+
+def extension(made: Extension) -> str:
+    """How a team names `made` among its extensions."""
+    key = f"extension_{len(_NAMED)}"
+    _NAMED[key] = made
     return f"{__name__}:{key}"
 
 

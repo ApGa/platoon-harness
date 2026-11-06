@@ -133,7 +133,8 @@ Each law is a sentence, and each has a test of the same name.
   view.token          0600: a view credential, which reads and never writes
   lock                flock: held by the one live runtime
   commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
-  agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one
+  agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one;
+                      home/, an isolated harness's HOME
 ```
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/` and `conformance/`, what
@@ -1037,7 +1038,7 @@ One driver instance per agent.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, login kind, version, capabilities. Starts nothing
+    def describe(self) -> DriverInfo: ...                        # name, login kind, version, capabilities, installed. Starts nothing
     async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
     async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
@@ -1048,11 +1049,12 @@ class Driver(Protocol):
 
 `AgentSpec` holds agent, role, goal, cwd, which is where the journal says its agent works, so no driver knows the mode, the agent's
 own folder, model, effort (a string handed to the harness as it stands), sandbox
-(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included, or a `Gateway`, which only a driver that declares `sealed` is given, with the gateway's model as the model), env, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
+(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included, or a `Gateway`, which only a driver that declares `sealed` is given, with the gateway's model as the model), env, where a `HOME` is the harness's home, so the driver inherits none of the variables that keep its state elsewhere, wrap, the argv of the isolation it runs in, which `Process` puts before its command, so the recorded leader is the confiner, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
 again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal,
 which is a `Delivery`, the first, under the id of the offer that launched it, sent as the driver sends any input, so its harness says
 it landed as it says any did. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
-such setting refuses an effort.
+such setting refuses an effort. `DriverInfo.installed` is the paths its harness reads to run, as it reaches them, which an isolation
+shows it (§13); a harness in the runtime's own process declares none.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
@@ -1578,8 +1580,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
 
 A role's `workspace` is a ladder, each step promising one thing more: `shared`, `worktree`, `snapshot` or `isolated`. The mode recorded
 is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
-another. The core gives the first three, on git and the filesystem alone, and refuses `isolated` naming why. A trainable team
-works in `shared` or `isolated` (§14). See
+another. The core gives the first three, on git and the filesystem alone, and `isolated` where one extension the team names gives an
+isolation. A trainable team works in `shared` or `isolated` (§14). See
 [ADR 0031](adr/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
 
 - **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
@@ -1594,6 +1596,18 @@ works in `shared` or `isolated` (§14). See
   checkout's git resolves for who commits and how files are read and written, and your local excludes and attributes. Git in it
   writes only its own repository, and what runs there can still reach anything you can. It is built aside and renamed into place
   last, so it is whole or absent, and a retry adopts a whole one.
+- **`isolated`** is a snapshot whose harness, and everything the runtime runs in its tree, one extension's isolation confines
+  (`Extension.isolation`, §17): its looks, the check at a launch or a resume that the tree is a work tree of its repository, the stop's
+  reading of what removal would lose, making a kept snapshot whole, and finding its objects for the bundle. The core says what it may
+  do and the isolation makes it so. It writes only its agent's folder, which holds its workspace and its harness's home, `home/`, given
+  as `HOME`, and a private /tmp. It finds your home, as `HOME` names it and as your account does, the session root and the runtime
+  directory empty and read-only, but for your repository's objects and the paths its driver declares installed, read-only. It sees
+  only its own processes, which all end with it. It still reads what you can read outside those folders, and reaches the network,
+  every loopback service, every abstract socket and every socket file outside them, on the same kernel, as the same uid. Only such a
+  launch records assurance `isolated`. Before any cost it is refused, besides where a snapshot is, when no extension the team names
+  gives an isolation, when two do, naming both, when the isolation cannot confine here, when a harness declares no installed path,
+  and for a role with no auth profile whose harness signs itself in, as that login is in your home. The SDK's `bwrap` extension gives
+  one on Linux. It is experimental. See [ADR 0034](adr/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
 - **Where an agent works.** In the same subfolder of its workspace as the session's cwd is of its repository. The path never changes
   while the agent lives, every launch and resume runs its harness there, and a resume whose folder has gone, or is no longer a work tree
   of the recorded repository, ends its agent `lost`, naming the fix.
@@ -1783,7 +1797,7 @@ Threat tiers stay separate, in docs and in events.
 | Model arguments | Hallucination, prompt injection through tool arguments | Closed by construction: laws 6 and 7, server-side authorization, strict decoding |
 | Untrusted content | Board contents, repository files, tool output, rendered Markdown | `SafeText` in the terminal; escaping and hash-only CSP in the browser. Content is data, never instructions |
 | Network | Browser and remote clients | Loopback by default, and any other address needs `--host` and TLS, with a wildcard refused. View and control credentials are separate classes, fixed when minted. Links are one-time, in the fragment, and exchanged for session tokens that expire, of which `web` keeps hashes in memory. `Host` must name the authority served and a POST's `Origin` the page's own |
-| Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only OS isolation earns `isolated` |
+| Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only a launch inside an extension's isolation earns `isolated`, which hides the session root, the runtime directory and your home, and leaves the network, loopback and every socket outside those reachable (§13) |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 
 - **Bodies.** A body's hash is a capability to whoever reads the journal, a person or a program, and a low-entropy body can be
@@ -1822,6 +1836,10 @@ freely, because credit-critical evidence is an event and deltas are not.
 ```python
 extension = Extension("ballot", ops=[cast], views=[Votes], daemons=[], presets=[pair_review])
 ```
+
+An extension may give an `isolation`, which confines an isolated agent (§13): `refusal()`, why it cannot confine here, and
+`wrap(writable, readable, hidden)`, the argv a command runs under. A team names at most one that gives one. The SDK's `bwrap` is one,
+on Linux's bubblewrap, registered under the extensions group and imported only by a team that names it.
 
 A preset is a plain function returning a topology fragment. Its name is the function's with dashes for underscores, and it may not
 take the name of a built-in preset or a topology key.

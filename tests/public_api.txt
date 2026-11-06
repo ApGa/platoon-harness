@@ -4,6 +4,8 @@ platoon_harness.annotations.Annotation(*,id,target,kind,producer,producer_versio
 platoon_harness.annotations.ANNOTATIONS
 platoon_harness.annotations.Status
 platoon_harness.annotations.Status[scored,invalid,error,timeout,cancelled]
+platoon_harness.bwrap.Bubblewrap
+platoon_harness.bwrap.extension
 platoon_harness.config.credentials
 platoon_harness.config.ENVIRONMENT_VARIABLE
 platoon_harness.config.forms
@@ -141,6 +143,7 @@ platoon_harness.kernel.Effect
 platoon_harness.kernel.Effects
 platoon_harness.kernel.Event
 platoon_harness.kernel.Extension
+platoon_harness.kernel.Extension.isolation
 platoon_harness.kernel.filesystem
 platoon_harness.kernel.Filesystem
 platoon_harness.kernel.first
@@ -315,6 +318,10 @@ platoon_harness.runtime.GRACE
 platoon_harness.runtime.host.DriverLink
 platoon_harness.runtime.host.GRACE
 platoon_harness.runtime.host.Host
+platoon_harness.runtime.isolation.hidden
+platoon_harness.runtime.isolation.Isolation
+platoon_harness.runtime.isolation.isolation_of
+platoon_harness.runtime.isolation.problems
 platoon_harness.runtime.LocalAuthority
 platoon_harness.runtime.looks.look
 platoon_harness.runtime.looks.PAGE
@@ -363,7 +370,6 @@ platoon_harness.runtime.workspaces.end_snapshot
 platoon_harness.runtime.workspaces.end_worktree
 platoon_harness.runtime.workspaces.make_snapshot
 platoon_harness.runtime.workspaces.make_worktree
-platoon_harness.runtime.workspaces.NOT_YET
 platoon_harness.runtime.workspaces.operations
 platoon_harness.runtime.workspaces.present
 platoon_harness.runtime.workspaces.problems

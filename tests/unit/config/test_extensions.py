@@ -221,7 +221,7 @@ def test_an_unknown_name_lists_registered_installed_and_nearest(site):
     text = str(caught.value)
     assert text.startswith("extensions.balot: no extension")
     assert "no extension `balot`. Did you mean `ballot`?" in text
-    assert "Registered: ballot, bored." in text
+    assert "Registered: ballot, bored, bwrap." in text
     assert "platoon-harness-ballot 0.2.0" in text
     assert "platoon-harness-board 0.3.0" in text
 
@@ -249,8 +249,8 @@ def test_something_else_in_the_extensions_group_is_refused(site):
 def test_installed_lists_without_importing(site):
     site.module("never_imported_e", "raise RuntimeError('imported')")
     site.install("ballot", entry_points={EXTENSIONS: {"ballot": "never_imported_e:extension"}})
-    assert list(Installed()) == ["ballot"]
-    assert len(Installed()) == 1
+    assert list(Installed()) == ["ballot", "bwrap"]
+    assert len(Installed()) == 2
     assert "never_imported_e" not in sys.modules
 
 
@@ -282,7 +282,7 @@ def test_team_check_reports_what_loading_an_extension_found(site):
     found = "\n".join(map(str, report))
     assert "needs platoon-harness-sdk>=9" in found
     assert "no extension `ghost`" in found
-    assert "Registered: old." in found
+    assert "Registered: bwrap, old." in found
 
 
 def test_drivers_load_by_name_too(site):
@@ -297,7 +297,7 @@ def test_a_module_reference_works_with_nothing_installed(site):
     site.module(
         "nothing_installed_ext", 'from platoon_harness.kernel import Extension\nextension = Extension("loose")\n'
     )
-    assert len(Installed()) == 0
+    assert list(Installed()) == ["bwrap"]
     team = Team.loads('extensions = ["nothing_installed_ext:extension"]\n[roles.a]\nharness = "pi"\n')
 
     assert team.resolved(Installed()) == team

@@ -9,11 +9,23 @@ from typing import Any, get_args
 import pytest
 
 import platoon_harness
-from platoon_harness import annotations, credit, runtime, session
-from platoon_harness.runtime import authority, control, git, host, looks, opening, paths, recovery, workspaces
+from platoon_harness import annotations, bwrap, credit, runtime, session
+from platoon_harness.runtime import (
+    authority,
+    control,
+    git,
+    host,
+    isolation,
+    looks,
+    opening,
+    paths,
+    recovery,
+    workspaces,
+)
 
 MODULES = {
     "annotations": annotations,
+    "bwrap": bwrap,
     "credit": credit,
     "session": session,
     "runtime": runtime,
@@ -21,6 +33,7 @@ MODULES = {
     "runtime.control": control,
     "runtime.git": git,
     "runtime.host": host,
+    "runtime.isolation": isolation,
     "runtime.looks": looks,
     "runtime.opening": opening,
     "runtime.paths": paths,

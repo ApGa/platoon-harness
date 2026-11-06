@@ -181,18 +181,6 @@ def test_uncommitted_changes_are_warned_of_whatever_status_config_says(repo, tmp
     assert "1 uncommitted path, notes.md," in found["warning"][0]
 
 
-def test_a_mode_that_cannot_be_given_is_refused_before_any_cost(repo, tmp_path):
-    found = problems_of(workspace_team(workspace="isolated"), repo, tmp_path / "home")
-
-    assert found["error"] == [f"roles.bob.workspace: {workspaces.NOT_YET['isolated']}"]
-
-
-def test_isolated_with_no_extension_that_confines_is_refused_before_any_cost(repo, tmp_path):
-    found = problems_of(workspace_team(workspace="isolated"), repo, tmp_path / "home")
-
-    assert "needs an extension whose isolation confines a harness" in found["error"][0]
-
-
 CODEX = {"harness": "codex", "model": "gpt-6-luna", "workspace": "worktree"}
 
 

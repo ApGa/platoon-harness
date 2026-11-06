@@ -379,7 +379,7 @@ def test_the_bundle_writes_nothing_into_your_repository(repo, tmp_path):
     folder = tmp_path / "session"
     folder.mkdir()
 
-    written = workspaces.write_bundle(folder, record, [work], ())
+    written = workspaces.write_bundle(folder, record, [work], {})
 
     assert written == {"file": "commits.bundle", "commits": 1, "missing": 0}
     assert (git("for-each-ref", cwd=repo), git("count-objects", "-v", cwd=repo)) == (refs, objects)
@@ -395,11 +395,11 @@ def test_a_bundle_holds_what_the_last_one_held(repo, tmp_path):
     record = repo_of(repo).model_copy(update={"head": start})
     folder = tmp_path / "session"
     folder.mkdir()
-    workspaces.write_bundle(folder, record, [dropped], ())
+    workspaces.write_bundle(folder, record, [dropped], {})
     pruned(repo)
     kept = commit(repo, "kept")
 
-    written = workspaces.write_bundle(folder, record, [dropped, kept], ())
+    written = workspaces.write_bundle(folder, record, [dropped, kept], {})
 
     assert not has(repo, dropped)
     assert written == {"file": "commits.bundle", "commits": 2, "missing": 0}
@@ -410,7 +410,7 @@ def test_a_commit_git_no_longer_has_is_counted_missing(repo, tmp_path):
     folder = tmp_path / "session"
     folder.mkdir()
 
-    written = workspaces.write_bundle(folder, repo_of(repo), ["f" * 40], ())
+    written = workspaces.write_bundle(folder, repo_of(repo), ["f" * 40], {})
 
     assert written == {"file": None, "commits": 0, "missing": 1}
     assert not (folder / workspaces.BUNDLE).exists()
@@ -423,6 +423,6 @@ def test_a_bundle_borrows_only_from_repositories_still_there(repo, tmp_path):
     folder = tmp_path / "session"
     folder.mkdir()
 
-    written = workspaces.write_bundle(folder, record, [work], [str(tmp_path / "gone" / ".git")])
+    written = workspaces.write_bundle(folder, record, [work], {str(tmp_path / "gone" / ".git"): ()})
 
     assert written == {"file": "commits.bundle", "commits": 1, "missing": 0}

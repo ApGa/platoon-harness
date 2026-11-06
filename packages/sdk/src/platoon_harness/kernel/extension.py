@@ -13,13 +13,15 @@ from .view import View, tables_of
 
 @dataclass(frozen=True)
 class Extension:
-    """A named set of ops, views, daemons and topology presets. The name is the ops' namespace."""
+    """A named set of ops, views, daemons and topology presets, and the `isolation` that confines an isolated agent, if
+    it gives one. The name is the ops' namespace."""
 
     name: str
     ops: Sequence[Op] = ()
     views: Sequence[type[View]] = ()
     daemons: Sequence[Daemon] = ()
     presets: Sequence[Callable[..., Any]] = ()
+    isolation: Any = None
 
 
 @dataclass(frozen=True)

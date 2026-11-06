@@ -19,6 +19,7 @@ from platoon_harness.tools import ToolServer
 from .authority import Admission, AgentOutcome, AgentRef, Authority, Gateway, LocalAuthority, SpawnRequest
 from .control import Control
 from .host import GRACE, Host
+from .isolation import isolation_of
 from .opening import open_session, repository, told
 from .paths import MANIFEST, OWNER_TOKEN, RUNNING, VIEW_TOKEN, Running, write_private
 from .recovery import recover_agents
@@ -70,7 +71,16 @@ class Runtime:
         self.tools = ToolServer(self.kernel)
         authority = self._authority or LocalAuthority(team)
         cwd = Path(manifest.cwd)
-        self.host = Host(self.kernel, self.tools, team, authority, self.folder, cwd, plan_login=manifest.plan_login)
+        self.host = Host(
+            self.kernel,
+            self.tools,
+            team,
+            authority,
+            self.folder,
+            cwd,
+            plan_login=manifest.plan_login,
+            isolation=isolation_of(extensions),
+        )
         self.control = Control(self.kernel, self.principal, self.folder)
         incarnation = None
         try:

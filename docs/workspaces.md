@@ -23,7 +23,7 @@ has the decisions behind this page, and [compatibility.md](compatibility.md#work
 | `shared` | The session's checkout, its cwd. Every agent's writes land there at once, and nothing in it is private or confined | Given everywhere, with or without git |
 | `worktree` | A linked git worktree of your repository, on a branch of its own, made at your checkout's HEAD when its agent's workspace is made. It shares the repository's refs, objects, config and hooks, and what runs there can reach anything you can, so it is not a sandbox | Given on git |
 | `snapshot` | A repository of its own holding your tree as your git sees it, uncommitted and untracked work included, but no ignored file. It reads your objects and holds its own, has no remote, and git in it writes only its own repository, while what runs there can still reach anything you can | Given on git |
-| `isolated` | A snapshot whose harness an extension's isolation confines | Planned, and refused before any cost: no extension gives an isolation yet |
+| `isolated` | A snapshot whose harness, and everything the runtime runs in its tree, one extension's isolation confines. It writes only its own folder and a private /tmp, sees none of your home, no session folder and only its own processes, and still reaches the network | Experimental, given where an extension the team names confines it, as the SDK's own `bwrap` does on Linux, [below](#where-an-isolated-agent-runs) |
 
 An agent works in the same subfolder of its workspace as the session's cwd is of its repository: a session started in `src/` puts a
 worktree agent in `src/` of its worktree. Its folder never changes while it lives, and every launch and resume runs its harness there.
@@ -49,6 +49,58 @@ config, so your excludes and attributes apply and your ignored files, such as a 
 `.git/hooks` do not run there, since it is a repository of its own, while a `core.hooksPath` your global or system config sets still
 does. It reads your objects through alternates and holds in its own pack everything else it needs, so your unstaging and pruning
 cannot take from it what it holds. A split index of yours is written whole into it, and nothing is written into your git directory.
+
+## Where an isolated agent runs
+
+An isolated workspace is a snapshot, made, looked at and ended as one, whose harness runs inside the isolation that one extension the
+team names gives. The SDK ships one, `bwrap`, on Linux's bubblewrap, which needs unprivileged user namespaces:
+
+```toml
+extensions = ["bwrap"]
+
+[auth.anthropic]
+env = ["ANTHROPIC_API_KEY"]
+
+[roles.reviewer]
+harness = "claude"
+auth = "anthropic"
+workspace = "isolated"
+```
+
+Inside it, the harness and everything it starts:
+
+- write only the agent's folder, which holds its workspace and its home, and a /tmp of its own;
+- find these empty and read-only: your home, as `HOME` names it and as your account does; the session root, with every session
+  under it, its journal and tokens among them; and the runtime directory, where sockets are made. The only exceptions are your
+  repository's objects, which the snapshot borrows, and the paths its harness's driver declares it is installed at, all read-only;
+- see only their own processes, all of which end when the harness does, even one that started a session of its own.
+
+The harness ends with the runtime that started it, so a runtime killed outright takes it down, where an unconfined harness lives on
+until the next runtime reaps it, and a resume starts it again as after any crash. A stop gives it the end of its input and its grace,
+and then kills it outright, saying so as the gap `crash_window`, since its confiner passes no `SIGTERM` on.
+
+What stays reachable: everything you can read outside those folders, the network, every loopback service, every abstract socket,
+and every socket file outside those folders, since a read-only mount does not stop a connect to one. It runs on the same kernel, as
+you. Our tools and a training system's gateway are on loopback, so they stay reachable too. It is experimental: its escape tests have
+passed on one Linux host, on bubblewrap 0.4.1.
+
+Its harness's home is `home/` in the agent's folder, so none of your harness settings, logins or memory are read or written. A role
+needs an auth profile, or a training system's gateway, for model access. Neither its git nor the runtime's git in its tree reads
+your global git config, so your global excludes do not apply there: a file only they would ignore shows as untracked, and the stop
+keeps the workspace for it.
+
+Everything the runtime runs in that tree goes through the same isolation: each look, the check at a launch or a resume that the tree
+is still a work tree of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, and finding its
+objects for `commits.bundle`. So a filter or an fsmonitor an agent writes into its own repository's config runs
+inside, never as you. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. Only a launch inside the
+isolation records assurance `isolated`; every other agent's is `cooperative`.
+
+Before any cost, besides wherever a snapshot is refused, `isolated` is refused when no extension the team names gives an isolation,
+when two do, naming both, when the isolation cannot confine here, as `bwrap` cannot where a kernel setting, AppArmor or a container's
+seccomp blocks user namespaces, when a harness declares no path it is installed at, as one in the runtime's own process cannot, and
+for a role with no auth profile whose harness signs itself in, since that login is in your home. A spawn asks the isolation again
+before it builds the snapshot. [compatibility.md](compatibility.md#workspaces) says what each harness declares, and [ADR
+0034](adr/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) why.
 
 ## Before any cost
 
@@ -182,8 +234,9 @@ cannot see:
 - who made a commit when the agent's git did not move HEAD onto it, as `commit-tree` with `update-ref` does not, or when two
   workspaces made the same commit in one second. Attribution reads what the agent's own git wrote, so it is evidence, never proof.
 
-A look runs the filters your repository's config names, as your own `git status` does. One that cannot read a workspace records the
-gap `workspace_unobserved` and nothing else, and the Ending names each agent whose last look never finished as `unobserved`.
+A look runs the filters your repository's config names, as your own `git status` does, and in an isolated workspace those its
+agent's config names, inside its isolation. One that cannot read a workspace records the gap `workspace_unobserved` and nothing
+else, and the Ending names each agent whose last look never finished as `unobserved`.
 
 ## Taking an agent's work
 
@@ -195,7 +248,8 @@ $ git merge platoon-harness/fix-auth/ada
 ```
 
 A snapshot agent's commits are in the snapshot's own repository until you fetch its branch, as its `release` does, and `/review` says
-so of its group. The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
+so of its group. A fetch runs your git in that repository, outside any isolation, so read an isolated agent's `<path>/.git/config`
+before you fetch from it, as you would any repository you did not make. The runtime never merges, rebases or resolves a conflict, and never moves a branch an agent has.
 
 ## From a script
 

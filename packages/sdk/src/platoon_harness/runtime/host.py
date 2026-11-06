@@ -56,6 +56,7 @@ from platoon_harness.tools import (
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
 from .git import GitError
+from .isolation import Isolation, hidden
 from .looks import PAGE, look, tips_of
 from .opening import PLAN_LOGIN_FIX, make_driver
 from .paths import agent_folder, read_conformance, root_of
@@ -134,6 +135,7 @@ class Host:
         cwd: Path,
         *,
         plan_login: bool,
+        isolation: Isolation | None = None,
     ) -> None:
         self._kernel = kernel
         self._tools = tools
@@ -142,6 +144,7 @@ class Host:
         self._folder = folder
         self._cwd = cwd
         self._plan_login = plan_login
+        self._isolation = isolation
         self._links: dict[str, DriverLink] = {}
         self._acting: dict[int, asyncio.Task[None]] = {}
         self._admitted: dict[str, Admission] = {}
@@ -305,23 +308,45 @@ class Host:
 
     async def workspace(self, effect: Effect) -> dict[str, Any]:
         """Make an agent's workspace, or adopt what an earlier attempt of this effect made, since no agent starts in
-        one before its effect has finished. A mode that cannot be given fails loudly and never degrades."""
+        one before its effect has finished. A mode that cannot be given fails loudly and never degrades: an isolated
+        one is a snapshot made only where its isolation can confine it now."""
         mode, agent, repo = effect.data["workspace"], effect.data["agent"], self._repo()
         folder, branch = agent_folder(self._folder, agent), branch_of(self._folder.name, agent)
         if mode == "shared":
             host = socket.gethostname()
             repository = None if repo is None else repo.repository
             made = Workspace(mode="shared", path=str(self._cwd), host=host, repository=repository)
-        elif mode not in ("worktree", "snapshot"):
-            raise DriverError(f"workspace `{mode}` is not available yet: use `shared`, `worktree` or `snapshot`")
         elif repo is None:
             raise GitError(f"`{mode}` needs a git work tree, and {self._cwd} was in none when the session opened")
         elif mode == "worktree":
             made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
         else:
+            if mode == "isolated" and (why := await asyncio.to_thread(self._refusal)) is not None:
+                raise DriverError(why)
             made_for = f"{self._folder.name}/{agent}"
             made = await asyncio.to_thread(make_snapshot, repo, folder, branch, self._tips_at_open(repo), made_for)
+            if mode == "isolated":
+                made = made.model_copy(update={"mode": "isolated", "assurance": "isolated"})
         return made.model_dump()
+
+    def _refusal(self) -> str | None:
+        """Why no isolated agent can be confined now, or None when its isolation can confine one."""
+        if self._isolation is None:
+            return "`isolated` needs an extension the team names whose isolation confines a harness"
+        return self._isolation.refusal()
+
+    async def _wrap(self, agent: str, role: str, workspace: Workspace) -> tuple[str, ...]:
+        """The isolation an isolated agent's harness, and the runtime's own git in its tree, run in: writing only its
+        folder, which holds its workspace and its harness's home, and a /tmp of its own, reading its repository's
+        objects and where its harness is installed, and seeing nothing of your home, of a session under its root or of
+        the runtime directory. Any other agent's is empty, as it runs unconfined."""
+        if workspace.mode != "isolated":
+            return ()
+        if self._isolation is None:
+            raise DriverError("`isolated` needs an extension the team names whose isolation confines a harness")
+        objects = [Path(workspace.objects)] if workspace.objects else []
+        readable = [*objects, *(await self.describe(role)).installed]
+        return self._isolation.wrap(agent_folder(self._folder, agent), readable, hidden(self._folder))
 
     def _tips_at_open(self, repo: Repo) -> list[str]:
         """The commits every ref named when the session opened, read from the journal once."""
@@ -359,8 +384,9 @@ class Host:
         resume: str | None = None,
     ) -> None:
         """Bring a harness up on its own binding, with `goal`, a spawn's goal and body, as its first delivery, under
-        the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch. A harness
-        that never says it is ready is a failure, not a hang."""
+        the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch. An isolated
+        harness runs in its isolation, on access it was given, as a login of its own would be in your home, which it
+        never sees. A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
         access = admission.access
         if isinstance(access, Gateway) and not info.capabilities.sealed:
@@ -368,11 +394,14 @@ class Host:
         pinned = _pinned(self._team.roles[role], access)
         login = "gateway" if isinstance(access, Gateway) else "key" if access else info.login
         workspace = self._workspace_of(agent)
-        await asyncio.to_thread(present, workspace)
+        wrap = await self._wrap(agent, role, workspace)
+        if wrap and not access and info.login is not None:
+            raise DriverError(f"`isolated` gives `{info.name}` a home of its own, where its {info.login} login is not")
+        await asyncio.to_thread(present, workspace, wrap)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
         self._links[agent] = link
-        spec = self._spec(link, admission, resume, Path(workspace.path))
+        spec = self._spec(link, admission, resume, Path(workspace.path), wrap)
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
 
@@ -476,12 +505,19 @@ class Host:
             and await self._on_plan(record["name"], record["role"])
         ]
 
-    def _spec(self, link: DriverLink, admission: Admission, resume: str | None, cwd: Path) -> AgentSpec:
-        """How an agent starts, in `cwd`, where its workspace is. Its instructions are the preamble and then the role's
-        words, so a role has the last. A harness that reopens its own session keeps what it was told when that began,
-        so it is handed that again."""
+    def _spec(
+        self, link: DriverLink, admission: Admission, resume: str | None, cwd: Path, wrap: tuple[str, ...]
+    ) -> AgentSpec:
+        """How an agent starts, in `cwd`, where its workspace is, under `wrap`, an isolation's, whose harness keeps its
+        state in a home of its own in the agent's folder. Its instructions are the preamble and then the role's words,
+        so a role has the last. A harness that reopens its own session keeps what it was told when that began, so it is
+        handed that again."""
         role = self._team.roles[link.role]
         folder = agent_folder(self._folder, link.agent)
+        env = {}
+        if wrap:
+            (folder / "home").mkdir(mode=0o700, parents=True, exist_ok=True)
+            env["HOME"] = str(folder / "home")
         surface = surface_of(link.info.capabilities)
         principal = self._kernel.authenticate(admission.token.reveal())
         binding = None
@@ -504,8 +540,10 @@ class Host:
             allow_native_children=role.allow_native_children,
             tools=binding,
             access=admission.access,
+            env=env,
             instructions=told,
             resume=resume,
+            wrap=wrap,
         )
 
     def _told(self, agent: str) -> str | None:
@@ -596,30 +634,34 @@ class Host:
 
     async def _look(self, agent: str, cause: int | None, places: Sequence[str]) -> None:
         """Look at each of `places`, one look at a time in the session, and record what is new in pages, the shared
-        workspace first, so that a worker whose base holds its new commits finds them recorded. A workspace a look
-        cannot read records the gap `workspace_unobserved` and no change. Nothing is looked at outside a repository."""
+        workspace first, so that a worker whose base holds its new commits finds them recorded. Git runs in an isolated
+        workspace under its agent's wrap. A workspace a look cannot read records the gap `workspace_unobserved` and no
+        change. Nothing is looked at outside a repository."""
         if (repo := self._repo()) is None:
             return
         kernel = self._kernel
         async with self._looking:
             readings = kernel.query(kernel.runtime, "repo.looks", {}).result
-            makers = {"shared": Path(repo.top)}
+            makers: dict[str, tuple[Path, tuple[str, ...]]] = {"shared": (Path(repo.top), ())}
             for record in kernel.query(kernel.runtime, "agent.records", {}).result:
-                workspace = record["workspace"]
-                if workspace and workspace["mode"] != "shared" and not record["removed"]:
-                    makers[f"@{record['name']}"] = self._root(f"@{record['name']}")
+                if record["workspace"] and record["workspace"]["mode"] != "shared" and not record["removed"]:
+                    made = Workspace.model_validate(record["workspace"])
+                    wrap = await self._wrap(record["name"], record["role"], made)
+                    makers[f"@{record['name']}"] = (self._root(f"@{record['name']}"), wrap)
             shared = any(role.workspace == "shared" for role in self._team.roles.values())
             for where in places:
                 base = repo.head if where == "shared" else self._workspace_of(agent).base
+                root, wrap = makers.get(where, (self._root(where), ()))
                 try:
                     seen = await asyncio.to_thread(
                         look,
-                        self._root(where),
+                        root,
                         base=base,
                         tips=self._tips_at_open(repo),
                         last=readings.get(where),
-                        makers={name: root for name, root in makers.items() if root.is_dir()},
+                        makers={name: tree for name, tree in makers.items() if tree[0].is_dir()},
                         record=shared or where != "shared",
+                        wrap=wrap,
                     )
                 except (GitError, OSError) as error:
                     await self._report({"agent": agent, "workspace": where, "cause": cause, "unobserved": str(error)})
@@ -685,7 +727,10 @@ class Host:
                 if mode == "worktree":
                     ended = await asyncio.to_thread(end_worktree, workspace, folder, top, left)
                 else:
-                    ended = await asyncio.to_thread(end_snapshot, workspace, folder, top, left, retried=retried)
+                    wrap = await self._wrap(name, record["role"], workspace)
+                    ended = await asyncio.to_thread(
+                        end_snapshot, workspace, folder, top, left, retried=retried, wrap=wrap
+                    )
         finally:
             outcome = AgentOutcome(status=record["status"], report=self._report_of(effect.data.get("cause")))
             await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
@@ -705,7 +750,7 @@ class Host:
 
     async def bundle(self) -> dict[str, Any] | None:
         """Keep the commits the journal recorded in a bundle in the session folder, or None when it recorded none, as
-        git may prune one an agent rewrote."""
+        git may prune one an agent rewrote. Git runs in an isolated agent's repository under its wrap."""
         kernel, repo = self._kernel, self._repo()
         commits, after = [], 0
         while repo is not None:
@@ -715,8 +760,10 @@ class Host:
                 break
         if repo is None or not commits:
             return None
-        records = kernel.query(kernel.runtime, "agent.records", {}).result
-        repositories = {record["workspace"]["repository"] for record in records if record["workspace"]} - {None}
+        repositories: dict[str, tuple[str, ...]] = {}
+        for record in kernel.query(kernel.runtime, "agent.records", {}).result:
+            if record["workspace"] and (made := Workspace.model_validate(record["workspace"])).repository:
+                repositories[made.repository] = await self._wrap(record["name"], record["role"], made)
         return await asyncio.to_thread(write_bundle, self._folder, repo, commits, repositories)
 
     async def reconcile(self, agent: str | None, key: str) -> Reconciled:

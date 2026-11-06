@@ -68,16 +68,25 @@ for package in (platoon_harness, platoon_harness_cli):
             importlib.import_module(module.name)
 for name in Installed(DRIVERS):
     load(DRIVERS, name)
-print(sorted(name for name in sys.modules if name.partition(".")[0] in sys.argv[2:]))
+print(sorted(name for name in sys.modules if any(name == root or name.startswith(f"{root}.") for root in sys.argv[2:])))
 """
-"""A program for a fresh interpreter: what of OpenHands is loaded once every module of the SDK and the command line is,
-but the worker's own, and every driver class."""
+"""A program for a fresh interpreter: which modules of the roots it is given are loaded once every module of the SDK
+and the command line is, but the one it is given first, and every driver class."""
 
 
 def test_nothing_but_the_openhands_worker_loads_openhands():
     """Importing the SDK, any module the runtime or a driver class imports, or the command line loads no OpenHands."""
     worker = "platoon_harness.drivers.openhands.agent"
     command = [sys.executable, "-P", "-c", LOADED, worker, *OPENHANDS]
+    done = subprocess.run(command, capture_output=True, text=True, timeout=120, check=False)
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["[]"]
+
+
+def test_nothing_but_a_team_that_names_it_loads_bwrap():
+    """The `bwrap` extension ships in the SDK, and only `Installed()["bwrap"]`, for a team that names it, imports it."""
+    command = [sys.executable, "-P", "-c", LOADED, "platoon_harness.bwrap", "platoon_harness.bwrap"]
     done = subprocess.run(command, capture_output=True, text=True, timeout=120, check=False)
 
     assert done.returncode == 0, done.stderr

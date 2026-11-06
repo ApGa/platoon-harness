@@ -189,6 +189,20 @@ async def test_a_stop_that_came_to_sigkill_says_so(tmp_path):
     assert GapReport(what="crash_window") in heard.reports
 
 
+async def test_a_confined_harness_goes_from_the_end_of_stdin_to_sigkill_and_says_so(tmp_path):
+    """Its confiner passes no TERM on and dies of one, which kills the harness outright, so its stop says so."""
+    ready, heard, marker = asyncio.Event(), Heard(), tmp_path / "termed"
+    spec = make_spec(tmp_path, wrap=("/bin/sh", "-c", 'exec "$@"', "sh"))
+    script = f"trap 'touch {marker}; exit 0' TERM; echo ready; while :; do sleep 0.01; done"
+    process = await launch(tmp_path, "sh", "-c", script, read=lines_into([], then=ready), report=heard, spec=spec)
+    await ready.wait()
+
+    await process.stop(0.05)
+
+    assert GapReport(what="crash_window") in heard.reports
+    assert not marker.exists()
+
+
 async def test_a_stop_that_term_answered_leaves_no_gap(tmp_path):
     ready, heard = asyncio.Event(), Heard()
     script = "trap 'exit 0' TERM; echo ready; while :; do sleep 0.01; done"

@@ -45,18 +45,24 @@ class GitError(Exception):
 
 
 def git(
-    *args: str, cwd: Path, input: str | None = None, ok: Sequence[int] = (0,), env: Mapping[str, str] | None = None
+    *args: str,
+    cwd: Path,
+    input: str | None = None,
+    ok: Sequence[int] = (0,),
+    env: Mapping[str, str] | None = None,
+    wrap: Sequence[str] = (),
 ) -> str:
     """Run git in `cwd` and return what it printed, or raise `GitError` with what it said for an exit not in `ok`. Your
     config applies, as it would to your own git, but for the settings that would run something or start a gc. `env`
-    is what this one call sets besides, such as the index and object store a snapshot's capture writes instead."""
+    is what this one call sets besides, such as the index and object store a snapshot's capture writes instead. `wrap`
+    is the isolation git runs in, in an isolated agent's tree, whose config the agent writes."""
     settings = [part for setting in _SETTINGS for part in ("-c", setting)]
     env = (
         {name: value for name, value in os.environ.items() if name not in _LOCAL} | dict(_ENVIRONMENT) | dict(env or {})
     )
     try:
         done = subprocess.run(
-            ["git", *settings, *args],
+            [*wrap, "git", *settings, *args],
             cwd=cwd,
             input=input,
             capture_output=True,

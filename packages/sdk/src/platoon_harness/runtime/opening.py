@@ -21,7 +21,7 @@ from platoon_harness.team import Budget, Command, Role, Team, team_check, traina
 from platoon_harness.tools import instructions, surface_of
 from platoon_harness.topology import Limits, Queue, Topic, compile, scopes
 
-from . import workspaces
+from . import isolation, workspaces
 from .paths import find_root, new_folder, read_conformance, sessions_of
 from .workspaces import read_repo
 
@@ -96,8 +96,9 @@ def check(
     name: str | None = None,
 ) -> tuple[Problem, ...]:
     """Every problem a session would meet in a team, errors and warnings, at once and before any cost, asking each
-    role's driver what it is and git what the session's `cwd` is in. `root` and `name` say where the session's folder
-    would be. A team that cannot be resolved raises `ConfigError`.
+    role's driver what it is, git what the session's `cwd` is in, and an isolated role's isolation whether it can
+    confine here. `root` and `name` say where the session's folder would be. A team that cannot be resolved raises
+    `ConfigError`.
 
     `trainable` checks it as a training system starts it: what keeps the team from training, `trainable_problems`, under
     the `approvals` it would run, and each role's driver for a sealed launch and a result kept under `root` that proves
@@ -122,6 +123,8 @@ def check(
         problems += _on_a_plan_login(resolved, known)
     folder = sessions_of(find_root(root)) / (name or "")
     problems += workspaces.problems(resolved, cwd=cwd, folder=folder, session=name, approvals=approvals)
+    loaded = [extensions[reference] for reference in resolved.extensions]
+    problems += isolation.problems(resolved, known, loaded, trainable=trainable)
     return tuple(problems)
 
 

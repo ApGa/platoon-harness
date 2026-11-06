@@ -373,6 +373,7 @@ class Process:
         self._streams = streams
         self._record = record
         self._folder = spec.folder
+        self._confined = bool(spec.wrap)
         self._report = report
         self.redact = Redactor(secrets_of(spec))
         self._quota = quota
@@ -559,8 +560,9 @@ class Process:
             self._stopping = asyncio.create_task(self._stop(grace))
 
     async def stop(self, grace: float) -> None:
-        """End the whole tree: end of stdin, wait, TERM, wait, KILL, then verify, and what left the group too. A stop
-        that came to KILL reports `crash_window`. A second call waits for the first."""
+        """End the whole tree: end of stdin, wait, TERM, wait, KILL, then verify, and what left the group too. A harness
+        under a wrap gets no TERM, as its confiner passes none on and dies of one, which kills the harness outright. A
+        stop that came to KILL reports `crash_window`. A second call waits for the first."""
         self._stop_soon(grace)
         assert self._stopping is not None
         await asyncio.shield(self._stopping)
@@ -576,7 +578,7 @@ class Process:
             with contextlib.suppress(TimeoutError):
                 async with asyncio.timeout(grace):
                     await self.exited()
-        if self._record.state() != "gone" and not await _termed(self._record.pid, grace):
+        if self._record.state() != "gone" and (self._confined or not await _termed(self._record.pid, grace)):
             self._enqueue(GapReport(what="crash_window"))
             await _killed(self._record.pid)
         await _end_marked((self._folder,), max(deadline - loop.time(), 0.0))

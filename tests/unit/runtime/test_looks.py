@@ -42,7 +42,9 @@ def worktree(repo: Path, tmp_path: Path, agent: str) -> tuple[Path, str]:
 
 
 def seen(where: str, root: Path, base: str | None, opened: list[str], makers: dict[str, Path], **options: Any):
-    return looks.look(root, base=base, tips=opened, last=options.pop("last", None), makers=makers, **options)
+    """A look at `root`, whose makers' git runs under no wrap."""
+    trees = {name: (path, ()) for name, path in makers.items()}
+    return looks.look(root, base=base, tips=opened, last=options.pop("last", None), makers=trees, **options)
 
 
 def made_in(found: looks.Seen) -> dict[str, str | None]:

@@ -11,7 +11,8 @@ def test_public_names_match_the_list():
         for line in (Path(__file__).parents[2] / "public_api.txt").read_text().split()
     ]
     prefix = "platoon_harness.kernel."
-    assert {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)} == set(kernel.__all__)
+    listed = {name.removeprefix(prefix) for name in recorded if name.startswith(prefix)}
+    assert {name for name in listed if "." not in name} == set(kernel.__all__)
 
 
 def test_every_public_name_exists():

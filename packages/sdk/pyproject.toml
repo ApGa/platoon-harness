@@ -33,3 +33,6 @@ pi = "platoon_harness.drivers.pi:PiDriver"
 openhands = "platoon_harness.drivers.openhands:OpenHandsDriver"
 exec = "platoon_harness.drivers.exec:ExecDriver"
 wire = "platoon_harness.drivers.wire:WireDriver"
+
+[project.entry-points."platoon_harness.extensions"]
+bwrap = "platoon_harness.bwrap:extension"

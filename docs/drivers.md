@@ -35,7 +35,8 @@ method promises:
   without starting one, which a trainable session's check holds a kept result to before any harness launches; `ready` says the version
   that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its binary, and what that
   resolves into, such as a release folder or the `node_modules` it imports from. An isolation shows it those, read-only, and nothing
-  else of your home. A harness in the runtime's own process declares none, as nothing can confine it.
+  else of your home ([workspaces.md](workspaces.md#where-an-isolated-agent-runs)). A harness in the runtime's own process declares
+  none, as nothing can confine it, and an isolated role on it is refused before any cost.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
@@ -53,7 +54,7 @@ method promises:
   an extension's tool. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
   them over once, as they are, through the harness's supported path, and never per turn. A resume gives the same text again, as
   Claude Code and Codex keep what a session began with whatever a resume passes. The runtime journals them as what the agent was told.
-  A `HOME` in `spec.env` is the harness's home: `harness_env` then passes
+  A `HOME` in `spec.env` is the harness's home, as the runtime gives an isolated harness one in its folder: `harness_env` then passes
   none of the variables that keep a harness's state elsewhere, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR` and
   `PI_CODING_AGENT_SESSION_DIR`, so the harness keeps its state there, and the driver reads it there. `spec.wrap` is the argv of the
   isolation it runs in, empty for a harness that runs unconfined. `Process.launch` puts it between the trampoline and the command, so
@@ -70,7 +71,8 @@ method promises:
 - **`stop`** leaves no process behind, a running tool and what it put in the background included. A tool that leads a group of its
   own outlives a `SIGKILL` of its harness, so ask a harness to end first, and with real grace. `Process` then ends, on Linux, what
   carries the harness's own `TMPDIR`, whichever group it left for. It reports the gap `crash_window` when it comes to `SIGKILL`, and the
-  workspace may still be being written.
+  workspace may still be being written. A harness under `spec.wrap` comes to it straight after the end of stdin, since its confiner
+  passes no `SIGTERM` on and dies of one, which kills the harness outright.
 
 ### What a driver reports
 
@@ -225,8 +227,8 @@ the reason is in the agent's `stderr.log`, which the error names.
 
 A driver runs its harness in `spec.cwd`. That is where the journal says its agent works, which the host takes from the agent's
 workspace, so no driver knows the mode. Nothing checks that a wire program's own harness runs there, and `runs_in_its_workspace` in
-`check_driver` is how to show it does. A program runs inside what wraps it, so its frames name no wrap, and its `installed` is
-where `PATH` finds it, with any paths its description adds for what it reads beside.
+`check_driver` is how to show it does. An isolated agent's program runs inside its isolation, so its frames name no wrap, and its
+`installed` is where `PATH` finds it, with any paths its description adds for what it reads beside.
 
 ### In Python
 

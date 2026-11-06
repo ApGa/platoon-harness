@@ -593,6 +593,17 @@ or system config sets still runs for an agent's commits [V].
 | pi 1.5.0 | Sessions are keyed on the folder, which never changes, so a resume never meets its prompt to fork into another [S]. It commits there and resumes in the same folder on FakeModel [V]. `.pi/` resources load only under a trusted path, which a session folder usually is not, so they are silently absent [S, from 1.4.0] |
 | OpenHands 1.59.0 | `workspace=spec.cwd`, and skills are read at the worktree's root [S] |
 
+In an isolated workspace each runs inside the `bwrap` extension's isolation, with its home in its agent's folder and yours hidden.
+Each committed, left a process in a session of its own, which ended with it, and called our tools on loopback, against FakeModel on
+one Linux host with bubblewrap 0.4.1 [V]. What each needs, which its driver declares as `installed`:
+
+| Harness | Isolated |
+|---|---|
+| Claude Code 2.1.319 | Its native binary is a link from `~/.local/bin` into a versions folder in your home, so with your home hidden it is `command not found` [V]. The driver declares where `PATH` finds it, and the wrap binds what that resolves to and makes each link on the way again [V]. It keeps its state in `home/.claude` [V]. An npm install, which runs on node from a package folder, is not declared [U] |
+| Codex 0.167.0 | Its standalone release, which `codex-package.json` names, holds the `bwrap` its own sandbox runs and `rg`, and is declared whole [V]. Under `workspace-write` its sandbox ran a command nested inside ours, and its commit escalated, was allowed, and ran inside ours [V]. It keeps its state in `home/.codex` [V]. An npm install [U] |
+| pi 1.5.0 | Itself, the `node_modules` its package is in, node, and the Python our stdio shim runs on [V]. It keeps its state in `home/.pi` [V] |
+| OpenHands 1.59.0 | The worker runs on the runtime's own Python: the interpreter, its environment, the installation that is made from, and our package's folder [V]. The folder its driver makes for tmux is under /tmp, so the worker makes it again inside its own [V] |
+
 A Codex role in a worktree or a snapshot has three postures, which `team check` names before any cost when its sandbox keeps `.git`
 read-only and its approvals are left to ask: `sandbox = "danger-full-access"`, where commits work and its commands run with no
 sandbox; `approvals = "allow"`, where the sandbox stays and each escalation is allowed by policy; or `ask`, where a person approves
@@ -655,6 +666,7 @@ detection rows describe our code. The others record probes of upstreams or throw
 | SwarmChat client | **Tested** on our backend, reading and acting, in Playwright 1.64.1's Chromium headless shell, revision 1248, on RHEL 9 x86-64, on scripted harnesses, the real `claude` binary against FakeModel, and real models in live run 58. Chromium's headless shell only: Firefox, WebKit and a headed Chromium untested | Not run by us. Upstream runs `unittest` only | Not run by us. Upstream runs `unittest` only | Not run |
 | Claude Code, Codex | **Real model** on x86-64 | Not run. Seatbelt not tested | Not run | Not run. Codex's sandbox does not support WSL1 |
 | pi, OpenCode, OpenHands | **Loopback** on x86-64 | Not run | Not run | Not run |
+| Isolated workspaces | **Experimental.** The `bwrap` extension, its escape tests passing on Claude Code, Codex, pi and OpenHands against FakeModel, on one host with bubblewrap 0.4.1 | **Not given.** No provider, and it is refused before any cost | Not a target | Not run |
 | Prime Agent | Version and help on linux-x64 | Not run | Not run | Not run |
 | Platoon bridge | Probed on CPU | **Unverified.** Platoon classifiers list POSIX Linux only. This does not affect the SDK | Not a target | Not run |
 
@@ -672,6 +684,7 @@ Milestone 1 closes.
 | `openhands` | The SDK's `openhands` extra, in the runtime's environment or, run as a wire command, one of its own: Python 3.12+. An environment of the worker with OpenHands' tools and without the proxy was 498 MB, and 387 MB without the tools. The OpenHands CLI needs `==3.12.*` and is not used |
 | `prime` | Release tarball, `uv`, Python >= 3.11 kernel |
 | Codex sandbox on Linux | Bubblewrap and user namespaces. A bundled `bwrap` is the fallback. With user namespaces blocked, sandboxed commands cannot run (docs, not reproduced). Never fall back to `danger-full-access` silently |
+| `isolated` workspaces | The SDK's `bwrap` extension: Linux, `bwrap` on `PATH` and unprivileged user namespaces, which a kernel setting, AppArmor or a container's seccomp can block, and which its probe says before any cost. Run on bubblewrap 0.4.1 alone. No provider for macOS |
 
 ## 7. Auth and terms
 
