@@ -61,7 +61,7 @@ class Harness:
 
 
 def _scripted() -> Harness:
-    turn = [Call(ENVIRONMENT_TOOL, {"note": "looked"}), AskModel(), Compact()]
+    turn = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
     made = support.harness(lambda: ScriptedDriver(itertools.repeat(turn)))
     return Harness(
         made, (), lambda folder: check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=folder)
@@ -84,7 +84,7 @@ def _pi() -> Harness:
 def _openhands() -> Harness:
     """Forty calls of the environment's tool, past which OpenHands' condenser forgets, with the compaction headers. Each
     agent's turn has taken a little over 300 seconds beside another slow test, so a wait on it may take twice that."""
-    calls = [ToolCall(ENVIRONMENT_TOOL, {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
+    calls = [ToolCall(f"environment_{ENVIRONMENT_TOOL}", {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
     return Harness(
         "openhands", [*calls, "the summary", "done"], lambda folder: check_harness("openhands", folder), 600.0
     )

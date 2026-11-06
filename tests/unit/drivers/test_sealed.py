@@ -27,6 +27,7 @@ from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
+    ENVIRONMENT_TOOLS,
     SHELL,
     TOOL,
     AskModel,
@@ -85,10 +86,13 @@ async def test_each_sealed_driver_sends_the_compaction_headers_and_reports_each_
     assert heard.of(Compacted)[0].summary == "the summary"
 
 
-async def test_a_sealed_scripted_harness_shows_the_environment_s_tools_beside_ours_and_calls_them_on_its_bearer(
+async def test_a_sealed_scripted_harness_shows_the_environment_s_tools_named_by_its_server_and_calls_them_on_its_bearer(
     tmp_path,
 ):
-    async with FakeModel(ToolCall(ENVIRONMENT_TOOL, {"note": "hi"}), "done") as model, FakeTools() as tools:
+    """Beside ours, by their own names, each of the environment's tools is named by its server, so its `finish` and
+    `think` collide with nothing, and a call of one reaches the server by the name the server lists."""
+    called = ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "hi"})
+    async with FakeModel(called, "done") as model, FakeTools() as tools:
         gateway = model.gateway(BEARER)
         spec = make_spec(tmp_path, model=gateway.model, access=gateway, tools=tools.binding(tmp_path))
         driver, heard = ScriptedDriver([[AskModel()]]), Heard()
@@ -96,9 +100,9 @@ async def test_a_sealed_scripted_harness_shows_the_environment_s_tools_beside_ou
         await heard.until(TurnEnded)
         await driver.stop(1)
 
-    assert set(model.calls[0].tools) == {TOOL, ENVIRONMENT_TOOL}
-    assert set((await heard.until(Ready)).tools_visible or ()) == {TOOL, ENVIRONMENT_TOOL}
-    assert [call.bearer for call in model.tool_calls] == [BEARER]
+    shown = {TOOL, *(f"mcp__environment__{tool}" for tool in ENVIRONMENT_TOOLS)}
+    assert set(model.calls[0].tools) == set((await heard.until(Ready)).tools_visible or ()) == shown
+    assert [(call.bearer, call.json["params"]["name"]) for call in model.tool_calls] == [(BEARER, ENVIRONMENT_TOOL)]
     assert driver.results[0]["content"][0]["text"] == "pong"
 
 

@@ -708,6 +708,22 @@ async def test_a_sealed_launch_that_shows_a_tool_of_the_harness_s_own_fails(tmp_
     )
 
 
+async def test_a_sealed_launch_that_shows_the_environment_s_tools_bare_fails(tmp_path):
+    """Bare, the environment's `finish` and `think` would collide with a harness's own, as they did on OpenHands."""
+
+    class Bare(Filtered):
+        def _servers_given(self):
+            for _, server in super()._servers_given():
+                yield "", server
+
+    result = await check(Bare, tmp_path)
+
+    assert result.get("environment_tools_in_first_request").reason == (
+        "the first model request does not name environment_ping, finish, think by the environment's server"
+    )
+    assert result.get("sealed_first_request_holds_only_ours").state == "failed"
+
+
 async def test_a_sealed_launch_that_reads_the_project_s_instructions_fails(tmp_path):
     class Reading(Filtered):
         async def start(self, spec, report):

@@ -42,6 +42,7 @@ from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile, Command
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
+    ENVIRONMENT_TOOLS,
     TOOL,
     Call,
     FakeModel,
@@ -850,10 +851,12 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
 
 
 async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compaction(tmp_path):
-    """Sealed, OpenHands shows its model our tools and the environment's alone: forty calls of the environment's tool
-    take its view past what its condenser keeps, and the condenser's call carries the gateway's compaction headers and
-    is reported, for that purpose, by the id the model gave it."""
-    calls = [ToolCall(ENVIRONMENT_TOOL, {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
+    """Sealed, OpenHands shows its model our tools, by their own names, the environment's, named by its server as
+    OpenHands' SDK names a server's tools, so its `finish` and `think` collide with nothing, and its own `finish` and
+    `think` alone: forty calls of the environment's tool take its view past what its condenser keeps, and the
+    condenser's call carries the gateway's compaction headers and is reported, for that purpose, by the id the model
+    gave it."""
+    calls = [ToolCall(f"environment_{ENVIRONMENT_TOOL}", {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
     async with FakeModel(*calls, "SUMMARY of the steps so far", "done") as model, FakeTools() as tools:
         gateway = model.gateway("bearer-of-ada")
         spec = on_fake_model(tmp_path, model, goal="look forty times", access=gateway, tools=tools.binding(tmp_path))
@@ -869,5 +872,6 @@ async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compacti
     reported = [call for call in heard.of(ModelCall) if call.purpose == "compaction"]
     assert len(compacting) == 1 and [call.call_id for call in reported] == [compacting[0].response_id]
     assert {call.bearer for call in model.calls} == {"bearer-of-ada"}
-    assert set(model.calls[0].tools) == set(ready.tools_visible or ()) == {TOOL, ENVIRONMENT_TOOL, "finish", "think"}
-    assert len(model.tool_calls) == 40
+    environment = {f"environment_{tool}" for tool in ENVIRONMENT_TOOLS}
+    assert set(model.calls[0].tools) == set(ready.tools_visible or ()) == {TOOL, "finish", "think", *environment}
+    assert [call.json["params"]["name"] for call in model.tool_calls] == [ENVIRONMENT_TOOL] * 40

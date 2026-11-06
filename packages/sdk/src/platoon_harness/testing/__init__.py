@@ -3,7 +3,7 @@
 from .conformance import chat_access, check_driver, goal
 from .extension import check_extension
 from .harnesses import check_harness
-from .model import ENVIRONMENT_TOOL, FakeModel, Overflow, Request, Stall, Text, Thought, ToolCall
+from .model import ENVIRONMENT_TOOL, ENVIRONMENT_TOOLS, FakeModel, Overflow, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
     SHELL,
     Ask,
@@ -24,6 +24,7 @@ from .tools import NAMESPACE, TOOL, FakeTools
 
 __all__ = [
     "ENVIRONMENT_TOOL",
+    "ENVIRONMENT_TOOLS",
     "NAMESPACE",
     "SHELL",
     "TOOL",

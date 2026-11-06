@@ -5,7 +5,16 @@ import json
 
 import pytest
 
-from platoon_harness.testing import ENVIRONMENT_TOOL, FakeModel, Overflow, Stall, Text, Thought, ToolCall
+from platoon_harness.testing import (
+    ENVIRONMENT_TOOL,
+    ENVIRONMENT_TOOLS,
+    FakeModel,
+    Overflow,
+    Stall,
+    Text,
+    Thought,
+    ToolCall,
+)
 from platoon_harness.testing.loopback import post
 from platoon_harness.testing.model import INPUT_TOKENS, OUTPUT_TOKENS
 
@@ -278,8 +287,9 @@ async def test_a_script_can_grow_while_it_runs():
 
 
 async def test_fake_model_serves_models_and_tools_on_a_bearer_and_records_headers():
-    """As a gateway: its models at its origin, and the environment's tool at the URL it names, which answers only a
-    bearer it gave, and each request kept with the bearer and the headers it came with."""
+    """As a gateway: its models at its origin, and the environment's tools at the URL it names, two of them named as
+    harnesses name tools of their own, which answer only a bearer it gave, and each request kept with the bearer and the
+    headers it came with."""
     async with FakeModel() as model:
         gateway = model.gateway("bearer-1")
         bearer = {"authorization": "Bearer bearer-1"}
@@ -291,7 +301,7 @@ async def test_fake_model_serves_models_and_tools_on_a_bearer_and_records_header
         strangers = await post(gateway.tools, called, {"authorization": "Bearer someone-else"})
 
     tools = json.loads(listed[1])["result"]["tools"]
-    assert [tool["name"] for tool in tools] == [ENVIRONMENT_TOOL]
+    assert [tool["name"] for tool in tools] == list(ENVIRONMENT_TOOLS) == [ENVIRONMENT_TOOL, "finish", "think"]
     assert json.loads(answered[1])["result"]["content"] == [{"type": "text", "text": "pong"}]
     assert strangers[0] == 401
     assert model.calls[0].bearer == "bearer-1" and model.calls[0].carries(gateway.compaction_headers)

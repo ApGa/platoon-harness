@@ -444,6 +444,7 @@ platoon_harness.testing.Compact
 platoon_harness.testing.Compact()
 platoon_harness.testing.EndTurn
 platoon_harness.testing.ENVIRONMENT_TOOL
+platoon_harness.testing.ENVIRONMENT_TOOLS
 platoon_harness.testing.every_turn_asks_the_model
 platoon_harness.testing.Exit
 platoon_harness.testing.Fail

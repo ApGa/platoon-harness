@@ -616,6 +616,15 @@
 
 ### Fixed
 
+- Every OpenHands agent of a sealed launch on an environment with a tool named `finish`, as TextCraft's is, was refused at launch,
+  "Duplicate tool names found: {'finish'}": OpenHands keeps its own `finish` and `think`, and showed the environment's tools bare.
+  One rule now holds for every harness: an environment's tools reach the model named by their server, never bare, so none can
+  collide with a harness's own. OpenHands shows them as `environment_<tool>`, as its SDK names a server's tools, and calls the
+  server by the names it lists; pi already showed them as `mcp__environment__<tool>`, and ScriptedDriver now does too, its `Call`
+  step naming a tool as the model is shown it. `environment_tools_in_first_request` now asks for each of the environment's tools
+  named by its server, and FakeModel's environment serves `finish` and `think` beside `environment_ping`, all three as
+  `testing.ENVIRONMENT_TOOLS`, so a harness that shows them bare fails it. A result kept before was earned on the weaker check:
+  `doctor --check` again.
 - A session root given relatively, as `Session.attach(name, root="home")`, failed every read of its annotations, "relative path can't
   be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.

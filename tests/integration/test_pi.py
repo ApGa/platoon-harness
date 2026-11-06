@@ -40,6 +40,7 @@ from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
+    ENVIRONMENT_TOOLS,
     NAMESPACE,
     TOOL,
     FakeModel,
@@ -994,7 +995,7 @@ async def test_pi_reports_each_body_id_as_its_call_id_when_sealed(tmp_path):
 
 async def test_pi_sealed_first_request_holds_no_built_in_tool(tmp_path):
     """Pi's built-in tools are off, and none of the user's setup or the project's instructions reaches the model: our
-    tools and the environment's are all it is shown, and `ready` says so."""
+    tools and the environment's, each named by its server, are all it is shown, and `ready` says so."""
     async with FakeModel() as model, FakeTools() as tools:
         driver, heard = PiDriver(), Heard()
         await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
@@ -1002,7 +1003,7 @@ async def test_pi_sealed_first_request_holds_no_built_in_tool(tmp_path):
         first = await model.call(0)
         await driver.stop(2.0)
 
-    shown = {f"mcp__{NAMESPACE}__{TOOL}", f"mcp__environment__{ENVIRONMENT_TOOL}"}
+    shown = {f"mcp__{NAMESPACE}__{TOOL}", *(f"mcp__environment__{tool}" for tool in ENVIRONMENT_TOOLS)}
     assert set(first.tools) == shown and not set(first.tools) & BUILT_IN
     assert set(ready.tools_visible or ()) == shown
     assert not first.says("vermilion")

@@ -3,7 +3,8 @@
 Its tool calls are real MCP over `ToolBinding.url`, and an `AskModel` step is a real model call, so a scripted team
 exercises the real tool plane, and conformance can read what it did from the model's log. Given a gateway it launches
 sealed, which is the reference a training system's tests run on with no binary: the gateway's model under its bearer,
-the environment's tools beside ours, and a `Compact` step that carries the gateway's compaction headers.
+the environment's tools beside ours, each named by the environment's server as `mcp__environment__<tool>`, and a
+`Compact` step that carries the gateway's compaction headers.
 """
 
 import asyncio
@@ -18,6 +19,7 @@ from typing import Any
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
+    ENVIRONMENT,
     SHORT_LIMIT,
     AgentSpec,
     ApprovalRequested,
@@ -87,7 +89,8 @@ class Think:
 
 @dataclass(frozen=True)
 class Call:
-    """Call one of our tools, as real MCP. Its result lands in `ScriptedDriver.results`."""
+    """Call a tool by the name the model is shown, as real MCP: one of ours, or on a gateway one of the environment's.
+    Its result lands in `ScriptedDriver.results`."""
 
     tool: str
     arguments: Mapping[str, Any] = field(default_factory=dict)
@@ -180,7 +183,7 @@ class ScriptedDriver:
         self._heard_this_turn = False
         self._approvals: dict[str, asyncio.Future[Verdict]] = {}
         self._tools: list[dict[str, Any]] = []
-        self._servers: dict[str, tuple[str, Secret]] = {}
+        self._servers: dict[str, tuple[tuple[str, Secret], str]] = {}
         self._turn_count = 0
         self._incarnation = uuid.uuid4().hex[:8]
         self._steps: asyncio.Task[str] | None = None
@@ -313,12 +316,14 @@ class ScriptedDriver:
         await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
         return verdict
 
-    def _servers_given(self) -> Iterator[tuple[str, Secret]]:
-        """Where its tools are, each server's URL with the bearer it takes: ours, and a gateway's environment's."""
+    def _servers_given(self) -> Iterator[tuple[str, tuple[str, Secret]]]:
+        """Each server of its tools, by its URL and the bearer it takes, after what the model is shown before each of
+        its tools' names: nothing for ours, and the server's name for a gateway's environment's, so none of those
+        collides with another tool."""
         if self._spec.tools is not None:
-            yield self._spec.tools.url, self._spec.tools.token
+            yield "", (self._spec.tools.url, self._spec.tools.token)
         if isinstance(access := self._spec.access, Gateway) and access.tools is not None:
-            yield access.tools, access.bearer
+            yield f"mcp__{ENVIRONMENT}__", (access.tools, access.bearer)
 
     async def _mcp(self, server: tuple[str, Secret], method: str, params: Mapping[str, Any]) -> Any:
         url, bearer = server
@@ -332,25 +337,26 @@ class ScriptedDriver:
         return answer["result"]
 
     async def _list_tools(self) -> tuple[str, ...] | None:
-        """The tools the model is shown, ours and the environment's, as each server lists them, or None with neither."""
-        for server in self._servers_given():
+        """The tools the model is shown, ours and the environment's, or None with neither."""
+        for prefix, server in self._servers_given():
             for tool in (await self._mcp(server, "tools/list", {}))["tools"]:
-                self._servers[tool["name"]] = server
-                function = {"name": tool["name"], "parameters": tool["inputSchema"]}
+                self._servers[prefix + tool["name"]] = server, tool["name"]
+                function = {"name": prefix + tool["name"], "parameters": tool["inputSchema"]}
                 self._tools.append({"type": "function", "function": function})
         return tuple(self._servers) if self._spec.tools is not None or self._servers else None
 
     async def _call(
         self, tool: str, arguments: Mapping[str, Any], *, native_id: str | None = None, call_id: str | None = None
     ) -> Any:
-        """Call a tool of ours, or of the environment's by the name its server lists."""
+        """Call a tool of ours, or of the environment's, by the name the model is shown."""
         binding = self._spec.tools
-        server = self._servers.get(tool) or (None if binding is None else (binding.url, binding.token))
-        if server is None:
+        found = self._servers.get(tool) or (None if binding is None else ((binding.url, binding.token), tool))
+        if found is None:
             raise DriverError("this agent has no tools")
+        server, listed = found
         started = Item(kind="tool", phase="started", gist=f"{tool} called"[:GIST_LIMIT])
         await self._report(started.model_copy(update={"native_id": native_id, "call_id": call_id}))
-        result = await self._mcp(server, "tools/call", {"name": tool, "arguments": dict(arguments)})
+        result = await self._mcp(server, "tools/call", {"name": listed, "arguments": dict(arguments)})
         self.results.append(result)
         outcome = "failed" if result.get("isError") else "completed"
         done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)

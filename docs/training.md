@@ -130,7 +130,9 @@ one fails, naming why.
   `${PLATOON_HARNESS_BEARER}`, never its value, so the session folder, which is your export, holds no key. A wire program finds the
   variable's name in its launch frame, beside your origin, model, tools and compaction headers.
 - **Your environment's tools are a second MCP server,** named `environment`, at `Gateway.tools`, under the same bearer, beside the
-  session's own tools.
+  session's own tools. Each reaches the model named by that server, never bare, so a tool of yours named `finish` cannot collide
+  with a harness's own: pi and ScriptedDriver show it as `mcp__environment__finish`, and OpenHands as `environment_finish`, as its
+  SDK names a server's tools. A policy calls your tools by those names, and your server is called by the names it lists.
 - **Compaction stays on, and each compaction call carries your `compaction_headers`,** so your gateway tells it apart as it arrives
   and can keep it out of a step budget. The harness reports each such call as `model.call` of purpose `compaction`, with the id
   your model gave it: ScriptedDriver's `Compact` step, OpenHands' condenser, a wire program from its launch spec, and pi through
@@ -140,7 +142,7 @@ one fails, naming why.
   no check of, runs `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request` beside the rest, on `FakeModel`
   acting as a gateway, and keeps them in the one result an agent's levels read. They prove, on the machine they ran on and its own
   home, that the first request goes under the gateway's bearer, holds none of the project's instructions, and shows only our tools,
-  the environment's and those the harness keeps that act on nothing. What else a sealed launch keeps out, the user's settings,
+  the environment's, each named by its server, and those the harness keeps that act on nothing. What else a sealed launch keeps out, the user's settings,
   extensions and skills, is how each driver builds its launch, which the slow tests read and no check proves.
 
 ## Rewards and credit
@@ -190,7 +192,8 @@ stopped: eligibility, lineage, exposure and annotations all answer on it, alike 
 `platoon_harness.testing` is what a training system's own tests build on:
 
 - **`FakeModel` acts as your gateway.** `model.gateway(bearer)` gives a `Gateway` to its models, at its origin, and to an MCP
-  server of one tool, `environment_ping`, at `/mcp`, which answers only a bearer it gave, with compaction headers of its own. It
+  server of three tools, `ENVIRONMENT_TOOLS`, at `/mcp`, which answers only a bearer it gave, with compaction headers of its own.
+  The tools are `ENVIRONMENT_TOOL`, `environment_ping`, and `finish` and `think`, named as harnesses name tools of their own. It
   logs every request with its bearer and headers, gives each response an id in its body, and answers an `Overflow` in its script
   with each dialect's own refusal of a request too long for the model's window.
 - **`ScriptedDriver` launches sealed** with no binary: its tool calls are real MCP, its `AskModel` step a real model call, and its

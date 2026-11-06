@@ -19,6 +19,7 @@ from typing import Any
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
+    ENVIRONMENT,
     AgentSpec,
     ApprovalRequested,
     Boundary,
@@ -45,7 +46,7 @@ from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
 from platoon_harness.version import __version__
 
-from .model import ENVIRONMENT_TOOL, INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
+from .model import ENVIRONMENT_TOOLS, INPUT_TOKENS, OUTPUT_TOKENS, FakeModel, Request, Stall, ToolCall
 from .scripted import API_KEY, BASE_URL, SHELL
 from .tools import TOOL, FakeTools
 
@@ -664,8 +665,8 @@ def _sealing(capabilities: Capabilities) -> str | None:
 @_check(_sealing)
 async def sealed_first_request_holds_only_ours(rig: _Rig) -> None:
     """On a gateway, the first request goes under its bearer and holds nothing of the user's: the instructions of the
-    project it works in never reach it, and every tool it shows is ours, the environment's, or one the harness keeps
-    that acts on nothing."""
+    project it works in never reach it, and every tool it shows is ours, the environment's named by its server, or one
+    the harness keeps that acts on nothing."""
     work = rig.folder / "work"
     work.mkdir(parents=True, exist_ok=True)
     for name in ("AGENTS.md", "CLAUDE.md"):
@@ -675,17 +676,27 @@ async def sealed_first_request_holds_only_ours(rig: _Rig) -> None:
 
     _expect(first.bearer == _BEARER, "the first request went under another bearer than its gateway's")
     _expect(not first.says(_USERS), "the first request holds the instructions of the project it works in")
-    known = (TOOL, ENVIRONMENT_TOOL)
-    theirs = [name for name in first.tools if not name.endswith(known) and name not in rig.options.kept]
+    environment = [name for name in first.tools if any(_by_its_server(name, tool) for tool in ENVIRONMENT_TOOLS)]
+    theirs = [name for name in first.tools if not name.endswith(TOOL) and name not in (*environment, *rig.options.kept)]
     _expect(not theirs, f"the first request shows {', '.join(theirs)}, which are neither ours nor the environment's")
 
 
 @_check(_sealing)
 async def environment_tools_in_first_request(rig: _Rig) -> None:
-    """On a gateway, the environment's own tools, at the URL it names, are shown in the first request beside ours."""
+    """On a gateway, the environment's own tools, at the URL it names, are shown in the first request beside ours, each
+    named by the environment's server, so that none collides with a tool of the harness's own, as FakeModel's `finish`
+    and `think` would."""
     await rig.start(access=rig.model.gateway(_BEARER))
+    shown = (await rig.call(0)).tools
 
-    _expect((await rig.call(0)).offers(ENVIRONMENT_TOOL), f"the first model request does not show {ENVIRONMENT_TOOL}")
+    missing = [tool for tool in ENVIRONMENT_TOOLS if not any(_by_its_server(name, tool) for name in shown)]
+    _expect(not missing, f"the first model request does not name {', '.join(missing)} by the environment's server")
+
+
+def _by_its_server(name: str, tool: str) -> bool:
+    """Whether `name` shows the environment's `tool` named by the environment's server, never bare."""
+    prefix = name.removesuffix(tool)
+    return prefix != name and ENVIRONMENT in prefix
 
 
 def _unproven(capabilities: Capabilities) -> str | None:

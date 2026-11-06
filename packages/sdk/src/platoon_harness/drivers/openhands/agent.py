@@ -187,16 +187,22 @@ def ready(
 ) -> tuple[tuple[str, ...], tuple[str, ...], MCPClient | None]:
     """Ready the agent, which starts our server and the terminal, and say the tools it offers its model, which of them
     are ours, and on a gateway the client of the environment's server, whose tools it adds. That server is a client's
-    own, as the SDK's client of two servers would name each tool by its server, and ours go by their own names. The SDK
-    readies an agent on a message, a run or a tool: `think` is the one with no other effect. This blocks."""
+    own, so ours go by their own names, and its tools are each named `environment_<tool>`, as the SDK's client of two
+    servers names a server's tools, so none collides with OpenHands' `finish` and `think`. The SDK readies an agent on a
+    message, a run or a tool: `think` is the one with no other effect. This blocks."""
     conversation.execute_tool("think", ThinkAction(thought="ready"))
     ours = tuple(name for name, tool in conversation.agent.tools_map.items() if isinstance(tool, MCPToolDefinition))
     environment = None
     if isinstance(gateway := spec.access, Gateway) and gateway.tools is not None:
         server = MCPServer(url=gateway.tools, headers={"Authorization": f"Bearer {key.reveal()}"})
         environment = create_mcp_tools({ENVIRONMENT: server})
-        conversation.agent.add_runtime_tools(environment.tools)
+        conversation.agent.add_runtime_tools([_named_by(ENVIRONMENT, tool) for tool in environment.tools])
     return tuple(conversation.agent.tools_map), ours, environment
+
+
+def _named_by(server: str, tool: MCPToolDefinition) -> MCPToolDefinition:
+    """`tool` shown to the model as `<server>_<tool>`, and still called on its server by the name the server lists."""
+    return tool.model_copy(update={"mcp_tool": tool.mcp_tool.model_copy(update={"name": f"{server}_{tool.name}"})})
 
 
 def pending(conversation: LocalConversation) -> list[ActionEvent]:

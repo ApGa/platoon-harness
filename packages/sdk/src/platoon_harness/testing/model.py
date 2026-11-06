@@ -22,18 +22,24 @@ INPUT_TOKENS = 11
 OUTPUT_TOKENS = 3
 
 ENVIRONMENT_TOOL = "environment_ping"
-"""The one tool of the environment's own that FakeModel serves as a gateway, at `/mcp`."""
+"""The environment's tool that FakeModel serves as a gateway, at `/mcp`, for a test to call."""
+ENVIRONMENT_TOOLS = (ENVIRONMENT_TOOL, "finish", "think")
+"""Every tool of the environment's own that FakeModel serves, each answering pong: `finish` and `think` are named as
+harnesses name tools of their own, which a harness that showed the environment's tools bare would collide with."""
 COMPACTION_HEADERS = {"X-Call-Purpose": "compaction"}
 """What FakeModel as a gateway asks each compaction call to carry."""
 
 _MODEL = "fake-model"
 _TOOLS = "/mcp"
 _DEFAULT_REPLY = "ok"
-_ENVIRONMENT_TOOL = {
-    "name": ENVIRONMENT_TOOL,
-    "description": "Answer with pong. It is the environment's own, which a training system's gateway serves.",
-    "inputSchema": {"type": "object", "properties": {"note": {"type": "string"}}, "additionalProperties": False},
-}
+_ENVIRONMENT_TOOLS = [
+    {
+        "name": name,
+        "description": "Answer with pong. It is the environment's own, which a training system's gateway serves.",
+        "inputSchema": {"type": "object", "properties": {"note": {"type": "string"}}, "additionalProperties": False},
+    }
+    for name in ENVIRONMENT_TOOLS
+]
 
 Dialect = Literal["chat", "responses", "messages"]
 _ROUTES: tuple[tuple[str, Dialect], ...] = (
@@ -517,10 +523,10 @@ class FakeModel:
                 info = {"name": "fake-environment", "version": "1"}
                 result = {"protocolVersion": asked, "capabilities": {"tools": {}}, "serverInfo": info}
             case "tools/list":
-                result = {"tools": [_ENVIRONMENT_TOOL]}
+                result = {"tools": _ENVIRONMENT_TOOLS}
             case "tools/call":
                 called = (frame.get("params") or {}).get("name")
-                result = {"content": [{"type": "text", "text": "pong"}], "isError": called != ENVIRONMENT_TOOL}
+                result = {"content": [{"type": "text", "text": "pong"}], "isError": called not in ENVIRONMENT_TOOLS}
             case method:
                 error = {"code": -32601, "message": f"no method {method}"}
                 return answer(200, json.dumps({"jsonrpc": "2.0", "id": frame["id"], "error": error}).encode())
