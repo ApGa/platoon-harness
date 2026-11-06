@@ -61,30 +61,6 @@ FOLLOWING_UP = [
     [Call("message_send", {"to": "@bob", "gist": "A question about it. Say: it meant this"})],
     [Call("agent_retire", {"agent": "@bob"}), Call("agent_finish", {"gist": "all done"})],
 ]
-NOTE = "board/notes/risks@1"
-TASK = {"queue": "tasks", "gist": "list three risks of caching DNS answers", "based_on": ["inbox/lead@1"]}
-MIXED_LEAD = [
-    [
-        Call("task_add", TASK),
-        Call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "Take the task on the queue tasks."}),
-    ],
-    [
-        Call("board_get", {"board": "notes", "name": "risks"}),
-        Call("agent_finish", {"gist": "Three risks of caching DNS answers are on the board.", "based_on": [NOTE]}),
-    ],
-]
-"""What the lead of `examples/mixed-team` does in place of a model: the job's task, a worker, a finish citing a note."""
-MIXED_WORKER = [
-    [
-        Call("task_claim", {"queue": "tasks"}),
-        Call(
-            "board_post", {"board": "notes", "name": "risks", "gist": "stale, poisoned", "based_on": ["task/tasks/1@1"]}
-        ),
-        Call("task_complete", {"queue": "tasks", "gist": "noted as risks", "based_on": [NOTE]}),
-        Call("agent_finish", {"gist": "The risks are on the board as risks.", "based_on": [NOTE]}),
-    ],
-]
-"""What its worker does: the task claimed, a note citing it, and a result and a report citing the note."""
 HANG_IN_A_TURN = [Call("task_claim", {"queue": "tasks"}), Hang()]
 ASK_THEN_HANG = [Ask("Ship the fix?"), Hang()]
 AFTER_A_RESUME = [Call("task_complete", {"queue": "tasks", "gist": "done after the crash"}), Call("agent_finish", {})]
@@ -250,8 +226,6 @@ HARNESSES = {
     "hostile": lambda: ScriptedDriver([[Say(HOSTILE)]]),
     "streaming": lambda: Streaming(itertools.repeat([Say("")])),
     "breaking": lambda: Breaking([[Say("on it"), Hang()]], [[Say("back")]]),
-    "mixed_lead": lambda: ScriptedDriver(MIXED_LEAD),
-    "mixed_worker": lambda: ScriptedDriver(MIXED_WORKER),
     "sealed": lambda: Installed(itertools.repeat(SEALED), name="wire-sealed"),
     "sealed_checked": lambda: Installed(every_turn_asks_the_model(), name="wire-sealed"),
 }

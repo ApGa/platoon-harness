@@ -82,12 +82,13 @@ $ uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file 
 
 ## With no keys
 
-Scripted stand-ins do what the job asks, each citing what it rests on, with no model at all:
+Scripted stand-ins, in [stand_ins.py](stand_ins.py), do what the job asks, each citing what it rests on, with no model at
+all:
 
 ```console
-$ PYTHONPATH=. uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file examples/mixed-team/job.md \
-    --set 'roles.lead.harness = "tests.integration.scripts:mixed_lead"' \
-    --set 'roles.worker.harness = "tests.integration.scripts:mixed_worker"' --name dns
+$ PYTHONPATH=examples/mixed-team uv run platoon-harness run --team examples/mixed-team/team.toml \
+    --prompt-file examples/mixed-team/job.md --set 'roles.lead.harness = "stand_ins:lead"' \
+    --set 'roles.worker.harness = "stand_ins:worker"' --name dns
 ```
 
 The test suite runs this file that way, from the command line in `tests/integration/test_examples.py` and from the page with the

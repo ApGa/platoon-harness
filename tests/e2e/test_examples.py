@@ -1,7 +1,9 @@
-"""The mixed-team example in a real browser with the terminal UI attached at once, on scripted stand-ins swapped in for
-its harnesses as settings, the no-key demo: the job sent from the page, the lead's answer drawn in both, and the
-browser's Provenance pane naming everyone the record ties to that answer."""
+"""The mixed-team example in a real browser with the terminal UI attached at once, on the scripted stand-ins of its
+`stand_ins.py` swapped in for its harnesses by the settings its README's no-key command gives: the job sent from the
+page, the lead's answer drawn in both, and the browser's Provenance pane naming everyone the record ties to that
+answer."""
 
+import shlex
 from pathlib import Path
 
 import pytest
@@ -10,8 +12,7 @@ from playwright.async_api import Browser, expect
 from platoon_harness import Session, load_team
 from platoon_harness_cli.tui.app import TerminalUI
 
-from ..integration.cli import ROOT
-from ..integration.scripts import inside
+from ..integration.cli import ROOT, shown
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn
 from .support import SECONDS, chat, opened, serving
@@ -19,13 +20,16 @@ from .support import SECONDS, chat, opened, serving
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 EXAMPLE = ROOT / "examples" / "mixed-team"
-STAND_INS = [f'roles.lead.harness = "{inside("mixed_lead")}"', f'roles.worker.harness = "{inside("mixed_worker")}"']
+[NO_KEYS] = shown(EXAMPLE / "README.md", where="stand_ins:lead")
+WORDS = shlex.split(NO_KEYS)
+STAND_INS = [WORDS[index + 1] for index, word in enumerate(WORDS) if word == "--set"]
 
 
 async def test_the_mixed_team_runs_from_the_page_with_the_terminal_attached_and_shows_who_contributed(
     chromium: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    monkeypatch.syspath_prepend(str(EXAMPLE))
     team = load_team(EXAMPLE / "team.toml", sets=STAND_INS)
     job = (EXAMPLE / "job.md").read_text().strip()
 

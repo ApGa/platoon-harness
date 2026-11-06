@@ -469,6 +469,9 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The mixed team's scripted stand-ins live in the example, `examples/mixed-team/stand_ins.py`, on public names alone, so its
+  no-keys run imports no test code: `PYTHONPATH=examples/mixed-team`, and `stand_ins:lead` and `stand_ins:worker` as the
+  harnesses. Its tests run the README's command as the README shows it, and load the stand-ins' turns from that file.
 - Each package's description is the project's one sentence, after what the package is, and each wheel ships the MIT license
   as `LICENSE`. The SDK no longer names macOS, where nothing has run, the command line has the SDK's classifiers, and both name
   the project's URLs and keywords.

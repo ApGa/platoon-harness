@@ -1,12 +1,14 @@
-"""The mixed-team example as its README runs it, with no keys: its own team file and job, with scripted stand-ins
-swapped in for its harnesses through `--set`, the no-key demo, and on the real binaries against FakeModel, each model
-saying what a stand-in does. Real models run it in `tests/live/test_examples.py`."""
+"""The mixed-team example as its README runs it, with no keys: the README's own command, which swaps the scripted
+stand-ins of its `stand_ins.py` in for its harnesses through `--set`, and on the real binaries against FakeModel, each
+model saying what a stand-in does. Real models run it in `tests/live/test_examples.py`."""
 
 import asyncio
+import importlib.util
 import json
 import shutil
 from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -16,22 +18,30 @@ from platoon_harness.testing import Call, FakeModel, ToolCall
 
 from ..unit.runtime.support import of_type
 from . import test_claude, test_codex, test_openhands, test_pi
-from .cli import ROOT, Cli, checked
-from .scripts import MIXED_LEAD, MIXED_WORKER, NOTE
+from .cli import ROOT, Cli, shown
 
 pytestmark = pytest.mark.timeout(120)
 
 EXAMPLE = ROOT / "examples" / "mixed-team"
-STAND_INS = (
-    "--set",
-    'roles.lead.harness = "tests.integration.scripts:mixed_lead"',
-    "--set",
-    'roles.worker.harness = "tests.integration.scripts:mixed_worker"',
-)
+README = EXAMPLE / "README.md"
+
+
+def loaded(path: Path) -> ModuleType:
+    """A module of an example from its file, as an example is no package."""
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+STAND_INS = loaded(EXAMPLE / "stand_ins.py")
 
 
 @pytest.fixture
 async def cli(tmp_path: Path) -> AsyncIterator[Cli]:
+    """The command line in a folder holding a copy of the example where a checkout has it, as its README runs there."""
+    shutil.copytree(EXAMPLE, tmp_path / "examples" / "mixed-team", ignore=shutil.ignore_patterns("__pycache__"))
     made = Cli(tmp_path)
     yield made
     await asyncio.to_thread(made.end)
@@ -41,17 +51,24 @@ def ref(event: dict) -> str:
     return f"{event['stream']}@{event['version']}"
 
 
+async def journal(cli: Cli, session: str) -> list[dict[str, Any]]:
+    """A session's events, as `events --json` prints them, every one in `seq` order."""
+    read = await cli.run("events", session, "--json")
+    events = [json.loads(line) for line in read.stdout.splitlines()]
+    assert [event["seq"] for event in events] == list(range(1, len(events) + 1)), read.stderr
+    return events
+
+
 async def test_the_mixed_team_example_runs_with_no_keys_through_a_queue_a_board_and_messages(cli: Cli):
     """The person's job reaches the lead, the lead's task reaches the worker by the queue, the worker's note goes on the
     board and its report back by message, each write citing what it rests on, and the session settles."""
     job = (EXAMPLE / "job.md").read_text().strip()
+    [command] = shown(README, where="stand_ins:lead")
 
-    done = await cli.run(
-        "run", "--team", str(EXAMPLE / "team.toml"), "--prompt-file", str(EXAMPLE / "job.md"), *STAND_INS, "--json"
-    )
+    done = await cli.as_shown(command)
 
-    events = checked(done)
-    assert (done.code, done.lines()[-1]["reason"]) == (0, "settled"), done.stderr
+    assert done.code == 0, done.stderr
+    events = await journal(cli, "dns")
     cited = {ref(event): event["based_on"] for event in events if event["based_on"]}
     sent = [event for event in events if event["type"] == "message.sent"]
     assert [(event["stream"], event["gist"]) for event in sent if event["actor"] == "human:you"] == [
@@ -63,23 +80,23 @@ async def test_the_mixed_team_example_runs_with_no_keys_through_a_queue_a_board_
         "task.claimed",
         "task.completed",
     ]
-    assert cited["task/tasks/1@1"] == ["inbox/lead@1"] and cited[NOTE] == ["task/tasks/1@1"]
-    assert cited["task/tasks/1@3"] == [NOTE]
+    note = STAND_INS.NOTE
+    assert cited["task/tasks/1@1"] == ["inbox/lead@1"] and cited[note] == ["task/tasks/1@1"]
+    assert cited["task/tasks/1@3"] == [note]
     finished = {event["agent"]: ref(event) for event in events if event["type"] == "agent.finished"}
-    assert cited[finished["w"]] == [NOTE] and cited[finished["lead"]] == [NOTE]
+    assert cited[finished["w"]] == [note] and cited[finished["lead"]] == [note]
 
 
 async def test_the_mixed_team_example_says_who_contributed_to_the_lead_s_answer(cli: Cli):
     """Walked back from the lead's finish along its citations, the record reaches the worker's note, the lead's own task
     and the person's job, and names each maker once, in the order reached, weighing nobody."""
-    await cli.run(
-        "run", "--team", str(EXAMPLE / "team.toml"), "--prompt-file", str(EXAMPLE / "job.md"), *STAND_INS, "--name", "m"
-    )
-    used = await cli.run("uses", "m", "--ref", NOTE)
+    [command] = shown(README, where="stand_ins:lead")
+    await cli.as_shown(command)
+    used = await cli.run("uses", "dns", "--ref", STAND_INS.NOTE)
     citing = [row for row in json.loads(used.stdout)["rows"] if row["kind"] == "declared"]
     answer = next(row["ref"] for row in citing if (row["maker"], row["type"]) == ("agent:lead", "agent.finished"))
 
-    reached = await cli.run("contributors", "m", "--ref", answer)
+    reached = await cli.run("contributors", "dns", "--ref", answer)
 
     rows = [(row["maker"], row["kinds"]) for row in json.loads(reached.stdout)["rows"]]
     assert rows == [(maker, ["declared"]) for maker in ("agent:lead", "agent:w", "human:you")], reached.stdout
@@ -129,7 +146,7 @@ async def test_the_mixed_team_example_runs_on_real_binaries_against_fake_model(
     for needed in ("claude", worker):
         if needed != "openhands" and shutil.which(needed) is None:
             pytest.skip(f"{needed} is not installed, so the example met no real {needed} here")
-    async with FakeModel(*said(MIXED_LEAD, prefixed)) as led, FakeModel(*said(MIXED_WORKER, calling)) as worked:
+    async with FakeModel(*said(STAND_INS.LEAD, prefixed)) as led, FakeModel(*said(STAND_INS.WORKER, calling)) as worked:
         home = tmp_path / "home"
         leading = test_claude.keyed(home, led, monkeypatch).auth["fake"].env
         working = module.keyed(home, worked, monkeypatch).auth["fake"].env

@@ -1,9 +1,11 @@
 """The installed `platoon-harness`, run as processes of its own, each leading a group that the test ends however it
-ends, and team files on the scripted harnesses of `scripts.py`."""
+ends, team files on the scripted harnesses of `scripts.py`, and the commands a page shows, run as it shows them."""
 
 import asyncio
 import json
 import os
+import re
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,13 +65,13 @@ class Cli:
         return name
 
     async def start(
-        self, *args: str, stdin: int = asyncio.subprocess.DEVNULL, stdout: int = PIPE
+        self, *args: str, stdin: int = asyncio.subprocess.DEVNULL, stdout: int = PIPE, **env: str
     ) -> asyncio.subprocess.Process:
         process = await asyncio.create_subprocess_exec(
             EXECUTABLE,
             *args,
             cwd=self.folder,
-            env=self.env,
+            env={**self.env, **env},
             stdin=stdin,
             stdout=stdout,
             stderr=PIPE,
@@ -81,6 +83,16 @@ class Cli:
     async def run(self, *args: str, input: bytes | None = None) -> Done:
         process = await self.start(*args, stdin=asyncio.subprocess.DEVNULL if input is None else PIPE)
         return await finished(process, input)
+
+    async def as_shown(self, command: str) -> Done:
+        """A `uv run platoon-harness` command as a page shows it, run here with the variables it sets in front."""
+        words = shlex.split(command, comments=True)
+        env = {}
+        while re.fullmatch(r"[A-Z_]+=.*", words[0]):
+            name, _, value = words.pop(0).partition("=")
+            env[name] = value
+        assert words[:3] == ["uv", "run", "platoon-harness"], command
+        return await finished(await self.start(*words[3:], **env))
 
     def end(self) -> None:
         """End each process this started that is still there, with its group."""
@@ -116,6 +128,15 @@ async def said(process: asyncio.subprocess.Process, words: str) -> None:
             if words in line.decode():
                 return
     raise AssertionError(f"nothing said {words!r}")
+
+
+def shown(page: Path, *, where: str = "") -> list[str]:
+    """Each command `page` shows after a `$ ` in a console block, its continued lines joined, of the first block that
+    holds `where`."""
+    blocks = re.findall(r"^```console\n(.*?)^```$", page.read_text(), re.MULTILINE | re.DOTALL)
+    block = next(block for block in blocks if where in block)
+    joined = re.sub(r"\\\n\s*", "", block)
+    return [line.removeprefix("$ ") for line in joined.splitlines() if line.startswith("$ ")]
 
 
 def checked(done: Done, *, first: int = 1) -> list[dict[str, Any]]:
