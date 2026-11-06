@@ -301,7 +301,7 @@ Version 2.1.316; driver path `claude -p` stream-json with control protocol.
 - **No Claude Code harness exists.** Builtin specs: `mini-swe-agent`, `openhands`, `platoon-bash` (`platoon@efe3b277c82c:platoon/harness/builtin/specs/`). `Dialect` admits `anthropic_messages` (`platoon@efe3b277c82c:platoon/harness/spec.py:78`), so a future TOML spec could select it, with `env` carrying `{base_url}` and `{api_key}` as `platoon-bash` does (`platoon@efe3b277c82c:platoon/harness/builtin/specs/platoon-bash.toml:19`).
 - Dialect: IMPLEMENTED, labeled experimental (`platoon@efe3b277c82c:platoon/gateway/dialects/anthropic.py:1`). `POST {prefix}/v1/messages` and `count_tokens` (`platoon@efe3b277c82c:platoon/gateway/server.py:235`). Agent key accepted as Bearer or `x-api-key` (`platoon@efe3b277c82c:platoon/gateway/server.py:498`).
 - **Mismatch with 2.1.316 [static]:** `chat_request` raises on any role other than user or assistant (`platoon@efe3b277c82c:platoon/gateway/dialects/anthropic.py:169`), and Claude Code sends `role: "system"` entries. Docs say Claude Code retries once with the text moved into user messages (`llm-gateway-protocol`). **Resolved by the critic's probe:** real 2.1.316 through the real gateway on a minted key exited 1 with zero recorded calls, with and without `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`, matching `platoon-platform.md`. The documented fallback does not rescue this path today.
-- `x-claude-code-*` headers are read nowhere in `platoon/*.py` (grep: 0 matches). Native-child selectors (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:200`) and call kinds (`platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:107`) are DRAFT/RFC for Claude Code. Platoon RFC 0005 milestone M4 is not done.
+- `x-claude-code-*` headers are read nowhere in `platoon/*.py` (grep: 0 matches). Native-child selectors (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:200`) and call kinds (`platoon@efe3b277c82c:docs/rfcs/0005-gateway-dialects-and-tito.md:107`) are DRAFT/RFC for Claude Code. [Platoon RFC 0005](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0005-gateway-dialects-and-tito.md) milestone M4 is not done.
 
 ## Implications for platoon-harness
 
@@ -318,7 +318,7 @@ Version 2.1.316; driver path `claude -p` stream-json with control protocol.
 11. Worker env: `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` so a turn means a turn, and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=0`. Leave native behavior for everyday single-agent use.
 12. Treat repo-supplied hooks and `.mcp.json` as code execution: warn on first run in an untrusted worktree.
 13. Termination: `interrupt`, then close stdin, then SIGTERM to the process group. Expect stdio MCP children.
-14. Upstream asks for Platoon: accept `role: "system"` entries in the Messages dialect, and read `x-claude-code-*` into call kinds. Both are small Platoon RFC 0005 M4 items.
+14. Upstream asks for Platoon: accept `role: "system"` entries in the Messages dialect, and read `x-claude-code-*` into call kinds. Both are small [Platoon RFC 0005](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0005-gateway-dialects-and-tito.md) M4 items.
 
 ## Taste notes
 

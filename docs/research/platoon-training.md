@@ -22,12 +22,12 @@ Research report for Milestone 0. Labels: **IMPLEMENTED** (code on the default br
 
 | Concept | Module | Tier | Status |
 |---|---|---|---|
-| `AgentGraph`, `AgentRecord`, `Edge`, `RewardEvent` | none (Platoon RFC 0001 section 1) | n/a | DRAFT/RFC; no such symbol in `platoon/` or `extensions/` |
+| `AgentGraph`, `AgentRecord`, `Edge`, `RewardEvent` | none ([Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) section 1) | n/a | DRAFT/RFC; no such symbol in `platoon/` or `extensions/` |
 | `AgentContext`, `AgentAPI`, `AgentResult`, `ChatReply`, `ModelEndpoint`, `McpEndpoint`, `SubagentResult` | `platoon.harness.agent` | stable | IMPLEMENTED |
 | `EpisodeContext`, `program`, finalizers | `platoon.programs` | stable | IMPLEMENTED |
 | `ModelGateway`, `AgentSession`, `ChatResponse`, `TinkerLLMInteraction`, `ProviderRecord` | `platoon.gateway.core` | internal (reachable through `EpisodeContext.root`) | IMPLEMENTED |
 | HTTP gateway and mint route | `platoon.gateway.server` | internal API, documented wire contract | IMPLEMENTED; Responses and Messages dialects EXPERIMENTAL |
-| MCP tool plane | `platoon.gateway.mcp` | internal | IMPLEMENTED in part (Platoon RFC 0005 section 5); orchestrator tools not built |
+| MCP tool plane | `platoon.gateway.mcp` | internal | IMPLEMENTED in part ([Platoon RFC 0005](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0005-gateway-dialects-and-tito.md) section 5); orchestrator tools not built |
 | `Trajectory`, `TrajectoryCollection` | `platoon.trajectory` | stable (`TrajectoryStep`, `ParentInfo` internal) | IMPLEMENTED |
 | Trace builder | `platoon.gateway.trace` | internal | IMPLEMENTED |
 | Converter, `AgentTag`, `TrajectoryCollectionResult` | `platoon.utils.tinker_data_processing` | internal | IMPLEMENTED |
@@ -68,11 +68,11 @@ Research report for Milestone 0. Labels: **IMPLEMENTED** (code on the default br
 
 Built per entry as `Class(setup, options)`, selected by `environments[].credit` and `credit_options` (`platoon@efe3b277c82c:platoon/train/components.py:514`), by built-in name, `@credit_estimator`, or `module:Class`. Runs in the trainer process, once per group. Evaluation never runs one. A raising estimator stops the run; `ScoringFailed` fails only its group (`platoon@efe3b277c82c:platoon/train/credit/runtime.py:55`). `settle` is called as the group is filed; `state()` is checkpointed with kept groups.
 
-## 2. Platoon RFC 0001 section 7 versus Platoon RFC 0021
+## 2. [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) section 7 versus [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md)
 
-Platoon RFC 0021 replaces section 7 and leaves the rest of Platoon RFC 0001 standing as draft (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:9`, `platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:1039`).
+[Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md) replaces section 7 and leaves the rest of [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) standing as draft (`platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:9`, `platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:1039`).
 
-| Platoon RFC 0001 section 7 | After Platoon RFC 0021 | Status at this commit |
+| [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) section 7 | After [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md) | Status at this commit |
 |---|---|---|
 | `CreditPolicy.returns/advantages`, one number per agent | `CreditEstimator.assign`, async, per entry, per-token capable | EXPERIMENTAL |
 | Runs inside a `GroupRolloutWorkflow` subclass | `environments[].credit`; hooks `compute_baselines`, `assign_advantages` remain, refused beside an estimator | IMPLEMENTED |
@@ -87,8 +87,8 @@ Per-token advantages today:
 - `TrainingSample.set_advantages(values)` takes one value per target token and writes only where `mask > 0` (`platoon@efe3b277c82c:platoon/train/credit/api.py:82`).
 - `reverse_kl` is the one built-in that uses it (`platoon@efe3b277c82c:platoon/train/credit/reverse_kl.py:126`). `group` and `keyed` set one value per row or agent.
 - Before credit, the converter loads each action token with the trajectory's processed reward (`platoon@efe3b277c82c:platoon/utils/tinker_data_processing.py:562`).
-- A row is a prefix-merged run of calls, and no call boundaries reach the estimator. Platoon RFC 0021 lists "per-call token spans" as not built (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:1026`).
-- Platoon RFC 0021's `CreditGroup.emit` and `gae` are not built; `gae` is only a reserved name (`platoon@efe3b277c82c:platoon/train/credit/registry.py:40`).
+- A row is a prefix-merged run of calls, and no call boundaries reach the estimator. [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md) lists "per-call token spans" as not built (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:1026`).
+- [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md)'s `CreditGroup.emit` and `gae` are not built; `gae` is only a reserved name (`platoon@efe3b277c82c:platoon/train/credit/registry.py:40`).
 
 ## 3. Attribution levels
 
@@ -196,7 +196,7 @@ What a mint does and does not do (`platoon@efe3b277c82c:platoon/gateway/core.py:
 
 - Inherits rollout, interaction map, tool binding, access, sampling defaults, judges switch, `call_cap` with a shared tally, and `policy_only`.
 - Cap: 64 per rollout, or `PLATOON_MAX_MINTED_AGENTS` (`platoon@efe3b277c82c:platoon/gateway/core.py:105`).
-- No `may_spawn`, no depth limit, no idempotency, no `fork`, no status, wait, finish or cancel. These are Platoon RFC 0001 section 3, DRAFT/RFC.
+- No `may_spawn`, no depth limit, no idempotency, no `fork`, no status, wait, finish or cancel. These are [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) section 3, DRAFT/RFC.
 - `role` is a free string, and it selects the policy and the treatment. Probe: a minted `judge` gets its calls moved to the parent's `judge_calls`, untrained. A minted `verifier` is not marked as one, so it trains.
 - The minted child has `result=None` and `outcome=None`, so it shares the episode reward (probe), unless a finalizer changes it.
 - It sees the parent's tool binding, in effect a `shared` fork.
@@ -227,7 +227,7 @@ The "span" is the call's whole sampled sequence; nothing subdivides it. After pr
 | Hosted call | `ProviderRecord`, no tokens | Observable, not trainable |
 | **Request messages and tools** | **Not recorded** | Only recoverable by decoding `obs` |
 
-Tokens are never written to disk; the rollout's event file is built from the collection (`platoon@efe3b277c82c:platoon/train/workers/run.py:173`). Platoon RFC 0007's sidecar and Platoon RFC 0005's TITO are DRAFT/RFC.
+Tokens are never written to disk; the rollout's event file is built from the collection (`platoon@efe3b277c82c:platoon/train/workers/run.py:173`). [Platoon RFC 0007](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0007-records-and-atif.md)'s sidecar and [Platoon RFC 0005](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0005-gateway-dialects-and-tito.md)'s TITO are DRAFT/RFC.
 
 ## 6. Seams for an external execution system
 
@@ -240,7 +240,7 @@ Ranked narrowest first.
 | **C. Reward processor** | entry point `platoon.reward_processors` | `(score, components)` from a trajectory dict | Local and team numbers to estimators via `rewards_dict` | Numbers only; must be importable under process isolation |
 | **D. `CreditEstimator`** | experimental | `assign`, optional `settle`, `state`, `load_state` | Replaceable credit, per-token | Sees rows, tags, `trajectory_stats`; no misc |
 | **E. Custom `rollout:`** | config key (`platoon@efe3b277c82c:platoon/train/components.py:458`) | `async (Task, RolloutConfig) -> dict` | Own session lifecycle | Interactions must land in `proxy_interactions` (internal) |
-| **F. Custom `RolloutWorkflow`** | experimental | `arun_episode(row) -> RolloutOutput \| Sequence[Datum] \| None` | Bypasses group credit entirely | Must build `tinker.Datum`s from real samples; `make_output` from Platoon RFC 0021 is not built |
+| **F. Custom `RolloutWorkflow`** | experimental | `arun_episode(row) -> RolloutOutput \| Sequence[Datum] \| None` | Bypasses group credit entirely | Must build `tinker.Datum`s from real samples; `make_output` from [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md) is not built |
 | **`RolloutSource`** | internal | Nothing: it is the consumer | | Not a seam for us |
 
 **Harness kinds:** exactly two, `FunctionHarness` (`platoon@efe3b277c82c:platoon/harness/function.py:41`) and `HarnessSpec` (`platoon@efe3b277c82c:platoon/harness/spec.py:396`). The `platoon harness` CLI group only lists and shows them.
@@ -269,12 +269,12 @@ Probe: a root with zero model calls and two minted peers is valid (`steps=0`, `t
 
 | # | Gap | Evidence | Smallest amendment |
 |---|---|---|---|
-| G1 | Minted child cannot report end, status or reward | No route; `result=None` | Platoon RFC 0001 M2 subset: `POST /v1/platoon/agents/{id}/finish` with status and message; or a documented finalizer contract |
+| G1 | Minted child cannot report end, status or reward | No route; `result=None` | [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) M2 subset: `POST /v1/platoon/agents/{id}/finish` with status and message; or a documented finalizer contract |
 | G2 | Mint has no policy over `role`, depth or retries | Section 5 | `agents.roles.<role>.may_mint`, `max_depth` check, `request_id` idempotency |
 | G3 | No attribution or purpose on records | Section 3 | `AgentSession.attribution`, `harness`, `purpose` in `misc.agent`; a converter filter with default `{exact}`; settle the config key name |
-| G4 | No call spans in rows | Platoon RFC 0021 section 18 | `TrajectoryCollectionResult.datum_calls` and `TrainingSample.calls`: `(call_id, start, end, version)` per merged call |
+| G4 | No call spans in rows | [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md) section 18 | `TrajectoryCollectionResult.datum_calls` and `TrainingSample.calls`: `(call_id, start, end, version)` per merged call |
 | G5 | Provenance cannot reach credit | Worker returns `result` only (`platoon@efe3b277c82c:platoon/train/workers/run.py:338`); `draw_provenance` false for `rl` | Bounded `AgentTag.annotations`, or a per-rollout content reference on the result |
-| G6 | One scalar reward per agent, no `None` on `Trajectory` | `platoon@efe3b277c82c:platoon/trajectory.py:60` | `AgentRun.rewards: Mapping[str, float \| None]` from `misc.outcome`; `RewardEvent` as Platoon RFC 0001 M1 subset |
+| G6 | One scalar reward per agent, no `None` on `Trajectory` | `platoon@efe3b277c82c:platoon/trajectory.py:60` | `AgentRun.rewards: Mapping[str, float \| None]` from `misc.outcome`; `RewardEvent` as [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) M1 subset |
 | G7 | Exactly one root; single parent | `platoon@efe3b277c82c:platoon/gateway/trace.py:338` | Keep for now with a synthetic root; propose a rollout-level team outcome and non-tree edges later |
 | G8 | Black-box harness cannot mark a call | `annotate_step` is function-only and last-call-only; `aux` trains | Header `X-Platoon-Exclude-From-Training: <reason>`, or step annotation by `call_id` |
 | G9 | Harness cannot learn its own `agent_id` | No placeholder or route | `{agent_id}` placeholder and `GET /v1/platoon/agents/self` |
@@ -315,7 +315,7 @@ G1, G3, G4 and G5 block the brief's token-level and graph-based credit. The othe
 
 ## Brief check
 
-`AgentGraph`, reward events and attribution levels are draft only, which the brief allows for; no integration can target them. Section 7's formula is opt-in, not the default. Platoon RFC 0021's header says "Implementation: None yet" (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:10`), and `docs/architecture.md` says multi-policy training is not built and treats credit as subclass-only (`platoon@efe3b277c82c:docs/architecture.md:858`). Code and tests show otherwise; trust the code.
+`AgentGraph`, reward events and attribution levels are draft only, which the brief allows for; no integration can target them. Section 7's formula is opt-in, not the default. [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md)'s header says "Implementation: None yet" (`platoon@efe3b277c82c:docs/rfcs/0021-trainers-credit-and-policies.md:10`), and `docs/architecture.md` says multi-policy training is not built and treats credit as subclass-only (`platoon@efe3b277c82c:docs/architecture.md:858`). Code and tests show otherwise; trust the code.
 
 ## Unknowns and risks
 

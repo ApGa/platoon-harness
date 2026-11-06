@@ -1,6 +1,7 @@
 """The RFCs: the index lists each with the title and status it gives itself and explains every status, each holds the
-sections the index names, the template holds every section and row, every RFC the repository cites exists, and the name
-they had before is gone but for the sentence that tells it."""
+sections the index names, the template holds every section and row, every RFC the repository cites exists, each of
+Platoon's it cites is linked at the commit the research read, and the name they had before is gone but for the sentence
+that tells it."""
 
 import re
 from pathlib import Path
@@ -23,6 +24,12 @@ CITATION = re.compile(
 )
 """`RFC NNNN`, or `RFCs` and a list or range, across line breaks, but Platoon's own RFCs and the IETF's."""
 NOT_CITING = {"docs/spec/BRIEF.md": "verbatim brief; the RFCs it names are Platoon's"}
+PLATOON_RFC = re.compile(r"Platoon\s+RFCs?\s+\d{4}")
+PLATOON_LINK = re.compile(
+    r"\[Platoon RFC (?P<number>\d{4})\]"
+    r"\(https://github\.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/(?P=number)-[a-z0-9-]+\.md\)"
+)
+"""A citation of Platoon's RFC, linked to it at the commit the research read Platoon at."""
 OLD_NAME = re.compile(r"\badrs?\b|docs/adr", re.IGNORECASE)
 PINNED = re.compile(r"platoon-harness@[0-9a-f]{7,40}:docs/adr/")
 """A line-numbered citation in a dated note, read at the commit it names, before the records moved."""
@@ -30,7 +37,7 @@ HISTORY = (
     "Until 2026-11-07, RFCs 0001 to 0060 were architecture decision records in `docs/adr`; earlier commits and other "
     "repositories cite them as ADR NNNN, under the same numbers."
 )
-NAMING_IT = {"tests/unit/docs/test_rfcs.py": "it names the old name to look for it"}
+NAMING_IT = {"tests/unit/docs/test_rfcs.py": "it names what it looks for"}
 
 
 def rfcs() -> dict[str, Path]:
@@ -160,6 +167,15 @@ def test_every_rfc_cited_exists():
 
     missing = [(name, number) for name, text in texts(NOT_CITING) for number in cited(text) if number not in files]
     assert missing == []
+
+
+def test_every_platoon_rfc_cited_is_linked_at_the_commit_the_research_read():
+    unlinked = [
+        f"{name}: {match[0]}"
+        for name, text in texts(NOT_CITING | NAMING_IT)
+        for match in PLATOON_RFC.finditer(PLATOON_LINK.sub("", text))
+    ]
+    assert unlinked == []
 
 
 def test_the_old_name_is_gone_but_for_the_sentence_that_tells_it():

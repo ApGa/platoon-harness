@@ -194,14 +194,16 @@ Specific gaps:
 | Group baseline: only completed roots count; a singleton completed root gets zero advantage | IMPLEMENTED | `platoon@efe3b277c82c:platoon/train/credit/group.py:66` |
 | `CreditEstimator` seam, `group`, `keyed` | IMPLEMENTED under a Draft RFC | `platoon@efe3b277c82c:platoon/train/credit/api.py:244` |
 | `AgentGraph`, edges including `informed_by`, `RewardEvent`, `send_message`, `read_messages`, `spawn_agent`, `await_agents` | DRAFT/RFC: zero code hits for `informed_by` and no graph types | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:36`, `:115` |
-| Platoon RFC 0001 section 7 credit | Superseded by Platoon RFC 0021, confirming the brief's observation | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:9` |
+| [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) section 7 credit | Superseded by [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md), confirming the brief's observation | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:9` |
 | Shared boards stay env tools and report `_meta.platoon.edges` | DRAFT/RFC | `platoon@efe3b277c82c:docs/rfcs/0001-native-multi-agent.md:177` |
 
 **DAO: unknown.** A whole-word search for `DAO` across Platoon returns nothing. Three web searches found no matching
 paper or definition, and the RAO abstract page mentions no decentralized variant. I will not guess an expansion. The
 only available definition is the brief's own row: "Peer messaging, spawning, shared artifacts, non-tree information
-flow". The nearest Platoon idea is Platoon RFC 0001's peer swarm (`:26`, `:298`). Scenario 2 below implements the brief's row
-and needs nothing more. Asking the owner what DAO stands for would resolve this.
+flow". The nearest Platoon idea is
+[Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md)'s peer swarm
+(`:26`, `:298`). Scenario 2 below implements the brief's row and needs nothing more. Asking the owner what DAO stands
+for would resolve this.
 
 ## 6. Example scenarios for brief section 10
 

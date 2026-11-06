@@ -267,7 +267,7 @@ Fixture: `docs/research/fixtures/openhands-events-sample.json` holds stream and 
 6. **Approvals:** synthesize a pending-approval event from `WAITING_FOR_CONFIRMATION` and unmatched actions. Headless runs must use `NeverConfirm` or an explicit reject policy, and never hang.
 7. **Native subagents:**
    - Trainable runs: disable `task` by default, and let delegation go through our `spawn`.
-   - Everyday runs: allow it; ingest `<parent>/subagents/<hex>/events/` as a labelled observed-after-completion source, identity `inferred` (a child with no credential of its own; Platoon RFC 0001 rates the header route `inferred`).
+   - Everyday runs: allow it; ingest `<parent>/subagents/<hex>/events/` as a labelled observed-after-completion source, identity `inferred` (a child with no credential of its own; [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md) rates the header route `inferred`).
    - Advanced trainable path: keyed factory with a minted child credential, identity exact, unique factory name per role.
    - Reconcile stats so `task:*` is not added to child records.
 8. **Training profile:** `num_retries` 0 or 1, `api_mode="chat"`, condenser `aux` header, no `ask_agent`, no autotitle, fixed tool set, pinned version. Eligibility must check these in a manifest rather than assume them.

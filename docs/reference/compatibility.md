@@ -33,7 +33,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 
 | Observation | Verdict | Note |
 |---|---|---|
-| Platoon RFC 0021's `CreditEstimator` partly supersedes Platoon RFC 0001's credit section, with per-token advantages | **Verified** | EXPERIMENTAL. Platoon RFC 0021's header still says "Implementation: None yet", so the code is what counts. Only `reverse_kl` uses per-token advantages |
+| [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md)'s `CreditEstimator` partly supersedes [Platoon RFC 0001](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0001-native-multi-agent.md)'s credit section, with per-token advantages | **Verified** | EXPERIMENTAL. [Platoon RFC 0021](https://github.com/ApGa/platoon/blob/efe3b277c82c/docs/rfcs/0021-trainers-credit-and-policies.md)'s header still says "Implementation: None yet", so the code is what counts. Only `reverse_kl` uses per-token advantages |
 | SwarmChat's browser viewer is read-only | **Verified** | Enforced on the server. Read-only is a property of the `view_*` requests, not the link: the admin token opens them too. Eight mutating requests with a view token gave 401 |
 | Toad uses ACP and is a design reference | **Verified** | Own client with `PROTOCOL_VERSION = 1`, no ACP SDK dependency |
 | Platoon extensions: explicit selection, lazy loading, provenance, conformance checks | **Partly verified** | The first three hold. Conformance exists only for experimental sampler, admission, trainer and credit APIs, plus static `platoon extensions check`. No harness or environment suite exists |
