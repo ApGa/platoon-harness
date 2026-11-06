@@ -1819,10 +1819,11 @@ class AgentOutcome(Model):
   admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
   `Team.recipients()`, a compaction, `settled`, a cancel and a retirement, the close on each `said`, eligibility `exact` from a kept
   result, a reward of each status, and `propagate@1`'s rows. Beside it,
-  `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs one agent `isolated` under `bwrap`, on a scripted harness
-  on the wire in the fast pass, as a harness in the runtime's own process cannot be confined, and on pi and OpenHands in the slow
-  pass: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is eligible from the
-  result kept where it ran unconfined, and leaves no form of its bearer in a file or its command line. See
+  `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs one agent `isolated` under `bwrap` in the slow pass, as
+  every confined session runs, on a scripted harness on the wire, as a harness in the runtime's own process cannot be confined,
+  and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is
+  eligible from the result kept where it ran unconfined, the closed session's `agent.started` says assurance `isolated`, and no
+  form of its bearer or its token is in a file or in the command line of any process of its harness. See
   [ADR 0053](adr/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
 
 | Operation | Authorizes | Executes | Records | Reconciles |

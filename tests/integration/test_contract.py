@@ -7,9 +7,11 @@ what can train, and rewards and credit go in beside it. ScriptedDriver runs it i
 each on its real binary or SDK, in the slow pass.
 
 The same session with one agent isolated, confined by the `bwrap` extension, still reaches its gateway on loopback. A
-harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it in the fast pass.
+harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it beside pi and OpenHands,
+in the slow pass, as every session that confines one is.
 """
 
+import contextlib
 import itertools
 import shutil
 from collections.abc import Awaitable, Callable, Sequence
@@ -120,9 +122,7 @@ class Training:
     async def admit(self, spawn: SpawnRequest) -> Admission:
         self.admitted.append(spawn)
         self.gateways[spawn.agent] = gateway = self.model.gateway(bearer_of(spawn.agent))
-        return Admission(
-            token=Secret(f"token-{len(self.admitted)}"), access=gateway, backend={"agent_id": f"id-{spawn.agent}"}
-        )
+        return Admission(token=Secret(token_of(spawn.agent)), access=gateway, backend={"agent_id": f"id-{spawn.agent}"})
 
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
         self.told.append((agent, outcome))
@@ -130,6 +130,11 @@ class Training:
 
 def bearer_of(agent: str) -> str:
     return f"bearer-of-{agent}"
+
+
+def token_of(agent: str) -> str:
+    """The agent's token on the session's tool plane."""
+    return f"token-of-{agent}"
 
 
 def trainable_team(harness: str) -> Team:
@@ -263,17 +268,37 @@ def files_of(folder: Path, *besides: Path) -> dict[Path, bytes]:
     return {path: path.read_bytes() for path in found if not any(path.is_relative_to(other) for other in besides)}
 
 
-def leader_of(folder: Path) -> bytes:
-    """The command line of the process group a harness leads, as the agent's folder records it."""
+def under(pid: int) -> list[int]:
+    """`pid`, then every process below it, as their parents are now."""
+    below: dict[int, list[int]] = {}
+    for entry in Path("/proc").iterdir():
+        with contextlib.suppress(OSError):
+            if entry.name.isdecimal():
+                parent = int(entry.joinpath("stat").read_text().rpartition(")")[2].split()[1])
+                below.setdefault(parent, []).append(int(entry.name))
+    found, left = [], [pid]
+    while left:
+        found.append(at := left.pop())
+        left += below.get(at, [])
+    return found
+
+
+def command_lines(folder: Path) -> list[bytes]:
+    """The command line of the process group a harness leads, as the agent's folder records it, then of each process
+    below it."""
     record = Record.read(folder)
     assert record is not None
-    return Path(f"/proc/{record.pid}/cmdline").read_bytes()
+    lines = []
+    for pid in under(record.pid):
+        with contextlib.suppress(OSError):
+            lines.append(Path(f"/proc/{pid}/cmdline").read_bytes())
+    return lines
 
 
 @pytest.mark.parametrize(
     "made",
     [
-        pytest.param(_wire, id="wire"),
+        pytest.param(_wire, id="wire", marks=pytest.mark.slow),
         pytest.param(_pi, id="pi", marks=pytest.mark.slow),
         pytest.param(_openhands, id="openhands", marks=pytest.mark.slow),
     ],
@@ -281,8 +306,9 @@ def leader_of(folder: Path) -> bytes:
 async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path, monkeypatch, made):
     """Confined by `bwrap`, which binds only its folder to write and passes its environment, an agent launched sealed
     calls its gateway on loopback with its own bearer, compacts with the headers and reports each compaction by its id,
-    and is eligible from the result kept where it ran unconfined. No form of its bearer is in any file or in its
-    command line, so its environment alone carried it, and nothing outside the session's folder was written."""
+    and is eligible from the result kept where it ran unconfined, and the closed session says it ran `isolated`. No form
+    of its bearer or its token is in any file or in the command line of any process of its harness, so its environment
+    alone carried them, and nothing outside the session's folder was written."""
     harness: Harness = made()
     if harness.named == "pi" and shutil.which("pi") is None:
         pytest.skip("pi is not installed, so no isolated harness met its gateway here")
@@ -302,13 +328,13 @@ async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path
         start: dict[str, Any] = {"principal": PROGRAM, "authority": authority, "trainable": True, "cwd": cwd}
         async with Session.start(team, name="rollout", root=root, **start) as session:
             await in_state(session, "alice", "idle")
-            folder = agent_folder(session.folder, "alice")
-            leader = leader_of(folder)
             await session.open_episode("task")
             model.script(harness.replies)
             await session.send("@alice", "the task")
             await until(lambda: of_type(session, "context.compacted"), session)
             await in_state(session, "alice", "idle")
+            folder = agent_folder(session.folder, "alice")
+            lines = command_lines(folder)
             await session.settled()
             await session.retire("@alice")
             await session.close_episode(based_on=[row["said"] for row in await session.agents()])
@@ -318,8 +344,9 @@ async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path
     history = await Session.attach("rollout", root=root)
     started = await of_type(history, "agent.started")
     eligible, calls = await history.eligibility("@alice", "task"), await every_call(history, "alice")
-    argv = leader.decode().split("\0")[:-1]
-    gateway, bearer = authority.gateways["alice"], bearer_of("alice")
+    argv = lines[0].decode().split("\0")[:-1]
+    gateway, bearer, token = authority.gateways["alice"], bearer_of("alice"), token_of("alice")
+    held = {form for secret in (bearer, token) for form in forms(Secret(secret))}
     by_id = {request.response_id: request for request in model.calls if request.response_id}
     compacting = [request for request in model.calls if request.carries(gateway.compaction_headers)]
     assert Path(argv[0]).name == "bwrap"
@@ -336,5 +363,6 @@ async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path
     assert compacting and {request.response_id for request in compacting} <= reported
     assert (eligible.attribution, eligible.verdict, eligible.reasons) == ("exact", "eligible", ()), eligible
     assert all(call.verdict == "eligible" for call in calls), calls
-    assert holding(tmp_path, [bearer]) == [] and not any(form in leader for form in forms(Secret(bearer)))
+    assert holding(tmp_path, [bearer, token]) == [] and len(lines) > 1
+    assert not [line for line in lines if any(form in line for form in held)]
     assert files_of(tmp_path, root / "sessions") == before

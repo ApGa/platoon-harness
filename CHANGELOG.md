@@ -5,10 +5,10 @@
 ### Added
 
 - The integration test, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`: one agent `isolated` under `bwrap` and
-  launched sealed on a training authority's gateway, on a scripted harness on the wire in the fast pass, as a harness in the
-  runtime's own process cannot be confined, and on pi and OpenHands in the slow pass. Confined, it calls the gateway on loopback with
-  its own bearer, reports each compaction by its id and is eligible from the result kept where it ran unconfined, and no form of its
-  bearer is in a file or its command line.
+  launched sealed on a training authority's gateway, in the slow pass, on a scripted harness on the wire, as a harness in the
+  runtime's own process cannot be confined, and on pi and OpenHands. Confined, it calls the gateway on loopback with its own bearer,
+  reports each compaction by its id and is eligible from the result kept where it ran unconfined, the closed session says it ran
+  `isolated`, and no form of its bearer or its token is in a file or in the command line of any process of its harness.
 - `tests/public_api.txt` records `Team.spawners(role)` and `Session.get_body(ref, *, limit)`, which a training system reads.
 - Runtime tests of a commit, `repo.test{commit}`: a person's or a program's act, never a tool, refused to an agent whatever its
   grants, that runs the team's new `test = {command, timeout}`, `timeout` required, in a clean detached checkout of a recorded commit,

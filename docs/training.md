@@ -204,5 +204,5 @@ stopped: eligibility, lineage, exposure and annotations all answer on it, alike 
   `Compact` step a compaction call with the headers.
 - **The contract test,** `test_a_managed_session_runs_as_a_training_authority_drives_it` in this repository's
   `tests/integration/test_contract.py`, runs your whole use of the SDK with no training system behind it, on ScriptedDriver and, in
-  the slow pass, on pi and OpenHands. Beside it, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs an agent
-  `isolated` under `bwrap`, on a scripted harness on the wire and, in the slow pass, on pi and OpenHands.
+  the slow pass, on pi and OpenHands. Beside it, in the slow pass, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`
+  runs an agent `isolated` under `bwrap`, on a scripted harness on the wire, pi and OpenHands.
