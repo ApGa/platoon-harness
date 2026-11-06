@@ -198,6 +198,12 @@ async def test_a_resumed_admission_that_mints_anew_loses_its_agent(tmp_path, bea
         await until(lambda: of_type(session, "turn.lost"), session)
         await session.send("@bob", "again")
         await in_state(session, "bob", "ended")
+
+        async def stopped() -> list[Any]:
+            return [e for e in await of_type(session, "effect.finished") if e.data["kind"] == "stop"]
+
+        # The stop effect's `finally` tells the authority the agent is lost, so wait for the stop to finish.
+        await until(stopped, session)
         row = (await session.ending()).agents[0]
         results = await admitted(session)
 

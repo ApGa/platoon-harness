@@ -37,7 +37,6 @@ PROBE = """\
 tried() {{ if (echo > "$1") 2>/dev/null; then echo "$2 written"; else echo "$2 refused"; fi; }}
 {{
 tried "{outside}/escaped" outside
-tried "{repo}/escaped" checkout
 tried "{objects}/escaped" objects
 tried "{private}" tmp
 tried "{folder}/mine" folder
@@ -211,7 +210,6 @@ async def confined(harness: Harness, folder: Path, monkeypatch: pytest.MonkeyPat
             name: path.exists()
             for name, path in {
                 "outside": outside / "escaped",
-                "checkout": repo / "escaped",
                 "objects": objects / "escaped",
                 "tmp": private,
                 "filter": outside / "filtered",

@@ -2,11 +2,13 @@
 read, see and leave behind, and what its probe says where it cannot confine. Each test probes only what it made."""
 
 import os
+import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,21 @@ def bwrap() -> Bubblewrap:
     if (why := isolation.refusal()) is not None:
         pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why}")
     return isolation
+
+
+@pytest.fixture
+def beyond_tmp() -> Iterator[Path]:
+    """A base directory outside the system temp dir, where the private /tmp does not reach, so hiding and the read-only
+    root are shown on their own. It is the test's own, and goes after. Where none is writable, there is nothing to
+    show here, as the private /tmp alone would cover a folder under it."""
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    if not base or Path(base).resolve().is_relative_to(Path(tempfile.gettempdir()).resolve()):
+        pytest.skip("no writable directory outside the system temp dir, so hiding beyond the private /tmp is not shown")
+    made = Path(tempfile.mkdtemp(dir=base, prefix="platoon-harness-test-"))
+    try:
+        yield made
+    finally:
+        shutil.rmtree(made, ignore_errors=True)
 
 
 def run(
@@ -81,6 +98,33 @@ def test_a_wrapped_command_writes_only_its_folder_and_a_tmp_of_its_own(bwrap, tm
     assert said.split("\n")[:5] == ["mine written", *["escaped refused"] * 3, f"{private.name} written"]
     assert seen == "unseen\n"
     assert [path.exists() for path in places] == [True, False, False, False, False]
+
+
+def test_a_hidden_folder_and_the_outside_hold_where_the_private_tmp_does_not_reach(bwrap, beyond_tmp):
+    """Outside the system temp dir, so the private /tmp cannot be what hides it: a hidden folder shows only what it may
+    read, read-only, and a folder bound nowhere is seen through the read-only root yet cannot be written."""
+    home, outside, folder = beyond_tmp / "home", beyond_tmp / "outside", beyond_tmp / "folder"
+    (home / "keys").mkdir(parents=True)
+    (home / "keys" / "secret").write_text("canary\n")
+    (home / "objects").mkdir()
+    (home / "objects" / "pack").write_text("borrowed\n")
+    outside.mkdir()
+    folder.mkdir()
+    probe = "; ".join(
+        (
+            f"cat {home}/objects/pack",
+            f"cat {home}/keys/secret 2>/dev/null || echo unread",
+            tried(home / "objects" / "x"),
+            f"test -e {outside} && echo seen || echo unseen",
+            tried(outside / "escaped"),
+        )
+    )
+
+    said = run(bwrap, probe, folder, readable=[home / "objects"], hidden=[home])
+
+    assert said.split("\n")[:5] == ["borrowed", "unread", "x refused", "seen", "escaped refused"]
+    assert (home / "keys" / "secret").read_text() == "canary\n"
+    assert not (outside / "escaped").exists()
 
 
 def test_what_a_wrapped_command_may_read_is_read_only_where_it_is_hidden(bwrap, tmp_path):
