@@ -30,18 +30,26 @@ def bwrap() -> Bubblewrap:
 
 
 @pytest.fixture
-def beyond_tmp() -> Iterator[Path]:
-    """A base directory outside the system temp dir, where the private /tmp does not reach, so hiding and the read-only
-    root are shown on their own. It is the test's own, and goes after. Where none is writable, there is nothing to
-    show here, as the private /tmp alone would cover a folder under it."""
+def beyond_tmp(tmp_path) -> Iterator[Path]:
+    """A base directory outside /tmp, where the private /tmp does not reach, so hiding and the read-only root are shown
+    on their own: the test's own folder where the system keeps those elsewhere, else one under XDG_RUNTIME_DIR, which
+    goes after. Where neither is outside /tmp, there is nothing to show here, as the private /tmp alone would cover a
+    folder under it."""
+    if not _under_tmp(tmp_path):
+        yield tmp_path
+        return
     base = os.environ.get("XDG_RUNTIME_DIR")
-    if not base or Path(base).resolve().is_relative_to(Path(tempfile.gettempdir()).resolve()):
-        pytest.skip("no writable directory outside the system temp dir, so hiding beyond the private /tmp is not shown")
+    if not base or _under_tmp(Path(base)):
+        pytest.skip("no writable directory outside /tmp, so hiding beyond the private /tmp is not shown")
     made = Path(tempfile.mkdtemp(dir=base, prefix="platoon-harness-test-"))
     try:
         yield made
     finally:
         shutil.rmtree(made, ignore_errors=True)
+
+
+def _under_tmp(path: Path) -> bool:
+    return path.resolve().is_relative_to(Path("/tmp").resolve())
 
 
 def run(
@@ -85,19 +93,22 @@ def test_the_probe_says_why_bwrap_cannot_confine_here(tmp_path, monkeypatch):
 
 def test_a_wrapped_command_writes_only_its_folder_and_a_tmp_of_its_own(bwrap, tmp_path):
     """A hidden folder is empty and read-only, what it may read is read-only, and /tmp is its own, so of everything it
-    tried only its folder's file is on disk after."""
-    folder, home, outside = tmp_path / "folder", tmp_path / "home", tmp_path / "outside"
-    for made in (folder, home / "objects", outside):
+    tried only its folder's file is on disk after, and a folder of the real /tmp is not there to see."""
+    folder, home = tmp_path / "folder", tmp_path / "home"
+    for made in (folder, home / "objects"):
         made.mkdir(parents=True)
+    outside = Path(tempfile.mkdtemp(dir="/tmp", prefix="platoon-harness-test-"))
     private = Path("/tmp") / f"platoon-harness-test-{uuid.uuid4().hex}"
     places = (folder / "mine", home / "escaped", home / "objects" / "escaped", outside / "escaped", private)
+    try:
+        said = run(bwrap, "; ".join(map(tried, places)), folder, readable=[home / "objects"], hidden=[home])
+        seen = run(bwrap, f"test -e {outside} && echo seen || echo unseen", folder)
 
-    said = run(bwrap, "; ".join(map(tried, places)), folder, readable=[home / "objects"], hidden=[home])
-    seen = run(bwrap, f"test -e {outside} && echo seen || echo unseen", folder)
-
-    assert said.split("\n")[:5] == ["mine written", *["escaped refused"] * 3, f"{private.name} written"]
-    assert seen == "unseen\n"
-    assert [path.exists() for path in places] == [True, False, False, False, False]
+        assert said.split("\n")[:5] == ["mine written", *["escaped refused"] * 3, f"{private.name} written"]
+        assert seen == "unseen\n"
+        assert [path.exists() for path in places] == [True, False, False, False, False]
+    finally:
+        shutil.rmtree(outside, ignore_errors=True)
 
 
 def test_a_hidden_folder_and_the_outside_hold_where_the_private_tmp_does_not_reach(bwrap, beyond_tmp):
