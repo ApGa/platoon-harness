@@ -30,8 +30,8 @@ class Source:
     """A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more."""
 
     trust: bool = False
-    """Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-    profile."""
+    """Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+    an auth profile."""
 
     def load(self, path: Path | None) -> Team:
         """The team: the project file, the team file at `path` over it, then these."""

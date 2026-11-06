@@ -292,8 +292,8 @@ For example:
 * `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
         of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
-* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+        an auth profile.
 * `--to`: The one agent the prompt is for, as `@agent`. Left out, it goes to every agent the session starts.
 * `--prompt-file`: A file whose text is the prompt.
 * `--name`: The session's name. Left out, one is made from the time.
@@ -325,8 +325,8 @@ For example:
 * `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
         of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
-* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+        an auth profile.
 * `--name`: The session's name. Left out, one is made from the time.
 * `--approvals`: Answer every approval this way, over each role's own policy. *[choices: ask, deny, allow]*
 * `--plan-login`: Several agents may run headless on one plan login: say so to say this is your own work.
@@ -598,8 +598,8 @@ It exits 78 when one is an error.
 * `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
         of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
-* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+        an auth profile.
 * `--plan-login`: Several agents may run headless on one plan login, as `run --plan-login` says.
 * `--trainable`: Check it as a training system starts it, on this machine: what keeps the team from training, and each role's
     driver for a sealed launch and a result kept here that proves trainable.
@@ -621,8 +621,8 @@ Say what a team allows, in plain words or as TOML that loads back to the same te
 * `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
         of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
-* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+        an auth profile.
 * `--resolved`: The expansion, which is what a session's manifest keeps, with no secret in it.
 
 #### platoon-harness team told
@@ -644,8 +644,8 @@ That is all the runtime adds to its harness. No harness starts.
 * `--harness`: A role on this harness, whose agent takes its name, over the rest: with no team file and no project file, a team
         of one.
 * `--set`: A line of TOML over the rest, such as `budget.usd = 5`. Give it again for more.
-* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr` or an auth
-        profile.
+* `--trust`: Run what the project file or the team file names to run: a command harness, a `module:attr`, a test command or
+        an auth profile.
 
 ### platoon-harness init
 
