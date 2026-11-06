@@ -18,7 +18,7 @@ LISTED = re.compile(r"^\d+\. \*\*(?P<name>.+?)\*\*(?P<optional> \(optional\))?:"
 ROW = re.compile(r"^\| \[(?P<number>\d{4})\]\((?P<link>[^)]+)\) \| (?P<title>.+?) \| (?P<status>[^|]+?) \|$", re.M)
 FILE_NAME = re.compile(r"^\d{4}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 CITATION = re.compile(
-    r"(?<!Platoon\s)(?<!IETF\s)\bRFCs?\s+"
+    r"(?<!Platoon\s)(?<!Platoon's\s)(?<!IETF\s)\bRFCs?\s+"
     r"(?P<numbers>\d{4}\b(?:(?:,\s*|,?\s+(?:and|or|to)\s+)\d{4}\b)*)"
 )
 """`RFC NNNN`, or `RFCs` and a list or range, across line breaks, but Platoon's own RFCs and the IETF's."""
@@ -150,7 +150,7 @@ def test_the_template_and_every_rfc_numbered_from_0061_have_the_whole_status_tab
 
 def test_a_citation_names_every_number_of_a_list_across_line_breaks():
     text = "RFCs 0027, 0028, 0035 and 0043; RFC\n  0034; RFC 0001:199; RFCs 0001 to 0059; Platoon RFC 0021"
-    text += "; Platoon\nRFC 0005; IETF RFC 2606; Platoon RFCs 0001 and 0021"
+    text += "; Platoon\nRFC 0005; IETF RFC 2606; Platoon RFCs 0001 and 0021; Platoon's RFC 0005"
 
     assert cited(text) == ["0027", "0028", "0035", "0043", "0034", "0001", "0001", "0059"]
 
