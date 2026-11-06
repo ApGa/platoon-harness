@@ -217,7 +217,7 @@ def _gone(db: Any) -> int:
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
-SEALED = [Call(ENVIRONMENT_TOOL, {"note": "looked"}), AskModel(), Compact()]
+SEALED = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
 """A sealed turn: the environment's tool, the model, and a compaction."""
 
 HARNESSES = {
