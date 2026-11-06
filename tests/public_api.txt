@@ -408,6 +408,7 @@ platoon_harness.session.Session.close_episode(*,based_on)
 platoon_harness.session.Session.eligibility(agent,episode,*,after)
 platoon_harness.session.Session.events(after,match,*,streams,follow)
 platoon_harness.session.Session.exposure(agent,ref,*,before)
+platoon_harness.session.Session.get_body(ref,*,limit)
 platoon_harness.session.Session.head()
 platoon_harness.session.Session.leave(grace)
 platoon_harness.session.Session.lineage(ref,*,after)
@@ -428,6 +429,7 @@ platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
 platoon_harness.team.Team.recipients(to)
+platoon_harness.team.Team.spawners(role)
 platoon_harness.team.Team.test
 platoon_harness.team.Test
 platoon_harness.team.trainable_problems

@@ -4,6 +4,7 @@
 
 ### Added
 
+- `tests/public_api.txt` records `Team.spawners(role)` and `Session.get_body(ref, *, limit)`, which a training system reads.
 - Runtime tests of a commit, `repo.test{commit}`: a person's or a program's act, never a tool, refused to an agent whatever its
   grants, that runs the team's new `test = {command, timeout}`, `timeout` required, in a clean detached checkout of a recorded commit,
   as you and unconfined, and records what it came to as `repo.tested` on `repo/<name>`, with no agent in the envelope: the command, its
