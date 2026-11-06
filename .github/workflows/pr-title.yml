@@ -1,0 +1,26 @@
+name: PR title
+
+# A workflow of its own, so that editing a pull request's title or description re-runs only this check. It runs while
+# the repository is private too, so that collaborators get it.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The commit form of AGENTS.md: no scope, and a summary in sentence case without a final period.
+          disallowScopes: .+
+          subjectPattern: ^[A-Z].*[^.]$
+          subjectPatternError: >-
+            Write the summary of "{title}" in sentence case without a final period, for example
+            "feat: Add leased task queue".
+          # A squash merge of a single commit suggests that commit's message, not the title, so check it too.
+          validateSingleCommit: true
