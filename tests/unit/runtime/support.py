@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from platoon_harness import Refused, Session, Team
+from platoon_harness.config import Secret
 from platoon_harness.drivers import Driver
 from platoon_harness.kernel import Extension, Kernel
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.testing import ScriptedDriver
+from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequest
+from platoon_harness.testing import FakeModel, ScriptedDriver
 
 from ..kernel.support import dump
 
@@ -48,6 +50,21 @@ def scripted(*turns: Any, **options: Any) -> str:
 def solo(*turns: Any, **role: Any) -> Team:
     """One role that starts one agent, `bob`, with nothing to wake it but a message."""
     return Team.model_validate({"roles": {"bob": {"harness": scripted(*turns), **role}}})
+
+
+class Gateways:
+    """An authority that admits each agent through `model` acting as its gateway, on a bearer and a backend id of its
+    own, so a scripted harness's `AskModel` steps ask it."""
+
+    def __init__(self, model: FakeModel) -> None:
+        self.model = model
+
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        access = self.model.gateway(f"bearer-of-{spawn.agent}")
+        return Admission(token=Secret(f"token-of-{spawn.agent}"), access=access, backend={"agent_id": spawn.agent})
+
+    async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+        return None
 
 
 async def rebuilt_equals_live(folder: Path) -> None:

@@ -635,7 +635,10 @@ team = Team(roles={"lead": Role(harness="my_tests:lead")})
 The module is imported by that name, so keep a script behind `if __name__ == "__main__"`, or importing it runs it again.
 
 The steps are `Say`, `Think`, `Call`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
-until the model only talks.
+until the model only talks. A tool call the model chose goes under the id the model gave it, as `scripted/toolCallId` in MCP's
+`_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
+`tool_item_carries_its_anchor` holds it to that. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its
+turn, and an identical one in the same turn is answered as a repeat.
 
 ### Extensions
 

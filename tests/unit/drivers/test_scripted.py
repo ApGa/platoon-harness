@@ -2,6 +2,7 @@
 
 import pytest
 
+from platoon_harness import Session, Team
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     ApprovalRequested,
@@ -39,6 +40,7 @@ from platoon_harness.testing import (
     chat_access,
 )
 
+from ..runtime.support import Gateways, in_state, of_type, scripted, until
 from .support import Heard, make_spec
 
 pytestmark = pytest.mark.timeout(30)
@@ -405,3 +407,31 @@ async def test_a_resumed_harness_has_its_transcript_and_no_new_turn(tmp_path):
         await again.stop(1)
 
     assert model.calls[1].says("do the thing") and model.calls[1].says("more")
+
+
+async def test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call(tmp_path):
+    """Two identical claims one model call chose go under ids of their own, which their tool items hold, so each is a
+    claim of its own and joins that call, as a harness's does. With no id the tool plane takes the second for a repeat
+    of the first in its turn, which a `Call` step still is."""
+    queue = {"kind": "queue", "writers": "all", "readers": "all", "delivery": "pull", "max_inflight": 2}
+    team = Team.model_validate(
+        {"roles": {"bob": {"harness": scripted([AskModel()])}}, "topology": {"channels": {"tasks": queue}}}
+    )
+    claims = [ToolCall("task_claim", {"queue": "tasks"}, id=f"call_{n}") for n in (1, 2)]
+    model = FakeModel(claims, "both claimed")
+    async with model, Session.start(team, root=tmp_path, authority=Gateways(model)) as session:
+        await in_state(session, "bob", "idle")
+        for name in ("one", "two"):
+            await session.task_add("tasks", name)
+        await session.send("@bob", "claim two")
+        claimed = await until(lambda: of_type(session, "task.claimed"), session, lambda found: len(found) == 2)
+        await in_state(session, "bob", "idle")
+        [called, _] = await of_type(session, "model.called")
+        made = [(await session.lineage(f"{event.stream}@{event.version}")).made for event in claimed]
+
+    assert sorted(event.stream for event in claimed) == ["task/tasks/1", "task/tasks/2"]
+    assert [(found.anchor and (found.anchor.key, found.anchor.id, found.anchor.ops)) for found in made] == [
+        ("scripted/toolCallId", "call_1", 1),
+        ("scripted/toolCallId", "call_2", 1),
+    ]
+    assert {found.call for found in made} == {f"{called.stream}@{called.version}"}

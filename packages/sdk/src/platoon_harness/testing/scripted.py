@@ -1,7 +1,9 @@
 """ScriptedDriver: a deterministic harness for tests and demos, with no model unless a step asks for one.
 
 Its tool calls are real MCP over `ToolBinding.url`, and an `AskModel` step is a real model call, so a scripted team
-exercises the real tool plane, and conformance can read what it did from the model's log. Given a gateway it launches
+exercises the real tool plane, and conformance can read what it did from the model's log. A tool call the model chose
+goes under the id the model gave it, as `scripted/toolCallId`, so its op joins that model call as a harness's would,
+while a `Call` step, which no model chose, sends none. Given a gateway it launches
 sealed, which is the reference a training system's tests run on with no binary: the gateway's model under its bearer,
 the environment's tools beside ours, each named by the environment's server as `mcp__environment__<tool>`, and a
 `Compact` step that carries the gateway's compaction headers.
@@ -59,6 +61,8 @@ SUMMARIZE = "Summarize the conversation so far, so that it can go on from the su
 """What a `Compact` step asks the model."""
 
 _SHELL_GRACE = 1.0
+_ANCHOR = "scripted/toolCallId"
+"""The key a tool call's id goes under, which says whose id it is, and the tool server takes as a harness's."""
 
 _DEFAULT = Capabilities(
     persistent=True,
@@ -348,7 +352,9 @@ class ScriptedDriver:
     async def _call(
         self, tool: str, arguments: Mapping[str, Any], *, native_id: str | None = None, call_id: str | None = None
     ) -> Any:
-        """Call a tool of ours, or of the environment's, by the name the model is shown."""
+        """Call a tool of ours, or of the environment's, by the name the model is shown. A call the model chose goes
+        under the id it gave that call, `native_id`, sent as MCP's `_meta` as a harness sends its own, so its op joins
+        the model call that chose it."""
         binding = self._spec.tools
         found = self._servers.get(tool) or (None if binding is None else ((binding.url, binding.token), tool))
         if found is None:
@@ -356,7 +362,10 @@ class ScriptedDriver:
         server, listed = found
         started = Item(kind="tool", phase="started", gist=f"{tool} called"[:GIST_LIMIT])
         await self._report(started.model_copy(update={"native_id": native_id, "call_id": call_id}))
-        result = await self._mcp(server, "tools/call", {"name": listed, "arguments": dict(arguments)})
+        params: dict[str, Any] = {"name": listed, "arguments": dict(arguments)}
+        if native_id is not None:
+            params["_meta"] = {_ANCHOR: native_id}
+        result = await self._mcp(server, "tools/call", params)
         self.results.append(result)
         outcome = "failed" if result.get("isError") else "completed"
         done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)

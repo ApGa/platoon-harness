@@ -43,7 +43,6 @@ ONE_SHOT_SKIPS = {
 SCRIPTED_SKIPS = {
     "one_shot_exits",
     "declared_but_unproven",
-    "tool_item_carries_its_anchor",
     "native_children_off_by_default",
     "native_child_seen",
 }
@@ -69,6 +68,7 @@ async def test_the_scripted_driver_conforms_in_this_process(tmp_path):
     assert (result.driver, result.version) == ("scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == {*SCRIPTED_SKIPS, "stop_leaves_no_process", "malformed_frame_is_a_gap"}
+    assert states(result)["tool_item_carries_its_anchor"] == "passed"
 
 
 @pytest.mark.timeout(240)  # Every check starts a program of its own, the shell's two among them.

@@ -544,7 +544,7 @@ One definition reaches every surface.
 | TUI | Palette entries for the commands a person may run, from the command line's definitions, worded as its help, with generated forms, as a read is what the views draw; the dock's actions come from `actions[]`, on the row the person chose; an interrupt the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
-one (`claudecode/toolUseId`, Codex `callId`, pi's `pi/toolCallId`) and the turn otherwise. The op and args stay in the key because
+one (`claudecode/toolUseId`, Codex `callId`, pi's `pi/toolCallId`, ScriptedDriver's `scripted/toolCallId`) and the turn otherwise. The op and args stay in the key because
 one Codex script can make several calls under shared ids. Either way a harness retry after a timeout is one logical operation. So a
 client with no id cannot tell the server that an identical call in one turn is meant, and it gets the first answer, labelled as a
 repeat. `ph` and the stdio shim therefore send a fresh `platoon-harness/callId` per call that has no harness's id, kept under that

@@ -18,7 +18,7 @@ from .surface import Surface, body_fields, held_tools, list_tools, named_surface
 _HOST = "127.0.0.1"
 _PATH = "/mcp"
 _REVISIONS = ("2025-11-25", "2025-06-18")
-HARNESS_ANCHORS = ("claudecode/toolUseId", "callId", "pi/toolCallId")
+HARNESS_ANCHORS = ("claudecode/toolUseId", "callId", "pi/toolCallId", "scripted/toolCallId")
 _ANCHORS = (*HARNESS_ANCHORS, "platoon-harness/callId")
 _ANCHOR_LIMIT = 256
 _REQUEST_LIMIT = 1024 * 1024
