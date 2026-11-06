@@ -154,7 +154,10 @@ async def own(
             finally:
                 await session.leave()
                 if printed is not None:
-                    await printed
+                    try:
+                        await printed
+                    except Refused as error:  # the printer's, which never takes the place of what ended the run
+                        note(refused(error.refusal))
         try:
             return await _ending(session.name, reason, json)
         except Refused as error:
