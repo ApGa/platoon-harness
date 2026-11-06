@@ -64,11 +64,11 @@ Why: The largest gap found, and it needs no model loop. Today the agent goes idl
 
 Why: One writer means the journal enumerates its own crash points, though a cut is a legal crash state for the journal only: blobs, agent folders and process records stay from a later time. The probe covered 124 of 159 boundaries at about 0.7 s each with no kernel defect, so this is a guard, not a known fix. It came from the comparison, not from Pi, whose recovery tests hang storage or drop a held commit (packages/durable/test/harness-restart-failure.test.ts:60-75).
 
-**6. Roster row: closed `phase`, `stopped`, `parent`, `held_by` (adapt).** Make `Item.phase` a closed literal of started, completed, final and decided (primitives/reports.py:84). State in docs/drivers.md that a driver sends `started` where the harness shows it, so `activity` (primitives/agents.py:174-176) reads the running tool. Add `stopped`, `parent` and `held_by` to the row (primitives/clients.py:228-239). Add no list of running tools and no fold. Fix bug-clients-1 first.
+**6. Roster row: closed `phase`, `stopped`, `parent`, `held_by` (adapt).** Make `Item.phase` a closed literal of started, completed, final and decided (primitives/reports.py:84). State in docs/extending/drivers.md that a driver sends `started` where the harness shows it, so `activity` (primitives/agents.py:174-176) reads the running tool. Add `stopped`, `parent` and `held_by` to the row (primitives/clients.py:228-239). Add no list of running tools and no fold. Fix bug-clients-1 first.
 
 Why: The contract is being written now, and `activity` misleads without a `started` item. A running list would be a second answer to one question and leaves phantom rows if a `completed` is lost. Pi's model: spec.md:4601-4610, 4635-4645.
 
-**7. Write down that text is fixed at launch (adapt).** State in architecture section 10 that the tool list and preamble are fixed at launch and later changes travel in a delivery. Rename `turn preamble` to `preamble` (tools/surface.py:155). Add a `check_driver` row that the preamble appears once per request. Record tool-block stability in docs/compatibility.md as a measurement, not a gate.
+**7. Write down that text is fixed at launch (adapt).** State in architecture section 10 that the tool list and preamble are fixed at launch and later changes travel in a delivery. Rename `turn preamble` to `preamble` (tools/surface.py:155). Add a `check_driver` row that the preamble appears once per request. Record tool-block stability in docs/reference/compatibility.md as a measurement, not a gate.
 
 Why: Stops a the drivers stage driver resending the preamble because of its name. Pi treats prefix bytes as a budget and change as positional (packages/durable/src/harness/prompt.ts:66-93). Unchecked on a real harness.
 
@@ -80,11 +80,11 @@ Why: That text is in every request of every agent and enters training prompts at
 
 Why: docs/architecture.md:910 promises 32 KiB and queries have no cap (kernel/kernel.py:436). An extension query returned about 1 MB through a real ToolServer. Only queries can overflow, so a refusal never contradicts a committed event. Pi bounds every tool result (packages/durable/src/harness/tool.ts:700-701). Serves BRIEF section 12.
 
-**10. `call_id` on `Item` and `Usage` (adopt).** Add `call_id: str | None` to both (primitives/reports.py:78-88, 114-122). Pass a ModelRef on `item.recorded` and `usage.reported` when the driver gave one (primitives/lifecycle.py:358-364). Keep `call.joined` for the late case only. Add a conformance check, and update docs/drivers.md and tests/public_api.txt.
+**10. `call_id` on `Item` and `Usage` (adopt).** Add `call_id: str | None` to both (primitives/reports.py:78-88, 114-122). Pass a ModelRef on `item.recorded` and `usage.reported` when the driver gave one (primitives/lifecycle.py:358-364). Keep `call.joined` for the late case only. Add a conformance check, and update docs/extending/drivers.md and tests/public_api.txt.
 
 Why: Harness frames hold both ids (docs/research/fixtures/pi-sample.jsonl:18), the envelope already has the slots (kernel/model.py:105-106), and without a field the driver drops the link. The alternative is inference, which AGENTS.md forbids. Our op to pi's toolCallId stays unanchored (packages/mcp/src/client.ts:405-409), so that stays turn quality. Serves BRIEF sections 6 and 7.
 
-**11. Report pi's `responseId`, fix the compat row (adapt).** In the drivers stage, report `ModelCall(call_id=message.responseId, ...)` from `message_end` and correct docs/compatibility.md:83 and docs/research/adapter-others.md:264. Declare `call_ids="call"` for Platoon's gateway only at M3, after a loopback test with real pi on the real gateway.
+**11. Report pi's `responseId`, fix the compat row (adapt).** In the drivers stage, report `ModelCall(call_id=message.responseId, ...)` from `message_end` and correct platoon-harness@4d5e6c5:docs/compatibility.md:83 and docs/research/adapter-others.md:264. Declare `call_ids="call"` for Platoon's gateway only at M3, after a loopback test with real pi on the real gateway.
 
 Why: Our own fixture contradicts the row. The id comes from the first chunk (packages/ai/src/api/openai-completions.ts:548), and by source Platoon sets chunk ids to its call_id (Platoon platoon/gateway/dialects/openai_chat.py:101). Spike s8 matched on a fake model only; no real gateway or provider was observed. Exceptions: a budget stop, a stream error, retry.provider.maxRetries above 0, and compaction.
 
@@ -143,7 +143,7 @@ Spike questions, all seven of which truly ran, against a fake model, each once u
 - Shared code: the fixed crash notice after a successful resume, the slow journal-cut sweep, and a named test that a budgeted session ends needs_human.
 - Contract: `Item.phase` closed, `started` required where the harness shows it, `call_id` on Item and Usage, `purpose` on ModelCall, `summary` on Compacted, `native_id` on InputDelivered if cheap. Update tests/public_api.txt.
 - Roster fields stopped, parent, held_by, after bug-clients-1.
-- docs/drivers.md lines: `interrupted` as a turn reason, what `forgotten` holds, what Usage.tokens counts, and that a zero on an aborted call means unknown.
+- docs/extending/drivers.md lines: `interrupted` as a turn reason, what `forgotten` holds, what Usage.tokens counts, and that a zero on an aborted call means unknown.
 - Conformance rows: preamble once per request; native_id equals the MCP anchor where one exists; stop during a running shell tool.
 - Query refusal over the limit, tool list ceiling, task.renew no longer a tool, and the 'fixed at launch' sentence in architecture section 10.
 - Fix bug-provenance-1 and bug-provenance-2 before drivers report compactions.
@@ -249,7 +249,7 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - minor. bug-provenance-2: Compacted(forgotten=None) records no gap unless the driver sends a second report. primitives/lifecycle.py:365-367. Nothing is lost, but Ending omits it. Fix: record compaction_opaque there.
 - minor. bug-provenance-4: forgotten has no stated meaning; a test passes a journal ref while the compat doc means native ids. tests/unit/primitives/test_delivery.py:294. Fix: state native ids.
 - minor. bug-provenance-5: Usage.tokens is undefined, so budgets are not comparable across drivers. primitives/reports.py:114-122. Fix: one sentence and a conformance check.
-- minor. bug-provenance-6, bug-driver-4: the compat row says pi has no per-call id, against our fixture and spike s8. docs/compatibility.md:83. Fix the id rows; row 241 reports what was observed, so leave it.
+- minor. bug-provenance-6, bug-driver-4: the compat row says pi has no per-call id, against our fixture and spike s8. platoon-harness@4d5e6c5:docs/compatibility.md:83. Fix the id rows; row 241 reports what was observed, so leave it.
 - minor. bug-driver-2: with no client call id, identical calls in one turn collapse into one. tools/mcp.py:336-343, spike s12 on real pi over HTTP MCP. A stated trade-off. The proposed key is wrong, because a retry after a lost ack would run twice. Fix: the stdio shim.
 - minor. bug-driver-3: stop_leaves_no_process cannot see a tool, and the promise does not hold past SIGKILL. testing/conformance.py:336-347, spike s9. Only SIGKILL of pi leaves bash alive. Fix: a check during a running tool, and a crash_window gap.
 
@@ -300,9 +300,9 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - 'Only the change is sent, so the prompt cache stays valid' holds only for models flagged in the catalog (packages/ai/src/utils/transcript.ts:115-120).
 - The 15,000 line claim is stale: true at v1.0.0, and 30,230 lines at v1.5.0 without src/testing.
 - packages/durable/docs/group-commit.md still says 'design', and it shipped in 1.5.0.
-- Ours: docs/compatibility.md:83 and docs/research/adapter-others.md:264 are wrong that pi has no per-call id. It has one on RPC, at 1.4.0 too; the research read headers, not frames.
-- Ours: docs/compatibility.md:83 and :384 should record that HTTP MCP is now probed on pi against our real ToolServer.
-- Ours: docs/compatibility.md:236 says pi's append path was not researched; pi has --append-system-prompt (packages/coding-agent/src/cli/args.ts:123).
+- Ours: platoon-harness@4d5e6c5:docs/compatibility.md:83 and docs/research/adapter-others.md:264 are wrong that pi has no per-call id. It has one on RPC, at 1.4.0 too; the research read headers, not frames.
+- Ours: platoon-harness@4d5e6c5:docs/compatibility.md:83 and :384 should record that HTTP MCP is now probed on pi against our real ToolServer.
+- Ours: platoon-harness@4d5e6c5:docs/compatibility.md:236 says pi's append path was not researched; pi has --append-system-prompt (packages/coding-agent/src/cli/args.ts:123).
 - Ours: primitives/waits.py:347 'Wait without spending a turn' is false for a join today.
 - Ours: platoon-harness@4d5e6c5:docs/architecture.md:222 and :1148, platoon-harness@4d5e6c5:docs/adr/0007-topology-as-grants.md:20 and RFC 0005 need the changes under bug-durability-6, bug-extensions-8 and bug-durability-3. RFC 0012 needs a line for the counted report.
 - Analysis errors: Pi tells the model after a crash only for a plain tool; packages/durable/test/harness-tools-recovery.test.ts:109 uses harness.close, not a crash; Pi's dial-out relay was never published, not shipped and removed (packages/coding-agent/CHANGELOG.md:281); 'a TUI over ssh already works' was false because no TUI exists; tool name collisions are not all refused at load.
@@ -310,4 +310,4 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 
 ## Not read or not run
 
-No real model, provider or Platoon gateway ran. No real Claude Code or Codex ran. No real harness was killed except pi and Pi Durable in spikes on a fake model; our crash probes use an in-process abandon. Neither project's test suite ran, so every Pi performance figure is their claim. The get_entries search and the shim with pi were not run. The sweep covered 124 of 159 boundaries, and only 1 blocked cut was traced. Pi: most of the spec, session.ts, transaction.ts and scheduler.ts beyond cited regions, most test bodies, most of Chord, pi-ai providers other than openai-completions; the Cloudflare page was seen only through a summarizer. Ours: docs/training.md (absent from the frozen tree), most RFCs, tests in part, and all commits after 4d5e6c5. The fact-checker opened every citation a verdict rests on, sampled some others, and re-ran our probes but no Pi spike. Other citations are as the analysts and fact-checker gave them.
+No real model, provider or Platoon gateway ran. No real Claude Code or Codex ran. No real harness was killed except pi and Pi Durable in spikes on a fake model; our crash probes use an in-process abandon. Neither project's test suite ran, so every Pi performance figure is their claim. The get_entries search and the shim with pi were not run. The sweep covered 124 of 159 boundaries, and only 1 blocked cut was traced. Pi: most of the spec, session.ts, transaction.ts and scheduler.ts beyond cited regions, most test bodies, most of Chord, pi-ai providers other than openai-completions; the Cloudflare page was seen only through a summarizer. Ours: docs/extending/training.md (absent from the frozen tree), most RFCs, tests in part, and all commits after 4d5e6c5. The fact-checker opened every citation a verdict rests on, sampled some others, and re-ran our probes but no Pi spike. Other citations are as the analysts and fact-checker gave them.

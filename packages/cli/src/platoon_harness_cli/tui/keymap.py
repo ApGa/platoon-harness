@@ -270,7 +270,10 @@ def reference() -> str:
     return "\n\n".join(sections)
 
 
-BEGIN = "<!-- keymap: made from the keymap table by `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md` -->"
+BEGIN = (
+    "<!-- keymap: made from the keymap table by "
+    "`uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md` -->"
+)
 END = "<!-- end of keymap -->"
 
 

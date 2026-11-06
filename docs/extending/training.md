@@ -2,7 +2,7 @@
 
 A training system runs a session per rollout and trains on what its agents' model calls did. It builds on one contract, which this
 page describes, and the SDK names no training system in it. The first to build on it is Platoon's `platoon-teams` extension, in
-Platoon's own repository. [architecture.md](architecture.md) section 14 is the design of record.
+Platoon's own repository. [architecture.md](../architecture.md) section 14 is the design of record.
 
 What the SDK owns is execution and evidence: the session, its journal and what the record says of each agent. What the training
 system owns is identity and model access, through its authority, and what trains.
@@ -121,7 +121,7 @@ conformance store gone:
   it. A sealed launch makes no call but these: it retries nothing, warms no cache, and labels each compaction call as it makes it.
   A call your gateway recorded that no harness reported has no call id to join, so it never trains.
 
-[provenance.md](provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
+[provenance.md](../how-to/provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
 
 ## What a sealed launch is
 

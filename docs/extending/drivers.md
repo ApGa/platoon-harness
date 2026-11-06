@@ -35,7 +35,7 @@ method promises:
   without starting one, which a trainable session's check holds a kept result to before any harness launches; `ready` says the version
   that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its binary, and what that
   resolves into, such as a release folder or the `node_modules` it imports from. An isolation shows it those, read-only, and nothing
-  else of your home ([workspaces.md](workspaces.md#where-an-isolated-agent-runs)). A harness in the runtime's own process declares
+  else of your home ([workspaces.md](../how-to/workspaces.md#where-an-isolated-agent-runs)). A harness in the runtime's own process declares
   none, as nothing can confine it, and an isolated role on it is refused before any cost.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That

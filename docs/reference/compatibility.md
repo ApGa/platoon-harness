@@ -4,7 +4,7 @@ What each upstream is, how we use it, and what is known about it. Everything her
 These are **upstream facts**, not claims about our drivers. Each driver records its own verified result in the status list of
 section 3 as it lands, and a result pins to the driver, the harness version, the SDK and the host (architecture §9.3).
 
-Detail and citations live in [research/](research/README.md). Where a report and a spike disagree, the spike wins because
+Detail and citations live in [research/](../research/README.md). Where a report and a spike disagree, the spike wins because
 it was measured later. The critic's corrections in the research index are authoritative. Section 3 lists what changed.
 
 ## 1. Upstreams
@@ -113,8 +113,8 @@ by a driver landing; only the row below changes.
 
 ### Evidence
 
-**claude, CLI 2.1.316.** [Report](research/adapter-claude-code.md), [spike](research/spikes/tools-and-parking.md),
-[fixture](research/fixtures/claude-stream-sample.jsonl).
+**claude, CLI 2.1.316.** [Report](../research/adapter-claude-code.md), [spike](../research/spikes/tools-and-parking.md),
+[fixture](../research/fixtures/claude-stream-sample.jsonl).
 
 - Real model: 5 turns with `haiku` in one process (multi-turn, one subagent, interrupt, MCP approval), then 14 spike turns with `claude-haiku-5-5`.
 - Loopback: the real CLI against a scripted Messages server. `Bash(echo *)` ask rule, mid-Bash message, `/compact`, `--resume`, `--fork-session`.
@@ -154,7 +154,7 @@ by a driver landing; only the row below changes.
 - `permissions.defaultMode` of `acceptEdits` or `bypassPermissions` in a user's settings ran a `Bash` with no approval asked, so a role's `deny` did not hold. `--permission-mode default` took both back to asking, 1 trial each [L].
 - Inline `--mcp-config` JSON expands `${PLATOON_HARNESS_TOKEN}` from the harness's environment, so the token is in no file and not in argv [L] [R].
 - The transcript is internal, and the driver reads it for one thing: whether an input's uuid is on a line, to `reconcile` after a crash. A miss says `unknown`. On a native login it is also the one place a live test can read a request: all of a session's requests shared one `api-request-shape`, across a resume too [R].
-- Real teams, in [the spike](research/spikes/real-harness.md): a lead and two workers fixed a seeded bug through the queue and a board and settled, in 25 calls and 28.5 s, and a lead with a Codex worker in 22 and 23 calls. `ready` took 1.2 s at the median and 1.4 s at worst, and a handover 0.03 s to begin a turn, or up to 0.8 s as a process's first [R].
+- Real teams, in [the spike](../research/spikes/real-harness.md): a lead and two workers fixed a seeded bug through the queue and a board and settled, in 25 calls and 28.5 s, and a lead with a Codex worker in 22 and 23 calls. `ready` took 1.2 s at the median and 1.4 s at worst, and a handover 0.03 s to begin a turn, or up to 0.8 s as a process's first [R].
 - The mixed-team example, from SwarmChat's page with the terminal UI attached: as the lead it added the task, spawned a
   Codex worker, read the worker's note when its report came and finished citing it, in 6 calls of the run's 11, run 80 [R].
 - The live run: a goal, `board_post` called directly with no `ToolSearch`, its `toolUseId` matching the item, a delivery, an interrupt, an approval, and a resume by a new process, with the preamble once in every request and no unknown frame, in the user's own setup, at 7 model calls. Getting there took 20 calls over four runs [R]. It passed again on the launch of now, in run 19, at 7 calls: our tool reached through `--mcp-config` naming the token's variable, the approval asked under `--permission-mode default`, and the interrupt that dropped the queue read `interrupted` [R].
@@ -173,8 +173,8 @@ by a driver landing; only the row below changes.
   `session stop` during `sleep 20`, it was resumed with the text it was told at launch, journaled again whole, read the cut-off notice,
   checked, found the file unwritten and ran the command once more, in 6 calls, run 40 [R].
 
-**codex, CLI 0.164.0, and 0.167.0 where a line says so.** [Report](research/adapter-codex.md), [spike](research/spikes/tools-and-parking.md),
-[fixture](research/fixtures/codex-appserver-sample.jsonl).
+**codex, CLI 0.164.0, and 0.167.0 where a line says so.** [Report](../research/adapter-codex.md), [spike](../research/spikes/tools-and-parking.md),
+[fixture](../research/fixtures/codex-appserver-sample.jsonl).
 
 - Real model: 3 report turns, then 24 spike turns with `gpt-6-luna`. Client approval, subagents and interrupt scope came from the stub.
 - Tool found by the model: default 6 of 7 threads, each needing a discovery call. With `omit_tools_from: ["deferred"]`, 8 of 8.
@@ -214,7 +214,7 @@ by a driver landing; only the row below changes.
 - Resume with a dangling tool call: the next request holds `function_call_output: "aborted"` for it, and it did not run again. That agrees with our cut-off notice (1 trial) [L]. On a real model the rollout says `aborted by user after 0.4s`, or 0.5s, of a tool that ran for seconds, with no user there, 4 trials, which the notice's "whatever your history shows" covers [R].
 - A killed runtime takes the app-server with it, and its tool, in 0.2 s, as stdin ends. The cut-off notice held on it: in 4 of 4 the model looked first. In 2 it ran only the half that was missing, in 1 it ran the whole command again, having found it unfinished, and in 1, after an owner's stop, it left it alone [R].
 - `kill -9` of the app-server alone ends its tool too, and `thread/resume` of that thread worked, during a tool and between turns, 1 trial each [R].
-- Real teams, in [the spike](research/spikes/real-harness.md): a Codex worker under a Claude lead claimed, fixed and completed two tasks, in teams of 22 and 23 calls. `ready` took 1.9 s at the median and 2.9 s at worst, and a handover 1.0 s to begin a turn and 2.2 s at worst. Each first turn cost a call looking up our tools in `ALL_TOOLS`, whatever `omit_tools_from` says [R].
+- Real teams, in [the spike](../research/spikes/real-harness.md): a Codex worker under a Claude lead claimed, fixed and completed two tasks, in teams of 22 and 23 calls. `ready` took 1.9 s at the median and 2.9 s at worst, and a handover 1.0 s to begin a turn and 2.2 s at worst. Each first turn cost a call looking up our tools in `ALL_TOOLS`, whatever `omit_tools_from` says [R].
 - Its own agents, off unless a role allows them: `agents.enabled = false` in `thread/start.config` takes away the V1 tools a
   model outside the catalog gets and the V2 `collaboration` tools a catalog model such as `gpt-6-luna` gets, with the
   `<multi_agent_role>` text that says it is `/root`. `features.multi_agent = false` takes away V1 alone, and
@@ -245,7 +245,7 @@ by a driver landing; only the row below changes.
   run waited out its wall limit, run 42, which a turn charged its estimate now prevents. With no `tokens` limit it resumed with the text it was told at launch, journaled again whole,
   looked for the file, found it missing and ran the command once, in 4 calls, run 43 [R].
 
-**pi 1.4.0, and the driver on 1.5.0.** [Report](research/adapter-others.md), [fixture](research/fixtures/pi-sample.jsonl).
+**pi 1.4.0, and the driver on 1.5.0.** [Report](../research/adapter-others.md), [fixture](../research/fixtures/pi-sample.jsonl).
 
 - All loopback: fake chat server, isolated `HOME`, on Node 26.13.0. No real model, in the research or through the driver: nothing below is [R].
 - `mcp__coord__ping` was in the first request. A tool turn made exactly 2 calls, with no title call.
@@ -285,7 +285,7 @@ by a driver landing; only the row below changes.
   reached a child, and an interrupt during a call under a `tokens` limit charged the cut turn its estimate and the session went on
   [L]. A spawn's anchor is pi's own id for the call that made it, which its tool item holds [L].
 
-**openhands, SDK 1.59.0.** [Report](research/adapter-openhands.md), [fixture](research/fixtures/openhands-events-sample.json).
+**openhands, SDK 1.59.0.** [Report](../research/adapter-openhands.md), [fixture](../research/fixtures/openhands-events-sample.json).
 
 - All loopback, against a scripted OpenAI-compatible server. No real model. The clone is ahead of the wheel, so unprobed citations need rechecking.
 - Critic probes: Platoon's runner on 1.59.0 gave 2 exact records with logprobs and 2 datums on the child. `arun()` with an MCP tool had `llm_response_id == call_id` for every action.
@@ -358,7 +358,7 @@ by a driver landing; only the row below changes.
   resume`, took the cut-off notice and settled [L]. A scripted lead and an OpenHands agent exchanged messages through our tools, and
   the session settled [L].
 
-**opencode, 2.2.5 via ACP.** [Report](research/adapter-others.md), [fixture](research/fixtures/opencode-sample.jsonl).
+**opencode, 2.2.5 via ACP.** [Report](../research/adapter-others.md), [fixture](../research/fixtures/opencode-sample.jsonl).
 
 - Loopback frames cover `initialize`, `session/new`, `session/prompt`, `session/request_permission` and `session/cancel`.
 - `initialize` advertised `loadSession`, `additionalDirectories`, `close`, `delete`, `fork`, `list`, `resume`, HTTP MCP, no SSE.
@@ -368,23 +368,23 @@ by a driver landing; only the row below changes.
 - One unpinned run reached hosted `opencode/flint-40b-free` by accident. That is the only real-model contact, and it proves the risk, not a capability.
 - HTTP depth (`steer`, `queue`, inbox evidence) ran on loopback but is not reachable through ACP. Per-session permission rules are source only.
 
-**prime, 0.10.2.** [Report](research/adapter-others.md), [fixture note](research/fixtures/prime-agent-sample.md).
+**prime, 0.10.2.** [Report](../research/adapter-others.md), [fixture note](../research/fixtures/prime-agent-sample.md).
 
 - The Linux x64 tarball printed its version and help. A model turn was denied by the session's permission policy and not retried.
 - Everything else is source. The fixture states it holds no capture. Make no claim from this row.
 
-**generic ACP.** [Report](research/acp-mcp.md).
+**generic ACP.** [Report](../research/acp-mcp.md).
 
 - The spec and schema are read at `212f0cace08a`. Both SDK versions ran against a fake raw agent, on `initialize`, `session/new`, `prompt` and `_meta`.
 - `claude-agent-acp@0.99.1` and `codex-acp@2.5.0` were probed at `initialize` only. They advertise `_meta.steering.supported`. No steering request was sent.
 
-**generic exec.** Nothing upstream to inspect. [Architecture §9.1](architecture.md) defines it. Platoon's `platoon-bash` and
+**generic exec.** Nothing upstream to inspect. [Architecture §9.1](../architecture.md) defines it. Platoon's `platoon-bash` and
 `mini-swe-agent` specs show that one process on one key is exact there, which is the only fact the row rests on.
 
 ### SwarmChat on our backend
 
 `platoon-harness web` serves SwarmChat 0.1.0's page, from source commit `fb5aa6a05b40`, over a projection of the journal, as
-[RFC 0027](rfcs/0027-the-browser-on-our-backend.md) says and [web.md](web.md) guides. These are the page files it serves, read from
+[RFC 0027](../rfcs/0027-the-browser-on-our-backend.md) says and [web.md](../how-to/web.md) guides. These are the page files it serves, read from
 the installed package and held to these SHA-256 values when it starts. A file that differs stops it before anything is served.
 
 | File | SHA-256 |
@@ -527,7 +527,7 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | | Hooks | Passthrough, restricted in training | No hooks as such: extensions on `tool_call`, which keep working beside our gate [L]. User extensions can add subagents or alter calls. Training plans `--no-extensions` plus an explicit `-e` list, a combination not probed. A known limit: `--mode rpc` shows no trust prompt, so `.pi/` resources load only under a saved decision or `defaultProjectTrust: "always"`, as they would for `pi -p`. Both ran. The driver passes neither `--approve` nor `--no-approve` [L] |
 | | Native subagents | None in core; an extension's cannot be turned off | A user's extension can add a tool for agents of its own. Nothing of ours turns it off, and its children go unseen [S] |
 | | Session compaction | Passthrough, exact | `compaction_end` names `firstKeptEntryId`, `get_entries` turns that into `forgotten`, and the summary is kept [L]. Purpose is on our `model.call` and unlabelled at a gateway |
-| `openhands` | Project instructions | Passthrough | `Agent()` ignores them, so the worker sets `AgentContext(load_project_skills=True)`, as OpenHands' CLI does, which loads `.cursorrules`, `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `GEMINI.md` from the workspace and the repository's root. A project's `AGENTS.md` reached the first request beside ours, which are `system_message_suffix` [L]. The choice is the driver's and no role's, so the resolved team holds nothing of it, and this table and `docs/drivers.md` record it. A training profile that turns it off arrives with M3 |
+| `openhands` | Project instructions | Passthrough | `Agent()` ignores them, so the worker sets `AgentContext(load_project_skills=True)`, as OpenHands' CLI does, which loads `.cursorrules`, `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `GEMINI.md` from the workspace and the repository's root. A project's `AGENTS.md` reached the first request beside ours, which are `system_message_suffix` [L]. The choice is the driver's and no role's, so the resolved team holds nothing of it, and this table and `docs/extending/drivers.md` record it. A training profile that turns it off arrives with M3 |
 | | Native skills | Project skills only | A project's `.agents/skills` load with its instructions. The user's own, in `~/.openhands/skills`, and public skills, which fetch from GitHub, stay off, as the SDK's defaults are, where OpenHands' CLI loads all three |
 | | Slash commands | Not determined | Found only in the CLI's TUI, which the worker does not run. `openhands acp` sends `available_commands_update`. The SDK path was not researched |
 | | Tool configuration | Ours by their own names | Our server, through the stdio shim, is the agent's one `mcp_config` entry, as the SDK reads no user's server, and its tools show unprefixed, so `tool_names` is `bare` [L]. Whether one can collide with a built-in: not determined. A child inherits our server and calls it on its parent's token |
@@ -585,7 +585,7 @@ script made is said to have returned to that script, which may never have shown 
 
 ### Workspaces
 
-What each harness sees in a worktree of its own ([workspaces.md](workspaces.md), RFC 0031), and what git does that the runtime's
+What each harness sees in a worktree of its own ([workspaces.md](../how-to/workspaces.md), RFC 0031), and what git does that the runtime's
 own git relies on or works around. Git 2.47.3 is the only version run; [V] verified here, [S] read in source, [U] unverified. In a
 snapshot each sees the same, but that the repository's own `.git/hooks` are new and empty there, while a `core.hooksPath` your global
 or system config sets still runs for an agent's commits [V].
@@ -661,7 +661,7 @@ says.
 ## 6. Supported platforms
 
 The initial release targets **Linux and macOS**. Linux is the only platform anything has run on. Only the kernel and filesystem
-detection rows describe our code. The others record probes of upstreams or throwaway prototypes, and [STATUS.md](STATUS.md) holds what exists.
+detection rows describe our code. The others record probes of upstreams or throwaway prototypes, and [STATUS.md](../STATUS.md) holds what exists.
 
 | Component | Linux | macOS | Windows | WSL |
 |---|---|---|---|---|
@@ -676,7 +676,7 @@ detection rows describe our code. The others record probes of upstreams or throw
 | Prime Agent | Version and help on linux-x64 | Not run | Not run | Not run |
 | Platoon bridge | Probed on CPU | **Unverified.** Platoon classifiers list POSIX Linux only. This does not affect the SDK | Not a target | Not run |
 
-Performance on Linux, from the [journal spike](research/spikes/journal-performance.md): at 500 events per second with 100 simulated
+Performance on Linux, from the [journal spike](../research/spikes/journal-performance.md): at 500 events per second with 100 simulated
 agents, ack p99 was 2.8 ms on node-local NVMe. Those are server disks with near-instant flush, so they do not stand in for a laptop.
 Ack p99 is at least twice the sync time, so a sync above about 20 ms misses the 50 ms mark. Run the benchmark on a real Mac before
 Milestone 1 closes.
@@ -773,7 +773,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - A Codex child that stays under a Codex lead past one trial: on the words it is told now the owner's flow passed once, in run 38,
   after a lead in run 36 sent its follow-up before the first answer. Told it stayed for the next message, a child held a `wait` for
   its parent instead of answering, in runs 23 and 24.
-- Teams past three agents, and work past a minute: everything in [the spike](research/spikes/real-harness.md) was small and quick.
+- Teams past three agents, and work past a minute: everything in [the spike](../research/spikes/real-harness.md) was small and quick.
 - Auto compaction, a turn that fails and a child's approval on a real Codex model, and `fileChange` items anywhere: FakeModel offered no patch tool, so a stand-in is all that has shown one.
 - Whether a steer that ended a model call on FakeModel does so on a real model.
 - Unix sockets from the Codex sandboxed shell, the `read-only` sandbox, and blocked user namespaces.

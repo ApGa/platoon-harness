@@ -50,4 +50,4 @@ the role's policy. In 36 live sessions a native child had run only where a test 
 - `tests/integration/test_claude.py` and `test_codex.py`, on the real binaries against FakeModel, a catalog model's V2 tools among
   them, and `check_driver` on each driver.
 - `tests/live/test_launch.py`, run 34: asked to hand a search to a sub-agent of its own, neither harness started one.
-- [compatibility.md](../compatibility.md), the evidence for each driver and the native features table.
+- [compatibility.md](../reference/compatibility.md), the evidence for each driver and the native features table.

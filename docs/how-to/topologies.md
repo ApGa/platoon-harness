@@ -5,7 +5,7 @@ ordinary grants over relations such as `parent` and `children`, which stay true 
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
 checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but the two that
-need a program, map-reduce and git-swarm, which it refuses until programs run: see [STATUS.md](STATUS.md).
+need a program, map-reduce and git-swarm, which it refuses until programs run: see [STATUS.md](../STATUS.md).
 
 ```python
 from platoon_harness.team import Role, Team

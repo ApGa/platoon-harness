@@ -24,7 +24,7 @@ from platoon_harness_cli.tui.workspace import Dock, Navigator, Workspace
 from ..runtime.support import harness, in_state
 from .support import drawn
 
-GUIDE = Path(__file__).parents[3] / "docs" / "tui.md"
+GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "tui.md"
 PLACES = {
     TerminalUI: ("everywhere",),
     Sessions: ("sessions",),
@@ -107,7 +107,7 @@ def test_no_typed_command_is_named_as_a_command_of_the_command_line():
 def test_the_guide_s_keymap_is_the_table_s_with_each_typed_command_beside_its_key():
     guide = GUIDE.read_text()
 
-    assert guide == regenerate(guide), "run `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md`"
+    assert guide == regenerate(guide), "run `uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md`"
     for key in acts():
         pressed = f"`{re.escape(key.shown)}`[^|]*" if key.keys else ""
         assert re.search(rf"\| {pressed} \| `{re.escape(key.typed)}` \|", reference()), key

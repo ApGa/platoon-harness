@@ -58,7 +58,7 @@ $ uv run platoon-harness contributors dns --ref "$finish"             # whose wo
 
 `uses` names the lead's finish, its `agent.finished`, among what cites the note, with its ref, which is what to ask `contributors`
 about; the ref differs from run to run, so the second line picks it from `uses`. `contributors` is reachability in the record and
-never credit: it weighs and ranks nobody, and a citation is its agent's claim. [docs/provenance.md](../../docs/provenance.md) says
+never credit: it weighs and ranks nobody, and a citation is its agent's claim. [docs/how-to/provenance.md](../../docs/how-to/provenance.md) says
 how to read each answer.
 
 ## Other harnesses
@@ -71,7 +71,7 @@ $ uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file 
 ```
 
 OpenHands keeps no login, so its role needs a model and a key, named by an auth profile, and the SDK's `openhands` extra, which
-`platoon-harness doctor` says how to install ([docs/drivers.md](../../docs/drivers.md#openhands-a-wire-worker)). Name the model
+`platoon-harness doctor` says how to install ([docs/extending/drivers.md](../../docs/extending/drivers.md#openhands-a-wire-worker)). Name the model
 your key reaches:
 
 ```console

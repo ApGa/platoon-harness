@@ -29,7 +29,7 @@ on our own runtime, with no model.
 
 Evidence is cited as `project@commit:path:line`, against the commit above. Claude Code docs are cited by page, since their line
 numbers belong to copies not kept here. The License column is not from this review, whose records hold no license:
-[compatibility.md](../compatibility.md) records those of the upstreams it shares.
+[compatibility.md](../reference/compatibility.md) records those of the upstreams it shares.
 
 ## Answer
 

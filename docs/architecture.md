@@ -2,7 +2,7 @@
 
 This is the design of record. When code and this page disagree, one of them has a bug. Status lives in
 [STATUS.md](STATUS.md); decisions and their alternatives live in [rfcs/](rfcs/); upstream facts live in
-[compatibility.md](compatibility.md).
+[compatibility.md](reference/compatibility.md).
 
 ## 1. The whole thing in one paragraph
 
@@ -980,7 +980,7 @@ lease = "30m"
 max_hops = 8
 ```
 
-[topologies.md](topologies.md) is the guide, with a worked example per preset.
+[topologies.md](how-to/topologies.md) is the guide, with a worked example per preset.
 
 | Key | Meaning |
 |---|---|
@@ -1029,7 +1029,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 - **Role `allow_native_children`** lets its harness start agents of its own, beside ours. Left out, it is false: such an agent is no agent
   of ours, since its calls reach us only in its parent's total, no topology binds it, and its calls to our tools go out on its parent's
   token. A driver turns them off for one launch by the harness's own setting, and what a harness keeps out of reach of that is in
-  [compatibility.md](compatibility.md). Its approvals still come to the runtime, under its parent's role. See
+  [compatibility.md](reference/compatibility.md). Its approvals still come to the runtime, under its parent's role. See
   [RFC 0024](rfcs/0024-a-harness-s-own-agents-are-off.md).
 - **The tool set** is fixed per role at launch, since live tool-list updates vary by harness. Valid targets change, so the preamble
   lists them at launch and `peers` as they stand; tool schemas never enumerate them.
@@ -1119,7 +1119,7 @@ wire command. See [RFC 0030](rfcs/0030-openhands-is-an-extra-of-the-sdk.md).
 Credentials never travel in a frame: `start` names them, and the program finds their values in its environment. `serve(driver)`
 is all a wire driver in Python needs. Unknown lines and reports become `native` plus a gap, and a line past 16 MiB stops the agent
 with a gap, since it may have held an answer. A team names a program with `harness = { command = [...], mode = "wire" }`.
-[drivers.md](drivers.md) is the guide, with a complete wire driver that a test runs through the conformance suite.
+[drivers.md](extending/drivers.md) is the guide, with a complete wire driver that a test runs through the conformance suite.
 
 A simple one-shot CLI needs no code: `harness = { command = ["my-agent", "{goal}"], mode = "oneshot" }` runs under the `exec`
 driver, coordinating through `ph`. PTY integration is an explicit degraded fallback, not a substitute for structured events.
@@ -1273,7 +1273,7 @@ Codex agents opened turns with a `wait` that named nothing. That text is in ever
 of every agent, so a test holds each default role's list under a ceiling. We append through each harness's
 supported path and never overwrite `CLAUDE.md`, `AGENTS.md`, skills or hooks. The per-harness table of how project
 instructions, skills, slash commands, hooks and compaction interact with coordination lives in
-[compatibility.md](compatibility.md).
+[compatibility.md](reference/compatibility.md).
 
 **The preamble is a template.** `Team.preamble` is every role's and `Role.preamble` one role's in its place, and left out it is
 `PREAMBLE`, which renders what the preamble said before it was a template byte for byte, but for a line that would name no peer or no
@@ -1463,7 +1463,7 @@ person's entry handed to its agent, which exposure then never answers `not_seen`
 never a result kept since, so it answers alike after a rebuild, on a closed copy and with the conformance store gone. Humans,
 programs and judges are never agents here, and what trains is the training system's to decide.
 
-[provenance.md](provenance.md) is the guide.
+[provenance.md](how-to/provenance.md) is the guide.
 
 ## 12. Clients
 
@@ -1539,7 +1539,7 @@ the schema `Session.annotate` checks, as an op's are from its arguments. With `-
 owns journals, from its `runtime.started`, in a shape versioned by its `format`, then the Ending, and nothing else; logs go to stderr.
 One stopped while its
 runtime starts prints its Ending alone. Nothing prompts: an `ask` with nobody attached ends `needs_human` at once, and `--approvals`
-states a policy over every role's, which the manifest keeps. [cli.md](cli.md) is its reference, made from the command definitions.
+states a policy over every role's, which the manifest keeps. [cli.md](reference/cli.md) is its reference, made from the command definitions.
 
 Three views answer the five questions, through `view.watch(name, after)`: a snapshot, then keyed changes. Almost any event can move a
 roster row, under a name that is not that agent's, so `roster` answers with every row whenever the journal has moved, which is about
@@ -1582,7 +1582,7 @@ op references, each with whatever keeps a stale button from deciding anything, s
   terminal delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the
   only way, and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter.
   `/provenance`, or `p` with the transcript in focus, opens the chosen line's provenance in a panel, Enter following a link and Esc
-  going back one hop, so it takes no chord. [tui.md](tui.md) is its guide.
+  going back one hop, so it takes no chord. [tui.md](how-to/tui.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
@@ -1599,7 +1599,7 @@ op references, each with whatever keeps a stale button from deciding anything, s
   `attention` view. Provenance among a message's actions opens a pane over `x_provenance`, a read of ours beside the `view_*`
   that a view link reaches too, in the terminal's words, and the projection keeps the ref of the event each line shows, which the
   pane opens on, and following a link a chat shows opens that chat there. Each link in the pane is a button, and a message's
-  actions show while focus is in it, so the keyboard reaches both. [web.md](web.md) is its guide, and
+  actions show while focus is in it, so the keyboard reaches both. [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md) and [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
   its decisions.
@@ -1610,7 +1610,7 @@ A role's `workspace` is a ladder, each step promising one thing more: `shared`, 
 is the one that ran, and a mode that cannot be given fails loudly, before any cost where that can be seen, and never degrades to
 another. The core gives the first three, on git and the filesystem alone, and `isolated` where one extension the team names gives an
 isolation. A trainable team works in `shared` or `isolated` (§14). See
-[RFC 0031](rfcs/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](workspaces.md).
+[RFC 0031](rfcs/0031-a-workspace-is-a-place-git-already-knows.md) and [workspaces.md](how-to/workspaces.md).
 
 - **`shared`** is the session's checkout, its cwd, where every agent's writes land at once, and nothing in it is private or confined.
 - **`worktree`** is a linked git worktree of the cwd's repository at `agents/<agent>/workspace`, on a new branch
@@ -1719,7 +1719,7 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve
   it. For your checkout it is open
   while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`. A merge queue
-  for worktree teams is a queue and a merger in a worktree, written out in [topologies.md](topologies.md), not a preset: the merger
+  for worktree teams is a queue and a merger in a worktree, written out in [topologies.md](how-to/topologies.md), not a preset: the merger
   merges with git, the look records the merge or the conflict, and the merger completes the task naming any conflict, which reaches
   its worker through the task. See [RFC 0058](rfcs/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
 - **What the journal recorded** is kept in `commits.bundle` in the session folder, written at each stop past the session's starting
@@ -1836,7 +1836,7 @@ class AgentOutcome(Model):
   and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is
   eligible from the result kept where it ran unconfined, the closed session's `agent.started` says assurance `isolated`, and no
   form of its bearer or its token is in a file or in the command line of any process of its harness. See
-  [RFC 0053](rfcs/0053-a-gateway-admission-launches-sealed.md) and [training.md](training.md).
+  [RFC 0053](rfcs/0053-a-gateway-admission-launches-sealed.md) and [training.md](extending/training.md).
 
 | Operation | Authorizes | Executes | Records | Reconciles |
 |---|---|---|---|---|

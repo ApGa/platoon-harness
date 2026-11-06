@@ -13,7 +13,7 @@ from .support import in_state, of_type, scripted, until
 
 pytestmark = pytest.mark.timeout(30)
 
-GUIDE = Path(__file__).parents[3] / "docs" / "provenance.md"
+GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "provenance.md"
 BLOCK = re.compile(r"^```python\n(.*?)^```$", re.M | re.S)
 
 

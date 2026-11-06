@@ -1,4 +1,5 @@
-"""`python -m platoon_harness_cli.reference > docs/cli.md`: the command line's reference, made from its definitions."""
+"""`python -m platoon_harness_cli.reference > docs/reference/cli.md`: the command line's reference, made from its
+definitions."""
 
 import sys
 
@@ -18,14 +19,14 @@ def reference() -> str:
     ending = ", ".join(f"`{name}`" for name in ("type", *Ending.model_fields, "code"))
     return f"""# Command line reference
 
-<!-- Made from the command definitions by `uv run python -m platoon_harness_cli.reference > docs/cli.md`. Do not edit:
-change the definitions, and make it again. A test holds it to them. -->
+<!-- Made from the command definitions by `uv run python -m platoon_harness_cli.reference > docs/reference/cli.md`.
+Do not edit: change the definitions, and make it again. A test holds it to them. -->
 
 Each command under Ops on a session takes the session's name first, and runs one op there as a guest, by the name and
 with the arguments an agent's `ph` uses: `ph task.claim --queue tasks` is `platoon-harness task claim SESSION --queue
 tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. `wait` and
 the ops on a wait have no command, as a wait parks a turn and a person has none: `events --follow` watches a session,
-and a script has `Session.wait`. The [headless quickstart](headless.md) shows them together.
+and a script has `Session.wait`. The [headless quickstart](../how-to/headless.md) shows them together.
 
 ## Exit codes
 

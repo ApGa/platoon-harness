@@ -29,7 +29,7 @@
 - `repo.commit{sha}`, an agent read every agent holds: a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or its first
   4 or more hex digits, the read recorded as exposure, refused 'not recorded yet: a commit is recorded at the look after the turn that
   made it' until then. `Session.repo_commit`. See [RFC 0057](docs/rfcs/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
-- The merge queue for worktree teams, written out in `docs/topologies.md`: a `merges` queue and a merger in a worktree, the look
+- The merge queue for worktree teams, written out in `docs/how-to/topologies.md`: a `merges` queue and a merger in a worktree, the look
   recording each merge or conflict, and a conflict going back to its worker as its task's result. `docs/research/landscape.md` now puts
   the merge-queue role there, and not in `git-swarm`, which never merges. See [RFC 0058](docs/rfcs/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).
 - `isolated` workspaces, experimental. An isolated workspace is a snapshot whose harness, and everything the runtime runs in its tree,
@@ -96,7 +96,7 @@
   `Session.start(trainable=True)`, `prepare(trainable=True)` and `platoon-harness team check --trainable` run. A trainable start needs
   an authority. `DriverInfo.version` says the harness version a driver would run, where it can tell without starting one, and
   `levels.unearned` why a result does not prove a level. See [RFC 0052](docs/rfcs/0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md).
-- `docs/training.md`, the guide for a training system building on the contract.
+- `docs/extending/training.md`, the guide for a training system building on the contract.
 - A session's principal is a person or a program: `Session.start(principal=)` and `prepare(principal=)` take `human:<name>` or
   `program:<name>`, and `Manifest.principal` names it, a manifest from before reading its `human` as one. A program's message goes
   as its reader's setting says, and a session a program starts issues no owner credential, so a guest of its runtime holds a view
@@ -239,7 +239,7 @@
   post's vote control disabled, saying why. A queue's or a board's chat draws Tasks or Entries disabled, as the tasks and board
   views are planned. A post's thread is followed by an index on each message's parent, so the Board's time grows with a
   session's messages and not with their square; the projection is version 4, which `web` folds again from the journal when
-  it starts. See `docs/web.md` and [RFC 0035](docs/rfcs/0035-the-board-and-the-map-over-messages.md).
+  it starts. See `docs/how-to/web.md` and [RFC 0035](docs/rfcs/0035-the-board-and-the-map-over-messages.md).
 - The look: at each turn's end and each resume the lifecycle asks the host for a `probe`, and an agent's stop looks once more before
   it ends the workspace. Looks run one at a time, change no ref, index or file, and record on `repo/<name>`, with no agent in the
   envelope, `repo.committed` once per new commit, parents first, `repo.rewritten` for what a branch no longer reaches of what the
@@ -264,7 +264,7 @@
 - `workspace = "worktree"`: a linked git worktree of the session's repository, locked, on `platoon-harness/<session>/<agent>`, at
   `agents/<agent>/workspace` in the session folder, made in three steps git keeps a fact of, so the `workspace` effect is retried after
   a crash and adopts what an earlier attempt made. A launch and a resume run where the journal says the agent works, and a resume
-  whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/workspaces.md` and [RFC 0031](docs/rfcs/0031-a-workspace-is-a-place-git-already-knows.md).
+  whose worktree has gone, or left its repository, ends its agent `lost`, naming the fix. See `docs/how-to/workspaces.md` and [RFC 0031](docs/rfcs/0031-a-workspace-is-a-place-git-already-knows.md).
 - Refused before any cost: a git mode outside a work tree, in a bare repository or one with no commit, on git older than 2.36, with
   LFS files and no filter, from a subfolder the workspace would not hold, or where a session's branches exist, naming another session
   name first; a session folder unignored in its repository's work tree, in every mode. Warned of: submodules, uncommitted changes,
@@ -286,7 +286,7 @@
   approvals as cards with Allow and Deny, Needs you with its count, from the runtime's `attention`, and an agent's interrupt, stop
   below, retire and cancel and the session's close and cancel, each asking first where the terminal does. Each act keeps its key
   until answered, across a lost connection and a reload, so a retry is one operation, and a refusal shows its reason. Every control
-  the person cannot use says why. See `docs/web.md` and [RFC 0028](docs/rfcs/0028-acting-from-the-page.md).
+  the person cannot use says why. See `docs/how-to/web.md` and [RFC 0028](docs/rfcs/0028-acting-from-the-page.md).
 - `view_info`'s `x` says `body_limit`, the most bytes a body may be.
 - The browser suite, `tests/e2e/`, in Chromium's headless shell: a message in an agent's input path once, on a wire harness and on
   the real `claude` binary against FakeModel, the browser and the terminal attached at once, approvals raced from two clients,
@@ -296,7 +296,7 @@
   one way into `swarmchat.sqlite`, with ids a rebuild gives again, and serves the page's `view_*` replies from it, with "Delivered to"
   from delivery evidence in place of "Read by". A view link and a control link, each opening once for a session token that expires;
   `Host` and `Origin` checked; loopback unless `--host` names another address with TLS. `/x/command`, `/x/body` and `/x/link` take what
-  the page will send. The page reads in this stage, and every act is drawn disabled, saying why. See `docs/web.md` and [RFC 0027](docs/rfcs/0027-the-browser-on-our-backend.md).
+  the page will send. The page reads in this stage, and every act is drawn disabled, saying why. See `docs/how-to/web.md` and [RFC 0027](docs/rfcs/0027-the-browser-on-our-backend.md).
 - `platoon_harness.runtime.control.BODY_LIMIT` and `platoon_harness.primitives.IN_A_RESULT` are public.
 - `platoon_harness.http`: the tool server's bounded HTTP, as a module of its own with public names. `Origin`, when a request has
   one, must now be the origin of its `Host`.
@@ -308,7 +308,7 @@
 - The tool plane: a tools-only MCP server on loopback, a stdio shim, `ph`, and one derivation of tools and the preamble from
   `ops.list`, per token.
 - `platoon_harness.rpc`: one line-delimited JSON-RPC 2.0 peer on asyncio streams, split on LF only.
-- The driver contract: seven methods, one closed report vocabulary, `levels`, and `docs/drivers.md`.
+- The driver contract: seven methods, one closed report vocabulary, `levels`, and `docs/extending/drivers.md`.
 - `Process`, for every subprocess driver: a group recorded before exec, pipes that always drain, a bounded masked log, and a
   verified `stop`. `harness_env` is the allowlist of section 15.
 - `WireDriver` and `serve`, and the `exec` driver. `harness = { command = [...], mode = "wire" }` names a program in a team.
@@ -372,7 +372,7 @@
   prints one line per event the runtime it owns journals, from its `runtime.started`, and then the Ending, in a shape versioned by
   `format`. Exit codes are an Ending's, 64 for usage, a refused `run` or `session resume` among it, and 78 for configuration. Ctrl+C
   or `SIGTERM` at any point runs the owner's shutdown. `--approvals` answers every approval one way and the manifest keeps it, and
-  nothing prompts. `docs/cli.md` is made from the command definitions, and `docs/headless.md` is a quickstart.
+  nothing prompts. `docs/reference/cli.md` is made from the command definitions, and `docs/how-to/headless.md` is a quickstart.
 - `kernel.registry(extensions)`, the op table before any session exists, and `Op.agent`, which keeps `agent.finish` to agents by
   kind as `runtime` keeps an op to the runtime.
 - `runtime.opening.check(team, plan_login=)`, every problem `Session.start` would meet, which `team check` prints, and
@@ -400,7 +400,7 @@
   starts a session on a detached runtime and is its guest, so Ctrl+D detaches and the session runs on. The workspace has a navigator
   grouped by what a person must do, a focus pane with a transcript read from the journal a page at a time, live text below it, an
   inspector, a dock of the places a person must act, and a composer whose target is always shown. One keymap table makes the
-  bindings, the help, the footer, the palette and the keymap of `docs/tui.md`. Untrusted text crosses one `SafeText` boundary.
+  bindings, the help, the footer, the palette and the keymap of `docs/how-to/tui.md`. Untrusted text crosses one `SafeText` boundary.
   `tests/live/test_tui.py` drives it with Pilot on a Claude Code lead and a Codex worker.
 - `group` on each roster row: what a person must do about the agent, `needs_you`, `working`, `blocked`, `idle`, `done` or
   `failed`, derived in the view so every client says the same.
@@ -409,7 +409,7 @@
   goes to no agent, `/` alone lists them, `/` from any other part begins one there, and the footer always begins `/ commands`.
   Tab and Shift+Tab go round the parts in the order they are on screen. The dock takes focus with no place chosen, so its `y`
   and `n` answer only a place chosen there with the arrows. The sessions screen has a plain key for each act, `?` the help, `p`
-  the palette and `q` quitting among them. `docs/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep
+  the palette and `q` quitting among them. `docs/how-to/tui.md` names the VS Code, Cursor, Terminal.app and iTerm2 settings that keep
   keys. [RFC 0026](docs/rfcs/0026-every-act-from-any-terminal.md).
 
 - `tool_names` on `Capabilities`: a harness that shows our MCP tools by their own names, as OpenHands does, says `bare`, and its

@@ -153,4 +153,4 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
   own, and an end that kept the snapshot whole, in run 64 on `claude-haiku-5-5` in 2 calls and run 65 on `gpt-6-luna` in 2; and its
   release commands run after it, which left the commit on its branch in your repository and the snapshot gone, in run 66 on
   `claude-haiku-5-5` in 2 calls and run 67 on `gpt-6-luna` in 2.
-- Git 2.47.3 is the only version run. [compatibility.md](../compatibility.md) has what each harness sees in a worktree.
+- Git 2.47.3 is the only version run. [compatibility.md](../reference/compatibility.md) has what each harness sees in a worktree.

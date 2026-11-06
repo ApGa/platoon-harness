@@ -12,7 +12,7 @@ from platoon_harness.testing import check_driver
 from platoon_harness.testing.conformance import _CHECKS
 from platoon_harness.testing.scripted import ScriptedDriver
 
-GUIDE = Path(__file__).parents[3] / "docs" / "drivers.md"
+GUIDE = Path(__file__).parents[3] / "docs" / "extending" / "drivers.md"
 TEXT = GUIDE.read_text()
 
 pytestmark = pytest.mark.timeout(60)

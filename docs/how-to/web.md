@@ -2,7 +2,7 @@
 
 `platoon-harness web SESSION` serves [SwarmChat](https://swarmchat.io)'s page over one session's journal. It is a client
 like any other: it reads what the journal holds, decides nothing, and computes no status, and what a person does there is an
-op, through the same path as the terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](cli.md) the command line's
+op, through the same path as the terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's
 reference.
 
 ## Opening it
@@ -165,7 +165,7 @@ for what changed. Live text, what an agent is saying before its turn commits it,
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
 only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may
 run are the terminal's and the command line's for now. The page is laid out for a wide window, and at a phone's width it
-is not usable yet. [STATUS.md](STATUS.md) says what each is.
+is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 
 ## Security
 

@@ -1,6 +1,6 @@
 # Headless quickstart
 
-From a terminal or CI, with harnesses you already use and their own logins. [cli.md](cli.md) is the full reference.
+From a terminal or CI, with harnesses you already use and their own logins. [cli.md](../reference/cli.md) is the full reference.
 
 ## Check the machine
 
@@ -22,7 +22,7 @@ when the machine can run sessions and 78 when it cannot. `doctor --check` runs e
 ships for against a model of ours on loopback, on no account, and keeps what it found under the root, where the runtime reads it at
 each launch and resume: an agent's levels come from it, and say `unverified` for a harness, an SDK or a host no result was made on.
 `doctor` says whether a kept result speaks for the binary that runs, and what it found. `openhands` is there once the SDK's
-`openhands` extra is installed for the interpreter it names, as [drivers.md](drivers.md#openhands-a-wire-worker) says.
+`openhands` extra is installed for the interpreter it names, as [drivers.md](../extending/drivers.md#openhands-a-wire-worker) says.
 
 ## Write a team
 
@@ -40,7 +40,7 @@ no problems
 agent of each role would be told. `--harness codex` adds a role on Codex over the project file, so where there is none it is a team
 of one that needs no file.
 
-[examples/mixed-team](../examples/mixed-team/README.md) is such a team with a job to give it, which runs as below, and with no keys
+[examples/mixed-team](../../examples/mixed-team/README.md) is such a team with a job to give it, which runs as below, and with no keys
 on scripted stand-ins.
 
 ## Run it

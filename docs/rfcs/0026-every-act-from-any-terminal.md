@@ -70,4 +70,4 @@ Backspace.
 ## Evidence
 
 - The owner's report, and [tui-expectations.md](../research/tui-expectations.md) section 2 on terminal limits.
-- [tui.md](../tui.md), "Every act from any terminal" and "Terminals that keep keys". [Architecture section 12](../architecture.md).
+- [tui.md](../how-to/tui.md), "Every act from any terminal" and "Terminals that keep keys". [Architecture section 12](../architecture.md).

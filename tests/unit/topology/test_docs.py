@@ -7,7 +7,7 @@ from typing import Any
 from platoon_harness.team import Team
 from platoon_harness.topology import PRESETS
 
-GUIDE = Path(__file__).parents[3] / "docs" / "topologies.md"
+GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "topologies.md"
 BLOCK = re.compile(r"^```(\w+)\n(.*?)^```$", re.M | re.S)
 
 

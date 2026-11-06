@@ -35,12 +35,12 @@ $ uv run platoon-harness            # the terminal UI
 | Read | For |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | The design of record, and [docs/rfcs/](docs/rfcs/) for why each decision was made |
-| [docs/tui.md](docs/tui.md), [docs/web.md](docs/web.md), [docs/headless.md](docs/headless.md), [docs/cli.md](docs/cli.md) | The terminal UI, the browser, headless runs, and every command |
-| [docs/topologies.md](docs/topologies.md) | Teams and topologies, with a worked example per preset |
-| [docs/workspaces.md](docs/workspaces.md) | Where each agent works, a worktree of its own among them, and what becomes of it |
-| [docs/provenance.md](docs/provenance.md) | What reached each agent, what it rests on, whose work an outcome reaches, and credit beside the journal |
+| [docs/how-to/tui.md](docs/how-to/tui.md), [docs/how-to/web.md](docs/how-to/web.md), [docs/how-to/headless.md](docs/how-to/headless.md), [docs/reference/cli.md](docs/reference/cli.md) | The terminal UI, the browser, headless runs, and every command |
+| [docs/how-to/topologies.md](docs/how-to/topologies.md) | Teams and topologies, with a worked example per preset |
+| [docs/how-to/workspaces.md](docs/how-to/workspaces.md) | Where each agent works, a worktree of its own among them, and what becomes of it |
+| [docs/how-to/provenance.md](docs/how-to/provenance.md) | What reached each agent, what it rests on, whose work an outcome reaches, and credit beside the journal |
 | [examples/mixed-team](examples/mixed-team/README.md) | A Claude Code lead and a Codex worker in one session, run, watched, steered and read back, with no keys too |
-| [docs/drivers.md](docs/drivers.md), [docs/compatibility.md](docs/compatibility.md) | How a harness is driven, and what each one supports |
+| [docs/extending/drivers.md](docs/extending/drivers.md), [docs/reference/compatibility.md](docs/reference/compatibility.md) | How a harness is driven, and what each one supports |
 | [AGENTS.md](AGENTS.md) | Rules for changing this repository, human or agent |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 

@@ -101,4 +101,4 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
 ## Evidence
 
 - [swarmchat.md](../research/swarmchat.md): the wire contract, the overlay technique, the traps and the eleven implications.
-- `tests/unit/web/`, `tests/integration/test_web.py`, `tests/e2e/test_web.py`. [web.md](../web.md) is the guide.
+- `tests/unit/web/`, `tests/integration/test_web.py`, `tests/e2e/test_web.py`. [web.md](../how-to/web.md) is the guide.

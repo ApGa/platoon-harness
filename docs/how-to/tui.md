@@ -1,7 +1,7 @@
 # The terminal UI
 
 `platoon-harness` on a terminal opens the terminal UI. It is a client like any other: it submits ops and draws the views,
-holds no timer that decides anything, and computes no status. [cli.md](cli.md) is the command line's reference and
+holds no timer that decides anything, and computes no status. [cli.md](../reference/cli.md) is the command line's reference and
 [headless.md](headless.md) runs the same sessions with no terminal.
 
 ## Opening it
@@ -187,7 +187,7 @@ The keymap is one table, from which the bindings, the typed commands, the help (
 sessions screen, or F1), the footer, the palette and this keymap are made. A part that has focus takes its own keys
 before the session's. `^` is Ctrl.
 
-<!-- keymap: made from the keymap table by `uv run python -m platoon_harness_cli.tui.keymap docs/tui.md` -->
+<!-- keymap: made from the keymap table by `uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md` -->
 
 ### Everywhere
 
@@ -312,5 +312,5 @@ Disabled where a control for it would be, or absent from the palette: diffs and 
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, an approval and who answered it in the transcript, copying a selection from
 the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in
-a message's text followed. [STATUS.md](STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+a message's text followed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.

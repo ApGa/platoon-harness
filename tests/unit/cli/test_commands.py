@@ -26,7 +26,7 @@ from platoon_harness_cli.reference import reference
 
 APP = build()
 OPS = registry(PRIMITIVES)
-REFERENCE = Path(__file__).parents[3] / "docs" / "cli.md"
+REFERENCE = Path(__file__).parents[3] / "docs" / "reference" / "cli.md"
 
 
 def parsed(words: list[str]) -> tuple[Any, dict[str, Any]]:
@@ -200,8 +200,8 @@ def test_annotate_is_made_from_the_schema_session_annotate_checks():
 
 
 def test_the_reference_is_made_from_the_definitions():
-    """On a failure, run `uv run python -m platoon_harness_cli.reference > docs/cli.md`."""
-    assert (Path(__file__).parents[3] / "docs" / "cli.md").read_text() == reference()
+    """On a failure, run `uv run python -m platoon_harness_cli.reference > docs/reference/cli.md`."""
+    assert (Path(__file__).parents[3] / "docs" / "reference" / "cli.md").read_text() == reference()
 
 
 def test_a_person_s_text_is_cut_into_a_gist_and_a_body_one_way():

@@ -74,4 +74,4 @@ An event's ref means something only in the session that wrote it.
   worker citing the goal it was handed, and `test_a_commit_made_elsewhere_cites_no_event_of_this_session`, a commit fetched from
   another clone, made a year before, citing the `agent/ada@1` of its own session, which cites nothing here, though ada was handed
   this session's.
-- [Architecture sections 7, 11 and 13](../architecture.md). [workspaces.md](../workspaces.md).
+- [Architecture sections 7, 11 and 13](../architecture.md). [workspaces.md](../how-to/workspaces.md).

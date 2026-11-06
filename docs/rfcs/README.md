@@ -88,7 +88,7 @@ Write an RFC before the code when a change touches any of these:
 - the driver contract or the wire protocol ([section 9](../architecture.md#9-drivers));
 - the tool plane ([section 10](../architecture.md#10-tool-plane));
 - the schema of the team file or the config ([section 17](../architecture.md#17-extensions-and-configuration));
-- the [command line](../cli.md);
+- the [command line](../reference/cli.md);
 - the training contract ([section 14](../architecture.md#14-training));
 - a new required dependency, or a new layer;
 - a name in `tests/public_api.txt`, renamed or removed;

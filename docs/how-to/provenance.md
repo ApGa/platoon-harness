@@ -1,7 +1,7 @@
 # Provenance
 
 A session's journal says what each agent was handed, what it claimed to rest on, and what followed from what. This guide is how to
-ask it. Architecture section 11 is the design of record, and [RFC 0038](rfcs/0038-provenance-is-answered-from-the-record.md) the
+ask it. Architecture section 11 is the design of record, and [RFC 0038](../rfcs/0038-provenance-is-answered-from-the-record.md) the
 decision.
 
 Three things stay apart in every answer, and none is ever drawn as another:
@@ -42,7 +42,7 @@ never asks. It costs 78 bytes in every request of such an agent, 20 tokens by Qw
 for each citation that names nothing or no lines of its event. A team that copies the default and leaves the slot out asks nothing,
 and its agents' citations are still checked and kept. In two live runs, one on each of Claude Code and Codex, each of the two
 citations made named something its citer had been shown, and none was refused; two runs measure no rate, and
-[STATUS.md](STATUS.md) keeps them.
+[STATUS.md](../STATUS.md) keeps them.
 
 ## Asking the record
 
@@ -90,7 +90,7 @@ reads as not said there, never as never. [tui.md](tui.md) and [web.md](web.md) a
 `unknown` lists its reasons: offers its harness had not said by the bound that it took, surfaces of the agent's harness no stored
 conformance result proves observed, and gaps content could have come through. An empty list of offers is how "not handed over
 through us below the bound" reads, which is not "never seen": every harness here has a shell, and what reaches an agent through a shell, a file or git leaves nothing in the
-journal. So nothing answers `not_seen` today. [compatibility.md](compatibility.md), Provenance per harness, says what each harness's
+journal. So nothing answers `not_seen` today. [compatibility.md](../reference/compatibility.md), Provenance per harness, says what each harness's
 reports let the runtime confirm and join.
 
 ## Contributors are not credit
@@ -142,7 +142,7 @@ It splits an episode's one team reward, on its `episode.closed`, over the refs t
 and its citations, an agent's only where its exposure says `seen`, never along an offer. It writes one local `credit` row per agent it
 reached, on that agent's first `agent.started`, and none for an agent it never reached, which stays unscored. Citing gives away all
 but `retained` of what reaches the citer, and work nobody cites earns nothing from it, so training on it pulls against the default
-template's request to cite. [training.md](training.md) shows it run.
+template's request to cite. [training.md](../extending/training.md) shows it run.
 
 ## What can train
 
@@ -182,7 +182,7 @@ $ platoon-harness annotate fix-auth --target task/tasks/1@3 --kind credit --prod
 $ platoon-harness annotations fix-auth --target task/tasks/1@3
 ```
 
-[examples/mixed-team](../examples/mixed-team/README.md) runs a team whose writes cite what they rest on, and asks `uses` and
+[examples/mixed-team](../../examples/mixed-team/README.md) runs a team whose writes cite what they rest on, and asks `uses` and
 `contributors` of its lead's answer.
 
 A session closed before an upgrade changed a view refuses a query, naming the views behind its journal. `platoon-harness session
