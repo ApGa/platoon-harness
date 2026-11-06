@@ -59,6 +59,11 @@ def title_and_status(path: Path) -> tuple[str, str]:
     return title[1], status[1]
 
 
+def undated(status: str) -> str:
+    """A status as the index gives it: the RFC's own, with its note and without its date."""
+    return re.sub(r"^(\w+), \d{4}-\d{2}-\d{2}", r"\1", status)
+
+
 def headings(path: Path) -> list[str]:
     return [line.removeprefix("## ") for _, line in prose(path) if line.startswith("## ")]
 
@@ -117,8 +122,8 @@ def test_the_index_lists_every_rfc_with_its_title_and_status():
         title, status = title_and_status(path)
         assert row["link"] == path.name
         assert row["title"] == title, f"RFC {number}: the index says {row['title']!r}, the RFC {title!r}"
-        assert row["status"] in STATUSES, f"RFC {number}: {row['status']!r} is not one of {STATUSES}"
-        assert re.match(rf"{row['status']}\b", status), f"RFC {number}: the index says {row['status']}, it {status}"
+        assert re.split(r"[,;]", status)[0] in STATUSES, f"RFC {number}: {status!r} is not one of {STATUSES}"
+        assert row["status"] == undated(status), f"RFC {number}: the index says {row['status']!r}, the RFC {status!r}"
 
 
 def test_the_index_explains_every_status():

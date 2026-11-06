@@ -11,6 +11,8 @@ index entry.
 ## Index
 
 Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
+A status below is the one the RFC gives, with its note and without its date, so the index shows what superseded,
+amended or extended an RFC.
 
 | RFC | Title | Status |
 |---|---|---|
@@ -21,37 +23,37 @@ Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own d
 | [0005](0005-daemons-and-effects.md) | Daemons, effects and explicit uncertainty | Accepted |
 | [0006](0006-per-session-runtime.md) | A runtime per session, with ownership modes | Accepted |
 | [0007](0007-topology-as-grants.md) | Topology as grants over relations | Accepted |
-| [0008](0008-driver-contract-and-wire.md) | Driver contract and JSON-RPC wire protocol | Accepted |
+| [0008](0008-driver-contract-and-wire.md) | Driver contract and JSON-RPC wire protocol | Accepted; superseded in part by [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md) |
 | [0009](0009-tools-only-mcp-server.md) | A tiny tools-only MCP server, HTTP bearer by default, and ph | Accepted |
-| [0010](0010-provenance.md) | Provenance: backward references, bounds, evidence and gaps | Accepted |
+| [0010](0010-provenance.md) | Provenance: backward references, bounds, evidence and gaps | Accepted; superseded in part by [RFC 0036](0036-one-ref-names-what-a-model-is-shown.md), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0038](0038-provenance-is-answered-from-the-record.md) |
 | [0011](0011-annotations-beside-the-journal.md) | Annotations live beside the journal | Accepted |
-| [0012](0012-waiting-and-the-monitor.md) | Waiting parks at turn end, with a monitor and a hop limit | Accepted |
-| [0013](0013-platoon-bridge.md) | Platoon bridge on the function-harness seam | Accepted |
+| [0012](0012-waiting-and-the-monitor.md) | Waiting parks at turn end, with a monitor and a hop limit | Accepted; superseded in part by [RFC 0023](0023-agents-that-stay.md) |
+| [0013](0013-platoon-bridge.md) | Platoon bridge on the function-harness seam | Accepted; superseded by [RFC 0049](0049-the-contract-a-training-authority-gets.md) |
 | [0014](0014-swarmchat-compatibility-backend.md) | SwarmChat compatibility backend plus overlay | Accepted |
 | [0015](0015-textual-and-safetext.md) | Textual, a SafeText boundary and a Line API transcript | Accepted |
-| [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | Accepted |
+| [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | Accepted; amended by [RFC 0027](0027-the-browser-on-our-backend.md) |
 | [0017](0017-config-and-entry-points.md) | TOML config, pydantic, and two entry-point groups | Accepted |
-| [0018](0018-who-owns-a-process.md) | Who owns a process | Accepted |
+| [0018](0018-who-owns-a-process.md) | Who owns a process | Accepted; superseded in part by [RFC 0021](0021-what-a-harness-leaves-behind.md) |
 | [0019](0019-one-link-two-forms.md) | One link, two forms | Accepted |
 | [0020](0020-finish-and-handover-wait-for-the-turn.md) | Finish and handover wait for the turn | Accepted |
 | [0021](0021-what-a-harness-leaves-behind.md) | What a harness leaves behind | Accepted |
 | [0022](0022-what-a-harness-took-is-the-runtime-s-again.md) | What a harness took is the runtime's again | Accepted |
-| [0023](0023-agents-that-stay.md) | Agents that stay | Accepted |
+| [0023](0023-agents-that-stay.md) | Agents that stay | Accepted; amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) |
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | Accepted |
-| [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted |
+| [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
 | [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted |
-| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted |
+| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
 | [0031](0031-a-workspace-is-a-place-git-already-knows.md) | A workspace is a place git already knows | Accepted |
-| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted |
+| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), and extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
 | [0033](0033-a-harness-s-own-worktrees-are-off.md) | A harness's own worktrees are off | Accepted |
 | [0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) | Isolation is an extension's, and the runtime's own git runs inside it | Accepted |
 | [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Accepted |
-| [0036](0036-one-ref-names-what-a-model-is-shown.md) | One ref names what a model is shown, and a citation is checked and kept as a claim | Accepted |
-| [0037](0037-an-offer-is-confirmed-only-by-its-harness.md) | An offer is confirmed only by its harness, and the record claims nothing more than it holds | Accepted |
-| [0038](0038-provenance-is-answered-from-the-record.md) | Provenance is answered from the record, one hop at a time, and never as credit | Accepted |
+| [0036](0036-one-ref-names-what-a-model-is-shown.md) | One ref names what a model is shown, and a citation is checked and kept as a claim | Accepted; extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) and [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
+| [0037](0037-an-offer-is-confirmed-only-by-its-harness.md) | An offer is confirmed only by its harness, and the record claims nothing more than it holds | Accepted; extended by [RFC 0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) |
+| [0038](0038-provenance-is-answered-from-the-record.md) | Provenance is answered from the record, one hop at a time, and never as credit | Accepted; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
 | [0039](0039-estimators-write-beside-the-journal-at-m2.md) | Estimators write rewards and credit beside the journal from M2 | Accepted |
 | [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) | Pi names what landed and which call made a tool call | Accepted |
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
@@ -66,7 +68,7 @@ Every RFC below was accepted on 2026-11-02, during Milestone 0, unless its own d
 | [0050](0050-a-script-is-a-person-or-a-program.md) | A script is a person or a program | Accepted |
 | [0051](0051-one-rule-for-whom-a-prompt-goes-to.md) | One rule for whom a session's prompt goes to | Accepted |
 | [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted |
-| [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted |
+| [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06 |
 | [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted |
 | [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted |
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | Accepted |
