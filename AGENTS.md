@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Rules for anyone changing this repository, human or agent. Read [docs/architecture.md](docs/architecture.md) first: it is
-the design of record. [docs/spec/BRIEF.md](docs/spec/BRIEF.md) is the product brief.
+Rules for every change, human or agent. [CONTRIBUTING.md](CONTRIBUTING.md) says how to set up, test and propose a change;
+[architecture.md](docs/architecture.md) §1-§3 is the design. Read the section you touch before changing the kernel or a
+primitive.
 
 ## Clean room
 
@@ -27,8 +28,8 @@ The owner asked for very good taste. In practice:
 
 ## Layers
 
-`kernel` imports only the standard library and pydantic. `primitives`, `patterns`, drivers and extensions use only public kernel
-names. An AST test enforces this. If a primitive needs a private call, the kernel is wrong: fix the kernel.
+`kernel` imports only the standard library and pydantic. `primitives`, drivers and extensions use only public kernel names. An
+AST test enforces this. If a primitive needs a private call, the kernel is wrong: fix the kernel.
 
 The SDK never imports the CLI, Textual, Platoon, Torch, Tinker or an agent implementation. The one exception is OpenHands, the
 SDK's `openhands` extra, which only the OpenHands worker imports, in a process of its own. A boundary test enforces this.
@@ -36,9 +37,9 @@ SDK's `openhands` extra, which only the OpenHands worker imports, in a process o
 ## Engineering conventions
 
 - Python 3.12+, uv workspace, one `uv.lock`. Run things with `uv run`.
-- `uv run ruff check . && uv run ruff format --check .`, and `uv run ty check` as a gate.
-- `uv run pytest -q` for fast tests, `uv run pytest -q -m slow` for slow ones, `-m e2e` for browser tests. Tests are CPU only with
-  no network, use port 0 and `tmp_path`, and never sleep to wait for a condition: use `ManualClock` and await the event.
+- `ruff check`, `ruff format --check` and `ty check` pass on every change.
+- Tests are CPU only with no network, use port 0 and `tmp_path`, and never sleep to wait for a condition: use `ManualClock` and
+  await the event.
 - Live tests are marked `live`, need `PLATOON_HARNESS_LIVE=1`, and state their budget. A skipped live test is not a passing
   integration. Say which was run.
 - Public API changes update `tests/public_api.txt`. Generated docs are regenerated, not hand-edited.
@@ -48,10 +49,10 @@ SDK's `openhands` extra, which only the OpenHands worker imports, in a process o
 
 ## Commits
 
-Conventional Commits with no scope, in sentence case, with no final period: `feat: Add leased task queue`. The body says why. Commit
-locally only: never push, tag or publish without an explicit request from the owner. Never pass `--no-verify`.
+Conventional Commits with no scope, in sentence case, with no final period: `feat: Add leased task queue`. The body says why. Agents
+commit locally only: never push, tag or publish without an explicit request from the owner. Never pass `--no-verify`.
 
 ## Status
 
-`docs/STATUS.md` lists every capability as implemented, tested, experimental or deferred. An interface, a mock, a screenshot or a TODO
-does not count as implemented. Update it in the same change.
+`docs/STATUS.md` lists every capability as planned, implemented, tested, experimental or deferred. An interface, a mock, a
+screenshot or a TODO does not count as implemented. Update it in the same change.

@@ -11,6 +11,9 @@
   count, `open` while the latest turn has not ended. It is worked out from the views as it is asked, with no new table, and
   answers alike after a rebuild and on a closed copy. `primitives.Span` and `primitives.Spans`. See
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+- [CONTRIBUTING.md](CONTRIBUTING.md), the workflow: setting up a checkout, the tests and what each needs, the hooks, commits
+  and pull requests, what CI runs, and adding a driver, an extension, a preset, an op or an example. AGENTS.md keeps the rules
+  every change follows.
 - The integration test, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`: one agent `isolated` under `bwrap` and
   launched sealed on a training authority's gateway, in the slow pass, on a scripted harness on the wire, as a harness in the
   runtime's own process cannot be confined, and on pi and OpenHands. Confined, it calls the gateway on loopback with its own bearer,

@@ -54,6 +54,7 @@ Each example has a README that says what it does and how to run it.
 
 ## Contributing
 
+[CONTRIBUTING.md](../CONTRIBUTING.md) says how to set up a checkout, run the tests and propose a change.
 [AGENTS.md](../AGENTS.md) holds the rules for changing this repository, human or agent. Some changes start as an RFC:
 see [when to write an RFC](rfcs/README.md#when-to-write-an-rfc) and
 [how to propose a change](rfcs/README.md#how-to-propose-a-change).

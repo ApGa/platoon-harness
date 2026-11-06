@@ -42,6 +42,7 @@ $ uv run platoon-harness            # the terminal UI
 | [docs/how-to/provenance.md](docs/how-to/provenance.md) | What reached each agent, what it rests on, whose work an outcome reaches, and credit beside the journal |
 | [examples/mixed-team](examples/mixed-team/README.md) | A Claude Code lead and a Codex worker in one session, run, watched, steered and read back, with no keys too |
 | [docs/extending/drivers.md](docs/extending/drivers.md), [docs/reference/compatibility.md](docs/reference/compatibility.md) | How a harness is driven, and what each one supports |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to set up a checkout, run the tests and propose a change |
 | [AGENTS.md](AGENTS.md) | Rules for changing this repository, human or agent |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 
