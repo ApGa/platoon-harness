@@ -2,6 +2,7 @@
 
 import ast
 import asyncio
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -279,13 +280,23 @@ def test_nothing_has_a_private_api():
 
 
 def test_nothing_claims_mid_generation():
+    """Every doc, the root's Markdown and the packages' code, but for the folders whose dated research and verbatim
+    brief quote the phrase to forbid it; the law's own words and the rule in AGENTS.md that carries it out are no
+    claim."""
     root = Path(__file__).parents[3]
-    texts = (*root.glob("packages/*/src/**/*.py"), *root.glob("docs/*.md"), *root.glob("docs/adr/*.md"))
+    excluded = ("docs/research", "docs/spec")
+    not_claims = re.compile(r'Nothing claims mid-generation|Never say "exactly once" or "mid-generation"\.')
+    texts = []
+    for pattern in ("packages/*/src/**/*.py", "*.md", "docs/**/*.md"):
+        found = sorted(root.glob(pattern))
+        assert found, f"{pattern} matches nothing"
+        texts += [path for path in found if not any(path.is_relative_to(root / folder) for folder in excluded)]
+    assert all((root / folder).is_dir() for folder in excluded)
     claims = [
-        f"{path.name}: {line}"
+        f"{path.relative_to(root)}: {line}"
         for path in texts
         for line in path.read_text().splitlines()
-        if "mid-generation" in line.lower() and "Nothing claims mid-generation" not in line
+        if "mid-generation" in not_claims.sub("", line).lower()
     ]
     assert claims == []
 
