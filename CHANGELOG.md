@@ -386,6 +386,8 @@
 
 ### Changed
 
+- Claude Code's conformance test pins 2.1.319, which it updated itself to on the machines that run the slow pass, and on which its
+  checks pass against FakeModel, 26 passed and 4 skipped, as on 2.1.318.
 - Codex's conformance test pins 0.167.0, the version its checks last passed on, against FakeModel, as they had on 0.164.0.
 - Claude Code's conformance test pins 2.1.318, the version its checks last passed on, against FakeModel, as they had on 2.1.316.
 - `trainable` stands on the two sealed checks too, beside `ready_with_pinned_model`, `tool_in_first_request` and
