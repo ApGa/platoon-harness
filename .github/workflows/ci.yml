@@ -1,0 +1,78 @@
+name: CI
+
+# Pull requests into any branch, so that a pull request stacked on another one is checked too, and pushes to main.
+# Every job runs while the repository is private too, so that collaborators get checks. The slow tests need harness
+# binaries, so they stay out of CI, and the live tests spend model calls on a person's logins, so they never run here.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a pull request or to main cancels the run it makes stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Every hook of the pre-commit stage on every file: ruff's lint and format, and ty. `--locked` fails when uv.lock is
+  # out of date with a pyproject.toml, rather than locking again on the runner.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run the hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  # The fast suite on each Python the packages' classifiers name. UV_PYTHON has uv sync and uv run use the job's
+  # Python. With bubblewrap, the bwrap tests confine where the runner lets them, and skip saying why where it does not.
+  # Git 2.47.3 is the only git the workspace tests have run on, so an older one fails the job.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Check that git is 2.47 or later
+        run: git --version && printf '2.47\n%s\n' "$(git --version | cut -d' ' -f3)" | sort -V -C
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run the tests
+        run: uv run pytest -q -n auto
+
+  # The browser tests, on Playwright's Chromium headless shell and the system libraries it needs.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Install Chromium's headless shell
+        run: uv run playwright install --with-deps chromium-headless-shell
+
+      - name: Run the browser tests
+        run: uv run pytest -q -m e2e
