@@ -34,6 +34,7 @@ $ uv run platoon-harness            # the terminal UI
 
 | Read | For |
 |---|---|
+| [docs/README.md](docs/README.md) | The table of contents: every page of the docs, by kind |
 | [docs/architecture.md](docs/architecture.md) | The design of record, and [docs/rfcs/](docs/rfcs/) for why each decision was made |
 | [docs/how-to/tui.md](docs/how-to/tui.md), [docs/how-to/web.md](docs/how-to/web.md), [docs/how-to/headless.md](docs/how-to/headless.md), [docs/reference/cli.md](docs/reference/cli.md) | The terminal UI, the browser, headless runs, and every command |
 | [docs/how-to/topologies.md](docs/how-to/topologies.md) | Teams and topologies, with a worked example per preset |
