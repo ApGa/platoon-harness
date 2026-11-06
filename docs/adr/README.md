@@ -65,6 +65,7 @@ Every record below was accepted on 2026-11-02, during Milestone 0, unless its ow
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | `repo.test` never a tool, the team's `test` with a required timeout and the trust step, a clean detached checkout in a repository of its own, `repo.tested` with no agent in the envelope, and a commit made in an isolated workspace, or built on one, refused |
 | [0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) | An agent cites a commit by the ref the journal gives | `repo.commit{sha}`, an agent read every agent holds, giving a recorded commit's ref, gist and maker and recording the read as exposure, or 'not recorded yet' |
 | [0058](0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md) | A merge queue is a queue and a merger, written out | No preset and no place in `git-swarm`: a `merges` queue read by a merger in a worktree, the look recording the merge or the conflict, and a conflict sent back through the task |
+| [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Nothing is handed to an agent while a stop of a child of its is under way, and the stop tells the authority last, so a training authority settles a child before its parent can act on the report; an answer to the parent's own call reads the journal as it stands |
 
 ## Adding or changing one
 

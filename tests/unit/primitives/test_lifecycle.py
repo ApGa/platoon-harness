@@ -1534,7 +1534,30 @@ async def parked_on(kernel: Kernel, *children: str, role: str = "worker", **wait
 
 
 async def finished(kernel: Kernel, by: Principal) -> None:
+    """`by` finishes, and its stop runs once it has ended, as its host's would."""
     result_of(await kernel.submit(by, "agent.finish", {"gist": f"{by.name} is done"}))
+    await settle_effects(kernel, by.name)
+
+
+async def test_a_parent_hears_of_a_child_s_end_only_once_its_stop_has_finished(kernel):
+    """A stop tells the authority how its agent ended, last, so the parent is handed nothing while it is under way, and
+    is on its way to a turn until it has finished."""
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    bob = await spawn(kernel, "bob", by=lead, goal="")
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+    [stop] = result_of(kernel.query(kernel.runtime, "effect.ready", {}))
+    attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": stop["id"]}))
+
+    stopping = ready(kernel)["agents"]
+    refused = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    blockers = result_of(kernel.query(kernel.runtime, "session.status", {}))["blockers"]
+    result_of(await kernel.submit(kernel.runtime, "effect.finish", {"id": stop["id"], "attempt": attempt}))
+
+    assert (stop["kind"], stopping, refused) == ("stop", [], None)
+    assert "deliverable_delivery" in blockers
+    assert ready(kernel)["agents"] == ["lead"]
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    assert [item["gist"] for item in handed["items"]] == ["done"]
 
 
 async def test_a_join_of_three_costs_one_wake(kernel):
@@ -1620,6 +1643,7 @@ async def test_a_counted_child_that_ended_badly_wakes_the_parent_and_the_wait_st
         await report(kernel, "a", "exited", reason="segfault")
     else:
         result_of(await kernel.submit(ada, how, {"agent": "a"}))
+    await settle_effects(kernel, "a")
 
     assert of_type(kernel, "message.sent")[-1].data["delivery"] == "wake"
     assert ready(kernel)["agents"] == ["lead"]
@@ -1694,6 +1718,7 @@ async def test_a_worker_that_finishes_with_a_task_open_wakes_a_join_it_cannot_en
 
     await finished(kernel, agent("a"))
     await end_turn(kernel, "a")
+    await settle_effects(kernel, "a")
 
     assert ready(kernel)["agents"] == ["lead"]
 

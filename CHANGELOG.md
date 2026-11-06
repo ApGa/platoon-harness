@@ -425,6 +425,9 @@
 
 ### Changed
 
+- Nothing is handed to an agent while a stop of a child of its is under way, so a parent hears of a child's end, by its report or
+  by the notice of a wait that holds on it, only once the authority's `finish` for that child has returned, and is on its way to a
+  turn until then. An answer to its own call reads the journal as it stands. See ADR 0059.
 - Claude Code's conformance test pins 2.1.319, which it updated itself to on the machines that run the slow pass, and on which its
   checks pass against FakeModel, 26 passed and 4 skipped, as on 2.1.318.
 - A snapshot's refusals say `a snapshot` where they said `` `snapshot` ``, as they hold for an isolated workspace too.

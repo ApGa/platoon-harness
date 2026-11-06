@@ -805,6 +805,11 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   that exits on its own puts its agent to rest once, below. One that cannot come back ends its agent `lost`, or `failed` if it never
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
   its turn: `finished` if that turn `stopped`, and `failed` otherwise.
+- **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, and
+  nothing is handed to its parent while that stop is under way: no wake, steer or notice, so neither its report nor the notice of a
+  wait that holds on its end. The parent is on its way to a turn until then. An answer to the parent's own call reads the journal as
+  it stands, so a `wait` it calls or holds open, `message.read` or `agent.status` can say the child has ended first. See
+  [ADR 0059](adr/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md).
 - **Rest: an agent's process is not its identity.** Any agent between turns for ten minutes on the session's clock, with no setting,
   rests, when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a `rest` effect ends its
   process tree, and its next handover brings its harness back first, on its native session, or anew where it took no turn, on a fresh
@@ -1770,8 +1775,9 @@ class AgentOutcome(Model):
   `compact`, one or two calls, each with the headers and each reported, by its id or with none where it never answered, even when
   the compaction is cut. A gateway that counts a budget does so as calls arrive, so only a label a call carries keeps it out, and a
   call no harness reported has no id to join, so it never trains.
-- **Finish** tells the authority how an agent ended, with its report. A stop that a crash cut is said again by the next runtime, so
-  `finish` takes a second telling as the first.
+- **Finish** tells the authority how an agent ended, with its report, last in its stop, and its parent is handed nothing until it
+  has returned (§7), so a training system settles a child before its parent can act on the report. A stop that a crash cut is
+  said again by the next runtime, so `finish` takes a second telling as the first.
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
   that counts steps counts them at its gateway.
 - **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody

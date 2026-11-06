@@ -173,6 +173,35 @@ async def test_an_authority_hears_how_an_agent_ended(tmp_path):
         )
 
 
+async def test_a_parent_hears_of_a_child_s_end_only_once_its_authority_has(tmp_path):
+    """A child's stop tells its authority how it ended, last, so its parent, between turns, is handed the report only
+    once that has returned: here, once the test lets it."""
+    told, go = asyncio.Event(), asyncio.Event()
+
+    class Holding(LocalAuthority):
+        async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+            told.set()
+            await go.wait()
+
+    spawning = Call("agent_spawn", {"name": "ada", "child_role": "worker", "goal": "report"})
+    roles = {
+        "lead": {"harness": scripted([spawning], [Say("heard")]), "may_spawn": ["worker"]},
+        "worker": {"harness": scripted([Call("agent_finish", {"gist": "done"})])},
+    }
+    team = Team.model_validate({"roles": roles})
+    async with Session.start(team, authority=Holding(team), root=tmp_path) as session:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "start")
+        await asyncio.wait_for(told.wait(), SECONDS)
+        held = await offers(session)
+        go.set()
+        heard = await until(lambda: offers(session), session, lambda found: len(found) == 2)
+        stops = [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "stop"]
+
+    assert [offer.agent for offer in held] == ["lead"]
+    assert heard[1].agent == "lead" and heard[1].seq > stops[0].seq
+
+
 async def test_a_long_forgotten_does_not_lose_the_agent(tmp_path):
     """Compaction can name more than one event holds, so the list is a body, whatever its length."""
     forgotten = tuple(f"{index:036d}" for index in range(500))

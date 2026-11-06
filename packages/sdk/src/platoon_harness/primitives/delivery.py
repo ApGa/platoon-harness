@@ -6,7 +6,7 @@ from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, 
 
 from .agents import Agent, Agents
 from .budgets import reserve
-from .common import Exposed, Name, expose, fitted
+from .common import Exposed, Name, expose, fitted, name_of
 from .messages import Deliveries, Entry, chain_of
 from .sessions import SessionRecord
 from .waits import WaitRecord, Waits, out_of_turn
@@ -55,25 +55,33 @@ def _stranded(txn: Txn) -> list[tuple[str, str]]:
     return found
 
 
-def _interrupting(txn: Txn) -> set[str | None]:
-    """Agents an interrupt is under way for."""
+def _under_way(txn: Txn, kind: str) -> set[str]:
+    """Agents an effect of `kind` is under way for."""
     effects = txn.view(Effects)
     return {
         effect.agent
         for state in ("requested", "started")
         for effect in effects.in_state(state)
-        if effect.kind == "interrupt"
+        if effect.kind == kind and effect.agent is not None
     }
+
+
+def _awaiting_stops(txn: Txn) -> set[str]:
+    """Agents a stop of a child of theirs is under way for. A stop tells the authority how its agent ended last."""
+    stopping = (txn.view(Agents).get(name) for name in _under_way(txn, "stop"))
+    return {name_of(agent.parent) for agent in stopping if agent is not None and agent.parent is not None}
 
 
 def work(txn: Txn) -> Work:
     """The courier's input, and what `settled` asks about. A wait stays open while its agent's turn runs, and nothing is
-    handed to an agent while an interrupt of it is under way, as it could land in the turn that interrupt cuts."""
+    handed to an agent while an interrupt of it is under way, as it could land in the turn that interrupt cuts, nor
+    while a stop of a child of its is, so that a parent hears of a child's end only once the authority has, and is on
+    its way to a turn until then."""
     stranded = _stranded(txn)
     if not txn.view(SessionRecord).accepting():
         return Work([], [], stranded, [], None)
     agents = txn.view(Agents)
-    interrupting = _interrupting(txn)
+    interrupting, awaiting = _under_way(txn, "interrupt"), _awaiting_stops(txn)
     ready: list[str] = []
     later: list[str] = []
     dues: list[float] = []
@@ -84,7 +92,9 @@ def work(txn: Txn) -> Work:
         if not (agent.state in ("idle", "waiting") or (agent.state == "running" and steer and _steerable(agent))):
             continue
         due = max(due, agent.retry_at)
-        if due <= txn.now:
+        if reader in awaiting:
+            later.append(reader)
+        elif due <= txn.now:
             ready.append(reader)
         else:
             later.append(reader)
@@ -160,13 +170,16 @@ def _wake(txn: Txn, agent: Agent) -> dict[str, Any] | None:
 
 @op("delivery.offer", on=lambda a: f"agent/{a.agent}", runtime=True)
 def offer(txn: Txn, a: Offer) -> dict[str, Any] | None:
-    """Hand an agent what is queued: a new turn if it is out of one, its earliest boundary if it is working.
+    """Hand an agent what is queued: a new turn if it is out of one, its earliest boundary if it is working, and nothing
+    while a stop of a child of its is under way.
 
     `boundary="tool"` asks for pending steer notices to go on a coordination tool's result, so no effect is requested.
     """
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
+    if a.agent in _awaiting_stops(txn):
+        return None
     if a.boundary == "tool":
         return _hand_over(txn, a.agent, ("steer",), "tool", "notice")
     if agent.state in ("idle", "waiting"):
