@@ -54,6 +54,11 @@ async def ended(session: Session, agent: str) -> dict[str, Any]:
     return next(row for row in (await session.ending()).agents if row["agent"] == agent)
 
 
+async def stops(session: Session, kind: str) -> list[Any]:
+    """The events of `kind` of each agent's stop."""
+    return [event for event in await of_type(session, kind) if event.data["kind"] == "stop"]
+
+
 async def test_a_commit_that_failed_and_landed_all_the_same_does_not_run_twice(tmp_path):
     """A failed commit's outcome is unknown. Told `unavailable` of something that landed, the host retries, and the key
     it keeps across its tries answers from the journal."""
@@ -196,10 +201,40 @@ async def test_a_parent_hears_of_a_child_s_end_only_once_its_authority_has(tmp_p
         held = await offers(session)
         go.set()
         heard = await until(lambda: offers(session), session, lambda found: len(found) == 2)
-        stops = [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "stop"]
+        finished = await until(lambda: stops(session, "effect.finished"), session)
 
     assert [offer.agent for offer in held] == ["lead"]
-    assert heard[1].agent == "lead" and heard[1].seq > stops[0].seq
+    assert heard[1].agent == "lead" and heard[1].seq > finished[0].seq
+
+
+async def test_an_authority_hears_of_an_end_whose_harness_would_not_stop(tmp_path):
+    """A stop tells the authority how its agent ended even when ending the harness fails, and the parent is handed the
+    report only after."""
+    told: list[str] = []
+
+    class Listening(LocalAuthority):
+        async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+            told.append(agent.agent)
+
+    class Stubborn(ScriptedDriver):
+        async def stop(self, grace: float) -> None:
+            await super().stop(grace)
+            raise DriverError("it would not stop")
+
+    spawning = Call("agent_spawn", {"name": "ada", "child_role": "worker", "goal": "report"})
+    roles = {
+        "lead": {"harness": scripted([spawning], [Say("heard")]), "may_spawn": ["worker"]},
+        "worker": {"harness": harness(lambda: Stubborn([[Call("agent_finish", {"gist": "done"})]]))},
+    }
+    team = Team.model_validate({"roles": roles})
+    async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "start")
+        failed = await until(lambda: stops(session, "effect.failed"), session)
+        heard = await until(lambda: offers(session), session, lambda found: len(found) == 2)
+
+    assert told == ["ada"]
+    assert heard[1].agent == "lead" and heard[1].seq > failed[0].seq
 
 
 async def test_a_long_forgotten_does_not_lose_the_agent(tmp_path):

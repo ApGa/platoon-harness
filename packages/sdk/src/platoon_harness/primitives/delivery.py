@@ -6,10 +6,10 @@ from platoon_harness.kernel import Args, Daemon, Effects, Kernel, Refused, Txn, 
 
 from .agents import Agent, Agents
 from .budgets import reserve
-from .common import Exposed, Name, expose, fitted, name_of
+from .common import Exposed, Name, expose, fitted
 from .messages import Deliveries, Entry, chain_of
 from .sessions import SessionRecord
-from .waits import WaitRecord, Waits, out_of_turn
+from .waits import WaitRecord, Waits, awaiting_stops, out_of_turn
 
 _RETRY_SECONDS = 1.0
 _ATTACHED = ("next-turn", "wake", "steer")
@@ -55,21 +55,15 @@ def _stranded(txn: Txn) -> list[tuple[str, str]]:
     return found
 
 
-def _under_way(txn: Txn, kind: str) -> set[str]:
-    """Agents an effect of `kind` is under way for."""
+def _interrupting(txn: Txn) -> set[str | None]:
+    """Agents an interrupt is under way for."""
     effects = txn.view(Effects)
     return {
         effect.agent
         for state in ("requested", "started")
         for effect in effects.in_state(state)
-        if effect.kind == kind and effect.agent is not None
+        if effect.kind == "interrupt"
     }
-
-
-def _awaiting_stops(txn: Txn) -> set[str]:
-    """Agents a stop of a child of theirs is under way for. A stop tells the authority how its agent ended last."""
-    stopping = (txn.view(Agents).get(name) for name in _under_way(txn, "stop"))
-    return {name_of(agent.parent) for agent in stopping if agent is not None and agent.parent is not None}
 
 
 def work(txn: Txn) -> Work:
@@ -81,7 +75,7 @@ def work(txn: Txn) -> Work:
     if not txn.view(SessionRecord).accepting():
         return Work([], [], stranded, [], None)
     agents = txn.view(Agents)
-    interrupting, awaiting = _under_way(txn, "interrupt"), _awaiting_stops(txn)
+    interrupting, awaiting = _interrupting(txn), awaiting_stops(txn)
     ready: list[str] = []
     later: list[str] = []
     dues: list[float] = []
@@ -178,7 +172,7 @@ def offer(txn: Txn, a: Offer) -> dict[str, Any] | None:
     agent = txn.view(Agents).get(a.agent)
     if agent is None:
         raise Refused("not_found", f"no agent {a.agent}")
-    if a.agent in _awaiting_stops(txn):
+    if a.agent in awaiting_stops(txn):
         return None
     if a.boundary == "tool":
         return _hand_over(txn, a.agent, ("steer",), "tool", "notice")

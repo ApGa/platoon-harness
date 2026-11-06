@@ -1,5 +1,6 @@
 """Lifecycle and completion: spawn, the one ended transition, the monitor, and what `settled` means."""
 
+import asyncio
 import sqlite3
 from pathlib import Path
 
@@ -1558,6 +1559,65 @@ async def test_a_parent_hears_of_a_child_s_end_only_once_its_stop_has_finished(k
     assert ready(kernel)["agents"] == ["lead"]
     handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
     assert [item["gist"] for item in handed["items"]] == ["done"]
+
+
+async def test_the_notice_of_a_wait_that_holds_on_a_child_s_end_waits_for_its_stop(kernel):
+    lead = await parked_on(kernel, "bob")
+    result_of(await kernel.submit(agent("bob"), "agent.finish", {"gist": "done"}))
+    [closing] = ready(kernel)["waits"]
+    result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": closing}))
+
+    held = ready(kernel)["agents"], result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "lead"}))
+    await settle_effects(kernel, "bob")
+
+    assert held == ([], None)
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": lead.name}))
+    assert "Your wait holds." in [item["gist"] for item in handed["items"]]
+
+
+async def test_a_wait_held_open_holds_only_once_a_stop_of_a_child_of_its_waiter_s_has_finished(kernel, clock):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    bob = await spawn(kernel, "bob", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    placed = result_of(await kernel.submit(lead, "wait", {"agents": ["bob"], "hold": 20.0}))
+    held = asyncio.create_task(hold_open(kernel, placed))
+    await clock.sleeping()
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+    clock.advance(20)
+    ran_out = await held
+
+    again = asyncio.create_task(hold_open(kernel, placed))
+    await settle_effects(kernel, "bob")
+
+    assert (ran_out["state"], (await again)["state"]) == ("pending", "released")
+
+
+async def test_a_working_parent_is_steered_nothing_while_a_stop_of_a_child_is_under_way(kernel, ada):
+    lead = await spawn(kernel, "lead", role="lead", goal="", ready={"boundaries": ["tool", "turn"]})
+    bob = await spawn(kernel, "bob", by=lead, goal="")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(bob, "agent.finish", {"gist": "done"}))
+    await send(kernel, ada, "@lead", "and also this")
+
+    offers = [{"agent": "lead"}, {"agent": "lead", "boundary": "tool"}]
+    held = [result_of(await kernel.submit(kernel.runtime, "delivery.offer", offer)) for offer in offers]
+    waking = ready(kernel)["agents"]
+    await settle_effects(kernel, "bob")
+
+    assert (held, waking) == ([None, None], [])
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", offers[1]))
+    assert [item["gist"] for item in handed["items"]] == ["done", "and also this"]
+
+
+async def test_finishing_is_refused_over_a_child_held_for_the_stop_of_one_of_its_own(kernel):
+    lead = await spawn(kernel, "lead", role="lead", goal="")
+    bob = await spawn(kernel, "bob", role="linked", by=lead, goal="")
+    await spawn(kernel, "cy", by=bob, goal="")
+    await start_turn(kernel, "lead")
+    result_of(await kernel.submit(agent("cy"), "agent.finish", {"gist": "done"}))
+
+    assert ready(kernel)["agents"] == []
+    assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {"gist": "all done"})).detail
 
 
 async def test_a_join_of_three_costs_one_wake(kernel):

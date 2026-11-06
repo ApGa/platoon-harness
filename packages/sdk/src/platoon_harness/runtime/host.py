@@ -719,19 +719,19 @@ class Host:
         with it. With no link, a crash may have left it, and `reap` proves what is ours. A link stays until its harness
         has stopped, so a shutdown that cuts this short can still stop it. Each step is safe to repeat, so a repeat
         finishes what the last one began, and a workspace gone at a repeat, which an earlier attempt may have removed,
-        is not looked for. The authority hears how the agent ended even when ending its workspace fails."""
+        is not looked for. The authority hears how the agent ended last, even when a step before fails."""
         name, retried = effect.data["agent"], effect.attempts > 0
         folder = agent_folder(self._folder, name)
-        link = self.link(name)
-        if link is None:
-            left = await reap(folder, GRACE)
-        else:
-            link.ready.set()
-            left = await self._end(link, GRACE)
-            self._links.pop(name, None)
         record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
         ended: dict[str, Any] = {"removed": False, "kept": None}
         try:
+            link = self.link(name)
+            if link is None:
+                left = await reap(folder, GRACE)
+            else:
+                link.ready.set()
+                left = await self._end(link, GRACE)
+                self._links.pop(name, None)
             if record["workspace"] is not None:
                 places = [
                     where

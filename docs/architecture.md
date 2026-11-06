@@ -660,7 +660,7 @@ wait, the runtime posts the turn's final text, or `<name> <status>: <reason>` fo
 spawning parent's inbox, as a runtime-authored event naming the child as
 subject. It wakes the parent only for what the parent asked: the spawn asks, and so does each message of the parent's own to the
 child's inbox the first time it lands in a turn of the child's, and every report answers, one a wait of the parent's counts too, except
-one from a turn an interrupt or the owner's stop cut. A message lands at once in a tool's result, and by a handover when its harness says so, which for a steer can be in
+one from a turn an interrupt or the owner's stop cut. A message lands at once in a tool's result, unless a stop of a child of its reader's is under way (Lifecycle, below), and by a handover when its harness says so, which for a steer can be in
 the turn after the one it was offered in. So a parent is woken once for the spawn and once more for each message it sent that child,
 and a turn a peer or a human started, or a parent's broadcast, asks nothing. A turn that parks posts no report, so it answers nothing
 yet. It stops at `max_hops`; past either, its message waits for the next turn. So a worker reports back even if its harness hides our tools. Tools add power rather than being the only way in. See
@@ -755,8 +755,9 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
 - **The wait lives in the service.** A wake never depends on the model having seen the tool result, because an interrupted
   harness can replace that result. Parking was clean in 10 of 10 trials across Claude Code and Codex with the tool visible.
 - **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending`; the agent may call again,
-  and each stream resumes from its own cursor, so nothing is counted twice. A one-shot driver cannot park, so `wait` beyond `hold`
-  is refused `unsupported` with the reason.
+  and each stream resumes from its own cursor, so nothing is counted twice. It answers `released` only while no stop of a child of
+  the agent's is under way (Lifecycle, below). A one-shot driver cannot park, so `wait` beyond `hold` is refused `unsupported` with
+  the reason.
 - **Tool arguments are friendly** (`agents`, `from`, `tasks`, `board`, `channels`, `queue`) and compile to `on(...)`, which no tool
   schema shows, so a model never learns stream names. `from` counts by subject, so a monitor's report counts as its child's, and a
   human or a program by name. `queue` holds on the oldest open task, or else wherever the next will land, so a task added after
@@ -805,10 +806,12 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   that exits on its own puts its agent to rest once, below. One that cannot come back ends its agent `lost`, or `failed` if it never
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
   its turn: `finished` if that turn `stopped`, and `failed` otherwise.
-- **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, and
-  nothing is handed to its parent while that stop is under way: no wake, steer or notice, so neither its report nor the notice of a
-  wait that holds on its end. The parent is on its way to a turn until then. An answer to the parent's own call reads the journal as
-  it stands, so a `wait` it calls or holds open, `message.read` or `agent.status` can say the child has ended first. See
+- **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, even
+  when a step before fails, and nothing reaches its parent while that stop is under way: no wake, steer or notice is handed to it,
+  and a `wait` it holds open in a call does not answer `released`, so neither its report, the notice of a wait that holds on its end
+  nor a held call's answer. The parent is on its way to a turn until then. A call it makes once the child has ended reads the
+  journal as it stands, so a `wait` that holds as it is placed, `message.read` or `agent.status` can say the child has ended first:
+  only a parent at work on its own when its child ended can learn of it that way. See
   [ADR 0059](adr/0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md).
 - **Rest: an agent's process is not its identity.** Any agent between turns for ten minutes on the session's clock, with no setting,
   rests, when its harness is persistent and resumes by a native id it gave: the courier asks `agent.rest`, a `rest` effect ends its
@@ -1775,9 +1778,11 @@ class AgentOutcome(Model):
   `compact`, one or two calls, each with the headers and each reported, by its id or with none where it never answered, even when
   the compaction is cut. A gateway that counts a budget does so as calls arrive, so only a label a call carries keeps it out, and a
   call no harness reported has no id to join, so it never trains.
-- **Finish** tells the authority how an agent ended, with its report, last in its stop, and its parent is handed nothing until it
-  has returned (§7), so a training system settles a child before its parent can act on the report. A stop that a crash cut is
-  said again by the next runtime, so `finish` takes a second telling as the first.
+- **Finish** tells the authority how an agent ended, with its report, last in its stop, even when a step before fails. Until it has
+  returned, its parent is handed nothing and a `wait` the parent holds open does not answer `released` (§7), so a training system
+  settles a child before a parent that waited for it can act on the report. A parent at work on its own when its child ended can
+  read of the end first, by a call it makes. A stop that a crash cut is said again by the next runtime, so `finish` takes a second
+  telling as the first.
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system
   that counts steps counts them at its gateway.
 - **Who acts.** A training system starts a session as a program, `program:<name>`, whose message is no person's and as whom nobody

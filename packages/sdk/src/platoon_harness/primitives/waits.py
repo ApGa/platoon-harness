@@ -10,6 +10,7 @@ from pydantic.json_schema import SkipJsonSchema
 from platoon_harness.kernel import (
     GIST_LIMIT,
     Args,
+    Effects,
     Event,
     Grants,
     Kernel,
@@ -25,7 +26,7 @@ from platoon_harness.kernel import (
 
 from .agents import Agents
 from .channels import Channels
-from .common import AgentName, Seq, checked_after, stream_of
+from .common import AgentName, Seq, checked_after, name_of, stream_of
 from .messages import Deliveries, ack, post, restore_wakes
 from .tasks import Tasks
 
@@ -351,6 +352,18 @@ def out_of_turn(txn: Txn, waiter: str) -> bool:
     return agent is None or agent.state in _OUT_OF_TURN
 
 
+def awaiting_stops(txn: Txn) -> set[str]:
+    """Agents a stop of a child of theirs is under way for. A stop tells the authority how its agent ended last."""
+    agents, effects = txn.view(Agents), txn.view(Effects)
+    stopping = [
+        agents.get(effect.agent)
+        for state in ("requested", "started")
+        for effect in effects.in_state(state)
+        if effect.kind == "stop" and effect.agent is not None
+    ]
+    return {name_of(agent.parent) for agent in stopping if agent is not None and agent.parent is not None}
+
+
 def _check_call(txn: Txn, a: Wait) -> None:
     """A held call must stay below the harness's cap, and a one-shot harness cannot park at all."""
     agent = txn.view(Agents).get(txn.me.name) if txn.me.kind == "agent" else None
@@ -495,7 +508,8 @@ def progress_of(txn: Txn, a: WaitId) -> dict[str, Any] | None:
         return None
     if wait.closed is not None:
         return {"id": wait.id, "state": wait.closed}
-    return {**wait.shown(), "state": "open", "holds": wait.left <= 0}
+    holds = wait.left <= 0 and _reader(wait.waiter) not in awaiting_stops(txn)
+    return {**wait.shown(), "state": "open", "holds": holds}
 
 
 async def hold_open(kernel: Kernel, placed: dict[str, Any]) -> dict[str, Any]:
@@ -503,8 +517,9 @@ async def hold_open(kernel: Kernel, placed: dict[str, Any]) -> dict[str, Any]:
     way it closed, or `pending` with the wait still registered, so the agent may call again or end its turn.
 
     A wait that holds comes back `released` and still open: the surface closes it with `wait.release{told}` once its
-    answer has left, so an answer that is lost costs no wake. The call was authorized when it was placed, so this asks
-    as the runtime.
+    answer has left, so an answer that is lost costs no wake. While a stop of a child of its waiter's is under way, it
+    is not said to hold, as nothing reaches that waiter until the stop has finished. The call was authorized when it was
+    placed, so this asks as the runtime.
     """
     expiry = kernel.clock.now() + placed["hold"]
     while True:

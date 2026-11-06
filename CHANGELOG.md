@@ -431,9 +431,10 @@
 
 ### Changed
 
-- Nothing is handed to an agent while a stop of a child of its is under way, so a parent hears of a child's end, by its report or
-  by the notice of a wait that holds on it, only once the authority's `finish` for that child has returned, and is on its way to a
-  turn until then. An answer to its own call reads the journal as it stands. See ADR 0059.
+- Nothing reaches an agent while a stop of a child of its is under way: no handover, and no `released` from a `wait` it holds open
+  in a call. So a parent hears of a child's end, by its report, by the notice of a wait that holds on it or by a held call's
+  answer, only once the authority's `finish` for that child has returned, and is on its way to a turn until then. A call it makes
+  once the child has ended reads the journal as it stands. See ADR 0059.
 - Claude Code's conformance test pins 2.1.319, which it updated itself to on the machines that run the slow pass, and on which its
   checks pass against FakeModel, 26 passed and 4 skipped, as on 2.1.318.
 - A snapshot's refusals say `a snapshot` where they said `` `snapshot` ``, as they hold for an isolated workspace too.
@@ -636,6 +637,8 @@
   kept before was earned on the weaker check: `doctor --check` again.
 - A session root given relatively, as `Session.attach(name, root="home")`, failed every read of its annotations, "relative path can't
   be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
+- A stop whose driver's `stop` raised or ran past its time never told the authority how its agent ended: `finish` now comes last
+  whatever failed before it (ADR 0059).
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.
 - Codex 0.167.0 refused every turn of an agent given access, "This chat uses platoon-harness, but your current provider is
   openai", as it holds a thread to the provider its app-server started on, and the driver had named a provider for the thread
