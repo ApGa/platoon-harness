@@ -154,12 +154,14 @@ async def test_a_test_past_its_timeout_is_an_error_not_a_failure(repo, tmp_path)
     """And nothing it started runs on."""
     clock = ManualClock(1000.0)
     pid = tmp_path / "pid"
+    os.mkfifo(pid)
     check = ["sh", "-c", f"echo $$ > {pid}; exec sleep 100"]
     team = team_of(check, lambda cwd: commit(cwd, "work.txt"), timeout="2m")
     async with Session.start(team, name="s", root=tmp_path, cwd=repo, clock=clock) as session:
         await session.spawn("ada", "worker", "work")
         [sha] = await committed(session, 1)
         await session.submit("repo.test", commit=sha)
+        started = await asyncio.wait_for(asyncio.to_thread(pid.read_text), SECONDS)
         await asyncio.wait_for(clock.slept_until(clock.now() + 120), SECONDS)
         clock.advance(120)
         [record] = await records(session)
@@ -168,7 +170,7 @@ async def test_a_test_past_its_timeout_is_an_error_not_a_failure(repo, tmp_path)
     assert record.data["why"] == "its timeout of 2m came first"
     assert record.gist == f"{sha[:12]} tests error: its timeout of 2m came first in 120.0 s"
     with pytest.raises(ProcessLookupError):
-        os.kill(int(pid.read_text()), 0)
+        os.kill(int(started), 0)
 
 
 async def test_a_test_the_journal_recorded_is_not_run_again(repo, tmp_path):
