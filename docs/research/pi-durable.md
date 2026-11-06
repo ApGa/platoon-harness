@@ -72,13 +72,13 @@ Why: The contract is being written now, and `activity` misleads without a `start
 
 Why: Stops a the drivers stage driver resending the preamble because of its name. Pi treats prefix bytes as a budget and change as positional (packages/durable/src/harness/prompt.ts:66-93). Unchecked on a real harness.
 
-**8. A ceiling on tool list size (adapt).** A test in tests/unit/tools/test_surface.py with a ceiling just above today's size for the default manager-worker roles, in one stated JSON form. Separately, drop `tool=True` from `task.renew` (primitives/tasks.py:305), which docs/architecture.md:563 says stays for programs.
+**8. A ceiling on tool list size (adapt).** A test in tests/unit/tools/test_surface.py with a ceiling just above today's size for the default manager-worker roles, in one stated JSON form. Separately, drop `tool=True` from `task.renew` (primitives/tasks.py:305), which platoon-harness@4d5e6c5:docs/architecture.md:563 says stays for programs.
 
 Why: That text is in every request of every agent and enters training prompts at M3. A worker has 21 tools at about 22 KB of full list_tools JSON, and `wait` alone is about 2.4 KB. An exact pin would trip on every wording fix.
 
 **9. Refuse a query result over the limit (adopt).** In the query branch of `_run` in tools/mcp.py, refuse a result over `_RESULT_LIMIT`, saying how to narrow. Refuse, do not cut: a generic cut cannot keep JSON valid. An op with nothing to narrow by needs paging first, and `peers` does.
 
-Why: docs/architecture.md:910 promises 32 KiB and queries have no cap (kernel/kernel.py:436). An extension query returned about 1 MB through a real ToolServer. Only queries can overflow, so a refusal never contradicts a committed event. Pi bounds every tool result (packages/durable/src/harness/tool.ts:700-701). Serves BRIEF section 12.
+Why: platoon-harness@4d5e6c5:docs/architecture.md:910 promises 32 KiB and queries have no cap (kernel/kernel.py:436). An extension query returned about 1 MB through a real ToolServer. Only queries can overflow, so a refusal never contradicts a committed event. Pi bounds every tool result (packages/durable/src/harness/tool.ts:700-701). Serves BRIEF section 12.
 
 **10. `call_id` on `Item` and `Usage` (adopt).** Add `call_id: str | None` to both (primitives/reports.py:78-88, 114-122). Pass a ModelRef on `item.recorded` and `usage.reported` when the driver gave one (primitives/lifecycle.py:358-364). Keep `call.joined` for the late case only. Add a conformance check, and update docs/extending/drivers.md and tests/public_api.txt.
 
@@ -90,7 +90,7 @@ Why: Our own fixture contradicts the row. The id comes from the first chunk (pac
 
 **12. `purpose` on `ModelCall` (adapt).** Add `purpose: str | None` to `ModelCall` (primitives/reports.py:106-111), a free native string that is None unless the harness said so. On pi, emit a call at `compaction_end` with its usage. Do not add `outcome` until M3 shows a need.
 
-Why: Training must not read a compaction as a policy sample (BRIEF section 7, compatibility.md:391). Pi Durable writes no entry for a compaction attempt (packages/durable/src/harness/compaction.ts:199-206), which is the shape of a hidden call.
+Why: Training must not read a compaction as a policy sample (BRIEF section 7, platoon-harness@4d5e6c5:docs/compatibility.md:391). Pi Durable writes no entry for a compaction attempt (packages/durable/src/harness/compaction.ts:199-206), which is the shape of a hidden call.
 
 **13. Store the compaction's summary, expand a position into `forgotten` (adapt).** Add `summary: str | None` to `Compacted` (primitives/reports.py:125-127). In `_commit`, store `summary`, and `forgotten` when long, as bodies (runtime/host.py:349-351). State that `forgotten` holds native ids. On pi, expand firstKeptEntryId through get_entries (packages/coding-agent/docs/json.md:136-156, rpc-commands.md:689-699). Test that a long `forgotten` does not lose the agent.
 
@@ -112,7 +112,7 @@ Why: The hand-over property transfers because we own the ring (spec.md:4729-4736
 
 Why: A human often wants everything below to stop without losing the agents, and today only one agent or the irreversible `session.cancel` is available (primitives/lifecycle.py:219-228, 523-534; docs/research/tui-expectations.md:95). It needs the roster's `parent` and works only once an interrupted child's report goes out at `next-turn`, or each report wakes a parked parent.
 
-**18. A failed commit ends the runtime (adapt).** Try the rule with no constant: a failed commit ends the runtime, as in Pi. Add a count only if a transient case is shown. This needs a small new path from writer to `Runtime.run`, which has no failure channel (runtime/__init__.py:103-111). tests/unit/kernel/test_writer.py and docs/architecture.md:222 must change.
+**18. A failed commit ends the runtime (adapt).** Try the rule with no constant: a failed commit ends the runtime, as in Pi. Add a count only if a transient case is shown. This needs a small new path from writer to `Runtime.run`, which has no failure channel (runtime/__init__.py:103-111). tests/unit/kernel/test_writer.py and platoon-harness@4d5e6c5:docs/architecture.md:222 must change.
 
 Why: Every failed batch answers `unavailable` (kernel/writer.py:144-147) and Host.insist retries until the kernel closes (runtime/host.py:165-175). Recovery is our tested way back, and a failed commit's outcome is unknown (spec.md:6125-6147).
 
@@ -221,13 +221,13 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - MAJOR. bug-coordination-6: an interrupted or failed turn reads to the parent as a final answer and wakes it. primitives/lifecycle.py:326-328, probe. Fix: for any reason but stopped, gist `<name> turn <reason>: <text>`, and post interrupted at next-turn.
 - MAJOR. bug-coordination-7: Esc does not stop an agent with something queued. primitives/delivery.py:54-64, probe. The proposed fix does not work; the replacement is contested.
 - MAJOR. bug-durability-2: an approval pending when the runtime died stays askable. primitives/approvals.py:77-79. Resolving it commits, then fails loudly; before that settled() can say needs_human for a question nobody can usefully answer. Fix: fold turn.lost into moot and lower the row.
-- MAJOR. bug-coordination-9: a harness that exits alone is lost for good, with its subtree, though it can resume. docs/architecture.md:613-615. Design of record, not probed with a real harness. See contested.
+- MAJOR. bug-coordination-9: a harness that exits alone is lost for good, with its subtree, though it can resume. platoon-harness@4d5e6c5:docs/architecture.md:613-615. Design of record, not probed with a real harness. See contested.
 - MAJOR. bug-clients-2: a late joiner is shown committed text, and frames cannot be matched to items. kernel/pulse.py:109-133. Reproduced. Fix: the live tail.
 - MAJOR. bug-provenance-3: a tool item cannot carry the model call that produced it. primitives/lifecycle.py:358-361. A contract gap that costs real links once drivers exist. Fix: call_id on reports.
 - minor. bug-durability-3: an uncertain effect under `surface` cannot be settled by anyone, against RFC 0005. kernel/effects.py:210, :218. It cannot hang a session. Fix: effect.settle for a human, two actions on the row.
 - minor. bug-durability-4: how an extension's effect recovers is unwritten, and a live timeout under reconcile reaches nobody. runtime/recovery.py:90-106. Fix: state that the daemon that performs a kind settles its rows.
 - minor. bug-durability-5: a committed call that lost its ack can run again if a model reissues it after resume. tools/mcp.py:133-135. A native id still dedupes a harness retry. Fix: note it and rely on the notice.
-- minor. bug-durability-6: docs/architecture.md:222 says no command happened after a failed commit, when the outcome is unknown. By reading only. Fix: reword, and give insist a key where a double matters.
+- minor. bug-durability-6: platoon-harness@4d5e6c5:docs/architecture.md:222 says no command happened after a failed commit, when the outcome is unknown. By reading only. Fix: reword, and give insist a key where a double matters.
 - minor. bug-durability-7: Waits.closing scans every wait ever made on each pass. primitives/waits.py:247-255. Not measured. Fix: partial indexes and per-pass cost in the scale test.
 - minor. bug-coordination-5: a one-shot parent's children die with its turn, unwarned. primitives/lifecycle.py:322-325, probe. Fix: a warning in team_check, not _warnings. _warnings has no capabilities, while team_check has Capabilities.persistent (team.py:271, primitives/reports.py:36).
 - minor. bug-coordination-8: Esc is refused between a wake and its turn. primitives/lifecycle.py:224, probe. Fix: accept waking, or keep a refusal a client can show.
@@ -238,7 +238,7 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - minor. bug-clients-4: a late joiner's first frame says lag 0. kernel/pulse.py:128. Fix: the live tail.
 - minor. bug-clients-5: delta makes a ring for any name and never ends for an ended agent. kernel/kernel.py:508-522. Reproduced. Fix: refuse unknown names, answer None once drained.
 - minor. bug-clients-6: the roster row lacks parent and held_by. Fix: the roster idea.
-- minor. bug-clients-7: marks.sqlite is in the design with no code and no STATUS row. docs/architecture.md:120.
+- minor. bug-clients-7: marks.sqlite is in the design with no code and no STATUS row. platoon-harness@4d5e6c5:docs/architecture.md:120.
 - minor. bug-extensions-1: model-facing hints name tools the reader does not hold, and no agent holds agent.list. tools/surface.py:26. Fix: derive hints from held names.
 - minor. bug-extensions-2: the 32 KiB limit is not enforced for queries. Reached by a third-party op or about 520 peers. Fix: refuse a result over the limit.
 - minor. bug-extensions-3: a resume under different SDK or extension versions leaves no record. kernel/effects.py:241. Harness versions are recorded. Fix: compare and record at start.
