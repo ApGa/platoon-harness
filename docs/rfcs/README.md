@@ -149,6 +149,11 @@ table.
 An Accepted RFC is revised as implementation changes course; once it is Implemented, a changed decision is a new RFC
 that supersedes it, noted in the old one's Status cell.
 
+RFCs 0001 to 0060 stay `Accepted` until an audit marks as `Implemented` each one that describes the code that shipped.
+Until then, [STATUS](../STATUS.md) stands in for their status under this rule: a decision whose code STATUS calls
+implemented, tested or experimental is changed by a new RFC, noted in the old one's Status cell as their notes are, and
+a decision whose code is planned or deferred is revised.
+
 ## Linking an RFC to its implementation
 
 - **In each implementation pull request**, say which RFC and milestone it implements, with a link, for example
