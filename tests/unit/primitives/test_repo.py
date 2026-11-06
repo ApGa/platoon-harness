@@ -291,6 +291,7 @@ async def test_the_changes_view_holds_commits_and_uncommitted_paths(kernel):
         "removed": 0,
         "files": 1,
         "recorded": 0,
+        "tests": None,
         "dropped": False,
         "seq": 0,
     }
@@ -464,7 +465,143 @@ async def test_a_session_outside_a_git_repository_says_changes_are_not_observed(
     assert result_of(kernel.query(kernel.runtime, "session.ending", {}))["unobserved"] == []
 
 
-# An agent's read of a commit.
+# Runtime tests, and an agent's read of a commit.
+
+CHECKS = ["uv", "run", "pytest", "-q"]
+
+
+async def spawned_in(kernel: Kernel, name: str, mode: str) -> None:
+    """Spawn an agent through to started, its workspace made in `mode` as the host makes one."""
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": name, "child_role": "worker"}))
+    folder = f"/s/agents/{name}/workspace"
+    made = {"mode": mode, "path": folder, "host": "h", "branch": f"platoon-harness/s/{name}", "base": BASE}
+    made |= {"repository": f"{folder}/.git", "assurance": "isolated" if mode == "isolated" else "cooperative"}
+    while effects := [
+        row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["agent"] == name
+    ]:
+        for effect in effects:
+            attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+            result = made if effect["kind"] == "workspace" else None
+            args = {"id": effect["id"], "attempt": attempt, "result": result}
+            result_of(await kernel.submit(kernel.runtime, "effect.finish", args))
+    await start(kernel, name)
+
+
+async def recorded_test(kernel: Kernel, sha: str, outcome: str, *, effect: int = 1) -> str:
+    """Record what a runtime test came to, as the host does once it has run."""
+    tested = {"effect": effect, "sha": sha, "command": CHECKS, "exit": 0 if outcome == "passed" else 1}
+    tested |= {"seconds": 2.5, "outcome": outcome}
+    return result_of(await kernel.submit(kernel.runtime, "repo.record", tested))
+
+
+def commit_row(kernel: Kernel, sha: str) -> dict[str, Any]:
+    return next(row for row in changes(kernel)["rows"] if row["id"] == f"commit/{sha}")
+
+
+def requested_tests(kernel: Kernel) -> list[Any]:
+    return [event for event in of_type(kernel, "effect.requested") if event.data["kind"] == "test"]
+
+
+async def test_a_commit_s_tests_are_its_latest_runtime_test_or_none(kernel):
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE), commit(TWO, ONE)], reading=reading(TWO))
+    untested = commit_row(kernel, ONE)
+    await recorded_test(kernel, ONE, "failed", effect=1)
+    ref = await recorded_test(kernel, ONE, "passed", effect=2)
+
+    [_, tested] = of_type(kernel, "repo.tested")
+    assert untested["tests"] is None and commit_row(kernel, TWO)["tests"] is None
+    assert commit_row(kernel, ONE)["tests"] == "passed" and commit_row(kernel, ONE)["seq"] == tested.seq
+    assert ref == f"{tested.stream}@{tested.version}" and (tested.agent, tested.turn) == (None, None)
+    assert tested.gist == f"{ONE[:12]} tests passed in 2.5 s"
+
+
+@pytest.mark.parametrize("checks", [CHECKS])
+async def test_a_test_is_a_person_s_or_a_program_s_act_on_a_recorded_commit(kernel, ada):
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+
+    asked = result_of(await kernel.submit(ada, "repo.test", {"commit": ONE[:7]}))
+    unrecorded = await kernel.submit(ada, "repo.test", {"commit": TWO})
+
+    [requested] = requested_tests(kernel)
+    assert asked == {"effect": requested.data["id"]}
+    assert requested.data["data"] == {"sha": ONE} and requested.data["on_uncertain"] == "retry"
+    assert requested.agent is None
+    assert refusal(unrecorded).code == "not_found"
+    assert (
+        refusal(unrecorded).detail == "not recorded yet: a commit is recorded at the look after the turn that made it"
+    )
+
+
+async def test_a_test_needs_the_team_s_test_command(kernel, ada):
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+
+    outcome = await kernel.submit(ada, "repo.test", {"commit": ONE})
+
+    assert refusal(outcome).code == "unsupported" and "names no `test`" in refusal(outcome).detail
+    assert "actions" not in commit_row(kernel, ONE)
+
+
+@pytest.mark.parametrize("checks", [CHECKS])
+async def test_an_agent_cannot_ask_the_runtime_to_run_its_code(kernel):
+    """Not as a tool, and not as an op, even under a grant that covers it, as this fixture's `agent *` does."""
+    bob = await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+
+    outcome = await kernel.submit(bob, "repo.test", {"commit": ONE})
+
+    assert refusal(outcome).code == "not_permitted"
+    assert not kernel.ops["repo.test"].tool
+    assert requested_tests(kernel) == []
+
+
+@pytest.mark.parametrize("checks", [CHECKS])
+async def test_a_test_of_an_isolated_commit_is_refused(kernel, ada):
+    """And of one built on it, which holds its code, as a merge of it does. A commit beside it is no matter."""
+    await spawned_in(kernel, "bob", "isolated")
+    await spawned_in(kernel, "cy", "worktree")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+    merge = commit(TWO, BASE, ONE, made_in="@cy", branch="platoon-harness/s/cy")
+    beside = commit(THREE, BASE, made_in="@cy", branch="platoon-harness/s/cy")
+    await looked(kernel, "@cy", commits=[merge, beside], reading=reading(THREE, branch="platoon-harness/s/cy"))
+
+    made, built = [await kernel.submit(ada, "repo.test", {"commit": sha}) for sha in (ONE, TWO)]
+    result_of(await kernel.submit(ada, "repo.test", {"commit": THREE}))
+
+    assert refusal(made).code == refusal(built).code == "not_permitted"
+    assert refusal(made).detail == "@bob's commit was made in an isolated workspace, so its code runs only there"
+    assert refusal(built).detail == (
+        "it is built on a commit @bob made in an isolated workspace, so its code runs only there"
+    )
+    assert [event.data["data"]["sha"] for event in requested_tests(kernel)] == [THREE]
+
+
+@pytest.mark.parametrize("checks", [CHECKS])
+async def test_a_test_action_says_whose_code_it_runs(kernel):
+    await spawned_in(kernel, "bob", "worktree")
+    await spawned_in(kernel, "cy", "isolated")
+    await looked(kernel, commits=[commit(ONE), commit(TWO, ONE, made_in=None)], reading=reading(TWO))
+    await looked(kernel, "@cy", commits=[commit(THREE, made_in="@cy")], reading=reading(THREE))
+
+    actions = {sha: commit_row(kernel, sha)["actions"] for sha in (ONE, TWO, THREE)}
+
+    assert actions[ONE] == [
+        {
+            "label": "Test: runs @bob's commit as you, unconfined",
+            "op": "repo.test",
+            "args": {"commit": ONE},
+            "disabled": None,
+        }
+    ]
+    assert actions[TWO][0]["label"] == "Test: runs this commit as you, unconfined"
+    assert actions[THREE][0] | {"args": None} == {
+        "label": "Test",
+        "op": "repo.test",
+        "args": None,
+        "disabled": "@cy's commit was made in an isolated workspace, so its code runs only there",
+    }
 
 
 async def test_repo_commit_gives_a_recorded_commit_s_ref_or_says_not_recorded_yet(kernel, ada):

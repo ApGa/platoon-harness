@@ -15,7 +15,8 @@ from .approvals import Approvals
 from .budgets import Budgets
 from .common import DIGEST_ITEMS, name_of
 from .messages import Deliveries
-from .repo import unsettled
+from .repo import Looks, confined, unsettled
+from .sessions import SessionRecord
 from .tasks import Tasks
 from .waits import Waits
 
@@ -224,12 +225,13 @@ class Attention(View):
 
 
 class Changes(View):
-    """What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it, for each
-    workspace's last reading and for each path it holds uncommitted, keyed by `id`, each with the `seq` that last moved
-    it, which a client compares with the person's mark on `repo/<name>`. A newer reading replaces its workspace's paths
-    whole, and a row closes in place, so a watcher hears that it went away."""
+    """What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it and its `tests`,
+    the outcome of the latest runtime test at it, or None while none ran, for each workspace's last reading and for
+    each path it holds uncommitted, keyed by `id`, each with the `seq` that last moved it, which a client compares with
+    the person's mark on `repo/<name>`. A newer reading replaces its workspace's paths whole, and a row closes in place,
+    so a watcher hears that it went away."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_changes(
         id TEXT PRIMARY KEY,
@@ -254,14 +256,21 @@ class Changes(View):
         data = event.data
         shown = {key: data[key] for key in ("made_in", "branch", "added", "removed", "files")}
         row = {"id": f"commit/{data['sha']}", "kind": "commit", "commit": data["sha"], "gist": event.gist, **shown}
-        self._put({**row, "recorded": event.seq, "dropped": False}, None, event)
+        self._put({**row, "recorded": event.seq, "tests": None, "dropped": False}, None, event)
+
+    def _amend(self, sha: str, event: Event, **changed: Any) -> None:
+        found = self.db.execute("SELECT row FROM v_changes WHERE id = ?", (f"commit/{sha}",)).fetchone()
+        if found is not None:
+            self._put({**json.loads(found["row"]), **changed}, None, event)
 
     @fold("repo.rewritten")
     def rewritten(self, event: Event) -> None:
         for sha in event.data["dropped"]:
-            found = self.db.execute("SELECT row FROM v_changes WHERE id = ?", (f"commit/{sha}",)).fetchone()
-            if found is not None:
-                self._put({**json.loads(found["row"]), "dropped": True}, None, event)
+            self._amend(sha, event, dropped=True)
+
+    @fold("repo.tested")
+    def tested(self, event: Event) -> None:
+        self._amend(event.data["sha"], event, tests=event.data["outcome"])
 
     @fold("workspace.changed")
     def changed(self, event: Event) -> None:
@@ -445,10 +454,30 @@ class Watch(Args):
     ] = None
 
 
+def _acted(txn: Txn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Changes rows, each commit's with the act that tests it when the team names a `test`, saying whose code it runs as
+    you, or disabled, saying why, for a commit whose code runs only in an isolation. Neither changes once the commit is
+    recorded, so a row's `seq` still says when it last moved."""
+    if txn.view(SessionRecord).settings().test is None:
+        return rows
+    looks = txn.view(Looks)
+    acted = []
+    for row in rows:
+        if row["kind"] == "commit":
+            made_in = row["made_in"]
+            whose = f"{made_in}'s commit" if made_in and made_in.startswith("@") else "this commit"
+            disabled = confined(looks, row["commit"], made_in)
+            label = "Test" if disabled else f"Test: runs {whose} as you, unconfined"
+            act = {"label": label, "op": "repo.test", "args": {"commit": row["commit"]}, "disabled": disabled}
+            row = {**row, "actions": [act]}
+        acted.append(row)
+    return acted
+
+
 def _snapshot(txn: Txn, name: str) -> list[dict[str, Any]]:
     if name == "roster":
         return _roster(txn)
-    return txn.view(Attention).rows() if name == "attention" else txn.view(Changes).rows()
+    return txn.view(Attention).rows() if name == "attention" else _acted(txn, txn.view(Changes).rows())
 
 
 def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], list[str]]:
@@ -457,7 +486,8 @@ def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], lis
     if name == "roster":
         return (_roster(txn) if txn.view(Stamps).head() > after else []), []
     if name == "changes":
-        return txn.view(Changes).since(after)
+        rows, removed = txn.view(Changes).since(after)
+        return _acted(txn, rows), removed
     rows = txn.view(Attention).since(after)
     return [row for row in rows if row["open"]], [row["id"] for row in rows if not row["open"]]
 

@@ -1,4 +1,5 @@
-"""What changed, as a list a person reads: each workspace's commits and uncommitted paths, from the `changes` view."""
+"""What changed, as a list a person reads: each workspace's commits and uncommitted paths, from the `changes` view, and
+on a commit the act that tests it."""
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any
@@ -11,11 +12,12 @@ from textual.widgets import Static
 
 from .keymap import bindings
 from .rows import Row, Rows
-from .safe import SafeText
+from .safe import SafeText, note
 
 PLANNED = "Diffs come with review, which is planned."
 NOBODY = "nobody's"
 """Where the commits go that no agent's workspace made: in your checkout, or in no workspace or in two."""
+TESTS = {"passed": "green", "failed": "red", "error": "yellow"}
 
 
 def _lines(added: int | None, removed: int | None) -> str:
@@ -33,11 +35,18 @@ def snapshots_of(roster: Iterable[Mapping[str, Any]]) -> set[str]:
     return {f"@{row['agent']}" for row in roster if (row["workspace"] or {}).get("mode") in ("snapshot", "isolated")}
 
 
+def _tests(commit: Mapping[str, Any]) -> tuple[str, str] | str:
+    """What a commit's latest runtime test came to, or that none ran where one could."""
+    if commit["tests"] is not None:
+        return (f"  tests {commit['tests']}", TESTS[commit["tests"]])
+    return ("  untested", "dim") if commit.get("actions") else ""
+
+
 def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:
-    """The changes as rows, grouped by workspace: each agent's commits under it, newest recorded first, then its
-    uncommitted paths, conflicted first, and how many more there are than the list holds; your checkout's paths; and
-    last the commits that are nobody's. A group of one of `snapshots` says its commits are in its own repository. A
-    row past `mark` is marked new."""
+    """The changes as rows, grouped by workspace: each agent's commits under it, newest recorded first, with what its
+    latest runtime test came to, then its uncommitted paths, conflicted first, and how many more there are than the
+    list holds; your checkout's paths; and last the commits that are nobody's. A group of one of `snapshots` says its
+    commits are in its own repository. A row past `mark` is marked new."""
     commits = sorted((row for row in changes.values() if row["kind"] == "commit"), key=lambda row: -row["recorded"])
     readings = {row["workspace"]: row for row in changes.values() if row["kind"] == "workspace"}
     paths = sorted(
@@ -57,7 +66,7 @@ def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Coll
         for commit in (commit for commit in commits if _owner(commit) == group):
             dropped = (" dropped", "red") if commit["dropped"] else ""
             counts = (f"  {_lines(commit['added'], commit['removed'])}", "dim")
-            line = Content.assemble(_new(commit, mark), SafeText(commit["gist"]), counts, dropped)
+            line = Content.assemble(_new(commit, mark), SafeText(commit["gist"]), counts, _tests(commit), dropped)
             found.append(Row(line, commit["id"]))
         held = [path for path in paths if path["workspace"] == group]
         for path in held:
@@ -79,8 +88,9 @@ def _new(row: Mapping[str, Any], mark: int) -> tuple[str, str]:
 
 
 class Review(ModalScreen[None]):
-    """What changed, read-only, as `rows_of` lists it. Reading to its end moves the person's mark on `repo/<name>`,
-    through `read`. Diffs are drawn disabled, saying why."""
+    """What changed, as `rows_of` lists it. Reading to its end moves the person's mark on `repo/<name>`, through
+    `read`. Choosing a commit takes its act, through `act`, or says why it is disabled. Diffs are drawn disabled, saying
+    why."""
 
     BINDINGS = bindings("dialog")
 
@@ -89,20 +99,24 @@ class Review(ModalScreen[None]):
         changes: Mapping[str, Mapping[str, Any]],
         mark: int,
         read: Callable[[int], object],
+        act: Callable[[Mapping[str, Any]], object],
         snapshots: Collection[str] = (),
     ) -> None:
         super().__init__()
+        self._changes = changes
         self._rows = rows_of(changes, mark, snapshots)
         self._mark = mark
         self._newest = max((row["seq"] for row in changes.values()), default=0)
         self._read = read
+        self._act = act
 
     def compose(self) -> ComposeResult:
+        acted = any(row.get("actions") for row in self._changes.values())
         with Vertical(classes="dialog wide"):
             yield Static(Content.styled("What changed", "bold"))
             yield Rows(id="changes")
             yield Static(Content.styled(PLANNED, "dim"), id="diffs")
-            yield Static(Content.styled("Esc: leave", "dim"))
+            yield Static(Content.styled("Enter on a commit: test it    Esc: leave" if acted else "Esc: leave", "dim"))
 
     def on_mount(self) -> None:
         rows = self.query_one(Rows)
@@ -116,6 +130,14 @@ class Review(ModalScreen[None]):
         if self._newest > self._mark and rows.scroll_offset.y + rows.size.height >= len(rows.rows):
             self._mark = self._newest
             self._read(self._newest)
+
+    def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
+        actions = self._changes.get(chosen.key, {}).get("actions") or ()
+        for action in actions:
+            if action["disabled"]:
+                note(self, f"{action['label']}: {action['disabled']}", severity="warning")
+            else:
+                self._act(action)
 
     def action_leave(self) -> None:
         self.dismiss(None)

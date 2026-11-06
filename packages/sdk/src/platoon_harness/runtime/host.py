@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import shutil
 import socket
 from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
@@ -36,13 +37,13 @@ from platoon_harness.drivers import (
     TurnEnded,
     unknown_frame,
 )
-from platoon_harness.drivers.env import Held, Redactor, secrets_of
+from platoon_harness.drivers.env import Held, Redactor, inherited, secrets_of, tmpdir
 from platoon_harness.drivers.levels import Profile, implementation, levels, speaks_for, tool_visibility
-from platoon_harness.drivers.process import reap
+from platoon_harness.drivers.process import exit_reason, reap, run
 from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
-from platoon_harness.schema import ConfigError, Problem
-from platoon_harness.team import Role, Team
+from platoon_harness.schema import ConfigError, Problem, seconds
+from platoon_harness.team import Role, Team, Test
 from platoon_harness.tools import (
     NAMESPACE,
     PH,
@@ -59,10 +60,22 @@ from .git import GitError
 from .isolation import Isolation, hidden
 from .looks import PAGE, look, tips_of
 from .opening import PLAN_LOGIN_FIX, make_driver
-from .paths import agent_folder, read_conformance, root_of
-from .workspaces import branch_of, end_snapshot, end_worktree, make_snapshot, make_worktree, present, write_bundle
+from .paths import TESTS, agent_folder, read_conformance, root_of
+from .workspaces import (
+    branch_of,
+    checkout,
+    end_snapshot,
+    end_worktree,
+    make_snapshot,
+    make_worktree,
+    present,
+    write_bundle,
+)
 
 GRACE = 5.0
+_PRINTED = 64 * 1024
+"""How much of what a runtime test printed its record keeps, the last of it: as much as the journal holds in an event's
+own body, so that `blob.get` reads it for anyone."""
 
 _READY_SECONDS = 60.0
 _HANDOVER_SECONDS = 60.0
@@ -163,6 +176,7 @@ class Host:
             "rest": self._rest,
             "stop": self._stop,
             "answer": self._answer,
+            "test": self._test,
         }
 
     def link(self, agent: str | None) -> DriverLink | None:
@@ -735,6 +749,87 @@ class Host:
             outcome = AgentOutcome(status=record["status"], report=self._report_of(effect.data.get("cause")))
             await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
         return ended
+
+    async def _test(self, effect: Effect) -> dict[str, Any]:
+        """Run the team's `test` command at a commit, in a clean detached checkout of it in the session's subfolder, as
+        you and unconfined, on what every process inherits, and record what it came to. A test the journal recorded is
+        not run again, as when a crash came between its record and its finish, and one a crash cut off runs again from
+        the start, once what it left is ended. Its folder goes once it is recorded."""
+        sha, repo, test = effect.data["sha"], self._repo(), self._team.test
+        assert repo is not None and test is not None  # `repo.test` refuses a test without them.
+        folder = self._folder / TESTS / str(effect.id)
+        if effect.attempts:
+            await reap(folder, GRACE)
+            await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
+            if (ref := self._tested(repo, effect.id)) is not None:
+                return {"ref": ref}
+        tmpdir(folder).mkdir(mode=0o700, parents=True)
+        tested = {"effect": effect.id, "sha": sha, "command": test.command, "exit": None, "seconds": None}
+        try:
+            await asyncio.to_thread(checkout, sha, folder / "checkout", self._testable(repo))
+            cwd = folder / "checkout" / repo.prefix
+            if not cwd.is_dir():
+                raise GitError(f"{sha[:12]} holds no {repo.prefix}, where the session's command runs")
+        except GitError as error:
+            tested |= {"outcome": "error", "why": str(error)}
+        else:
+            tested |= await self._run_test(test, cwd, folder)
+        ref = (await self.insist("repo.record", tested)).result
+        await asyncio.to_thread(shutil.rmtree, folder)
+        return {"ref": ref}
+
+    def _testable(self, repo: Repo) -> list[str]:
+        """The repositories a test reads a commit from: yours, then each workspace's own, but an isolated one's, whose
+        objects never leave its isolation."""
+        records = self._kernel.query(self._kernel.runtime, "agent.records", {}).result
+        own = [
+            record["workspace"]["repository"]
+            for record in records
+            if record["workspace"] and record["workspace"]["mode"] != "isolated" and record["workspace"]["repository"]
+        ]
+        return list(dict.fromkeys([repo.repository, *own]))
+
+    async def _run_test(self, test: Test, cwd: Path, folder: Path) -> dict[str, Any]:
+        """Run a test's command in `cwd` until it exits or its timeout comes, and say what it came to, with the last of
+        what it printed. A program it names by a relative path is the commit's own, in its checkout."""
+        program, env, clock = test.command[0], {**inherited(), "TMPDIR": str(tmpdir(folder))}, self._kernel.clock
+        if shutil.which(str(cwd / program) if os.sep in program else program, path=env.get("PATH")) is None:
+            return {"outcome": "error", "why": f"{program} is not an executable a test can run"}
+        output, began = folder / "output", clock.now()
+        try:
+            code = await run(
+                test.command,
+                cwd=cwd,
+                folder=folder,
+                env=env,
+                output=output,
+                limit=seconds(test.timeout),
+                clock=clock,
+                grace=GRACE,
+            )
+        except (DriverError, OSError) as error:
+            return {"outcome": "error", "why": f"{program} could not start: {error}"}
+        ran: dict[str, Any] = {"seconds": round(clock.now() - began, 3), "printed": output.stat().st_size}
+        with output.open("rb") as printed:
+            printed.seek(max(0, ran["printed"] - _PRINTED))
+            ran["body"] = f"sha256:{await self._kernel.put_body(printed.read())}"
+        if code is None:
+            return {**ran, "outcome": "error", "why": f"its timeout of {test.timeout} came first"}
+        if code < 0:
+            return {**ran, "outcome": "failed", "why": exit_reason(code)}
+        return {**ran, "exit": code, "outcome": "passed" if code == 0 else "failed"}
+
+    def _tested(self, repo: Repo, effect: int) -> str | None:
+        """The ref of the record of the test `effect` ran, which comes after its request, or None while the journal
+        holds none."""
+        kernel, after = self._kernel, effect
+        while True:
+            page = kernel.read(kernel.runtime, after=after, streams=[f"repo/{repo.name}"])
+            for event in page.events:
+                if event.type == "repo.tested" and event.data["effect"] == effect:
+                    return f"{event.stream}@{event.version}"
+            if (after := page.cursor) >= page.head:
+                return None
 
     def _report_of(self, ended: int | None) -> str | None:
         """The words an agent's end keeps, the gist and then the body, by the seq of its `agent.ended`, or None when it

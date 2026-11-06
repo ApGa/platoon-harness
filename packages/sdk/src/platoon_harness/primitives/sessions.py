@@ -52,13 +52,15 @@ class Repo(Args):
 
 class Settings(Args):
     """What a session states at open. `manifest` is a stored body. `repo` is None when the session's cwd is in no
-    repository, and when a session opened before it was recorded, which is not observed."""
+    repository, and when a session opened before it was recorded, which is not observed. `test` is the command a
+    runtime test of a commit runs, or None when the team names none."""
 
     roles: dict[Name, Role] = {}
     limits: Limits = Limits()
     until: Annotated[str, Field(pattern=rf"^(settled|program|role:{NAME})$")] = "settled"
     manifest: BodyRef | None = None
     repo: Repo | None = None
+    test: tuple[str, ...] | None = None
 
 
 class SessionRecord(View):

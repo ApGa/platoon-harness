@@ -35,11 +35,17 @@ def repo() -> dict[str, Any] | None:
 
 
 @pytest.fixture
+def checks() -> list[str] | None:
+    """The command a runtime test of a commit runs, or None for a team that names none."""
+    return None
+
+
+@pytest.fixture
 async def kernel(
-    folder: Path, clock: ManualClock, limits: dict[str, int], repo: dict[str, Any] | None
+    folder: Path, clock: ManualClock, limits: dict[str, int], repo: dict[str, Any] | None, checks: list[str] | None
 ) -> AsyncIterator[Kernel]:
     opened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
-    settings: dict[str, Any] = {"roles": ROLES, "limits": limits}
+    settings: dict[str, Any] = {"roles": ROLES, "limits": limits, "test": checks}
     if repo is not None:
         settings["repo"] = {**repo, "tips": f"sha256:{await opened.put_body(b'')}"}
     result_of(await opened.submit(opened.runtime, "session.open", settings))

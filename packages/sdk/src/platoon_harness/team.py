@@ -61,6 +61,7 @@ __all__ = [
     "Command",
     "Role",
     "Team",
+    "Test",
     "team_check",
     "trainable_problems",
 ]
@@ -92,6 +93,14 @@ class Command(Model):
 
     command: Annotated[tuple[str, ...], Field(min_length=1)]
     mode: Literal["oneshot", "wire"] = "oneshot"
+
+
+class Test(Model):
+    """What the runtime runs at a recorded commit when a person or a program asks: `command`, in a clean detached
+    checkout of that commit, as you and unconfined, ended at `timeout`, which is then an error and not a failure."""
+
+    command: Annotated[tuple[str, ...], Field(min_length=1)]
+    timeout: Duration
 
 
 class Role(Model):
@@ -137,7 +146,8 @@ class Role(Model):
 
 class Team(Model):
     """Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
-    agent is told before its role's words, unless its role gives its own."""
+    agent is told before its role's words, unless its role gives its own. `test` is what a runtime test of a commit
+    runs, if the team names one."""
 
     extensions: tuple[str, ...] = ()
     preamble: Template = PREAMBLE
@@ -145,6 +155,7 @@ class Team(Model):
     auth: Annotated[Mapping[Name, AuthProfile], Sorted] = {}
     budget: Budget = Budget()
     topology: Topology = Topology()
+    test: Test | None = None
 
     @field_validator("topology", mode="before")
     @classmethod

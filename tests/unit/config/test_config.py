@@ -163,6 +163,28 @@ def test_a_command_in_a_team_file_needs_trust_too(layers):
         layers.load()
 
 
+def test_a_test_command_from_a_project_file_needs_the_trust_step(layers):
+    """It runs the commit's code as you, as a `command` harness runs its own."""
+    test = 'test = { command = ["uv", "run", "pytest"], timeout = "10m" }\n'
+    layers.project_file.write_text(f'{test}[roles.a]\nharness = "pi"\n')
+    with pytest.raises(ConfigError, match=r"test\.command: a test command in a project file needs explicit trust"):
+        layers.load()
+    assert (
+        layers.load(trust_project=True).test
+        == Team.model_validate(
+            {"roles": {"a": {"harness": "pi"}}, "test": {"command": ["uv", "run", "pytest"], "timeout": "10m"}}
+        ).test
+    )
+    layers.project_file.write_text('[roles.a]\nharness = "pi"\n')
+    layers.user_file.write_text(test)
+    assert layers.load().test is not None
+
+
+def test_a_test_needs_a_timeout():
+    with pytest.raises(ConfigError, match=r"test\.timeout"):
+        Team.loads('test = { command = ["make", "check"] }\n[roles.a]\nharness = "pi"\n')
+
+
 def test_a_command_from_the_user_needs_no_trust(layers):
     layers.user_file.write_text('[roles.a]\nharness = { command = ["my-agent"] }\n')
     assert isinstance(layers.load().roles["a"].harness, Command)

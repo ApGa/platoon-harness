@@ -1,6 +1,7 @@
-"""What the runtime's looks find in the session's repository, on `repo/<name>`: each commit, each rewrite of what the
-journal holds, and each workspace's head and uncommitted state. A look is the runtime's observation, not an act of an
-agent's, so none of its events names an agent in its envelope, and none claims a turn or a context."""
+"""What the runtime finds in the session's repository, on `repo/<name>`: each commit, each rewrite of what the journal
+holds, and each workspace's head and uncommitted state, as its looks find them, and what each runtime test of a commit
+came to. The runtime's finding is not an act of an agent's, so none of these events names an agent in its envelope, and
+none claims a turn or a context."""
 
 import json
 import sqlite3
@@ -28,6 +29,9 @@ Uncited = Literal["unrecorded", "no_event", "no_lines", "unread"]
 """Why an `Informed-By` value cites nothing: it names a commit the journal holds no record of, no event, no lines of
 its event's body, or an event its commit's maker had neither made nor been handed."""
 PathState = Literal["modified", "added", "deleted", "renamed", "copied", "type_changed", "untracked", "conflicted"]
+TestOutcome = Literal["passed", "failed", "error"]
+"""What a runtime test came to: its command exited 0, exited otherwise or was ended by a signal of its own, or it could
+not run to its end, as when its timeout came first."""
 
 NOT_RECORDED = "not recorded yet: a commit is recorded at the look after the turn that made it"
 
@@ -125,18 +129,36 @@ class Report(Args):
 
 
 class Looks(View):
-    """Each workspace's last look, which the next one starts from, and the ref of each commit the journal holds."""
+    """Each workspace's last look, which the next one starts from, every isolated workspace, and the ref of each commit
+    the journal holds, with the isolated workspace that made it or a commit the journal holds that it is built on."""
 
+    version = 2
     schema = """
     CREATE TABLE v_looks(workspace TEXT PRIMARY KEY, reading TEXT NOT NULL) WITHOUT ROWID, STRICT;
-    CREATE TABLE v_looks_commits(sha TEXT PRIMARY KEY, ref TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_commits(sha TEXT PRIMARY KEY, ref TEXT NOT NULL, isolated TEXT) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_isolated(workspace TEXT PRIMARY KEY) WITHOUT ROWID, STRICT;
     """
+
+    @fold("effect.finished")
+    def made(self, event: Event) -> None:
+        result = event.data["result"]
+        if event.data["kind"] == "workspace" and isinstance(result, dict) and result.get("mode") == "isolated":
+            self.db.execute("INSERT OR IGNORE INTO v_looks_isolated VALUES (?)", (f"@{event.agent}",))
 
     @fold("repo.committed")
     def committed(self, event: Event) -> None:
+        """A commit's parents the journal holds are recorded before it, so what confines them is known here."""
+        made_in, parents = event.data["made_in"], event.data["parents"]
+        isolated = self.db.execute("SELECT workspace FROM v_looks_isolated WHERE workspace = ?", (made_in,)).fetchone()
+        if isolated is None:
+            marks = ", ".join("?" * len(parents))
+            isolated = self.db.execute(
+                f"SELECT isolated FROM v_looks_commits WHERE sha IN ({marks}) AND isolated IS NOT NULL LIMIT 1",
+                parents,
+            ).fetchone()
         self.db.execute(
-            "INSERT OR IGNORE INTO v_looks_commits VALUES (?, ?)",
-            (event.data["sha"], f"{event.stream}@{event.version}"),
+            "INSERT OR IGNORE INTO v_looks_commits VALUES (?, ?, ?)",
+            (event.data["sha"], f"{event.stream}@{event.version}", None if isolated is None else isolated[0]),
         )
 
     @fold("workspace.changed")
@@ -157,6 +179,12 @@ class Looks(View):
         return self.db.execute(
             "SELECT * FROM v_looks_commits WHERE substr(sha, 1, ?) = ? ORDER BY sha LIMIT 2", (len(given), given)
         ).fetchall()
+
+    def isolated(self, sha: str) -> str | None:
+        """The isolated workspace that made a recorded commit, or a commit the journal holds that it is built on, or
+        None for a commit whose code may leave every isolation."""
+        row = self.db.execute("SELECT isolated FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
+        return None if row is None else row["isolated"]
 
     def reading(self, workspace: str) -> dict[str, Any] | None:
         row = self.db.execute("SELECT reading FROM v_looks WHERE workspace = ?", (workspace,)).fetchone()
@@ -247,6 +275,17 @@ def report(txn: Txn, a: Report) -> None:
         )
 
 
+def confined(looks: Looks, sha: str, made_in: str | None) -> str | None:
+    """Why a recorded commit's code runs only in an isolation, in words, or None when nothing keeps it there: it, or a
+    commit the journal holds that it is built on, was made in an isolated workspace."""
+    isolated = looks.isolated(sha)
+    if isolated is None:
+        return None
+    if isolated == made_in:
+        return f"{made_in}'s commit was made in an isolated workspace, so its code runs only there"
+    return f"it is built on a commit {isolated} made in an isolated workspace, so its code runs only there"
+
+
 def _recorded(txn: Txn, given: str) -> Event:
     """The `repo.committed` of the one recorded commit `given` names. Refused `unsupported` when the session observes
     no repository, `not_found` while the journal holds no such commit, and `invalid` when `given` names several."""
@@ -274,6 +313,67 @@ def commit(txn: Txn, a: Which) -> dict[str, Any]:
     ref, sha, made_in = f"{event.stream}@{event.version}", event.data["sha"], event.data["made_in"]
     expose_read(txn, [Exposed.gist(ref, event.gist, {"sha": sha, "made_in": made_in})])
     return {"ref": ref, "sha": sha, "gist": event.gist, "made_in": made_in}
+
+
+class Testing(Args):
+    commit: Given
+
+
+@op("repo.test")
+def test(txn: Txn, a: Testing) -> dict[str, int]:
+    """Run a recorded commit's maker's code as you, unconfined: the team's `test` command, in a clean detached checkout
+    of that commit. What it came to is recorded on `repo/<name>` as `repo.tested`, naming the `effect` this gives back.
+    A person or a program asks for this, never an agent, as what the commit holds, a `conftest.py` among it, runs with
+    all you can reach. Refused `not_permitted` to an agent, and for a commit made in an isolated workspace or built on
+    one, whose code runs only there; `not_found` while the commit is not recorded yet; `invalid` when what you gave
+    names several; `unsupported` when the team names no `test` or the session observes no repository; and `conflict`
+    once the session is closing."""
+    if txn.me.kind == "agent":
+        raise Refused("not_permitted", "an agent cannot have the runtime run its code: a person or a program asks")
+    session = txn.view(SessionRecord)
+    if not session.accepting():
+        raise Refused("conflict", f"the session is {session.state()}")
+    if session.settings().test is None:
+        raise Refused("unsupported", "the team names no `test` command")
+    event = _recorded(txn, a.commit)
+    sha = event.data["sha"]
+    if (why := confined(txn.view(Looks), sha, event.data["made_in"])) is not None:
+        raise Refused("not_permitted", why)
+    return {"effect": txn.effect("test", {"sha": sha}, on_uncertain="retry")}
+
+
+class Tested(Args):
+    """What a runtime test at `sha`, which `effect` ran, came to: the `command` it ran, its `exit`, None when it never
+    exited on its own, the `seconds` it took, None when it never started, its `outcome`, `why` it failed or erred where
+    its exit does not say, and as its `body` the last of what it printed, of `printed` bytes in all, which `blob.get`
+    reads by the record's ref."""
+
+    effect: int
+    sha: Sha
+    command: tuple[str, ...]
+    exit: int | None
+    seconds: float | None
+    outcome: TestOutcome
+    why: str | None = None
+    body: BodyRef | None = None
+    printed: int | None = None
+
+
+@op("repo.record", runtime=True)
+def record(txn: Txn, a: Tested) -> str:
+    """Record what a runtime test of a commit came to, on `repo/<name>` with no agent in the envelope, its `why` cut to
+    fit, and give its ref."""
+    repo = txn.view(SessionRecord).settings().repo
+    if repo is None:
+        raise Refused("unsupported", "this session observes no repository")
+    why = None if a.why is None else a.why[:_WHY_LIMIT]
+    said = f"{a.outcome}: {why}" if why else f"failed, exit {a.exit}" if a.outcome == "failed" else a.outcome
+    took = "" if a.seconds is None else f" in {a.seconds:.1f} s"
+    gist = f"{a.sha[:12]} tests {said}{took}"[:GIST_LIMIT]
+    refs = [a.body] if a.body else ()
+    data = a.model_copy(update={"why": why})
+    event = txn.emit("repo.tested", f"repo/{repo.name}", gist=gist, refs=refs, data=data)
+    return f"{event.stream}@{event.version}"
 
 
 @op("repo.looks", query=True, runtime=True)

@@ -25,6 +25,9 @@ VIEW_TOKEN = "view.token"
 LOG = "runtime.log"
 MARKS = "marks.sqlite"
 CONFORMANCE = "conformance"
+TESTS = "tests"
+"""Where in a session's folder each runtime test of a commit runs, in a folder named for its effect, gone once its
+outcome is recorded."""
 
 _SOCKET_LIMIT = 103
 _HASH_LENGTH = 16
@@ -39,6 +42,7 @@ __all__ = [
     "MARKS",
     "OWNER_TOKEN",
     "RUNNING",
+    "TESTS",
     "VIEW_TOKEN",
     "Listed",
     "Running",

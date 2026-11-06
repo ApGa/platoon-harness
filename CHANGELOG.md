@@ -4,6 +4,20 @@
 
 ### Added
 
+- Runtime tests of a commit, `repo.test{commit}`: a person's or a program's act, never a tool, refused to an agent whatever its
+  grants, that runs the team's new `test = {command, timeout}`, `timeout` required, in a clean detached checkout of a recorded commit,
+  as you and unconfined, and records what it came to as `repo.tested` on `repo/<name>`, with no agent in the envelope: the command, its
+  exit, its seconds, `passed`, `failed` or `error`, why where the exit does not say, and the last 64 KiB of what it printed as its
+  body. The checkout is a repository of its own in the session folder's `tests/<effect>/`, borrowing the objects of your repository
+  and each workspace's own but an isolated one's, and goes once recorded. A timeout is an `error` and ends all the test started. A
+  commit made in an isolated workspace, or built on one, is refused, naming why. A `test` from a project or team file needs the trust
+  step. `Team.test` and `team.Test`, `Settings.test`, the runtime-only `repo.record`, the `test` effect, `Session.repo_test`,
+  `drivers.process.run`, which runs a command in a group recorded before it can exec and ends what it leaves, `Record.of`,
+  `runtime.workspaces.checkout` and `runtime.paths.TESTS`. See ADR 0056.
+- The `changes` view's commit rows carry `tests`, the latest runtime test's outcome or None, and, when the team names a test, an act
+  saying 'Test: runs @ada's commit as you, unconfined', or disabled, saying why. The terminal's `/review` shows each commit's outcome,
+  `untested` where none ran, and tests the chosen commit with Enter once you say yes. `repo.test` is among the acts both clients ask
+  about first. The view is at version 3.
 - `repo.commit{sha}`, an agent read every agent holds: a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or its first
   4 or more hex digits, the read recorded as exposure, refused 'not recorded yet: a commit is recorded at the look after the turn that
   made it' until then. `Session.repo_commit`. See ADR 0057.

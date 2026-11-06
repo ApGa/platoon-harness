@@ -31,9 +31,9 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return repository(tmp_path / "repo", monkeypatch)
 
 
-def team(*work: Callable[[Path], Any]) -> Team:
+def team(*work: Callable[[Path], Any], **fields: Any) -> Team:
     lead = {"harness": working(*work), "workspace": "worktree"}
-    return Team.model_validate({"roles": {"lead": lead}, "topology": {"edges": {"lead": ["human"]}}})
+    return Team.model_validate({"roles": {"lead": lead}, "topology": {"edges": {"lead": ["human"]}}, **fields})
 
 
 @contextlib.asynccontextmanager
@@ -122,6 +122,28 @@ async def test_a_conflict_in_the_dock_says_where_to_resolve_it(root, repo):
     assert path[:20] in line
 
 
+async def test_review_tests_a_commit_once_you_say_yes_and_shows_what_it_came_to(root, repo):
+    """Choosing a commit takes its act, which says whose code it runs as you, and asks first."""
+    async with attached(team(worked, test={"command": ["true"], "timeout": "1m"}), root, repo) as (owner, pilot):
+        await pilot.press(*"go", "enter")
+        await looked(owner)
+        await drawn(pilot, lambda text: "1 commit," in text)
+        await pilot.press("alt+d")
+        listed = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
+        await pilot.press("enter")
+        asked = await drawn(pilot, lambda text: "Run it?" in text)
+        await pilot.press("y")
+        await until(lambda: of_type(owner, "repo.tested"), owner)
+        await pilot.press("escape")
+        await pilot.press("alt+d")
+        again = await drawn(pilot, lambda text: "tests passed" in text)
+
+    head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
+    assert f"{head[:12]} add work  +1 -0  untested" in listed and "Enter on a commit: test it" in listed
+    assert "Test: runs @lead's commit as you, unconfined. Run it?" in asked
+    assert f"{head[:12]} add work  +1 -0  tests passed" in again
+
+
 def test_an_isolated_workspace_s_commits_are_said_to_be_in_a_repository_of_its_own():
     roster = [
         {"agent": "ada", "workspace": {"mode": "isolated", "path": "/s/agents/ada/workspace", "branch": "b"}},
@@ -146,6 +168,7 @@ def test_review_groups_commits_by_the_workspace_that_made_them():
             "removed": 0,
             "files": 1,
             "recorded": seq,
+            "tests": None,
             "dropped": False,
             "seq": seq,
         }
@@ -196,6 +219,7 @@ def commit_of(sha: str, made_in: str, recorded: int, seq: int | None = None, dro
         "removed": 0,
         "files": 1,
         "recorded": recorded,
+        "tests": None,
         "dropped": dropped,
         "seq": recorded if seq is None else seq,
     }

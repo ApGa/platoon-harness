@@ -663,7 +663,14 @@ async def test_capabilities_name_the_person_their_grants_and_what_is_asked_first
 
     assert x["person"] == "you" and x["live"] is True and x["cannot"] is None
     assert {"message.send", "approval.resolve", "agent.interrupt"} <= set(x["may"])
-    assert x["confirmed"] == ["agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"]
+    assert x["confirmed"] == [
+        "agent.cancel",
+        "agent.retire",
+        "body.tombstone",
+        "repo.test",
+        "session.cancel",
+        "session.close",
+    ]
     assert x["body_limit"] == BODY_LIMIT
 
 

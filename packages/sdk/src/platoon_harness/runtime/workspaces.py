@@ -69,6 +69,7 @@ __all__ = [
     "STATUS",
     "UNDER_WAY",
     "branch_of",
+    "checkout",
     "end_snapshot",
     "end_worktree",
     "make_snapshot",
@@ -726,3 +727,23 @@ def write_bundle(
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
         part.unlink(missing_ok=True)
+
+
+# Testing a commit.
+
+
+def checkout(sha: str, root: Path, repositories: Sequence[str]) -> None:
+    """Check `sha` out at `root`, clean and detached, in a repository of its own that borrows the objects of those of
+    `repositories` still there, so nothing is written into any of them and none of their own config applies. A commit
+    none of them holds fails, saying so."""
+    git("init", "-q", str(root), cwd=root.parent)
+    store = Path(git("rev-parse", "--path-format=absolute", "--git-path", "objects", cwd=root).strip())
+    objects = [
+        git("rev-parse", "--path-format=absolute", "--git-path", "objects", cwd=Path(repository)).strip()
+        for repository in repositories
+        if Path(repository).is_dir()
+    ]
+    (store / "info" / "alternates").write_text("".join(f"{path}\n" for path in objects))
+    if not git("rev-parse", "-q", "--verify", f"{sha}^{{commit}}", cwd=root, ok=(0, 1)).strip():
+        raise GitError(f"no repository a test may read from holds {sha[:12]}")
+    git("checkout", "-q", "--detach", sha, cwd=root)

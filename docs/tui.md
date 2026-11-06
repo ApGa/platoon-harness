@@ -102,17 +102,20 @@ below it: both stop turns, not waits. When the runtime refuses one, the refusal 
 pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves. Retiring
 or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the palette,
 `/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end an
-agent or the session, or erase a body, ask once. A read is what the screen draws, so the palette offers none: the
+agent or the session, erase a body, or run a commit's code as you, ask once. A read is what the screen draws, so the palette offers none: the
 command line prints any. A takeover says it is not built yet, as `/takeover` does.
 
 ### What changed
 
-`/review`, or Alt+D, lists what changed, read-only, grouped by workspace: the commits made in an agent's workspace under that agent,
-newest recorded first, with their short SHA, subject and lines added and removed, a dropped one marked where it stands; then that
+`/review`, or Alt+D, lists what changed, grouped by workspace: the commits made in an agent's workspace under that agent,
+newest recorded first, with their short SHA, subject, lines added and removed, and what their latest runtime test came to, `untested`
+where none ran and the team names a test, a dropped one marked where it stands; then that
 workspace's uncommitted paths, conflicted first, with their state and lines, `?` where nobody measured them, and how many more there
 are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
 or in no workspace the session knows. A snapshot's group, an isolated one's among them, says its commits are in its own repository,
-until you fetch them. A look
+until you fetch them. Enter on a commit tests it, once you say yes to its act, which says whose code it runs as you, unconfined; one
+made in an isolated workspace, or built on one, says instead why it cannot be tested ([workspaces.md](workspaces.md#testing-a-commit)).
+A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
 conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves

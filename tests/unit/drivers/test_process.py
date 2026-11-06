@@ -15,6 +15,7 @@ import pytest
 
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Delta, DriverError, Exited, GapReport, Item, Native, Ready
+from platoon_harness.drivers.env import tmpdir
 from platoon_harness.drivers.process import (
     _SH,
     _TRAMPOLINE,
@@ -26,7 +27,9 @@ from platoon_harness.drivers.process import (
     _gone,
     _started,
     reap,
+    run,
 )
+from platoon_harness.kernel import ManualClock
 from platoon_harness.rpc import read_lines
 
 from .support import Heard, group_of, make_spec, running, spawn_group
@@ -400,6 +403,50 @@ async def test_reap_ends_what_left_a_group_a_crash_left_behind(tmp_path):
 
     assert not running(int(found[0]))
     await process.stop(1)
+
+
+async def test_a_run_says_how_its_command_exited_and_keeps_what_it_printed(tmp_path):
+    output = tmp_path / "output"
+    env = {"PATH": os.environ["PATH"], "TMPDIR": str(tmpdir(tmp_path))}
+    script = "echo out; echo err >&2; exit 3"
+
+    code = await run(
+        ["sh", "-c", script],
+        cwd=tmp_path,
+        folder=tmp_path,
+        env=env,
+        output=output,
+        limit=30,
+        clock=ManualClock(),
+        grace=1,
+    )
+
+    assert code == 3
+    assert output.read_text() == "out\nerr\n"
+    assert not (tmp_path / RECORD).exists()
+
+
+async def test_a_run_ends_what_its_command_left_and_what_its_limit_cut_off(tmp_path):
+    """A child it left in its group, one that left the group by `setsid`, and the command its limit came before."""
+    clock = ManualClock(1000.0)
+    env = {"PATH": os.environ["PATH"], "TMPDIR": str(tmpdir(tmp_path))}
+    tmpdir(tmp_path).mkdir()
+    os.mkfifo(tmp_path / "ready")
+    left = (
+        "sleep 100 & echo $! > pids; setsid sleep 100 & echo $! >> pids; echo $$ >> pids; echo > ready; exec sleep 100"
+    )
+    output = tmp_path / "output"
+    running_for = asyncio.ensure_future(
+        run(["sh", "-c", left], cwd=tmp_path, folder=tmp_path, env=env, output=output, limit=60, clock=clock, grace=1)
+    )
+    await asyncio.wait_for(asyncio.to_thread((tmp_path / "ready").read_text), 10)
+    await asyncio.wait_for(clock.slept_until(1060.0), 10)
+    clock.advance(60)
+
+    code = await asyncio.wait_for(running_for, 10)
+
+    assert code is None
+    assert not [pid for pid in map(int, (tmp_path / "pids").read_text().split()) if running(pid)]
 
 
 async def test_a_forked_child_holding_stdout_cannot_hold_up_the_exit_report(tmp_path):

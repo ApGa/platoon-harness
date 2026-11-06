@@ -88,6 +88,7 @@ platoon_harness.drivers.process.LOG_LIMIT
 platoon_harness.drivers.process.Process
 platoon_harness.drivers.process.Reader
 platoon_harness.drivers.process.reap
+platoon_harness.drivers.process.run
 platoon_harness.drivers.process.Record
 platoon_harness.drivers.process.RECORD
 platoon_harness.drivers.process.REPORT_QUOTA
@@ -355,6 +356,7 @@ platoon_harness.runtime.paths.root_of
 platoon_harness.runtime.paths.session_folder
 platoon_harness.runtime.paths.sessions_of
 platoon_harness.runtime.paths.socket_path
+platoon_harness.runtime.paths.TESTS
 platoon_harness.runtime.paths.VIEW_TOKEN
 platoon_harness.runtime.paths.write_conformance
 platoon_harness.runtime.paths.write_conformance(root,result)
@@ -365,6 +367,7 @@ platoon_harness.runtime.SpawnRequest
 platoon_harness.runtime.told
 platoon_harness.runtime.workspaces.BRANCHES
 platoon_harness.runtime.workspaces.branch_of
+platoon_harness.runtime.workspaces.checkout
 platoon_harness.runtime.workspaces.BUNDLE
 platoon_harness.runtime.workspaces.end_snapshot
 platoon_harness.runtime.workspaces.end_worktree
@@ -423,6 +426,7 @@ platoon_harness.team.Role
 platoon_harness.team.Team
 platoon_harness.team.team_check
 platoon_harness.team.Team.recipients(to)
+platoon_harness.team.Test
 platoon_harness.team.trainable_problems
 platoon_harness.team.trainable_problems(team,*,approvals)
 platoon_harness.testing.Ask

@@ -133,6 +133,7 @@ Each law is a sentence, and each has a test of the same name.
   view.token          0600: a view credential, which reads and never writes
   lock                flock: held by the one live runtime
   commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
+  tests/<effect>/     a runtime test of a commit while it runs: its clean checkout, what it printed, its group's record
   agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one;
                       home/, an isolated harness's HOME
 ```
@@ -344,6 +345,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `admit` | None: a training authority's admission has no idempotency | Never retried. Spawn fails, reservation released, orphan recorded as a gap. One that finished is not retried either: its token went with the runtime, so `launch` asks the authority again, as a resume. Its result is the backend's ids for the agent (§14) |
 | `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
 | `probe` | None | Repeat: a look records only what the journal does not hold, so a repeat records nothing twice |
+| `test` | None | Repeat unless recorded: one whose `repo.tested` the journal holds finishes from it and runs nothing, and one a crash cut off runs again from the start, once what it left is ended |
 | `rest` | None | Repeat: ending a harness that has gone ends nothing, and `reap` proves what is ours |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop looks once more at what its agent left, then removes its workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
 | `erase` | None | Repeat: erasing twice is harmless |
@@ -572,11 +574,12 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` |
 | Evidence, kernel | `body.tombstone` | |
-| Repository | `repo.commit` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
+| Repository | `repo.test` `repo.commit` | |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list`, `blob.get` and `repo.commit` are commands; for a human or a
-program they run as queries and write nothing. `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+program they run as queries and write nothing. `repo.test` is a person's or a program's act, and never a tool: it is refused to an
+agent whatever its grants (§13). `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
 `episode.close` closes the open episode on `based_on`, the refs of what it came to, checked as a citation is (§7), and what it was
 worth is an annotation's to say (§11), never the episode's.
 Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
@@ -1312,9 +1315,9 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 Git ancestry, declared `informed_by`, observed reads and credit are four relations, and none is derived from another: a commit's
 `parents` are ancestry, its `Informed-By` trailers are its one declaration, which `based_on` cites, an agent's read is exposure, and
 credit is an annotation. Commits, rewrites and each workspace's state are events on `repo/<name>`, which a look records with no agent
-in the envelope, since a look is the runtime's observation and claims no turn or context (§13). An agent's `repo.commit` turns a SHA
-into the ref of its record, which is how `based_on` cites a commit, and is an observed read, while one read with `git log` stays
-unobserved. **Three axes never merge:** evidence type
+in the envelope, since a look is the runtime's observation and claims no turn or context (§13), and so is what a runtime test of a
+commit came to, `repo.tested`. An agent's `repo.commit` turns a SHA into the ref of its record, which is how `based_on` cites a
+commit, and is an observed read, while one read with `git log` stays unobserved. **Three axes never merge:** evidence type
 says why an edge is believed; **attribution** (`exact` or `forked`, and None otherwise) says how well a model call is tied to an
 agent, which `eligibility` answers and nothing stores; **assurance** (`cooperative`, `isolated`) says how well an actor is
 tied to a credential, recorded once on `agent.started`.
@@ -1524,7 +1527,7 @@ roster row, under a name that is not that agent's, so `roster` answers with ever
 |---|---|---|
 | `roster` | `agent, role, harness, model, parent, state, resting, group, activity, stopped, held_by, why, unread, levels, login, usage, workspace` | Who is working, on what, what is blocked, and where. A row names everyone as `agent` does, so `parent` finds its row |
 | `attention` | `id, kind, agent, gist, since_seq, version, actions[]` | Where you must act: `approval`, `mention`, `uncertain`, `failed`, `dead_task`, `budget`, `hops`, `conflict`, `daemon` |
-| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, dropped`, `recorded` being the seq that recorded it, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed |
+| `changes` | `id, kind, seq` and, by kind, a `commit` row's `commit, gist, made_in, branch, added, removed, files, recorded, tests, dropped`, `recorded` being the seq that recorded it and `tests` the outcome of the latest runtime test at it, None while none ran, with `actions[]` when the team names a `test`, a `workspace` row's `workspace, head, branch, under_way, rebasing, total, conflicted`, and a `path` row's `workspace, path, state, added, removed` | What changed, as looks found it after each turn, so opaque harnesses are covered. A newer reading replaces its workspace's paths whole, and a row that goes is named in `removed`. A client compares `seq` with the person's mark on `repo/<name>`, which `session.status` names as `repo`, None when nothing is observed. A commit's act, `repo.test`, says whose code it runs as you, unconfined, or is disabled, saying why, for a commit whose code runs only in an isolation |
 
 **What waits for an agent.** `agent.unread`, a person's query, lists what the roster's `unread` counts, oldest first, each entry
 with the `delivery` it would land by now, so a client draws a chip and a queue line above a composer and works nothing out.
@@ -1669,6 +1672,19 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   session's event only in a commit this session's agent made. Anything else, a git ref among them, is kept as written and unresolved,
   with why, never refused, since git already holds it; `repo.committed` keeps why at payload 2. What the maker was handed of what it
   cites is its exposure's to say, bounded at the look that recorded the commit, as for any citation.
+- **Testing a commit** is a person's or a program's act, `repo.test{commit}`, and never a tool: an agent is refused whatever its
+  grants, since the trust step covers the command and not the code it runs, which the agent wrote, a `conftest.py` among it. It runs
+  the team's `test = {command, timeout}`, whose `timeout` is required and which needs the trust step from a project or team file as a
+  `command` harness does, in a clean detached checkout of that commit in the session's subfolder, as you and unconfined, on what every
+  process inherits. The checkout is a repository of its own in `tests/<effect>/` that borrows the objects of your repository and of
+  each workspace's own but an isolated one's, so nothing is written into any of them and none of their own config applies; it goes
+  once the test is recorded. A commit the journal records as made in an isolated workspace, or built on one, is refused, naming why,
+  as its code runs only there. `repo.tested` on `repo/<name>` names the commit, the command, its exit, None when it never exited on
+  its own, the seconds it took, None when it never started, its outcome, `passed`, `failed` or `error`, why where its exit does not
+  say, and as its body the last of what it printed, of how many bytes in all, which `blob.get` reads by the record's ref. A test past
+  its timeout is an `error`, and nothing it started runs on. The `test` effect is owned by no agent, keeps the session from settling until it ends, finishes from the journal when its `repo.tested` is held, and otherwise
+  runs again from the start. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ from the agent's
+  own run. See [ADR 0056](adr/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
   its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit
   is recorded at the look after the turn that made it', until then. Every agent holds it. See
@@ -1826,8 +1842,11 @@ Threat tiers stay separate, in docs and in events.
   a control link acts as the session's person, and nothing tells a second person from the first, so a control link is the owner's to
   use and a view link is what another gets. Refusing an address other than loopback to a session on a plan login is planned.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
-  `command` harness, a `module:attr` reference or an auth profile, needs an explicit trust step when it comes from a project or team
-  file: `--trust` on the command line, `trust_project` to `load_team`. The check reads where each value came from, since mappings merge
+  `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
+  project or team file: `--trust` on the command line, `trust_project` to `load_team`. The trust step covers a test's command and not
+  the commit it runs, which its maker wrote, so a runtime test is a person's or a program's act and never an agent's, says on its act
+  that it runs that commit's maker's code as you, unconfined, and is refused for a commit whose code runs only in an isolation (§13).
+  The check reads where each value came from, since mappings merge
   across layers.
 - **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same
   allowlist plus its token variable. Nothing is inherited by default, so variables that change a harness's behavior or leak a parent's

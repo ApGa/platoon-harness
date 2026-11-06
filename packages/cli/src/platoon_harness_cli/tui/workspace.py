@@ -947,7 +947,20 @@ class Workspace(Screen[None]):
             self.marks[stream] = seq
             self.run_worker(self._mark_one(live.session, stream, seq), group="marks")
 
-        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, snapshots_of(live.roster)))
+        snapshots = snapshots_of(live.roster)
+        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, self._test, snapshots))
+
+    @work(group="act")
+    async def _test(self, action: dict[str, Any]) -> None:
+        """Test a commit, once the person says yes, since it runs that commit's code as them, unconfined."""
+        live = self.live
+        if live is None or not await self.app.push_screen_wait(Confirm(SafeText(f"{action['label']}. Run it?"))):
+            return
+        outcome = await live.session.submit(action["op"], **action["args"])
+        if outcome.refusal is not None:
+            note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
+        else:
+            note(self, f"Testing {action['args']['commit'][:12]}: what it comes to shows on its row.")
 
     def action_provenance(self) -> None:
         """Show the chosen line's provenance. Every line is an event, and one that carries another's words opens on what

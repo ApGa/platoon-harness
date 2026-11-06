@@ -121,7 +121,8 @@ not hold.
 | A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
 
 **Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run:
-these are the ops the terminal asks about too, one set both read, and nothing takes them back.
+these are the ops the terminal asks about too, one set both read, and nothing takes them back. Testing a commit is in that set, and
+the page has no list of commits to test from: the terminal's `/review` is where one is tested.
 
 **Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
 answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new control

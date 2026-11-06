@@ -134,6 +134,8 @@ def _needing_trust(team: Team, merged: Mapping[str, Any], files: Sequence[Mappin
             yield Problem(f"roles.{name}.harness", "a `module:attr` in a project file needs explicit trust")
     if any(":" in reference for reference in team.extensions) and from_a_file("extensions"):
         yield Problem("extensions", "a `module:attr` in a project file needs explicit trust")
+    if from_a_file("test", "command"):
+        yield Problem("test.command", "a test command in a project file needs explicit trust")
     for name in team.auth:
         if from_a_file("auth", name):
             yield Problem(f"auth.{name}", "an auth profile in a project file needs explicit trust")

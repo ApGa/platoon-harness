@@ -49,9 +49,11 @@ def person_ops() -> dict[str, Op]:
 
 
 _PERSON = frozenset(person_ops())
-CONFIRMED = frozenset({"agent.cancel", "agent.retire", "body.tombstone", "session.cancel", "session.close"})
+CONFIRMED = frozenset(
+    {"agent.cancel", "agent.retire", "body.tombstone", "repo.test", "session.cancel", "session.close"}
+)
 """The ops a person is asked about once before they run, in the terminal and in the browser alike: each ends an agent or
-the session, or erases a body, which nothing takes back."""
+the session, erases a body, or runs a commit's code as you, which nothing takes back."""
 
 
 def cut(text: str, *, file: str | None = None) -> tuple[str, str | None]:

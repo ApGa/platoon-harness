@@ -835,6 +835,12 @@ class Session:
         `made_in`, by its SHA or its first 4 or more hex digits."""
         return await self._ask("repo.commit", sha=sha)
 
+    async def repo_test(self, commit: str) -> int:
+        """Ask for a runtime test of a recorded commit, which runs that commit's maker's code as you, unconfined: the
+        team's `test` command, in a clean detached checkout of it. Its effect, which `repo.tested` names with what it
+        came to."""
+        return (await self._do("repo.test", commit=commit))["effect"]
+
     # Provenance.
 
     async def exposure(self, agent: str, ref: str, *, before: str | None = None) -> Seen | NotSeen | Unknown:

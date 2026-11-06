@@ -15,7 +15,7 @@ from collections.abc import Callable, Coroutine, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self
 
-from platoon_harness.kernel import GIST_LIMIT
+from platoon_harness.kernel import GIST_LIMIT, Clock, first
 from platoon_harness.primitives import Delta, Exited, GapReport, Native, Report
 from platoon_harness.schema import Model
 
@@ -53,6 +53,7 @@ __all__ = [
     "Record",
     "exit_reason",
     "reap",
+    "run",
     "status",
 ]
 
@@ -114,6 +115,12 @@ class Record(Model):
 
     pid: int
     started: str
+
+    @classmethod
+    def of(cls, pid: int) -> Self | None:
+        """The record of the process that holds `pid` now, or None when none does."""
+        started = _started(pid)
+        return None if started is None else cls(pid=pid, started=started)
 
     def write(self, folder: Path) -> None:
         """Replace the record in one step, on disk before this returns."""
@@ -269,6 +276,52 @@ async def reap(folder: Path, grace: float) -> tuple[str, ...]:
         else:
             left.append(f"process group {record.pid} outlived its leader and cannot be proved ours")
     return tuple(left)
+
+
+async def run(
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    folder: Path,
+    env: Mapping[str, str],
+    output: Path,
+    limit: float,
+    clock: Clock,
+    grace: float,
+) -> int | None:
+    """Run `command` in `cwd` as a harness is run, in a group of its own recorded in `folder` before it can exec, on
+    `env`, which should give it `folder`'s `TMPDIR`, with nothing on stdin and all it prints in `output`, until it exits
+    or `limit` seconds pass on `clock`. Then what is left of it is ended, as `reap` ends it, whichever way it went. Its
+    exit code, negative for the signal that ended it, or None when its limit came first."""
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with output.open("wb") as printed:
+        process = await asyncio.create_subprocess_exec(
+            _SH,
+            "-c",
+            _TRAMPOLINE,
+            "sh",
+            *command,
+            stdin=PIPE,
+            stdout=printed,
+            stderr=subprocess.STDOUT,
+            env=env,
+            cwd=cwd,
+            start_new_session=True,
+        )
+    try:
+        record = Record.of(process.pid)
+        if record is None:
+            raise DriverError(f"{command[0]} died before it could be recorded")
+        record.write(folder)
+        assert process.stdin is not None
+        process.stdin.write(b"\n")
+        await process.stdin.drain()
+        process.stdin.close()
+        exited = await first(process.wait(), clock.sleep(limit))
+    finally:
+        await reap(folder, grace)
+        await process.wait()
+    return process.returncode if exited else None
 
 
 class _Streams(SubprocessStreamProtocol):
@@ -427,10 +480,9 @@ class Process:
         )
         pid = transport.get_pid()
         try:
-            started = _started(pid)
-            if started is None:
+            record = Record.of(pid)
+            if record is None:
                 raise DriverError(f"{command[0]} died before it could be recorded")
-            record = Record(pid=pid, started=started)
             record.write(spec.folder)
             assert streams.stdin is not None
             streams.stdin.write(b"\n")

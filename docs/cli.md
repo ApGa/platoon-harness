@@ -147,6 +147,7 @@ For example:
 - [`peers`](#platoon-harness-peers)
 - [`repo`](#platoon-harness-repo)
     - [`commit`](#platoon-harness-repo-commit)
+    - [`test`](#platoon-harness-repo-test)
 - [`task`](#platoon-harness-task)
     - [`add`](#platoon-harness-task-add)
     - [`claim`](#platoon-harness-task-claim)
@@ -1591,6 +1592,29 @@ For example:
 **Parameters**:
 
 * `--sha`: A commit's SHA, or its first 4 or more hex digits. **[required]**
+
+#### platoon-harness repo test
+
+```console
+platoon-harness repo test --commit STR [OPTIONS] SESSION
+```
+
+Run a recorded commit's maker's code as you, unconfined: the team's `test` command, in a clean detached checkout of that commit.
+
+What it came to is recorded on `repo/<name>` as `repo.tested`, naming the `effect` this gives back. A person or a program asks for this, never an agent, as what the commit holds, a `conftest.py` among it, runs with all you can reach. Refused `not_permitted` to an agent, and for a commit made in an isolated workspace or built on one, whose code runs only there; `not_found` while the commit is not recorded yet; `invalid` when what you gave names several; `unsupported` when the team names no `test` or the session observes no repository; and `conflict` once the session is closing.
+
+For example:
+
+    platoon-harness repo test SESSION --commit COMMIT
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--commit`: A commit's SHA, or its first 4 or more hex digits. **[required]**
+* `--key`: Name this command, so that running it again with the same key is one operation.
 
 ### platoon-harness task
 

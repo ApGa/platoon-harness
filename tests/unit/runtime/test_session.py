@@ -58,6 +58,7 @@ COVERED = {
     "ops.list": "ops",
     "peers": "peers",
     "repo.commit": "repo_commit",
+    "repo.test": "repo_test",
     "session.cancel": "cancel",
     "session.close": "close",
     "session.ending": "ending",

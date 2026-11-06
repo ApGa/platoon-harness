@@ -647,6 +647,8 @@ Git, as the runtime's own git meets it [V]:
 - With `core.splitIndex`, a capture writing a copy of your index put a new `sharedindex.*` into your git directory and left the
   copy unreadable in the snapshot; with `core.splitIndex=false` in its environment it writes the copy whole.
 - `bundle create` refuses a bare commit with no ref; `bundle unbundle` restores a commit pruned since.
+- `checkout --detach <sha>` in a repository just made, whose `objects/info/alternates` names another's store, checks that commit out
+  whole and clean from the borrowed objects, following a snapshot's own alternates on to yours, as a runtime test's checkout does.
 
 By git's release notes, not run: `--path-format` arrived in 2.31, `worktree add --reason` in 2.33 and `worktree list -z` in 2.36 [S].
 Git other than 2.47.3, macOS, a case-insensitive filesystem and a repository past 100,000 files or on Lustre are [U], as section 8
