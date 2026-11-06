@@ -577,8 +577,12 @@ class Workspace(Screen[None]):
             return []
         status = self._inspected if self._inspected and self._inspected["agent"] == row["agent"] else {}
         made = status.get("workspace") or {}
-        assurance = f", {made['assurance']}" if made.get("assurance") else ""
-        lines: list[Content] = [SafeText(f"workspace {workspace['mode']}{assurance}")]
+        assurance = made.get("assurance")
+        said = f", {assurance}" if assurance and assurance != workspace["mode"] else ""
+        lines: list[Content] = [SafeText(f"workspace {workspace['mode']}{said}")]
+        if workspace["mode"] == "isolated":
+            reaches = "  still reaches the network, loopback and what you can read outside your home"
+            lines.append(SafeText(reaches, "dim"))
         lines += [SafeText(f"  branch {workspace['branch']}")] if workspace["branch"] else []
         lines += [SafeText(f"  from {made['base'][:12]}")] if made.get("base") else []
         lines.append(SafeText(f"  {workspace['path']}", "dim"))
@@ -960,7 +964,7 @@ class Workspace(Screen[None]):
         if outcome.refusal is not None:
             note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
         else:
-            note(self, f"Testing {action['args']['commit'][:12]}: what it comes to shows on its row.")
+            note(self, f"Testing {action['args']['commit'][:12]}: open the changes again to see what it comes to.")
 
     def action_provenance(self) -> None:
         """Show the chosen line's provenance. Every line is an event, and one that carries another's words opens on what

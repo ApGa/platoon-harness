@@ -130,12 +130,15 @@ class Report(Args):
 
 class Looks(View):
     """Each workspace's last look, which the next one starts from, every isolated workspace, and the ref of each commit
-    the journal holds, with the isolated workspace that made it or a commit the journal holds that it is built on."""
+    the journal holds, with the workspace it was `found_in` and the isolated workspace that confines its code: that one
+    where it was found, or an isolated commit the journal holds that it is built on."""
 
-    version = 2
+    version = 3
     schema = """
     CREATE TABLE v_looks(workspace TEXT PRIMARY KEY, reading TEXT NOT NULL) WITHOUT ROWID, STRICT;
-    CREATE TABLE v_looks_commits(sha TEXT PRIMARY KEY, ref TEXT NOT NULL, isolated TEXT) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_commits(
+        sha TEXT PRIMARY KEY, ref TEXT NOT NULL, isolated TEXT, found_in TEXT
+    ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_looks_isolated(workspace TEXT PRIMARY KEY) WITHOUT ROWID, STRICT;
     """
 
@@ -147,18 +150,22 @@ class Looks(View):
 
     @fold("repo.committed")
     def committed(self, event: Event) -> None:
-        """A commit's parents the journal holds are recorded before it, so what confines them is known here."""
-        made_in, parents = event.data["made_in"], event.data["parents"]
-        isolated = self.db.execute("SELECT workspace FROM v_looks_isolated WHERE workspace = ?", (made_in,)).fetchone()
-        if isolated is None:
+        """A commit's code runs only in an isolation when the look that found it was of an isolated workspace, which is
+        where its code is, or when a parent the journal holds is confined. Attribution does not decide this, since an
+        isolated agent writes its own reflog. A commit's parents the journal holds are recorded before it."""
+        sha, parents, found_in = event.data["sha"], event.data["parents"], event.data.get("found_in")
+        row = self.db.execute("SELECT workspace FROM v_looks_isolated WHERE workspace = ?", (found_in,)).fetchone()
+        isolated = found_in if row is not None else None
+        if isolated is None and parents:
             marks = ", ".join("?" * len(parents))
-            isolated = self.db.execute(
+            parent = self.db.execute(
                 f"SELECT isolated FROM v_looks_commits WHERE sha IN ({marks}) AND isolated IS NOT NULL LIMIT 1",
                 parents,
             ).fetchone()
+            isolated = None if parent is None else parent["isolated"]
         self.db.execute(
-            "INSERT OR IGNORE INTO v_looks_commits VALUES (?, ?, ?)",
-            (event.data["sha"], f"{event.stream}@{event.version}", None if isolated is None else isolated[0]),
+            "INSERT OR IGNORE INTO v_looks_commits VALUES (?, ?, ?, ?)",
+            (sha, f"{event.stream}@{event.version}", isolated, found_in),
         )
 
     @fold("workspace.changed")
@@ -180,11 +187,12 @@ class Looks(View):
             "SELECT * FROM v_looks_commits WHERE substr(sha, 1, ?) = ? ORDER BY sha LIMIT 2", (len(given), given)
         ).fetchall()
 
-    def isolated(self, sha: str) -> str | None:
-        """The isolated workspace that made a recorded commit, or a commit the journal holds that it is built on, or
-        None for a commit whose code may leave every isolation."""
-        row = self.db.execute("SELECT isolated FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
-        return None if row is None else row["isolated"]
+    def isolated(self, sha: str) -> sqlite3.Row | None:
+        """A recorded commit's `isolated` workspace, the one that confines its code, and the workspace it was
+        `found_in`, or None for a commit the journal does not hold. `isolated` is None for one whose code may leave
+        every isolation, equals `found_in` for one found in an isolated workspace, and names an ancestor's for one
+        built on an isolated commit."""
+        return self.db.execute("SELECT isolated, found_in FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
 
     def reading(self, workspace: str) -> dict[str, Any] | None:
         row = self.db.execute("SELECT reading FROM v_looks WHERE workspace = ?", (workspace,)).fetchone()
@@ -257,6 +265,7 @@ def report(txn: Txn, a: Report) -> None:
         if looks.ref(commit.sha) is None:
             cites = [_citation(txn, looks, value, commit.made_in) for value in commit.informed_by]
             data = commit.model_dump(mode="json", exclude={"subject"})
+            data["found_in"] = a.workspace
             for value, (_, why) in zip(data["informed_by"], cites, strict=True):
                 value["why"] = why
             based_on = list(dict.fromkeys(ref for ref, _ in cites if ref is not None))
@@ -275,14 +284,15 @@ def report(txn: Txn, a: Report) -> None:
         )
 
 
-def confined(looks: Looks, sha: str, made_in: str | None) -> str | None:
-    """Why a recorded commit's code runs only in an isolation, in words, or None when nothing keeps it there: it, or a
-    commit the journal holds that it is built on, was made in an isolated workspace."""
-    isolated = looks.isolated(sha)
-    if isolated is None:
+def confined(looks: Looks, sha: str) -> str | None:
+    """Why a recorded commit's code runs only in an isolation, in words, or None when nothing keeps it there: it was
+    found in an isolated workspace, or it is built on a commit the journal holds that was."""
+    row = looks.isolated(sha)
+    if row is None or row["isolated"] is None:
         return None
-    if isolated == made_in:
-        return f"{made_in}'s commit was made in an isolated workspace, so its code runs only there"
+    isolated, found_in = row["isolated"], row["found_in"]
+    if isolated == found_in:
+        return f"{isolated}'s commit was made in an isolated workspace, so its code runs only there"
     return f"it is built on a commit {isolated} made in an isolated workspace, so its code runs only there"
 
 
@@ -337,7 +347,7 @@ def test(txn: Txn, a: Testing) -> dict[str, int]:
         raise Refused("unsupported", "the team names no `test` command")
     event = _recorded(txn, a.commit)
     sha = event.data["sha"]
-    if (why := confined(txn.view(Looks), sha, event.data["made_in"])) is not None:
+    if (why := confined(txn.view(Looks), sha)) is not None:
         raise Refused("not_permitted", why)
     return {"effect": txn.effect("test", {"sha": sha}, on_uncertain="retry")}
 

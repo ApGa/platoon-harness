@@ -225,11 +225,12 @@ class Attention(View):
 
 
 class Changes(View):
-    """What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it and its `tests`,
-    the outcome of the latest runtime test at it, or None while none ran, for each workspace's last reading and for
-    each path it holds uncommitted, keyed by `id`, each with the `seq` that last moved it, which a client compares with
-    the person's mark on `repo/<name>`. A newer reading replaces its workspace's paths whole, and a row closes in place,
-    so a watcher hears that it went away."""
+    """What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it, its `tests`,
+    the outcome of the latest runtime test at it, or None while none ran, and that test's `tested` ref, `tests_why` and
+    `tests_exit` where it has them, so a client says why it failed and can open its record; for each workspace's last
+    reading; and for each path it holds uncommitted, keyed by `id`, each with the `seq` that last moved it, which a
+    client compares with the person's mark on `repo/<name>`. A newer reading replaces its workspace's paths whole, and a
+    row closes in place, so a watcher hears that it went away."""
 
     version = 3
     schema = """
@@ -270,7 +271,15 @@ class Changes(View):
 
     @fold("repo.tested")
     def tested(self, event: Event) -> None:
-        self._amend(event.data["sha"], event, tests=event.data["outcome"])
+        data = event.data
+        self._amend(
+            data["sha"],
+            event,
+            tests=data["outcome"],
+            tested=f"{event.stream}@{event.version}",
+            tests_why=data.get("why"),
+            tests_exit=data.get("exit"),
+        )
 
     @fold("workspace.changed")
     def changed(self, event: Event) -> None:
@@ -466,7 +475,7 @@ def _acted(txn: Txn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if row["kind"] == "commit":
             made_in = row["made_in"]
             whose = f"{made_in}'s commit" if made_in and made_in.startswith("@") else "this commit"
-            disabled = confined(looks, row["commit"], made_in)
+            disabled = confined(looks, row["commit"])
             label = "Test" if disabled else f"Test: runs {whose} as you, unconfined"
             act = {"label": label, "op": "repo.test", "args": {"commit": row["commit"]}, "disabled": disabled}
             row = {**row, "actions": [act]}

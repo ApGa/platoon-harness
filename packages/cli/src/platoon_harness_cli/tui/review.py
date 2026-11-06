@@ -36,10 +36,15 @@ def snapshots_of(roster: Iterable[Mapping[str, Any]]) -> set[str]:
 
 
 def _tests(commit: Mapping[str, Any]) -> tuple[str, str] | str:
-    """What a commit's latest runtime test came to, or that none ran where one could."""
-    if commit["tests"] is not None:
-        return (f"  tests {commit['tests']}", TESTS[commit["tests"]])
-    return ("  untested", "dim") if commit.get("actions") else ""
+    """What a commit's latest runtime test came to, with why it failed or erred, or that none ran where one could."""
+    outcome = commit["tests"]
+    if outcome is None:
+        return ("  untested", "dim") if commit.get("actions") else ""
+    detail = commit.get("tests_why") or (
+        f"exit {commit['tests_exit']}" if commit.get("tests_exit") is not None else None
+    )
+    said = f"  tests {outcome}: {detail}" if detail and outcome != "passed" else f"  tests {outcome}"
+    return (said, TESTS[outcome])
 
 
 def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:

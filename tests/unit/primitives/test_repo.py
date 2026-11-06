@@ -516,6 +516,21 @@ async def test_a_commit_s_tests_are_its_latest_runtime_test_or_none(kernel):
     assert tested.gist == f"{ONE[:12]} tests passed in 2.5 s"
 
 
+async def test_a_commit_row_says_why_its_test_failed_and_names_its_record(kernel):
+    """So a client shows the reason, not only the outcome, and can open the record its body blob holds."""
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE), commit(TWO, ONE)], reading=reading(TWO))
+    failed = {"effect": 1, "sha": ONE, "command": CHECKS, "exit": 2, "seconds": 2.5, "outcome": "failed"}
+    ref = result_of(await kernel.submit(kernel.runtime, "repo.record", failed))
+    erred = {"effect": 2, "sha": TWO, "command": CHECKS, "exit": None, "seconds": None, "outcome": "error"}
+    erred["why"] = "its timeout of 1m came first"
+    result_of(await kernel.submit(kernel.runtime, "repo.record", erred))
+
+    one, two = commit_row(kernel, ONE), commit_row(kernel, TWO)
+    assert (one["tests"], one["tests_exit"], one["tests_why"], one["tested"]) == ("failed", 2, None, ref)
+    assert (two["tests"], two["tests_exit"], two["tests_why"]) == ("error", None, "its timeout of 1m came first")
+
+
 @pytest.mark.parametrize("checks", [CHECKS])
 async def test_a_test_is_a_person_s_or_a_program_s_act_on_a_recorded_commit(kernel, ada):
     await spawn(kernel, "bob")
@@ -576,6 +591,26 @@ async def test_a_test_of_an_isolated_commit_is_refused(kernel, ada):
         "it is built on a commit @bob made in an isolated workspace, so its code runs only there"
     )
     assert [event.data["data"]["sha"] for event in requested_tests(kernel)] == [THREE]
+
+
+@pytest.mark.parametrize("checks", [CHECKS])
+async def test_isolation_is_decided_by_the_look_not_by_the_reflog_an_agent_writes(kernel, ada):
+    """A commit an isolated agent made, and a merge of it, are refused even when their reflog names no maker: the look
+    that found the code decides, since an isolated agent writes its own reflog and could clear it."""
+    await spawned_in(kernel, "bob", "isolated")
+    await spawned_in(kernel, "cy", "worktree")
+    await looked(kernel, "@bob", commits=[commit(ONE, made_in=None)], reading=reading(ONE))
+    merge = commit(TWO, BASE, ONE, made_in=None, branch="platoon-harness/s/cy")
+    await looked(kernel, "@cy", commits=[merge], reading=reading(TWO, branch="platoon-harness/s/cy"))
+
+    made, built = [await kernel.submit(ada, "repo.test", {"commit": sha}) for sha in (ONE, TWO)]
+
+    assert refusal(made).code == refusal(built).code == "not_permitted"
+    assert refusal(made).detail == "@bob's commit was made in an isolated workspace, so its code runs only there"
+    assert refusal(built).detail == (
+        "it is built on a commit @bob made in an isolated workspace, so its code runs only there"
+    )
+    assert requested_tests(kernel) == []
 
 
 @pytest.mark.parametrize("checks", [CHECKS])

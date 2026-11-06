@@ -252,3 +252,23 @@ def test_review_says_a_snapshot_s_commits_are_in_its_own_repository():
         "@cy, a snapshot, whose commits are in its own repository",
         "  bbbb made  +1 -0",
     ]
+
+
+def test_review_says_why_a_commit_s_test_failed_or_erred():
+    failed = {**commit_of("aaaa", "@ada", 3), "tests": "failed", "tests_exit": 2, "tests_why": None}
+    erred = {
+        **commit_of("bbbb", "@ada", 4),
+        "tests": "error",
+        "tests_exit": None,
+        "tests_why": "its timeout came first",
+    }
+    passed = {**commit_of("cccc", "@ada", 5), "tests": "passed", "tests_exit": 0, "tests_why": None}
+    changes = {row["id"]: row for row in (failed, erred, passed)}
+
+    lines = [row.line.plain.rstrip() for row in rows_of(changes, mark=9)]
+
+    assert lines[1:] == [
+        "  cccc made  +1 -0  tests passed",
+        "  bbbb made  +1 -0  tests error: its timeout came first",
+        "  aaaa made  +1 -0  tests failed: exit 2",
+    ]

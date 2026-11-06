@@ -59,7 +59,7 @@ quits. In a form, Enter goes to the next field, and from the last sends it.
 | Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
-| Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
+| Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from, a line on what an isolated one still reaches, and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions. A conflict has none, and says where to resolve it. Nor has a daemon that keeps failing, which says where its traceback is and what starts it anew |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
 
@@ -108,13 +108,13 @@ command line prints any. A takeover says it is not built yet, as `/takeover` doe
 ### What changed
 
 `/review`, or Alt+D, lists what changed, grouped by workspace: the commits made in an agent's workspace under that agent,
-newest recorded first, with their short SHA, subject, lines added and removed, and what their latest runtime test came to, `untested`
-where none ran and the team names a test, a dropped one marked where it stands; then that
+newest recorded first, with their short SHA, subject, lines added and removed, and what their latest runtime test came to, with why
+it failed or erred, `untested` where none ran and the team names a test, a dropped one marked where it stands; then that
 workspace's uncommitted paths, conflicted first, with their state and lines, `?` where nobody measured them, and how many more there
 are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
 or in no workspace the session knows. A snapshot's group, an isolated one's among them, says its commits are in its own repository,
-until you fetch them. Enter on a commit tests it, once you say yes to its act, which says whose code it runs as you, unconfined; one
-made in an isolated workspace, or built on one, says instead why it cannot be tested ([workspaces.md](workspaces.md#testing-a-commit)).
+until you fetch them. Enter on a commit tests it, once you say yes to its act, which says whose code it runs as you, unconfined; one a
+look of an isolated workspace found, or one built on it, says instead why it cannot be tested ([workspaces.md](workspaces.md#testing-a-commit)).
 A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A

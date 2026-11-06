@@ -33,12 +33,14 @@ covers the command a team names, and not the code that command loads. An isolate
 - **Retried, and never run twice for one record.** The effect is owned by no agent and `on_uncertain = retry`. A retried attempt first
   ends what an earlier one left in its folder, then finishes from its effect's `repo.tested` when the journal holds one, and
   otherwise runs again from the start.
-- **An isolated agent's code runs only in its isolation.** A commit the journal records as made in an isolated workspace, or built
-  on one, is refused, naming why. The design refused only the commit itself; a merge of it holds its code, and a person releasing a
+- **An isolated agent's code runs only in its isolation.** A commit a look of an isolated workspace found, or one built on such a
+  commit, is refused, naming why. The design refused only the commit itself; a merge of it holds its code, and a person releasing a
   kept isolated snapshot with `git fetch` and an agent merging that branch is an ordinary path, so the rule follows recorded
-  ancestry. That is the smallest change that keeps the design's reason. The `Looks` view learns which workspaces are isolated from
-  their `workspace` effects and carries the isolated maker down each recorded parent, so the op and the `changes` view read one
-  answer. The checkout never borrows an isolated workspace's objects either, so a commit only it holds cannot be checked out.
+  ancestry. That is the smallest change that keeps the design's reason. The look that found a commit decides this, not who it is
+  attributed to: the `Looks` view learns which workspaces are isolated from their `workspace` effects and marks each commit by the
+  workspace it was `found_in` and down each recorded parent, so the op and the `changes` view read one answer. Attribution is the
+  isolated agent's own reflog, which it can clear; the workspace a look was of, it cannot. The checkout never borrows an isolated
+  workspace's objects either, so a commit only it holds cannot be checked out.
 - **The act says whose code it runs.** When the team names a test, each commit row in `changes` carries `actions[]` with
   'Test: runs @ada's commit as you, unconfined', 'this commit' where no one workspace made it, or a disabled 'Test' saying why. The
   terminal asks before it runs one, as it does for every act nothing takes back.
@@ -53,6 +55,7 @@ covers the command a team names, and not the code that command loads. An isolate
 | Infer test runs from tool items | It fabricates a link between a tool call and a commit that nobody recorded |
 | `git worktree add --detach` in the repository that holds the commit | It writes a registration into your repository, or into an agent's snapshot, and a crash leaves it there |
 | Refuse only a commit made in an isolated workspace | A merge of it carries the same code out of its isolation |
+| Mark isolation by attribution (`made_in`) | It reads the agent's own HEAD reflog, which an isolated agent can clear; the look that found the code decides instead |
 | An `output` field for what it printed | An event's one body is already `body`, which `blob.get` reads by the record's ref with nothing new |
 | Keep the last 1 MiB, as a harness's log does | A body past 64 KiB is kept outside the journal's own row, which `blob.get` gives back as no text, so the command line could not show it |
 | A query for whether an effect's test is recorded | Only a retried attempt asks, and the journal's `repo/<name>` past the effect's own seq answers it |
@@ -70,8 +73,9 @@ covers the command a team names, and not the code that command loads. An isolate
 
 - `tests/unit/primitives/test_repo.py`: `test_a_commit_s_tests_are_its_latest_runtime_test_or_none`,
   `test_a_test_is_a_person_s_or_a_program_s_act_on_a_recorded_commit`, `test_a_test_needs_the_team_s_test_command`,
-  `test_an_agent_cannot_ask_the_runtime_to_run_its_code`, `test_a_test_of_an_isolated_commit_is_refused` and
-  `test_a_test_action_says_whose_code_it_runs`.
+  `test_an_agent_cannot_ask_the_runtime_to_run_its_code`, `test_a_test_of_an_isolated_commit_is_refused`,
+  `test_isolation_is_decided_by_the_look_not_by_the_reflog_an_agent_writes`, `test_a_test_action_says_whose_code_it_runs`
+  and `test_a_commit_row_says_why_its_test_failed_and_names_its_record`.
 - `tests/unit/runtime/test_commit_tests.py`, on real git: `test_a_runtime_test_runs_at_the_exact_commit_in_a_clean_checkout`,
   `test_a_runtime_test_s_exit_time_and_output_are_recorded_and_its_checkout_removed`,
   `test_a_snapshot_s_commit_is_tested_from_the_repository_that_holds_it`,
