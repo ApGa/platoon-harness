@@ -457,9 +457,10 @@ The computed level needs more than this ceiling: a gateway admission, a driver t
 kept on the machine that proves trainable, its two sealed checks among it, and a trainable session refuses a role without them before
 any harness launches. Of the drivers shipped, ScriptedDriver, `pi` and `openhands` declare `sealed`, and a wire program may; Claude
 Code, Codex, `exec` and ACP do not, so a gateway admission to one fails. Each sealed driver shows the environment's tools named by
-its server, never bare: `mcp__environment__<tool>` on ScriptedDriver and pi, and `environment_<tool>` on OpenHands, as its SDK names
-a server's tools. Bare, TextCraft's `finish` collided with OpenHands' own, and every agent of a sealed launch was refused at launch.
-`environment_tools_in_first_request` holds each sealed driver to it, on FakeModel's own `finish` and `think`.
+its server, never bare: `mcp__environment__<tool>` on ScriptedDriver and pi, and `environment_<tool>` on OpenHands, as its SDK's
+client of two servers names a server's tools. Bare, TextCraft's `finish` collided with OpenHands' own, and every agent of a sealed
+launch was refused at launch. `environment_tools_in_first_request` holds each sealed driver to it, on FakeModel's own `finish` and
+`think`.
 
 | Harness | How each compaction call carries the gateway's headers | How it is reported | Settled by |
 |---|---|---|---|

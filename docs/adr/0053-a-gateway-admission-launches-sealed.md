@@ -38,7 +38,8 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
   `environment_tools_in_first_request`, run on FakeModel acting as a gateway, inside the one result `doctor --check` keeps, and
   `trainable` stands on them. They run as a rollout would, on the machine's own home, and prove what the first request holds: the
   gateway's bearer, none of the project's instructions, and only ours, the environment's, each named by its server, and the tools a
-  harness keeps that act on nothing. The rest of what a launch keeps out is how each driver builds it, which its slow tests read and no check proves.
+  harness keeps that act on nothing. The rest of what a launch keeps out is how each driver builds it, which its slow tests read
+  and no check proves.
 
 ## Alternatives considered
 

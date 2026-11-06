@@ -1164,9 +1164,10 @@ Absence means unsupported, as in ACP.
   harnesses name tools of their own: `sealed_first_request_holds_only_ours`, that the first request goes under the gateway's bearer,
   holds none of the instructions a project's `AGENTS.md` or `CLAUDE.md` gives, and shows no tool but ours, the environment's and
   those the harness keeps that act on nothing, which its check names; and `environment_tools_in_first_request`, that it shows each
-  of the environment's tools named by its server, never bare. Both go in the one result kept for the driver, as there is one result per driver and
-  version, never a second per mode. They run as a rollout would, on the machine's own home, so what else a sealed launch keeps out
-  of the user's, settings, extensions and skills, is how its driver builds the launch (§9.5), which no check proves.
+  of the environment's tools named by its server, never bare. Both go in the one result kept for the driver, as there is one
+  result per driver and version, never a second per mode. They run as a rollout would, on the machine's own home, so what else a
+  sealed launch keeps out of the user's, settings, extensions and skills, is how its driver builds the launch (§9.5), which no check
+  proves.
 - **Model pinning.** The effective model must equal the requested one, which is the gateway's when access is a gateway, and a role
   may name only that one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses

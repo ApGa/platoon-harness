@@ -21,7 +21,7 @@ from .loopback import Loopback, Message, answer, stream_head
 INPUT_TOKENS = 11
 OUTPUT_TOKENS = 3
 
-ENVIRONMENT_TOOL = "environment_ping"
+ENVIRONMENT_TOOL = "ping"
 """The environment's tool that FakeModel serves as a gateway, at `/mcp`, for a test to call."""
 ENVIRONMENT_TOOLS = (ENVIRONMENT_TOOL, "finish", "think")
 """Every tool of the environment's own that FakeModel serves, each answering pong: `finish` and `think` are named as

@@ -852,10 +852,10 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
 
 async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compaction(tmp_path):
     """Sealed, OpenHands shows its model our tools, by their own names, the environment's, named by its server as
-    OpenHands' SDK names a server's tools, so its `finish` and `think` collide with nothing, and its own `finish` and
-    `think` alone: forty calls of the environment's tool take its view past what its condenser keeps, and the
-    condenser's call carries the gateway's compaction headers and is reported, for that purpose, by the id the model
-    gave it."""
+    OpenHands' client of two servers names a server's tools, so its `finish` and `think` collide with nothing, and its
+    own `finish` and `think` alone: forty calls of the environment's tool take its view past what its condenser keeps,
+    and the condenser's call carries the gateway's compaction headers and is reported, for that purpose, by the id the
+    model gave it."""
     calls = [ToolCall(f"environment_{ENVIRONMENT_TOOL}", {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
     async with FakeModel(*calls, "SUMMARY of the steps so far", "done") as model, FakeTools() as tools:
         gateway = model.gateway("bearer-of-ada")
@@ -875,3 +875,4 @@ async def test_openhands_condenser_sends_the_headers_and_is_reported_as_compacti
     environment = {f"environment_{tool}" for tool in ENVIRONMENT_TOOLS}
     assert set(model.calls[0].tools) == set(ready.tools_visible or ()) == {TOOL, "finish", "think", *environment}
     assert [call.json["params"]["name"] for call in model.tool_calls] == [ENVIRONMENT_TOOL] * 40
+

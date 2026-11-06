@@ -719,7 +719,7 @@ async def test_a_sealed_launch_that_shows_the_environment_s_tools_bare_fails(tmp
     result = await check(Bare, tmp_path)
 
     assert result.get("environment_tools_in_first_request").reason == (
-        "the first model request does not name environment_ping, finish, think by the environment's server"
+        "the first model request does not name ping, finish, think by the environment's server"
     )
     assert result.get("sealed_first_request_holds_only_ours").state == "failed"
 

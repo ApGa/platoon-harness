@@ -185,7 +185,7 @@ How each harness here does it:
 | ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours, as `mcp__environment__<tool>`; a call of its `shell`, or of any tool neither lists, is told there is no such tool and runs nothing | A `Compact` step: one call, with the headers, reported with its id |
 | A wire program | It finds the gateway in its launch frame, and the bearer in the variable the frame names, and names the environment's tools by their server | It sends the headers from its frame, and reports each call with its id |
 | `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension, whose tools pi shows as `mcp__environment__<tool>` | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; it says each call made, by its id or null for one that never answered, as a status the driver reads before pi says the compaction ended, so a compaction cut after its first call still reports both |
-| `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own and named by it as the SDK names a server's tools, `environment_<tool>`, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
+| `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own and named by it as the SDK's client of two servers names a server's tools, `environment_<tool>`, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
 
 A driver with no sealed launch reads access through `keys_of(spec)`, which refuses a gateway, and the host refuses one before that.
 Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver. They prove, on the machine's own
@@ -429,7 +429,7 @@ agents start keeps its socket in the directory every tmux of the user's shares. 
   and `LITELLM_LOCAL_MODEL_COST_MAP` and `OPENHANDS_SUPPRESS_BANNER` keep it off the network and off stdout.
 - **Tools** are OpenHands' terminal, in a subprocess, its file editor and its task tracker, as its own CLI gives them, and ours
   through the stdio shim, which gives each call an id of its own, so two identical calls in a turn are two calls. `tool_names` is
-  `bare`, as OpenHands shows a server's tools by their own names.
+  `bare`, as OpenHands' client of one server shows its tools by their own names.
 - **`ready`** says the conversation's id, the SDK's version, the role's model and the tools the agent offers its model once readied,
   and the start fails if none of ours is among them, as the SDK only warns of a server that failed.
 - **Instructions:** ours are `AgentContext.system_message_suffix`, the project's load with `load_project_skills=True`, as its own
