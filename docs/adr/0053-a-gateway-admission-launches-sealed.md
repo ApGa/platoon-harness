@@ -28,7 +28,9 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
   "compaction", call_id=...)`, by every sealed driver: ScriptedDriver's `Compact` step, a wire program from its launch spec,
   OpenHands' condenser through its LLM's `extra_headers`, and pi through our extension, which takes `session_before_compact` and
   runs pi's own exported `compact` with the headers and a stream function that keeps each response's id, for each of its one or
-  two calls. The ids reach the driver in the details pi keeps of the compaction.
+  two calls. Our extension says each call made, by its id or null for one that never answered, as a status the driver reads
+  before pi says the compaction ended, whether the compaction came to something or not, so one cut after its first call still
+  reports both calls and never one.
 - **A sealed launch is earned, never declared.** Two checks, `sealed_first_request_holds_only_ours` and
   `environment_tools_in_first_request`, run on FakeModel acting as a gateway, inside the one result `doctor --check` keeps, and
   `trainable` stands on them.
@@ -44,6 +46,7 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
 | A second kept result per mode | Part 3 keeps one result per driver, pinned to its harness version |
 | The environment's server beside ours in OpenHands' own MCP config | The SDK's client of two servers names each tool by its server, so ours would lose the names we teach |
 | OpenHands' `finish` and `think` taken away | It ends a run and notes a thought with them, and neither acts on anything; a harness check names the tools a sealed launch keeps |
+| The ids of pi's calls in the details pi keeps of a compaction | A compaction that fails keeps no details, so the calls it made would be one call with no id |
 
 ## Consequences
 
@@ -60,8 +63,8 @@ cannot keep a compaction out of it, and a call whose purpose is unknown must nev
   bearer in the environment alone, a gateway whose URLs or headers carry a credential refused, and a sealed scripted harness that
   runs no tool of its own.
 - [tests/integration/test_pi.py](../../tests/integration/test_pi.py): on pi 1.5.0, each body id is its call id, the first request
-  holds no built-in tool, an overflow refusal is compacted and retried, and a compaction of two calls carries the headers on each and
-  reports both ids.
+  holds no built-in tool, an overflow refusal is compacted and retried, a compaction of two calls carries the headers on each and
+  reports both ids, and one cut after its first call reports both calls.
 - [tests/integration/test_openhands.py](../../tests/integration/test_openhands.py): OpenHands 1.59.0's condenser carries the headers
   and is reported as `compaction` with its id.
 - [tests/integration/test_sealed.py](../../tests/integration/test_sealed.py): the sealed checks pass on both, and earn trainable.

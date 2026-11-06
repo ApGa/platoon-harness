@@ -450,7 +450,7 @@ Code, Codex, `exec` and ACP do not, so a gateway admission to one fails.
 |---|---|---|---|
 | ScriptedDriver | Its `Compact` step makes one call with them | `model.call` of purpose `compaction`, with the response's id | `tests/unit/drivers/test_sealed.py` |
 | A wire program | It sends them from the gateway in its launch frame | As it reports any call, with purpose `compaction` | `tests/unit/drivers/test_sealed.py`, on a program serving ScriptedDriver |
-| `pi` 1.5.0 | Our extension takes `session_before_compact` and runs pi's own exported `compact` with them, and a stream function that keeps each response's id; one call, or two for a split turn's prefix and the history before it | One `model.call` of purpose `compaction` per id, which reach the driver in the details pi keeps of the compaction | `tests/integration/test_pi.py`, slow, on FakeModel [L] |
+| `pi` 1.5.0 | Our extension takes `session_before_compact` and runs pi's own exported `compact` with them, and a stream function that keeps each response's id; one call, or two for a split turn's prefix and the history before it | One `model.call` of purpose `compaction` per call made, by its id or none for one that never answered, which our extension says as a status before pi says the compaction ended, so one cut after its first call still reports both | `tests/integration/test_pi.py`, slow, on FakeModel [L] |
 | `openhands` 1.59.0 | Its condenser's LLM sends them as `extra_headers` | Its `condenser` usage id is reported under `compaction`, with `llm_response_id` | `tests/integration/test_openhands.py`, slow, on FakeModel [L] |
 
 Pi's overflow handling and its tools off are settled too, at 1.5.0 on FakeModel [L]: with `--no-builtin-tools` its first request

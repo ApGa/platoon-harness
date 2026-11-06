@@ -995,6 +995,19 @@ async def test_a_compaction_that_came_to_nothing_spent_what_nobody_can_say(tmp_p
     assert (reports[1].tokens, reports[1].label) == (None, "unavailable")
 
 
+async def test_a_compaction_our_extension_ran_reports_each_call_it_made_even_when_it_was_cut(tmp_path, stand):
+    """Our extension says each call a compaction made before pi says it ended, so one cut after its first call answered
+    reports that call by its id and the call that never answered with none, and two calls are never one."""
+    calls = {"type": "extension_ui_request", "id": "9", "method": "setStatus", "statusText": '["resp_7", null]'}
+    cut = {"type": "compaction_end", "reason": "threshold", "aborted": True, "willRetry": False}
+    reports = await played(stand, tmp_path, {**calls, "statusKey": "platoon_harness.compaction"}, cut)
+
+    assert [(call.call_id, call.purpose) for call in reports if isinstance(call, ModelCall)] == [
+        ("resp_7", "compaction"),
+        (None, "compaction"),
+    ]
+
+
 def test_what_left_starts_where_the_compaction_before_kept():
     entries = [
         entry("u1", None),

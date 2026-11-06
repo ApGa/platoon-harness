@@ -61,17 +61,19 @@ export default function (pi) {
   });
 
   // A sealed launch compacts with pi's own `compact`, each of whose one or two calls carries the gateway's compaction
-  // headers and keeps the id the model gave it, which the details pi keeps of the compaction hand the driver. One that
-  // fails is cancelled, as pi would otherwise compact again by itself, with neither the headers nor the ids.
+  // headers. Each call made is said to the driver, by the id the model gave it or null for one that never answered, as
+  // a status before pi says the compaction ended, whether it came to something or not. One that fails is cancelled, as
+  // pi would otherwise compact again by itself, with neither the headers nor the ids.
   if (compaction) {
     pi.on("session_before_compact", async (event, ctx) => {
       const calls = [];
       const keeping = async (model, context, options) => {
+        const call = calls.push(null) - 1;
         const stream = streamSimple(model, context, options);
         return {
           result: async () => {
             const message = await stream.result();
-            calls.push(message.responseId ?? null);
+            calls[call] = message.responseId ?? null;
             return message;
           },
         };
@@ -82,9 +84,11 @@ export default function (pi) {
         const made = await compact(
           preparation, ctx.model, key, compaction.headers, customInstructions, signal, ctx.thinkingLevel, keeping,
         );
-        return { compaction: { ...made, details: { ...made.details, platoon_harness: { calls } } } };
+        return { compaction: made };
       } catch {
         return { cancel: true };
+      } finally {
+        ctx.ui.setStatus("platoon_harness.compaction", JSON.stringify(calls));
       }
     });
   }

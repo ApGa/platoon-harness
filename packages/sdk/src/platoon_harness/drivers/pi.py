@@ -85,6 +85,9 @@ as none at all, which would have it compact after every turn: so it compacts onc
 long, and retries that request once."""
 _TOOLS_STATUS = "platoon_harness.tools"
 """The status our extension says the tools pi declares under, once ours have connected."""
+_COMPACTION_STATUS = "platoon_harness.compaction"
+"""The status our extension says the calls of a compaction it ran under, each by its id or null, before pi says the
+compaction ended."""
 _INSTRUCTIONS = "instructions.md"
 _AGENT_DIR = "PI_CODING_AGENT_DIR"
 _SEALED = (
@@ -99,8 +102,6 @@ _SEALED = (
 """What a sealed launch keeps out: whatever pi would find of the user's or the project's, and pi's own tools."""
 _SEALED_SETTINGS = {"retry": {"enabled": False}, "cacheWarming": "off"}
 """A sealed agent's settings: a retry is a second call a gateway records, and a warmed cache one nobody asked for."""
-_CALLS = "platoon_harness"
-"""Where our extension puts the ids of a compaction's calls, among the details pi keeps of it."""
 _DIALOGS = frozenset({"select", "input", "editor"})
 _IN_CONTEXT = frozenset({"message", "custom_message", "branch_summary"})
 _SAYS_NOTHING = frozenset(
@@ -269,6 +270,7 @@ class PiDriver:
         self._later: set[asyncio.Task[None]] = set()
         self._declared: tuple[str, ...] | None = None
         self._declaring = asyncio.Event()
+        self._compacting: list[str | None] | None = None
 
     def describe(self) -> DriverInfo:
         if self._info is None:
@@ -454,6 +456,10 @@ class PiDriver:
             ):
                 self._declared = tuple(json.loads(text))
                 self._declaring.set()
+            case {"type": "extension_ui_request", "method": "setStatus", "statusKey": key, "statusText": str(text)} if (
+                key == _COMPACTION_STATUS
+            ):
+                self._compacting = [call if isinstance(call, str) else None for call in json.loads(text)]
             case {"type": "extension_ui_request", "method": "confirm", "id": id}:
                 self._asked(id, frame.get("title") or "", frame.get("message") or "")
             case {"type": "extension_ui_request", "method": method, "id": id} if method in _DIALOGS:
@@ -604,10 +610,11 @@ class PiDriver:
         self._report(item)
 
     def _compaction(self, result: Mapping[str, Any] | None) -> None:
-        """One or two model calls whose usage comes as one. Through our extension each is reported by the id the model
-        gave it, and pi's own compaction names none. One that came to nothing says what it spent, and one that came to
-        something waits in its place for what it forgot."""
-        calls = ((result or {}).get("details") or {}).get(_CALLS, {}).get("calls") or [None]
+        """One or two model calls whose usage comes as one. Through our extension each call it made is reported, by the
+        id the model gave it or none where it never answered, and pi's own compaction is one call that names none. One
+        that came to nothing says what it spent, and one that came to something waits in its place for what it
+        forgot."""
+        calls, self._compacting = [None] if self._compacting is None else self._compacting, None
         self._report(*(ModelCall(call_id=call, purpose="compaction") for call in calls))
         self._spent((result or {}).get("usage") or {}, calls[0] if len(calls) == 1 else None)
         if result is not None:

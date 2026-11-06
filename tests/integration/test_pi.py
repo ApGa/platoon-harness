@@ -1048,3 +1048,23 @@ async def test_pi_compacts_through_our_extension_with_the_headers_and_reports_ea
     assert len(compacting) == 2 and all(call.bearer == BEARER for call in compacting)
     assert [call.call_id for call in reported] == [call.response_id for call in compacting]
     assert "the history" in heard.of(Compacted)[0].summary and "the turn so far" in heard.of(Compacted)[0].summary
+
+
+async def test_a_pi_compaction_cut_after_its_first_call_reports_each_call_it_made(tmp_path):
+    """A split turn's second call refused: the compaction comes to nothing, and still each of its two calls is reported,
+    the one that answered by its id and the one that never did with none, so two calls are never counted as one."""
+    second = Delivery(input="2", boundary="turn", text="go on", items=())
+    replies = [LONG, [LONG, ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "a"})], Overflow()]
+    async with FakeModel(*replies, "the history", Overflow()) as model, FakeTools() as tools:
+        driver, heard = PiDriver(), Heard()
+        await driver.start(sealed(tmp_path, model, tools, goal="go"), heard)
+        await heard.until(TurnEnded)
+        await driver.deliver(second)
+        await heard.until(TurnEnded, lambda _: len(heard.of(TurnEnded)) == 2)
+        await driver.stop(2.0)
+
+    compacting = [call for call in model.calls if call.carries(COMPACTION_HEADERS)]
+    reported = [call for call in heard.of(ModelCall) if call.purpose == "compaction"]
+    assert [call.response_id is None for call in compacting] == [False, True]
+    assert [call.call_id for call in reported] == [call.response_id for call in compacting]
+    assert not heard.of(Compacted)

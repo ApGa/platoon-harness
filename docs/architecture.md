@@ -1719,8 +1719,9 @@ class AgentOutcome(Model):
 - **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
   compact a context, and reports that call as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's
   `Compact` step, a wire program from its launch spec, OpenHands' condenser, and pi through our extension, which runs pi's own
-  `compact`, one or two calls, each with the headers and its id kept. A gateway that counts a budget does so as calls arrive, so
-  only a label a call carries keeps it out, and a call whose purpose is unknown never trains.
+  `compact`, one or two calls, each with the headers and each reported, by its id or with none where it never answered, even when
+  the compaction is cut. A gateway that counts a budget does so as calls arrive, so only a label a call carries keeps it out, and a
+  call no harness reported has no id to join, so it never trains.
 - **Finish** tells the authority how an agent ended, with its report. A stop that a crash cut is said again by the next runtime, so
   `finish` takes a second telling as the first.
 - **Budgets are the session's.** An authority owns identity and model access and limits nothing of the session's: a training system

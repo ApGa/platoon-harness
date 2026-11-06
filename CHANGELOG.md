@@ -17,7 +17,8 @@
 - Compaction labelled at call time: each compaction call of a sealed launch carries the gateway's `compaction_headers` and is
   reported as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's new `Compact` step, OpenHands'
   condenser, a wire program from its frame, and pi through our extension, which takes `session_before_compact` and runs pi's own
-  `compact`, keeping each of its one or two calls' ids. See ADR 0053.
+  `compact`, and says each of its one or two calls to the driver, by its id or with none where it never answered, before pi says
+  the compaction ended, even when it was cut. See ADR 0053.
 - `FakeModel.gateway(bearer)`: FakeModel as a training system's gateway, its models and an MCP server of the environment's one tool,
   `ENVIRONMENT_TOOL`, at `/mcp`, answering only a bearer it gave. `Request.bearer`, `Request.carries(headers)`, `FakeModel.tool_calls`,
   and `Overflow`, a reply that refuses a request as too long in each dialect's own error form.
