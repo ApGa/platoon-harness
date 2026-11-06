@@ -166,12 +166,13 @@ class Writer:
 
     def _answer(self, jobs: list[_Job], results: list[Any], head: int | None) -> None:
         """Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending
-        live text an item replaced, is done before a follower on its loop looks."""
+        live text an item replaced, is done before a follower on its loop looks. A command is out of flight before its
+        caller hears, so one that sends again at once is not refused over what it has heard of."""
+        for job in jobs:
+            self._done(job)
         woken = () if head is None else self._pulse.advance(head)
         acks = zip((job.future for job in jobs), results, strict=True)
         settle([*acks, *((waiter, None) for waiter in woken)])
-        for job in jobs:
-            self._done(job)
 
     def _attempt(self, job: _Job) -> Any:
         """A refusal is the job's own. Anything else takes the batch with it."""

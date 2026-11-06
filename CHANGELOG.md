@@ -639,6 +639,8 @@
   be expressed as a file URI". `find_root` makes a root absolute where it finds it, against the folder it was given in.
 - A stop whose driver's `stop` raised or ran past its time never told the authority how its agent ended: `finish` now comes last
   whatever failed before it (ADR 0059).
+- A caller that sent again as soon as it heard its commands were recorded could be refused `busy` over those very commands: the
+  journal's writer took a batch out of flight only after answering it, and now does so first.
 - The terminal's `/review` says of an isolated workspace's group, as of any snapshot's, that its commits are in its own repository.
 - Codex 0.167.0 refused every turn of an agent given access, "This chat uses platoon-harness, but your current provider is
   openai", as it holds a thread to the provider its app-server started on, and the driver had named a provider for the thread

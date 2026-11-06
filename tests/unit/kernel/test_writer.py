@@ -3,7 +3,7 @@
 import asyncio
 import sqlite3
 
-from platoon_harness.kernel import Args, Extension, JournalError, Kernel, Principal, Txn, op
+from platoon_harness.kernel import Args, Extension, JournalError, Kernel, Principal, Txn, op, writer
 from platoon_harness.kernel.writer import BATCH_LIMIT, PRINCIPAL_LIMIT, RUNTIME_RESERVE, SESSION_LIMIT
 
 from .support import HUMAN, enroll, events_of, grant, notes, refusal_of, result_of
@@ -141,6 +141,20 @@ async def test_a_principal_holds_at_most_32_inflight(kernel, gate):
     assert not other.done()
     gate.release.set()
     await asyncio.gather(held, other, *tasks)
+
+
+async def test_a_command_is_out_of_flight_before_its_caller_hears_of_it(kernel, monkeypatch):
+    """So a caller that sends again as soon as it hears is never refused `busy` over what it has heard of."""
+    real, in_flight = writer.settle, []
+
+    def settling(outcomes):
+        in_flight.append(sum(kernel._writer._inflight.values()))
+        real(outcomes)
+
+    monkeypatch.setattr(writer, "settle", settling)
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+
+    assert in_flight == [0]
 
 
 async def test_runtime_principals_have_reserved_capacity(kernel, gate):
