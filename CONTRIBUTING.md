@@ -26,7 +26,7 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 
 | You want to | Start with |
 |---|---|
-| Report a bug | An issue with the command you ran, what it printed, what you expected, the commit you ran it on, and what `uv run platoon-harness doctor` prints, which names no account |
+| Report a bug | An issue with the command you ran, what it printed, what you expected, the commit you ran it on, and what `uv run platoon-harness doctor` prints, which shows your paths, user id and host name: edit out what you would not post |
 | Fix a bug | A pull request; a fix comes with a test that fails without it |
 | Run a harness the SDK does not drive | Usually no change here: [Add a driver](#add-a-driver) |
 | Add a topology preset | Usually an extension of your own: [Add a topology preset](#add-a-topology-preset) |

@@ -69,7 +69,9 @@ $ uv run platoon-harness doctor
 ```
 
 `doctor` says what this machine has, and whether it can run a session. On a machine with `claude` and `codex` signed in
-and no `pi`, after `uv sync` and `platoon-harness doctor --check`:
+and no `pi`, after `uv sync` and `platoon-harness doctor --check`, it printed this, its root and sockets lines shown in
+the form they take for the default root, with `<home>`, `<filesystem>` and `<uid>` standing for your own, and `...` for a
+line per driver and extension:
 
 ```text
 platoon-harness 0.1.0, SDK 0.1.0
@@ -77,8 +79,8 @@ claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 s
 codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
 openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed
 pi         not on PATH
-root       ~/.local/state/platoon-harness, on xfs
-sockets    /run/user/1000/platoon-harness
+root       <home>/.local/state/platoon-harness, on <filesystem>
+sockets    /run/user/<uid>/platoon-harness
 ...
 usable
 ```

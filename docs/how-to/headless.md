@@ -11,18 +11,20 @@ claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 s
 codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
 openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed
 pi         not on PATH
-root       ~/.local/state/platoon-harness, on xfs
-sockets    /run/user/1000/platoon-harness
+root       <home>/.local/state/platoon-harness, on <filesystem>
+sockets    /run/user/<uid>/platoon-harness
 ...
 usable
 ```
 
-It says each harness's version and the kind of its login, from the harness's own status command, and never an account. It exits 0
-when the machine can run sessions and 78 when it cannot. `doctor --check` runs every check of each harness it finds that a check
-ships for against a model of ours on loopback, on no account, and keeps what it found under the root, where the runtime reads it at
-each launch and resume: an agent's levels come from it, and say `unverified` for a harness, an SDK or a host no result was made on.
-`doctor` says whether a kept result speaks for the binary that runs, and what it found. `openhands` is there once the SDK's
-`openhands` extra is installed for the interpreter it names, as [Install](../getting-started/install.md#openhands) says.
+Its root and sockets lines are shown as they read for the default root, with `<home>`, `<filesystem>` and `<uid>` for your own,
+and `...` for a line per driver and extension. It says each harness's version and the kind of its login, from the harness's own
+status command, and never an account. It exits 0 when the machine can run sessions and 78 when it cannot. `doctor --check` runs
+every check of each harness it finds that a check ships for against a model of ours on loopback, on no account, and keeps what it
+found under the root, where the runtime reads it at each launch and resume: an agent's levels come from it, and say `unverified`
+for a harness, an SDK or a host no result was made on. `doctor` says whether a kept result speaks for the binary that runs, and
+what it found. `openhands` is there once the SDK's `openhands` extra is installed for the interpreter it names, as
+[Install](../getting-started/install.md#openhands) says.
 
 ## Write a team
 

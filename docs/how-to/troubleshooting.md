@@ -11,7 +11,9 @@ $ uv run platoon-harness doctor
 
 `doctor` says what this machine has and whether it can run a session: each harness with its version and the kind of its
 login, the root where sessions live, each driver and extension installed, a `problem` line for each reason it cannot,
-and `usable` or `not usable`. It names no account, so what it prints can go in an issue as it is.
+and `usable` or `not usable`. It never names a harness's account, but it prints this machine's paths, whose home folder
+is often your user name, the user id in its sockets line, and the host a kept check was made on when that check may not
+speak for the binary that runs: take out what you would not post before you paste its output into an issue.
 [Install](../getting-started/install.md#check-the-installation) shows its output.
 
 ## doctor says `not usable`
