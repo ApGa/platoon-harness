@@ -328,15 +328,18 @@ isolation. It reads with `--no-ext-diff`, `--no-textconv` and `--no-color` and g
 diff, diff driver, textconv, pager or colour a repository's config names runs or shapes it, and its git runs no hook and no
 fsmonitor. A filter a config names does run for an uncommitted diff, as it does at every look and in your own `git status`.
 
-`repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace and the HEAD it was read against, and the patch as its body,
-which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at a time, and which a message cites lines of
-by its ref, `repo/<name>@<version>#L40-52`. A patch past 64 KiB, as much as the journal holds in an event's own body, is cut at
-the end of the last line that fits; the record says `cut` and its gist where, as
+`repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace, the HEAD it was read against and `read_at`, when its
+reading began, and the patch as its body, which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at
+a time, and which a message cites lines of by its ref, `repo/<name>@<version>#L40-52`. A patch past 64 KiB, as much as the journal
+holds in an event's own body, is cut at the end of the last line that fits; the record says `cut` and its gist where, as
 `3f9c2a1b2c3d patch, cut after 1022 lines at 64 KiB`, and the rest is in git. A file git takes for binary is named,
 `Binary files a/x and b/x differ`, and never shown. A diff that could not be read, as of a workspace gone from under its agent,
 records why. A diff keeps its session from settling until it is read, and one a crash cut off is read again when the session
 resumes. A look reads no patch, so a turn's end costs what it did.
 [RFC 0065](../rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md) has why.
+
+A commit's patch never changes, so it is read once: asked for again while it is read, `repo diff` gives the same effect, and once
+it is kept, the ref of its record, reading nothing. What a workspace holds uncommitted is read at each ask.
 
 What a diff cannot show: an untracked repository inside the tree, of which git shows no file, and an untracked file past the
 bound. An uncommitted diff is a moment's reading, so one of an agent in a turn changes as it is read, and a file removed while it

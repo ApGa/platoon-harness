@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from platoon_harness import Refused, Session, Team
+from platoon_harness.kernel import ManualClock
 
 from .gitting import commit, git, repository, working
 from .support import SECONDS, of_type, scripted, until
@@ -63,6 +64,33 @@ async def patch_of(session: Session, record: Any) -> bytes:
 def changed(cwd: Path, name: str, text: str) -> None:
     """Change a file and leave it uncommitted, as an agent leaves its work."""
     (cwd / name).write_text(text)
+
+
+async def test_an_uncommitted_diff_says_when_it_was_read(repo, tmp_path):
+    """And the HEAD it is against. It is a moment's reading, so each ask reads again, where a commit's patch, which
+    never changes, is kept once and asked for again gives its ref."""
+    clock = ManualClock(1000.0)
+
+    def work(cwd: Path) -> None:
+        commit(cwd, "value.txt", "first\n")
+        changed(cwd, "value.txt", "second\n")
+
+    async with Session.start(team_of(work), name="s", root=tmp_path, cwd=repo, clock=clock) as session:
+        await session.spawn("ada", "worker", "work")
+        [sha] = await committed(session, 1)
+        earlier = await diff_of(session, "@ada")
+        clock.advance(60)
+        changed(Path((await session.status("@ada"))["workspace"]["path"]), "value.txt", "third\n")
+        later, of_commit = await diff_of(session, "@ada"), await diff_of(session, sha)
+        again = await session.repo_diff(sha[:7])
+        patches = [await patch_of(session, record) for record in (earlier, later)]
+
+    assert (earlier.data["read_at"], later.data["read_at"]) == (1000.0, 1060.0)
+    assert earlier.data["head"] == later.data["head"] == sha and earlier.data["workspace"] == "@ada"
+    assert earlier.gist == f"@ada uncommitted against {sha[:12]}, {patches[0].count(b'\n')} lines"
+    assert patches[0].endswith(b"-first\n+second\n") and patches[1].endswith(b"-first\n+third\n")
+    assert of_commit.data["read_at"] is None
+    assert again == {"ref": f"{of_commit.stream}@{of_commit.version}"}
 
 
 async def test_a_patch_past_its_bound_is_cut_and_says_where(repo, tmp_path):

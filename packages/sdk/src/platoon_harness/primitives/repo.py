@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
+from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Effects, Event, Refused, Stamps, Txn, View, fold, op
 
 from .agents import Agents
 from .common import BodyRef, Exposed, Name, cited, event_at, expose_read, inline_body, parts_of
@@ -133,18 +133,35 @@ class Report(Args):
 
 
 class Looks(View):
-    """Each workspace's last look, which the next one starts from, every isolated workspace, and the ref of each commit
-    the journal holds, with the workspace it was `found_in` and the isolated workspace that confines its code: that one
-    where it was found, or an isolated commit the journal holds that it is built on."""
+    """Each workspace's last look, which the next one starts from, every isolated workspace, the ref of each commit the
+    journal holds, with the workspace it was `found_in` and the isolated workspace that confines its code: that one
+    where it was found, or an isolated commit the journal holds that it is built on, and each commit's diff: the
+    `effect` asked to read it, then the `ref` of its patch once kept."""
 
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_looks(workspace TEXT PRIMARY KEY, reading TEXT NOT NULL) WITHOUT ROWID, STRICT;
     CREATE TABLE v_looks_commits(
         sha TEXT PRIMARY KEY, ref TEXT NOT NULL, isolated TEXT, found_in TEXT
     ) WITHOUT ROWID, STRICT;
     CREATE TABLE v_looks_isolated(workspace TEXT PRIMARY KEY) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_diffs(sha TEXT PRIMARY KEY, effect INTEGER NOT NULL, ref TEXT) WITHOUT ROWID, STRICT;
     """
+
+    @fold("effect.requested")
+    def asked(self, event: Event) -> None:
+        effect, data = event.data["id"], event.data["data"]
+        if event.data["kind"] == "diff" and "sha" in data:
+            self.db.execute("INSERT OR REPLACE INTO v_looks_diffs VALUES (?, ?, NULL)", (data["sha"], effect))
+
+    @fold("repo.diffed")
+    def diffed(self, event: Event) -> None:
+        """A record that says why it could not be read holds no patch, so the next ask reads again."""
+        if event.data["sha"] is not None and event.data["body"] is not None:
+            self.db.execute(
+                "UPDATE v_looks_diffs SET ref = ? WHERE sha = ? AND effect = ?",
+                (f"{event.stream}@{event.version}", event.data["sha"], event.data["effect"]),
+            )
 
     @fold("effect.finished")
     def made(self, event: Event) -> None:
@@ -197,6 +214,11 @@ class Looks(View):
         every isolation, equals `found_in` for one found in an isolated workspace, and names an ancestor's for one
         built on an isolated commit."""
         return self.db.execute("SELECT isolated, found_in FROM v_looks_commits WHERE sha = ?", (sha,)).fetchone()
+
+    def diff(self, sha: str) -> sqlite3.Row | None:
+        """A commit's diff: the `effect` last asked to read it and the `ref` of its patch once kept, or None while
+        nobody asked."""
+        return self.db.execute("SELECT effect, ref FROM v_looks_diffs WHERE sha = ?", (sha,)).fetchone()
 
     def reading(self, workspace: str) -> dict[str, Any] | None:
         row = self.db.execute("SELECT reading FROM v_looks WHERE workspace = ?", (workspace,)).fetchone()
@@ -426,10 +448,12 @@ def _held(txn: Txn, where: str) -> str:
 
 
 @op("repo.diff")
-def diff(txn: Txn, a: Diffing) -> dict[str, int]:
+def diff(txn: Txn, a: Diffing) -> dict[str, int | str]:
     """Read the patch of a recorded commit against its first parent, or what a workspace holds uncommitted against its
     HEAD, as `of` names, where that workspace lives, and keep it on `repo/<name>` as `repo.diffed`, whose body is the
-    patch, cut at a line's end past 64 KiB, naming the `effect` this gives back. A person or a program asks for this,
+    patch, cut at a line's end past 64 KiB, naming the `effect` this gives back. A commit's patch never changes, so it
+    is read once: asked again while it is read, this gives the same `effect`, and once it is kept, its `ref`. What a
+    workspace holds uncommitted is read at each ask, and its record says when. A person or a program asks for this,
     never an agent. Refused `not_permitted` to an agent, which reads a commit through `repo.commit` or its own git;
     `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what
     you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the
@@ -446,18 +470,26 @@ def diff(txn: Txn, a: Diffing) -> dict[str, int]:
     else:
         event = _recorded(txn, a.of)
         asked = {"sha": event.data["sha"], "found_in": event.data.get("found_in")}
+        if (kept := txn.view(Looks).diff(asked["sha"])) is not None:
+            if kept["ref"] is not None:
+                return {"ref": kept["ref"]}
+            effect = txn.view(Effects).get(kept["effect"])
+            if effect is not None and effect.state in ("requested", "started", "uncertain"):
+                return {"effect": effect.id}
     return {"effect": txn.effect("diff", asked, on_uncertain="retry")}
 
 
 class Diffed(Args):
     """What a diff `effect` read: a recorded commit's patch against its first parent, by its `sha`, or a `workspace`'s
-    uncommitted diff against `head`, None before its first commit; as its `body` the patch, which `cut` says ends at the
-    end of the last line within `PATCH_LIMIT` bytes, as it was longer; or `why` it could not be read."""
+    uncommitted diff against `head`, None before its first commit, as it was when its reading began, `read_at`, on the
+    session's clock; as its `body` the patch, which `cut` says ends at the end of the last line within `PATCH_LIMIT`
+    bytes, as it was longer; or `why` it could not be read."""
 
     effect: int
     sha: Sha | None = None
     workspace: Where | None = None
     head: Sha | None = None
+    read_at: float | None = None
     body: BodyRef | None = None
     cut: bool = False
     why: str | None = None

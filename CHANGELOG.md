@@ -34,14 +34,16 @@ named here is closed.
   every field and Run are disabled, saying why. Spawning an agent, erasing a body, budgets, channels, tasks, boards and
   episodes were the terminal's and the command line's alone. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
-- **A diff read on request.** `repo.diff{of}`, with `Session.repo_diff(of)` and the command `repo diff`, asks the runtime for
-  a recorded commit's patch against its first parent, or for what a workspace, `@ada` or `shared`, holds uncommitted against its
+- **A diff read on request.** `repo.diff{of}`, with `Session.repo_diff(of)` and the command `repo diff`, asks the runtime for a
+  recorded commit's patch against its first parent, or for what a workspace, `@ada` or `shared`, holds uncommitted against its
   HEAD, its untracked files as new ones. A `diff` effect reads it where the workspace lives, in a snapshot's own repository and
   inside an isolated workspace's isolation, with no external diff, textconv, hook or colour, and keeps it on `repo/<name>` as
   `repo.diffed`, whose body is the patch: its first 64 KiB, cut at a line's end and saying where, which `blob.get` reads and a
-  message cites lines of. A file git takes for binary is named and never shown. An agent is refused, as it is `repo.test`, and
-  reads a commit through `repo.commit` or its own git, which is the default pending the owner's ruling. A look reads no patch. See
-  [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
+  message cites lines of. A file git takes for binary is named and never shown. A commit's patch is read once, and asked for
+  again gives its ref; an uncommitted diff names the HEAD it is against and when it was read, and each ask reads it again. An
+  agent is refused, as it is `repo.test`, and reads a commit through `repo.commit` or its own git, which is the default pending
+  the owner's ruling. A look reads no patch. See [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a
+  draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run
   in, comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it
   names none. CI's `e2e` job is written to run them once in each of Chromium, Firefox and WebKit, which is inferred from

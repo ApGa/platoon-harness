@@ -1763,10 +1763,12 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   workspace inside its isolation. Every diff passes `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own prefixes, so
   nothing a repository's config names runs to show it, though a filter runs for an uncommitted diff as it does at a look, and git
   is ended once it has printed past the bound. `repo.diffed` on `repo/<name>`, with no agent in the envelope, names the commit, or
-  the workspace and the HEAD it was read against, and keeps the patch as its body, which `blob.get` reads and a citation names
-  lines of: all of it, or its first 64 KiB cut at the end of the last line that fits, which `cut` and its gist say. What git takes
-  for binary is named and never shown, and a diff that could not be read says why. The effect keeps the session from settling
-  until it ends, finishes from the journal when its `repo.diffed` is held, and otherwise reads again. A look reads no patch. See
+  the workspace, the HEAD it was read against and `read_at`, when its reading began, and keeps the patch as its body, which
+  `blob.get` reads and a citation names lines of: all of it, or its first 64 KiB cut at the end of the last line that fits, which
+  `cut` and its gist say. What git takes for binary is named and never shown, and a diff that could not be read says why. A
+  commit's patch is kept once: asked for again while it is read, `repo.diff` gives the same effect, and once it is kept, its ref,
+  reading nothing, while what a workspace holds uncommitted is read at each ask. The effect keeps the session from settling until
+  it ends, finishes from the journal when its `repo.diffed` is held, and otherwise reads again. A look reads no patch. See
   [RFC 0065](rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
   its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit

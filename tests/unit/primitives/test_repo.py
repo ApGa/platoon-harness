@@ -775,6 +775,7 @@ async def test_a_message_cites_lines_of_a_diff_by_its_ref(kernel, ada):
         "sha": ONE,
         "workspace": None,
         "head": None,
+        "read_at": None,
         "body": None,
         "cut": False,
         "why": None,
@@ -783,3 +784,28 @@ async def test_a_message_cites_lines_of_a_diff_by_its_ref(kernel, ada):
     assert message.based_on == (f"{ref}#L6-7",)
     assert refusal(past).code == "invalid" and "past the end" in refusal(past).detail["detail"]
     assert read["text"] == "@@ -1 +1 @@\n-old\n+new\n" and read["lines"] == 7
+
+
+async def test_a_recorded_commit_s_patch_is_read_once_and_asked_again_gives_its_ref(kernel, ada):
+    """A commit never changes, so neither does its patch: asked again while it is read, the same effect, and once it is
+    kept, its ref, reading nothing. A record saying why it could not be read holds no patch, so the next ask reads
+    again. What a workspace holds uncommitted is read at each ask."""
+    await spawned_in(kernel, "bob", "worktree")
+    await looked(kernel, commits=[commit(ONE), commit(TWO, ONE)], reading=reading(TWO))
+
+    first, again = [result_of(await kernel.submit(ada, "repo.diff", {"of": of})) for of in (ONE, ONE[:5])]
+    unread = result_of(await kernel.submit(ada, "repo.diff", {"of": TWO}))
+    body = f"sha256:{await kernel.put_body(b'diff --git a/x b/x\n')}"
+    read = {"effect": first["effect"], "sha": ONE, "body": body}
+    unreadable = {"effect": unread["effect"], "sha": TWO, "why": "no repository a diff may read from holds it"}
+    ref, _ = [result_of(await kernel.submit(kernel.runtime, "repo.keep", kept)) for kept in (read, unreadable)]
+    await settle_effects(kernel)
+    kept, retried = [result_of(await kernel.submit(ada, "repo.diff", {"of": of})) for of in (ONE, TWO)]
+    workspaces = [result_of(await kernel.submit(ada, "repo.diff", {"of": "@bob"})) for _ in range(2)]
+
+    requested = [event.data["id"] for event in requested_diffs(kernel)]
+    assert first == again == {"effect": requested[0]}
+    assert kept == {"ref": ref}
+    assert unread == {"effect": requested[1]} and retried == {"effect": requested[2]}
+    assert workspaces == [{"effect": requested[3]}, {"effect": requested[4]}]
+    assert len(requested) == 5

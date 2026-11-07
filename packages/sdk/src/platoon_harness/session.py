@@ -844,7 +844,8 @@ class Session:
     async def repo_diff(self, of: str) -> dict[str, Any]:
         """Ask for the patch of a recorded commit, by its SHA or its first 4 or more hex digits, or for what a
         workspace, `@ada` or `shared`, holds uncommitted, which the runtime reads where that workspace lives and keeps
-        as `repo.diffed`: the `effect` that reads it, which that names."""
+        as `repo.diffed`: the `effect` that reads it, which that names, or for a commit whose patch is kept, its
+        `ref`."""
         return await self._do("repo.diff", of=of)
 
     # Provenance.
