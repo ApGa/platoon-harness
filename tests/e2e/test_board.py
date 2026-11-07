@@ -59,15 +59,15 @@ async def test_the_board_lists_a_channel_s_posts_and_opens_one_with_its_replies_
     await expect(page.locator("#main [data-sort=new]")).to_have_class(re.compile(r"\bon\b"))
     for sort in ("hot", "top"):
         await expect(page.locator(f"#main [data-sort={sort}]")).to_be_disabled()
-        await expect(page.locator(f"#main [data-sort={sort}]")).to_have_attribute("title", UNVOTED)
+        await expect(page.locator(f"#main [data-sort={sort}]")).to_have_accessible_description(UNVOTED)
     votes = post.locator(".votes")
-    await expect(votes).to_have_attribute("aria-disabled", "true")
-    await expect(votes).to_have_attribute("title", UNVOTED)
+    await expect(votes).to_be_disabled()
+    await expect(votes).to_have_accessible_description(UNVOTED)
     await expect(votes.locator("span")).to_have_count(0)
 
     await post.locator(".ptitle").click()
     await expect(page.locator("#main .comments .msg .text", has_text="a reply")).to_have_count(1, timeout=SECONDS)
-    await expect(page.locator("#main .post .votes")).to_have_attribute("title", UNVOTED)
+    await expect(page.locator("#main .post .votes")).to_have_accessible_description(UNVOTED)
 
     await page.goto(address(page, "#layout=board&sort=hot"))
     await expect(page.locator("#tip")).to_have_text(UNVOTED, timeout=SECONDS)
@@ -79,11 +79,11 @@ async def test_the_board_lists_a_channel_s_posts_and_opens_one_with_its_replies_
     tasks = page.locator("#main button", has_text="Tasks")
     await expect(page.locator("#main [data-goto=chat]")).to_be_visible(timeout=SECONDS)
     await expect(tasks).to_be_disabled()
-    await expect(tasks).to_have_attribute("title", UNBUILT)
+    await expect(tasks).to_have_accessible_description(UNBUILT)
     await page.locator("#main [data-goto=chat]").click()
     await expect(page.locator("#main [data-goto=board]")).to_be_visible(timeout=SECONDS)
     await expect(tasks).to_be_disabled()
-    await expect(tasks).to_have_attribute("title", UNBUILT)
+    await expect(tasks).to_have_accessible_description(UNBUILT)
     assert errors == []
 
 
@@ -105,7 +105,7 @@ async def test_the_map_draws_the_session_s_agents_the_person_and_their_chats_wit
     await page.evaluate("S.view.hover = S.view.index.get('u:you'); S.view.showPane()")
     see = page.locator("#pane [data-see-as=you]")
     await expect(see).to_be_disabled()
-    await expect(see).to_have_attribute("title", re.compile("^Only an agent leaves evidence"))
+    await expect(see).to_have_accessible_description(re.compile("^Only an agent leaves evidence"))
 
     await page.evaluate("S.view.setWindow([S.view.act.start, S.view.act.end])")
     await page.wait_for_function("() => S.view.winData !== null", timeout=SECONDS)

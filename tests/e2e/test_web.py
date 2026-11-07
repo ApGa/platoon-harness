@@ -76,11 +76,14 @@ async def test_the_people_list_says_what_each_agent_is_doing_and_only_an_agent_c
         await expect(row.locator(".t .n")).to_have_text(statuses[agent], timeout=SECONDS)
     await page.locator("#as").click()
     you = page.locator(".pop .it", has_text="you")
-    await expect(you).to_have_attribute("aria-disabled", "true")
-    await expect(you).to_have_attribute("title", only)
+    await expect(you).to_be_disabled()
+    await expect(you).to_have_accessible_description(only)
     await you.click(force=True)
+    await expect(page.locator("#tip")).to_have_text(only)
     await expect(page.locator("#as")).to_contain_text("As everyone")
-    await page.keyboard.press("Escape")
+    await page.locator('.pop .it[data-as="w1"]').focus()
+    await page.keyboard.press("Enter")
+    await expect(page.locator("#as")).to_contain_text("As w1")
     await page.goto(served["control"].partition("#")[0] + "#as=you")
     await expect(page.locator("#tip")).to_have_text(only, timeout=SECONDS)
     await expect(page.locator("#as")).to_contain_text("As everyone")
@@ -96,7 +99,7 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(chromium: Browser
     await page.locator("#list .row", has_text="lead & you").click()
     composer = page.locator(".x-composer textarea")
     await expect(composer).to_be_disabled(timeout=SECONDS)
-    await expect(composer).to_have_attribute("title", why)
+    await expect(composer).to_have_accessible_description(why)
     for button in await page.locator(".x-composer button").all():
         await expect(button).to_be_disabled()
     await expect(page.locator(".x-composer .x-why")).to_have_text(why)
@@ -104,22 +107,22 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(chromium: Browser
     await expect(replies.first).to_be_attached()
     for reply in await replies.all():
         await expect(reply).to_be_disabled()
-        await expect(reply).to_have_attribute("title", why)
+        await expect(reply).to_have_accessible_description(why)
 
     await page.goto(served["view"].partition("#")[0] + "#person=lead")
     acts = page.locator("[data-x-act]")
     await expect(acts).to_have_count(4, timeout=SECONDS)
     for act in await acts.all():
         await expect(act).to_be_disabled()
-        await expect(act).to_have_attribute("title", why)
+        await expect(act).to_have_accessible_description(why)
     for label in ("Tool activity", "Review changes"):
         unbuilt = page.locator(".person .x-acts button", has_text=label)
         await expect(unbuilt).to_be_disabled()
-        await expect(unbuilt).to_have_attribute("title", re.compile("^Not built yet: "))
+        await expect(unbuilt).to_have_accessible_description(re.compile("^Not built yet: "))
     await page.goto(served["view"].partition("#")[0] + "#person=you")
     links = page.locator("[data-x-link]")
     await expect(links).to_have_count(2, timeout=SECONDS)
     for link in await links.all():
         await expect(link).to_be_disabled()
-        await expect(link).to_have_attribute("title", why)
+        await expect(link).to_have_accessible_description(why)
     assert errors == []

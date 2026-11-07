@@ -78,14 +78,14 @@ async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_wh
             page.locator("[data-x-reply]").first,
         ):
             await expect(control).to_be_disabled(timeout=SECONDS)
-            await expect(control).to_have_attribute("title", why)
+            await expect(control).to_have_accessible_description(why)
         needs = page.locator("[data-x-needs]")
-        await expect(needs).to_have_attribute("aria-disabled", "true")
-        await expect(needs).to_have_attribute("title", why)
+        await expect(needs).to_be_disabled()
+        await expect(needs).to_have_accessible_description(why)
         await page.goto(web.link("view").partition("#")[0] + "#person=you")
         for act in await page.locator("[data-x-act]").all():
             await expect(act).to_be_disabled()
-            await expect(act).to_have_attribute("title", why)
+            await expect(act).to_have_accessible_description(why)
         assert await session.head() == head
         await page.context.close()
 

@@ -102,7 +102,7 @@ async def test_a_file_goes_as_a_message_s_body_its_limit_said_before_it_is_sent(
         attach = page.locator("#main [data-x-attach]")
         files = page.locator("#main [data-x-file]")
 
-        await expect(attach).to_have_attribute("title", re.compile(r"of at most 12\.6 MB$"))
+        await expect(attach).to_have_accessible_description(re.compile(r"of at most 12\.6 MB$"))
         await files.set_input_files(
             {"name": "big.bin", "mimeType": "application/octet-stream", "buffer": b"\0" * (BODY_LIMIT + 1)}
         )
@@ -309,7 +309,8 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
         await expect(place).to_have_text(re.compile(r"⚠ approval .*bob: Ship the fix\?AllowDeny$"))
         await place.locator(".t").click()
         await expect(page.locator("#main .x-to")).to_have_text("To @bob", timeout=SECONDS)
-        await needs.click()
+        await needs.focus()
+        await page.keyboard.press("Enter")
         await place.get_by_role("button", name="Allow").click()
 
         await expect(page.locator("#tip")).to_have_text("Allow: Ship the fix?", timeout=SECONDS)
@@ -377,10 +378,10 @@ async def test_a_reply_in_a_thread_cites_the_message_it_answers(chromium: Browse
         await expect(question).to_have_count(1, timeout=SECONDS)
         aloud = page.locator("#main .msg", has_text="a thought aloud").locator("[data-x-reply]")
         await expect(aloud).to_be_disabled()
-        await expect(aloud).to_have_attribute("title", re.compile("is no message a reply can cite"))
+        await expect(aloud).to_have_accessible_description(re.compile("is no message a reply can cite"))
         provenance = question.locator(".actions button", has_text="Provenance")
         await expect(provenance).to_be_enabled()
-        await expect(provenance).to_have_attribute("title", re.compile("^What inbox/you@1 rests on"))
+        await expect(provenance).to_have_accessible_description(re.compile("^What inbox/you@1 rests on"))
 
         await question.hover()
         await question.locator("[data-x-reply]").click()
@@ -435,8 +436,22 @@ async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(
         await expect(said_here).to_have_text("Retire @w: done.", timeout=SECONDS)
 
         await page.goto(web.link("control").partition("#")[0] + "#person=you")
-        await page.locator('[data-x-link="view"]').click()
+        answered = asyncio.Event()
+
+        async def held(route: Route) -> None:
+            await answered.wait()
+            await route.continue_()
+
+        await page.route("**/x/link", held)
+        link = page.locator('[data-x-link="view"]')
+        await link.click()
+        await expect(link).to_be_disabled()
+        await expect(link).to_have_accessible_description("Sent, and waiting for its answer.")
+        answered.set()
         await expect(said_here).to_have_text(re.compile(r"^A view link, which opens once, within ten minutes: "))
+        await expect(link).to_be_enabled()
+        await expect(link).to_have_accessible_description("")
+        await page.unroute("**/x/link", held)
         made = (await said_here.text_content() or "").rpartition(" ")[2]
         served = f"http://127.0.0.1:{web.port}/view#link="
         viewer, viewer_errors = await opened(chromium, made)

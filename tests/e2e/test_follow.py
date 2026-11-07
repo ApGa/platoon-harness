@@ -279,11 +279,13 @@ async def test_on_history_every_act_says_how_to_resume_and_a_runtime_coming_back
         await expect(page.locator("#live")).to_have_text("Read-only")
         composer = page.locator(COMPOSER)
         await expect(composer).to_be_disabled()
-        await expect(composer).to_have_attribute("title", re.compile("`platoon-harness session resume s` resumes it"))
-        await expect(page.locator("[data-x-needs]")).to_have_attribute("aria-disabled", "true")
+        await expect(composer).to_have_accessible_description(
+            re.compile("`platoon-harness session resume s` resumes it")
+        )
+        await expect(page.locator("[data-x-needs]")).to_be_disabled()
         await page.goto(web.link("control").partition("#")[0] + "#person=bob")
         for act in await page.locator("[data-x-act]").all():
-            await expect(act).to_have_attribute("title", re.compile("platoon-harness session resume s"))
+            await expect(act).to_have_accessible_description(re.compile("platoon-harness session resume s"))
         await chat(page, "bob & you")
 
         async with Session.resume("s", root=root) as owner:
