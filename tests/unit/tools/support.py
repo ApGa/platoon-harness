@@ -3,6 +3,7 @@
 import ast
 import asyncio
 import json
+import secrets
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -10,10 +11,12 @@ from typing import Any, NamedTuple
 from urllib.parse import urlsplit
 
 from platoon_harness.kernel import Kernel, ManualClock, Principal, hash_token
+from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
+from platoon_harness.topology.compile import compile, scopes
 
-from ..primitives.support import result_of, spawn
+from ..primitives.support import channel, result_of, spawn
 
 SECONDS = 10.0
 
@@ -42,6 +45,21 @@ workers = "worker"
 """
 
 BUILT = Team.loads(TEAM)
+
+
+async def opened(folder: Path, clock: ManualClock) -> Kernel:
+    """A session of `BUILT` in `folder`, opened with its grants, a queue `tasks` and a board `notes`."""
+    kernel = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    roles = {
+        name: {"harness": role.driver, "tools": scopes(role), "delivery": role.delivery}
+        for name, role in BUILT.roles.items()
+    }
+    result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": roles}))
+    for grant in compile(BUILT):
+        result_of(await kernel.submit(kernel.runtime, "grant.add", grant.model_dump()))
+    await channel(kernel, "tasks", kind="queue")
+    await channel(kernel, "notes", kind="board")
+    return kernel
 
 
 class Reply(NamedTuple):
@@ -157,9 +175,10 @@ async def enrolled(
     stays: bool | None = None,
     **ready: Any,
 ) -> tuple[Principal, Client]:
-    """Spawn an agent through to started, issue its token as the host does, and connect a client."""
+    """Spawn an agent through to started, issue it a token as `LocalAuthority` makes one and the host issues it, and
+    connect a client."""
     agent = await spawn(kernel, name, role=role, by=by, ready=ready, stays=stays)
-    token = f"token-of-{name}"
+    token = secrets.token_urlsafe(32)
     args = {"id": agent.id, "token_hash": hash_token(token)}
     result_of(await kernel.submit(kernel.runtime, "principal.issue", args))
     return kernel.authenticate(token), Client(server.url, token)

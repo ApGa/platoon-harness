@@ -16,7 +16,19 @@ from platoon_harness.tools import mcp as tool_server
 from platoon_harness.tools.surface import harness_name
 
 from ..primitives.support import end_turn, events_of, grant, of_type, result_of, send, spawn, start_turn
-from .support import Client, connect, drained, enrolled, exchange, request, slept_until, text_of, tool_call, value_of
+from .support import (
+    Client,
+    connect,
+    drained,
+    enrolled,
+    exchange,
+    opened,
+    request,
+    slept_until,
+    text_of,
+    tool_call,
+    value_of,
+)
 
 INITIALIZE = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}}
 
@@ -448,6 +460,30 @@ async def test_identity_comes_only_from_the_token(kernel, lead):
 
     assert not result["result"]["isError"]
     assert of_type(kernel, "task.added")[-1].actor == "agent:lead"
+
+
+async def test_one_session_s_agent_token_is_refused_by_another_session_s_tool_plane(server, lead, tmp_path, clock):
+    """Identity: run isolation. A token's hash is journaled in its own session alone, so an agent of the same name and
+    role in another session is another principal, on a token of its own, and neither token opens the other's plane."""
+    other = await opened(tmp_path / "other", clock)
+    elsewhere = ToolServer(other)
+    await elsewhere.start()
+    try:
+        _, theirs = await enrolled(other, elsewhere, "lead", role="lead")
+        head = other.head
+        ours_there = Client(elsewhere.url, lead[1].token)
+        theirs_here = Client(server.url, theirs.token)
+
+        refused = [await client.post(INITIALIZE) for client in (ours_there, theirs_here)]
+        called = await ours_there.post(tool_call("task_add", {"queue": "tasks", "gist": "from another session"}))
+        answered = [await client.rpc("ping") for client in (lead[1], theirs)]
+    finally:
+        await elsewhere.stop()
+        other.close()
+
+    assert [reply.status for reply in (*refused, called)] == [401, 401, 401]
+    assert all("result" in answer for answer in answered)
+    assert other.head == head
 
 
 async def test_a_query_that_decoding_refuses_is_journaled(kernel, lead):
