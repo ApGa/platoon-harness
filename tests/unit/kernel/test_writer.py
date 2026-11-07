@@ -71,6 +71,26 @@ async def test_a_failed_commit_ends_the_writer_as_a_kill_would_and_a_retry_answe
     again.close()
 
 
+async def test_a_caller_hears_its_commit_failed_only_once_the_kernel_has_closed(folder, clock, monkeypatch):
+    """So whoever hears of the failure finds the kernel closed, however long the writer takes to go on."""
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes])
+    real, closed = writer.settle, []
+
+    def settling(outcomes):
+        closed.append(kernel.closed)
+        real(outcomes)
+
+    def failing_seal(db):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr(writer, "settle", settling)
+    kernel._writer._seal = failing_seal
+
+    assert refusal_of(await kernel.submit(kernel.runtime, "note.add", {})) == "unavailable"
+    assert closed == [True]
+    kernel.close()
+
+
 async def test_a_failed_rollback_still_answers_and_ends_the_writer_loudly(folder, clock):
     class Broken:
         """A connection on a disk that has gone: nothing can be committed or rolled back."""

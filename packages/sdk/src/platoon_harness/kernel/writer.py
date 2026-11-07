@@ -37,8 +37,8 @@ class Writer:
     """Holds the journal for writing: the one connection, the lock and the checkpoints.
 
     Drains jobs into transactions of up to BATCH_LIMIT, so one fsync covers a whole batch. A batch that fails ends the
-    writing, as a kill would: `failure` says why, every later job is refused with it, and the pulse closes, so that
-    whoever waits on the journal learns it at once.
+    writing, as a kill would: `failure` says why, every later job is refused with it, and the pulse closes before the
+    batch's callers hear, so that whoever waits on the journal learns it at once, and whoever hears finds it closed.
     """
 
     def __init__(
@@ -159,10 +159,9 @@ class Writer:
             results = [Refused("unavailable", f"journal: {error}")] * len(jobs)
             with self._lock:
                 self.failure = JournalError(f"{self._path}: a commit failed, so nothing more is recorded: {error}")
+            self._pulse.close()
         self._answer(jobs, results, head)
         self._batch_seconds = time.perf_counter() - started
-        if self.failure is not None:
-            self._pulse.close()
 
     def _answer(self, jobs: list[_Job], results: list[Any], head: int | None) -> None:
         """Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending

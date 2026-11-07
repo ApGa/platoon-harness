@@ -847,6 +847,9 @@ named here is closed.
 
 ### Fixes
 
+- **A caller that hears its commit failed finds the kernel closed.** The writer answered a failed batch's callers first and
+  closed the kernel after, so a caller that had heard of the failure could still find `Kernel.closed` false, as the writer's
+  own test did in two of three runs of the fast suite on two loaded cores. The kernel now closes before the callers hear.
 - **A scripted turn whose step raises ends failed, saying why.** `ScriptedDriver` ended a turn failed on a `DriverError` alone,
   so a step or a subclass that raised anything else, such as a script reading a refused tool result as JSON, left its turn open
   with no error, and its session never settled. Such a turn now ends `failed:` with the type and words of what was raised, as a
