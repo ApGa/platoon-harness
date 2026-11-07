@@ -37,8 +37,8 @@ _KEY = inspect.Parameter(
 )
 _OPS = registry(PRIMITIVES)
 _PURPOSES = {
-    "agent": "Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how "
-    "each stands.",
+    "agent": "Agents: start one, interrupt a turn, hold one's deliveries and release it, cancel or retire one, and see "
+    "how each stands.",
     "approval": "Approvals, the decisions harnesses wait on: resolve one.",
     "attention": "What needs a person now, each with the actions that would settle it.",
     "blob": "Bodies that events carry: read one by its ref.",

@@ -178,7 +178,7 @@ For example:
 
 **Ops on a session**:
 
-* [`agent`](#platoon-harness-agent): Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how each stands.
+* [`agent`](#platoon-harness-agent): Agents: start one, interrupt a turn, hold one's deliveries and release it, cancel or retire one, and see how each stands.
 * [`approval`](#platoon-harness-approval): Approvals, the decisions harnesses wait on: resolve one.
 * [`attention`](#platoon-harness-attention): What needs a person now, each with the actions that would settle it.
 * [`blob`](#platoon-harness-blob): Bodies that events carry: read one by its ref.
@@ -770,7 +770,7 @@ For example:
 
 ### platoon-harness agent
 
-Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how each stands.
+Agents: start one, interrupt a turn, hold one's deliveries and release it, cancel or retire one, and see how each stands.
 
 #### platoon-harness agent cancel
 
