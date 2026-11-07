@@ -106,18 +106,21 @@ estimator's claim.
 The walk is `propagate@1`'s, unchanged. What an agent's event keeps is that agent's, and also its span's when the event lies in
 one. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on its first
 `agent.started`, holding all that agent's events kept. An agent's row is its spans' rows and what it kept in no span; the reward
-is the agents' rows and what nobody's events kept; a span or agent never reached has no row. Its agent rows equal `propagate@1`'s
-on every journal. The annotation schema does not change: a span's row targets the `model.called` of its last call, in the place
-of a turn's `turn.started` and a call's `model.called`, targets nothing wrote.
+is the agents' rows and what no row holds; a span or agent never reached has no row. An agent that never started, as one whose
+launch failed, has no start for a row to target, so what its events keep is in no row, as nobody's is, where the walk refused the
+whole episode. Its agent rows equal `propagate@1`'s on every journal. The annotation schema does not change: a span's row targets
+the `model.called` of its last call, in the place of a turn's `turn.started` and a call's `model.called`, targets nothing wrote.
 
 ### 5. `propagate@3`: a span rests on what it took
 
 One edge is added, the take. A call's takes are the events, other than its own agent's, that offers its agent's harness confirmed
 taking showed, by gist or body, after the agent's previous call and its latest start or resume and before the call; a span's takes
-are its calls' takes, and an event's takes are its span's takes confirmed below its bound. An event in no span has none. Each
-event shown is one take, one share, as each relation is: a post cited and taken gets two shares. A confirmation is written by
-`agent.report` from the harness's own report, which comes in order with the reports of its model calls, and an offer its harness
-never confirmed is no edge: [provenance.md](../how-to/provenance.md)'s "never along an offer" becomes "never along an unconfirmed offer". Takes of the
+are its calls' takes, and an event's takes are its span's takes confirmed below its bound. An event in no span has none, nor has
+an entry that carries an event, as a child's report or an announce does: it repeats that event's words and reaches that event, and
+what it took, as its cause, while its own bound, its commit, would make reads its words never saw its edges. Each event shown is
+one take, one share, as each relation is: a post cited and taken gets two shares. A confirmation is written by `agent.report` from
+the harness's own report, which comes in order with the reports of its model calls, and an offer its harness never confirmed is no
+edge: [provenance.md](../how-to/provenance.md)'s "never along an offer" becomes "never along an unconfirmed offer". Takes of the
 agent's own events never count, as what it made is already its own; takes of a program's or a person's events count, and keep
 for nobody, as their citations do.
 
@@ -167,6 +170,8 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 | Unconfirmed offers, or every take in an agent's history | Being handed something is not using it, and an earlier process's takes were never this one's |
 | Exempting native resumes from the launch bound | A branch on the resume's kind, to keep the takes between a native resume's last call and its crash |
 | Counting own takes | What an agent made is its own already; counted, its own instructions kept part of the queue's credit for no span |
+| An entry that carries an event taking by its own bound | Its bound is its commit, after the call that chose its words, so a read in a trailing call became an edge of words that never saw it |
+| Refusing an episode whose walk reaches an agent that never started | A failed launch is ordinary, and its report is taken by a read, so one would leave a whole episode with no row |
 | `said` naming `agent.finished` for every finish in a turn | One act would keep two refs where an empty finish carries its last message |
 | Copying `based_on` onto `agent.ended`, or walking from the end to the finish by order | One claim with two homes, or an edge the record does not hold |
 | Pooling spans as agents of their own in a training system | It ties an agent's advantage to how many spans it was cut into |

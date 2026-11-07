@@ -153,11 +153,13 @@ The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@3`, a
 It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
 `retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
 its citations, an agent's only where its exposure says `seen`, and what its span took: the events, but its own agent's, that offers
-its harness confirmed taking showed before that span's calls, below the event's bound, never along an unconfirmed offer.
+its harness confirmed taking showed before that span's calls, below the event's bound, never along an unconfirmed offer. An entry
+that carries an event, as a child's report does, takes nothing of its own: it reaches that event, and what it took, as its cause.
 What an agent's event keeps is also its span's when the event lies in one: the span holding the model call that made it, for an
 entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is
 one span. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on that agent's
-first `agent.started`, holding all its events kept, and none for a span or an agent it never reached, which stays unscored. An
+first `agent.started`, holding all its events kept, and none for a span or an agent it never reached, which stays unscored, nor
+for one that never started, as one whose launch failed, whose events keep their share for no row. An
 agent's row is its spans' rows and what it kept in no span, such as its end out of a turn. Where no span took another principal's
 event its rows are those `propagate@2` wrote, whose agent rows were `propagate@1`'s. Citing or taking gives away all but `retained`
 of what reaches the event, and work nobody cites or takes earns nothing from it, so training on it pulls against the default

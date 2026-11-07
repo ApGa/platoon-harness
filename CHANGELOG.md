@@ -446,8 +446,11 @@
   agent rows were `propagate@1`'s on every journal. Version 3 adds one edge, the take: the events, but its own agent's, shown by
   offers its agent's harness confirmed taking before a call of its span, since the call before and its latest start or resume,
   and below the event's bound, so it walks offers its harness confirmed and never an unconfirmed one; a walk that meets an edge to
-  an event no older than its own makes every row `invalid`. Where no span took another principal's event, its rows are version
-  2's. A span's row is now the one annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were
+  an event no older than its own makes every row `invalid`. An entry that carries an event, as a child's report or an announce
+  does, takes nothing of its own, as it reaches that event, and what it took, as its cause; by the entry's own bound, which is its
+  commit, a read in a trailing call became an edge of words that never saw it. An agent that never started, as one whose launch
+  failed, gets no row, as it has no start for one to target, and what its events keep is in no row, where the walk refused the
+  whole episode once a read took its report. Where no span took another principal's event, its rows are version 2's. A span's row is now the one annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were
   targets nothing wrote. See [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - "Span" means one thing, a stretch of one turn of an agent: `primitives.Lines.span`, the `#L<first>-<last>` a result shows of a
   body, is `Lines.range`, as the read tools' argument already was, `schema.seconds` takes a `duration`, the facade's own alias for a

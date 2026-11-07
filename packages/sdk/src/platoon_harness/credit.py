@@ -34,16 +34,18 @@ async def propagate(session: Session, episode: str, *, judge: Gateway | None, re
     only where its exposure says Seen, and its takes. An event with no edge keeps it all. What an agent's event keeps is
     that agent's, and also its span's when the event lies in one: the span holding the model call that made it, for an
     entry that carries an event that event's, and for an event tied to no call its turn's when that turn is one span.
-    So an agent's row is its spans' rows and what it kept in no span. An event's takes are the events, but its own
-    agent's, shown by each offer that agent's harness confirmed taking before a call of its span, after the call before
-    and the agent's latest start or resume, and below the event's bound; an event in no span has none, and an offer its
-    harness never confirmed is no edge. The walk takes events newest first, so a path that reconverges adds once. It
-    stops at 4,096 events, or at an edge to an event no older than its own, when every row is `invalid`. A team reward
-    that is not scored passes its status to each row, and an agent or a span it never reaches gets no row, so is
-    unscored. What nobody's events kept is the reward less the agents' rows, and is no row. Citing or taking gives away
-    all but `retained` of what reaches the event, and work nobody cites or takes earns nothing from it. `judge` is not
-    read. Refused `invalid` for a `retained` outside [0, 1] or a reward on an episode that closed on no ref, and
-    `conflict` for several team rewards."""
+    So an agent's row is its spans' rows and what it kept in no span. An agent that never started, as one whose launch
+    failed, has no start for a row to target, so what its events keep is in no row. An event's takes are the events,
+    but its own agent's, shown by each offer that agent's harness confirmed taking before a call of its span, after the
+    call before and the agent's latest start or resume, and below the event's bound; an event in no span has none, nor
+    has an entry that carries an event, whose words it repeats and which, with what it took, it reaches as its cause;
+    and an offer its harness never confirmed is no edge. The walk takes events newest first, so a path that reconverges
+    adds once. It stops at 4,096 events, or at an edge to an event no older than its own, when every row is `invalid`.
+    A team reward that is not scored passes its status to each row, and an agent or a span it never reaches gets no
+    row, so is unscored. What nobody's events kept, and an agent's that never started, is the reward less the agents'
+    rows, and is no row. Citing or taking gives away all but `retained` of what reaches the event, and work nobody
+    cites or takes earns nothing from it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a
+    reward on an episode that closed on no ref, and `conflict` for several team rewards."""
     if not 0 <= retained <= 1:
         raise Refused("invalid", f"`retained` is a share, from 0 to 1, and {retained} is not")
     closed = await _closed(session, episode)
@@ -91,18 +93,18 @@ async def _closed(session: Session, episode: str) -> str:
     return f"{closed[-1].stream}@{closed[-1].version}"
 
 
-async def _agent(session: Session, name: str) -> _Agent:
+async def _agent(session: Session, name: str) -> _Agent | None:
     """An agent as the walk needs it, read once: its spans, every page of them, each call by where it stands on its turn
     stream between its span's first call and its last, and every page of what it was offered below its last span's last
-    call. A confirmation is taken by the agent's next call, unless the agent started or resumed in between, as a new
-    harness never held what the one before took."""
+    call; or None for one that never started, as one whose launch failed. A confirmation is taken by the agent's next
+    call, unless the agent started or resumed in between, as a new harness never held what the one before took."""
     started, launches = None, []
     async for event in session.events(streams=[f"agent/{name}"]):
         if event.type in ("agent.started", "agent.resumed"):
             started = started or f"{event.stream}@{event.version}"
             launches.append(event.seq)
     if started is None:
-        raise Refused("not_found", f"@{name} never started")
+        return None
     page = await session.spans(f"@{name}")
     spans = list(page.spans)
     while page.cursor is not None:
@@ -156,20 +158,21 @@ async def _walk(
     events, whether the walk stopped at its limit or at an edge to an event no older than its own, and the head it read
     at."""
     traced: dict[str, Lineage] = {}
-    agents: dict[str, _Agent] = {}
+    agents: dict[str, _Agent | None] = {}
 
     async def trace(ref: str) -> Lineage:
         if ref not in traced:
             traced[ref] = await session.lineage(ref)
         return traced[ref]
 
-    async def part(agent: _Agent, found: Lineage) -> Span | None:
-        """The span of an agent's event: its call's, what it carries', or its turn's when that turn is one span."""
+    async def part(agent: _Agent, found: Lineage, carried: str | None) -> Span | None:
+        """The span of an agent's event: its call's, for an entry that carries an event that event's, or its turn's
+        when that turn is one span. What an entry carries never carries another."""
         if found.made.call is not None:
             return agent.holding.get(found.made.call)
-        if (carried := await _carried(session, found)) is not None:
+        if carried is not None:
             carrying = await trace(carried)
-            return await part(agent, carrying) if carrying.made.maker == f"agent:{agent.name}" else None
+            return await part(agent, carrying, None) if carrying.made.maker == f"agent:{agent.name}" else None
         whole = [span for span in agent.spans if found.made.turn is not None and span.turn == found.made.turn]
         return whole[0] if len(whole) == 1 else None
 
@@ -208,10 +211,12 @@ async def _walk(
             name = maker.removeprefix("agent:")
             if name not in agents:
                 agents[name] = await _agent(session, name)
-            targets.append(agents[name].started)
-            if (span := await part(agents[name], found)) is not None:
-                targets.append(span.ref)
-                edges += await takes(agents[name], span, found)
+            if (agent := agents[name]) is not None:
+                targets.append(agent.started)
+                carried = await _carried(session, found)
+                if (span := await part(agent, found, carried)) is not None:
+                    targets.append(span.ref)
+                    edges += [] if carried is not None else await takes(agent, span, found)
         keeping = share * retained if edges else share
         for target in targets:
             kept[target] = kept.get(target, 0.0) + keeping

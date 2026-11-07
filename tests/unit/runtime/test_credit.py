@@ -435,6 +435,65 @@ async def test_an_entry_that_carries_an_event_lies_where_that_event_lies(tmp_pat
     assert values(await credited(session)) == {"lead": 0.5, "kid": 0.5}
 
 
+async def test_an_entry_that_carries_an_event_takes_nothing_of_its_own(tmp_path):
+    """`kid` finished by its first call and read `peer`'s message after, in the same span: the runtime's entry that
+    reports the finish to `lead` repeats the finish's words, so it passes all it hands on to the finish, which took
+    nothing below its bound, and nothing to `peer`, whose message the reported words never saw."""
+    kernel = await journal(tmp_path)
+    await driven.channel(kernel, "log", kind="topic")
+    lead = await driven.spawn(kernel, "lead", role="lead")
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "kid", by=lead)
+    await driven.send(kernel, driven.agent("peer"), "@kid", "and also")
+    await driven.start_turn(kernel, "kid")
+    await called(kernel, "kid", "k1")
+    finished = (await ran(kernel, "kid", "k1", "agent.finish", {"gist": "made it"}))["ref"]
+    await ran(kernel, "kid", "k1", "message.read", {}, tool="read")
+    await returned(kernel, "kid", "read")
+    named = await called(kernel, "kid", "k2")
+    await driven.end_turn(kernel, "kid")
+    entry = driven.of_type(kernel, "message.sent")[-1]
+    answer = (await driven.send(kernel, lead, "#log", "noted", reply_to=finished))["ref"]
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert values(await credited(session)) == {"lead": 0.5, "kid": 0.5}
+    assert {target: (row.value, row.evidence) for target, row in (await spanned(session)).items()} == {
+        named: (0.5, (f"{entry.stream}@{entry.version}", finished))
+    }
+
+
+async def test_a_taken_report_of_a_failed_spawn_credits_the_rest_of_the_episode(tmp_path):
+    """`kid`'s launch failed, so it never started, and `lead`'s answer took the report of its end, shown by that end:
+    an agent with no start has nothing for a row to target, so the half its end keeps is in no row, as nobody's is,
+    and `lead`'s answer keeps its half for `lead` and its span."""
+    kernel = await journal(tmp_path)
+    await driven.channel(kernel, "log", kind="topic")
+    await driven.spawn(kernel, "lead", role="lead")
+    await driven.start_turn(kernel, "lead")
+    await called(kernel, "lead", "c1")
+    await ran(kernel, "lead", "c1", "agent.spawn", {"name": "kid", "child_role": "worker", "goal": "be kid"})
+    [launch] = driven.result_of(kernel.query(kernel.runtime, "effect.ready", {}))
+    attempt = driven.result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": launch["id"]}))
+    failing = {"id": launch["id"], "attempt": attempt, "error": "refused"}
+    driven.result_of(await kernel.submit(kernel.runtime, "effect.fail", failing))
+    gone = {"agent": "kid", "report": {"type": "exited", "reason": "its launch failed"}}
+    driven.result_of(await kernel.submit(kernel.runtime, "agent.report", gone))
+    ended = driven.of_type(kernel, "agent.ended")[-1]
+    await called(kernel, "lead", "c2")
+    await ran(kernel, "lead", "c2", "message.read", {}, tool="read")
+    await returned(kernel, "lead", "read")
+    answering = await called(kernel, "lead", "c3")
+    answer = await sent(kernel, "lead", "c3", "#log")
+    await driven.end_turn(kernel, "lead")
+
+    session = await propagated(kernel, tmp_path, [answer])
+
+    assert (ended.agent, ended.data["status"]) == ("kid", "failed")
+    assert values(await credited(session)) == {"lead": 0.5}
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {answering: 0.5}
+
+
 async def test_an_agent_whose_every_kept_event_lies_in_its_one_span_gets_a_span_row_equal_to_its_agent_row(tmp_path):
     """`lead` answers the report of `kid`, whose one span chose its finish: the report and the finish both lie there."""
     kernel = await journal(tmp_path)

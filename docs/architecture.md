@@ -1847,12 +1847,14 @@ class AgentOutcome(Model):
   passes the rest equally along its edges, one share each, newest first and at most 4,096 events. An event's edges are its causes,
   its previous version or a commit's parents, its citations, an agent's only where exposure says Seen, and its takes: the events,
   but its own agent's, shown by each offer its agent's harness confirmed taking before a call of its span, after the call before
-  and the agent's latest start or resume, and below the event's bound. An event in no span takes nothing, and an offer never
-  confirmed is no edge. What an agent's event keeps is that agent's, and also its span's when the event lies in one (§11). It
+  and the agent's latest start or resume, and below the event's bound. An event in no span takes nothing, nor does an entry that
+  carries an event, which reaches that event, and what it took, as its cause, and an offer never confirmed is no edge. What an
+  agent's event keeps is that agent's, and also its span's when the event lies in one (§11). It
   writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on its first
   `agent.started`, holding all that agent's events kept. A span or an agent it never reached has no row, a team reward not scored
   passes its status on, and a walk cut short, or one that meets an edge to an event no older than its own, makes every row
-  `invalid`. The reward is the agents' rows and what nobody's events kept. An agent's row is its spans' rows and what it kept in no
+  `invalid`. The reward is the agents' rows and what no row holds: what nobody's events kept, and what those of an agent that never
+  started kept, as one whose launch failed has no start for a row to target. An agent's row is its spans' rows and what it kept in no
   span, which no span's row holds. Where no span took another principal's event its rows are `propagate@2`'s, whose agent rows
   were `propagate@1`'s: one name, one function and a version for each, an earlier one reached by pinning an earlier SDK. Citing,
   and taking, give away all but `retained` of what reaches the event; being cited or taken by a credited span earns credit,

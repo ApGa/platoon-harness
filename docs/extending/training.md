@@ -183,14 +183,16 @@ episode that closed on none. Each event it reaches keeps `retained` of what reac
 one share each, along the event's causes, its previous version or a commit's parents, its citations, an agent's only where its
 exposure says Seen, and its takes: the events, but its own agent's, shown by offers its agent's harness confirmed taking before a
 call of its span, since the call before and the agent's latest start or resume, and below the event's own bound. An event in no
-span takes nothing, and an offer the harness never said it took is no edge. It walks newest first, at most 4,096 events. What an
+span takes nothing, nor does an entry that carries an event, as a child's report does, which reaches that event, and what it took,
+as its cause; and an offer the harness never said it took is no edge. It walks newest first, at most 4,096 events. What an
 agent's event keeps is that agent's, and also its span's when the event lies in one: the span holding the model call that made it,
 for an entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that
 turn is one span. It writes, under the producer `platoon_harness.credit:propagate`, one local `credit` row per span it reached, on
 the span's name, and one per agent it reached, on that agent's first `agent.started`, holding all that agent's events kept. A span
 or an agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a
 walk cut short, or one that meets an edge to an event no older than its own, makes every row `invalid`. What reached the events of
-no agent is the reward less the agents' rows, and what an agent kept in no span, such as an end out of a turn, is its row less its
+no agent, or of one that never started, as one whose launch failed, which has no start for a row to target, is the reward less
+the agents' rows, and what an agent kept in no span, such as an end out of a turn, is its row less its
 spans' rows, and no span's row holds it. Where no span took another principal's event, its rows are those `propagate@2` wrote,
 whose agent rows were `propagate@1`'s; pin an earlier SDK to run an earlier version.
 
