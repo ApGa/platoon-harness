@@ -56,7 +56,7 @@ EVERY_REPORT = [
         outcome="ok",
     ),
     InputDelivered(input="12", boundary="tool", evidence="message_start", native_id="entry-3"),
-    ApprovalRequested(id="a1", gist="run it?"),
+    ApprovalRequested(id="a1", gist="run it?", body='Bash {"command": "touch x"}', cut=3),
     ModelCall(call_id="c1", model="m", purpose="compaction"),
     Usage(tokens=14, usd=0.5, label="provider", scope="tree", call_id="c1"),
     Compacted(forgotten=("e1", "e2"), summary="what it kept"),

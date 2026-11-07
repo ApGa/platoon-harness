@@ -129,9 +129,11 @@ class Exit:
 
 @dataclass(frozen=True)
 class Ask:
-    """Ask for an approval, and hold the turn until it is answered."""
+    """Ask for an approval, and hold the turn until it is answered. `body` is the whole of what it asks, and None says
+    nothing of it."""
 
     gist: str
+    body: str | None = None
 
 
 @dataclass(frozen=True)
@@ -304,8 +306,8 @@ class ScriptedDriver:
                     return f"failed: {reason}"
                 case Exit(reason=reason):
                     raise _Exiting(reason)
-                case Ask(gist=gist):
-                    await self._ask(gist)
+                case Ask(gist=gist, body=body):
+                    await self._ask(gist, body)
                 case Hang():
                     await asyncio.Event().wait()
                 case AskModel():
@@ -318,11 +320,11 @@ class ScriptedDriver:
         await self._report(Delta(text=text))
         await self._report(Item(kind="message", gist=text[:GIST_LIMIT], body=text, call_id=call_id))
 
-    async def _ask(self, gist: str) -> Verdict:
+    async def _ask(self, gist: str, body: str | None = None) -> Verdict:
         id = f"approval-{uuid.uuid4().hex[:8]}"  # A resumed harness must not ask under an id it has used.
         answered: asyncio.Future[Verdict] = asyncio.get_running_loop().create_future()
         self._approvals[id] = answered
-        await self._report(ApprovalRequested(id=id, gist=gist[:GIST_LIMIT]))
+        await self._report(ApprovalRequested(id=id, gist=gist[:GIST_LIMIT], body=body))
         verdict = await answered
         await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
         return verdict
@@ -418,10 +420,11 @@ class ScriptedDriver:
         return {"role": "tool", "tool_call_id": call["id"], "content": output}
 
     async def _gate(self, name: str, arguments: Mapping[str, Any]) -> str:
-        """A tool of its own needs an approval. Once allowed, `shell` runs its `command`."""
+        """A tool of its own needs an approval, which asks with the tool's name and its input as JSON. Once allowed,
+        `shell` runs its `command`."""
         if self._capabilities.approvals == "none":
             return f"{name} needs an approval this harness cannot ask for"
-        verdict = await self._ask(f"run {name}?")
+        verdict = await self._ask(f"run {name}?", f"{name} {json.dumps(arguments)}")
         if verdict == "allow" and name == SHELL and "command" in arguments:
             return await self._shell(str(arguments["command"]))
         return f"{name} {verdict}"

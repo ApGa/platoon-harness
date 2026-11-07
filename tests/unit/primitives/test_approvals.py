@@ -1,15 +1,21 @@
-"""Approvals: four facts, one winner, and a policy stated at open."""
+"""Approvals: four facts, one winner, a policy stated at open, and the whole of what each asks."""
+
+import json
 
 import pytest
 
+from platoon_harness import Session
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives.approvals import ASK_LIMIT
+from platoon_harness.testing import Ask
 
+from ..runtime import support as running
 from .support import approval, enroll, grant, of_type, refusal, report, result_of, send, spawn, start_turn
 
 
-async def ask(kernel, id: str = "a1", agent: str = "bob") -> None:
-    args = {"id": id, "agent": agent, "gist": "May I run this?"}
+async def ask(kernel, id: str = "a1", agent: str = "bob", **fields) -> None:
+    args = {"id": id, "agent": agent, "gist": "May I run this?", **fields}
     result_of(await kernel.submit(kernel.runtime, "approval.request", args))
 
 
@@ -185,3 +191,44 @@ async def test_a_policy_decision_never_reaches_attention(tmp_path):
 
     assert result_of(kernel.query(kernel.runtime, "attention.list", {})) == []
     kernel.close()
+
+
+async def test_an_approval_s_whole_ask_is_its_body_redacted_and_bounded(kernel, ada):
+    """The ask is the body of the approval's first event, which `blob.get` reads whole. One the journal does not hold in
+    its row is refused, as nobody could read it, and a person redacts one as any body."""
+    await spawn(kernel, "bob")
+    whole = "Edit " + json.dumps({"file_path": "app.py", "new_string": "line of the new file\n" * 40})
+    body = f"sha256:{await kernel.put_body(whole.encode())}"
+    past = f"sha256:{await kernel.put_body(b'x' * (ASK_LIMIT + 1))}"
+
+    await ask(kernel, body=body)
+    refused = await kernel.submit(
+        kernel.runtime, "approval.request", {"id": "a2", "agent": "bob", "gist": "", "body": past}
+    )
+
+    asked = of_type(kernel, "approval.requested")[0]
+    assert (asked.v, asked.data["body"], asked.data["cut"]) == (2, body, 0)
+    assert result_of(await kernel.submit(ada, "blob.get", {"ref": "approval/a1@1"}))["text"] == whole
+    assert refusal(refused).code == "invalid"
+    result_of(await kernel.submit(ada, "body.tombstone", {"sha256": body.removeprefix("sha256:")}))
+    assert refusal(await kernel.submit(ada, "blob.get", {"ref": "approval/a1@1"})).code == "not_found"
+
+
+async def test_an_ask_past_its_bound_is_cut_and_says_where(tmp_path):
+    """At the end of the last whole character within 64 KiB, which here falls inside a line and between a character's
+    two bytes, so the ask stays text that `blob.get` reads, and its record counts the bytes it left out, so a reader can
+    say where it was cut and how much followed."""
+    whole = "xy" + ("é" * 99 + "\n") * 400
+    team = running.solo([Ask("run the long one?", body=whole)])
+
+    async with Session.start(team, root=tmp_path, clock=ManualClock(1000.0)) as session:
+        await running.in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        [asked] = await running.until(lambda: running.of_type(session, "approval.requested"), session)
+        kept = await session.get_body(asked.data["body"])
+        read = await session.blob(f"{asked.stream}@{asked.version}")
+
+    assert len(kept) == ASK_LIMIT - 1 and whole.encode().startswith(kept)
+    assert asked.data["cut"] == len(whole.encode()) - len(kept)
+    assert kept.decode().startswith(read["text"]) and read["lines"] == kept.count(b"\n") + 1
+    assert asked.gist == "run the long one?"

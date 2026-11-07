@@ -42,6 +42,7 @@ from platoon_harness.drivers.levels import Profile, implementation, levels, spea
 from platoon_harness.drivers.process import exit_reason, reap, run
 from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
+from platoon_harness.primitives.approvals import bounded
 from platoon_harness.schema import ConfigError, Problem, seconds
 from platoon_harness.team import Role, Team, Test
 from platoon_harness.tools import (
@@ -965,6 +966,10 @@ class Host:
                 report = TurnEnded(reason=OWNER_STOP)
             case Item(body=body):
                 report = report.model_copy(update={"body": await self._stored(body)})
+            case ApprovalRequested(body=str(body), cut=cut):  # Masked, so a cut splits no secret.
+                kept, left = bounded(body)
+                stored = f"sha256:{await self._kernel.put_body(kept)}"
+                report = report.model_copy(update={"body": stored, "cut": cut + left})
             case Compacted(forgotten=forgotten, summary=summary):
                 listed = None if forgotten is None else json.dumps(forgotten)
                 stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}

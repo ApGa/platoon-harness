@@ -74,8 +74,9 @@ records them at payload version 2:
 {"id": "a1", "policy": "ask", "body": "sha256:…", "cut": 0}
 ```
 
-The event's body is the ask, so `blob.get` reads it at `approval/<id>@1`, the first event of the approval's stream, a page at a
-time, and a citation can name its lines. An agent reads its own, as the event is its, and nobody else's. A body the journal does
+The event's body is the ask, so a client reads it by the body's ref, as it reads any body, and `blob.get` reads it at
+`approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body held in the
+journal's row. An agent reads its own, as the event is its, and nobody else's. A body the journal does
 not hold in its row is refused `invalid`, as `blob.get` could not read it, and the host then answers the approval `deny`, as it
 does any approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body, for a secret the mask did not know.
 A version 1 payload has neither field, which a reader takes as an ask nobody said and nothing cut. The `Approvals` view and the

@@ -811,8 +811,8 @@ def report(txn: Txn, a: AgentReport) -> None:
             confirmed(txn, input, delivered.boundary, delivered.evidence, delivered.native_id)
             if (launch := txn.view(Deliveries).launch(name)) is not None:  # Taken before any input it took.
                 confirmed(txn, launch, "turn", delivered.evidence)
-        case ApprovalRequested(id=id, gist=gist):
-            ask(txn, id, agent, gist)
+        case ApprovalRequested(id=id, gist=gist, body=body, cut=cut):
+            ask(txn, id, agent, gist, body, cut)
         case ModelCall(call_id=call_id) as call:
             data = call.model_dump(exclude={"type"})
             gist = f"{name} called a model"

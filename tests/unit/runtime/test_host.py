@@ -1,6 +1,7 @@
 """The host: effects performed level-triggered, each harness heard in order, and links that outlive the daemon."""
 
 import asyncio
+import base64
 import json
 import os
 import signal
@@ -9,6 +10,7 @@ import stat
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 
@@ -38,6 +40,7 @@ from platoon_harness.drivers.levels import Check, Conformance, implementation
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
 from platoon_harness.primitives import Verdict
+from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
@@ -1473,6 +1476,29 @@ async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_p
 
     assert items[0].gist == "my key is ***"
     assert body["text"] == "***\n"
+
+
+async def test_a_secret_in_an_approval_s_ask_is_masked_plain_and_encoded(tmp_path):
+    """Before the ask is cut, too, so a secret the bound falls inside leaves no part of itself behind."""
+    secret = 's3cret/value+with="specials"'
+    encoded = base64.b64encode(secret.encode()).decode(), base64.urlsafe_b64encode(secret.encode()).decode().rstrip("=")
+    forms = (secret, quote(secret, safe=""), json.dumps(secret)[1:-1], *encoded)
+    straddling = "x" * (ASK_LIMIT - 10 - len(" | ".join(forms))) + secret
+    said = ApprovalRequested(id="a1", gist=f"run with {secret}"[:280], body=f"{' | '.join(forms)}{straddling} tail")
+
+    class Telling(LocalAuthority):
+        async def admit(self, spawn: SpawnRequest) -> Admission:
+            admission = await super().admit(spawn)
+            return admission.model_copy(update={"access": {"KEY": Secret(secret)}})
+
+    team = solo_with(saying(said), model="m")
+    async with Session.start(team, authority=Telling(team), root=tmp_path) as session:
+        [asked] = await until(lambda: of_type(session, "approval.requested"), session)
+        kept = (await session.get_body(asked.data["body"])).decode()
+
+    assert asked.gist == "run with ***"
+    assert kept.startswith("*** | *** | *** | *** | ***x") and kept.endswith("x*** tail")
+    assert not any(form[:8] in kept for form in forms) and asked.data["cut"] == 0
 
 
 async def test_live_text_is_masked_too(tmp_path):

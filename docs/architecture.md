@@ -904,6 +904,11 @@ stall: such a daemon sets a timer.
 Four facts stay apart: `approval.requested`, `approval.resolved` (a principal decided), `effect.finished` (the answer reached
 the harness), and the observed item outcome. Codex's `accept` does not fix the result, so the UI reports the last.
 
+An approval carries the whole of what it asks, the command, the patch or the tool's input, as the body of its `approval.requested`,
+`approval/<id>@1`: masked as every report is, then kept to its first 64 KiB, cut at a character's end, with `cut` counting the bytes
+it left out. A driver that cannot say what its harness asks sends none, which is unknown and not an empty ask. See
+[RFC 0066](rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md).
+
 `resolve` carries `expected_version`: the first commit wins, and the loser gets `conflict{resolved_by, via}`, shown as
 information. **Approval policy is a durable session setting** (`ask`, `deny`, `allow`, per role), journaled at open, and
 `Session.start(approvals=)` states one over every role's own. A headless session states one before its first turn. An `ask` that no
@@ -1089,15 +1094,16 @@ shows it (§13); a harness in the runtime's own process declares none.
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
 `item{kind: message|thought|tool|patch, phase: started|completed, native_id, call_id, gist, body, approval, outcome}`,
-`input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist}`, `model.call{call_id, model, purpose}`,
+`input.delivered{input, boundary, evidence, native_id}`, `approval.requested{id, gist, body, cut}`, `model.call{call_id, model, purpose}`,
 `usage{tokens, usd, label, scope: call|turn|tree, call_id}`, `compacted{forgotten, summary}`,
 `child.seen{native, parent}`, `gap{what}`, `native{kind, raw, cut}` and `exited{reason}`. A driver claims no attribution: `child.seen`
 names the native child and the tool call that started it, and how well a call is tied to an agent is the record's to say. A gap's
 plane is its own. What changed in a
 workspace is the runtime's own look, so no driver reports it (§13). Unknown frames become `native` plus a gap, never a log line. A
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
-and `summary` go the same way, since either can pass what an event holds. `forgotten` holds native ids, and with `None` the runtime
-records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
+and `summary` go the same way, since either can pass what an event holds. An approval's `body` is its whole ask, which the host
+masks and then cuts to 64 KiB, adding the bytes it left out to `cut`, so a driver sends it whole. `forgotten` holds native ids, and
+with `None` the runtime records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
 agent's surface, with each entry's ref and sender, whether it has a body, which `blob.get` reads by that ref, and the input id. So a
 wire program in any language has it for nothing, and `items` is there for one that wants more.
 

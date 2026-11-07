@@ -10,6 +10,7 @@ import pytest
 
 from platoon_harness.config import WIRE_PROTOCOL, Secret
 from platoon_harness.drivers import (
+    ApprovalRequested,
     Delivery,
     DriverError,
     Exited,
@@ -365,6 +366,32 @@ async def test_an_unknown_report_sent_as_a_request_is_native_plus_a_gap_too(tmp_
     await driver.stop(2)
 
     assert "nonsense" in native.raw
+
+
+async def test_a_wire_approval_with_no_body_still_asks(tmp_path):
+    """As a program written before an approval carried its ask sends it: its ask is unknown, never empty, and its
+    answer still comes."""
+    answered = tmp_path / "answered.json"
+    asking = {"method": "report", "params": {"type": "approval.requested", "id": "a1", "gist": "may I?"}}
+    command = raw_program(
+        tmp_path,
+        DESCRIBING,
+        f"""
+        send({asking!r})
+        for frame in frames():
+            if frame["method"] == "answer":
+                open({str(answered)!r}, "w").write(json.dumps(frame["params"]))
+            reply(frame, None)
+    """,
+    )
+    driver, heard = await started(tmp_path, command)
+
+    asked = await heard.until(ApprovalRequested)
+    await driver.answer(asked.id, "allow")
+    await driver.stop(2)
+
+    assert (asked.id, asked.gist, asked.body, asked.cut) == ("a1", "may I?", None, 0)
+    assert json.loads(answered.read_text()) == {"approval": "a1", "verdict": "allow"}
 
 
 async def test_a_program_that_goes_points_at_what_it_said(tmp_path):

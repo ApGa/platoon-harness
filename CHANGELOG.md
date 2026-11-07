@@ -13,6 +13,14 @@ named here is closed.
 
 ### New features
 
+- **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
+  the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
+  keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which
+  `blob.get` reads at `approval/<id>@1` and `body.tombstone` redacts. `approval.request` takes the two too. A driver that sends no
+  body still asks, with its ask unknown, as a wire program written before this does. `ScriptedDriver`'s `Ask(gist, body)` scripts
+  one, and the approval its own tool asks for carries the tool's name and input. An approval said only its first 280 characters,
+  so a person allowed a long command or an edit having read part of it. Neither client shows the body yet. See
+  [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and

@@ -86,7 +86,7 @@ method promises:
 | `Delta` | `text` | Live text. It is lossy and never journaled |
 | `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item. A completed tool item whose `native_id` is the anchor a tool call went under, as Claude Code's `toolUseId` and Codex's `callId` are, and whose `outcome` is `completed`, confirms what the runtime showed in that call's result, so report it once the result is in. Say `failed` when the call's result never came back as it was returned, for an error, an interrupt or a lost reply: that confirms nothing |
 | `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness, the goal at launch among them: this is the one way an offer is confirmed. `evidence` names what showed it, and `native_id` is the harness's own id for what landed, verbatim, the one its compaction would name that input by, or None when it gives none |
-| `ApprovalRequested` | `id`, `gist` | The harness is waiting on a decision |
+| `ApprovalRequested` | `id`, `gist`, `body`, `cut` | The harness is waiting on a decision. `body` is the whole of what it asks to do, the command, the patch or the tool's input, as the harness gave it, and None when you cannot say, which is unknown and not an empty ask. Send it whole: the host masks it and keeps its first 64 KiB, cut at a character's end, adding the bytes it left out to `cut`. A program that cuts it first, to keep its frame within a line, says in `cut` how many bytes it left out |
 | `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
 | `Usage` | `tokens`, `usd`, `label`, `scope`, `call_id` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable`. `call_id` names the call a `call` scope paid for |
 | `Compacted` | `forgotten`, `summary` | Context was compacted. `forgotten` holds the native ids of what left it, and `summary` the text that took its place |
@@ -357,7 +357,7 @@ may start for it. Starting an agent is a new process.
 Each report is a `report` notification whose params are the report, with its `type`: `ready`, `turn.started`, `turn.ended`, `delta`,
 `item`, `input.delivered`, `approval.requested`, `model.call`, `usage`, `compacted`, `child.seen`, `gap`, `native`, `exited`.
 
-- **`protocol`** is an integer, currently 1, and whichever side does not know the other's refuses it. Your side answers `-32002`.
+- **`protocol`** is an integer, currently 2, and whichever side does not know the other's refuses it. Your side answers `-32002`.
 - **Errors.** A method you cannot honor answers `-32001` with the reason, which surfaces as `DriverError`.
 - **Credentials never travel in a frame.** `spec.access` names variables, and their values are in your environment. So is the tool
   token, in `PLATOON_HARNESS_TOKEN`, with `PLATOON_HARNESS_URL` beside it. `ph` is on your `PATH`. A program that declares `sealed` may
@@ -629,8 +629,9 @@ until the model only talks. A tool call the model chose goes under the id the mo
 `_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
 `tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since its op would join the
 call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
-one in the same turn is answered as a repeat. A step that raises, of its own or of a subclass's, fails its turn saying what it
-raised, and the next turn runs.
+one in the same turn is answered as a repeat. `Ask(gist, body)` asks for an approval with `body` as its whole ask, and the approval
+its `shell`, or any tool of its own that `AskModel` meets, asks for carries the tool's name and its input as JSON. A step that
+raises, of its own or of a subclass's, fails its turn saying what it raised, and the next turn runs.
 
 ### Extensions
 

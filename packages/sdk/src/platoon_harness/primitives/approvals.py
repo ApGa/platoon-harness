@@ -7,10 +7,13 @@ from pydantic import BaseModel, Field
 from platoon_harness.kernel import GIST_LIMIT, Args, Event, Refused, Stamps, Txn, View, fold, op
 
 from .agents import Agent, Agents
-from .common import Gist, Name
+from .common import BodyRef, Gist, Name, inline_body
 from .sessions import SessionRecord
 
 Verdict = Literal["allow", "deny"]
+ASK_LIMIT = 64 * 1024
+"""How many bytes of an approval's ask its record keeps: as much as the journal holds in an event's own row, so that
+`blob.get` reads it."""
 
 
 class Approval(BaseModel, frozen=True):
@@ -102,13 +105,29 @@ def _decide(txn: Txn, id: str, agent: str, verdict: str, by: str, via: str | Non
     )
 
 
-def ask(txn: Txn, id: str, agent: Agent, gist: str) -> None:
-    """Record that a harness is waiting on a decision, then apply the role's policy. `ask` leaves it for a human."""
+def bounded(ask: str) -> tuple[bytes, int]:
+    """An ask as its record keeps it, in UTF-8: whole, or its first `ASK_LIMIT` bytes cut at the end of the last whole
+    character, and how many bytes of it that leaves out. Mask it first, as a cut can split a secret."""
+    whole = ask.encode(errors="replace")
+    if len(whole) <= ASK_LIMIT:
+        return whole, 0
+    kept = whole[:ASK_LIMIT].decode(errors="ignore").encode()
+    return kept, len(whole) - len(kept)
+
+
+def ask(txn: Txn, id: str, agent: Agent, gist: str, body: str | None = None, cut: int = 0) -> None:
+    """Record that a harness is waiting on a decision, with `body`, the whole of what it asks, as a body the journal
+    holds, and `cut`, the bytes of it that body leaves out. Then apply the role's policy, which `ask` leaves to a
+    person."""
     if txn.view(Approvals).get(id) is not None:
         raise Refused("conflict", f"approval {id} exists")
+    if body is not None and inline_body(txn, body) is None:
+        raise Refused("invalid", f"an ask is kept in a body the journal holds, of at most {ASK_LIMIT // 1024} KiB")
     role = txn.view(SessionRecord).settings().roles.get(agent.role)
     policy = "ask" if role is None else role.approvals
-    txn.emit("approval.requested", f"approval/{id}", gist=gist, agent=agent.name, data={"id": id, "policy": policy})
+    data = {"id": id, "policy": policy, "body": body, "cut": cut}
+    refs = [body] if body is not None else ()
+    txn.emit("approval.requested", f"approval/{id}", gist=gist, agent=agent.name, refs=refs, data=data, v=2)
     if policy != "ask":
         _decide(txn, id, agent.name, policy, "policy", "policy")
 
@@ -117,15 +136,18 @@ class Request(Args):
     id: Name
     agent: Name
     gist: Gist
+    body: BodyRef | None = None
+    cut: Annotated[int, Field(ge=0)] = 0
 
 
 @op("approval.request", on=lambda a: f"approval/{a.id}", runtime=True)
 def request(txn: Txn, a: Request) -> None:
-    """Record that a harness is waiting on a decision."""
+    """Record that a harness is waiting on a decision, with the whole of what it asks as `body`, of which `cut` bytes
+    were left out."""
     agent = txn.view(Agents).get(a.agent)
     if agent is None or agent.ended:
         raise Refused("not_found", f"no live agent {a.agent}")
-    ask(txn, a.id, agent, a.gist)
+    ask(txn, a.id, agent, a.gist, a.body, a.cut)
 
 
 class Resolve(Args):
