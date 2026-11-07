@@ -146,6 +146,7 @@ class Workspace(Screen[None]):
         self.attached: tuple[str, bytes] | None = None
         self.marks: dict[str, int] = {}
         self.unread: dict[str, int] = {}
+        self._unwritten: dict[str, int] = {}
         self.human = "human:you"
         self._given = session
         self._refused: dict[tuple[str, str], tuple[str, str]] = {}
@@ -196,9 +197,12 @@ class Workspace(Screen[None]):
         self.live.start(through)
 
     async def on_unmount(self) -> None:
-        """Leave as a guest leaves: the session, and its runtime, run on."""
+        """Leave as a guest leaves: the session, and its runtime, run on. Taking the screen down cancels its workers, so
+        each mark still being written is written first, and what you read stays read."""
         if self.live is not None:
             self.live.stop()
+            for stream, seq in list(self._unwritten.items()):
+                await self._mark_one(self.live.session, stream, seq)
             await self.live.session.leave()
 
     def left(self) -> str | None:
@@ -294,14 +298,21 @@ class Workspace(Screen[None]):
         for stream in focus.marks:
             if self.marks.get(stream, 0) < transcript.through:
                 self.marks[stream] = transcript.through
-                self.run_worker(self._mark_one(live.session, stream, transcript.through), group="marks")
+                self._write_mark(live.session, stream, transcript.through)
         self.unread[focus.key] = 0
+
+    def _write_mark(self, session: Session, stream: str, seq: int) -> None:
+        """Write a mark off the screen's loop, as a worker; until it is written, leaving writes it."""
+        self._unwritten[stream] = seq
+        self.run_worker(self._mark_one(session, stream, seq), group="marks")
 
     async def _mark_one(self, session: Session, stream: str, seq: int) -> None:
         try:
             await session.mark(stream, seq)
         except Refused as refused:
             self._lose_marks(refused)
+        if self._unwritten.get(stream) == seq:
+            del self._unwritten[stream]
 
     def _lose_marks(self, refused: Refused) -> None:
         """Say once that your marks cannot be kept, which loses only badges."""
@@ -949,7 +960,7 @@ class Workspace(Screen[None]):
 
         def read(seq: int) -> None:
             self.marks[stream] = seq
-            self.run_worker(self._mark_one(live.session, stream, seq), group="marks")
+            self._write_mark(live.session, stream, seq)
 
         snapshots = snapshots_of(live.roster)
         self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, self._test, snapshots))

@@ -847,6 +847,9 @@ named here is closed.
 
 ### Fixes
 
+- **A mark still being written as you leave the terminal UI is kept.** The workspace wrote each mark in a worker of its
+  screen, and leaving takes the screen down, which cancels its workers, so a channel read just before leaving could come back
+  unread, as a test found with marks written slowly. Leaving now writes each mark still being written before it goes.
 - **Estimators writing at once to a session with no annotations yet each write.** Every write switched `annotations.sqlite` to
   WAL, and SQLite refuses at once, rather than after its five-second wait, one of two writers that switch a new file to WAL
   together, so one of several first statements could be refused `unavailable: database is locked`, as one of sixteen was in a

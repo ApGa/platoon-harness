@@ -3,6 +3,7 @@ socket."""
 
 import asyncio
 import contextlib
+import threading
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -12,6 +13,7 @@ from rich.cells import cell_len
 from textual.strip import Strip
 
 from platoon_harness import Session, Team
+from platoon_harness import session as session_module
 from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives import delivery
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
@@ -528,6 +530,33 @@ async def test_a_channel_s_unread_count_and_a_mention_come_from_the_person_s_mar
         marked = await owner.marks()
         assert marked["inbox/you"] >= marked["channel/notes"] >= head
         assert await owner.head() == head, "reading wrote nothing to the journal"
+
+
+async def test_a_mark_still_being_written_as_you_leave_is_kept(root, monkeypatch):
+    """Leaving takes the screen down, which cancels the workers writing marks, so leaving writes what they had not."""
+    real, began, release = session_module._mark, threading.Event(), threading.Event()
+
+    def held(folder: Path, person: str, stream: str, seq: int) -> None:
+        if not began.is_set():  # The first write is still under way as you leave.
+            began.set()
+            release.wait(SECONDS)
+        real(folder, person, stream, seq)
+
+    monkeypatch.setattr(session_module, "_mark", held)
+    async with Session.start(team(), name="s", root=root, cwd=root) as owner:
+        await in_state(owner, "lead", "idle")
+        app = TerminalUI("s")
+        try:
+            async with app.run_test(size=(120, 32)) as pilot:
+                await drawn(pilot, lambda text: "@lead" in text)
+                assert await asyncio.to_thread(began.wait, SECONDS)
+                read = dict(workspace(app).marks)
+                await pilot.press("ctrl+q")
+            marked = await owner.marks()
+        finally:
+            release.set()
+
+    assert read and marked == read
 
 
 async def test_an_agent_s_row_counts_what_waits_for_its_next_handover(root):
