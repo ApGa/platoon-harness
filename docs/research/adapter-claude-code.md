@@ -251,7 +251,7 @@ Gray area to state honestly: the Consumer Terms automation clause allows "where 
 
 ## 8. Live probe
 
-Throwaway cwd, 14 s, one process, `--model haiku`, `--max-turns 3`, allowlisted env. Five real turns; estimated cost $0.0032 at list price. Fixture: `docs/research/fixtures/claude-stream-sample.jsonl` (283 lines; ids replaced by stable placeholders; paths, account, rate-limit, plugin and signature fields removed).
+Throwaway cwd, 14 s, one process, `--model haiku`, `--max-turns 3`, allowlisted env. Five real turns; estimated cost $0.0032 at list price. Fixture: `docs/research/fixtures/claude-stream-sample.jsonl` (283 lines; ids replaced by stable placeholders; paths, account, rate-limit, plugin and signature fields removed; on 2026-11-07, the two texts Claude Code itself wrote, its frame around a subagent's report and its message around a compaction's summary, reduced to placeholders that give their length).
 
 | # | Turn | Result |
 |---|---|---|
