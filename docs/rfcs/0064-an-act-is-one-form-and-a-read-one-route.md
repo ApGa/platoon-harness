@@ -16,8 +16,9 @@ one function of the command line's package, by one rule: every op but `wait` and
 person has none, and but a query, which a pane draws. Each is worded as its command's help, and runs through one form made from
 its schema, which asks once before each op the terminal asks about. Every pane of the page reads through one route, `/v1/x_read`,
 which answers in the command line package's words through the session's queries alone, where the kernel refuses an op that
-writes, so nothing can be written through it, and which a view link reaches. `x_provenance` becomes its `provenance` pane, and Needs you reads its `attention` pane. This is step 1 of 2:
-step 2 lets an attention action fix only the arguments it knows and leave the rest to its op's form.
+writes, so nothing can be written through it, and which a view link reaches. `x_provenance` becomes its `provenance` pane, and
+Needs you reads its `attention` pane. This is step 1 of 2: step 2 lets an attention action fix only the arguments it knows and
+leave the rest to its op's form.
 
 ## Motivation
 
@@ -61,11 +62,14 @@ and its own words say that driving the agent's native session is not built, as `
 
 ### 2. One form, made from the schema
 
-A form asks for each flag of the op's command, by its flag and in its help's words, and takes what the flag's type takes: text, yes
-or no, one of its choices, a whole number, a number, several separated by commas, JSON, or a body, whose text is stored as a body
-for the op to cite. A JSON field takes only JSON, and says why before anything is sent. A field left empty is left out, so the op's
-own default stands, and the kernel refuses a required one left out, saying which. `via`, what an act was decided through, is no
-field: each client says it, `tui` or `browser`, as each says it for an approval today.
+A form asks for each flag of the op's command, by its flag and in its help's words, saying whether it is needed, the choices it
+takes and what stands when it is left empty, and takes what the flag's type takes: text, yes or no, one of its choices, a whole
+number, a number, several separated by commas, JSON, or a body, whose text is made a ref as the command line makes its flag's, by
+one function of its package, `body_ref`: a body's ref as it stands, and any other text stored as a body for the op to cite. A JSON
+field takes only JSON, and says why before anything is sent. A field left empty is left out, so the op's own default stands, and
+the kernel refuses a required one left out, saying which, and a gist too long for one, as at the command line. `via`, what an act
+was decided through, is no field: each client says it, `tui` or `browser`, as each says it for an approval today. A form says what
+came of its act: done, with the op's result as text, or the refusal.
 
 Before an op in `CONFIRMED`, the form asks once. `CONFIRMED` is the command line package's list, the ops that end an agent or the
 session, erase a body, or run a commit's code as you, so an extension's op is never asked about: none needs it yet. Architecture
@@ -82,9 +86,11 @@ help. Choosing one opens its form.
 
 `view_info` gives the page each form, on any link. Commands, in the top bar, opens a palette of them, found by typing as Search
 finds, and choosing one opens its form in the pane, which the address names, `act=`, so the browser's Back and a reload keep it,
-and Esc or × closes it. A form says under it what came of its act: done, with the op's result as text, or the refusal. Each act
-keeps its key until it is answered ([RFC 0028](0028-acting-from-the-page.md)). On a view link and on history every field and its
-Run button are disabled, saying why, as the composer is.
+and Esc or × closes it. `web` completes the args of an op the person holds a form for as the terminal completes its form's,
+making each body's text a ref by `body_ref` and saying `via`, so the page sends a form's args as typed. The composer, which cuts a
+long text as the terminal's composer does, says its words as `text` beside a message's args, and `web` makes them its gist, while
+a form's `gist` goes as given. Each act keeps its key until it is answered ([RFC 0028](0028-acting-from-the-page.md)). On a view
+link and on history every field and its Run button are disabled, saying why, as the composer is.
 
 ### 5. One read route
 
