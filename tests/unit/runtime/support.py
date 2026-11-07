@@ -2,14 +2,17 @@
 reached as an attribute of this file."""
 
 import asyncio
+import os
 import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+import pytest
 from pydantic import Field
 
 from platoon_harness import Refused, Session, Team
+from platoon_harness.bwrap import Bubblewrap
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Driver
 from platoon_harness.kernel import Args, Extension, Kernel, Txn, op
@@ -18,6 +21,9 @@ from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequ
 from platoon_harness.testing import FakeModel, ScriptedDriver
 
 from ..kernel.support import dump
+
+REQUIRE_BWRAP = "PLATOON_HARNESS_REQUIRE_BWRAP"
+"""Set to 1 where bubblewrap must confine, as CI's test job sets it, so a test that needs it fails there, not skips."""
 
 # How long a wait here may take before it fails as a hang: it bounds no claim, so it is sized for the slowest machine
 # that runs the suite, GitHub's runners, whose disks made one git-heavy wait outlast 15 s.
@@ -167,3 +173,14 @@ async def of_type(session: Session, *types: str) -> list[Any]:
 async def offers(session: Session) -> list[Any]:
     """What was offered past each launch: handovers, notices and reads, and not the launch's own offer."""
     return [event for event in await of_type(session, "context.offered") if event.data["how"] != "launch"]
+
+
+def bubblewrap() -> Bubblewrap:
+    """Bubblewrap, where it confines here. Elsewhere the test skips, saying why, or fails where `REQUIRE_BWRAP` is 1."""
+    isolation = Bubblewrap()
+    if (why := isolation.refusal()) is not None:
+        reason = f"bubblewrap cannot confine here, so nothing was confined: {why}"
+        if os.environ.get(REQUIRE_BWRAP) == "1":
+            pytest.fail(f"{reason}, and {REQUIRE_BWRAP}=1 says it must", pytrace=False)
+        pytest.skip(reason)
+    return isolation

@@ -16,6 +16,8 @@ import pytest
 from platoon_harness.bwrap import Bubblewrap, extension
 from platoon_harness.testing import check_extension
 
+from . import support
+
 pytestmark = pytest.mark.timeout(60)
 
 SECONDS = 30.0
@@ -23,10 +25,7 @@ SECONDS = 30.0
 
 @pytest.fixture
 def bwrap() -> Bubblewrap:
-    isolation = Bubblewrap()
-    if (why := isolation.refusal()) is not None:
-        pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why}")
-    return isolation
+    return support.bubblewrap()
 
 
 @pytest.fixture
@@ -89,6 +88,20 @@ def test_the_probe_says_why_bwrap_cannot_confine_here(tmp_path, monkeypatch):
         "`bwrap` cannot confine anything here, as where user namespaces are blocked: No permissions to create new "
         "namespace"
     )
+
+
+def test_a_bubblewrap_that_cannot_confine_fails_where_ci_requires_it_and_skips_elsewhere(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    monkeypatch.delenv(support.REQUIRE_BWRAP, raising=False)
+    with pytest.raises(pytest.skip.Exception) as skipped:
+        support.bubblewrap()
+    monkeypatch.setenv(support.REQUIRE_BWRAP, "1")
+    with pytest.raises(pytest.fail.Exception) as failed:
+        support.bubblewrap()
+
+    reason = "bubblewrap cannot confine here, so nothing was confined: `bwrap` is not on PATH: install bubblewrap"
+    assert str(skipped.value) == reason
+    assert str(failed.value) == f"{reason}, and PLATOON_HARNESS_REQUIRE_BWRAP=1 says it must"
 
 
 def test_a_wrapped_command_writes_only_its_folder_and_a_tmp_of_its_own(bwrap, tmp_path):

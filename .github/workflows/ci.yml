@@ -48,8 +48,9 @@ jobs:
 
   # The fast suite on each Python the packages' classifiers name. UV_PYTHON has uv sync and uv run use the job's
   # Python. Ubuntu's AppArmor keeps unprivileged processes from making user namespaces, which bubblewrap needs, so the
-  # job lifts that restriction before the tests. Git 2.47.3 is the only git the workspace tests have run on, so an older
-  # one fails the job.
+  # job lifts that restriction before the tests, and PLATOON_HARNESS_REQUIRE_BWRAP has a test that needs bubblewrap fail,
+  # not skip, if it cannot confine here all the same. Git 2.47.3 is the only git the workspace tests have run on, so an
+  # older one fails the job.
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -58,6 +59,7 @@ jobs:
         python: ["3.12", "3.13"]
     env:
       UV_PYTHON: ${{ matrix.python }}
+      PLATOON_HARNESS_REQUIRE_BWRAP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

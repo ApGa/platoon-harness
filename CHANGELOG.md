@@ -681,6 +681,9 @@ named here is closed.
   leaves the rest to its op's form, so a client that runs every action as it stands would write words or limits the person never
   gave. The view is at version 6, and keeps what each budget scope was last set to, so an older session's is refolded as it
   opens.
+- **The bubblewrap tests fail in CI rather than skip.** A test that needs bubblewrap to confine skipped wherever it
+  could not, so CI would have passed had its runners stopped confining. `PLATOON_HARNESS_REQUIRE_BWRAP=1`, which CI's
+  `test` job sets, now makes each such test fail there, saying why, and elsewhere they skip as before.
 - **CI's actions pinned to commits, and its token reading only.** Each action a workflow uses is pinned to a commit,
   with its release beside it, where a tag its owner could move named it, so a moved tag changes nothing CI runs. Each
   commit is the one its tag named, so nothing CI runs changed. Each workflow's token reads the repository and nothing

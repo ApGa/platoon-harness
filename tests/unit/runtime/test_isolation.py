@@ -3,14 +3,12 @@ snapshot whose harness, and the runtime's own git in its tree, run under its iso
 
 import os
 import pwd
-import shutil
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from platoon_harness import ConfigError, Session, Team
-from platoon_harness.bwrap import Bubblewrap
 from platoon_harness.drivers import AgentSpec, DriverInfo, Login, Reporter
 from platoon_harness.kernel import Extension
 from platoon_harness.runtime import isolation
@@ -18,7 +16,7 @@ from platoon_harness.runtime.paths import agent_folder
 from platoon_harness.testing import ScriptedDriver
 
 from .gitting import Working, commit, repository
-from .support import extension, harness, in_state, of_type, until
+from .support import bubblewrap, extension, harness, in_state, of_type, until
 from .test_workspaces import problems_of, workspace_of
 
 pytestmark = pytest.mark.timeout(60)
@@ -243,8 +241,7 @@ async def stops(session: Session) -> list[Any]:
 
 @pytest.fixture
 def confining() -> None:
-    if shutil.which("bwrap") is None or (why := Bubblewrap().refusal()) is not None:
-        pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why or 'bwrap is not on PATH'}")
+    bubblewrap()
 
 
 @pytest.mark.usefixtures("confining")

@@ -23,7 +23,6 @@ from urllib.parse import urlsplit
 import pytest
 
 from platoon_harness import ConfigError, Refused, Session, Team
-from platoon_harness.bwrap import Bubblewrap
 from platoon_harness.config import Secret, forms
 from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.drivers.levels import CHECKED, Conformance
@@ -319,8 +318,7 @@ async def test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback(tmp_path
     harness: Harness = made()
     if harness.named == "pi" and shutil.which("pi") is None:
         pytest.skip("pi is not installed, so no isolated harness met its gateway here")
-    if (why := Bubblewrap().refusal()) is not None:
-        pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why}")
+    support.bubblewrap()
     monkeypatch.setattr(support, "SECONDS", harness.seconds)
     root, cwd = tmp_path / "root", repository(tmp_path / "work", monkeypatch)
     write_conformance(root, await harness.proves(tmp_path / "check"))

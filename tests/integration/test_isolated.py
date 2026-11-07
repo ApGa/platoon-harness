@@ -20,7 +20,6 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
-from platoon_harness.bwrap import Bubblewrap
 from platoon_harness.runtime.paths import agent_folder, socket_path
 from platoon_harness.testing import FakeModel, ToolCall
 
@@ -242,8 +241,7 @@ def evidence(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFa
     harness = HARNESSES[request.param]
     if not harness.installed():
         pytest.skip(f"{harness.program} is not installed, so no isolated harness ran here")
-    if (why := Bubblewrap().refusal()) is not None:
-        pytest.skip(f"bubblewrap cannot confine here, so nothing was confined: {why}")
+    support.bubblewrap()
     with pytest.MonkeyPatch.context() as monkeypatch:
         return asyncio.run(confined(harness, tmp_path_factory.mktemp(harness.program), monkeypatch))
 

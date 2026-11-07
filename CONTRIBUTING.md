@@ -131,7 +131,7 @@ While you work, run what you touch, such as `uv run pytest -q tests/unit/primiti
 
 | Tests | Skip when |
 |---|---|
-| `tests/unit/runtime/test_bwrap.py`, and those of `tests/unit/runtime/test_isolation.py` on real bubblewrap | `bwrap` is not on `PATH`, or cannot confine here, as where unprivileged user namespaces are blocked. Ubuntu's AppArmor blocks them unless `kernel.apparmor_restrict_unprivileged_userns` is 0, which CI's `test` job sets |
+| `tests/unit/runtime/test_bwrap.py`, and those of `tests/unit/runtime/test_isolation.py` on real bubblewrap | `bwrap` is not on `PATH`, or cannot confine here, as where unprivileged user namespaces are blocked. Ubuntu's AppArmor blocks them unless `kernel.apparmor_restrict_unprivileged_userns` is 0, which CI's `test` job sets. Where `PLATOON_HARNESS_REQUIRE_BWRAP=1`, as CI's `test` job sets it, they fail instead, saying why |
 | One test of `tests/unit/runtime/test_bwrap.py` | There is no writable folder outside `/tmp` |
 | One test each of `tests/unit/tools/test_ph.py` and `tests/unit/tools/test_shim.py` | The machine has no system `python3` |
 | One test of `tests/unit/drivers/test_process.py` | There is no `/dev/full` |
@@ -245,7 +245,7 @@ changes nothing CI runs, and each checkout keeps no credentials for a later step
 |---|---|---|
 | `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
-| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs | git is older than 2.47, or a test fails |
+| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs, and with `PLATOON_HARNESS_REQUIRE_BWRAP=1` | git is older than 2.47, bubblewrap cannot confine, or a test fails |
 | `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it, as the workflow says, which no runner has shown yet | A browser test fails in that browser |
 | `build`, of the release workflow | Every distribution built and checked, as [Releases](#releases) says, and nothing published | A build or a check fails |
 
