@@ -139,6 +139,10 @@ def hostile() -> Team:
     return Team.model_validate({"roles": {"lead": {"harness": inside("hostile")}}})
 
 
+ESCAPED = "kestrel \\x1b]0;owned\\x1b\\"
+"""The hostile agent's words as its transcript shows them, escaped. The navigator cuts them short of this."""
+
+
 def _shown(screen: pyte.Screen) -> str:
     return "\n".join(screen.display)
 
@@ -154,10 +158,10 @@ def _read(master: int, within: float) -> bytes | None:
 
 
 def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
-    """`platoon-harness attach` on a real terminal, read through an emulator until it shows the agent's words, then
-    left by typing `/quit`, with keys every terminal delivers: the screen as it was then, and every byte it wrote. The
-    terminal reads until the program has gone, as a real one does: one that stops reading blocks the program's writes,
-    and Textual's exit waits for them."""
+    """`platoon-harness attach` on a real terminal, read through an emulator until its transcript shows the agent's
+    words, then left by typing `/quit`, with keys every terminal delivers: the screen as it was then, and every byte it
+    wrote. The terminal reads until the program has gone, as a real one does: one that stops reading blocks the
+    program's writes, and Textual's exit waits for them."""
     environ = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "30"}
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
@@ -171,7 +175,7 @@ def attached_in_a_pty(session: str) -> tuple[pyte.Screen, bytes]:
     stream = pyte.ByteStream(screen)
     try:
         deadline = time.monotonic() + 30
-        while not all(said in _shown(screen) for said in ("kestrel", "/ commands")) and time.monotonic() < deadline:
+        while not all(said in _shown(screen) for said in (ESCAPED, "/ commands")) and time.monotonic() < deadline:
             if (chunk := _read(master, 1.0)) is None:
                 break
             written += chunk
@@ -200,7 +204,7 @@ async def test_no_escape_from_an_agent_ever_reaches_the_terminal(tmp_path):
     screen, written = await asyncio.to_thread(attached_in_a_pty, "s")
     shown = _shown(screen)
 
-    assert "kestrel \\x1b]0;owned\\x1b\\" in shown
+    assert ESCAPED in shown
     assert shown.splitlines()[-1].split()[:2] == ["/", "commands"]
     assert b"\x1b]0;owned" not in written and b"\x1b]52;" not in written and b"\x1bc" not in written
     assert "\x9b".encode() not in written and "‮".encode() not in written
