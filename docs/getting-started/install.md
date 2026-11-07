@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- **Linux.** Continuous integration runs on Ubuntu, and nothing has run on macOS ([STATUS](../STATUS.md)).
+- **Linux.** Nothing has run on macOS ([STATUS](../STATUS.md)).
 - **Python 3.12 or 3.13**, the two that CI tests, and [uv](https://docs.astral.sh/uv/), which finds one or downloads it.
 - **The harnesses you want, on your PATH,** signed in as you usually are: `claude`, `codex` or `pi`. OpenHands needs no
   binary: see [OpenHands](#openhands).
