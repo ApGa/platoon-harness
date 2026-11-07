@@ -47,15 +47,21 @@ def loopback(host: str) -> bool:
         return False
 
 
+def wildcard(host: str) -> bool:
+    """Whether `host` is a wildcard address, or a name that resolves to one, as `0` does. A name that resolves to
+    nothing is left to the listen, which says so."""
+    try:
+        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return False
+    return any(ipaddress.ip_address(info[4][0]).is_unspecified for info in found)
+
+
 def tls_for(host: str, certificate: Path | None, key: Path | None) -> ssl.SSLContext | None:
     """TLS for `host`, which any address but loopback needs."""
     if (certificate is None) != (key is None):
         raise Usage("give --certificate and --key together")
-    try:
-        unspecified = ipaddress.ip_address(host).is_unspecified
-    except ValueError:
-        unspecified = False
-    if unspecified:
+    if wildcard(host):
         raise Usage(f"--host {host} names no one address that a browser's requests could name: name the one to serve")
     if certificate is None or key is None:
         if not loopback(host):

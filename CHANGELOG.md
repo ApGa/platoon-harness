@@ -882,6 +882,9 @@ named here is closed.
 
 ### Fixes
 
+- **A name that resolves to a wildcard is refused to `web`.** `web` refused a wildcard only written as an address, so
+  `--host 0`, which resolves to `0.0.0.0`, passed with TLS and served every interface. It now resolves the name and
+  refuses it if any address it has is a wildcard.
 - **A link opened over the page draws nothing first.** The page loaded again for a new link opened in its tab, but first
   drew the address it was leaving, whose read the reload cut off, which Firefox reports as an uncaught error.
 - **A stopped session's folder holds no credential.** A runtime left its `owner.token` and `view.token` in the folder when it

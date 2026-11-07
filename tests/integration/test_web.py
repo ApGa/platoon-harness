@@ -162,13 +162,13 @@ async def test_web_refuses_an_address_other_than_loopback_without_tls(cli: Cli):
     await said(serving, "serving session s")
 
     remote = await cli.run("web", "s", "--host", "192.0.2.7")
-    wildcard = await cli.run("web", "s", "--host", "0.0.0.0")
+    wildcards = [await cli.run("web", "s", "--host", host) for host in ("0.0.0.0", "::", "0")]
     halves = await cli.run("web", "s", "--certificate", "cert.pem")
     await cli.run("session", "stop", "s")
     await finished(serving)
 
-    assert [remote.code, wildcard.code, halves.code] == [64, 64, 64]
-    assert "needs TLS" in remote.stderr and "names no one address" in wildcard.stderr
+    assert [remote.code, *(wildcard.code for wildcard in wildcards), halves.code] == [64] * 5
+    assert "needs TLS" in remote.stderr and all("names no one address" in wildcard.stderr for wildcard in wildcards)
 
 
 def health(address: str, authority: str) -> int:

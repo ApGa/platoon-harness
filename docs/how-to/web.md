@@ -188,7 +188,8 @@ is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 What the whole of platoon-harness protects, and what it does not, is in [security.md](../security.md). The page's part:
 
 - **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
-  is refused without them. A wildcard such as `0.0.0.0` is refused, since a browser's requests must name the host served.
+  is refused without them. A wildcard such as `0.0.0.0` or `::`, or a name that resolves to one, as `0` does, is
+  refused, since a browser's requests must name the host served.
   A session on a plan login is served on loopback alone, and another address exits 78, saying why: one started with
   `--plan-login`, one of whose agents' harnesses came up last on a plan login, or one with a role that names no auth
   profile and whose harness says, by its own status command, that it is signed in on one, as a control link can spawn an
