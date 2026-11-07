@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **A team written from the terminal UI.** With nothing where the project's `platoon-harness.toml` goes, the sessions
+  screen offers once, as it opens, to write the team `init` writes from the harnesses on your PATH, and `y` takes the
+  offer. It writes over nothing, nor through a link, and says nothing was written if something came to be there while it
+  asked. With no harness on your PATH it says so. A newcomer needed `init` on the command line before `n` could start a
+  session. That this, and what `doctor` finds, are what the sessions screen reaches is the default, pending the owner's
+  ruling.
 - **Every op you hold that writes, from the page.** Commands, in the page's top bar, lists a form for each op the session's
   `ops.list` says you hold, an extension's among them, but a query and `wait` and the ops on a wait, by the rule the terminal's
   palette keeps. Choosing one opens its form in the pane: what the op does, as its command's help says it, and a field per

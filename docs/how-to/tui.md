@@ -12,8 +12,9 @@ see what changed and where a line came from.
 
 - `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
   environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
-- a session to open, such as [your first session](../getting-started/first-session.md)'s, which runs with no keys, or a team
-  to start one from, with its harnesses on your PATH and signed in as you usually are.
+- a session to open, such as [your first session](../getting-started/first-session.md)'s, which runs with no keys, or the
+  harnesses you use on your PATH, signed in as you usually are, to start one, from a team of yours or one the sessions
+  screen writes.
 
 ## Open it
 
@@ -55,9 +56,13 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 
 ## The sessions screen
 
-Every session under the root, whether a runtime holds it and its state, and it works with none. `n` starts one from the
-project's `platoon-harness.toml` or a team file. When several agents would run on your own plan login it asks once whether
-this is your own work, which is the SDK's `plan_login`. `r` resumes a session whose runtime has gone, after saying that it
+Every session under the root, whether a runtime holds it and its state, and it works with none. With nothing where the
+project's `platoon-harness.toml` goes, in the folder you started it in, it offers once, as it opens, to write one from the
+harnesses on your PATH, as `init` does: a lead on the first, which starts workers on the second. Only `y` takes the offer,
+and turned down it is not made again until the screen opens anew. It writes over nothing, nor through a link: anything put
+there meanwhile stays as it is, and it says nothing was written. With no harness on your PATH it says so. `n` starts a
+session from the project's `platoon-harness.toml` or a team file. When several agents would run on your own plan login it
+asks once whether this is your own work, which is the SDK's `plan_login`. `r` resumes a session whose runtime has gone, after saying that it
 can spend money. `s` stops one as its owner would, after one confirmation, and it stays resumable. Enter opens one: live
 as a guest, or as read-only history when no runtime holds it, with `/resume` offered to resume it. `/detach` comes back
 here from a session opened here, which runs on. `l` looks again, `?` shows every key, `p` opens the palette and `q`

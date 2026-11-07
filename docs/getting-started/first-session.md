@@ -107,3 +107,7 @@ otherwise, with exit 78. `platoon-harness run --plan-login` with a job then runs
 your logins, as [the headless quickstart](../how-to/headless.md#3-run-it) shows, and `platoon-harness` alone opens the
 terminal UI, whose sessions screen starts a session from the project's team.
 [The team file reference](../reference/team-file.md) lists every key the team file may set.
+
+You can set up the same team with no command line but `platoon-harness` itself. Where no team is, the sessions screen
+offers once, as it opens, to write the one `init` writes, and `y` takes the offer. It never overwrites a file either, and
+`n` then starts a session from it.

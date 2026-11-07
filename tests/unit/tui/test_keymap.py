@@ -9,6 +9,7 @@ from textual.actions import parse
 from textual.binding import Binding
 
 from platoon_harness import Session, Team
+from platoon_harness.config import PROJECT_FILE
 from platoon_harness.testing import ScriptedDriver
 from platoon_harness_cli.main import build
 from platoon_harness_cli.tui.app import TerminalUI
@@ -152,6 +153,8 @@ async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_o
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / PROJECT_FILE).write_text('[roles.lead]\nharness = "claude"\n')
     app = TerminalUI()
     async with app.run_test(size=(80, 24)) as pilot:
         await pilot.press("question_mark")

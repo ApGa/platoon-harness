@@ -16,14 +16,18 @@ from pathlib import Path
 
 import pyte
 import pytest
+from textual.content import Content
+from textual.widgets import Static
 
 from platoon_harness import Session, Team
-from platoon_harness.config import Manifest
+from platoon_harness.config import PROJECT_FILE, Manifest
 from platoon_harness.kernel import is_held
 from platoon_harness.runtime.paths import read_running
+from platoon_harness_cli import machine
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
+from platoon_harness_cli.tui.dialogs import Confirm, Help
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
@@ -37,9 +41,11 @@ pytestmark = pytest.mark.timeout(90)
 
 @pytest.fixture(autouse=True)
 def importable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """A detached runtime is another process, and it must find the harnesses these tests name."""
+    """A detached runtime is another process, and it must find the harnesses these tests name. Each test works in a
+    folder of its own, where the sessions screen looks for the project's team."""
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
 
 
 def saying() -> Team:
@@ -232,8 +238,7 @@ def sessions_of(app: TerminalUI) -> Sessions:
 async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_detached_runtime(tmp_path):
     """Enter in the form goes to its next field, and from the last starts the session. Ctrl+D comes back to the
     sessions screen, and the session runs on."""
-    team = tmp_path / "crew.toml"
-    team.write_text(f'[roles.lead]\nharness = "{inside("saying")}"\n')
+    (tmp_path / PROJECT_FILE).write_text(f'[roles.lead]\nharness = "{inside("saying")}"\n')
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         footer = (await drawn(pilot, lambda text: "No sessions yet" in text)).splitlines()[-1]
@@ -241,7 +246,7 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
 
         await pilot.press("n")
         await pilot.pause()
-        await pilot.press(*str(team), "enter", *"crew", "enter")
+        await pilot.press("enter", *"crew", "enter")
         assert not isinstance(app.screen, Workspace)
         await pilot.press(*"yes", "enter")
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
@@ -260,15 +265,14 @@ async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
     """Started from the sessions screen, a message sent, an approval answered from the dock reached by Shift+Tab, the
     agent interrupted, then detached and quit, with letters, Enter, Esc, Shift+Tab and the arrows alone, which every
     terminal delivers, as a terminal that keeps chords for itself, such as an editor's, does not."""
-    team = tmp_path / "crew.toml"
-    team.write_text(f'[roles.lead]\nharness = "{inside("asks_then_hangs")}"\n')
+    (tmp_path / PROJECT_FILE).write_text(f'[roles.lead]\nharness = "{inside("asks_then_hangs")}"\n')
     folder = tmp_path / "sessions" / "crew"
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "No sessions yet" in text)
         await pilot.press("n")
         await pilot.pause()
-        await pilot.press(*str(team), "enter", *"crew", "enter", *"yes", "enter")
+        await pilot.press("enter", *"crew", "enter", *"yes", "enter")
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         guest = await Session.attach("crew")
 
@@ -298,14 +302,13 @@ async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
 
 
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(tmp_path):
-    team = tmp_path / "crew.toml"
-    team.write_text(f'[roles.lead]\nharness = "{inside("planned")}"\ncount = 2\n')
+    (tmp_path / PROJECT_FILE).write_text(f'[roles.lead]\nharness = "{inside("planned")}"\ncount = 2\n')
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "No sessions yet" in text)
         await pilot.press("n")
         await pilot.pause()
-        await pilot.press(*str(team), "tab", *"crew", "tab", *"yes", "enter")
+        await pilot.press("tab", *"crew", "tab", *"yes", "enter")
         text = await drawn(pilot, lambda text: "your own work?" in text)
         assert "lead would run several agents headless on one plan login" in text
 
@@ -322,6 +325,7 @@ async def test_stopping_a_session_takes_one_confirmation_and_resuming_says_it_ca
     await in_state(guest, "lead", "idle")
     await guest.leave()
     folder = tmp_path / "sessions" / "s"
+    (tmp_path / PROJECT_FILE).write_text(f'[roles.lead]\nharness = "{inside("saying")}"\n')
     app = TerminalUI()
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "live" in text)
@@ -343,6 +347,113 @@ async def test_stopping_a_session_takes_one_confirmation_and_resuming_says_it_ca
         await pilot.press("y")
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         assert is_held(folder)
+        await pilot.press("ctrl+q")
+
+
+def on_path(monkeypatch: pytest.MonkeyPatch, folder: Path, *names: str) -> None:
+    """Harnesses on PATH that each say a version and exit at once, which none can start on, and nothing else on it but
+    the system's own."""
+    found = folder / "bin"
+    found.mkdir(exist_ok=True)
+    for name in names:
+        (found / name).write_text('#!/bin/sh\n[ "$1" = --version ] && echo "9.9.9 (fake)"\nexit 0\n')
+        (found / name).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{found}:/usr/bin:/bin")
+
+
+def asked(app: TerminalUI) -> str:
+    """The question open over the screen, whole however its dialog wraps it, or nothing."""
+    screen = app.screen
+    if not isinstance(screen, Confirm):
+        return ""
+    question = screen.query(Static).first().content
+    return question.plain if isinstance(question, Content) else str(question)
+
+
+def settled(app: TerminalUI) -> bool:
+    """The sessions screen shows, with nothing it set going still under way: no look, and no offer."""
+    return isinstance(app.screen, Sessions) and all(worker.is_finished for worker in app.workers)
+
+
+OFFER = "No team is in {}. Write platoon-harness.toml there from the harnesses on PATH: {}?"
+
+
+async def test_with_no_team_the_sessions_screen_offers_once_to_write_one_from_the_harnesses_on_path(
+    tmp_path, monkeypatch
+):
+    """With none on PATH it says so and asks nothing. Turned down, it is not offered again as the screen looks again or
+    comes back to the top. Taken, as the screen opens anew, it writes what `init` writes, and the screen starts
+    sessions from that."""
+    project = tmp_path / PROJECT_FILE
+    on_path(monkeypatch, tmp_path)
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text and settled(app))
+        said = f"No team is in {tmp_path}, and none can be written there: none is on PATH: install one of "
+        assert [notice.message for notice in app._notifications] == [said + "claude, codex, pi"]
+        await pilot.press("ctrl+q")
+
+    on_path(monkeypatch, tmp_path, "claude", "codex")
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda _: asked(app))
+        assert asked(app) == OFFER.format(tmp_path, "a lead on claude, which starts workers on codex")
+
+        await pilot.press("n")
+        await drawn(pilot, lambda text: "No sessions yet. n starts one from a team file." in text and settled(app))
+        await pilot.press("l")
+        await drawn(pilot, lambda _: settled(app))
+        await pilot.press("question_mark")
+        await drawn(pilot, lambda _: isinstance(app.screen, Help))
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: settled(app))
+        assert not project.exists(follow_symlinks=False)
+        await pilot.press("ctrl+q")
+
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda _: asked(app))
+        await pilot.press("y")
+        await drawn(pilot, lambda text: "No sessions yet. n starts one from platoon-harness.toml." in text)
+        said = (
+            "Wrote platoon-harness.toml: a lead on claude, which starts workers on codex. n starts a session from it."
+        )
+        assert said in [notice.message for notice in app._notifications]
+        await pilot.press("ctrl+q")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    assert machine.init() == 0
+    assert (elsewhere / PROJECT_FILE).read_text() == project.read_text()
+
+
+@pytest.mark.parametrize("planted", ["file", "link"])
+async def test_writing_a_team_from_the_tui_never_overwrites_nor_writes_through_a_link(tmp_path, monkeypatch, planted):
+    """A file, or a link to a file that is not there, put where the team goes while the offer is open, stays as it
+    was, and the link makes no file. Once anything is there, nothing is offered."""
+    on_path(monkeypatch, tmp_path, "claude")
+    project, linked = tmp_path / PROJECT_FILE, tmp_path / "linked.toml"
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda _: asked(app))
+        if planted == "file":
+            project.write_text("# mine\n")
+        else:
+            project.symlink_to(linked)
+        await pilot.press("y")
+        await drawn(pilot, lambda _: settled(app))
+        notices = [notice.message for notice in app._notifications]
+        assert f"Nothing was written, as something is at {PROJECT_FILE} now" in "".join(notices), notices
+        await pilot.press("ctrl+q")
+
+    assert not linked.exists(follow_symlinks=False)
+    assert project.readlink() == linked if planted == "link" else project.read_text() == "# mine\n"
+
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text and settled(app))
+        assert not app._notifications
         await pilot.press("ctrl+q")
 
 

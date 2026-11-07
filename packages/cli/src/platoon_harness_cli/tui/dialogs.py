@@ -18,8 +18,8 @@ columns."""
 
 
 class Confirm(ModalScreen[bool]):
-    """One confirmation of an act that cannot be taken back, or that can spend money. Only `y` says yes, so a key
-    pressed for something else never does."""
+    """One confirmation of an act that cannot be taken back, that can spend money, or that writes a file. Only `y` says
+    yes, so a key pressed for something else never does."""
 
     BINDINGS = bindings("question")
 

@@ -5,8 +5,9 @@ import os
 import re
 import shutil
 import socket
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from cyclopts import App
 
@@ -264,6 +265,41 @@ def _said_checked(name: str, checked: dict[str, Any] | None) -> str:
     return f"checked on {checked['version']}: {counted}, and {', '.join(checked['failed'])} failed{unmet}"
 
 
+@dataclass(frozen=True)
+class Starter:
+    """The team `init` writes from the harnesses on PATH: a lead on the first, which starts workers on the second, or on
+    the first again where it is alone. It writes no auth profile, so it passes over `openhands`, which signs in only
+    with a key from one."""
+
+    lead: str
+    worker: str
+
+    @classmethod
+    def on_path(cls) -> Self:
+        candidates = [name for name, driver in harnesses() if not isinstance(driver, OpenHandsDriver)]
+        found = [name for name in candidates if shutil.which(name)]
+        if not found:
+            raise ConfigError([Problem("harness", f"none is on PATH: install one of {', '.join(candidates)}")])
+        return cls(found[0], found[min(1, len(found) - 1)])
+
+    @property
+    def said(self) -> str:
+        return f"a lead on {self.lead}, which starts workers on {self.worker}"
+
+    def write(self) -> None:
+        """Write it here as the project file, over nothing and through no link: anything there, a link to nothing
+        among them, raises `FileExistsError`."""
+        team = {
+            "roles": {"lead": {"harness": self.lead, "may_spawn": ["worker"]}, "worker": {"harness": self.worker}},
+            "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}},
+        }
+        with open(PROJECT_FILE, "x") as file:
+            file.write(
+                f"# A team for this project: {self.said}.\n# `platoon-harness team show` says what it allows.\n\n"
+            )
+            file.write(dumps(team))
+
+
 def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
@@ -276,26 +312,15 @@ def init() -> int:
         platoon-harness team show
         platoon-harness run "Fix the flaky test"
     """
-    candidates = [(name, driver) for name, driver in harnesses() if not isinstance(driver, OpenHandsDriver)]
-    found = [(name, driver) for name, driver in candidates if shutil.which(name)]
-    if not found:
-        names = ", ".join(name for name, _ in candidates)
-        raise ConfigError([Problem("harness", f"none is on PATH: install one of {names}")])
-    lead, worker = found[0], found[min(1, len(found) - 1)]
-    team = {
-        "roles": {"lead": {"harness": lead[0], "may_spawn": ["worker"]}, "worker": {"harness": worker[0]}},
-        "topology": {"manager-worker": {"manager": "lead", "workers": "worker"}},
-    }
-    said = f"a lead on {lead[0]}, which starts workers on {worker[0]}"
+    starter = Starter.on_path()
     try:
-        with open(PROJECT_FILE, "x") as file:
-            file.write(f"# A team for this project: {said}.\n# `platoon-harness team show` says what it allows.\n\n")
-            file.write(dumps(team))
+        starter.write()
     except FileExistsError:
         note(f"{PROJECT_FILE} exists, and init writes over nothing: edit it, or move it away first")
         return REFUSED
-    plan = any(_login(driver) == "plan" for _, driver in {lead, worker})
-    note(f"wrote {PROJECT_FILE}: {said}")
+    drivers = dict(harnesses())
+    plan = any(_login(drivers[name]) == "plan" for name in {starter.lead, starter.worker})
+    note(f"wrote {PROJECT_FILE}: {starter.said}")
     note('run it with `platoon-harness run "..."`' + (", adding --plan-login on your own plan login" if plan else ""))
     return 0
 

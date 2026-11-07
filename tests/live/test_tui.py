@@ -16,6 +16,7 @@ from platoon_harness import Session
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.dialogs import Confirm
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Dock
@@ -75,10 +76,11 @@ def chosen(app: TerminalUI) -> dict:
 
 
 async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, monkeypatch):
-    """Budget: at most 30 model calls, counted from the journal. Started from the sessions screen, with the plan login
-    asked about once; the job sent from the composer; the worker's approval answered from the dock; its live text seen;
-    a memo queued for it, then the worker interrupted mid-turn, the memo staying quiet; then a detach back to the
-    sessions screen, an attach from a new app, and the session seen to settle. Each act is in the journal once."""
+    """Budget: at most 30 model calls, counted from the journal. Started from the sessions screen, its offer of a team
+    turned down for the one in a team file, with the plan login asked about once; the job sent from the composer; the
+    worker's approval answered from the dock; its live text seen; a memo queued for it, then the worker interrupted
+    mid-turn, the memo staying quiet; then a detach back to the sessions screen, an attach from a new app, and the
+    session seen to settle. Each act is in the journal once."""
     assert len(JOB) <= GIST_LIMIT, "the job must go as one gist, which the checks below compare, before any cost"
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "root"))
     work = seeded(tmp_path / "work")
@@ -87,7 +89,9 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
 
     app = TerminalUI()
     async with app.run_test(size=(140, 40)) as pilot:
-        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await drawn(pilot, lambda _: isinstance(app.screen, Confirm), within=60)
+        await pilot.press("n")
+        await drawn(pilot, lambda text: "No sessions yet" in text and isinstance(app.screen, Sessions))
         await pilot.press("n")
         await pilot.pause()
         await pilot.press(*"crew.toml", "enter", *"live-tui", "enter", "enter")

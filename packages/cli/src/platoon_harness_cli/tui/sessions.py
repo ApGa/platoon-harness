@@ -1,5 +1,5 @@
 """The sessions screen: every session under the root and how each stands, and opening, starting, resuming or stopping
-one."""
+one, and with no team here, writing one."""
 
 import asyncio
 from functools import partial
@@ -16,6 +16,7 @@ from platoon_harness import ConfigError, Refused, Session
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.runtime.paths import find_root, listing
 
+from ..machine import Starter
 from ..sessions import ask_to_stop
 from ..teams import Source
 from .dialogs import Confirm, Form
@@ -46,6 +47,8 @@ class Sessions(Screen[None]):
         footer = [part for key in keys("sessions") if key.footer for part in ((key.shown, "bold"), f" {key.name}  ")]
         self.query_one("#footer", Static).update(Content.assemble(*footer))
         self.action_look()
+        if not Path(PROJECT_FILE).exists(follow_symlinks=False):
+            self.offer_team()
 
     def on_screen_resume(self) -> None:
         self.action_look()
@@ -81,6 +84,29 @@ class Sessions(Screen[None]):
         team = PROJECT_FILE if Path(PROJECT_FILE).exists() else "a team file"
         empty = Content.styled(f"No sessions yet. n starts one from {team}.", "dim")
         self.query_one("#said", Static).update(Content("") if rows else empty)
+
+    @work(group="act")
+    async def offer_team(self) -> None:
+        """Offer once, as the screen opens with nothing where the project's team goes, to write one from the harnesses
+        on PATH, as `init` does, over nothing and through no link. With none on PATH, say so."""
+        here = Path.cwd()
+        try:
+            starter = await asyncio.to_thread(Starter.on_path)
+        except ConfigError as error:
+            what = "; ".join(problem.what for problem in error.problems)
+            note(self, f"No team is in {here}, and none can be written there: {what}", severity="warning")
+            return
+        question = f"No team is in {here}. Write {PROJECT_FILE} there from the harnesses on PATH: {starter.said}?"
+        if not await self.app.push_screen_wait(Confirm(SafeText(question))):
+            return
+        try:
+            await asyncio.to_thread(starter.write)
+        except FileExistsError:
+            said = f"Nothing was written, as something is at {PROJECT_FILE} now: a team is written over nothing, "
+            note(self, said + "nor through a link", severity="warning")
+            return
+        note(self, f"Wrote {PROJECT_FILE}: {starter.said}. n starts a session from it.")
+        self.action_look()
 
     def _chosen(self) -> str | None:
         return self.query_one(Rows).cursor
