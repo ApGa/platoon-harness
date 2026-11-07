@@ -13,12 +13,12 @@
 
 A driver's `approval.requested` report gains `body`, the whole of what its harness asks to do: the command, the patch or the
 tool's input, as the harness gave it. The host masks it as it masks every report, keeps its first 64 KiB, cut at a character's
-end, and counts in `cut` the bytes it left out. The record's `approval.requested` names that body, so `blob.get` reads an
-approval's whole ask at `approval/<id>@1`, and a body can be redacted as any can. `claude`, `codex`, `pi`, the OpenHands worker,
-`ScriptedDriver` and a wire program each send it, and a wire program that sends none still asks. Codex names no patch when it asks
-about a file change, so its driver joins the request's `itemId` to the patch of the item Codex started under that id. A new check,
-`approval_shows_its_ask`, proves on each real binary against FakeModel that an approval carries the whole command it asks about.
-This is step 1 of 2: step 2 shows the whole ask in both clients before anyone answers it.
+end, and counts in `cut` the bytes it left out. The record's `approval.requested` names that body, so a client reads an approval's
+whole ask by its ref, `blob.get` pages its lines at `approval/<id>@1`, and a body can be redacted as any can. `claude`, `codex`,
+`pi`, the OpenHands worker, `ScriptedDriver` and a wire program each send it, and a wire program that sends none still asks. Codex
+names no patch when it asks about a file change, so its driver joins the request's `itemId` to the patch of the item Codex started
+under that id. A new check, `approval_shows_its_ask`, proves on each real binary against FakeModel that an approval carries the
+whole command it asks about. This is step 1 of 2: step 2 shows the whole ask in both clients before anyone answers it.
 
 ## Motivation
 
@@ -56,12 +56,13 @@ out.
 ### 2. The host masks it, then bounds it
 
 The host masks every report with the credentials the agent holds, in each form a text can carry one, before it takes it, and the
-ask is masked with the rest. Then it keeps the ask whole up to 64 KiB, the most the journal holds in an event's own row, and past
+ask is masked with the rest. Then it keeps the ask whole up to 64 KiB, the most the journal holds in an event's own body, and past
 that its first 64 KiB, cut at the end of the last whole character, adding the bytes it left out to `cut`. It stores what it kept as
 a body, as it stores an item's. Masking comes first, so a cut never splits a secret into a part the mask would miss.
 
 The bound is the host's, and not each driver's, so every driver and a wire program in any language get it without a rule of their
-own, and no ask reaches the journal unbounded. An ask is cut at a character's end, and not at a line's, as a patch is
+own, and no ask reaches the journal unbounded. A patch's record and a test's output keep the same 64 KiB, so an ask is held as
+they are, in the journal and not in `blobs/`. An ask is cut at a character's end, and not at a line's, as a patch is
 ([RFC 0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md)), since an ask is often one line, a command or a tool's input as
 JSON, and a cut at a line's end would keep nothing of it.
 
@@ -74,14 +75,15 @@ records them at payload version 2:
 {"id": "a1", "policy": "ask", "body": "sha256:…", "cut": 0}
 ```
 
-The event's body is the ask, so a client reads it by the body's ref, as it reads any body, and `blob.get` reads it at
-`approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body held in the
-journal's row. An agent reads its own, as the event is its, and nobody else's. A body the journal does
-not hold in its row, one past 64 KiB or one a person redacted, is refused `invalid`, as `blob.get` could not read it, and the host
-then answers the approval `deny`, as it does any approval the journal refuses. `body.tombstone` redacts an ask as it redacts any
-body, for a secret the mask did not know, and redacted content does not come back: the same ask asked again is refused, and its
-approval answered `deny` with nobody asked.
-A version 1 payload has neither field, which a reader takes as an ask nobody said and nothing cut. The `Approvals` view and the
+The event's body is the ask, so a client reads it whole by the body's ref, as it reads any body. `blob.get` reads it at
+`approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body, and a line
+longer than one result holds, some 12 KiB, comes back with `text` null and nothing to page on to. Claude Code's, pi's and the
+OpenHands worker's asks are one line, and so is a command, so such an ask past a page is read by its ref only. An agent reads its
+own, as the event is its, and nobody else's. A body the journal does not hold itself, one past 64 KiB or one a person redacted, is
+refused `invalid`, so the op holds to the bound as the host does, and the host then answers the approval `deny`, as it does any
+approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body, for a secret the mask did not know, and
+redacted content does not come back: the same ask asked again is refused, and its approval answered `deny` with nobody asked. A
+version 1 payload has neither field, which a reader takes as an ask nobody said and nothing cut. The `Approvals` view and the
 attention row are unchanged: a client reads the ask by its ref when it shows it.
 
 ### 4. What each driver sends
@@ -122,11 +124,11 @@ exists outside this repository.
 
 ## The hard parts
 
-- **A secret outside the known set.** The mask knows the credentials the agent holds, and an ask can carry one it does not, a key a
-  model read from a file and put into a command. It becomes a stored body. `body.tombstone` redacts it, and the person who sees it
-  first is the one deciding, which is the reason to show it. A tombstone redacts the body and not the gist, which can hold the
-  ask's first 280 characters and which nothing redacts, so a secret among them stays. A model often asks again after a denial, and the same ask, once
-  redacted, is refused and denied with nobody asked, and its agent lives on.
+- **A secret outside the known set.** The mask knows the credentials the agent holds, and an ask can carry one it does not, a key
+  a model read from a file and put into a command. It becomes a stored body. `body.tombstone` redacts it, and the person who sees
+  it first is the one deciding, which is the reason to show it. A tombstone redacts the body and not the gist, which can hold the
+  ask's first 280 characters and which nothing redacts, so a secret among them stays. A model often asks again after a denial, and
+  the same ask, once redacted, is refused and denied with nobody asked, and its agent lives on.
 - **A large ask on the wire.** A wire program's line is at most 16 MiB, and one past it stops the agent with a gap. A program with
   an ask that large cuts it and says so in `cut`.
 - **Hostile text.** An ask is whatever a model wrote. Step 2 draws it through `SafeText` in the terminal and as text under the
@@ -139,7 +141,7 @@ exists outside this repository.
 | A longer gist | A gist is what any client shows for any event, at most 280 characters, and an event's data holds 16 KiB. A patch or a file's text is a body |
 | Each driver cuts the ask, as `Native.raw` is cut | Every driver and wire program, in any language, would have to mask and then cut in bytes. One that did not would either have its report refused, leaving its harness waiting on an approval nobody sees, or reach the journal unbounded. The host already masks every report |
 | Cut at a line's end, as a patch is | An ask is often one line, a command or a tool's input as JSON, and would keep nothing |
-| Keep an ask of any size | A body past 64 KiB is held outside the journal's row, in `blobs/`, which no op reads, so `blob.get` would give no text |
+| Keep an ask of any size | An ask is whatever a model wrote, so with no bound one record could grow without end. 64 KiB is what the journal holds in an event's own body, as a patch's record and a test's output keep, and past it a body is held in `blobs/` |
 | Carry the ask on the attention row or the `Approvals` view | A row is in every watcher's snapshot, and 64 KiB a row would cost each one. The ask is read by its ref when a client shows it |
 | Codex: every request's params as JSON, a command's too | A person reads a command as the shell runs it, and JSON escapes its quotes |
 | Codex: the patch from `turn/diff/updated` | That is the whole turn's diff, not the item's, and it is said after the item starts |
@@ -184,6 +186,8 @@ exists outside this repository.
   FakeModel, in each harness's `test_the_<harness>_driver_conforms`, and on `ScriptedDriver` and a wire program in
   `tests/conformance`. With `echo` in place of `touch`, no approval came from Claude Code 2.1.319, which ran the command unasked and
   sent its output to the model as the tool's result.
-- The bound is the most the journal holds in an event's own row, 64 KiB, as for a test's output and a patch. How often an ask
-  passes it is unmeasured: a command is short, and an `Edit`, a `Write` or a patch carries the text it writes (UNVERIFIED).
+- The bound is the most the journal holds in an event's own body, 64 KiB, as for a test's output and a patch. `blob.get` gives no
+  text for a one-line ask longer than one result holds, as `test_a_one_line_ask_past_a_page_is_read_whole_by_its_ref` in
+  `tests/unit/primitives/test_approvals.py` keeps. How often an ask passes it is unmeasured: a command is short, and an `Edit`, a
+  `Write` or a patch carries the text it writes (UNVERIFIED).
 - The tests named in the rollout plan's M1.

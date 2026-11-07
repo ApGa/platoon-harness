@@ -8,6 +8,7 @@ from platoon_harness import Session
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.primitives.approvals import ASK_LIMIT
+from platoon_harness.primitives.common import RESULT_LIMIT
 from platoon_harness.testing import Ask
 
 from ..runtime import support as running
@@ -232,3 +233,21 @@ async def test_an_ask_past_its_bound_is_cut_and_says_where(tmp_path):
     assert asked.data["cut"] == len(whole.encode()) - len(kept)
     assert kept.decode().startswith(read["text"]) and read["lines"] == kept.count(b"\n") + 1
     assert asked.gist == "run the long one?"
+
+
+async def test_a_one_line_ask_past_a_page_is_read_whole_by_its_ref(tmp_path):
+    """As Claude Code's ask is, a tool's name and its input as JSON: `blob.get` pages whole lines, and gives no text for
+    one longer than its page, and a reader takes the ask whole by its body's ref."""
+    whole = "Write " + json.dumps({"file_path": "big.py", "content": "x = 1\n" * 4000})
+    team = running.solo([Ask("write big.py?", body=whole)])
+
+    async with Session.start(team, root=tmp_path, clock=ManualClock(1000.0)) as session:
+        await running.in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        [asked] = await running.until(lambda: running.of_type(session, "approval.requested"), session)
+        read = await session.blob(f"{asked.stream}@{asked.version}")
+        kept = await session.get_body(asked.data["body"])
+
+    assert RESULT_LIMIT < len(whole) < ASK_LIMIT and "\n" not in whole
+    assert (read["text"], read["lines"], read["rest"]) == (None, 1, None)
+    assert kept.decode() == whole and asked.data["cut"] == 0

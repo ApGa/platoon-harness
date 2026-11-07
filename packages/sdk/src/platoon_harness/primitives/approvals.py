@@ -12,8 +12,8 @@ from .sessions import SessionRecord
 
 Verdict = Literal["allow", "deny"]
 ASK_LIMIT = 64 * 1024
-"""How many bytes of an approval's ask its record keeps: as much as the journal holds in an event's own row, so that
-`blob.get` reads it."""
+"""How many bytes of an approval's ask its record keeps: as much as the journal holds in an event's own body, as for a
+patch. A reader takes it whole by its ref, as `blob.get` pages whole lines and gives no text for one past a result."""
 
 
 class Approval(BaseModel, frozen=True):
