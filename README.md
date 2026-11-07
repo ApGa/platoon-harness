@@ -3,9 +3,6 @@
 Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions
 you can watch, steer, resume and read back.
 
-Bring the agent harnesses you already use, such as Claude Code, Codex and pi, together as a team: durable multi-agent
-sessions with explicit coordination primitives, a terminal UI, a browser client, and honest provenance.
-
 What it gives you:
 
 - **The harnesses you already use, on your own logins.** Claude Code, Codex and pi run as you installed them, signed in
