@@ -1018,8 +1018,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 
 | Config | Enforcement | Shown to the agent | UI |
 |---|---|---|---|
-| `edges` | `message.send` checked against the target's relations | `message_send`, `peers`; absent with no edges | DMs; the team view draws reachable pairs |
-| `channels` | Verb and selector checked on every write and read page | Verbs by kind, only for held grants | topic: channel; board: board view; queue: tasks view |
+| `edges` | `message.send` checked against the target's relations | `message_send`, `peers`; absent with no edges | DMs; the team view draws reachable pairs (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) |
+| `channels` | Verb and selector checked on every write and read page | Verbs by kind, only for held grants | topic: channel; board: board view (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)); queue: tasks view (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)) |
 | `groups` | Membership from the live graph; generation in every broadcast | `+name` | Sidebar section |
 | `may_spawn`, `limits` | Atomic admission with reservation | `agent_spawn` only if non-empty | Tree; refusal reason |
 | `delivery` | Negotiated with the driver, degraded visibly | Nothing | "Queued until turn end" |

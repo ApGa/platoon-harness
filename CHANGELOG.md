@@ -524,9 +524,10 @@ named here is closed.
 
 - **The architecture page marks what STATUS calls planned.** [docs/architecture.md](docs/architecture.md) sends a newcomer to
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking
-  STATUS: the library tier, `topology.patch` and `topology.show`, `session.metrics`, the ACP driver, the step that adds the
-  session id at export, a person driving an agent's native session during a takeover, the agent interaction graph's display, and
-  refusing an address other than loopback to a session on a plan login.
+  STATUS: the library tier, `topology.patch` and `topology.show`, the topology table's team, board and tasks views,
+  `session.metrics`, the ACP driver, the step that adds the session id at export, a person driving an agent's native session
+  during a takeover, the agent interaction graph's display, and refusing an address other than loopback to a session on a plan
+  login.
 - **Guides that say what you will do and need.** The how-to guides and the training guide open with their goal and
   prerequisites, and a section that is a task is headed by what you do there, the headless guide's as numbered steps. Their
   sentences are unchanged.
