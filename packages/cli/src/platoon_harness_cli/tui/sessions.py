@@ -184,11 +184,12 @@ class Sessions(Screen[None]):
             return  # Its runtime went, which the workspace says.
 
     async def _say_what_doctor_finds_of(self, agent: str | None, harness: Any) -> None:
-        """Say what `doctor` finds of an agent's harness that could not start. A harness a command names is none it
+        """Say what `doctor` finds of an agent's harness that could not start, run in this terminal, whose environment
+        the runtime it started has, so on the PATH the harness was looked for on. A harness a command names is none it
         looks for."""
         found = await asyncio.to_thread(finding, harness) if isinstance(harness, str) else None
         if found is not None:
-            note(self, f"@{agent} could not start, and doctor finds {harness} {found}", severity="error")
+            note(self, f"@{agent} could not start, and doctor, run here, finds {harness} {found}", severity="error")
 
     @work(group="act")
     async def action_resume(self) -> None:

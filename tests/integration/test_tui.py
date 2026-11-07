@@ -473,7 +473,7 @@ async def test_a_harness_that_cannot_start_says_what_doctor_finds(tmp_path, monk
         await pilot.press("n")
         await pilot.pause()
         await pilot.press("enter", *"crew", "enter", "enter")
-        told = f"@lead could not start, and doctor finds {claude}"
+        told = f"@lead could not start, and doctor, run here, finds {claude}"
         await drawn(pilot, lambda text: "lead failed" in text and told in [n.message for n in app._notifications])
         await pilot.press("ctrl+q")
 

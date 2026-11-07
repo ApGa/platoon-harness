@@ -64,8 +64,10 @@ anything put there meanwhile stays as it is, and it says nothing was written. Wi
 `n` starts a session from the project's `platoon-harness.toml` or a team file. When several agents would run on your own
 plan login it asks once whether this is your own work, which is the SDK's `plan_login`. An agent the session starts with
 whose harness cannot start fails, as the workspace shows, and for a harness `doctor` looks for, the terminal UI also
-says what `doctor` finds of it, in its words: not on PATH, or its version, the kind of its login and what its checks
-found. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
+says what `doctor` finds of it, run in this terminal, in its words: not on PATH, or its version, the kind of its login
+and what its checks found. The session's runtime has this terminal's environment, so PATH is the one the harness was
+looked for on, but an agent in an isolated workspace keeps its harness's state in a home of its own, so the login
+`doctor` names is this terminal's, not that harness's. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
 would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
 on. `l` looks again, `?` shows every key, `p` opens the palette and `q` quits. In a form, Enter goes to the next field,
