@@ -1,6 +1,7 @@
 """Nothing the repository holds names the machines it was built on or anyone's account: no site, host, reservation,
 resource type, account or group of theirs, no path into a home directory, group storage or a per-user data directory, no
-key, and no email address but one under `.invalid`, which IETF RFC 2606 keeps from ever naming an account.
+key of a shape Anthropic, OpenAI, GitHub or AWS gives out, and no email address but one under `.invalid`, which IETF RFC
+2606 keeps from ever naming an account.
 
 The scan covers every text file git tracks and every new file it does not ignore outside hidden directories, and the
 names of all of them. A file is text when its first 8000 bytes hold no NUL byte, as git judges it. A file may hold what
@@ -40,11 +41,14 @@ BANNED_PATTERNS = (
     re.compile(r"(?<![\w.~$-])/(?:groups|gs)(?=/)"),
     re.compile(r"(?<![\w.-])user_data/(?!<)[\w.-]+"),
     re.compile(r"ANTHROPIC_API_KEY=s[k]-|s[k]-ant-"),
+    re.compile(r"(?<![\w-])s[k]-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?<![\w-])(?:g[h][pousr]_[A-Za-z0-9]{36,}|git[h]ub_pat_[A-Za-z0-9_]{22,})"),
+    re.compile(r"(?<![A-Z0-9])(?:A[K]IA|A[S]IA)[A-Z0-9]{16}(?![A-Z0-9])"),
     re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?!invalid\b)[A-Za-z]{2,}\b"),
 )
 """A path into a home directory, group storage or a per-user data directory, whoever it belongs to, but a URL's path and
-a `<placeholder>` for the account; a key, its letters bracketed so that this file does not match itself; and an email
-address."""
+a `<placeholder>` for the account; a key, Anthropic's, then OpenAI's, a GitHub token and an AWS access key id, their
+letters bracketed so that this file does not match itself; and an email address."""
 ALLOWED: dict[tuple[str, str], str] = {
     (f"packages/{package}/pyproject.toml", "7fccfaca2ed8a3a9110f45f36230e10f0a66acf1eb1051407532bc492279bde8"): (
         "the author's contact, which each package publishes"
@@ -177,6 +181,26 @@ HOME, USERS, GROUPS = ("/".join(("", top, "someone", "notes")) for top in ("home
 )
 def test_the_scan_tells_a_local_path_from_a_path_in_a_repository(line, caught):
     assert bool(_hits(line)) == caught
+
+
+def test_the_scan_catches_openai_github_and_aws_key_shapes():
+    """Each key is made here from parts, so that this file holds none, and each near miss is a shape the repository
+    holds on purpose or one too short to be a key."""
+    tail = "a1B2c3D4" * 6
+    keys = [
+        "s" + "k-" + tail,
+        "s" + "k-proj-" + tail,
+        "s" + "k-svcacct-" + tail,
+        "g" + "hp_" + tail[:36],
+        "g" + "hs_" + tail[:36],
+        "git" + "hub_pat_" + tail[:22] + "_" + tail,
+        "AK" + "IA" + "Q3EXAMPLE7KEYID9",
+        "AS" + "IA" + "Q3EXAMPLE7KEYID9",
+    ]
+    near = ["api_key = " + "s" + "k-hunter2", "task-" + tail, "g" + "hp_" + tail[:20], "AK" + "IA" + "Q3EXAMPLE7KEY"]
+
+    assert [key for key in keys if _hits(f"token = {key}\n") != [f"line 1: {key!r}"]] == []
+    assert [line for line in near if _hits(line)] == []
 
 
 def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(tmp_path, made_up_bans):
