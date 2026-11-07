@@ -79,7 +79,10 @@ async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(roo
         await pilot.press("alt+d")
         text = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
         head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
-        marked = await until(owner.marks, owner, lambda marks: marks.get("repo/repo", 0) >= newest)
+        await pilot.pause()  # The review has looked at its end, so the mark is being written.
+        for worker in [worker for worker in pilot.app.workers if worker.group == "marks"]:
+            await worker.wait()
+        marked = await owner.marks()
         await pilot.press("escape")
         await pilot.press("alt+d")
         again = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
