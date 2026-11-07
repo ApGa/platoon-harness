@@ -41,6 +41,7 @@ what it found. `openhands` is there once the SDK's `openhands` extra is installe
 ```console
 $ platoon-harness init
 platoon-harness: wrote platoon-harness.toml: a lead on claude, which starts workers on codex
+platoon-harness: run it with `platoon-harness run "..."`, adding --plan-login on your own plan login
 $ platoon-harness team show
 lead (claude) may message its workers and you. Workers (codex) may message lead.
 lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.

@@ -18,7 +18,7 @@ from platoon_harness import Team
 from platoon_harness.config import Manifest
 from platoon_harness.runtime.paths import read_conformance
 
-from .cli import EXECUTABLE, SECONDS, Cli, Done, checked, crew, finished, line_where, said, solo
+from .cli import EXECUTABLE, ROOT, SECONDS, Cli, Done, checked, crew, finished, line_where, said, solo
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -697,6 +697,35 @@ async def test_init_writes_a_starter_from_the_harnesses_found_and_never_overwrit
     assert Team.loads(written).roles["worker"].harness == "codex"
     assert second.code == 1 and (cli.folder / "platoon-harness.toml").read_text() == written
     assert checked.code == 0, checked.stdout
+
+
+def plan_logins(cli: Cli) -> None:
+    """`claude` and `codex` on PATH, each saying a version, and a plan login as its own status command says one."""
+    folder = cli.folder / "bin"
+    folder.mkdir()
+    statuses = {
+        "claude": """[ "$1 $2" = "auth status" ] && echo '{"authMethod": "claude.ai"}'""",
+        "codex": """[ "$1 $2" = "login status" ] && echo "Logged in using ChatGPT" >&2""",
+    }
+    for name, status in statuses.items():
+        (folder / name).write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo "9.9.9 (fake)"\n{status}\nexit 0\n')
+        (folder / name).chmod(0o755)
+    cli.env["PATH"] = f"{folder}:/usr/bin:/bin"
+
+
+@pytest.mark.parametrize("page", ["how-to/headless.md", "getting-started/first-session.md"])
+async def test_a_guide_s_init_team_show_and_team_check_print_what_it_shows(cli: Cli, page: str):
+    """Each of the three commands prints the lines the guide's block shows below it, and nothing else, on the plan
+    logins of `claude` and `codex` that the guide's own `doctor` shows."""
+    blocks = re.findall(r"^```console\n(.*?)^```$", (ROOT / "docs" / page).read_text(), re.MULTILINE | re.DOTALL)
+    block = next(block for block in blocks if "$ platoon-harness init\n" in block)
+    printed = dict(part.partition("\n")[::2] for part in re.split(r"^\$ ", block, flags=re.MULTILINE)[1:])
+    plan_logins(cli)
+
+    for command in ("platoon-harness init", "platoon-harness team show", "platoon-harness team check --plan-login"):
+        done = await cli.run(*command.split()[1:])
+
+        assert (done.code, done.stderr + done.stdout) == (0, printed[command]), command
 
 
 async def test_init_writes_through_no_link_to_a_file_that_is_not_there(cli: Cli):
