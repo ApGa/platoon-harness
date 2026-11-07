@@ -28,8 +28,9 @@ What it gives you:
 - **Provenance.** What reached each agent, what it rests on, whose work an outcome reaches, and credit beside the
   journal, each row its named producer's statement ([provenance](docs/how-to/provenance.md)).
 - **A training contract.** The one contract a training system builds on, whose SDK half is tested. Platoon's own
-  extension, `platoon-teams`, builds on it in a fork of Platoon's repository, not released, and no team has trained on a
-  GPU yet ([training](docs/extending/training.md)).
+  extension, `platoon-teams`, builds on it in a fork of Platoon's repository, not released. Teams of pi agents have trained
+  through it on a GPU, per-span credit included, and an OpenHands team has run its rollouts through it, one seed each,
+  ranking nothing ([training](docs/extending/training.md)).
 
 ## Concepts
 
@@ -146,8 +147,9 @@ async def main() -> None:
 Milestones 0 (inspect and decide) and 1 (a working vertical slice) are done, 1 on Linux: a team of real harnesses,
 started, watched and steered from the terminal UI, the browser or the command line. Milestones 2 (dependable
 coordination) and 3 (training with Platoon) are in progress: the SDK's half of the training contract is tested, and the
-bridge lives on a branch of a fork of Platoon's repository. Milestone 4 (production polish) is planned. Nothing has run
-on macOS. [docs/STATUS.md](docs/STATUS.md) says what is implemented, what is tested and how, and what is planned.
+bridge lives on a branch of a fork of Platoon's repository, through which teams have trained on a GPU. Milestone 4
+(production polish) is planned. Nothing has run on macOS. [docs/STATUS.md](docs/STATUS.md) says what is implemented, what
+is tested and how, and what is planned.
 Nothing is published to PyPI yet.
 
 ## Documentation
