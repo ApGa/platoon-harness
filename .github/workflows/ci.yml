@@ -18,16 +18,20 @@ concurrency:
 env:
   UV_PYTHON_PREFERENCE: only-managed
 
+# setup-uv publishes no major tag since v8, so it is pinned to a release. It caches nothing: jobs that start together on one
+# cache key race to save it, and each that loses warns.
 jobs:
   # Every hook of the pre-commit stage on every file: ruff's lint and format, and ty. `--locked` fails when uv.lock is
   # out of date with a pyproject.toml, rather than locking again on the runner.
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
 
       - name: Install dependencies
         run: uv sync --locked
@@ -48,10 +52,12 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
 
       - name: Install bubblewrap
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
@@ -72,10 +78,12 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
 
       - name: Install dependencies
         run: uv sync --locked
