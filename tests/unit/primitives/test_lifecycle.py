@@ -914,26 +914,36 @@ async def test_on_parent_exit_adopt_gives_orphans_to_the_session(kernel, ada):
 
 
 async def test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_under_way(kernel, ada):
-    """A turn on its way, by a goal not begun, a wake that is due or a handover its harness took, has not begun."""
+    """A turn on its way, by a goal not begun, a wake that is due, a wait that holds, or a handover under way or taken
+    and not landed, has not begun."""
+    await channel(kernel, "news", delivery="pull")
     lead = await spawn(kernel, "lead", role="lead")
-    for name in ("idle", "parked", "busy", "woken", "taken"):
+    for name in ("idle", "parked", "busy", "woken", "answered", "offered", "taken"):
         await spawn(kernel, name, role="linked", by=lead, goal="")
     await spawn(kernel, "unbegun", role="linked", by=lead)
     await start_turn(kernel, "parked")
     result_of(await kernel.submit(agent("parked"), "wait", {"from": ["lead"]}))
     await end_turn(kernel, "parked")
+    await start_turn(kernel, "answered")
+    placed = result_of(await kernel.submit(agent("answered"), "wait", {"channels": ["#news"]}))
+    await end_turn(kernel, "answered")
+    await send(kernel, ada, "#news", "here it is")
     await start_turn(kernel, "busy")
     await send(kernel, ada, "@woken", "go on")
-    await send(kernel, ada, "@taken", "go on")
-    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "taken"}))
+    for name in ("offered", "taken"):
+        await send(kernel, ada, f"@{name}", "go on")
+        handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name}))
     await settle_effects(kernel, "taken")
     await confirm(kernel, "taken", handed["input"])
-    children = ("idle", "parked", "busy", "woken", "taken", "unbegun")
+    children = ("idle", "parked", "busy", "woken", "answered", "offered", "taken", "unbegun")
+    assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["waits"] == [placed["id"]]
     assert [state_of(kernel, name)["state"] for name in children] == [
         "idle",
         "waiting",
         "running",
         "idle",
+        "waiting",
+        "waking",
         "waking",
         "idle",
     ]
@@ -945,6 +955,8 @@ async def test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_
         "parked": "retired",
         "busy": "cancelled",
         "woken": "retired",
+        "answered": "retired",
+        "offered": "retired",
         "taken": "retired",
         "unbegun": "retired",
     }

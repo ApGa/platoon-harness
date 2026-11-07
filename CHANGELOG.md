@@ -750,9 +750,9 @@ named here is closed.
   never to finish lost to the preamble in run 21.
 - **A child idle at its parent's end is retired, not cancelled.** A child that ends with its parent ends `retired` unless a turn
   of its is under way, which its end cuts and which still ends it `cancelled`, as Platoon drops a cancelled child's tokens. A
-  parked child is retired, and so is one on its way to a turn, by a goal not begun, a wake due or a handover its harness took
-  and began no turn on, as that turn has not begun. `session.cancel` still cancels every agent, each parent before its
-  children, so that no report goes to a parent ending with it. See
+  parked child is retired, and so is one on its way to a turn, by a goal not begun, a wake that is due, a wait that holds, or a
+  handover under way or taken and not landed, as that turn has not begun. `session.cancel` still cancels every agent, each
+  parent before its children, so that no report goes to a parent ending with it. See
   [RFC 0062](docs/rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md).
 - **Refusals over an agent that stays say what to do.** An agent's `wait` for the end of one that stays is refused while it has
   not ended, naming `from`, a refusal over working children names `from` for one that stays, and a `max_children` refusal says

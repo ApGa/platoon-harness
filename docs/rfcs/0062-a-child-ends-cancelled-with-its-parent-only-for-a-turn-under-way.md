@@ -67,10 +67,10 @@ SDK, as one end read two ways is a contract with two meanings. How often it happ
 ## Evidence
 
 - [tests/unit/primitives/test_lifecycle.py](../../tests/unit/primitives/test_lifecycle.py),
-  `test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_under_way`: six children of a parent that is
-  cancelled, one idle, one parked, one in a turn, one with a wake due, one holding a handover it took with no turn begun and one
-  with a goal not begun, of which only the one in a turn ends `cancelled`. On the code before this record the three on their way
-  end `cancelled` too.
+  `test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_under_way`: eight children of a parent that is
+  cancelled, one idle, one parked, one in a turn, and five on their way to a turn, by a wake that is due, a wait that holds, a
+  handover under way, a handover taken with no turn begun and a goal not begun, of which only the one in a turn ends
+  `cancelled`. On the code before this record the five on their way end `cancelled` too.
 - The bridge's rule for its close, which reads an agent it cancels with no turn under way as retired, and its fixtures, in
   Platoon's `platoon-teams`, kept outside this repository.
 - [Architecture section 7](../architecture.md), Lifecycle.
