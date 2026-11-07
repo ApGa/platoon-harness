@@ -1,5 +1,7 @@
 # Architecture
 
+> New here? Read [Concepts](getting-started/concepts.md) first.
+
 This is the design of record. When code and this page disagree, one of them has a bug. Status lives in
 [STATUS.md](STATUS.md); decisions and their alternatives live in [rfcs/](rfcs/); upstream facts live in
 [compatibility.md](reference/compatibility.md).
@@ -310,7 +312,7 @@ writes them. It stays a type, since `model` is a column of every journal's `even
 A payload changes shape only with its `v`, and a fold that reads a field an older payload lacks fills it with what held when that
 payload was written, so a journal from before the change folds as it was meant.
 
-The session id is a constant of the file and is added only at export. An op cannot pass `seq`, `version`, `actor`,
+The session id is a constant of the file and is added only at export (planned: see [STATUS](STATUS.md#command-line-platoon_harness_cli)). An op cannot pass `seq`, `version`, `actor`,
 `wall_time` or the stamps. Its one say in `actor` is `runtime=True`, for what the runtime posts inside someone else's command,
 such as the monitor; it can name nobody else. The kernel takes the rest from cheap state at `emit`:
 
@@ -566,7 +568,7 @@ to do next.
 
 | Area | Commands | Queries |
 |---|---|---|
-| Session | `session.close` `session.cancel` `topology.patch` `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `topology.show` `ops.list` `budget.status` |
+| Session | `session.close` `session.cancel` `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `topology.show` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `ops.list` `budget.status` |
 | Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `agent.unread` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
@@ -594,7 +596,7 @@ check decides what it shows.
 
 ### Library tier
 
-`platoon_harness.patterns` uses the public API only: `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
+`platoon_harness.patterns` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) uses the public API only: `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
 `lock`, `request`, `vote`, `supervisor`, `population`, `map_reduce`, `verifier_generator`. These are compositions, never
 scheduler modes.
 
@@ -870,7 +872,7 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   before its children, so that no report goes to a parent ending with it.
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While it is at work, in a turn or
   on its way to one, it is refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
-- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session, which records the gap `takeover` where
+- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)), which records the gap `takeover` where
   the hold begins; `agent.release` returns it, to its open turn if it has one. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
 
 ### Completion
@@ -1036,8 +1038,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   lists them at launch and `peers` as they stand; tool schemas never enumerate them.
 - **Runtime evolution.** `spawn` adds members and journals `group.changed`. `channel.create` is a grant: a creator may use what
   it makes, and may name only readers and writers within its own reach. For an agent each selector means those it covers at that
-  moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` comes
-  from a human or program, and every event carries `topology_rev`.
+  moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives))
+  comes from a human or program, and every event carries `topology_rev`.
 - **`team check`** runs before any cost and reports everything at once. It refuses recursive spawning without `max_depth`, whether
   by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, a
   `program`, since none runs yet and a team left to one would get nothing it waits for, and an unknown preset, harness, extension,
@@ -1213,7 +1215,7 @@ the host commits all of this through `agent.start`, and a report has no field fo
 | `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. A thread whose `thread/start` or `thread/resume` names a `cwd` other than `spec.cwd` is refused. Under `workspace-write` and `read-only` its sandbox keeps `.git` read-only, so a commit outside the session's checkout waits on an approval, and `team check` names the three postures. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the agent's own, so no saved login pays: `-c` names it as the app-server starts, as from 0.167.0 a thread runs on no other, and the thread gives it its URL, as argv names no secret |
 | `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. An input is said to land under the id of the entry pi wrote it down as, which `get_entries` names from the last entry seen once its message has ended, and what pi says after it waits behind it, so the reports keep pi's order. The extension puts pi's own id for a call of ours among its arguments as `_meta`, which the shim moves to where MCP keeps it, so the call's op goes under `pi/toolCallId`, which its tool item holds. `message_end` gives `model.call`, with `responseId`, which is the response's own id. `compaction_end` gives a `model.call` of purpose `compaction`, one by each id our extension kept or one with none for pi's own, and `forgotten` from `get_entries`. Our extension says, as a status `ready` waits for, which tools pi declares once ours have connected, as pi says nothing when a server's tools arrive. Sealed, on a gateway: a context window stated that no context reaches, as pi takes one unstated as none and would compact after every turn, an agent directory of its own, `PI_CODING_AGENT_DIR` in the agent's folder, whose settings retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve` and `--offline`, and the environment's server beside ours; our extension takes `session_before_compact` and runs pi's own `compact` with the gateway's compaction headers and a stream function that keeps each of its one or two calls' ids, which reach the driver in the details pi keeps of the compaction |
 | `openhands` | Wire worker on SDK `arun()`, from the SDK's `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers` |
-| ACP agents | Generic driver, protocol 1, `fs` and `terminal` false | Turn boundary only; raw frames captured before parsing; `steer` only after a fixture passes. OpenCode must set `codemode: false`, or tools hide behind Code Mode, and must never run with an unset model |
+| ACP agents (planned: see [STATUS](STATUS.md#drivers-platoon_harnessdrivers-platoon_harnessrpc-platoon_harnesstesting)) | Generic driver, protocol 1, `fs` and `terminal` false | Turn boundary only; raw frames captured before parsing; `steer` only after a fixture passes. OpenCode must set `codemode: false`, or tools hide behind Code Mode, and must never run with an unset model |
 
 ## 10. Tool plane
 
@@ -1306,7 +1308,7 @@ says one. Tool descriptions, refusals and handovers stay fixed. See [RFC 0025](r
 The graph is not stored. Nodes are events, and edges are the references they already hold.
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
-- **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display, at M4: the clients show one event's
+- **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display, at M4 (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)): the clients show one event's
   hop at a time until then.
 - **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
   said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
@@ -1916,7 +1918,7 @@ Threat tiers stay separate, in docs and in events.
   harness says then: a launch that would put an agent on a plan login beside a live one fails, as a human can spawn more than a team said, and a
   resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. A browser on
   a control link acts as the session's person, and nothing tells a second person from the first, so a control link is the owner's to
-  use and a view link is what another gets. Refusing an address other than loopback to a session on a plan login is planned.
+  use and a view link is what another gets. Refusing an address other than loopback to a session on a plan login is planned: see [STATUS](STATUS.md#swarmchat-platoon_harness_cliweb).
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
   project or team file: `--trust` on the command line, `trust_project` to `load_team`. The trust step covers a test's command and not
@@ -1932,7 +1934,7 @@ Threat tiers stay separate, in docs and in events.
 
 ## 16. Observability
 
-`session.metrics` reads a fold of counters plus runtime gauges: throughput, ack latency, queue depth, failures, active and blocked agents, resource
+`session.metrics` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) reads a fold of counters plus runtime gauges: throughput, ack latency, queue depth, failures, active and blocked agents, resource
 use, provenance coverage and training eligibility. Counters are folds, so instrumentation adds no journal writes. Display telemetry can be reduced
 freely, because credit-critical evidence is an event and deltas are not.
 
