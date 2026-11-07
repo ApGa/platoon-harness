@@ -482,8 +482,8 @@ def retire(txn: Txn, a: Named) -> None:
 
 @op("agent.takeover", on=lambda a: f"agent/{a.agent}")
 def takeover(txn: Txn, a: Named) -> None:
-    """Hold an agent's deliveries so a human can drive its native session, which records the gap from here. Refused
-    `unsupported` with no resume."""
+    """Hold an agent's deliveries until `agent.release` returns it, recording the gap `takeover` from here. Driving its
+    native session while it is held is not built. Refused `unsupported` with no resume."""
     if txn.me.kind != "human":
         raise Refused("not_permitted", "only a human takes over an agent")
     agent = _live(txn, a.agent)

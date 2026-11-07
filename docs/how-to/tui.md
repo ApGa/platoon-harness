@@ -133,8 +133,8 @@ command line's flag does. The ones that end an agent or the session, erase a bod
 once, and what came of an op is said: done, with what it answered, or its refusal. A read is what the screen draws, so
 the palette offers no query: the command line prints any. `wait`
 and the ops on a wait are left out too, as a wait parks a turn and you have none. `agent takeover` holds an agent's
-deliveries, as the command line's does, while driving its own terminal from here is not built yet, as `/takeover`
-says.
+deliveries until `agent release`, as the command line's does, and says, as `/takeover` does, that driving the agent's
+native session is not built yet.
 
 ### Review what changed
 

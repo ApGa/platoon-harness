@@ -945,9 +945,9 @@ For example:
 platoon-harness agent takeover --agent STR [OPTIONS] SESSION
 ```
 
-Hold an agent's deliveries so a human can drive its native session, which records the gap from here.
+Hold an agent's deliveries until `platoon-harness agent release` returns it, recording the gap `takeover` from here.
 
-Refused `unsupported` with no resume.
+Driving its native session while it is held is not built. Refused `unsupported` with no resume.
 
 For example:
 

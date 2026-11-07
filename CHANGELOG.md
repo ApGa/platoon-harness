@@ -593,8 +593,10 @@ named here is closed.
   takes, which are all it takes, and what stands when it is left empty, and what came of an op is said with what it
   answered, so a person sees the task or ref they made, where it said only done. A body's ref typed in a body's field is
   cited, as the command line's flag cites one, where the form stored the ref's text as a body of its own. `agent takeover`
-  runs, holding an agent's deliveries as the command line's does, where it said it was not built; `/takeover` still says
-  driving its terminal is not built. See
+  runs, as the command line's does, holding an agent's deliveries until `agent release`, where the palette said it was not
+  built. Its words, at the command line too, now say that driving the agent's native session is not built, where they
+  said it held deliveries so that a human could drive it, and `/takeover` still says so. Whether the palette should run
+  it is the owner's to confirm. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The architecture page marks what STATUS calls planned.** [docs/architecture.md](docs/architecture.md) sends a newcomer to
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking
@@ -1109,8 +1111,8 @@ named here is closed.
     opened on the sessions screen quit the app, leaving history said the session ran on, and a UI that failed exited 0.
   - Esc, refused, sent again on every press. Ctrl+Home went to the oldest line held, not the start. Under 16 rows the dock
     and the banner stayed. The header ran off the edge, said nothing of what changed and no limit but tokens and usd.
-  - The palette cut a read's answer to 280 characters of JSON, erased a body without asking, and held an agent's
-    deliveries for a terminal not built. It offers commands, asks before an erase, and says a takeover is not built.
+  - The palette cut a read's answer to 280 characters of JSON, and erased a body without asking. It offers commands, and
+    asks before an erase.
   - A typo in a yes-or-no field went as no, Enter in a form's first field sent the form, Shift+N was shown for `n`, F1 in
     the help opened another, a slash command went with no word, and keys outside the one table were bound by hand.
   - `tests/integration/test_tui.py` stopped reading its PTY once the agent's words showed, so the UI's next repaint

@@ -56,8 +56,8 @@ Of what `ops.list` says the person holds, every op but `wait` and the ops on a w
 since a wait parks a turn and a person has none, and but a query, one marked `query` or `exposes`, which a pane draws and the
 command line prints. `ops.list` already leaves out what no grant gives a person, the runtime's ops and an agent's own. No field is
 added to the op table: an extension's op is offered when the person holds its grant, as every op is, and no extension needs a field
-yet. `agent.takeover` is offered and runs, as it does at the command line, holding an agent's deliveries; driving its own terminal
-from ours is still not built, which `/takeover` says.
+yet. `agent.takeover` is offered and runs, as it does at the command line, holding an agent's deliveries until `agent.release`,
+and its own words say that driving the agent's native session is not built, as `/takeover` says.
 
 ### 2. One form, made from the schema
 
@@ -126,7 +126,8 @@ This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read throu
 - An extension's op is offered in both palettes and run through the form with no core edit, and never asked about.
 - A view link sees what needs the person, each action disabled saying why, and on history Needs you shows what the journal holds,
   where both were disabled.
-- `agent takeover` runs from the terminal's palette, where it said it was not built.
+- `agent takeover` runs from both palettes, where the terminal's said it was not built, and its words, at the command line too,
+  say that driving the agent's native session is not built, where they said it held deliveries so that a human could drive it.
 - The page's form takes the pane, so opening a thread or provenance closes it, as each closes the other.
 - `view_info` reads `ops.list` on every link and every load, where it read it on a live control link alone.
 - Every pane milestone 4 adds reads through `x_read`, and words its answer in Python.
@@ -148,6 +149,11 @@ Each milestone lands beside this draft. Once the owner accepts it and they are a
 1. Whether the browser may list, start, resume or stop sessions is the owner's, as [RFC 0027](0027-the-browser-on-our-backend.md)
    says it may not. The default, pending the owner's ruling, is that it may not: the page's palette offers the ops of the one
    session it serves, and starts or resumes nothing. A ruling the other way would add to the palette, and tear nothing out.
+2. Whether both palettes run `agent takeover` is the owner's to confirm: the terminal's palette kept it out until now, as an
+   earlier fix said a hold for a terminal not built was a defect. The default, pending the owner's ruling, is that every write op
+   a person holds runs from both, as the plan's definition of done asks, with the op's words saying what it does and that driving
+   the agent's native session is not built, which the owner's question on the terminal's features defers by default. A ruling
+   the other way would leave it out of both palettes, and tear nothing else out.
 
 ## Evidence
 
