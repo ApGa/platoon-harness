@@ -1474,8 +1474,9 @@ it stands on the agent's own report stream between that turn's `turn.started` an
 a call in a span as it places one below a bound, and never joins identity. A call reported out of a turn lies in none, a turn with
 no call has no span, and a crash that loses a turn ends its spans. A span is named by the ref of its last call's `model.called`.
 An event lies in the span holding the call `lineage` says made it, an entry that carries an event, as an announce or a child's
-report does, where that event lies, and an event tied to no call in its turn's span when that turn is one span; any other event,
-such as an end out of a turn, lies in no span. Which span an event lies in is the record's to say, and that a span's calls made
+report does, where that event lies, and an event tied to no call in its turn's span when that turn is one span; any other event
+lies in no span. So an end out of a turn lies in the span of the call joined to it, as any write does, and in none where nothing
+joins it to a call, as it was made in no turn. Which span an event lies in is the record's to say, and that a span's calls made
 what lies in it is an estimator's to claim. `spans(agent)` is a query op that is no agent's tool, a `Session` method and a command,
 as `eligibility` is: each span of an agent, oldest first, a page beside its true count, with its first call, its turn and the
 writes the record ties to its calls, which one of them chose, and `open` while its latest turn has not ended, as a tool item
@@ -1483,7 +1484,8 @@ reported late can still join a write and cut that turn again. It is worked out f
 after a rebuild and on a closed copy, and it refuses a person or a program `invalid`. Where a harness's turns are cut follows from
 what it reports: pi, Claude Code and ScriptedDriver join a tool call to the model call that chose it, so theirs are cut at writes;
 OpenHands reports its calls and joins no tool call to one, so each of its turns is one span; Codex gives no id per model call, so
-its spans name calls nothing can join to a training system's record; and `exec` reports no call, so it has none
+no tool call joins one, each of its turns is one span, and its calls carry no id to train by; and `exec` reports no call, so it has
+none
 ([compatibility.md](reference/compatibility.md)). pi and ScriptedDriver report a call at its end and Claude Code at its start, so
 what a harness took while a call ran stands before that call's report on the first two and after it on the third. See
 [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).

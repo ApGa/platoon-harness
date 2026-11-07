@@ -192,7 +192,7 @@ the span's name, and one per agent it reached, on that agent's first `agent.star
 or an agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a
 walk cut short, or one that meets an edge to an event no older than its own, makes every row `invalid`. What reached the events of
 no agent, or of one that never started, as one whose launch failed, which has no start for a row to target, is the reward less
-the agents' rows, and what an agent kept in no span, such as an end out of a turn, is its row less its
+the agents' rows, and what an agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its
 spans' rows, and no span's row holds it. Where no span took another principal's event, its rows are those `propagate@2` wrote,
 whose agent rows were `propagate@1`'s; pin an earlier SDK to run an earlier version.
 

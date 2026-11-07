@@ -160,7 +160,8 @@ entry that carries an event, as a child's report does, that event's, and for an 
 one span. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on that agent's
 first `agent.started`, holding all its events kept, and none for a span or an agent it never reached, which stays unscored, nor
 for one that never started, as one whose launch failed, whose events keep their share for no row. An
-agent's row is its spans' rows and what it kept in no span, such as its end out of a turn. Where no span took another principal's
+agent's row is its spans' rows and what it kept in no span, such as an end out of a turn that nothing joins to a call: one joined
+to its call lies in that call's span, as any write does. Where no span took another principal's
 event its rows are those `propagate@2` wrote, whose agent rows were `propagate@1`'s. Citing or taking gives away all but `retained`
 of what reaches the event, and work nobody cites or takes earns nothing from it, so training on it pulls against the default
 template's request to cite. [training.md](../extending/training.md) shows it run, and

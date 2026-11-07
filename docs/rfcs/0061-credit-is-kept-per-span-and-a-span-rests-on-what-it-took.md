@@ -35,8 +35,8 @@ record's one exact tie to what came before it.
 A third came from [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md): a finished
 agent's `said` named its `agent.ended`, while that end's report carried its `agent.finished` or its last message, so one act had
 two refs. An episode closed on the end walked from an event that cites nothing and that no model call chose: a finish's
-citations carried no credit, and once credit is kept per span, an end out of a turn lies in no span, where its share trains
-nothing.
+citations carried no credit, and once credit is kept per span, such an end lies in a span only where its turn is one span, so in a
+cut turn its share would train nothing.
 
 ## Proposal
 
@@ -146,11 +146,12 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 - **Where a call is reported.** pi and ScriptedDriver report `model.called` at a call's end, so a take confirmed during call N is
   N's; Claude Code reports at a call's start, so such a take is N+1's. The same take can fall one call apart between harnesses at
   a span's edge.
-- **Coverage.** OpenHands joins no tool call to its call, so each of its turns is one span; Codex gives no id per call, so its
-  spans name calls nothing can train; `exec` reports no call, so it has none. A worker that does several tasks in one turn there
-  gets one span for all of them.
-- **Credit kept in no span.** An end out of a turn, runtime events about an agent in a cut turn and an op whose anchor never came
-  lie in no span. What they keep is their agent's alone, and a training system that trains spans trains nothing on it.
+- **Coverage.** OpenHands joins no tool call to its call, so each of its turns is one span; Codex gives no id per model call, so no
+  tool call joins one, each of its turns is one span, and its calls carry no id to train by; `exec` reports no call, so it has none.
+  A worker that does several tasks in one turn there gets one span for all of them.
+- **Credit kept in no span.** An end out of a turn that nothing joins to a call, runtime events about an agent in a cut turn and an
+  op whose anchor never came lie in no span. What they keep is their agent's alone, and a training system that trains spans trains
+  nothing on it. An end out of a turn that is joined to its call is a write like any other and lies in that call's span.
 
 ## Alternatives
 

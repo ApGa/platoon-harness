@@ -542,6 +542,31 @@ async def test_an_event_tied_to_no_call_lies_in_its_turn_only_when_the_turn_is_o
     assert values(await credited(session)) == {"w": 1.0}
 
 
+async def test_an_end_out_of_a_turn_lies_in_the_span_of_the_call_joined_to_it_and_else_in_none(tmp_path):
+    """`w` and `v` each finish after their turn ended: `w` by a tool call of its last call, so its end is a write that
+    cuts the turn there and lies in that call's span, and `v` by no tool call, so nothing joins its end to a call, it
+    was made in no turn, and it lies in no span, keeping its share for `v` alone."""
+    kernel = await journal(tmp_path)
+    await driven.spawn(kernel, "peer")
+    ends = {}
+    for name in ("w", "v"):
+        await driven.spawn(kernel, name)
+        await driven.start_turn(kernel, name)
+        await called(kernel, name, "c1")
+        await sent(kernel, name, "c1", "@peer")
+        await called(kernel, name, "c2")
+        await driven.end_turn(kernel, name)
+        ends[name] = (await ran(kernel, name, "c2" if name == "w" else None, "agent.finish", {"gist": "done"}))["ref"]
+    last = driven.of_type(kernel, "model.called")[1]
+
+    session = await propagated(kernel, tmp_path, [ends["w"], ends["v"]])
+
+    assert values(await credited(session)) == {"w": 0.5, "v": 0.5}
+    assert {target: (row.value, row.evidence) for target, row in (await spanned(session)).items()} == {
+        f"{last.stream}@{last.version}": (0.5, (ends["w"],))
+    }
+
+
 moves = st.lists(
     st.tuples(
         st.sampled_from(["send", "send", "revise", "wake", "wake", "turn"]),
