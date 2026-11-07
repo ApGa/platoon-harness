@@ -1,27 +1,33 @@
-"""Browser tests, on Playwright's Chromium headless shell. Selecting them where it is not installed fails, saying how to
-install it, and never skips: a skipped browser test is no passing one. The browser resolves one name of its own to
-loopback, as a name an attacker rebinds would, and no other."""
+"""Browser tests, in each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of chromium, firefox and webkit,
+and in Chromium's headless shell where it names none, each test once in each, its id naming the browser. Selecting them
+where a browser is not installed fails, saying how to install it, and never skips: a skipped browser test is no passing
+one."""
 
+import os
 from collections.abc import AsyncIterator
 
 import pytest
 from playwright.async_api import Browser, Error, async_playwright
 
-from .support import REBOUND
+INSTALL = {"chromium": "chromium-headless-shell", "firefox": "firefox", "webkit": "webkit"}
+"""What `playwright install` installs for each browser the tests may run in."""
 
 
-@pytest.fixture
-async def chromium() -> AsyncIterator[Browser]:
+@pytest.fixture(params=os.environ.get("PLATOON_HARNESS_BROWSERS", "chromium").split(","))
+async def browser(request: pytest.FixtureRequest) -> AsyncIterator[Browser]:
+    name = request.param
+    if name not in INSTALL:
+        pytest.fail(f"PLATOON_HARNESS_BROWSERS names {name!r}, which is none of {', '.join(INSTALL)}")
     async with async_playwright() as playwright:
         try:
-            browser = await playwright.chromium.launch(args=[f"--host-resolver-rules=MAP {REBOUND} 127.0.0.1"])
+            launched = await getattr(playwright, name).launch()
         except Error as error:
-            install = "`uv run playwright install chromium-headless-shell`"
+            install = f"`uv run playwright install {INSTALL[name]}`"
             pytest.fail(
-                f"the browser tests need Chromium's headless shell: {install}, or PLAYWRIGHT_BROWSERS_PATH naming "
-                f"where it is. {error.message.splitlines()[0]}"
+                f"{name} did not start. {install} installs it, or PLAYWRIGHT_BROWSERS_PATH names where it is. "
+                f"Playwright said: {error.message}"
             )
         try:
-            yield browser
+            yield launched
         finally:
-            await browser.close()
+            await launched.close()

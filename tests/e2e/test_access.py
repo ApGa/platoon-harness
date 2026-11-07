@@ -65,10 +65,10 @@ async def web(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
 
 
 async def test_a_disabled_control_takes_focus_and_its_reason_is_its_accessible_description(
-    chromium: Browser, web: tuple[Session, Web]
+    browser: Browser, web: tuple[Session, Web]
 ):
     session, served = web
-    page, errors = await opened(chromium, served.link("view"))
+    page, errors = await opened(browser, served.link("view"))
     await chat(page, "w1 & you")
     allow = page.locator('[data-x-decide="allow"]')
     await expect(allow).to_be_disabled(timeout=SECONDS)
@@ -122,11 +122,11 @@ async def say_why(page: Page) -> int:
     return len(controls)
 
 
-async def test_no_disabled_control_lacks_a_reason_a_screen_reader_reads(chromium: Browser, web: tuple[Session, Web]):
+async def test_no_disabled_control_lacks_a_reason_a_screen_reader_reads(browser: Browser, web: tuple[Session, Web]):
     _, served = web
     held: dict[str, int] = {}
     for kind in ("view", "control"):
-        page, errors = await opened(chromium, served.link(kind))
+        page, errors = await opened(browser, served.link(kind))
         base = page.url.partition("#")[0]
         for place, (route, heading, disabled) in PLACES.items():
             await page.goto(base + route)

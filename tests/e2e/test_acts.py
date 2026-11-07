@@ -39,11 +39,11 @@ def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-async def test_a_person_s_message_from_the_browser_enters_a_wire_harness_s_input_once(chromium: Browser, root: Path):
+async def test_a_person_s_message_from_the_browser_enters_a_wire_harness_s_input_once(browser: Browser, root: Path):
     team = Team.model_validate({"roles": {"bob": {"harness": wire("saying")}}})
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         await expect(page.locator("#main .x-to")).to_have_text("To @bob")
 
@@ -67,12 +67,12 @@ async def test_a_person_s_message_from_the_browser_enters_a_wire_harness_s_input
 
 
 async def test_the_composer_keeps_shift_enter_lines_and_cuts_a_long_text_as_the_terminal_does(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     long = "every word of a long note " * 20
     async with Session.start(solo([Hang()]), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
 
         composer = page.locator(COMPOSER)
@@ -93,11 +93,11 @@ async def test_the_composer_keeps_shift_enter_lines_and_cuts_a_long_text_as_the_
     assert errors == []
 
 
-async def test_a_file_goes_as_a_message_s_body_its_limit_said_before_it_is_sent(chromium: Browser, root: Path):
+async def test_a_file_goes_as_a_message_s_body_its_limit_said_before_it_is_sent(browser: Browser, root: Path):
     notes = ("# Notes\n" + "a line of the notes\n" * 2000).encode()
     async with Session.start(solo([Hang()]), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         attach = page.locator("#main [data-x-attach]")
         files = page.locator("#main [data-x-file]")
@@ -132,12 +132,12 @@ async def test_a_file_goes_as_a_message_s_body_its_limit_said_before_it_is_sent(
 
 
 async def test_a_message_and_its_reply_appear_in_the_browser_and_the_terminal_at_once_with_none_twice(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     team = solo([Say("heard the browser")], [Say("heard the terminal")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         app = TerminalUI("s")
         async with app.run_test(size=(120, 30)) as pilot:
@@ -170,14 +170,14 @@ async def asked(session: Session) -> dict:
 
 @pytest.mark.parametrize("winner", ["tui", "browser"])
 async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_takes_effect_once(
-    chromium: Browser, root: Path, winner: str
+    browser: Browser, root: Path, winner: str
 ):
     """The loser's answer is held on its way until the winner's is in, so both are under way at once whatever the host's
     load: a press raced against the feed can find its place already gone, and then sends nothing."""
     team = solo([Ask("Ship the fix?"), Say("shipped")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await asked(session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         await expect(page.locator("[data-x-needs] .badge")).to_have_text("1", timeout=SECONDS)
         allow = page.locator('[data-x-decide="allow"]')
@@ -230,7 +230,7 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
     assert errors == []
 
 
-async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, root: Path, monkeypatch):
+async def test_needs_you_lists_a_conflict_its_agent_rests_on(browser: Browser, root: Path, monkeypatch):
     """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, with no action here,
     saying on which files and where to resolve it, and naming its agent once."""
     repo = repository(root / "repo", monkeypatch)
@@ -249,7 +249,7 @@ async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, 
         await session.send("@bob", "merge theirs")
         await until(lambda: session.attention(), session)
         async with serving("s", root / "home") as web:
-            page, errors = await opened(chromium, web.link("control"))
+            page, errors = await opened(browser, web.link("control"))
             needs = page.locator("[data-x-needs]")
             await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
             await needs.click()
@@ -263,7 +263,7 @@ async def test_needs_you_lists_a_conflict_its_agent_rests_on(chromium: Browser, 
     assert errors == []
 
 
-async def test_needs_you_names_a_daemon_that_keeps_failing(chromium: Browser, root: Path, monkeypatch):
+async def test_needs_you_names_a_daemon_that_keeps_failing(browser: Browser, root: Path, monkeypatch):
     """A courier that fails on every pass hands nothing over, which would look like a quiet session: Needs you says
     which daemon fails and why, with no action, as only a person can find out what broke it."""
 
@@ -276,7 +276,7 @@ async def test_needs_you_names_a_daemon_that_keeps_failing(chromium: Browser, ro
         await session.send("@bob", "go")
         await until(lambda: session.attention(), session)
         async with serving("s", root) as web:
-            page, errors = await opened(chromium, web.link("control"))
+            page, errors = await opened(browser, web.link("control"))
             needs = page.locator("[data-x-needs]")
             await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
             await needs.click()
@@ -292,11 +292,11 @@ async def test_needs_you_names_a_daemon_that_keeps_failing(chromium: Browser, ro
     assert errors == []
 
 
-async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle_it(chromium: Browser, root: Path):
+async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle_it(browser: Browser, root: Path):
     team = solo([Ask("Ship the fix?"), Say("shipped")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await asked(session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         needs = page.locator("[data-x-needs]")
         await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
 
@@ -324,12 +324,12 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
     assert errors == []
 
 
-async def test_an_approval_answered_from_two_browsers_at_once_takes_effect_once(chromium: Browser, root: Path):
+async def test_an_approval_answered_from_two_browsers_at_once_takes_effect_once(browser: Browser, root: Path):
     """Each answer is held on its way until both are, so both reach web at once, whatever the host's load."""
     team = solo([Ask("Ship the fix?"), Say("shipped")])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await asked(session)
-        pages = [await opened(chromium, web.link("control")) for _ in range(2)]
+        pages = [await opened(browser, web.link("control")) for _ in range(2)]
         sent, both = [asyncio.Event() for _ in pages], asyncio.Event()
 
         def holding(here: asyncio.Event):
@@ -364,7 +364,7 @@ async def test_an_approval_answered_from_two_browsers_at_once_takes_effect_once(
     assert [errors for _, errors in pages] == [[], []]
 
 
-async def test_a_reply_in_a_thread_cites_the_message_it_answers(chromium: Browser, root: Path):
+async def test_a_reply_in_a_thread_cites_the_message_it_answers(browser: Browser, root: Path):
     turn = [Say("a thought aloud"), Call("message_send", {"to": "@you", "gist": "Which branch?"})]
     team = Team.model_validate(
         {"roles": {"bob": {"harness": scripted(turn)}}, "topology": {"edges": {"bob": ["human"]}}}
@@ -372,7 +372,7 @@ async def test_a_reply_in_a_thread_cites_the_message_it_answers(chromium: Browse
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
         await session.send("@bob", "go")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         question = page.locator("#main .msg", has_text="Which branch?")
         await expect(question).to_have_count(1, timeout=SECONDS)
@@ -411,13 +411,13 @@ def lead_and_child() -> Team:
     return Team.model_validate({"roles": roles, "topology": topology})
 
 
-async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(chromium: Browser, root: Path):
+async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(browser: Browser, root: Path):
     async with Session.start(lead_and_child(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "lead", "idle")
         await session.send("@lead", "go")
         await until(session.agents, session, lambda agents: len(agents) == 2)
         await in_state(session, "w", "running")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         said_here = page.locator(".person .x-said")
 
         await page.goto(web.link("control").partition("#")[0] + "#person=lead")
@@ -454,7 +454,7 @@ async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(
         await page.unroute("**/x/link", held)
         made = (await said_here.text_content() or "").rpartition(" ")[2]
         served = f"http://127.0.0.1:{web.port}/view#link="
-        viewer, viewer_errors = await opened(chromium, made)
+        viewer, viewer_errors = await opened(browser, made)
         credential = await viewer.evaluate("X.caps.credential")
         await viewer.context.close()
         await page.locator('[data-x-act="close"]').click()

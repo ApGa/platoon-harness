@@ -74,9 +74,16 @@ jobs:
       - name: Run the tests
         run: uv run pytest -q -n auto
 
-  # The browser tests, on Playwright's Chromium headless shell and the system libraries it needs.
+  # The browser tests, once in each browser, with PLATOON_HARNESS_BROWSERS naming it to the tests, on Playwright's build
+  # of it, Chromium's headless shell alone, and the system libraries it needs.
   e2e:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PLATOON_HARNESS_BROWSERS: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@v7
 
@@ -88,8 +95,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Install Chromium's headless shell
-        run: uv run playwright install --with-deps chromium-headless-shell
+      - name: Install the browser
+        run: uv run playwright install --with-deps --only-shell "$PLATOON_HARNESS_BROWSERS"
 
       - name: Run the browser tests
         run: uv run pytest -q -m e2e

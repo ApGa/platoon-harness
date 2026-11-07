@@ -16,8 +16,9 @@ from ..unit.web.support import served
 
 SECONDS = 20_000
 """How long a locator waits for what it expects, in milliseconds."""
-REBOUND = "rebound.test"
-"""A name the browser resolves to loopback, as a rebinding attacker's name would."""
+REBOUND = "rebound.localhost"
+"""A name that reaches loopback, as a rebinding attacker's name would: each browser resolves a name under `localhost` to
+loopback itself, so none needs a flag of its own."""
 
 
 def watched(page: Page, *expected: str) -> list[str]:
@@ -33,9 +34,9 @@ def _wrong(message: ConsoleMessage, expected: tuple[str, ...]) -> bool:
     return message.type in ("error", "warning") and not any(re.search(found, message.text) for found in expected)
 
 
-async def opened(chromium: Browser, link: str, *expected: str) -> tuple[Page, list[str]]:
+async def opened(browser: Browser, link: str, *expected: str) -> tuple[Page, list[str]]:
     """A page in a context of its own, opened from `link` and drawn."""
-    page = await (await chromium.new_context(viewport={"width": 1280, "height": 800})).new_page()
+    page = await (await browser.new_context(viewport={"width": 1280, "height": 800})).new_page()
     errors = watched(page, *expected)
     await page.goto(link)
     await expect(page.locator("#list .row").first).to_be_visible(timeout=SECONDS)

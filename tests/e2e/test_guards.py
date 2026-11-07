@@ -55,14 +55,14 @@ async def posted(page: Page, path: str, body: str) -> int:
     return await page.evaluate(script, [path, body])
 
 
-async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_why(chromium: Browser, root: Path):
+async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_why(browser: Browser, root: Path):
     why = "This is a view link: it shows the session and acts on nothing."
     async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
         await session.send("@bob", "go")
         await until(session.approvals, session)
         head = await session.head()
-        page, errors = await opened(chromium, web.link("view"), "status of 403")
+        page, errors = await opened(browser, web.link("view"), "status of 403")
         await chat(page, "bob & you")
 
         command = json.dumps({"op": "message.send", "args": {"to": "@bob", "gist": "x"}, "key": "k"})
@@ -93,12 +93,12 @@ async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_wh
     assert errors == []
 
 
-async def test_a_spent_link_is_refused(chromium: Browser, root: Path):
+async def test_a_spent_link_is_refused(browser: Browser, root: Path):
     async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
         link = web.link("control")
-        page, errors = await opened(chromium, link)
-        again = await (await chromium.new_context()).new_page()
+        page, errors = await opened(browser, link)
+        again = await (await browser.new_context()).new_page()
 
         await again.goto(link)
 
@@ -113,11 +113,11 @@ async def test_a_spent_link_is_refused(chromium: Browser, root: Path):
 
 
 async def test_a_sender_cannot_be_chosen_from_the_page_since_identity_comes_from_the_credential(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         forged = []
         for n, field in enumerate(("sender", "actor", "from")):
@@ -140,7 +140,7 @@ async def test_a_sender_cannot_be_chosen_from_the_page_since_identity_comes_from
 
 
 async def test_a_decision_said_through_text_a_replacement_would_expand_is_drawn_as_that_text(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     """`via` is free text, and replace reads a dollar and a quote or a backtick in what it puts in as other text."""
     via = "ci $` and $' and $& end"
@@ -149,7 +149,7 @@ async def test_a_decision_said_through_text_a_replacement_would_expand_is_drawn_
         await session.send("@bob", "go")
         approval = (await until(session.approvals, session))[0]
         await session.resolve(approval["id"], "allow", expected_version=approval["version"], via=via)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
 
         await expect(page.locator(".x-card.x-done")).to_have_text(f"Allowed by you via {via}", timeout=SECONDS)
@@ -178,12 +178,10 @@ async def elsewhere(page: bytes) -> AsyncIterator[str]:
         await server.wait_closed()
 
 
-async def test_a_page_of_another_origin_or_a_rebound_name_is_refused_on_the_command_route(
-    chromium: Browser, root: Path
-):
+async def test_a_page_of_another_origin_or_a_rebound_name_is_refused_on_the_command_route(browser: Browser, root: Path):
     async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         stolen = await page.evaluate(TOKEN)
         head = await session.head()
         target = json.dumps(f"http://127.0.0.1:{web.port}/x/command")
@@ -195,7 +193,7 @@ async def test_a_page_of_another_origin_or_a_rebound_name_is_refused_on_the_comm
                 headers: {{'Authorization': 'Bearer {stolen}', 'Content-Type': 'application/json'}}}})
                 .then(() => 'answered', () => 'blocked');
         </script>"""
-        other = await (await chromium.new_context()).new_page()
+        other = await (await browser.new_context()).new_page()
         answers: list[tuple[str, int]] = []
         other.on("response", lambda response: answers.append((response.request.method, response.status)))
         async with elsewhere(attack.encode()) as site:
@@ -237,13 +235,13 @@ def hostile() -> Team:
 
 
 async def test_hostile_text_names_files_approvals_and_bodies_stay_text_under_the_page_s_policy(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     async with Session.start(hostile(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "constructor", "idle")
         await session.send("@constructor", HOSTILE[:280])
         await until(session.approvals, session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         origin = f"http://127.0.0.1:{web.port}"
         requested: list[str] = []
         page.on("request", lambda request: requested.append(request.url))

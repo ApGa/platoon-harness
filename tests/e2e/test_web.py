@@ -40,9 +40,9 @@ async def served(cli: Cli) -> AsyncIterator[dict[str, str]]:
 
 
 async def test_the_page_opens_from_its_link_shows_the_session_follows_it_and_survives_a_reload(
-    chromium: Browser, cli: Cli, served: dict[str, str]
+    browser: Browser, cli: Cli, served: dict[str, str]
 ):
-    page, errors = await opened(chromium, served["control"])
+    page, errors = await opened(browser, served["control"])
 
     assert "#link=" not in page.url and "token=" not in page.url
     await expect(page.locator("#list")).to_contain_text("tasks")
@@ -64,9 +64,9 @@ async def test_the_page_opens_from_its_link_shows_the_session_follows_it_and_sur
 
 
 async def test_the_people_list_says_what_each_agent_is_doing_and_only_an_agent_can_be_seen_as(
-    chromium: Browser, served: dict[str, str]
+    browser: Browser, served: dict[str, str]
 ):
-    page, errors = await opened(chromium, served["control"])
+    page, errors = await opened(browser, served["control"])
     only = "Only an agent leaves evidence of what reached it, so only an agent can be seen as."
 
     await page.locator("[data-tab=people]").click()
@@ -92,8 +92,8 @@ async def test_the_people_list_says_what_each_agent_is_doing_and_only_an_agent_c
     assert errors == []
 
 
-async def test_a_view_link_shows_every_act_disabled_saying_why(chromium: Browser, served: dict[str, str]):
-    page, errors = await opened(chromium, served["view"])
+async def test_a_view_link_shows_every_act_disabled_saying_why(browser: Browser, served: dict[str, str]):
+    page, errors = await opened(browser, served["view"])
     why = "This is a view link: it shows the session and acts on nothing."
 
     await page.locator("#list .row", has_text="lead & you").click()

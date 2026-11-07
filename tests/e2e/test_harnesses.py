@@ -21,7 +21,7 @@ TOLD = "Fix the flaky test in tests/test_cart.py"
 
 
 async def test_a_person_s_message_from_the_browser_reaches_the_real_claude_binary_s_model_once(
-    chromium: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    browser: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     if shutil.which("claude") is None:
         pytest.skip("claude is not installed, so the page met no real harness here")
@@ -30,7 +30,7 @@ async def test_a_person_s_message_from_the_browser_reaches_the_real_claude_binar
         team = keyed(tmp_path / "home", model, monkeypatch)
         async with Session.start(team, name="s", root=tmp_path, cwd=tmp_path) as session, serving("s", tmp_path) as web:
             await in_state(session, "bob", "idle")
-            page, errors = await opened(chromium, web.link("control"))
+            page, errors = await opened(browser, web.link("control"))
             await chat(page, "bob & you")
 
             await page.locator("#main .x-composer textarea").fill(TOLD)

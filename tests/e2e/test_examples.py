@@ -26,7 +26,7 @@ STAND_INS = [WORDS[index + 1] for index, word in enumerate(WORDS) if word == "--
 
 
 async def test_the_mixed_team_runs_from_the_page_with_the_terminal_attached_and_shows_who_contributed(
-    chromium: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    browser: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     monkeypatch.syspath_prepend(str(EXAMPLE))
@@ -38,7 +38,7 @@ async def test_the_mixed_team_runs_from_the_page_with_the_terminal_attached_and_
         serving("mixed", tmp_path) as web,
     ):
         await in_state(session, "lead", "idle")
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         app = TerminalUI("mixed")
         async with app.run_test(size=(140, 40)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)

@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run in,
+  comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it names
+  none. CI's `e2e` job runs them once in each of Chromium, Firefox and WebKit. They pass in Chromium and Firefox. WebKit does
+  not start on the hosts we run on, as Playwright's build of it needs glibc 2.38, so it is untested, as the compatibility
+  page's section 6 says, and what CI shows of it is not known yet. The three, each claimed only where it passes, are the
+  default pending the owner's ruling.
 - **A disabled control in the page takes focus and says why.** Every control SwarmChat's page draws disabled stays in the
   keyboard's order, which `disabled` took it out of, and its reason, a title the mouse alone found, is its accessible
   description, which screen readers announce with a control, though none has been run on the page. Focus or a press shows

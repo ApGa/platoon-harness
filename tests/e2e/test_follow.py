@@ -59,14 +59,14 @@ class Losing:
 
 
 async def test_an_act_through_an_offline_window_a_lost_answer_and_a_reload_is_one_operation(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     team = solo([Ask("Ship the fix?"), Say("shipped")], *[[Say("heard you")]] * 3)
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
         await session.send("@bob", "go")
         await until(session.approvals, session)
-        page, errors = await opened(chromium, web.link("control"), *OFFLINE)
+        page, errors = await opened(browser, web.link("control"), *OFFLINE)
         await chat(page, "bob & you")
 
         await page.context.set_offline(True)
@@ -112,14 +112,14 @@ async def test_an_act_through_an_offline_window_a_lost_answer_and_a_reload_is_on
 
 
 async def test_an_act_answered_only_by_an_ended_session_goes_again_from_a_new_link_as_one_operation(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     """`web` acted and the page heard only that its session had ended, as when `web` stops after acting: the act stays
     kept, unanswered, and a new link opened over the page sends it again under its own key."""
     team = solo(*[[Say("heard you")]] * 2)
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"), "status of 401")
+        page, errors = await opened(browser, web.link("control"), "status of 401")
         await chat(page, "bob & you")
 
         async def ended(route: Route) -> None:
@@ -148,14 +148,14 @@ async def test_an_act_answered_only_by_an_ended_session_goes_again_from_a_new_li
 
 
 async def test_a_view_link_sends_no_act_left_unanswered_and_says_it_waits_for_a_control_link(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     """`web` acted and the page heard only that its session had ended. A view link opened over the page sends none of
     it, since its refusal would read as the act's, and says it waits; a control link opened next sends it, once."""
     team = solo(*[[Say("heard you")]] * 2)
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"), "status of 401")
+        page, errors = await opened(browser, web.link("control"), "status of 401")
         await chat(page, "bob & you")
 
         async def ended(route: Route) -> None:
@@ -190,7 +190,7 @@ async def test_a_view_link_sends_no_act_left_unanswered_and_says_it_waits_for_a_
     assert errors == []
 
 
-async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknown(chromium: Browser, root: Path):
+async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknown(browser: Browser, root: Path):
     """Sent again, an act `web` failed on would fail for ever, so the page keeps nothing and says what it knows."""
     failed = {"error": "Internal Server Error"}
     async with (
@@ -198,7 +198,7 @@ async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknow
         serving("s", root) as web,
     ):
         await in_state(session, "bob", "idle")
-        page, errors = await opened(chromium, web.link("control"), "status of 500")
+        page, errors = await opened(browser, web.link("control"), "status of 500")
         await chat(page, "bob & you")
         await page.route("**/x/command", lambda route: route.fulfill(status=500, json=failed))
 
@@ -216,9 +216,7 @@ async def test_a_failure_of_web_s_is_an_answer_saying_the_act_s_effect_is_unknow
     assert errors == []
 
 
-async def test_browsing_writes_nothing_moves_no_cursor_or_mark_and_receipts_say_delivered(
-    chromium: Browser, root: Path
-):
+async def test_browsing_writes_nothing_moves_no_cursor_or_mark_and_receipts_say_delivered(browser: Browser, root: Path):
     async with Session.start(solo([Say("on it")]), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
         await session.send("@bob", "go")
@@ -226,7 +224,7 @@ async def test_browsing_writes_nothing_moves_no_cursor_or_mark_and_receipts_say_
         journal = sqlite3.connect(f"{(session.folder / 'journal.sqlite').as_uri()}?mode=ro", uri=True)
         cursors = journal.execute("SELECT * FROM v_deliveries_cursors").fetchall()
         head = await session.head()
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
 
         await chat(page, "bob & you")
         await page.mouse.wheel(0, -2000)
@@ -265,7 +263,7 @@ async def test_browsing_writes_nothing_moves_no_cursor_or_mark_and_receipts_say_
 
 
 async def test_on_history_every_act_says_how_to_resume_and_a_runtime_coming_back_is_followed(
-    chromium: Browser, root: Path
+    browser: Browser, root: Path
 ):
     team = solo(*[[Say("heard you")]] * 3)
     async with Session.start(team, name="s", root=root, cwd=root) as owner:
@@ -273,7 +271,7 @@ async def test_on_history_every_act_says_how_to_resume_and_a_runtime_coming_back
         await owner.send("@bob", "before the stop")
         await until(lambda: of_type(owner, "turn.ended"), owner)
     async with serving("s", root) as web:
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         await expect(said(page, "before the stop")).to_have_count(1)
         await expect(page.locator("#live")).to_have_text("Read-only")

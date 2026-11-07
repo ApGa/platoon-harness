@@ -106,7 +106,7 @@ To run them on 3.13, set `UV_PYTHON=3.13` for both `uv sync` and `uv run`, as CI
 |---|---|---|---|
 | Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
 | Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so | No |
-| Browser | `e2e` | Playwright's Chromium headless shell. Where it is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes |
+| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes, once in each of the three |
 | Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are. Each file's docstring states the model calls its tests may spend | Never |
 
 ```bash
@@ -115,6 +115,10 @@ uv run playwright install chromium-headless-shell
 uv run pytest -q -m e2e
 PLATOON_HARNESS_LIVE=1 uv run pytest -q -m live tests/live/test_claude.py
 ```
+
+Each browser test runs once in each browser `PLATOON_HARNESS_BROWSERS` names, its id naming the browser, as
+`PLATOON_HARNESS_BROWSERS=chromium,firefox` runs them in both; `uv run playwright install firefox` or `webkit` installs another.
+Playwright's WebKit needs glibc 2.38 or later, so it does not start on RHEL 9, whose glibc is 2.34.
 
 A live test spends model calls on your logins, so run only the ones your change needs, and say in the pull request which
 ran and what they spent. A skipped live test is not a passing one.
@@ -239,7 +243,7 @@ stacked on another one is checked too, and for pushes to `main`. A new push canc
 | `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
 | `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs | git is older than 2.47, or a test fails |
-| `e2e` | The browser tests | A browser test fails |
+| `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it | A browser test fails in that browser |
 
 The commands, job by job:
 
@@ -253,9 +257,9 @@ sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 git --version && printf '2.47\n%s\n' "$(git --version | cut -d' ' -f3)" | sort -V -C
 uv sync --locked
 uv run pytest -q -n auto
-# e2e
+# e2e, once with PLATOON_HARNESS_BROWSERS set to each of chromium, firefox and webkit
 uv sync --locked
-uv run playwright install --with-deps chromium-headless-shell
+uv run playwright install --with-deps --only-shell "$PLATOON_HARNESS_BROWSERS"
 uv run pytest -q -m e2e
 ```
 

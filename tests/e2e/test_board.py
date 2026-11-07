@@ -47,9 +47,9 @@ def address(page: Page, route: str) -> str:
 
 
 async def test_the_board_lists_a_channel_s_posts_and_opens_one_with_its_replies_counting_no_votes(
-    chromium: Browser, web: Web
+    browser: Browser, web: Web
 ):
-    page, errors = await opened(chromium, web.link("control"))
+    page, errors = await opened(browser, web.link("control"))
 
     await chat(page, "general")
     await page.locator("#main [data-goto=board]").click()
@@ -88,9 +88,9 @@ async def test_the_board_lists_a_channel_s_posts_and_opens_one_with_its_replies_
 
 
 async def test_the_map_draws_the_session_s_agents_the_person_and_their_chats_with_the_timeline(
-    chromium: Browser, web: Web
+    browser: Browser, web: Web
 ):
-    page, errors = await opened(chromium, web.link("control"))
+    page, errors = await opened(browser, web.link("control"))
 
     await page.locator("#layouts [data-layout=map]").click()
     await expect(page.locator(".mapwrap canvas.graph")).to_be_visible(timeout=SECONDS)
@@ -120,8 +120,8 @@ async def test_the_map_draws_the_session_s_agents_the_person_and_their_chats_wit
     assert errors == []
 
 
-async def test_a_view_link_reaches_the_board_and_the_map(chromium: Browser, web: Web):
-    page, errors = await opened(chromium, web.link("view"))
+async def test_a_view_link_reaches_the_board_and_the_map(browser: Browser, web: Web):
+    page, errors = await opened(browser, web.link("view"))
 
     await page.locator("#layouts [data-layout=board]").click()
     await expect(page.locator("#main .post", has_text="plan")).to_have_count(1, timeout=SECONDS)

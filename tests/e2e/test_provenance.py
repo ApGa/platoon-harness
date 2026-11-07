@@ -70,14 +70,14 @@ def line(page: Page, kind: str, text: str):
     return page.locator(f"{PANE} .x-line", has=page.locator(".x-kind", has_text=kind), has_text=text)
 
 
-async def test_provenance_on_a_message_shows_sources_uses_and_contributors(chromium: Browser, root: Path):
+async def test_provenance_on_a_message_shows_sources_uses_and_contributors(browser: Browser, root: Path):
     """And asked again, the pane reads again: a second estimate shows beside the first, never summed."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await answered(session)
         head = await session.head()
         estimate = {"kind": "credit", "scope": "team", "status": "scored", "head_seq": head}
         await session.annotate(ANSWERED, producer="even-split", producer_version="0", value=0.5, **estimate)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
 
         await provenance_of(page, "the tests pass")
@@ -103,10 +103,10 @@ async def test_provenance_on_a_message_shows_sources_uses_and_contributors(chrom
     assert errors == []
 
 
-async def test_a_ref_in_the_pane_is_followed_into_its_chat_or_its_own_pane(chromium: Browser, root: Path):
+async def test_a_ref_in_the_pane_is_followed_into_its_chat_or_its_own_pane(browser: Browser, root: Path):
     async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await answered(session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await page.goto(web.link("control").partition("#")[0] + f"#provenance={ANSWERED}")
         heading = page.locator("#pane h2")
         await expect(heading).to_have_text(f"Provenance of {ANSWERED}", timeout=SECONDS)
@@ -138,10 +138,10 @@ async def test_a_ref_in_the_pane_is_followed_into_its_chat_or_its_own_pane(chrom
     assert errors == []
 
 
-async def test_the_pane_says_what_the_record_cannot_know(chromium: Browser, root: Path):
+async def test_the_pane_says_what_the_record_cannot_know(browser: Browser, root: Path):
     async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await answered(session)
-        page, errors = await opened(chromium, web.link("view"))
+        page, errors = await opened(browser, web.link("view"))
         await chat(page, "bob & you")
 
         await provenance_of(page, "check the tests")
@@ -157,12 +157,12 @@ async def test_the_pane_says_what_the_record_cannot_know(chromium: Browser, root
     assert errors == []
 
 
-async def test_the_pane_is_opened_and_followed_from_the_keyboard(chromium: Browser, root: Path):
+async def test_the_pane_is_opened_and_followed_from_the_keyboard(browser: Browser, root: Path):
     """A message's actions show while focus is in it, so Tab reaches Provenance, and each link in the pane is a button,
     which Tab reaches and Enter follows."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await answered(session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await chat(page, "bob & you")
         message = message_of(page, "the tests pass")
         await expect(message).to_have_count(1, timeout=SECONDS)
@@ -183,12 +183,12 @@ async def test_the_pane_is_opened_and_followed_from_the_keyboard(chromium: Brows
     assert errors == []
 
 
-async def test_a_message_s_actions_stay_within_it_beside_the_pane(chromium: Browser, root: Path):
+async def test_a_message_s_actions_stay_within_it_beside_the_pane(browser: Browser, root: Path):
     """With the pane open at 1024 pixels, the chat is narrow, and a message's actions wrap within it rather than cover
     what is beside it."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await answered(session)
-        page, errors = await opened(chromium, web.link("control"))
+        page, errors = await opened(browser, web.link("control"))
         await page.set_viewport_size({"width": 1024, "height": 768})
         await chat(page, "bob & you")
         await provenance_of(page, "the tests pass")
