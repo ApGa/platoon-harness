@@ -81,6 +81,7 @@ amended or extended an RFC.
 | [0063](0063-what-an-offer-showed-is-answered-by-its-ref.md) | What an offer showed is answered by its ref | Accepted |
 | [0064](0064-an-act-is-one-form-and-a-read-one-route.md) | A person's act is an op completed by one form, and a pane's read is one route | Draft |
 | [0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) | A diff is read on request, as a test is run | Draft |
+| [0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) | An approval carries the whole of what it asks | Draft |
 | [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
