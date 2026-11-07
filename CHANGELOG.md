@@ -873,6 +873,8 @@ named here is closed.
 
 ### Fixes
 
+- **A link opened over the page draws nothing first.** The page loaded again for a new link opened in its tab, but first
+  drew the address it was leaving, whose read the reload cut off, which Firefox reports as an uncaught error.
 - **A stopped session's folder holds no credential.** A runtime left its `owner.token` and `view.token` in the folder when it
   stopped, dead, as the next runtime issues new ones, but still bearer-shaped in a folder that is the session's export and
   gets copied. A stop or a close now removes them, and a killed runtime's, which stay dead, at the next stop, as RFC 0055's

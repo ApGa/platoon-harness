@@ -287,8 +287,13 @@ X.resend = () => {
   }
 };
 
-// A link opened over this page is the gate's to spend, so the page loads again for it.
-addEventListener('hashchange', () => { if (/(^#|&)link=/.test(location.hash)) location.reload(); });
+// A link opened over this page is the gate's to spend, so the page loads again for it, and draws nothing first for an
+// address it is leaving, whose reads the reload would cut off.
+addEventListener('hashchange', e => {
+  if (!/(^#|&)link=/.test(location.hash)) return;
+  e.stopImmediatePropagation();
+  location.reload();
+});
 
 // A refusal as a person reads it. A decision someone made first says who made it and through what.
 X.refused = refusal => {
