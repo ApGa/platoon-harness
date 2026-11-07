@@ -91,11 +91,14 @@ async def test_the_written_out_merge_queue_tells_the_worker_of_a_conflict(repo, 
         for name in ("ada", "bob"):
             await session.spawn(name, "worker", "add your line", stays=True)
         await until(lambda: of_type(session, "task.added"), session, lambda found: len(found) == 2)
-        for count in (1, 2):
+        for turns in (1, 2):
             await session.send("@merger", "merge the next")
-            done = await until(
-                lambda: of_type(session, "task.completed"), session, lambda found, count=count: len(found) == count
+            await until(
+                lambda: of_type(session, "turn.ended"),
+                session,
+                lambda found, turns=turns: [event.agent for event in found].count("merger") == turns,
             )
+        done = await of_type(session, "task.completed")
         conflicted = next(event for event in done if event.gist.startswith("conflict"))
         author = conflicted.gist.split("platoon-harness/s/")[1].split()[0]
         await until(session.attention, session, lambda rows: any(row["kind"] == "conflict" for row in rows))
