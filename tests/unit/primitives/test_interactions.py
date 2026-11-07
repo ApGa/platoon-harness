@@ -8,7 +8,7 @@ import pytest
 
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Kernel, ManualClock, Principal, registry
-from platoon_harness.primitives import PRIMITIVES, Interactions
+from platoon_harness.primitives import PRIMITIVES, Interactions, Unknown
 from platoon_harness.primitives.provenance import Pair
 from platoon_harness.testing import Say
 
@@ -16,6 +16,7 @@ from ..runtime import support as running
 from .support import (
     channel,
     confirm,
+    end_turn,
     enroll,
     grant,
     of_type,
@@ -96,17 +97,20 @@ async def test_who_reached_whom_may_run_both_ways(kernel):
 
 async def test_an_agent_s_unknowns_read_as_unknown_never_as_no_interaction(kernel):
     """An offer its harness never said it took is unknown, and an agent no edge reaches, even one declaring every
-    surface observed, is named with why what reached it is unknown: no result proves a surface, and a gap content could
-    come through stands in its record."""
+    surface observed, is named with why what reached it is unknown: no result proves a surface, as exposure leaves it
+    standing, and a gap content could come through stands in its record."""
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob")
     await spawn(kernel, "carol", ready={"coverage": dict.fromkeys(SURFACES, "observed")})
-    await send(kernel, alice, "@bob", "maybe read")
+    asked = (await send(kernel, alice, "@bob", "maybe read"))["ref"]
     offer = await handed(kernel, "bob", taken=False)
     await report(kernel, "carol", "gap", what="stream_lost")
     await report(kernel, "carol", "gap", what="usage_lower_bound")
 
     found = interactions(kernel)
+    exposed = Unknown.model_validate(
+        result_of(kernel.query(kernel.runtime, "exposure", {"agent": "carol", "ref": asked}))
+    )
 
     (pair,) = found.pairs
     assert (pair.who, pair.whom, pair.observed, pair.unconfirmed) == ("agent:alice", "agent:bob", 0, 1)
@@ -116,6 +120,7 @@ async def test_an_agent_s_unknowns_read_as_unknown_never_as_no_interaction(kerne
         ("bob", SURFACES, {}, 0),
         ("carol", SURFACES, {"stream_lost": 1}, 0),
     ]
+    assert found.unknowns[2].unproved == tuple(coverage.surface for coverage in exposed.standing)
 
 
 async def test_interactions_answer_at_a_head_and_page_by_pair(kernel):
@@ -140,12 +145,55 @@ async def test_interactions_answer_at_a_head_and_page_by_pair(kernel):
     assert (len(first.pairs), first.total, first.head) == (32, 42, second.head)
     assert second.cursor is None and [pair.declared for pair in (*first.pairs, *second.pairs)] == [1] * 42
     assert [(pair.who, pair.whom) for pair in (*first.pairs, *second.pairs)] == order
-    assert "late" not in [row.agent for row in second.unknowns]
+    assert [row.agent for row in first.unknowns] == [f"a{n}" for n in range(7)] and second.unknowns == ()
     again = next(pair for pair in fresh.pairs if (pair.who, pair.whom) == ("agent:a0", "agent:a1"))
     assert (fresh.total, again.declared, fresh.head) == (43, 2, kernel.head)
     assert [row.agent for row in fresh.unknowns][-1] == "late"
     for after in (f"{kernel.head + 1}:0", "a0@1", "32"):
         assert refusal(kernel.query(kernel.runtime, "interactions", {"after": after})).code == "invalid"
+
+
+async def test_each_agent_s_unknowns_come_a_page_at_a_time_beside_the_pairs(kernel):
+    """32 agents' unknowns a page, in the order they were spawned, so a page stays bounded however many agents a
+    session spawns, and the cursor runs on until the agents are through too, though no pair is left."""
+    agents = [await spawn(kernel, f"a{n:02}") for n in range(33)]
+    await send(kernel, agents[0], "@a01", "the one edge")
+    await handed(kernel, "a01", taken=True)
+
+    first = interactions(kernel)
+    second = interactions(kernel, after=first.cursor)
+
+    assert (len(first.pairs), first.total, len(second.pairs), second.total) == (1, 1, 0, 1)
+    assert [row.agent for row in (*first.unknowns, *second.unknowns)] == [agent.name for agent in agents]
+    assert (len(first.unknowns), first.cursor, second.cursor) == (32, f"{first.head}:32", None)
+
+
+async def test_an_answer_is_open_while_an_offer_it_counts_unconfirmed_can_still_be_taken(kernel):
+    """An offer made before the turn it starts, as on a wake, can still be taken, so the answer is open though no turn
+    had begun at its head. Once taken it is observed, and once its reader has ended an offer it never took is unknown
+    for good, so the answer is no longer open."""
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await send(kernel, alice, "@bob", "the plan")
+    offer = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))
+
+    waking = interactions(kernel)
+    await start_turn(kernel, "bob")
+    await confirm(kernel, "bob", offer["input"], evidence="message_start")
+    taken = interactions(kernel)
+    await end_turn(kernel, "bob")
+    await send(kernel, alice, "@bob", "and then")
+    await handed(kernel, "bob", taken=False)
+    pending = interactions(kernel)
+    await report(kernel, "bob", "exited", reason="the harness crashed")
+    ended = interactions(kernel)
+
+    assert (waking.pairs[0].unconfirmed, waking.pairs[0].observed, waking.open) == (1, 0, True)
+    assert interactions(kernel, after=f"{waking.head}:0") == waking
+    assert (taken.pairs[0].unconfirmed, taken.pairs[0].observed, taken.open) == (0, 1, False)
+    assert (pending.pairs[0].unconfirmed, pending.open) == (1, True)
+    assert of_type(kernel, "agent.ended")[-1].agent == "bob"
+    assert (ended.pairs[0].unconfirmed, ended.pairs[0].observed, ended.open) == (1, 1, False)
 
 
 async def test_a_person_s_and_a_program_s_writes_count_as_theirs(kernel, ada):
@@ -213,4 +261,4 @@ async def test_interactions_answer_alike_after_a_rebuild_and_on_a_closed_copy(ke
     closed = Kernel.open(tmp_path / "copy", extensions=PRIMITIVES, read_only=True)
     copied = interactions(closed)
     closed.close()
-    assert len(live.pairs) == 1 and live.open and live == rebuilt == copied
+    assert len(live.pairs) == 1 and live == rebuilt == copied

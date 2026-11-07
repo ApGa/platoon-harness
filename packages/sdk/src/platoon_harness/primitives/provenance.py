@@ -48,6 +48,8 @@ WALK_LIMIT = 4096
 
 _PAGE = DIGEST_ITEMS
 _SURFACES: tuple[Surface, ...] = get_args(Surface)
+_PROVED: tuple[Surface, ...] = ()
+"""The surfaces a stored result proves observed: none, as no check proves one yet."""
 _UNCARRIED = tuple(what for what, kind in GAPS.items() if not kind.carries)
 
 Back = Literal["declared", "cause", "ancestry"]
@@ -550,9 +552,10 @@ class Unknowns(Model):
 
 class Interactions(Model):
     """Who reached whom, as the record held it at `head`: a page of pairs, oldest first by the first edge the record
-    learned of each, `total` of them, with `cursor` to pass as `after` for the next page, read at the same head, and
-    each agent's `unknowns`. It is `open` while an agent's turn had not ended there, as a later report can still
-    confirm an offer. It counts reach in the record and never weighs it: nothing here is credit or influence."""
+    learned of each, `total` of them, and of the agents spawned by then, in the order they were, with each one's
+    `unknowns`, and `cursor` to pass as `after` for the next page, read at the same head, until both are through. It is
+    `open` while an offer a pair counts as unconfirmed went to an agent that had not ended there, whose harness can
+    still say it took it. It counts reach in the record and never weighs it: nothing here is credit or influence."""
 
     pairs: tuple[Pair, ...]
     total: int
@@ -771,6 +774,11 @@ def _standing(txn: Txn, agent: str, bound: Bound) -> tuple[Coverage, ...]:
     return tuple(Coverage(surface=surface, declared=declared.get(surface)) for surface in _SURFACES)
 
 
+def _unproved(txn: Txn, agent: str, bound: Bound) -> tuple[Surface, ...]:
+    """The surfaces no stored result proves observed, as `decide` leaves them standing for the agent below the bound."""
+    return tuple(coverage.surface for coverage in _standing(txn, agent, bound) if coverage.surface not in _PROVED)
+
+
 def _incident(txn: Txn, row: sqlite3.Row) -> Incident:
     event = txn.view(Stamps).event(row["seq"])
     assert event is not None
@@ -798,7 +806,7 @@ def _facts(txn: Txn, agent: str, event: Event, bound: Bound) -> Facts:
 
 def _exposed(txn: Txn, agent: str, event: Event, bound: Bound, open: bool) -> tuple[Seen | NotSeen | Unknown, Facts]:
     facts = _facts(txn, agent, event, bound)
-    return decide(facts, proved=(), bound=bound, head=txn.view(Stamps).head(), open=open), facts
+    return decide(facts, proved=_PROVED, bound=bound, head=txn.view(Stamps).head(), open=open), facts
 
 
 def _step(kind: Back, event: Event) -> Step:
@@ -1106,7 +1114,7 @@ def _walk(txn: Txn, outcome: Event) -> tuple[list[tuple[Event, int, set[Back]]],
 def _contributor(txn: Txn, made_by: str | None, found: dict[str, Any]) -> Contributor:
     agent = _agent_of(made_by)
     bound = Bound(by="commit", seq=found["last"] + 1)
-    unproved = None if agent is None else tuple(coverage.surface for coverage in _standing(txn, agent, bound))
+    unproved = None if agent is None else _unproved(txn, agent, bound)
     incidents = {} if agent is None else txn.view(Gaps).counted(agent, bound.seq, besides=_UNCARRIED)
     return Contributor(
         maker=made_by,
@@ -1281,14 +1289,15 @@ _COUNTS = ("declared", "observed", "cause", "ancestry", "unconfirmed")
 
 def _tallied(txn: Txn, head: int) -> tuple[list[Pair], list[str], bool]:
     """Every pair the record held at `head`, in the order it learned of each, every agent spawned by then, and whether
-    one was in a turn there: one walk of the journal, oldest first, taking each event's edges back as lineage does and
-    each offer's items as exposure does. A maker's events resting on its own are its history and pair it with nobody."""
+    a pair counts an offer as unconfirmed to an agent that had not ended there: one walk of the journal, oldest first,
+    taking each event's edges back as lineage does and each offer's items as exposure does. A maker's events resting on
+    its own are its history and pair it with nobody."""
     stamps = txn.view(Stamps)
     made = cache(lambda stream, version: maker(_held(stamps.at(stream, version))))
     tallies: dict[tuple[str | None, str | None], dict[str, Any]] = {}
     offers: dict[int, tuple[str, str, list[str | None]]] = {}
     agents: list[str] = []
-    in_turn: set[str] = set()
+    ended: set[str] = set()
 
     def count(who: str | None, whom: str | None, what: str, seq: int, ref: str) -> None:
         if who == whom and who is not None:
@@ -1303,10 +1312,8 @@ def _tallied(txn: Txn, head: int) -> tuple[list[Pair], list[str], bool]:
             break
         if event.type == "agent.spawned":
             agents.append(event.data["name"])
-        elif event.type == "turn.started" and event.agent is not None:
-            in_turn.add(event.agent)
-        elif event.type in ("turn.ended", "turn.lost") and event.agent is not None:
-            in_turn.discard(event.agent)
+        elif event.type == "agent.ended" and event.agent is not None:
+            ended.add(f"agent:{event.agent}")
         elif event.type == "context.offered" and event.agent is not None:
             named = sorted({parts[:2] for item in event.data["items"] if (parts := parts_of(item["ref"])) is not None})
             offers[event.seq] = (event.agent, _ref(event), [made(stream, version) for stream, version in named])
@@ -1327,7 +1334,8 @@ def _tallied(txn: Txn, head: int) -> tuple[list[Pair], list[str], bool]:
         Pair(who=who, whom=whom, **{name: tally[name] for name in _COUNTS}, first=tally["first"])
         for (who, whom), tally in ordered
     ]
-    return pairs, agents, bool(in_turn)
+    open = any(tally["unconfirmed"] and whom not in ended for (_, whom), tally in tallies.items())
+    return pairs, agents, open
 
 
 @op("interactions", query=True)
@@ -1337,30 +1345,31 @@ def interactions(txn: Txn, a: Paging) -> Interactions:
     apart and never summed: `declared` citations, which their citers claim, `observed` offers a harness said it took,
     `cause` and `ancestry`; how many offers between them a harness had not said it took, which are unknown; and each
     agent's unknowns, the surfaces no result proves observed and the gaps content could come through. It counts and
-    never weighs. Pairs come oldest first, a page at a time, each page read at the first one's head: pass `cursor` as
-    `after`. Refused `invalid` for an `after` that is no cursor, or names a head past the record's."""
+    never weighs. Pairs come oldest first and agents in the order they were spawned, a page of each at a time, each page
+    read at the first one's head: pass `cursor` as `after`. Refused `invalid` for an `after` that is no cursor, or names
+    a head past the record's."""
     stamps, exposures = txn.view(Stamps), txn.view(Exposures)
     now = stamps.head()
     head, start = _position(a.after) or (now, 0)
     if head > now:
         raise Refused("invalid", "`after` is a `cursor` from an earlier answer")
     pairs, agents, open = _tallied(txn, head)
-    bound = Bound(by="head", seq=head + 1)
+    page, bound = slice(start, start + _PAGE), Bound(by="head", seq=head + 1)
     incidents = txn.view(Gaps).held(head, besides=_UNCARRIED)
     unknowns = tuple(
         Unknowns(
             agent=agent,
-            unproved=tuple(coverage.surface for coverage in _standing(txn, agent, bound)),
+            unproved=_unproved(txn, agent, bound),
             incidents=incidents.get(agent, {}),
             older_offers=exposures.older(agent, bound.seq),
         )
-        for agent in agents
+        for agent in agents[page]
     )
     return Interactions(
-        pairs=tuple(pairs[start : start + _PAGE]),
+        pairs=tuple(pairs[page]),
         total=len(pairs),
         unknowns=unknowns,
-        cursor=f"{head}:{start + _PAGE}" if start + _PAGE < len(pairs) else None,
+        cursor=f"{head}:{page.stop}" if page.stop < max(len(pairs), len(agents)) else None,
         head=head,
         open=open,
     )

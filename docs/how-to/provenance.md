@@ -115,20 +115,26 @@ offers a harness said it took, `cause` and `ancestry`. An offer no harness has s
 `unconfirmed`, which is unknown. A maker's events that rest on its own are its history and make no pair, and a pair runs one way,
 so Alice reaching Bob and Bob reaching Alice are two. Each agent comes with why what reached it is unknown: the surfaces no result
 proves observed, which today is every one, and the gaps content could come through. So an agent no pair names has not been shown
-to be reached by nobody. Pairs come oldest first, 32 at a time, and the cursor carries the head the first page was read at, so
-every page of one answer agrees:
+to be reached by nobody. Pairs come oldest first and agents in the order they were spawned, 32 of each a page, and the cursor runs
+until both are through, carrying the head the first page was read at, so every page of one answer agrees:
 
 ```python
 async def who_reached_whom(session):
-    """Every pair, as who, whom and its counts, all read at one head however many pages they take."""
+    """Every pair, as who, whom and its counts, and every agent with unknowns, all read at one head however many pages
+    they take."""
     found = await session.interactions()
-    pairs = list(found.pairs)
+    pairs, unknowns = list(found.pairs), list(found.unknowns)
     while found.cursor is not None:
         found = await session.interactions(after=found.cursor)
         pairs += found.pairs
+        unknowns += found.unknowns
     kinds = ("declared", "observed", "cause", "ancestry", "unconfirmed")
-    return [(pair.who, pair.whom, {kind: getattr(pair, kind) for kind in kinds}) for pair in pairs]
+    counted = [(pair.who, pair.whom, {kind: getattr(pair, kind) for kind in kinds}) for pair in pairs]
+    return counted, [row.agent for row in unknowns]
 ```
+
+An answer is `open` while an offer it counts as unconfirmed went to an agent that had not ended, whose harness can still say it
+took it, so asking again later may find it observed.
 
 Each page walks the journal to its head and stores nothing, so it takes longer as a session grows: about 2.3 s at 91,670 events in
 [RFC 0067](../rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md)'s measurement. A pair counts reach in the

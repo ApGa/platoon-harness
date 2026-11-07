@@ -1512,15 +1512,17 @@ never summed: `declared`, an event of the second citing one of the first's, whic
 first's event that the second's harness said it took; `cause`, an event of the second naming one of the first's as its cause; and
 `ancestry`, the second's next version of the first's object, or its commit naming the first's a parent. An edge joins two events,
 so two ranges of one body cited are one, and an observed edge is one offer of one event. Beside them it counts the offers whose
-harness had not said it took them, `unconfirmed`, which are unknown, neither observed nor none, and it names the event holding
-the first edge of each count. It takes each event's edges back as `lineage` does and each offer's items as `exposure` does. Pairs
-come oldest first by the first edge the record learned of each, a page at a time, and the cursor carries the first page's head,
-so every page of one answer is read there. Each agent spawned by the head is named with its unknowns: the surfaces no result
-proves observed, the gaps content could come through that its record held, by kind, and its offers from before payload 3, so an
-agent no pair names reads as unknown, never as reached by nobody. A person's or a program's reading is no evidence, so nothing
-reaches either but through their own writes, and neither has unknowns. Nothing is stored: each page walks the journal to its
-head, and the writer pays nothing. It answers alike after a rebuild and on a closed copy. It counts reach in the record and never
-weighs it, so a pair is no credit and no influence. See
+harness had not said it took them, `unconfirmed`, which are unknown, neither observed nor none, and it names the event holding the
+first edge of each count. It takes each event's edges back as `lineage` does and each offer's items as `exposure` does. Each agent
+spawned by the head is named with its unknowns: the surfaces no result proves observed, as `exposure` leaves them standing, the
+gaps content could come through that its record held, by kind, and its offers from before payload 3, so an agent no pair names
+reads as unknown, never as reached by nobody. Pairs come oldest first by the first edge the record learned of each, and agents in
+the order they were spawned, 32 of each a page, so a page is bounded however large the session, and the cursor carries the first
+page's head, so every page of one answer is read there. An answer is `open` while an offer a pair counts as unconfirmed went to an
+agent that had not ended at its head, whose harness can still say it took it. A person's or a program's reading is no evidence, so
+nothing reaches either but through their own writes, and neither has unknowns. Nothing is stored: each page walks the journal to
+its head, and the writer pays nothing. It answers alike after a rebuild and on a closed copy. It counts reach in the record and
+never weighs it, so a pair is no credit and no influence. See
 [RFC 0067](rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md).
 
 [provenance.md](how-to/provenance.md) is the guide.

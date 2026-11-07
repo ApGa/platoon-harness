@@ -16,8 +16,8 @@ record who reached whom: each ordered pair of makers, an agent, a person, a prog
 how many edges of each kind lead from the first's events to the second's. A `declared` edge is a citation, an `observed` one an
 offer whose harness said it took it, a `cause` a cause an event names, and `ancestry` an object's next version or a commit's
 parent. Each kind is counted apart and nothing sums them. The offers no harness has said it took are counted beside them as
-unknown, and each agent is named with why what reached it is unknown. The answer is read at a head and paged by pair, and every
-page of one answer is read at that head. Nothing is stored: each page walks the journal to its head.
+unknown, and each agent is named with why what reached it is unknown. The answer is read at a head, a page of pairs and a page of
+agents at a time, and every page of one answer is read at that head. Nothing is stored: each page walks the journal to its head.
 
 ## Motivation
 
@@ -57,7 +57,7 @@ class Unknowns(Model):
 class Interactions(Model):
     pairs: tuple[Pair, ...]        # a page, oldest first
     total: int
-    unknowns: tuple[Unknowns, ...] # each agent spawned by the head
+    unknowns: tuple[Unknowns, ...] # a page of the agents spawned by the head
     cursor: str | None             # `<head>:<n>`
     head: int
     open: bool
@@ -106,28 +106,33 @@ A pair known only by such offers is listed, with no edge counted, since leaving 
 unknown.
 
 Each agent spawned by the head is named in `unknowns` with why what reached it, beyond the edges counted, is unknown: the
-surfaces no stored result proves observed, which is every surface today (section 11), the gaps content could come through that
+surfaces no stored result proves observed, which is every surface today (section 11), read from the one set of proved surfaces
+`exposure` decides by, so the two cannot drift apart when a check first proves one; the gaps content could come through that
 its record held, by kind, and its offers from before payload 3. So an agent no pair names reads as unknown, and never as reached
 by nobody. A person's or a program's reading is no evidence (law 9), so nothing reaches either but through their own writes,
 which are theirs, and neither is named there.
 
-### 5. At a head, paged by pair
+### 5. At a head, a page of pairs and of agents at a time
 
 Pairs come oldest first, by the first edge the record learned of each: the event holding it, and for an offer the confirmation,
 or the offer while it is unconfirmed. `first` names, for each count, the event holding the first edge of it, an offer for
-`observed` and `unconfirmed`, so a client can open its provenance. A page holds at most 32 pairs, beside `total`, and `cursor`,
-`<head>:<n>`, carries the head of the first page, so every page of one answer is read at that head and what the record learned
-since enters none of them until someone asks anew. An `after` that is no cursor, or that names a head past the record's, is
-refused `invalid`. `open` says an agent's turn had not ended at the head, so a later report can still confirm an offer counted
-there as unconfirmed.
+`observed` and `unconfirmed`, so a client can open its provenance. Agents come in the order they were spawned. A page holds at
+most 32 pairs, beside `total`, and at most 32 agents' unknowns, so a page is bounded however many makers a session has, the pairs
+growing with their square and the agents with their number. `cursor`, `<head>:<n>`, names the next page of both and carries the
+head of the first page, so every page of one answer is read at that head and what the record learned since enters none of them
+until someone asks anew. It runs until the pairs and the agents are both through. An `after` that is no cursor, or that names a
+head past the record's, is refused `invalid`.
 
-`unknowns` is whole on every page, one row per agent, as the roster is: it grows with the agents, and the pairs with the square
-of the makers.
+`open` says a later report can still change what the answer leaves unknown: an offer a pair counts as `unconfirmed` went to an
+agent that had not ended at the head, whose harness can still say it took it. A turn under way is not the test. The courier
+records a wake's offer before the harness reports the turn it starts, a launch's and a resting agent's likewise, and a steer can
+land in the turn after the one it was offered in, so an offer can be taken while no turn is under way; and once its reader has
+ended, nothing more can confirm it.
 
 ### 6. A walk at query time, and no fold
 
 Each page walks the journal once, oldest first, to its head: each event's edges back, each offer's items, each confirmation, and
-each spawn and turn. Nothing is stored and the writer pays nothing. The cost grows with the journal, measured at about 25 µs an
+each spawn and end. Nothing is stored and the writer pays nothing. The cost grows with the journal, measured at about 25 µs an
 event here (see Evidence), and the scale tests of milestone 4 measure it on the real stack at 100,000 events and hold it to a
 budget set from that measurement.
 
@@ -156,7 +161,9 @@ budget set from that measurement.
 | Leaving out a pair known only by unconfirmed offers | The record holds an offer between them, and leaving it out would read as no reach |
 | Pairing a maker with itself | It is that maker's history, which `lineage` and `spans` show, and every agent's revisions, claims and confirmations would bury its interactions |
 | A walk bounded at 4,096 events, as `contributors` is | `contributors` walks back from one outcome. Who reached whom asks of the whole record, and a bound would answer for some arbitrary part of it |
-| Paging each agent's unknowns too | They grow with the agents, as the roster does, which is whole, and two lists under one cursor would page neither by its own order |
+| Each agent's unknowns whole on every page | A page would grow with the agents, unbounded, and carry every agent again on every page of pairs. Under one cursor each list keeps its own order, and pages past the pairs cost a walk each only in a session with more agents than pairs |
+| The unknowns of only the agents a page's pairs name | An agent no pair names is the one whose unknowns matter most, and would be on no page |
+| `open` while an agent's turn had not ended | An offer made before the turn it starts, as on a wake, would read as settled though its harness can still say it took it |
 | A client walking `lineage` for each event | Clients compute nothing (section 12), and RFC 0038 made `contributors` an op so that no client walks |
 | A `head` argument | The cursor carries the head an answer is read at, and asking afresh asks of now. Nobody has asked for an older head |
 
@@ -167,7 +174,7 @@ budget set from that measurement.
 - Each page costs a walk of the journal to its head, about 2.3 s at 91,670 events here, and nothing else: no view, no writer
   cost, no stored graph.
 - A confirmation reported later moves an offer from `unconfirmed` to `observed` at a later head. A page read at an earlier head
-  keeps it unconfirmed, and says it was `open` where an agent's turn had not ended there.
+  keeps it unconfirmed, and says it was `open` where that offer's reader had not ended there.
 - Every agent has every surface unproved until a check proves one, so no agent's absence from a pair reads as no reach.
 - The runtime and nobody appear as makers where the record makes them so.
 - A pair is never credit, and nothing ranks the pairs but the order the record learned them in.
@@ -193,8 +200,10 @@ budget set from that measurement.
 - `tests/unit/primitives/test_interactions.py`: `test_each_kind_of_edge_is_counted_apart_and_never_merged`,
   `test_who_reached_whom_may_run_both_ways`, `test_an_agent_s_unknowns_read_as_unknown_never_as_no_interaction`,
   `test_interactions_answer_at_a_head_and_page_by_pair`, `test_a_person_s_and_a_program_s_writes_count_as_theirs`,
-  `test_a_view_credential_reads_interactions_and_writes_nothing` and
-  `test_interactions_answer_alike_after_a_rebuild_and_on_a_closed_copy`.
+  `test_a_view_credential_reads_interactions_and_writes_nothing`,
+  `test_interactions_answer_alike_after_a_rebuild_and_on_a_closed_copy`,
+  `test_each_agent_s_unknowns_come_a_page_at_a_time_beside_the_pairs` and
+  `test_an_answer_is_open_while_an_offer_it_counts_unconfirmed_can_still_be_taken`.
 - The cost of the walk, measured with a script kept outside this repository on journals written through the kernel's ops: a ring
   of agents in which each turn hands an agent what waits for it and its harness confirms it, reports a model call and a tool
   item, and sends the next agent a message citing the last one it got, and every fifth round every tenth agent posts or revises

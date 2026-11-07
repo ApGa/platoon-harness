@@ -1488,7 +1488,7 @@ platoon-harness interactions [OPTIONS] SESSION
 
 Say who reached whom, from the record: each pair of makers, an agent, a person, a program, the runtime or nobody the record names, with how many edges of each kind lead from the first's events to the second's, counted apart and never summed: `declared` citations, which their citers claim, `observed` offers a harness said it took, `cause` and `ancestry`; how many offers between them a harness had not said it took, which are unknown; and each agent's unknowns, the surfaces no result proves observed and the gaps content could come through.
 
-It counts and never weighs. Pairs come oldest first, a page at a time, each page read at the first one's head: pass `cursor` as `--after`. Refused `invalid` for an `--after` that is no cursor, or names a head past the record's.
+It counts and never weighs. Pairs come oldest first and agents in the order they were spawned, a page of each at a time, each page read at the first one's head: pass `cursor` as `--after`. Refused `invalid` for an `--after` that is no cursor, or names a head past the record's.
 
 For example:
 
