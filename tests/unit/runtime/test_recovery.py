@@ -201,6 +201,7 @@ async def test_an_uncertain_workspace_is_retried_and_its_agent_starts_once(tmp_p
 
     async with Session.resume("s", root=tmp_path) as session:
         await in_state(session, "ada", "idle")
+        await until(lambda: of_type(session, "agent.started"), session, lambda found: len(found) >= 2)
         events = await journal(session)
 
     made = [event for event in events if event.type == "effect.finished" and event.data["kind"] == "workspace"]
