@@ -5,12 +5,14 @@ import asyncio
 import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
+
+from pydantic import Field
 
 from platoon_harness import Refused, Session, Team
 from platoon_harness.config import Secret
 from platoon_harness.drivers import Driver
-from platoon_harness.kernel import Extension, Kernel
+from platoon_harness.kernel import Args, Extension, Kernel, Txn, op
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequest
 from platoon_harness.testing import FakeModel, ScriptedDriver
@@ -43,6 +45,23 @@ def extension(made: Extension) -> str:
     key = f"extension_{len(_NAMED)}"
     _NAMED[key] = made
     return f"{__name__}:{key}"
+
+
+class Vote(Args):
+    agent: Annotated[str, Field(pattern=r"^@[a-z]+$", description="The agent whose work it is on, as `@agent`.")]
+    choice: Annotated[Literal["yes", "no"], Field(description="Yes or no.")]
+
+
+@op("ballot.cast", on=lambda a: f"agent/{a.agent[1:]}")
+def _cast(txn: Txn, a: Vote) -> dict[str, str]:
+    """Cast a vote on an agent's work, kept among that agent's own events."""
+    txn.emit("ballot.voted", f"agent/{a.agent[1:]}", gist=f"a vote on {a.agent}'s work: {a.choice}", data=a)
+    return {"choice": a.choice}
+
+
+BALLOT = Extension("ballot", ops=[_cast])
+"""An extension as a team's own would be, which no core code knows: one op, which records its event on the agent's
+stream, where a client that shows the agent draws it by its gist."""
 
 
 def scripted(*turns: Any, **options: Any) -> str:

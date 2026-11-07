@@ -23,7 +23,7 @@ from platoon_harness_cli.tui.transcript import Transcript
 
 from ..integration.scripts import wire
 from ..unit.runtime.gitting import commit, git, repository, working
-from ..unit.runtime.support import in_state, of_type, scripted, solo, until
+from ..unit.runtime.support import BALLOT, extension, in_state, of_type, scripted, solo, until
 from ..unit.tui.support import drawn, workspace
 from .support import SECONDS, chat, opened, said, serving
 
@@ -647,4 +647,27 @@ async def test_a_json_field_takes_only_json_and_shows_it_as_text(browser: Browse
 
     assert [event.data["fields"] for event in posted] == [{"owner": "<img src=x onerror=window.__pwned=1>"}]
     assert pwned is None and images == 0
+    assert errors == []
+
+
+async def test_the_page_runs_an_extension_s_op_through_its_form_and_never_asks_about_it(browser: Browser, root: Path):
+    """An op a team's extension adds is among Commands, worded by its own description, and runs through its form with
+    no question, as what is asked about first is the command line's list."""
+    team = acting().model_copy(update={"extensions": (extension(BALLOT),)})
+    async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "lead", "idle")
+        page, errors = await opened(browser, web.link("control"))
+        await form(page, "ballot cast")
+        await expect(page.locator("#pane .x-about")).to_have_text(
+            "Cast a vote on an agent's work, kept among that agent's own events."
+        )
+        await fill(page, {"--agent": "@lead", "--choice": "yes"})
+        await page.locator("#pane [data-x-run]").click()
+        await expect(page.locator("#pane .x-said")).to_have_text('ballot cast: done. {"choice":"yes"}', timeout=SECONDS)
+        asked = await page.locator(".x-ask").count()
+        voted = await of_type(session, "ballot.voted")
+        await page.context.close()
+
+    assert asked == 0
+    assert [(event.actor, event.data) for event in voted] == [("human:you", {"agent": "@lead", "choice": "yes"})]
     assert errors == []

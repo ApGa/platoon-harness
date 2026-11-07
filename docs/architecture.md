@@ -1974,7 +1974,8 @@ are caught before any code loads or any cost is spent. Installing activates noth
 the same contracts.
 
 An extension op is usable through the SDK, MCP, `ph` and the generic UI with no core edit: every surface derives from `ops.list`, and any client
-can render any event from its `gist`. Unknown events survive export and replay. The command line derives its commands before any session exists, from
+can render any event from its `gist`. Both palettes offer it as a form, and neither asks about it first, since what is asked about first is the
+CLI's list. Unknown events survive export and replay. The command line derives its commands before any session exists, from
 the SDK's own `registry`, so an extension's op has no command yet, and `Session.submit` is how to run one.
 
 **Configuration** is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `tomllib`, or built in Python. Precedence, low to high: defaults, user

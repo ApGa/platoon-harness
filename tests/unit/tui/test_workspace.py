@@ -26,7 +26,7 @@ from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _value
 
-from ..runtime.support import SECONDS, harness, in_state, of_type, until
+from ..runtime.support import BALLOT, SECONDS, extension, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
 from .support import at_once, drawn, workspace
 
@@ -434,6 +434,36 @@ async def test_the_palette_offers_no_wait_and_no_query(root):
 
 def _waits(entry: dict) -> bool:
     return entry["name"].partition(".")[0] == "wait"
+
+
+def balloting() -> Team:
+    """The team of `team()`, naming an extension no core code knows."""
+    return team().model_copy(update={"extensions": (extension(BALLOT),)})
+
+
+async def test_the_palette_offers_an_extension_s_op_with_no_core_edit_and_never_asks_about_it(root):
+    """An op a team's extension adds is in the palette as `ops.list` gives it, worded by its own description, and runs
+    through its form with no question, as what is asked about first is the command line's list: the keys sent answer
+    the form alone, so a question would have left the vote unsent."""
+    async with attached(balloting(), root) as (owner, app, pilot):
+        commands = {title: said for title, said, _ in workspace(app).commands()}
+        await pilot.press("ctrl+p", *"ballot cast")
+        await pilot.press("enter")
+        await drawn(pilot, lambda text: "agent: The agent whose work it is on" in text)
+        await pilot.press("enter", *"yes", "enter")
+        voted = await until(lambda: of_type(owner, "ballot.voted"), owner)
+        await drawn(pilot, lambda _: any(notice.message == "ballot cast: done" for notice in app._notifications))
+
+    assert commands["ballot cast"] == "Cast a vote on an agent's work, kept among that agent's own events."
+    assert [(event.actor, event.data) for event in voted] == [("human:you", {"agent": "@lead", "choice": "yes"})]
+
+
+async def test_an_extension_s_event_is_drawn_by_its_gist(root):
+    """The TUI knows nothing of an extension's event, and draws it by its gist where its stream is shown."""
+    async with attached(balloting(), root) as (owner, _, pilot):
+        await owner.submit("ballot.cast", agent="@lead", choice="no")
+
+        await drawn(pilot, lambda text: "· a vote on @lead's work: no" in text)
 
 
 @pytest.mark.parametrize("width", [120, 59])

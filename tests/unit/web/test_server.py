@@ -27,7 +27,7 @@ from platoon_harness_cli.web.page import load
 from platoon_harness_cli.web.projection import Projection
 from platoon_harness_cli.web.server import Web
 
-from ..runtime.support import harness, in_state, of_type, until
+from ..runtime.support import BALLOT, extension, harness, in_state, of_type, until
 from .support import QUIET, Browser, caught_up, scenario, served, team
 
 pytestmark = pytest.mark.timeout(60)
@@ -749,6 +749,23 @@ async def test_the_page_is_given_each_write_op_s_form_worded_as_the_command_line
         ("--stays", "yes-no", [], False, None),
         ("--based-on", "list", [], False, []),
     ]
+
+
+async def test_the_page_is_given_an_extension_s_op_s_form_with_no_core_edit(root, clock):
+    """An op a team's extension adds is among the page's forms as `ops.list` gives it, worded by its own description,
+    each field by its flag, and never asked about, as what is asked about first is the command line's list."""
+    team = QUIET.model_copy(update={"extensions": (extension(BALLOT),)})
+    async with Session.start(team, name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
+        await in_state(session, "lead", "idle")
+        x = (await (await Browser(web).opened("control")).view("view_info"))["x"]
+
+    ballot = next(form for form in x["forms"] if form["op"] == "ballot.cast")
+    assert ballot["said"] == "Cast a vote on an agent's work, kept among that agent's own events."
+    assert [_shape(field) for field in ballot["fields"]] == [
+        ("--agent", "text", [], True, None),
+        ("--choice", "choice", ["yes", "no"], True, None),
+    ]
+    assert "ballot.cast" in x["may"] and "ballot.cast" not in x["confirmed"]
 
 
 def _shape(field: dict) -> tuple:
