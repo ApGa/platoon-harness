@@ -7,7 +7,7 @@ import pytest
 from platoon_harness import Session
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.primitives.approvals import ASK_LIMIT
+from platoon_harness.primitives.approvals import ASK_LIMIT, bounded
 from platoon_harness.primitives.common import RESULT_LIMIT
 from platoon_harness.testing import Ask
 
@@ -228,6 +228,11 @@ async def test_an_ask_nobody_said_has_no_cut_and_a_cut_needs_an_ask(kernel):
     [asked] = of_type(kernel, "approval.requested")
     assert (asked.data["body"], asked.data["cut"]) == (None, None)
     assert refusal(refused).code == "invalid"
+
+
+def test_a_lone_surrogate_in_an_ask_is_kept_as_its_escape():
+    """As a JavaScript harness's JSON can send one, which UTF-8 cannot hold: written as JSON wrote it, not as `?`."""
+    assert bounded("caf\udcc3\udca9 tail") == (b"caf\\udcc3\\udca9 tail", 0)
 
 
 async def test_an_ask_past_its_bound_is_cut_and_says_where(tmp_path):

@@ -57,8 +57,9 @@ out. A cut with no body is refused, as there is nothing it could count.
 
 The host masks every report with the credentials the agent holds, in each form a text can carry one, before it takes it, and the
 ask is masked with the rest. Then it keeps the ask whole up to 64 KiB, the most the journal holds in an event's own body, and past
-that its first 64 KiB, cut at the end of the last whole character, adding the bytes it left out to `cut`. It stores what it kept as
-a body, as it stores an item's. Masking comes first, so a cut never splits a secret into a part the mask would miss.
+that its first 64 KiB, cut at the end of the last whole character, adding the bytes it left out to `cut`. It stores what it kept
+as a body, as it stores an item's, in UTF-8, where a lone surrogate, which a harness's JSON can carry and UTF-8 cannot, is written
+as its escape, `\udcc3`, and not replaced. Masking comes first, so a cut never splits a secret into a part the mask would miss.
 
 The bound is the host's, and not each driver's, so every driver and a wire program in any language get it without a rule of their
 own, and no ask reaches the journal unbounded. A patch's record and a test's output keep the same 64 KiB, so an ask is held as

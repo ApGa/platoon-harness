@@ -106,9 +106,10 @@ def _decide(txn: Txn, id: str, agent: str, verdict: str, by: str, via: str | Non
 
 
 def bounded(ask: str) -> tuple[bytes, int]:
-    """An ask as its record keeps it, in UTF-8: whole, or its first `ASK_LIMIT` bytes cut at the end of the last whole
-    character, and how many bytes of it that leaves out. Mask it first, as a cut can split a secret."""
-    whole = ask.encode(errors="replace")
+    """An ask as its record keeps it, in UTF-8, where a lone surrogate, which a harness's JSON can carry and UTF-8
+    cannot, is written as its escape, `\\udcc3`, and not lost: whole, or its first `ASK_LIMIT` bytes cut at the end of
+    the last whole character, and how many bytes of it that leaves out. Mask it first, as a cut can split a secret."""
+    whole = ask.encode(errors="backslashreplace")
     if len(whole) <= ASK_LIMIT:
         return whole, 0
     kept = whole[:ASK_LIMIT].decode(errors="ignore").encode()
