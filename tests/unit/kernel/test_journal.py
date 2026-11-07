@@ -32,6 +32,14 @@ async def test_journal_uses_the_pragmas_the_spike_chose(kernel, pragma, value):
     assert kernel._writer._db.execute(f"PRAGMA {pragma}").fetchone()[0] == value
 
 
+@pytest.fixture
+def no_checkpoint_thread(monkeypatch):
+    """The checkpoint thread held off for an hour, so a commit's WAL frames stay where it left them on a slow machine:
+    it checkpoints every second of wall time."""
+    monkeypatch.setattr(journal, "CHECKPOINT_SECONDS", 3600.0)
+
+
+@pytest.mark.usefixtures("no_checkpoint_thread")
 async def test_a_checkpoint_moves_the_wal_off_the_commit_path(kernel, folder):
     result_of(await kernel.submit(kernel.runtime, "note.add", {}))
     db = sqlite3.connect(folder / "journal.sqlite", autocommit=True)
