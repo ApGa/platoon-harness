@@ -20,7 +20,7 @@ from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN, read_run
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 from ...integration.scripts import wire
-from .support import SECONDS, harness, in_state, of_type, scripted, solo, until
+from .support import SECONDS, harness, in_state, of_type, offers, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -45,6 +45,7 @@ COVERED = {
     "budget.set": "set_budget",
     "budget.status": "budgets",
     "contributors": "contributors",
+    "context.show": "shown",
     "channel.create": "create_channel",
     "channel.list": "channels",
     "effect.settle": "settle_effect",
@@ -774,6 +775,16 @@ async def test_a_body_is_its_hash_to_the_body_api_and_read_by_the_ref_of_its_eve
         await session.tombstone(body)
         with pytest.raises(Refused):
             await session.get_body(body)
+
+
+async def test_what_an_offer_showed_through_the_facade(tmp_path):
+    """A person's message to an agent is handed over as its gist, which the session gives back by the offer's ref."""
+    async with Session.start(solo(Say("ok")), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "find the bug")
+        (offer,) = await until(lambda: offers(session), session)
+
+        assert await session.shown(f"{offer.stream}@{offer.version}") == ("find the bug",)
 
 
 async def test_lifecycle_through_the_facade(tmp_path):

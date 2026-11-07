@@ -240,6 +240,11 @@ def decoded(data: bytes) -> str | None:
         return None
 
 
+def shown_gist(gist: str, fields: Mapping[str, Any] | None = None) -> str:
+    """The text an offer shows of a gist and any fields shown beside it."""
+    return json.dumps([gist, fields], ensure_ascii=False, sort_keys=True) if fields else gist
+
+
 class Exposed(BaseModel, frozen=True):
     """One thing offered to an agent. `form` is `gist` or `body`, recorded apart, and `digest` hashes what it saw."""
 
@@ -255,8 +260,7 @@ class Exposed(BaseModel, frozen=True):
     @classmethod
     def gist(cls, ref: str, gist: str, fields: Mapping[str, Any] | None = None) -> "Exposed":
         """A gist shown, and any fields shown beside it, which its digest covers too."""
-        shown = json.dumps([gist, fields], ensure_ascii=False, sort_keys=True) if fields else gist
-        return cls.of(ref, "gist", shown)
+        return cls.of(ref, "gist", shown_gist(gist, fields))
 
 
 def expose(

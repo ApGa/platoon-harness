@@ -86,6 +86,14 @@ while the turn its event was made in has not ended, since a later report can sti
 says whether its lines were shown as exposure says whether its event was: true when a confirmed offer showed them, and otherwise
 null, as no answer can say they were not.
 
+## What an offer showed
+
+An offer records what it showed by the ref of each event and a digest of what it showed of it, never the text. `context.show(offer)`,
+`Session.shown(offer)` and `platoon-harness context show`, gives that text back by the offer's ref, `context/<agent>@<version>`,
+item by item in the offer's order: a gist as it was shown, with any fields beside it, as a board entry's are, and a body or the
+lines of one. Each is given where the journal proves it by the item's digest, and is null where it does not, as for a body redacted
+since or one past 64 KiB, which the journal keeps outside it. A training system shows a model call's inputs this way.
+
 ## Spans
 
 `spans(agent)` cuts each turn of an agent where its model calls chose its writes: a turn is cut after each call that chose one of the

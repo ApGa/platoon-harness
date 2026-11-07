@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **What an offer showed, by its ref.** `context.show(offer)`, a query op with `Session.shown(offer)` and the command
+  `context show`: the text each item of an offer showed, in the offer's order, a gist as it was shown, with any fields beside
+  it, and a body or the lines of one, each where the journal proves it by the item's digest, a child's report and a board's
+  announce, shown by the event they carry, among them, and null where it does not, as for a body redacted since or past 64 KiB.
+  A training system shows a model call's inputs this way, and builds no form of its own of a gist shown with its fields, which
+  was private. See [RFC 0063](docs/rfcs/0063-what-an-offer-showed-is-answered-by-its-ref.md).
 - **Screenshots of the terminal UI, from its snapshot tests.** `docs/assets/tui-*.svg` are the snapshot tests' seven SVGs, byte
   for byte, which a test holds equal: the workspace at five sizes, the review list and the provenance panel, each drawn on
   scripted harnesses. The README, the terminal UI guide and both team examples show or link them, each captioned with what drew

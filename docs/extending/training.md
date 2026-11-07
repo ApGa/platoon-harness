@@ -240,7 +240,10 @@ on its row less its agent's baseline shared equally by that agent's scored spans
 
 The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside its
 journal. It holds no key, as bearers lived only in the harnesses' environments. Read it with `Session.attach` once its runtime has
-stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy.
+stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy. To show what a model call took in,
+read each offer its harness said it took, a `context.offered` its `context.delivered` names, with `Session.shown(offer)`: the
+text each item showed, a gist as it was shown, with any fields beside it, and a body or the lines of one, or None where the
+journal does not prove it by the item's digest. The form a gist is shown in is the SDK's to change, so read it there.
 
 ## Test without a training system
 

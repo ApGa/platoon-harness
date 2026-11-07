@@ -1,16 +1,18 @@
 """Provenance: what reached an agent, what an event rests on, what rests on it, and whose work an outcome reaches.
 
 The graph is not stored. Three views index the references events already hold, `Exposures` among them, and the queries
-answer from them, for people and programs and never as an agent's tool: four about events, and `spans`, which cuts an
-agent's turns where its model calls chose its writes. A query reads the journal alone, and never an annotation. See
-architecture section 11.
+answer from them, for people and programs and never as an agent's tool: four about events, `spans`, which cuts an
+agent's turns where its model calls chose its writes, and `context.show`, the text each item of an offer showed. A query
+reads the journal alone, and never an annotation. See architecture section 11.
 """
 
 import json
 import sqlite3
+import sys
 from collections import defaultdict, deque
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import cache, partial
+from hashlib import sha256
 from typing import Annotated, Any, Literal, NamedTuple, get_args
 
 from pydantic import Field
@@ -20,8 +22,21 @@ from platoon_harness.schema import Model
 
 from .agents import Agents
 from .clients import Gaps
-from .common import DIGEST_ITEMS, AgentName, event_at, inline_body, maker, name_of, parts_of
+from .common import (
+    DIGEST_ITEMS,
+    AgentName,
+    body_of,
+    decoded,
+    event_at,
+    inline_body,
+    lines_of,
+    maker,
+    name_of,
+    parts_of,
+    shown_gist,
+)
 from .exposures import Exposures
+from .messages import Deliveries
 from .repo import Looks, Uncited
 from .reports import GAPS, Surface
 
@@ -1155,3 +1170,58 @@ def spans(txn: Txn, a: AskedOfAgent) -> Spans:
         head=stamps.head(),
         open=stamps.turn(a.agent) is not None,
     )
+
+
+# What an offer showed.
+
+
+class AskedOfOffer(Args):
+    offer: Annotated[str, Field(max_length=1024, description="An offer's ref, `context/<agent>@<version>`.")]
+
+
+def _gists(txn: Txn, ref: str) -> Iterator[str]:
+    """Each text an offer can have shown as the gist of the event `ref` names: the gist of each entry shown by that ref,
+    a message or one that carries the event, and the event's own: a spawn's goal, a commit's gist with its SHA and its
+    workspace, and any other's gist with the fields it holds, as a board entry's."""
+    for entry in txn.view(Deliveries).shown_by(ref):
+        yield entry.gist
+    event = event_at(txn, ref)
+    if event is None:
+        return
+    if event.type == "agent.spawned":
+        yield event.data["goal"]
+    elif event.type == "repo.committed":
+        yield shown_gist(event.gist, {"sha": event.data["sha"], "made_in": event.data["made_in"]})
+    else:
+        yield shown_gist(event.gist, event.data.get("fields"))
+
+
+def _bodies(txn: Txn, ref: str, digest: str) -> Iterator[str]:
+    """Each text an offer can have shown as a body: the whole body its digest names, and the lines `ref` names of the
+    body of the event it names. Only a body held in the journal is read, as no op reads `blobs/`."""
+    whole = inline_body(txn, f"sha256:{digest}")
+    if whole is not None and (text := decoded(whole)) is not None:
+        yield text
+    named, _, lines = ref.partition("#")
+    event = event_at(txn, named) if lines else None
+    body = None if event is None else body_of(event)
+    data = None if body is None else inline_body(txn, body)
+    text = None if data is None else decoded(data)
+    if text is not None and (cut := lines_of(named, text, lines, sys.maxsize).text) is not None:
+        yield cut
+
+
+@op("context.show", query=True)
+def show(txn: Txn, a: AskedOfOffer) -> list[str | None]:
+    """Show the text each item of an offer showed, in the offer's order, where the journal proves it by the item's
+    digest: a gist as it was shown, with any fields beside it, and a body or the lines of one. Each other is null, as a
+    body redacted since, or one past 64 KiB, which the journal keeps outside it. Refused `invalid` for a ref that names
+    no offer, and `not_found` for no such event."""
+    event = _asked(txn, a.offer)
+    if event.type != "context.offered":
+        raise Refused("invalid", f"{a.offer[:80]} is a {event.type}, and no offer")
+    shown = []
+    for item in event.data["items"]:
+        texts = _bodies(txn, item["ref"], item["digest"]) if item["form"] == "body" else _gists(txn, item["ref"])
+        shown.append(next((text for text in texts if sha256(text.encode()).hexdigest() == item["digest"]), None))
+    return shown

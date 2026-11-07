@@ -575,7 +575,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
-| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` |
+| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` `context.show` |
 | Evidence, kernel | `body.tombstone` | |
 | Repository | `repo.test` `repo.commit` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
@@ -1421,6 +1421,12 @@ await session.contributors("task/tasks/1@3")                                    
   hops, the surfaces no result proves observed and the gaps content could come through below them. Apart from them it names each maker
   whose events were only offered to a walked maker, which the walk does not go through, and it says how far it walked and whether it
   stopped short. It is reachability in the record and never credit: it weighs and ranks nobody.
+- **`context.show(offer)`**, `Session.shown`, gives the text each item of an offer showed, in the offer's order, where the journal
+  proves it by the item's digest: a gist as it was shown, with any fields beside it, and a body or the lines of one. A gist shown is
+  the event's own, a board entry's with its fields and a commit's with its SHA and workspace, or a spawn's goal, or that of an entry
+  shown by the event's ref, a message or one that carries the event, as a child's report or a board's announce does. Anything else
+  is null, a body redacted since or one in `blobs/` among it, as no op reads there. It asks about an offer, so any other ref is
+  refused `invalid`.
 
 The queries ask about events, so a range or a body's hash is refused `invalid`, naming what to ask by, and so is an `agent` that is a
 person or a program, whose reading is no evidence. They read the journal alone, never an annotation, and answer alike after a rebuild

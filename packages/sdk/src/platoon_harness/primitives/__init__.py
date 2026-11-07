@@ -157,6 +157,7 @@ PRIMITIVES = (
     Extension("contributors", ops=[provenance.contributors]),
     Extension("eligibility", ops=[eligibility.eligibility]),
     Extension("spans", ops=[provenance.spans]),
+    Extension("context", ops=[provenance.show]),
 )
 
 __all__ = [

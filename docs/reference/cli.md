@@ -130,6 +130,8 @@ For example:
 - [`channel`](#platoon-harness-channel)
     - [`create`](#platoon-harness-channel-create)
     - [`list`](#platoon-harness-channel-list)
+- [`context`](#platoon-harness-context)
+    - [`show`](#platoon-harness-context-show)
 - [`contributors`](#platoon-harness-contributors)
 - [`effect`](#platoon-harness-effect)
     - [`settle`](#platoon-harness-effect-settle)
@@ -186,6 +188,7 @@ For example:
 * [`body`](#platoon-harness-body): Stored bodies: redact one, keeping whole the events that cite it.
 * [`budget`](#platoon-harness-budget): Budgets: set a scope's limits, and see what is spent and held against each.
 * [`channel`](#platoon-harness-channel): Channels: create a topic, queue or board, and list those you may use.
+* [`context`](#platoon-harness-context): What agents were offered: show the text each item of an offer showed.
 * [`contributors`](#platoon-harness-contributors): Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
 * [`effect`](#platoon-harness-effect): Effects whose outcome is uncertain: say whether one happened, when nothing else can tell.
 * [`eligibility`](#platoon-harness-eligibility): Say whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked` or none, and its verdict with each bar, of a closed set, and the same for a page of its model calls, oldest first, each eligible when its agent is and it has no bar of its own.
@@ -1294,6 +1297,32 @@ For example:
 **Parameters**:
 
 * `--after`: A `cursor` from an earlier call.
+
+### platoon-harness context
+
+What agents were offered: show the text each item of an offer showed.
+
+#### platoon-harness context show
+
+```console
+platoon-harness context show --offer STR SESSION
+```
+
+Show the text each item of an offer showed, in the offer's order, where the journal proves it by the item's digest: a gist as it was shown, with any fields beside it, and a body or the lines of one.
+
+Each other is null, as a body redacted since, or one past 64 KiB, which the journal keeps outside it. Refused `invalid` for a ref that names no offer, and `not_found` for no such event.
+
+For example:
+
+    platoon-harness context show SESSION --offer OFFER
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--offer`: An offer's ref, `context/<agent>@<version>`. **[required]**
 
 ### platoon-harness contributors
 

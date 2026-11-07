@@ -46,6 +46,7 @@ _PURPOSES = {
     "body": "Stored bodies: redact one, keeping whole the events that cite it.",
     "budget": "Budgets: set a scope's limits, and see what is spent and held against each.",
     "channel": "Channels: create a topic, queue or board, and list those you may use.",
+    "context": "What agents were offered: show the text each item of an offer showed.",
     "effect": "Effects whose outcome is uncertain: say whether one happened, when nothing else can tell.",
     "episode": "Episodes: open and close a part of the session with one outcome, as only events inside one can become "
     "training data.",

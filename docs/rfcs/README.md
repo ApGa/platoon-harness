@@ -78,6 +78,7 @@ amended or extended an RFC.
 | [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted |
 | [0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) | A child ends cancelled with its parent only for a turn under way | Accepted |
+| [0063](0063-what-an-offer-showed-is-answered-by-its-ref.md) | What an offer showed is answered by its ref | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

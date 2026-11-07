@@ -4,6 +4,7 @@ four queries of architecture section 11."""
 import asyncio
 import json
 import shutil
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -41,13 +42,16 @@ from .support import (
     report,
     result_of,
     send,
+    settle_effects,
     spawn,
+    start,
     start_turn,
 )
 
 EXPOSURE: TypeAdapter[Seen | NotSeen | Unknown] = TypeAdapter(Exposure)
 SURFACES = ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
 PROVENANCE = ("exposure", "lineage", "uses", "contributors")
+QUERIES = (*PROVENANCE, "context.show")
 COVERAGE = {
     **{
         name: dict(module._CAPABILITIES.coverage)
@@ -142,6 +146,7 @@ def answers(kernel: Kernel, refs: dict[str, str]) -> list[Any]:
         ask(kernel, "lineage", ref=refs["message"]),
         ask(kernel, "uses", ref=refs["posted"]),
         ask(kernel, "contributors", ref=refs["message"]),
+        *(ask(kernel, "context.show", offer=ref_of(offer)) for offer in of_type(kernel, "context.offered")),
     ]
 
 
@@ -953,7 +958,7 @@ async def test_a_compaction_marks_only_by_the_delivered_native_id(kernel):
     ]
 
 
-@pytest.mark.parametrize("op", PROVENANCE)
+@pytest.mark.parametrize("op", QUERIES)
 def test_the_provenance_queries_are_no_agent_s_tool(op):
     from platoon_harness.kernel import registry
 
@@ -970,6 +975,86 @@ def test_provenance_reads_no_annotation():
         for path in (sdk / part).rglob("*.py"):
             text = path.read_text()
             assert "annotations.sqlite" not in text and "annotations import" not in text, path
+
+
+# What an offer showed.
+
+
+def shown(kernel: Kernel, offer: Any) -> list[str | None]:
+    return ask(kernel, "context.show", offer=ref_of(offer))
+
+
+@pytest.mark.parametrize("repo", [REPO])
+async def test_context_show_gives_the_text_each_item_of_an_offer_showed(kernel):
+    """Every way an offer is made: a launch's goal, its body and its instructions, a handover of a board's announce and
+    of a child's report, each shown by the event it carries, and reads of a board entry with its fields and its lines, a
+    message with its body, a task and its result, and a commit."""
+    await channel(kernel, "notes", kind="board", delivery="wake")
+    await channel(kernel, "work", kind="queue")
+    alice, bob = await spawn(kernel, "alice", goal=""), Principal(id="agent:bob")
+    spawned = {"name": "bob", "child_role": "lead", "goal": "find the bug", "body": await stored(kernel, "all of it\n")}
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", spawned))
+    await settle_effects(kernel, "bob")
+    await start(kernel, "bob")
+    told = {"agent": "bob", "body": await stored(kernel, "be careful\n"), "goal": True}
+    launch = result_of(await kernel.submit(kernel.runtime, "agent.instruct", told))
+    body = await stored(kernel, "one\ntwo\nthree\n")
+    post = {"board": "notes", "name": "spec", "gist": "v1", "body": body, "fields": {"state": "draft", "by": "Zoë"}}
+    result_of(await kernel.submit(alice, "board.post", post))
+    announced = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))["input"]
+    await settle_effects(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await confirm(kernel, "bob", announced)
+    result_of(await kernel.submit(bob, "board.get", {"board": "notes", "name": "spec", "range": "L2-3"}))
+    result_of(await kernel.submit(bob, "board.query", {"board": "notes"}))
+    await send(kernel, alice, "@bob", "see this", body=await stored(kernel, "the details\n"))
+    result_of(await kernel.submit(bob, "message.read", {"bodies": True}))
+    result_of(await kernel.submit(alice, "task.add", {"queue": "work", "gist": "fix it"}))
+    result_of(await kernel.submit(bob, "task.claim", {"queue": "work"}))
+    result_of(await kernel.submit(bob, "task.complete", {"queue": "work", "gist": "fixed"}))
+    result_of(await kernel.submit(bob, "task.list", {"queue": "work"}))
+    await spawn(kernel, "carol", role="linked", by=bob, goal="")
+    await end_turn(kernel, "bob")
+    await start_turn(kernel, "carol")
+    await end_turn(kernel, "carol", "failed")
+    reported = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))["input"]
+    await recorded(kernel, [commit(ROOT, [], "@alice", [])])
+    result_of(await kernel.submit(bob, "repo.commit", {"sha": ROOT}))
+
+    offers = of_type(kernel, "context.offered")
+    texts = {offer.seq: shown(kernel, offer) for offer in offers}
+
+    assert [offer.data["how"] for offer in offers] == ["launch", "wake", *["read"] * 5, "wake", "read"]
+    for offer in offers:
+        digests = [item["digest"] for item in offer.data["items"]]
+        assert [sha256(text.encode()).hexdigest() for text in texts[offer.seq]] == digests
+    assert texts[launch] == ["find the bug", "all of it\n", "be careful\n"]
+    assert texts[announced] == ["spec: v1"]
+    fields = json.dumps(["v1", {"by": "Zoë", "state": "draft"}], ensure_ascii=False, sort_keys=True)
+    assert texts[offers[2].seq] == [fields, "two\nthree\n"]
+    assert texts[offers[3].seq] == [fields]
+    assert texts[offers[4].seq] == ["see this", "the details\n"]
+    assert [texts[offer.seq] for offer in offers[5:7]] == [["fix it"], ["fix it", "fixed"]]
+    assert texts[reported] == ["carol turn failed"]
+    assert texts[offers[-1].seq] == [json.dumps([f"{ROOT[:12]} aaaa", {"made_in": "@alice", "sha": ROOT}])]
+
+
+async def test_context_show_says_null_for_what_the_journal_no_longer_proves(kernel, ada):
+    """A body redacted since is null beside its gist, and a ref that names no offer is refused."""
+    await channel(kernel, "notes", kind="board")
+    alice = await spawn(kernel, "alice")
+    body = await stored(kernel, "secret\n")
+    result_of(await kernel.submit(alice, "board.post", {"board": "notes", "name": "spec", "gist": "v1", "body": body}))
+    result_of(await kernel.submit(alice, "board.get", {"board": "notes", "name": "spec"}))
+    (offer,) = of_type(kernel, "context.offered")
+    before = shown(kernel, offer)
+
+    result_of(await kernel.submit(ada, "body.tombstone", {"sha256": body.removeprefix("sha256:")}))
+    asked = ["board/notes/spec@1", "nothing@1", f"{ref_of(offer)}#L1-2", body]
+    refused = [refusal(kernel.query(kernel.runtime, "context.show", {"offer": ref})).code for ref in asked]
+
+    assert (before, shown(kernel, offer)) == (["v1", "secret\n"], ["v1", None])
+    assert refused == ["invalid", "not_found", "invalid", "invalid"]
 
 
 # The property.

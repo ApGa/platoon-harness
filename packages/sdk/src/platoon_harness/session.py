@@ -848,6 +848,12 @@ class Session:
         `Unknown`, each with why, and never a boolean."""
         return _EXPOSURE.validate_python(await self._ask("exposure", agent=agent, ref=ref, before=before))
 
+    async def shown(self, offer: str) -> tuple[str | None, ...]:
+        """The text each item of an offer showed, by the offer's ref, in its order: a gist as it was shown, with any
+        fields beside it, and a body or the lines of one, where the journal proves it by the item's digest, and None
+        where it does not, as for a body redacted since or one past 64 KiB."""
+        return tuple(await self._ask("context.show", offer=offer))
+
     async def lineage(self, ref: str, *, after: str | None = None) -> Lineage:
         """One hop back from an event: who made it, what it cites with its citer's exposure, what it followed from, its
         ancestry, and a page of what its maker was offered and the gaps in its record. Pass `cursor` as `after`."""
