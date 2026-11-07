@@ -1,0 +1,1 @@
+Add a function `slug(text)` to `slug.py` that gives its text in lower case with its words joined by hyphens, and a test of it in `test_slug.py` that `python3 -m unittest` finds. Commit both on your branch and hand the commit to the reviewer.

@@ -23,6 +23,8 @@ Each example has a README that says what it does and how to run it.
   with no key and no model.
 - [A worktree team with a merge queue](../examples/worktree-merge-queue/README.md): workers on branches of their own
   handing them to one merger through a queue, a conflict reaching its worker as its task's result, with no keys too.
+- [A review and verification team](../examples/review-verification/README.md): an author's commit read by a reviewer and
+  checked by a verifier that cannot write, with your test of it as evidence, with no keys too.
 
 ## How-to guides
 

@@ -66,6 +66,17 @@ named here is closed.
   out, offers Set the budget, `budget.set` with the scope the record names, filled in with the limits and estimate it was set
   to, which `budget.set` replaces whole, for you to change, where it offered nothing. A wake refused by a limit no amount can
   hold says in its gist to remove it, and its refusal `unavailable` names its scope and unit as data, as `over_budget` does. See [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
+- **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
+  author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
+  `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the
+  runtime run a commit's code, and finishes with a verdict citing the commit, its task and your answer, which cites the
+  record of your `repo test`. It is the pipeline the topologies guide writes out, with each role's instructions saying its
+  part, and the team's `test` runs Python's `unittest`. Its README checks the team, runs it with no keys on stand-ins of
+  its own, has you test the commit and answer the verifier from a second shell, reads back whose work the verdict
+  rests on, and says what a run with no keys cannot show: that the verifier cannot write, which only a real harness
+  shows. A test runs the README's commands as it shows them, in a repository of its own. It has not run on real models.
+  That it ships is the default, pending the owner's ruling on which Git examples ship.
+
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and

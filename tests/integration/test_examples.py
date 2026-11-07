@@ -2,7 +2,10 @@
 scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, as the project's README and the first
 session's guide run it too, and on the real binaries against FakeModel, each model saying what a stand-in does; real
 models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver. The
-worktree team: its README's commands, in a repository of their own, on the stand-ins of `scripts.py` through `--set`."""
+worktree team: its README's commands, in a repository of their own, on the stand-ins of `scripts.py` through `--set`.
+The review team: its README's commands, in a repository of their own, on the stand-ins of its own `stand_ins.py`
+through `--set`, which show its flow and nothing of what a harness's sandbox or approvals stop, which only a run on
+the real harnesses does."""
 
 import asyncio
 import importlib.util
@@ -23,7 +26,7 @@ from platoon_harness.testing import Call, FakeModel, ToolCall
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import of_type
 from . import test_claude, test_codex, test_openhands, test_pi
-from .cli import ROOT, Cli, Done, finished, shown
+from .cli import ROOT, SECONDS, Cli, Done, finished, shown
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -31,6 +34,7 @@ EXAMPLE = ROOT / "examples" / "mixed-team"
 README = EXAMPLE / "README.md"
 SCRIPT = ROOT / "examples" / "sdk-script"
 WORKTREE = ROOT / "examples" / "worktree-merge-queue" / "README.md"
+REVIEW = ROOT / "examples" / "review-verification" / "README.md"
 FIRST = ROOT / "docs" / "getting-started" / "first-session.md"
 
 
@@ -84,16 +88,21 @@ async def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
     await asyncio.to_thread(made.end)
 
 
-async def typed(cli: Cli, command: str) -> Done:
-    """A command as a page shows it with the checkout's environment active: `platoon-harness` and its arguments, with
-    the variables it sets in front, where `path/to/platoon-harness` is this checkout."""
+async def started(cli: Cli, command: str) -> asyncio.subprocess.Process:
+    """A command as a page shows it with the checkout's environment active, started: `platoon-harness` and its
+    arguments, with the variables it sets in front, where `path/to/platoon-harness` is this checkout."""
     words = shlex.split(command.replace("path/to/platoon-harness", str(ROOT)))
     env = {}
     while re.fullmatch(r"[A-Z_]+=.*", words[0]):
         name, _, value = words.pop(0).partition("=")
         env[name] = value
     assert words[0] == "platoon-harness", command
-    return await finished(await cli.start(*words[1:], **env))
+    return await cli.start(*words[1:], **env)
+
+
+async def typed(cli: Cli, command: str) -> Done:
+    """A command as a page shows it, run to its end."""
+    return await finished(await started(cli, command))
 
 
 def the_other_way(ending: str) -> str:
@@ -124,6 +133,71 @@ async def test_the_worktree_team_hands_each_branch_to_its_merger_and_a_conflict_
     committed = [event["data"] for event in events if event["type"] == "repo.committed"]
     assert [commit["made_in"] for commit in committed if len(commit["parents"]) == 2] == ["@merger"]
     assert "needs you: conflict conflict/@merger, merge stopped on conflicts in 1 file, CONTRIBUTORS.md" in said.stdout
+
+
+async def journaled(following: asyncio.subprocess.Process, wanted: Callable[[dict[str, Any]], bool]) -> dict[str, Any]:
+    """The next event `events --follow --json` prints that is `wanted`."""
+    assert following.stdout is not None
+    async with asyncio.timeout(SECONDS):
+        while line := await following.stdout.readline():
+            if wanted(event := json.loads(line)):
+                return event
+    raise AssertionError("the session's runtime went before it journaled what was wanted")
+
+
+async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_test_is_its_evidence(repo: Cli):
+    """Its page's commands as it shows them, on the stand-ins of its own `stand_ins.py`: the team checks and says what
+    it allows, and the run goes on while the verifier waits for you, as `session show` says. Your test of the commit
+    the verifier names, and your answer citing the test's record, let it finish: its verdict cites the commit, which
+    it read through `repo.commit`, as the reviewer's review does, and your answer, so the record ties the verdict to
+    your test. The stand-ins show the flow, and nothing of what Codex's read-only sandbox or the approvals denied stop:
+    only a run on the real harnesses shows that the verifier cannot write."""
+    check, show = shown(REVIEW, where="team check")[1:]
+    [run] = shown(REVIEW, where="--prompt-file")
+    asking, testing, watching, answering = shown(REVIEW, where="repo test")
+    listing, reaching = shown(REVIEW, where="contributors")
+
+    checked, told = await typed(repo, check), await typed(repo, show)
+    running = await started(repo, run)
+    assert running.stdout is not None and await asyncio.wait_for(running.stdout.readline(), SECONDS)
+    following = await repo.start("events", "review", "--follow", "--json")
+    asked = await journaled(following, lambda event: event["stream"] == "inbox/you")
+    showed = await typed(repo, asking)
+    sha = asked["gist"].split()[2]
+    tested = await typed(repo, testing.replace("SHA", sha))
+    record = await journaled(following, lambda event: event["type"] == "repo.tested")
+    [commit_row] = [row for row in json.loads((await typed(repo, watching)).stdout)["rows"] if row["kind"] == "commit"]
+    answered = await typed(repo, answering.replace("TESTED", commit_row["tested"]))
+    ran = await finished(running)
+    listed, reached = await typed(repo, listing), await typed(repo, reaching)
+
+    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(REVIEW, "to-reviewer")), checked
+    assert f"needs you: mention inbox/you@1, {asked['gist']}" in showed.stdout
+    assert (tested.code, record["data"]["outcome"], commit_row["tested"]) == (0, "passed", ref(record)), tested.stderr
+    assert answered.code == 0 and ran.code == 0, answered.stderr
+    assert ran.stdout.endswith(expected(REVIEW, "settled")), ran.stdout[-600:]
+    events = await journal(repo, "review")
+    [commit] = [event for event in events if event["type"] == "repo.committed"]
+    [answer] = [event for event in events if event["stream"] == "inbox/verifier" and event["actor"] == "human:you"]
+    done = {event["stream"]: event for event in events if event["type"] == "task.completed"}
+    ends = {event["agent"]: event for event in events if event["type"] == "agent.finished"}
+    offered = [event["data"] for event in events if (event["type"], event["agent"]) == ("context.offered", "verifier")]
+    read = [item["ref"] for data in offered if data["how"] == "read" for item in data["items"]]
+    assert record["data"]["sha"] == commit["data"]["sha"] and commit["data"]["sha"].startswith(sha)
+    assert commit["data"]["made_in"] == "@author"
+    assert asked["based_on"] == [ref(commit)] and ref(commit) in read
+    assert done["task/to-reviewer/1"]["based_on"] == [ref(commit)]
+    assert answer["based_on"] == [ref(record)] and answer["data"]["reply_to"] == "inbox/you@1"
+    verdict = [ref(commit), "task/to-verifier/1@1", ref(answer)]
+    assert done["task/to-verifier/1"]["based_on"] == ends["verifier"]["based_on"] == verdict
+    assert [task["result"] for task in json.loads(listed.stdout)["tasks"]] == [ends["verifier"]["data"]["gist"]]
+    assert [(row["maker"], row["first"]) for row in json.loads(reached.stdout)["rows"]] == [
+        ("agent:verifier", "task/to-verifier/1@3"),
+        ("agent:author", ref(commit)),
+        ("agent:reviewer", "task/to-verifier/1@1"),
+        ("human:you", ref(answer)),
+        ("runtime", ref(record)),
+    ]
 
 
 def ref(event: dict) -> str:
