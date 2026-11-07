@@ -21,6 +21,8 @@ Each example has a README that says what it does and how to run it.
   steered and read back, with no keys too.
 - [A headless script](../examples/sdk-script/README.md): a team run from Python on the SDK alone, waited on and read back,
   with no key and no model.
+- [A worktree team with a merge queue](../examples/worktree-merge-queue/README.md): workers on branches of their own
+  handing them to one merger through a queue, a conflict reaching its worker as its task's result, with no keys too.
 
 ## How-to guides
 

@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **A worktree team with its merge queue written out.** [examples/worktree-merge-queue](examples/worktree-merge-queue/README.md):
+  a Claude Code lead, Codex workers each in a worktree of its own and a Claude Code merger in a worktree of its own, the
+  `merges` queue of RFC 0058 with each role's instructions saying its part, and a README that checks it, runs it with no keys
+  on the test suite's stand-ins, reads back each merge and the conflict that reaches its worker as its task's result, and
+  says how to run it on real harnesses, which it has not run on yet. A test runs the README's commands as it shows them, in a
+  repository of its own.
 - **Spans: each agent's turns cut at its writes.** `spans(agent)`, a query op with `Session.spans` and the command `spans`: each
   turn of an agent cut after each model call that chose a write of content, one of the eight it made itself, as the record joins
   the op's anchor, the tool item holding it and that item's call, with a trailing piece that has no write joining the span

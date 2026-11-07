@@ -1,12 +1,14 @@
 """The examples as their pages run them, with no keys. The mixed team: its README's own command, which swaps the
 scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, as the project's README and the first
 session's guide run it too, and on the real binaries against FakeModel, each model saying what a stand-in does; real
-models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver."""
+models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver. The
+worktree team: its README's commands, in a repository of their own, on the stand-ins of `scripts.py` through `--set`."""
 
 import asyncio
 import importlib.util
 import json
 import re
+import shlex
 import shutil
 from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
@@ -18,15 +20,17 @@ import pytest
 from platoon_harness import Session, load_team
 from platoon_harness.testing import Call, FakeModel, ToolCall
 
+from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import of_type
 from . import test_claude, test_codex, test_openhands, test_pi
-from .cli import ROOT, Cli, shown
+from .cli import ROOT, Cli, Done, finished, shown
 
 pytestmark = pytest.mark.timeout(120)
 
 EXAMPLE = ROOT / "examples" / "mixed-team"
 README = EXAMPLE / "README.md"
 SCRIPT = ROOT / "examples" / "sdk-script"
+WORKTREE = ROOT / "examples" / "worktree-merge-queue" / "README.md"
 FIRST = ROOT / "docs" / "getting-started" / "first-session.md"
 
 
@@ -67,6 +71,59 @@ async def test_the_sdk_script_runs_a_team_with_no_keys_and_the_command_line_read
     assert match[1] in (await cli.as_shown(listing)).stdout
     read = await cli.as_shown(reading.replace("NAME", match[1]))
     assert read.code == 0 and "counter-2" in read.stdout, read.stderr
+
+
+@pytest.fixture
+async def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Cli]:
+    """The command line in a repository of its own with a commit, which ignores the state root there, as the worktree
+    team's page runs it from a repository of yours."""
+    folder = repository(tmp_path / "repo", monkeypatch)
+    (folder / ".git" / "info" / "exclude").write_text("home/\n")
+    made = Cli(folder)
+    yield made
+    await asyncio.to_thread(made.end)
+
+
+async def typed(cli: Cli, command: str) -> Done:
+    """A command as a page shows it with the checkout's environment active: `platoon-harness` and its arguments, with
+    the variables it sets in front, where `path/to/platoon-harness` is this checkout."""
+    words = shlex.split(command.replace("path/to/platoon-harness", str(ROOT)))
+    env = {}
+    while re.fullmatch(r"[A-Z_]+=.*", words[0]):
+        name, _, value = words.pop(0).partition("=")
+        env[name] = value
+    assert words[0] == "platoon-harness", command
+    return await finished(await cli.start(*words[1:], **env))
+
+
+def the_other_way(ending: str) -> str:
+    """The worktree team's ending with `ada` and `bob` the other way round, each agent's line where it stands."""
+    swapped = re.sub(r"\b(ada|bob)\b", lambda name: {"ada": "bob", "bob": "ada"}[name[1]], ending)
+    first, one, other, *rest = swapped.splitlines(keepends=True)
+    return "".join([first, other, one, *rest])
+
+
+async def test_the_worktree_team_hands_each_branch_to_its_merger_and_a_conflict_back_through_the_task(repo: Cli):
+    """Its page's commands as it shows them, on the stand-ins it names: the team checks and says what it allows, and
+    the run settles as the page says, one branch merged by a commit the look records as the merger's and the other's
+    conflict in its task's result, which its worker finishes with, the merger under Needs you while it rests on it."""
+    check, show = shown(WORKTREE, where="team check")[1:]
+    [run] = shown(WORKTREE, where="--prompt-file")
+    listing, showing = shown(WORKTREE, where="task list")
+
+    checked, told, ran = await typed(repo, check), await typed(repo, show), await typed(repo, run)
+    listed, said = await typed(repo, listing), await typed(repo, showing)
+
+    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(WORKTREE, "merges")), checked
+    ending = expected(WORKTREE, "settled")
+    assert ran.code == 0 and ran.stdout.endswith((ending, the_other_way(ending))), ran.stdout[-600:]
+    events = await journal(repo, "contributors")
+    reports = {event["agent"]: event["data"]["gist"] for event in events if event["type"] == "agent.finished"}
+    results = {task["gist"].rpartition("/")[2]: task["result"] for task in json.loads(listed.stdout)["tasks"]}
+    assert results == {name: reports[name] for name in ("ada", "bob")}
+    committed = [event["data"] for event in events if event["type"] == "repo.committed"]
+    assert [commit["made_in"] for commit in committed if len(commit["parents"]) == 2] == ["@merger"]
+    assert "needs you: conflict conflict/@merger, merge stopped on conflicts in 1 file, CONTRIBUTORS.md" in said.stdout
 
 
 def ref(event: dict) -> str:

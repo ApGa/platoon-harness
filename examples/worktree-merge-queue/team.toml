@@ -1,0 +1,37 @@
+# A Claude Code lead, Codex workers each in a worktree of its own, and a Claude Code merger in a worktree of its own.
+# Workers add their branches to the queue `merges`, and the merger merges each into its own branch with git: the runtime
+# never merges. Each role's instructions say its part. The workers commit and the merger merges, and each git command
+# that writes asks for an approval, which nobody is there to answer in a headless run, so those two roles allow theirs:
+# they run git as you. Swap a harness with `--set`, as the mixed team's README shows.
+
+[roles.lead]
+harness = "claude"
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "codex"
+workspace = "worktree"
+approvals = "allow"
+instructions = """Commit your work on your branch, then add a task to the queue `merges` whose gist is `merge` and your \
+branch's name. Wait on that task, and when it settles, finish with its result."""
+
+[roles.merger]
+harness = "claude"
+workspace = "worktree"
+approvals = "allow"
+instructions = """Claim each task on the queue `merges` and merge the branch it names into your own with `git merge \
+--no-ff`. Complete the task with what came of that: that it merged, or on a conflict the paths in conflict, leaving the \
+merge for a person to see. When the queue is empty, wait for work on it."""
+
+[topology.manager-worker]
+manager = "lead"
+workers = "worker"
+
+[topology.channels.merges]
+kind = "queue"
+writers = "role:worker"
+readers = "role:merger"
+
+[budget]
+turns = 20
+wall = "15m"

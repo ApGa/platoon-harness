@@ -5,7 +5,9 @@ import gc
 import itertools
 import json
 import sqlite3
+import subprocess
 import sys
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -108,6 +110,86 @@ class Lead(Templated):
         placed = await self._call("wait", {"agents": WORKERS})
         holds = json.loads(placed["content"][0]["text"])["state"] == "released"
         return await super()._walk(REPORT_BACK if holds else ())
+
+
+CONTRIBUTORS = ["ada", "bob"]
+"""The workers of the worktree example's job."""
+ADDING = "Add a line naming yourself at the end of CONTRIBUTORS.md, and hand your branch to the merger."
+MERGED = "Both branches went to the merger: one merged, and the other's conflict is in its task's result."
+
+
+def _answer(result: Any) -> Any:
+    return json.loads(result["content"][0]["text"])
+
+
+def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
+
+
+class Spawning(Templated):
+    """The worktree example's lead: it spawns ada and bob, then goes back to its wait on them until it holds, and
+    finishes."""
+
+    spawned = False
+
+    async def _walk(self, steps: Any) -> str:
+        if not self.spawned:
+            self.spawned = True
+            for name in CONTRIBUTORS:
+                await self._call("agent_spawn", {"name": name, "child_role": "worker", "goal": ADDING})
+        if _answer(await self._call("wait", {"agents": CONTRIBUTORS}))["state"] != "released":
+            return "stopped"
+        return await super()._walk([Call("task_list", {"queue": "merges"}), Call("agent_finish", {"gist": MERGED})])
+
+
+class Contributing(Templated):
+    """The worktree example's worker: its first turn adds a line naming it at the end of CONTRIBUTORS.md, commits it on
+    its branch and adds a task to `merges` naming the branch; each turn then waits on that task, and once it has
+    settled finishes with its result."""
+
+    task: str | None = None
+
+    async def _walk(self, steps: Any) -> str:
+        cwd = self._spec.cwd
+        if self.task is None:
+            branch = (await asyncio.to_thread(_git, "symbolic-ref", "--short", "HEAD", cwd=cwd)).stdout.strip()
+            with (cwd / "CONTRIBUTORS.md").open("a") as names:
+                names.write(f"{self._spec.agent}\n")
+            await asyncio.to_thread(_git, "add", "CONTRIBUTORS.md", cwd=cwd)
+            await asyncio.to_thread(_git, "commit", "-q", "-m", f"Add {self._spec.agent} to the contributors", cwd=cwd)
+            self.task = _answer(await self._call("task_add", {"queue": "merges", "gist": f"merge {branch}"}))["task"]
+        if _answer(await self._call("wait", {"tasks": [f"merges/{self.task}"]}))["state"] != "released":
+            return "stopped"
+        tasks = _answer(await self._call("task_list", {"queue": "merges"}))["tasks"]
+        result = next(task["result"] for task in tasks if task["id"] == self.task)
+        return await super()._walk([Call("agent_finish", {"gist": result})])
+
+
+class Merging(ScriptedDriver):
+    """The worktree example's merger: each turn claims each task on `merges`, merges the branch it names into its own
+    with git, and completes it with what came of that, a conflict naming its paths and left for a person to see, until
+    a wait for work on the queue parks it. Each call carries an id of its own, as a harness's do, so a second claim in
+    a turn is no repeat of the first."""
+
+    async def _call_anew(self, tool: str, arguments: dict[str, Any]) -> Any:
+        return await self._call(tool, arguments, native_id=f"merging-{uuid.uuid4().hex}")
+
+    async def _walk(self, steps: Any) -> str:
+        cwd = self._spec.cwd
+        while True:
+            claimed = await self._call_anew("task_claim", {"queue": "merges"})
+            if claimed.get("isError"):
+                if _answer(await self._call_anew("wait", {"queue": ["merges"]}))["state"] == "parked":
+                    return "stopped"
+                continue
+            branch = _answer(claimed)["gist"].removeprefix("merge ")
+            merged = await asyncio.to_thread(_git, "merge", "--no-ff", "--no-edit", branch, cwd=cwd)
+            if merged.returncode == 0:
+                gist = f"merged {branch}"
+            else:
+                paths = await asyncio.to_thread(_git, "diff", "--name-only", "--diff-filter=U", cwd=cwd)
+                gist = f"conflict in {', '.join(paths.stdout.split())}: rebase {branch} onto mine and add it again"
+            await self._call_anew("task_complete", {"queue": "merges", "gist": gist})
 
 
 class Resumable(Templated):
@@ -228,6 +310,9 @@ HARNESSES = {
     "breaking": lambda: Breaking([[Say("on it"), Hang()]], [[Say("back")]]),
     "sealed": lambda: Installed(itertools.repeat(SEALED), name="wire-sealed"),
     "sealed_checked": lambda: Installed(every_turn_asks_the_model(), name="wire-sealed"),
+    "spawning_contributors": lambda: Spawning([]),
+    "contributing": lambda: Contributing([]),
+    "merging": lambda: Merging([]),
 }
 
 
