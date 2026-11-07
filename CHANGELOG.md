@@ -19,12 +19,15 @@ named here is closed.
   not start on the hosts we run on, as Playwright's build of it needs glibc 2.38, so it is untested, as the compatibility
   page's section 6 says, and what CI shows of it is not known yet. The three, each claimed only where it passes, are the
   default pending the owner's ruling.
-- **A disabled control in the page takes focus and says why.** Every control SwarmChat's page draws disabled stays in the
-  keyboard's order, which `disabled` took it out of, and its reason, a title the mouse alone found, is its accessible
-  description, which screen readers announce with a control, though none has been run on the page. Focus or a press shows
-  the reason beside the control, and a press does nothing else. A control pressed says it waits for its act's answer until the answer comes. Needs you, each post's vote
-  control and each name in the as-picker are buttons Tab reaches and Enter presses. That this is the page's accessibility
-  bar, with no WCAG level claimed, is the default pending the owner's ruling.
+- **A disabled control in the page takes focus and says why.** Every control SwarmChat's page draws disabled stays in
+  the keyboard's order, which `disabled` took it out of, and its reason, a title the mouse alone found, is its
+  accessible description, which screen readers announce with a control, though none has been run on the page. Focus or a
+  press shows the reason beside the control, and a press does nothing else. A control pressed says it waits for its
+  act's answer until the answer comes. Needs you, each post's vote control and each name in the as-picker are buttons
+  Tab reaches and Enter presses. Needs you takes focus as it opens, so Tab reaches its actions first, and gives it back
+  to its row as it closes, as every popover gives focus back to what opened it, and a request allowed or denied keeps
+  focus on its card, which then says what came of it, where focus dropped to the page before. That this is the page's
+  accessibility bar, with no WCAG level claimed, is the default pending the owner's ruling.
 - **A security guide.** [docs/security.md](docs/security.md) says what platoon-harness protects, tier by tier, linking each
   to architecture section 15, and what it does not: other users on the same machine, who reach loopback, where a bearer check
   protects the data and not availability, which is the default pending the owner's ruling; an agent that runs commands as

@@ -217,9 +217,29 @@ route = async function () {
 const baseKey = onKey;
 onKey = e => e.key === 'Escape' && !overlay.on && S.route.provenance ? go({provenance: null}, true) : baseKey(e);
 
+// A popover gives focus back as it closes to what had it as it opened, or to what `X.back` finds in its place once that
+// was drawn again, so the keyboard goes on from where it was.
+const baseOpen = overlay.open, baseClose = overlay.close;
+overlay.open = function (content, anchor) {
+  const opener = document.activeElement;
+  X.back = () => opener;
+  baseOpen.call(this, content, anchor);
+};
+overlay.close = function () {
+  const back = X.back && X.back();
+  X.back = null;
+  baseClose.call(this);
+  if (back && back.isConnected && document.activeElement === document.body) back.focus();
+};
+
+// A request's card drawn again while focus is in it keeps focus: on the same control, or on what the card now says came
+// of it, which a screen reader then reads.
 const baseApply = apply;
 apply = events => {
+  const at = document.activeElement, card = at && at.closest && at.closest('[data-x-card]');
   baseApply(events);
+  const again = card && !card.isConnected && $(`[data-x-card="${CSS.escape(card.dataset.xCard)}"]`);
+  if (again) ((at.dataset.xDecide && $(`[data-x-decide="${at.dataset.xDecide}"]`, again)) || again).focus();
   X.needed();
 };
 
@@ -428,19 +448,29 @@ X.needed = throttle(async () => {
   if (X.needsBox && X.needsBox.isConnected) X.drawNeeds(X.needsBox);
 }, 1000);
 
+// Needs you takes focus as it opens, so Tab reaches its actions first, and gives it back to its row, which is drawn
+// again as places come and go. Drawn again itself, it keeps focus on the action that had it, or takes it.
 X.openNeeds = () => {
   X.needsBox = document.createElement('div');
   X.needsBox.className = 'pop x-needs';
+  X.needsBox.tabIndex = -1;
+  X.needsBox.setAttribute('role', 'dialog');
+  X.needsBox.setAttribute('aria-label', 'Needs you');
   X.drawNeeds(X.needsBox);
   overlay.open(X.needsBox, $('[data-x-needs]'));
+  X.back = () => $('[data-x-needs]');
+  X.needsBox.focus();
 };
 
 X.drawNeeds = box => {
-  const rows = X.needs || [];
+  const rows = X.needs || [], at = box.contains(document.activeElement) && document.activeElement;
   box.innerHTML = html`<div class="ph">${rows.length ? `Needs you: ${plural(rows.length, 'place')}` : 'Nothing needs you now.'}</div>${rows.map(row => html`<div class="it x-need"><span class="t"${row.agent ? html` data-x-goto="${row.agent}"` : ''}>⚠ <b>${row.kind}</b>${row.agent ? html` ${avatar(row.agent, 'sm')} ${name(row.agent)}` : ''}: ${row.gist}</span><span class="x-acts">${row.actions.map((action, i) => {
     const why = X.cannot(action.op);
     return html`<button class="btn" data-x-action="${i}" data-x-place="${row.id}"${X.disabled(why)}>${action.label}</button>`;
   })}</span></div>`)}`.s;
+  if (!at || at === box) return;
+  const same = $(`[data-x-place="${CSS.escape(at.dataset.xPlace)}"][data-x-action="${at.dataset.xAction}"]`, box);
+  (same || box).focus();
 };
 
 // ---------------------------------------------------------------------- what the page draws
@@ -524,9 +554,9 @@ X.card = m => {
   const a = m.x_approval;
   if (!a) return html``;
   if (a.state === 'resolved') {
-    return html`<div class="x-card x-done" data-x-card="${a.id}">${a.verdict === 'allow' ? 'Allowed' : 'Denied'} by ${name(a.by)}${a.via ? html` via ${a.via}` : ''}</div>`;
+    return html`<div class="x-card x-done" data-x-card="${a.id}" tabindex="-1">${a.verdict === 'allow' ? 'Allowed' : 'Denied'} by ${name(a.by)}${a.via ? html` via ${a.via}` : ''}</div>`;
   }
-  if (a.state === 'moot') return html`<div class="x-card x-done" data-x-card="${a.id}">Moot: the turn that asked for it has ended</div>`;
+  if (a.state === 'moot') return html`<div class="x-card x-done" data-x-card="${a.id}" tabindex="-1">Moot: the turn that asked for it has ended</div>`;
   const why = X.cannot('approval.resolve');
   const button = (verdict, label) => html`<button class="btn" data-x-decide="${verdict}" data-x-approval="${a.id}" data-x-version="${a.version}"${X.disabled(why)}>${label}</button>`;
   return html`<div class="x-card" data-x-card="${a.id}"><span>${first(m.from)} asks you to approve this</span>${button('allow', 'Allow')}${button('deny', 'Deny')}</div>`;

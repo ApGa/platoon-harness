@@ -106,6 +106,40 @@ async def test_a_disabled_control_takes_focus_and_its_reason_is_its_accessible_d
     assert errors == []
 
 
+async def test_needs_you_takes_focus_and_gives_it_back_and_a_decided_request_keeps_it(
+    browser: Browser, web: tuple[Session, Web]
+):
+    """From the keyboard alone, on a control link: Needs you takes focus as it opens, so Tab reaches its actions first,
+    and Escape gives focus back to its row; Allow pressed on a request's card leaves focus on what the card says came of
+    it, where it dropped to the page before."""
+    _, served = web
+    page, errors = await opened(browser, served.link("control"))
+    needs = page.locator("[data-x-needs]")
+    await expect(needs.locator(".badge")).to_be_visible(timeout=SECONDS)
+
+    await needs.focus()
+    await page.keyboard.press("Enter")
+    box = page.locator(".x-needs")
+    await expect(box).to_be_focused()
+    await expect(box).to_have_accessible_name("Needs you")
+    await page.keyboard.press("Tab")
+    await expect(box.locator("button").first).to_be_focused()
+    await page.keyboard.press("Escape")
+    await expect(box).to_have_count(0)
+    await expect(needs).to_be_focused()
+    await chat(page, "w1 & you")
+    allow = page.locator('[data-x-decide="allow"]')
+    await expect(allow).to_be_enabled(timeout=SECONDS)
+    await allow.focus()
+    await page.keyboard.press("Enter")
+    done = page.locator(".x-card.x-done")
+    await expect(done).to_have_text(re.compile(r"^Allowed by you"), timeout=SECONDS)
+    await expect(done).to_be_focused()
+    await page.context.close()
+
+    assert errors == []
+
+
 async def say_why(page: Page) -> int:
     """Hold every control shown disabled to taking focus, with a name of its own and its reason as its accessible
     description, which a browser makes of its title only where the title is not its name, and say how many there are.
