@@ -106,6 +106,34 @@ the agent's latest turn has not ended, as a tool item reported late can still jo
 claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
 last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
 
+## Who reached whom
+
+`interactions`, `Session.interactions` and `platoon-harness interactions` count the agent interaction graph from the record: each
+pair of makers, an agent, a person, a program, the runtime or nobody the record names, with how many edges lead from the first's
+events to the second's by each kind, counted apart and never summed: `declared` citations, which their citers claim, `observed`
+offers a harness said it took, `cause` and `ancestry`. An offer no harness has said it took is counted beside them as
+`unconfirmed`, which is unknown. A maker's events that rest on its own are its history and make no pair, and a pair runs one way,
+so Alice reaching Bob and Bob reaching Alice are two. Each agent comes with why what reached it is unknown: the surfaces no result
+proves observed, which today is every one, and the gaps content could come through. So an agent no pair names has not been shown
+to be reached by nobody. Pairs come oldest first, 32 at a time, and the cursor carries the head the first page was read at, so
+every page of one answer agrees:
+
+```python
+async def who_reached_whom(session):
+    """Every pair, as who, whom and its counts, all read at one head however many pages they take."""
+    found = await session.interactions()
+    pairs = list(found.pairs)
+    while found.cursor is not None:
+        found = await session.interactions(after=found.cursor)
+        pairs += found.pairs
+    kinds = ("declared", "observed", "cause", "ancestry", "unconfirmed")
+    return [(pair.who, pair.whom, {kind: getattr(pair, kind) for kind in kinds}) for pair in pairs]
+```
+
+Each page walks the journal to its head and stores nothing, so it takes longer as a session grows: about 2.3 s at 91,670 events in
+[RFC 0067](../rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md)'s measurement. A pair counts reach in the
+record and is never credit.
+
 ## Follow it in the terminal and the browser
 
 A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen

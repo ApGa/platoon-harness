@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture section 11](../architecture.md#11-provenance), [the brief's section 6](../spec/BRIEF.md#6-provenance-is-a-first-class-protocol-feature), [RFC 0010](0010-provenance.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | None yet |
+| Implementation | `feat: Count who reached whom from the record, kind by kind, at a head` |
 
 ## Summary
 

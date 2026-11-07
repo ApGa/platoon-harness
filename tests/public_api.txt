@@ -229,6 +229,8 @@ platoon_harness.primitives.hold_open
 platoon_harness.primitives.IN_A_RESULT
 platoon_harness.primitives.Injection
 platoon_harness.primitives.InputDelivered
+platoon_harness.primitives.Interactions
+platoon_harness.primitives.Interactions(*,pairs,total,unknowns,cursor,head,open)
 platoon_harness.primitives.Item
 platoon_harness.primitives.Kept
 platoon_harness.primitives.Lineage
@@ -418,6 +420,7 @@ platoon_harness.session.Session.events(after,match,*,streams,follow)
 platoon_harness.session.Session.exposure(agent,ref,*,before)
 platoon_harness.session.Session.get_body(ref,*,limit)
 platoon_harness.session.Session.head()
+platoon_harness.session.Session.interactions(*,after)
 platoon_harness.session.Session.leave(grace)
 platoon_harness.session.Session.lineage(ref,*,after)
 platoon_harness.session.Session.open_episode(episode)

@@ -187,7 +187,9 @@ def test_text_a_terminal_shows_escapes_what_could_take_it_over():
     assert safe("ok\x1b]0;owned\x07 and‮back\nnext") == "ok\\x1b]0;owned\\x07 and\\u202eback\nnext"
 
 
-@pytest.mark.parametrize("name", ["exposure", "lineage", "uses", "contributors", "eligibility", "spans"])
+@pytest.mark.parametrize(
+    "name", ["exposure", "lineage", "uses", "contributors", "eligibility", "spans", "interactions"]
+)
 def test_the_provenance_commands_derive_from_the_registry(name: str):
     """Each query is a command of its own name, reading on a view credential, with its op's flags and help."""
     command, arguments = parsed([name, "fix-auth", *needed(name)])

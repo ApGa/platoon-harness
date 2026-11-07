@@ -54,6 +54,7 @@ COVERED = {
     "episode.close": "close_episode",
     "episode.open": "open_episode",
     "exposure": "exposure",
+    "interactions": "interactions",
     "lineage": "lineage",
     "message.read": "read",
     "message.send": "send",

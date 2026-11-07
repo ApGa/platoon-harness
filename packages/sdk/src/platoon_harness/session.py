@@ -39,6 +39,7 @@ from platoon_harness.primitives import (
     Contributors,
     Eligibility,
     Exposure,
+    Interactions,
     Lineage,
     NotSeen,
     Policy,
@@ -887,6 +888,12 @@ class Session:
         content, as the record joins them, each span named by its last call's `model.called`, with its first call, its
         turn and its writes. Pass `cursor` as `after` for the next page."""
         return Spans.model_validate(await self._ask("spans", agent=agent, after=after))
+
+    async def interactions(self, *, after: str | None = None) -> Interactions:
+        """Who reached whom, from the record: a page of pairs of makers, each with how many edges of each kind lead
+        from the first's events to the second's, counted apart and never summed, and how many offers between them are
+        unknown, with each agent's unknowns. Every page is read at the first one's head: pass `cursor` as `after`."""
+        return Interactions.model_validate(await self._ask("interactions", after=after))
 
     async def annotate(
         self,

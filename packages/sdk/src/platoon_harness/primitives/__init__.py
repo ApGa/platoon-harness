@@ -48,6 +48,7 @@ from .provenance import (
     Calls,
     Contributors,
     Exposure,
+    Interactions,
     Lineage,
     NotSeen,
     References,
@@ -160,6 +161,7 @@ PRIMITIVES = (
     Extension("eligibility", ops=[eligibility.eligibility]),
     Extension("spans", ops=[provenance.spans]),
     Extension("context", ops=[provenance.show]),
+    Extension("interactions", ops=[provenance.interactions]),
 )
 
 __all__ = [
@@ -209,6 +211,7 @@ __all__ = [
     "Groups",
     "Injection",
     "InputDelivered",
+    "Interactions",
     "Item",
     "Kept",
     "Lineage",

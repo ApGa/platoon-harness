@@ -140,6 +140,7 @@ For example:
     - [`close`](#platoon-harness-episode-close)
     - [`open`](#platoon-harness-episode-open)
 - [`exposure`](#platoon-harness-exposure)
+- [`interactions`](#platoon-harness-interactions)
 - [`lineage`](#platoon-harness-lineage)
 - [`message`](#platoon-harness-message)
     - [`read`](#platoon-harness-message-read)
@@ -195,6 +196,7 @@ For example:
 * [`eligibility`](#platoon-harness-eligibility): Say whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked` or none, and its verdict with each bar, of a closed set, and the same for a page of its model calls, oldest first, each eligible when its agent is and it has no bar of its own.
 * [`episode`](#platoon-harness-episode): Episodes: open and close a part of the session with one outcome, as only events inside one can become training data.
 * [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not said it took by then, the surfaces no result proves observed and the gaps content could have come through.
+* [`interactions`](#platoon-harness-interactions): Say who reached whom, from the record: each pair of makers, an agent, a person, a program, the runtime or nobody the record names, with how many edges of each kind lead from the first's events to the second's, counted apart and never summed: `declared` citations, which their citers claim, `observed` offers a harness said it took, `cause` and `ancestry`; how many offers between them a harness had not said it took, which are unknown; and each agent's unknowns, the surfaces no result proves observed and the gaps content could come through.
 * [`lineage`](#platoon-harness-lineage): Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
 * [`message`](#platoon-harness-message): Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.
 * [`ops`](#platoon-harness-ops): The ops you hold a grant for, with their schemas.
@@ -1477,6 +1479,28 @@ For example:
 * `--agent`: The agent, as `@agent`. **[required]**
 * `--ref`: An event's ref, `stream@version`. **[required]**
 * `--before`: The ref of the event the answer stops before. Left out, the head.
+
+### platoon-harness interactions
+
+```console
+platoon-harness interactions [OPTIONS] SESSION
+```
+
+Say who reached whom, from the record: each pair of makers, an agent, a person, a program, the runtime or nobody the record names, with how many edges of each kind lead from the first's events to the second's, counted apart and never summed: `declared` citations, which their citers claim, `observed` offers a harness said it took, `cause` and `ancestry`; how many offers between them a harness had not said it took, which are unknown; and each agent's unknowns, the surfaces no result proves observed and the gaps content could come through.
+
+It counts and never weighs. Pairs come oldest first, a page at a time, each page read at the first one's head: pass `cursor` as `--after`. Refused `invalid` for an `--after` that is no cursor, or names a head past the record's.
+
+For example:
+
+    platoon-harness interactions SESSION
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--after`: A `cursor` from an earlier call.
 
 ### platoon-harness lineage
 

@@ -381,6 +381,19 @@ class Gaps(View):
         )
         return {row["what"]: row["n"] for row in rows}
 
+    def held(self, head: int, *, besides: Collection[str] = ()) -> dict[str, dict[str, int]]:
+        """How many gaps but those of the kinds `besides` the record held of each agent at `head`, by agent and kind."""
+        marks = ", ".join("?" * len(besides))
+        rows = self.db.execute(
+            f"SELECT agent, what, count(*) AS n FROM v_gaps WHERE seq <= ? AND what NOT IN ({marks}) "
+            "GROUP BY agent, what ORDER BY agent, what",
+            (head, *besides),
+        )
+        found: dict[str, dict[str, int]] = {}
+        for row in rows:
+            found.setdefault(row["agent"], {})[row["what"]] = row["n"]
+        return found
+
 
 def _why(txn: Txn, agent: Agent, uncertain: list[Effect], dues: dict[str, float]) -> why.Why | None:
     """The one thing most worth saying about this agent, or nothing if it needs no explaining."""

@@ -577,7 +577,7 @@ to do next.
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
 | Wait | `wait` `wait.cancel` | `wait.progress` |
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
-| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` `context.show` |
+| Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` `context.show` `interactions` |
 | Evidence, kernel | `body.tombstone` | |
 | Repository | `repo.test` `repo.diff` `repo.commit` | |
 | Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` `repo.keep` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
@@ -1312,8 +1312,9 @@ says one. Tool descriptions, refusals and handovers stay fixed. See [RFC 0025](r
 The graph is not stored. Nodes are events, and edges are the references they already hold.
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
-- **Agent interaction graph.** The quotient by agent. It may have cycles, and it is for display, at M4 (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)): the clients show one event's
-  hop at a time until then.
+- **Agent interaction graph.** The quotient by maker. It may have cycles, and `interactions` counts it from the record, kind by
+  kind, at a head (below). The clients show one event's hop at a time, and drawing it is planned (see
+  [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)).
 - **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
   said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
   **upper bound** on what an action could have known, `delivered` edges are a **lower bound**, and what lies between them is
@@ -1502,6 +1503,25 @@ none
 ([compatibility.md](reference/compatibility.md)). pi and ScriptedDriver report a call at its end and Claude Code at its start, so
 what a harness took while a call ran stands before that call's report on the first two and after it on the third. See
 [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+
+**Who reached whom.** `interactions` is a query op that is no agent's tool, a `Session` method and a command, as `spans` is: the
+agent interaction graph, counted from the record at a head. A pair names two makers, as `maker` names them, an agent, a person, a
+program or the runtime, with None for nobody the record names, which is no one maker; a maker's events that rest on its own are
+its history and pair it with nobody. It counts the edges that lead from the first's events to the second's, each kind apart and
+never summed: `declared`, an event of the second citing one of the first's, which its citer claims; `observed`, an offer of the
+first's event that the second's harness said it took; `cause`, an event of the second naming one of the first's as its cause; and
+`ancestry`, the second's next version of the first's object, or its commit naming the first's a parent. An edge joins two events,
+so two ranges of one body cited are one, and an observed edge is one offer of one event. Beside them it counts the offers whose
+harness had not said it took them, `unconfirmed`, which are unknown, neither observed nor none, and it names the event holding
+the first edge of each count. It takes each event's edges back as `lineage` does and each offer's items as `exposure` does. Pairs
+come oldest first by the first edge the record learned of each, a page at a time, and the cursor carries the first page's head,
+so every page of one answer is read there. Each agent spawned by the head is named with its unknowns: the surfaces no result
+proves observed, the gaps content could come through that its record held, by kind, and its offers from before payload 3, so an
+agent no pair names reads as unknown, never as reached by nobody. A person's or a program's reading is no evidence, so nothing
+reaches either but through their own writes, and neither has unknowns. Nothing is stored: each page walks the journal to its
+head, and the writer pays nothing. It answers alike after a rebuild and on a closed copy. It counts reach in the record and never
+weighs it, so a pair is no credit and no influence. See
+[RFC 0067](rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md).
 
 [provenance.md](how-to/provenance.md) is the guide.
 

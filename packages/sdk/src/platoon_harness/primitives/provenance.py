@@ -1,9 +1,11 @@
-"""Provenance: what reached an agent, what an event rests on, what rests on it, and whose work an outcome reaches.
+"""Provenance: what reached an agent, what an event rests on, what rests on it, whose work an outcome reaches, and who
+reached whom.
 
 The graph is not stored. Three views index the references events already hold, `Exposures` among them, and the queries
 answer from them, for people and programs and never as an agent's tool: four about events, `spans`, which cuts an
-agent's turns where its model calls chose its writes, and `context.show`, the text each item of an offer showed. A query
-reads the journal alone, and never an annotation. See architecture section 11.
+agent's turns where its model calls chose its writes, `context.show`, the text each item of an offer showed, and
+`interactions`, which counts the edges between makers kind by kind. A query reads the journal alone, and never an
+annotation. See architecture section 11.
 """
 
 import json
@@ -25,6 +27,7 @@ from .clients import Gaps
 from .common import (
     DIGEST_ITEMS,
     AgentName,
+    Paging,
     body_of,
     decoded,
     event_at,
@@ -510,6 +513,50 @@ class Spans(Model):
     agent: str
     spans: tuple[Span, ...]
     total: int
+    cursor: str | None
+    head: int
+    open: bool
+
+
+class Pair(Model):
+    """Who reached whom: how many edges of each kind lead from events `who` made to events `whom` made, each kind
+    counted apart and never summed. `declared` counts citations, which their citers claim; `observed`, offers whose
+    harness said it took them; `cause`, causes an event names; and `ancestry`, an object's next versions and the
+    commits that name a commit their parent. `unconfirmed` counts the offers whose harness had not said it took them,
+    which are unknown, neither observed nor none. `first` names, by the count's name, the event holding the first of
+    each the record learned, an offer for `observed` and `unconfirmed`. A maker is as `maker` names it, and None is
+    nobody the record names, as for a commit no single workspace made."""
+
+    who: str | None
+    whom: str | None
+    declared: int
+    observed: int
+    cause: int
+    ancestry: int
+    unconfirmed: int
+    first: dict[str, str]
+
+
+class Unknowns(Model):
+    """Why what reached an agent beyond the edges counted is unknown: the surfaces no result proves observed,
+    `unproved`; the gaps content could come through that its record held, by kind, `incidents`; and its offers from
+    before offer payload 3, `older_offers`, which no event can be tied to."""
+
+    agent: str
+    unproved: tuple[Surface, ...]
+    incidents: dict[str, int]
+    older_offers: int
+
+
+class Interactions(Model):
+    """Who reached whom, as the record held it at `head`: a page of pairs, oldest first by the first edge the record
+    learned of each, `total` of them, with `cursor` to pass as `after` for the next page, read at the same head, and
+    each agent's `unknowns`. It is `open` while an agent's turn had not ended there, as a later report can still
+    confirm an offer. It counts reach in the record and never weighs it: nothing here is credit or influence."""
+
+    pairs: tuple[Pair, ...]
+    total: int
+    unknowns: tuple[Unknowns, ...]
     cursor: str | None
     head: int
     open: bool
@@ -1225,3 +1272,95 @@ def show(txn: Txn, a: AskedOfOffer) -> list[str | None]:
         texts = _bodies(txn, item["ref"], item["digest"]) if item["form"] == "body" else _gists(txn, item["ref"])
         shown.append(next((text for text in texts if sha256(text.encode()).hexdigest() == item["digest"]), None))
     return shown
+
+
+# Who reached whom.
+
+_COUNTS = ("declared", "observed", "cause", "ancestry", "unconfirmed")
+
+
+def _tallied(txn: Txn, head: int) -> tuple[list[Pair], list[str], bool]:
+    """Every pair the record held at `head`, in the order it learned of each, every agent spawned by then, and whether
+    one was in a turn there: one walk of the journal, oldest first, taking each event's edges back as lineage does and
+    each offer's items as exposure does. A maker's events resting on its own are its history and pair it with nobody."""
+    stamps = txn.view(Stamps)
+    made = cache(lambda stream, version: maker(_held(stamps.at(stream, version))))
+    tallies: dict[tuple[str | None, str | None], dict[str, Any]] = {}
+    offers: dict[int, tuple[str, str, list[str | None]]] = {}
+    agents: list[str] = []
+    in_turn: set[str] = set()
+
+    def count(who: str | None, whom: str | None, what: str, seq: int, ref: str) -> None:
+        if who == whom and who is not None:
+            return
+        tally = tallies.setdefault((who, whom), {"since": seq, **dict.fromkeys(_COUNTS, 0), "first": {}})
+        tally[what] += 1
+        tally["first"].setdefault(what, ref)
+        tally["since"] = min(tally["since"], seq)
+
+    for event in stamps.events():
+        if event.seq > head:
+            break
+        if event.type == "agent.spawned":
+            agents.append(event.data["name"])
+        elif event.type == "turn.started" and event.agent is not None:
+            in_turn.add(event.agent)
+        elif event.type in ("turn.ended", "turn.lost") and event.agent is not None:
+            in_turn.discard(event.agent)
+        elif event.type == "context.offered" and event.agent is not None:
+            named = sorted({parts[:2] for item in event.data["items"] if (parts := parts_of(item["ref"])) is not None})
+            offers[event.seq] = (event.agent, _ref(event), [made(stream, version) for stream, version in named])
+        elif event.type == "context.delivered" and (offered := offers.pop(int(event.data["input"]), None)):
+            reader, offer, makers = offered
+            for who in makers:
+                count(who, f"agent:{reader}", "observed", event.seq, offer)
+        whom, edges = maker(event), set()
+        for kind, found in _back(txn, event):
+            if isinstance(found, Event) and (kind, found.seq) not in edges:
+                edges.add((kind, found.seq))
+                count(maker(found), whom, kind, event.seq, _ref(event))
+    for seq, (reader, offer, makers) in offers.items():
+        for who in makers:
+            count(who, f"agent:{reader}", "unconfirmed", seq, offer)
+    ordered = sorted(tallies.items(), key=lambda entry: entry[1]["since"])
+    pairs = [
+        Pair(who=who, whom=whom, **{name: tally[name] for name in _COUNTS}, first=tally["first"])
+        for (who, whom), tally in ordered
+    ]
+    return pairs, agents, bool(in_turn)
+
+
+@op("interactions", query=True)
+def interactions(txn: Txn, a: Paging) -> Interactions:
+    """Say who reached whom, from the record: each pair of makers, an agent, a person, a program, the runtime or
+    nobody the record names, with how many edges of each kind lead from the first's events to the second's, counted
+    apart and never summed: `declared` citations, which their citers claim, `observed` offers a harness said it took,
+    `cause` and `ancestry`; how many offers between them a harness had not said it took, which are unknown; and each
+    agent's unknowns, the surfaces no result proves observed and the gaps content could come through. It counts and
+    never weighs. Pairs come oldest first, a page at a time, each page read at the first one's head: pass `cursor` as
+    `after`. Refused `invalid` for an `after` that is no cursor, or names a head past the record's."""
+    stamps, exposures = txn.view(Stamps), txn.view(Exposures)
+    now = stamps.head()
+    head, start = _position(a.after) or (now, 0)
+    if head > now:
+        raise Refused("invalid", "`after` is a `cursor` from an earlier answer")
+    pairs, agents, open = _tallied(txn, head)
+    bound = Bound(by="head", seq=head + 1)
+    incidents = txn.view(Gaps).held(head, besides=_UNCARRIED)
+    unknowns = tuple(
+        Unknowns(
+            agent=agent,
+            unproved=tuple(coverage.surface for coverage in _standing(txn, agent, bound)),
+            incidents=incidents.get(agent, {}),
+            older_offers=exposures.older(agent, bound.seq),
+        )
+        for agent in agents
+    )
+    return Interactions(
+        pairs=tuple(pairs[start : start + _PAGE]),
+        total=len(pairs),
+        unknowns=unknowns,
+        cursor=f"{head}:{start + _PAGE}" if start + _PAGE < len(pairs) else None,
+        head=head,
+        open=open,
+    )
