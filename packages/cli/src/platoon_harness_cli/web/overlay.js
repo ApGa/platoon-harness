@@ -82,6 +82,13 @@ document.addEventListener('focusout', e => {
   const el = X.disabledAt(e.target);
   if (el && $('#tip').textContent === el.title) $('#tip').classList.remove('on');
 });
+// SwarmChat hides its tip whenever the pointer is over anything with no tip of its own, as when a list is drawn again
+// under a still pointer, so a focused control's reason shows again then: it stays beside it while it has focus. The
+// window hears the event after SwarmChat's listener on the document.
+addEventListener('mouseover', () => {
+  const el = document.activeElement && X.disabledAt(document.activeElement), tip = $('#tip');
+  if (el && tip.textContent === el.title) tip.classList.add('on');
+});
 document.addEventListener('click', e => {
   const el = X.disabledAt(e.target);
   if (!el) return;
@@ -447,6 +454,16 @@ X.needed = throttle(async () => {
   buildSide();
   if (X.needsBox && X.needsBox.isConnected) X.drawNeeds(X.needsBox);
 }, 1000);
+
+// The sidebar, drawn again as the session moves or as it scrolls, keeps focus on Needs you, the one row of it that
+// takes focus.
+const baseDraw = side.draw;
+side.draw = function () {
+  const had = document.activeElement && document.activeElement.matches('[data-x-needs]');
+  baseDraw.call(this);
+  const row = had && document.activeElement === document.body && $('[data-x-needs]');
+  if (row) row.focus();
+};
 
 // Needs you takes focus as it opens, so Tab reaches its actions first, and gives it back to its row, which is drawn
 // again as places come and go. Drawn again itself, it keeps focus on the action that had it, or takes it.

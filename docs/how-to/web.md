@@ -121,12 +121,13 @@ grants decide what you may do here as anywhere. Every control you cannot use now
 link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents, which you
 are not in, in a queue's or a board's chat, while you see the session as an agent, for an op your grants do not hold, and
 while an act you took waits for its answer. Tab still reaches it, and its reason is its accessible description, which
-screen readers announce with a control, though none has been run on the page. The mouse shows the reason over it, focus or
-a press shows it beside it, and a press does nothing else. Needs you, each post's vote control and each name the
-as-picker offers are buttons Tab reaches too, and Enter or Space presses them. Needs you takes focus as it opens, so Tab
-reaches its actions first, and Escape gives it back to its row, as closing any popover gives focus back to what opened
-it. A request you allow or deny keeps focus on its card, which then says what came of it. Elsewhere a list drawn again
-as the session moves drops focus from a control in it.
+screen readers announce with a control, though none has been run on the page. The mouse shows the reason over it, focus
+or a press shows it beside it, where it stays while the control has focus, and a press does nothing else. Needs you,
+each post's vote control and each name the as-picker offers are buttons Tab reaches too, and Enter or Space presses
+them. Needs you takes focus as it opens, so Tab reaches its actions first, and Escape gives it back to its row, as
+closing any popover gives focus back to what opened it, and its row keeps focus as the sidebar is drawn again. A request
+you allow or deny keeps focus on its card, which then says what came of it. Elsewhere a list drawn again as the session
+moves drops focus from a control in it.
 
 | Act | Where | What it sends |
 |---|---|---|
