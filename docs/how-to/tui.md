@@ -147,7 +147,7 @@ it failed or erred, `untested` where none ran and the team names a test, a dropp
 workspace's uncommitted paths, conflicted first, with their state and lines, `?` where nobody measured them, and how many more there
 are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
 or in no workspace the session knows. A snapshot's group, an isolated one's among them, says its commits are in its own repository,
-until you fetch them. `t` on a commit tests it, once you say yes to its act,
+until you fetch them. The page's Review changes lists them in the same words ([web.md](web.md)). `t` on a commit tests it, once you say yes to its act,
 which says whose code it runs as you, unconfined; one a look of an isolated workspace found, or one built on it, says instead why it
 cannot be tested ([workspaces.md](workspaces.md#test-a-commit)).
 A look

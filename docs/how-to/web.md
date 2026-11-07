@@ -139,13 +139,14 @@ moves drops focus from a control in it.
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
 | A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
+| Review changes | Review changes, in the top bar and on an agent's page, opens what changed in the pane, which the address names, `review=changes`, in the words the terminal's `/review` says, read through `x_read`: each workspace's commits and uncommitted paths, each commit with Patch and Test, and each workspace with Uncommitted diff. Patch and Uncommitted diff open the diff in the same pane, `review=` naming it, a page at a time with Read on, every line numbered as a citation names it, above it where it was read and, for an uncommitted diff, when, and below a cut patch where it was cut. A click on a line's number chooses it, Shift and a click, or Shift+Enter on a number, every line from it to the one chosen first, and a click on the one line chosen alone chooses none. Read again reads what changed again | Patch and Uncommitted diff send `repo.diff`, each time the diff opens, and read its record through `x_read`, so a commit's patch is read once. Test asks once, saying whose code it runs as you, unconfined, then sends `repo.test`, as the terminal does, or is disabled, saying why, for a commit whose code runs only in an isolation. Comment, below a diff, sends `message.send` to the change's maker, the agent whose workspace made it, saying whom and on what, `Comment to @ada on lines 40 to 52 of 3f9c2a1b2c3d's patch`, with `based_on` citing those lines, or with none chosen the commit, or an uncommitted diff whole, its words made its gist as the composer's are. A change no agent's workspace made has nobody to take a comment, and Comment says so |
 | Any op you hold that writes | Commands, in the top bar, lists one for each op the session's `ops.list` says you hold, an extension's among them, but a query, which a pane draws, and `wait` and the ops on a wait, as the terminal's palette lists them. Typing finds one, as Search does, and choosing it opens its form in the pane, which the address names, so Back and a reload keep it, and Esc or × closes it | The op, worded as its command's help, with a field per flag in that flag's words: text, yes or no, a choice, a whole number, a number, several separated by commas, JSON, which takes JSON alone and says why before anything is sent, or a body, whose text is stored, or cited where it is a body's ref, as the command line's flag takes it. A field left empty is left out, so the op's own default, shown in it, stands, and a gist too long for one is refused, as at the command line. `via` is said as `browser`. What came of it is said under Run: done, with what the op answered as text, or the refusal |
 
 **Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run,
 and so does Run on the form of any op the terminal asks about, beside Run, saying the op and what was given it: these are
 the ops that end an agent or the session, erase a body, or run a commit's code as you, one set both read, and nothing takes
-them back. An extension's op is never asked about. The page has no list of commits to test from, so `repo test` takes a
-commit's SHA in its form, and the terminal's `/review` lists them.
+them back. An extension's op is never asked about. Review changes lists the commits a person may test, each with its Test,
+and `repo test` in Commands takes a commit's SHA in its form.
 
 **Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
 answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new control
@@ -177,16 +178,19 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
-as it asks the others. It reads through the session's queries alone, which the kernel refuses for an op that writes, so nothing
-is written through it. Its `provenance` pane is one event's provenance,
+as it asks the others. It reads through the session's queries, which the kernel refuses for an op that writes, and its journal,
+so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
+Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
+`diff` pane is, by the effect `repo diff` gave, the diff that effect read with its first page, held until the journal records it,
+for at most 25 s, and saying it is still `reading` past that; and by the ref of a page's lines, that page. Asking for a diff is an
+act, so a view link and history read none, and Patch and Uncommitted diff say why.
 
 ## Not built yet
 
 Each is drawn disabled where its control is, saying why: the tasks and board views, with each task open, claimed and by
 whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
-chat, which holds what it announced; and Tool activity and Review changes on an agent's page, which names the terminal's `/review`
-for what changed. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
+chat, which holds what it announced; and Tool activity on an agent's page. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. A form starts
 empty wherever it was opened from. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 

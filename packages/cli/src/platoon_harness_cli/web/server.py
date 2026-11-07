@@ -3,9 +3,9 @@
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
 of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours, which
-reads through the session's queries alone, where the kernel refuses an op that writes. Every mutation is `/x/command`
-into `Session.submit`, the op path the terminal uses, and the kernel's grants decide what the person may do. Every
-answer says `no-store`.
+reads through the session's queries, where the kernel refuses an op that writes, and its journal. Every mutation is
+`/x/command` into `Session.submit`, the op path the terminal uses, and the kernel's grants decide what the person may
+do. Every answer says `no-store`.
 """
 
 import asyncio
@@ -13,16 +13,17 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import asdict
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 from platoon_harness import Refused, Session
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
 from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
-from .. import __version__
+from .. import __version__, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import read
+from ..review import changes_of, snapshots_of
 from ..roster import status_of
 from . import replies
 from .credentials import Class, Credentials, Held
@@ -284,14 +285,66 @@ class Web(Server[Request]):
 
     async def _read(self, params: Mapping[str, Any]) -> dict[str, Any]:
         """One pane of the page, which `pane` names, in the words of the command line's package, read through the
-        session's queries alone, which the kernel runs on a read connection and refuses for any op that writes, so
-        nothing is written through it on the owner's credential `web` holds, and a view link reads it too."""
+        session's queries, which the kernel runs on a read connection and refuses for any op that writes, and its
+        journal, so nothing is written through it on the owner's credential `web` holds, and a view link reads it."""
         match params.get("pane"):
             case "provenance":
                 return await self._provenance(params)
             case "attention":
                 return await self._attention()
-        raise replies.Error(404, "there is no such pane: the page's panes are provenance and attention")
+            case "changes":
+                return await self._changes()
+            case "diff":
+                return await self._diff(params)
+        raise replies.Error(404, "there is no such pane: the page's panes are provenance, attention, changes and diff")
+
+    async def _snapshot(self, view: Literal["roster", "changes"]) -> list[dict[str, Any]]:
+        """The rows of one of the runtime's client views, as its first snapshot gives them."""
+        async for state in self.session.watch(view):
+            return state["rows"]
+        return []
+
+    async def _changes(self) -> dict[str, Any]:
+        """What changed, in the lines the terminal's `/review` draws, with none new, as the page keeps no marks, and the
+        session's repository, None when it observes none."""
+        try:
+            repo = (await self.session.status())["repo"]
+            rows = await self._snapshot("changes") if repo else []
+            roster = await self._snapshot("roster") if repo else []
+        except Refused as refused:
+            raise replies.Error(400, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+        lines = changes_of({row["id"]: row for row in rows}, None, snapshots_of(roster))
+        return {"repo": repo, "lines": [asdict(line) for line in lines]}
+
+    async def _diff(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """A diff, in the words the terminal's `/review` says: by `effect`, the id `repo.diff` gave, the diff it read
+        with its first page, held until the journal records it, for at most `HOLD`, and `reading` while it does not; or
+        by `ref`, a page's `rest`, the page that names, None for a patch that is no text."""
+        effect, ref = params.get("effect"), params.get("ref")
+        try:
+            if isinstance(ref, str):
+                found = await review.page(self.session, ref)
+                return {"page": None if found is None else asdict(found)}
+            if not isinstance(effect, int) or isinstance(effect, bool) or effect < 1:
+                raise replies.Error(
+                    400, "a diff is read by the effect `repo diff` gave, or a page by the ref of its lines"
+                )
+            if self._holding >= HOLDING:
+                raise Rejected(503, why="too many pages are waiting for news: try again shortly")
+            read: list[review.Diff] = []
+
+            async def reading() -> None:
+                read.append(await review.read(self.session, effect))
+
+            self._holding += 1
+            try:
+                await first(reading(), self.clock.sleep(HOLD))
+            finally:
+                self._holding -= 1
+        except Refused as refused:
+            status = 404 if refused.refusal.code == "not_found" else 400
+            raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+        return {"diff": asdict(read[0])} if read else {"reading": True}
 
     async def _attention(self) -> dict[str, Any]:
         """Where the person must act: every row of the runtime's `attention` view but a mention, which is a message to

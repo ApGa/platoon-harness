@@ -115,10 +115,10 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(browser: Browser,
     for act in await acts.all():
         await expect(act).to_be_disabled()
         await expect(act).to_have_accessible_description(why)
-    for label in ("Tool activity", "Review changes"):
-        unbuilt = page.locator(".person .x-acts button", has_text=label)
-        await expect(unbuilt).to_be_disabled()
-        await expect(unbuilt).to_have_accessible_description(re.compile("^Not built yet: "))
+    unbuilt = page.locator(".person .x-acts button", has_text="Tool activity")
+    await expect(unbuilt).to_be_disabled()
+    await expect(unbuilt).to_have_accessible_description(re.compile("^Not built yet: "))
+    await expect(page.locator(".person .x-acts [data-x-review]")).to_be_enabled()
     await page.goto(served["view"].partition("#")[0] + "#person=you")
     links = page.locator("[data-x-link]")
     await expect(links).to_have_count(2, timeout=SECONDS)

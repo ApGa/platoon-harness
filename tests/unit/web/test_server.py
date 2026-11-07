@@ -1,6 +1,7 @@
 """The page's server, route by route and refusal by refusal, over a session the test owns, on a real socket."""
 
 import asyncio
+import dataclasses
 import errno
 import inspect
 import json
@@ -20,6 +21,7 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Hang, ScriptedDriver
 from platoon_harness_cli.ops import _command, cut, person_ops
+from platoon_harness_cli.review import changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
@@ -27,6 +29,7 @@ from platoon_harness_cli.web.page import load
 from platoon_harness_cli.web.projection import Projection
 from platoon_harness_cli.web.server import Web
 
+from ..runtime.gitting import commit, repository, working
 from ..runtime.support import BALLOT, extension, harness, in_state, of_type, until
 from .support import QUIET, Browser, caught_up, scenario, served, team
 
@@ -449,7 +452,7 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert [action["op"] for action in places[0]["actions"]] == ["approval.resolve"] * 2
     assert places[0]["actions"][0]["args"]["id"] == approvals[0]["id"]
     assert provenance["ref"] == "agent/w1@1" and "heading" in {line["kind"] for line in provenance["lines"]}
-    assert unnamed.status == 404 and "provenance and attention" in unnamed.json()["error"]
+    assert unnamed.status == 404 and "provenance, attention, changes and diff" in unnamed.json()["error"]
     assert gone.status == 404
     assert refused.status == 403 and "acts on nothing" in refused.json()["error"]
 
@@ -871,3 +874,52 @@ def test_a_role_is_on_a_plan_login_past_loopback_as_the_runtime_counts_one():
 
     assert plan_roles(manifest) == ["planned"]
     assert plan_roles(manifest.model_copy(update={"trainable": True})) == []
+
+
+async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words(root, clock, monkeypatch):
+    """`changes` is what changed in the lines the terminal's `/review` draws, with none new, as the page keeps no
+    marks; `diff` is, by the effect `repo diff` gave, the diff it read with its first page, and by a ref the page that
+    names. A view link reads both, and neither submits an op or writes anything."""
+    repo = repository(root / "repo", monkeypatch)
+    lead = {"harness": working(lambda cwd: commit(cwd, "notes.txt", "one\ntwo\n")), "workspace": "worktree"}
+    team = Team.model_validate({"roles": {"lead": lead}, "test": {"command": ["true"], "timeout": "1m"}})
+    async with Session.start(team, name="s", root=root / "home", cwd=repo) as session:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "go")
+        [made] = await until(lambda: of_type(session, "repo.committed"), session)
+        effect = (await session.repo_diff(made.data["sha"]))["effect"]
+        [record] = await until(lambda: of_type(session, "repo.diffed"), session)
+        rows = (await session.submit("view.watch", name="changes")).result["rows"]
+        async with served(session, root / "home", clock) as web:
+            browser = await Browser(web).opened("view")
+            head, submitted, submit = await session.head(), [], session.submit
+
+            async def recorded(op: str, /, **args: object) -> object:
+                submitted.append(op)
+                return await submit(op, **args)
+
+            with monkeypatch.context() as patched:
+                patched.setattr(session, "submit", recorded)
+                changes = await browser.view("x_read", {"pane": "changes"})
+                diff = (await browser.view("x_read", {"pane": "diff", "effect": effect}))["diff"]
+                page = (await browser.view("x_read", {"pane": "diff", "ref": f"{diff['ref']}#L7-8"}))["page"]
+                wrong = await browser.request("POST", "/v1/x_read", {"pane": "diff", "effect": "38"})
+            assert await session.head() == head and submitted == []
+
+    sha, ref = made.data["sha"], f"{record.stream}@{record.version}"
+    lines = changes_of({row["id"]: row for row in rows}, None)
+    assert changes == {"repo": "repo", "lines": json.loads(json.dumps([dataclasses.asdict(line) for line in lines]))}
+    assert [line["kind"] for line in changes["lines"]] == ["heading", "commit"] and not any(
+        line["new"] for line in changes["lines"]
+    )
+    assert changes["lines"][1]["of"] == sha and changes["lines"][1]["actions"][0]["op"] == "repo.test"
+    assert (diff["ref"], diff["above"], diff["to"], diff["whole"]) == (
+        ref,
+        [record.gist, "Read in @lead's worktree."],
+        "@lead",
+        f"{made.stream}@{made.version}",
+    )
+    assert [line["text"] for line in diff["first"]["lines"]][-2:] == ["+one", "+two"]
+    added = [{"number": 7, "text": "+one", "tone": "good"}, {"number": 8, "text": "+two", "tone": "good"}]
+    assert page == {"lines": added, "total": 8, "rest": None}
+    assert wrong.status == 400

@@ -15,8 +15,7 @@ const X = {caps: null};
 // What is not built over a session yet, and why: what the brief asks the page to show.
 X.unbuilt = {tasks: 'Not built yet: the tasks and board views are planned, with each task open, claimed and by whom ' +
     'under what lease, or done, and each board entry with its versions. This chat holds what its queue or board announced.',
-  activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.',
-  review: 'Not built yet: diff review is planned. The terminal\'s /review lists what changed.'};
+  activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.'};
 
 // What the Provenance pane says first: what the record holds, and what it cannot.
 X.RECORD = 'This is what the record holds: a citation is the agent\'s claim, being handed something is not using it, and ' +
@@ -153,10 +152,27 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-form textarea { resize: vertical; }
 .x-form .x-acts { margin-top: 2px; }
 .x-form .x-said { margin: 0; overflow-wrap: anywhere; }
+.x-review .x-change { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 14px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.x-review .x-heading { padding-top: 12px; }
+.x-review .x-path, .x-review .x-more { padding-left: 28px; }
+.x-review > .x-about, .x-review .x-end, .x-review .x-comment { padding: 8px 14px; margin: 0; font-size: 12.5px; }
+.x-tone-strong { font-weight: 700; }
+.x-tone-faint { color: var(--faint); }
+.x-tone-good { color: var(--good); }
+.x-tone-bad { color: var(--bad); }
+.x-tone-warn { color: var(--warn); }
+.x-patch { font-family: var(--mono); font-size: 12px; line-height: 1.45; overflow-x: auto; }
+.x-patch .x-pl { display: grid; grid-template-columns: 52px 1fr; white-space: pre; }
+.x-patch .x-pl.x-chosen { background: var(--hover); box-shadow: inset 3px 0 var(--accent); }
+.x-patch .x-n { border: 0; background: none; color: var(--faint); font: inherit; text-align: right; padding: 0 8px 0 0; cursor: pointer; }
+.x-review .x-below { color: var(--warn); margin: 0; }
+.x-comment { display: grid; gap: 6px; border-top: 1px solid var(--line); }
+.x-comment textarea { font: inherit; resize: vertical; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
+.x-comment .x-said, .x-comment .x-about { margin: 0; }
 [aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
-$('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button>`.s);
+$('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button><button class="find" data-x-review="changes" title="What changed: each commit with its test and patch, and each workspace's uncommitted diff">Review changes</button>`.s);
 
 $('#login p').textContent = 'This page opens from a link that platoon-harness web says, or one a page acting for you ' +
   'made. Each link opens once, so ask for a new one.';
@@ -196,14 +212,15 @@ setLive = state => {
 
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
-// a thread or what had reached an agent takes it from provenance or an op's form, and provenance from a form. A form's
-// `args` go with it.
-KEYS.push('provenance', 'act', 'args');
+// a thread or what had reached an agent takes it from provenance, an op's form or what changed, provenance from a form
+// or what changed, and a form from what changed. A form's `args` go with it.
+KEYS.push('provenance', 'act', 'args', 'review');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
-  if (r.thread || r.knew) { delete r.provenance; delete r.act; }
-  if (r.provenance) delete r.act;
+  if (r.thread || r.knew) { delete r.provenance; delete r.act; delete r.review; }
+  if (r.provenance) { delete r.act; delete r.review; }
+  if (r.act) delete r.review;
   if (!r.act) delete r.args;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
@@ -213,18 +230,20 @@ readRoute = () => {
   return r;
 };
 
-// The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, or an op's form,
-// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes. SwarmChat's own
-// route takes the pane for a thread, for what had reached an agent and for the map, and otherwise leaves it to this
-// one. A form drawn again for the same op and args keeps what was typed in it, and says again what it may do now.
-X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form;
+// The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
+// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, or what changed
+// or a diff, `review=`. SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map,
+// and otherwise leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says
+// again what it may do now.
+X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review;
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
   await baseRoute();
   const r = S.route, pane = $('#pane');
   if (r.layout === 'map' || r.thread || r.knew) return;
-  const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form] : [];
+  const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form]
+    : r.review ? ['review', X.Review] : [];
   if (!key) {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
@@ -239,8 +258,8 @@ route = async function () {
 
 // Esc closes a pane of ours as it closes SwarmChat's own.
 const baseKey = onKey;
-onKey = e => e.key === 'Escape' && !overlay.on && (S.route.provenance || S.route.act)
-  ? go({provenance: null, act: null, args: null}, true) : baseKey(e);
+onKey = e => e.key === 'Escape' && !overlay.on && (S.route.provenance || S.route.act || S.route.review)
+  ? go({provenance: null, act: null, args: null, review: null}, true) : baseKey(e);
 
 // A popover gives focus back as it closes to what had it as it opened, or to what `X.back` finds in its place once that
 // was drawn again, so the keyboard goes on from where it was.
@@ -533,7 +552,10 @@ X.openCommands = () => {
       : html`<div class="grp">${X.caps.forms.length ? 'No command holds those words.' : 'You hold no op that writes.'}</div>`).s;
     mark();
   };
-  const choose = form => { overlay.close(); go({act: form.op, args: null, provenance: null, thread: null, knew: null}, true); };
+  const choose = form => {
+    overlay.close();
+    go({act: form.op, args: null, provenance: null, review: null, thread: null, knew: null}, true);
+  };
   input.addEventListener('input', () => { at = 0; draw(); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { at = Math.min(found.length - 1, at + 1); mark(); e.preventDefault(); }
@@ -653,6 +675,182 @@ document.addEventListener('submit', e => {
   if (!box) return;
   e.preventDefault();
   X.run(box);
+});
+
+// ---------------------------------------------------------------------- what changed
+
+// Review changes, in the pane the address names, `review=`: `changes`, what changed, in the words the terminal's
+// /review says, read through x_read's changes pane, each commit with Patch and Test and each workspace with Uncommitted
+// diff; or a commit's SHA or a workspace, its diff, asked for with repo.diff each time it opens, read through x_read's
+// diff pane a page at a time, its lines chosen by their numbers, and a comment on them sent below as a message to the
+// change's maker. What changed is read as it opens and again when Read again is pressed.
+X.Review = class {
+  constructor(name) {
+    this.name = name;
+    const changes = name === 'changes';
+    const title = changes ? 'What changed' : /^[0-9a-f]+$/.test(name) ? `Patch of ${name.slice(0, 12)}`
+      : `${name === 'shared' ? 'Your checkout' : name}, uncommitted`;
+    const back = changes ? html`<button class="btn" data-x-again>Read again</button>`
+      : html`<button class="btn" data-x-review="changes">What changed</button>`;
+    $('#pane').innerHTML = html`<div class="phead"><h2>${title}</h2>${back}<button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-review"><div class="loading">Loading</div></div><p class="x-said" aria-live="polite"></p></div>`.s;
+    this.box = $('#pane .x-review');
+    this.said = $('#pane .x-review + .x-said');
+    if (changes) this.list(); else this.open();
+  }
+  async list() {
+    let r;
+    try { r = await api('x_read', {pane: 'changes'}); } catch (e) { return this.note(e.message); }
+    if (this.dead) return;
+    this.lines = r.lines;
+    if (r.repo == null) return this.note('Nothing is observed: the session\'s cwd is in no git repository.');
+    this.box.innerHTML = html`${r.lines.map(X.change)}`.s;
+    this.paint();
+  }
+  async open() {
+    const why = X.cannot('repo.diff');
+    if (why) return this.note(why);
+    this.box.innerHTML = html`<div class="loading">Asking for the diff of ${this.name}</div>`.s;
+    const r = await X.act('repo.diff', {of: this.name});
+    if (this.dead) return;
+    if (!r || r.refusal) return this.note(r ? X.refused(r.refusal) : X.UNANSWERED);
+    let got;
+    try {
+      do { got = await api('x_read', {pane: 'diff', effect: r.result.effect}); } while (got.reading && !this.dead);
+    } catch (e) { return this.note(e.message); }
+    if (this.dead) return;
+    const d = this.diff = got.diff;
+    this.pages = d.first ? [d.first] : [];
+    this.chosen = null;
+    this.box.innerHTML = html`<p class="x-about"><b>${d.above[0]}</b>${d.above.slice(1).map(line => html`<br>${line}`)}</p><div class="x-patch">${this.pages.map(X.patchPage)}</div><div class="x-end"></div><form class="x-comment"><p class="x-about"></p><textarea rows="3" aria-label="Comment" spellcheck="false"></textarea><div class="x-acts"><button class="btn primary" data-x-comment>Comment</button></div><p class="x-said" aria-live="polite"></p></form>`.s;
+    this.end();
+    this.paint();
+  }
+  note(said) {
+    if (!this.dead) this.box.innerHTML = html`<div class="note">${said}</div>`.s;
+  }
+  // What follows the lines read so far: Read on while the patch has more, and at its end the words below it.
+  end() {
+    const last = this.pages[this.pages.length - 1], below = this.diff.below;
+    const shown = last && last.lines.length ? last.lines[last.lines.length - 1].number : 0;
+    $('.x-end', this.box).innerHTML = (last && last.rest
+      ? html`<button class="btn" data-x-more>${num(last.total - shown)} more lines: read on</button>`
+      : below ? html`<p class="x-below">${below}</p>` : html``).s;
+  }
+  async more(el) {
+    X.disable(el, X.WAITING);
+    let r;
+    try { r = await api('x_read', {pane: 'diff', ref: this.pages[this.pages.length - 1].rest}); } catch (e) {
+      X.disable(el, null);
+      return toast(e.message);
+    }
+    if (this.dead || !r.page) return;
+    this.pages.push(r.page);
+    $('.x-patch', this.box).insertAdjacentHTML('beforeend', X.patchPage(r.page).s);
+    this.end();
+    this.mark();
+  }
+  // Choose line `n`, or with `extend` every line from the one chosen first to it. The one line chosen alone, chosen
+  // again, chooses none.
+  choose(n, extend) {
+    const [first, last] = this.chosen || [];
+    if (extend && this.chosen) this.chosen = [Math.min(this.anchor, n), Math.max(this.anchor, n)];
+    else if (first === n && last === n) this.chosen = null;
+    else { this.chosen = [n, n]; this.anchor = n; }
+    this.mark();
+  }
+  mark() {
+    const [first, last] = this.chosen || [0, -1];
+    for (const el of $$('.x-pl', this.box)) {
+      const on = +el.dataset.n >= first && +el.dataset.n <= last;
+      el.classList.toggle('x-chosen', on);
+      $('[data-x-line]', el).setAttribute('aria-pressed', String(on));
+    }
+    this.paint();
+  }
+  // Every control disabled where the page may not take its act now, saying why, and whom a comment goes to and what
+  // it is on, as the terminal says it.
+  paint() {
+    for (const el of $$('[data-x-diff]', this.box)) X.disable(el, X.cannot('repo.diff'));
+    for (const el of $$('[data-x-test]', this.box)) {
+      const action = this.lines[+el.dataset.xTest].actions[0];
+      X.disable(el, action.disabled || X.cannot(action.op) || (this.testing ? X.WAITING : null));
+    }
+    const form = $('.x-comment', this.box), d = this.diff;
+    if (!form) return;
+    const [first, last] = this.chosen || [];
+    const on = !this.chosen ? d.about : first === last ? `line ${first} of ${d.of}` : `lines ${first} to ${last} of ${d.of}`;
+    $('.x-about', form).innerHTML = (d.to ? html`Comment to <b>${d.to}</b> on ${on}` : html`${d.unsendable}`).s;
+    const why = d.unsendable || X.cannot('message.send') || (this.sending ? X.WAITING : null), t = $('textarea', form);
+    t.readOnly = !!why;
+    X.disable(t, why);
+    X.disable($('[data-x-comment]', form), why);
+  }
+  destroy() { this.dead = true; }
+};
+
+// One line of what changed: its words, each part drawn by its tone, and its acts.
+X.change = (c, i) => {
+  const acts = [];
+  if (c.of && c.kind === 'commit') acts.push(html`<button class="btn" data-x-diff="${c.of}">Patch</button>`);
+  if (c.of && c.kind === 'heading') acts.push(html`<button class="btn" data-x-diff="${c.of}">Uncommitted diff</button>`);
+  if (c.actions.length) acts.push(html`<button class="btn" data-x-test="${i}">Test</button>`);
+  return html`<div class="x-change x-${c.kind}"><span>${c.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span>${acts.length ? html`<span class="x-acts">${acts}</span>` : ''}</div>`;
+};
+
+// A page of a patch: each line its number, a button that chooses it, and its words, drawn by its tone.
+X.patchPage = page => html`${page.lines.map(l => html`<div class="x-pl x-tone-${l.tone || 'plain'}" data-n="${l.number}"><button type="button" class="x-n" data-x-line="${l.number}" aria-pressed="false" title="Choose line ${l.number}, or with Shift every line from the one chosen first">${l.number}</button><span>${l.text}</span></div>`)}`;
+
+// Test a commit, after one question, as its act's label says whose code it runs as you, and say what came of it.
+X.test = async el => {
+  const pane = S.pane, action = pane.lines[+el.dataset.xTest].actions[0];
+  if (!await X.ask(el, `${action.label}. Run it?`, 'Test')) return;
+  pane.testing = true;
+  pane.paint();
+  pane.said.textContent = X.WAITING;
+  const r = await X.act(action.op, action.args);
+  pane.testing = false;
+  pane.paint();
+  pane.said.textContent = !r ? X.UNANSWERED : r.refusal ? `Test: ${X.refused(r.refusal)}`
+    : `Testing ${action.args.commit.slice(0, 12)}: Read again to see what it comes to.`;
+};
+
+// Send a comment: a message to the change's maker, its text made its gist as the composer's is, citing the lines
+// chosen of the diff, or with none chosen the commit, or an uncommitted diff whole.
+X.comment = async form => {
+  const pane = S.pane, d = pane && pane.diff, t = $('textarea', form), said = $('.x-said', form);
+  if (!(pane instanceof X.Review) || !d || pane.sending || d.unsendable || X.cannot('message.send')) return;
+  const text = t.value.trim();
+  if (!text) return;
+  const cites = pane.chosen ? `${d.ref}#L${pane.chosen[0]}-${pane.chosen[1]}` : d.whole;
+  pane.sending = true;
+  pane.paint();
+  said.textContent = X.WAITING;
+  const r = await X.act('message.send', {to: d.to, based_on: [cites]}, {text});
+  pane.sending = false;
+  said.textContent = !r ? X.UNANSWERED : r.refusal ? `Comment: ${X.refused(r.refusal)}` : `Sent to ${d.to}, citing ${cites}.`;
+  if (r && !r.refusal) t.value = '';
+  pane.paint();
+};
+
+document.addEventListener('submit', e => {
+  const form = e.target.closest('.x-comment');
+  if (!form) return;
+  e.preventDefault();
+  X.comment(form);
+});
+
+// Shift and Enter on a line's number chooses every line from the one chosen first, as Shift and a click does, and in a
+// comment Enter sends, as in the composer.
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (e.key !== 'Enter' || e.isComposing || !t.matches) return;
+  if (e.shiftKey && t.matches('[data-x-line]') && S.pane instanceof X.Review) {
+    e.preventDefault();
+    S.pane.choose(+t.dataset.xLine, true);
+  } else if (!e.shiftKey && t.matches('.x-comment textarea')) {
+    e.preventDefault();
+    t.form.requestSubmit();
+  }
 });
 
 // ---------------------------------------------------------------------- what the page draws
@@ -911,7 +1109,7 @@ X.followed = null;
 X.provenance = (ref, followed) => {
   X.followed = followed ? ref : null;
   if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
-  go({provenance: ref, thread: null, knew: null, act: null, args: null}, true);
+  go({provenance: ref, thread: null, knew: null, act: null, args: null, review: null}, true);
 };
 X.reveal = (at, ref) => {
   const [chat, seq] = at.split(':');
@@ -957,8 +1155,8 @@ MapView = class extends MapView {
   }
 };
 
-// A person's page: an agent's acts, and what of it is not built yet, or on the person's own, the session's acts and
-// new links, which a view link cannot make.
+// A person's page: an agent's acts, what changed, and what of it is not built yet, or on the person's own, the session's
+// acts and new links, which a view link cannot make.
 PersonView = class extends PersonView {
   constructor(main, id) {
     super(main, id);
@@ -974,7 +1172,7 @@ PersonView = class extends PersonView {
     });
     const why = X.caps.credential === 'view' ? X.caps.cannot : null;
     const more = agent
-      ? [['activity', 'Tool activity'], ['review', 'Review changes']].map(([k, label]) => html`<button class="btn"${X.disabled(X.unbuilt[k])}>${label}</button>`)
+      ? [html`<button class="btn"${X.disabled(X.unbuilt.activity)}>Tool activity</button>`, html`<button class="btn" data-x-review="changes">Review changes</button>`]
       : ['view', 'control'].map(kind => html`<button class="btn" data-x-link="${kind}"${X.disabled(why)}>New ${kind} link</button>`);
     card.insertAdjacentHTML('afterend', html`<div class="x-acts">${acts}</div><div class="x-acts">${more}</div><p class="x-said" aria-live="polite"></p>`.s);
   }
@@ -1028,7 +1226,7 @@ X.action = async el => {
   const action = row.actions[+el.dataset.xAction];
   if (action.form) {
     overlay.close();
-    return go({act: action.op, args: JSON.stringify(action.args), provenance: null, thread: null, knew: null}, true);
+    return go({act: action.op, args: JSON.stringify(action.args), provenance: null, review: null, thread: null, knew: null}, true);
   }
   X.disable(el, X.WAITING);
   const r = await X.act(action.op, action.args);
@@ -1038,11 +1236,20 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands]');
-  if (!el && (S.route.provenance || S.route.act) && e.target.closest('[data-close-pane]')) return go({provenance: null, act: null, args: null}, true);
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again]');
+  if (!el && (S.route.provenance || S.route.act || S.route.review) && e.target.closest('[data-close-pane]')) {
+    return go({provenance: null, act: null, args: null, review: null}, true);
+  }
   if (!el) return baseClick(e);
   const d = el.dataset;
   if ('xCommands' in d) return X.openCommands();
+  if (d.xReview || d.xDiff) {
+    return go({review: d.xReview || d.xDiff, provenance: null, act: null, args: null, thread: null, knew: null}, true);
+  }
+  if (d.xTest) return X.test(el);
+  if ('xMore' in d) return S.pane.more(el);
+  if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);
+  if ('xAgain' in d) return S.pane.list();
   if (d.xProvenance) return X.provenance(d.xProvenance, false);
   if (d.xFollow) return X.provenance(d.xFollow, true);
   if (d.xReply) return go({thread: d.xReply, knew: null}, true);

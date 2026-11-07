@@ -31,6 +31,13 @@ named here is closed.
   `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
   `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
   it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **What changed, in the page.** Review changes, in the top bar and on an agent's page, where it was drawn disabled, opens
+  what changed in the pane in the terminal's `/review` words, each commit with Patch and Test and each workspace with
+  Uncommitted diff. A diff opens in the same pane a page at a time, every word of it through the page's escaping. Test asks
+  once, saying whose code it runs as you. A click on a line's number chooses it, Shift and a click a range, and Comment sends
+  your message to the change's maker citing those lines, or the commit. `x_read` gains a `changes` pane and a `diff` pane, which
+  reads a diff's record by the effect `repo diff` gave, or a page by its ref. See
+  [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **A comment on a diff's lines, from the terminal.** In a diff `/review` opens, Space chooses a line, and on another every
   line between, and `c` writes a comment at the foot, sent as your message to the agent whose workspace made the change, its
   `based_on` citing those lines by the record's ref, or with none chosen the commit, or an uncommitted diff whole. A change no
