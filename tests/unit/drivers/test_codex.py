@@ -966,6 +966,20 @@ async def test_a_spawned_child_holds_the_turn_open_whichever_comes_first(tmp_pat
     assert [usage.scope for usage in heard.of(Usage)] == ["call", "call", "tree"]
 
 
+async def test_a_child_said_interrupted_before_its_turn_starts_still_holds_the_turn_open(tmp_path, stand):
+    """Codex 0.167.0 said so of a child its parent interrupted as it spawned it, and then the child ran a turn."""
+    cut = started("subAgentActivity", "call_cut", kind="interrupted", agentThreadId=CHILD, agentPath="/root/child1")
+    child = [began("child-1", CHILD), used(14, CHILD), ended("interrupted", "child-1", CHILD)]
+    stand.install(turns=[[began(), SPAWNS["second"], cut, used(14), ended(), *child]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        await heard.until(Usage, lambda usage: usage.scope == "tree")
+        await heard.until(TurnEnded)
+
+    told = (TurnStarted, ChildSeen, TurnEnded)
+    assert [type(report) for report in heard.reports if isinstance(report, told)] == list(told)
+
+
 async def test_a_spawn_that_names_a_child_already_heard_from_holds_nothing(tmp_path, stand):
     """A spawn saying `pendingInit` of a child whose turn has come and gone would otherwise hold the turn for good."""
     reports = await played(

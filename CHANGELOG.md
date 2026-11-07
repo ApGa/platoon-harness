@@ -866,7 +866,8 @@ named here is closed.
   six with Codex short of CPU, so the turn ended with the parent, and the child's turn was reported as one of its own, which the
   runtime never began, with the child's spending in it. A child now counts from the first frame that names it, in either generation of
   Codex's own agents: the spawn item that says it is yet to start, or its own `turn/started`. It holds the turn open until its
-  turn ends, an interrupt cuts its turn as it starts, and a child's own spawn counts as well.
+  turn ends, an interrupt cuts its turn as it starts, and a child's own spawn counts as well. One that never started a turn would
+  hold it open past an interrupt, until a stop, though none has been seen: a child interrupted as it was spawned still ran one.
 - **A prompt on stdin that is not UTF-8 exits 64 whatever the locale.** `run` read a prompt on stdin through Python's text
   reader, which under a C or C.UTF-8 locale, as on GitHub's runners, lets bytes that are not UTF-8 through as surrogates, so
   such a prompt started a session whose first message was refused and the run ended 0, where it exits 64 saying why. It now
