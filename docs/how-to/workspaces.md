@@ -32,6 +32,8 @@ There is no branch, path, base, lock or removal option. The mode recorded is the
 loudly, before any cost where that can be seen, and never becomes another. [RFC 0031](../rfcs/0031-a-workspace-is-a-place-git-already-knows.md)
 has the decisions behind this page, and [compatibility.md](../reference/compatibility.md#workspaces) what each harness sees.
 
+### What each mode promises
+
 | Mode | It is | State |
 |---|---|---|
 | `shared` | The session's checkout, its cwd. Every agent's writes land there at once, and nothing in it is private or confined | Given everywhere, with or without git |
