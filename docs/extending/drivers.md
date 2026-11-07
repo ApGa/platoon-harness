@@ -596,7 +596,8 @@ needs a gateway login, a driver that declares `sealed`, our tools seen, and a ke
 ### A real binary for free
 
 `FakeModel` speaks Anthropic Messages, OpenAI Chat Completions and OpenAI Responses, with streaming, so a real harness runs against it
-on a dummy key and spends nothing. Give it an isolated home, so that no login of yours takes part.
+on a dummy key and spends nothing. Give it an isolated home, so that no login of yours takes part. A tool call you give no id gets
+one of its reply's own, `call_<reply>_<place>`, so no two calls share one, as a model's never do.
 
 ```python
 from platoon_harness.testing import FakeModel, ToolCall
@@ -605,7 +606,7 @@ async with FakeModel(ToolCall("wait", {"timeout": 60}), "done") as model:
     ...  # point the harness at model.url
 
 model.calls[0].offers("wait")   # was the model shown the tool?
-model.calls[1].says("call_1")   # did its result come back?
+model.calls[1].says("call_1_0") # did its result come back?
 model.requests                  # everything that arrived, exactly as it arrived
 ```
 
@@ -637,8 +638,9 @@ The module is imported by that name, so keep a script behind `if __name__ == "__
 The steps are `Say`, `Think`, `Call`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
 until the model only talks. A tool call the model chose goes under the id the model gave it, as `scripted/toolCallId` in MCP's
 `_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
-`tool_item_carries_its_anchor` holds it to that. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its
-turn, and an identical one in the same turn is answered as a repeat.
+`tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since its op would join the
+call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
+one in the same turn is answered as a repeat.
 
 ### Extensions
 

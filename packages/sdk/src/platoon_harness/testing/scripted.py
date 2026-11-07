@@ -3,7 +3,8 @@
 Its tool calls are real MCP over `ToolBinding.url`, and an `AskModel` step is a real model call, so a scripted team
 exercises the real tool plane, and conformance can read what it did from the model's log. A tool call the model chose
 goes under the id the model gave it, as `scripted/toolCallId`, so its op joins that model call as a harness's would,
-while a `Call` step, which no model chose, sends none. Given a gateway it launches
+and one under an id it has sent already fails its turn, as its op would join the call that sent it first; a `Call`
+step, which no model chose, sends none. Given a gateway it launches
 sealed, which is the reference a training system's tests run on with no binary: the gateway's model under its bearer,
 the environment's tools beside ours, each named by the environment's server as `mcp__environment__<tool>`, and a
 `Compact` step that carries the gateway's compaction headers.
@@ -188,6 +189,7 @@ class ScriptedDriver:
         self._approvals: dict[str, asyncio.Future[Verdict]] = {}
         self._tools: list[dict[str, Any]] = []
         self._servers: dict[str, tuple[tuple[str, Secret], str]] = {}
+        self._sent: set[str] = set()
         self._turn_count = 0
         self._incarnation = uuid.uuid4().hex[:8]
         self._steps: asyncio.Task[str] | None = None
@@ -354,7 +356,11 @@ class ScriptedDriver:
     ) -> Any:
         """Call a tool of ours, or of the environment's, by the name the model is shown. A call the model chose goes
         under the id it gave that call, `native_id`, sent as MCP's `_meta` as a harness sends its own, so its op joins
-        the model call that chose it."""
+        the model call that chose it. An id sent already is refused, since its op would join the call that sent it."""
+        if native_id is not None:
+            if native_id in self._sent:
+                raise DriverError(f"the model gave tool call id {native_id} twice, and an op joins its call by its id")
+            self._sent.add(native_id)
         binding = self._spec.tools
         found = self._servers.get(tool) or (None if binding is None else ((binding.url, binding.token), tool))
         if found is None:

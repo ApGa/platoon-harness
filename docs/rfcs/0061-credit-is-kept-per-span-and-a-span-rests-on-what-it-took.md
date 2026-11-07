@@ -60,6 +60,11 @@ already held. The key is among the tool server's `HARNESS_ANCHORS`, so conforman
 scripted driver too. A `Call` step, which no model chose, sends none. Without it no fast test could show a join, and two identical
 calls one model call chose were one op.
 
+An op joins its call by that id, so an id must name one call. `FakeModel` gives a tool call its script names no id
+`call_<reply>_<place>`, where every such call was `call_1`, so no two calls share one, as a model's never do; and ScriptedDriver
+fails the turn of a call under an id it has sent already, rather than join its op to the call that sent it first or answer it as
+a repeat.
+
 ### 3. Spans, from the record alone
 
 A span is cut after each call that chose a write of content, where the record joins them: the op's anchor names a tool item and
@@ -191,7 +196,7 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the three beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries` |
-| M2 Scripted ids | `scripted/toolCallId` | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does` |
+| M2 Scripted ids | `scripted/toolCallId`, and an id per tool call | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, `test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives` and `test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does` |
 | M3 Spans | The `spans` query and the renames | `tests/unit/primitives/test_spans.py` | `feat: Cut each agent's turns into spans at its writes` |
 | M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_2_writes_the_agent_rows_propagate_1_wrote`, over generated journals | `feat: Keep propagated credit per span` |
 | M5 `propagate@3` | The take and the older-edge rule | The take tests in `test_credit.py`, and `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took` | `feat: Follow what a span took` |

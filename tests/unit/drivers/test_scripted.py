@@ -435,3 +435,50 @@ async def test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_cal
         ("scripted/toolCallId", "call_2", 1),
     ]
     assert {found.call for found in made} == {f"{called.stream}@{called.version}"}
+
+
+async def test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives(tmp_path):
+    """A script that names no ids gets ids of each reply's own, so the same claim chosen in two turns is two claims,
+    each joined to the call that chose it, and not the second a repeat of the first, joined to the first's call."""
+    queue = {"kind": "queue", "writers": "all", "readers": "all", "delivery": "pull", "max_inflight": 2}
+    roles = {"bob": {"harness": scripted([AskModel()], [AskModel()])}}
+    team = Team.model_validate({"roles": roles, "topology": {"channels": {"tasks": queue}}})
+    claim = ToolCall("task_claim", {"queue": "tasks"})
+    model = FakeModel(claim, "claimed one", claim, "claimed another")
+    async with model, Session.start(team, root=tmp_path, authority=Gateways(model)) as session:
+        await in_state(session, "bob", "idle")
+        for name in ("one", "two"):
+            await session.task_add("tasks", name)
+        for number in (1, 2):
+            await session.send("@bob", "claim one")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda found, n=number: len(found) == n)
+            await in_state(session, "bob", "idle")
+        claimed = await of_type(session, "task.claimed")
+        calls = [f"{event.stream}@{event.version}" for event in await of_type(session, "model.called")]
+        made = [(await session.lineage(f"{event.stream}@{event.version}")).made for event in claimed]
+
+    assert sorted(event.stream for event in claimed) == ["task/tasks/1", "task/tasks/2"]
+    assert [(found.anchor and found.anchor.id, found.call) for found in made] == [
+        ("call_1_0", calls[0]),
+        ("call_3_0", calls[2]),
+    ]
+
+
+async def test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent(tmp_path):
+    """An op is joined to its call by the id, so a second call under one would be joined to the first's: it is refused,
+    loudly, and never sent."""
+    same = ToolCall(TOOL, {"note": "x"}, id="call_a")
+    async with FakeModel(same, "once", same, "twice") as model, FakeTools() as tools:
+        driver, heard = await started(
+            tmp_path, [AskModel()], [AskModel()], tools=tools.binding(tmp_path), model="m", access=chat_access(model)
+        )
+        await heard.until(TurnEnded)
+        await driver.deliver(delivery())
+        await heard.until(TurnEnded, lambda ended: ended.reason != "stopped")
+        await driver.stop(1)
+
+    assert [ended.reason for ended in heard.of(TurnEnded)] == [
+        "stopped",
+        "failed: the model gave tool call id call_a twice, and an op joins its call by its id",
+    ]
+    assert len(tools.calls) == 1

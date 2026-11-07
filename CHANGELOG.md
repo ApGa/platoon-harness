@@ -456,8 +456,12 @@
 - `ScriptedDriver` sends each tool call a model chose under the id the model gave it, as `scripted/toolCallId` in MCP's `_meta`,
   which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and two identical calls one
   model call chose are two ops, where the tool plane took the second for a repeat. The key is among the tool server's
-  `HARNESS_ANCHORS`, so conformance's `tool_item_carries_its_anchor` runs on ScriptedDriver and passes, where it skipped. A `Call`
-  step, which no model chose, sends no id, as before.
+  `HARNESS_ANCHORS`, so conformance's `tool_item_carries_its_anchor` runs on ScriptedDriver and passes, where it skipped. A call
+  under an id it has sent already fails its turn, as its op would join the call that sent it first. A `Call` step, which no model
+  chose, sends no id, as before.
+- `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
+  every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
+  each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
 - The architecture decision records are RFCs, in [docs/rfcs](docs/rfcs/README.md) under the same numbers, with
   [a template](docs/rfcs/0000-template.md) and a process for proposing one. The guides moved to `docs/how-to/`,
   `docs/extending/` and `docs/reference/`, and [docs/README.md](docs/README.md) lists every page.

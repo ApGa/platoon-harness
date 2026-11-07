@@ -12,7 +12,7 @@ import shlex
 import signal
 import socket
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import FunctionType
 from typing import Any
@@ -398,13 +398,14 @@ def _approving(capabilities: Capabilities) -> str | None:
 @_check(_approving)
 async def approval_answered(rig: _Rig) -> None:
     gated = rig.options.gated("touch allowed")
-    rig.model.script([gated])
+    id = gated.id or "call_gated"  # Its result is found by the id it went under.
+    rig.model.script([replace(gated, id=id)])
     await rig.start()
 
     asked = await rig.until(ApprovalRequested)
     await rig.driver.answer(asked.id, "allow")
 
-    _expect((await rig.call(1)).says(gated.id), "the tool's result never reached the model")
+    _expect((await rig.call(1)).says(id), "the tool's result never reached the model")
 
 
 @_check(_approving)

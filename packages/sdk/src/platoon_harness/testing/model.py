@@ -9,7 +9,7 @@ import asyncio
 import json
 from collections import deque
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Any, Literal, Self
 
@@ -65,11 +65,13 @@ class Thought:
 
 @dataclass(frozen=True)
 class ToolCall:
-    """The model calls a tool. `namespace` is how a Responses client names an MCP server's tools."""
+    """The model calls a tool. `id` is the id the model gives the call, and left out FakeModel gives it
+    `call_<reply>_<place>`, by the reply's number and its place in it, so no two calls share one, as a model's never
+    do. `namespace` is how a Responses client names an MCP server's tools."""
 
     name: str
     arguments: Mapping[str, Any] = field(default_factory=dict)
-    id: str = "call_1"
+    id: str | None = None
     namespace: str | None = None
 
 
@@ -151,6 +153,14 @@ def _blocks(reply: Reply) -> tuple[Block, ...]:
     if isinstance(reply, str):
         return (Text(reply),)
     return (reply,) if isinstance(reply, Text | Thought | ToolCall | Stall | Overflow) else tuple(reply)
+
+
+def _named(blocks: Sequence[Block], number: int) -> tuple[Block, ...]:
+    """A reply's blocks, each tool call its script gave no id under one of the reply's own."""
+    return tuple(
+        replace(block, id=f"call_{number}_{place}") if isinstance(block, ToolCall) and block.id is None else block
+        for place, block in enumerate(blocks)
+    )
 
 
 def _pieces(text: str) -> list[str]:
@@ -542,7 +552,7 @@ class FakeModel:
             writer.write(answer(400, json.dumps(form.OVERFLOW).encode()))
             return True
         self._next_id += 1
-        id = f"resp_{self._next_id}"
+        id, blocks = f"resp_{self._next_id}", _named(blocks, self._next_id)
         request = self._log(Request(message, dialect, id))
         if blocks and isinstance(blocks[0], Stall):
             if not await self._held(reader):

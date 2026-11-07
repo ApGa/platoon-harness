@@ -91,6 +91,16 @@ async def test_chat_answers_text_and_tool_calls():
     assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"note": "hi"}
 
 
+async def test_a_tool_call_the_script_names_no_id_for_gets_one_of_its_replys_own():
+    """No two calls share an id, as a model's never do: one is named by its reply's number and its place in it."""
+    async with FakeModel([ToolCall("ping"), ToolCall("ping")], ToolCall("ping"), ToolCall("ping", id="mine")) as model:
+        replies = [await ask(model, CHAT) for _ in range(2)]
+        named = await ask(model, MESSAGES)
+
+    ids = [call["id"] for reply in replies for call in reply["choices"][0]["message"]["tool_calls"]]
+    assert (ids, named["content"][0]["id"]) == (["call_1_0", "call_1_1", "call_2_0"], "mine")
+
+
 async def test_chat_streams_deltas_a_finish_usage_and_done():
     async with FakeModel("one two", ToolCall("ping", {"a": 1})) as model:
         text = await stream(model, CHAT)
