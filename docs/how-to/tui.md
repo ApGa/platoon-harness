@@ -1,10 +1,21 @@
 # The terminal UI
 
-`platoon-harness` on a terminal opens the terminal UI. It is a client like any other: it submits ops and draws the views,
-holds no timer that decides anything, and computes no status. [cli.md](../reference/cli.md) is the command line's reference and
-[headless.md](headless.md) runs the same sessions with no terminal.
+This guide shows how to start, watch and steer sessions from a terminal. `platoon-harness` on a terminal opens the terminal
+UI. It is a client like any other: it submits ops and draws the views, holds no timer that decides anything, and computes no
+status. [cli.md](../reference/cli.md) is the command line's reference and [headless.md](headless.md) runs the same sessions with
+no terminal.
 
-## Opening it
+**Goal:** open a session in a terminal, see who is working and what needs you, answer it, steer an agent with a message, and
+see what changed and where a line came from.
+
+**Prerequisites:**
+
+- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
+  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- a session to open, such as [your first session](../getting-started/first-session.md)'s, which runs with no keys, or a team
+  to start one from, with its harnesses on your PATH and signed in as you usually are.
+
+## Open it
 
 ```console
 $ platoon-harness                 # the sessions screen
@@ -90,7 +101,7 @@ in the gist. Up and Down on the first and last lines recall what you sent or ran
 being written, which a recalled message is once you edit it. Ctrl+D on an empty composer detaches, and with a draft it
 says why it does not.
 
-### Acting
+### Act on the session
 
 Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
 place you must act, and `/yes` and `/no` take its first and second action, Allow and Deny for an approval, each carrying
@@ -105,7 +116,7 @@ or cancelling an agent, closing or cancelling the session, and every other comma
 agent or the session, erase a body, or run a commit's code as you, ask once. A read is what the screen draws, so the palette offers none: the
 command line prints any. A takeover says it is not built yet, as `/takeover` does.
 
-### What changed
+### Review what changed
 
 `/review`, or Alt+D, lists what changed, grouped by workspace: the commits made in an agent's workspace under that agent,
 newest recorded first, with their short SHA, subject, lines added and removed, and what their latest runtime test came to, with why
@@ -114,14 +125,14 @@ workspace's uncommitted paths, conflicted first, with their state and lines, `?`
 are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
 or in no workspace the session knows. A snapshot's group, an isolated one's among them, says its commits are in its own repository,
 until you fetch them. Enter on a commit tests it, once you say yes to its act, which says whose code it runs as you, unconfined; one a
-look of an isolated workspace found, or one built on it, says instead why it cannot be tested ([workspaces.md](workspaces.md#testing-a-commit)).
+look of an isolated workspace found, or one built on it, says instead why it cannot be tested ([workspaces.md](workspaces.md#test-a-commit)).
 A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
 conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves
 one. The inspector says why a workspace was kept only once its agent's stop has kept it.
 
-### Provenance
+### Follow a line's provenance
 
 `/provenance`, or `p` with the transcript in focus, shows where the chosen line came from: the newest line while the transcript
 follows, or the one you chose with the arrows. Every line is an event, and a line of a message that carries another event's words,

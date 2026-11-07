@@ -455,6 +455,8 @@
 
 ### Changed
 
+- The how-to guides and the training guide open with their goal and prerequisites, and a section that is a task is headed by
+  what you do there, the headless guide's as numbered steps. Their sentences are unchanged.
 - `propagate` is `propagate@3`, in place, under the same name and function. Version 2 kept `propagate@1`'s walk, unchanged, and
   booked what each event keeps to the span it lies in too: the span holding the model call that made it, for an entry that
   carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is one

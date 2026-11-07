@@ -1,11 +1,23 @@
 # The browser
 
-`platoon-harness web SESSION` serves [SwarmChat](https://swarmchat.io)'s page over one session's journal. It is a client
-like any other: it reads what the journal holds, decides nothing, and computes no status, and what a person does there is an
-op, through the same path as the terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's
-reference.
+This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
+[SwarmChat](https://swarmchat.io)'s page over one session's journal. It is a client like any other: it reads what the journal
+holds, decides nothing, and computes no status, and what a person does there is an op, through the same path as the
+terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
 
-## Opening it
+**Goal:** open a session in a browser, read its chats as yourself or as one of its agents, answer what needs you and act on
+the session as you, and give someone else a link that only reads.
+
+**Prerequisites:**
+
+- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
+  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- a session: one a runtime holds, to act on, as `web` starts and resumes nothing, or one no runtime holds, to read its
+  history;
+- a browser on this machine, or on another that can forward a port to it. The page's tests run in Chromium, and it has not
+  run in Firefox or WebKit ([STATUS](../STATUS.md#swarmchat-platoon_harness_cliweb)).
+
+## Open it
 
 ```console
 $ platoon-harness web fix-auth
@@ -30,7 +42,7 @@ page makes new links on your own page there. While it runs, `web` is a client ho
 whose agent asks for an approval waits for you to answer it, from the page or anywhere, instead of ending `needs_human`
 at once: stop `web` for a run that should end that way.
 
-## The two links
+## Choose a link
 
 | Link | What it opens |
 |---|---|

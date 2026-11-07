@@ -4,6 +4,18 @@ A session's journal says what each agent was handed, what it claimed to rest on,
 ask it. Architecture section 11 is the design of record, and [RFC 0038](../rfcs/0038-provenance-is-answered-from-the-record.md) the
 decision.
 
+**Goal:** ask a session's journal what reached an agent, what an event rests on, what came of it and whose work an outcome
+reaches, write an estimate beside the journal, and ask whether an agent's work can train.
+
+**Prerequisites:**
+
+- a session, live or closed, such as [the mixed team](../../examples/mixed-team/README.md)'s, whose writes cite what they
+  rest on;
+- the SDK for the Python blocks, or `platoon-harness` on your PATH for the commands at the end, from a checkout installed as
+  [Install](../getting-started/install.md) says.
+
+## What an answer keeps apart
+
 Three things stay apart in every answer, and none is ever drawn as another:
 
 - **What an agent claims.** A citation, `based_on` on a write, is its writer's claim, checked to name an event and, for a range,
@@ -29,7 +41,7 @@ agent of the session made, of an event that agent made or was handed, as `blob.g
 clones and sessions, so a ref in a commit made elsewhere, or by nobody the record names, names nothing here. A value that cites
 nothing stays as written, never refused, and lineage lists it as unresolved, saying why.
 
-## Asking agents to cite
+## Ask agents to cite
 
 What an agent is told is a template, and the default asks every agent that holds a write of content, in one line of its own:
 
@@ -44,7 +56,7 @@ and its agents' citations are still checked and kept. In two live runs, one on e
 citations made named something its citer had been shown, and none was refused; two runs measure no rate, and
 [STATUS.md](../STATUS.md) keeps them.
 
-## Asking the record
+## Ask the record
 
 Four queries answer people and programs, from a live session or a closed one, and none is an agent's tool:
 
@@ -86,7 +98,7 @@ the agent's latest turn has not ended, as a tool item reported late can still jo
 claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
 last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
 
-## In the terminal and the browser
+## Follow it in the terminal and the browser
 
 A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen
 line, and Provenance among a message's actions in the browser, on a view link too. Both show one event at a time, in the same words,
@@ -113,7 +125,7 @@ being handed something is not using it, and the walk does not go through them. N
 an estimate is an annotation. `propagate@3`, an estimate, also follows what a span's harness confirmed taking, so a maker listed
 apart here can still earn credit there.
 
-## Writing credit
+## Write credit
 
 An estimator reads the record, then writes what it found beside the journal, in `annotations.sqlite`, with no runtime, on a live
 session or a closed one. `Session.annotate` and the `annotate` command are the one way in, and each statement is checked against
@@ -191,7 +203,7 @@ ids, and `forked` once a native child of its harness is seen. Its bars are `not_
 purpose its harness gave other than `compaction`: a call reported with no purpose is its turn's. A program's message is no
 person's. It reads the levels each start recorded, so a result kept or lost since changes no answer.
 
-## From the command line
+## Use the command line
 
 Each query is a command of its name, and prints its answer as JSON:
 

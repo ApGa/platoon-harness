@@ -1,6 +1,22 @@
 # Workspaces
 
-Where each agent works, and what becomes of it. A role names one:
+Where each agent works, and what becomes of it.
+
+**Goal:** choose where each agent of a team works, know before any cost what each mode refuses, and take, test or let go of
+what an agent leaves behind.
+
+**Prerequisites:**
+
+- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
+  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- for `worktree`, `snapshot` and `isolated`, a session started in a git work tree of a repository with a commit, and git
+  2.36 or later;
+- for `isolated`, which is experimental, Linux with [bubblewrap](https://github.com/containers/bubblewrap) and unprivileged
+  user namespaces, and an auth profile, or a training system's gateway, for each role.
+
+## Choose a mode
+
+A role names one:
 
 ```toml
 [roles.lead]
@@ -15,8 +31,6 @@ workspace = "worktree"            # "shared" (the default) | "worktree" | "snaps
 There is no branch, path, base, lock or removal option. The mode recorded is the one that ran: a mode that cannot be given fails
 loudly, before any cost where that can be seen, and never becomes another. [RFC 0031](../rfcs/0031-a-workspace-is-a-place-git-already-knows.md)
 has the decisions behind this page, and [compatibility.md](../reference/compatibility.md#workspaces) what each harness sees.
-
-## What each mode promises
 
 | Mode | It is | State |
 |---|---|---|
@@ -96,7 +110,7 @@ and on the same allowlist its harness gets, `PATH` and `HOME` alone, never a var
 harness does not. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. The runtime's own
 bookkeeping files in the agent's folder — its process record, its log, its instructions, the `ph` shim — it writes and reads
 following no symlink the confined harness could plant there, so none of them can be made to land outside the tree. Only a launch
-inside the isolation records assurance `isolated`; every other agent's is `cooperative`. A [runtime test](#testing-a-commit) of a
+inside the isolation records assurance `isolated`; every other agent's is `cooperative`. A [runtime test](#test-a-commit) of a
 commit a look of such a workspace found, or one built on it, is refused, as its code runs only there, and no test reads an isolated
 workspace's objects.
 
@@ -243,7 +257,7 @@ A look runs the filters your repository's config names, as your own `git status`
 agent's config names, inside its isolation. One that cannot read a workspace records the gap `workspace_unobserved` and nothing
 else, and the Ending names each agent whose last look never finished as `unobserved`.
 
-## Taking an agent's work
+## Take an agent's work
 
 A worktree agent's commits are on its branch in your repository, so you merge, rebase or cherry-pick them as you would anyone's:
 
@@ -255,11 +269,11 @@ $ git merge platoon-harness/fix-auth/ada
 A snapshot agent's commits are in the snapshot's own repository until you fetch its branch, as its `release` does, and `/review` says
 so of its group. A fetch runs your git in that repository, outside any isolation, so read an isolated agent's `<path>/.git/config`
 before you fetch from it, as you would any repository you did not make. The runtime never merges, rebases or resolves a conflict,
-and never moves a branch an agent has. For a team whose workers hand their branches to one merger, [topologies.md](topologies.md#a-merge-queue-for-worktrees)
+and never moves a branch an agent has. For a team whose workers hand their branches to one merger, [topologies.md](topologies.md#merge-worktrees-through-a-queue)
 writes out the merge queue: a queue and a merger in a worktree, whose look records each merge or conflict, and a conflict that goes
 back to its worker through the task.
 
-## Testing a commit
+## Test a commit
 
 A person or a program can have the runtime run the team's test at a recorded commit, and record what it came to beside the commit:
 
@@ -290,7 +304,7 @@ erred and the ref of its record, and the terminal's `/review` shows the outcome 
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
 session resumes. [RFC 0056](../rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
 
-## From a script
+## Read workspaces from a script
 
 `platoon-harness view watch <session> --name changes` gives the `changes` view's rows: each recorded commit, with its latest runtime
 test's outcome and, when the team names a test, the act that runs it, each workspace's last reading and each uncommitted path, with
@@ -300,7 +314,7 @@ as its exposure and says 'not recorded yet' until the look after the turn that m
 whose `workspaces` are the kept ones with their reasons and any `release`, and whose `unobserved` names the agents whose last look
 never finished.
 
-## What the journal recorded
+## Recover a commit the journal recorded
 
 When a session stops or closes, the runtime writes `commits.bundle` into the session folder, holding every commit the journal recorded
 past the session's starting HEAD, and replaces the last one, keeping what it held. So a commit an agent amended or rebased away after a

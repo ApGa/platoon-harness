@@ -334,7 +334,7 @@ Hold it to what a core primitive keeps with `check_extension` from `platoon_harn
 ## Add a topology preset
 
 A preset is a plain function that returns a `Topology`. Listed on an extension of your own, it has the power of a built-in:
-[Your own preset](docs/how-to/topologies.md#your-own-preset) shows one. A built-in preset is a function in
+[Your own preset](docs/how-to/topologies.md#write-your-own-preset) shows one. A built-in preset is a function in
 `packages/sdk/src/platoon_harness/topology/presets.py`, added to `PRESETS`, which also needs:
 
 - its name in `tests/public_api.txt`, as `platoon_harness.topology` exports it;

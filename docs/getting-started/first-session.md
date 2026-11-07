@@ -104,6 +104,6 @@ no problems
 
 `--plan-login` says you mean to run several agents on your own plan login at once, which a headless run refuses
 otherwise, with exit 78. `platoon-harness run --plan-login` with a job then runs the team, which spends model calls on
-your logins, as [the headless quickstart](../how-to/headless.md#run-it) shows, and `platoon-harness` alone opens the
+your logins, as [the headless quickstart](../how-to/headless.md#3-run-it) shows, and `platoon-harness` alone opens the
 terminal UI, whose sessions screen starts a session from the project's team.
 [The team file reference](../reference/team-file.md) lists every key the team file may set.

@@ -115,7 +115,7 @@ filesystem is refused to a live session, with exit 78, as a live journal is not 
 ## A headless run ends at once with exit 4
 
 With no client attached to answer, an approval that would ask ends the run at once with exit 4. In a script or CI,
-answer approvals by a stated policy with `--approvals`, as [the headless quickstart](headless.md#run-it) shows.
+answer approvals by a stated policy with `--approvals`, as [the headless quickstart](headless.md#3-run-it) shows.
 
 ## Still stuck
 

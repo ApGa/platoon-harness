@@ -7,7 +7,18 @@ Platoon's own repository. [architecture.md](../architecture.md) section 14 is th
 What the SDK owns is execution and evidence: the session, its journal and what the record says of each agent. What the training
 system owns is identity and model access, through its authority, and what trains.
 
-## The authority
+**Goal:** a training system that runs a session per rollout, admits each agent through a gateway of its own, asks the record
+what can train, and writes rewards and credit beside the journal.
+
+**Prerequisites:**
+
+- the SDK, from a checkout installed as [Install](../getting-started/install.md) says;
+- a gateway of yours that records each call on a bearer as one agent's, or `FakeModel` in its place, as
+  [testing without a training system](#test-without-a-training-system) shows;
+- roles on harnesses whose drivers launch sealed: ScriptedDriver, pi, OpenHands or a wire program that declares it
+  ([What a sealed launch is](#what-a-sealed-launch-is)).
+
+## Write the authority
 
 A session admits each agent through an `Authority`. A training system's admits it through a gateway of its own:
 
@@ -59,7 +70,7 @@ class MyAuthority:
 
 A refusal of yours wins: `admit` raises, and the spawn fails with your words. An admission is never retried.
 
-## Who starts it
+## Start each rollout's session
 
 Start each rollout's session as a program, with the authority, and with `trainable=True`, and end every agent before you close
 the episode:
@@ -154,7 +165,7 @@ one fails, naming why.
   the environment's, each named by its server, and those the harness keeps that act on nothing. What else a sealed launch keeps out,
   the user's settings, extensions and skills, is how each driver builds its launch, which the slow tests read and no check proves.
 
-## Rewards and credit
+## Write rewards and credit
 
 Every reward and credit is an annotation, written through `Session.annotate` once the session has ended, on the session attached
 with no runtime, so no context a policy could see held one. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`, a
@@ -229,7 +240,7 @@ The export is the session as it ended: its folder, closed, or stopped for a roll
 journal. It holds no key, as bearers lived only in the harnesses' environments. Read it with `Session.attach` once its runtime has
 stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy.
 
-## Testing without a training system
+## Test without a training system
 
 `platoon_harness.testing` is what a training system's own tests build on:
 

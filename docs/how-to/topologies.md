@@ -3,6 +3,12 @@
 A topology says who may reach whom. It never says who acts next: control flow belongs in a Python program. Everything else is
 ordinary grants over relations such as `parent` and `children`, which stay true as agents come and go.
 
+**Goal:** a team whose roles may reach whom you mean, from a preset, several presets, grants written out or a preset of your
+own, checked before it spends anything.
+
+**Prerequisites:** the SDK for the Python forms, from a checkout installed as [Install](../getting-started/install.md) says.
+The TOML forms go in a team file, whose every key [the team file reference](../reference/team-file.md) lists.
+
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
 checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but the two that
 need a program, map-reduce and git-swarm, which it refuses until programs run: see [STATUS.md](../STATUS.md).
@@ -303,7 +309,7 @@ Workers (codex, own worktrees) may message no one.
 Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Program `population` runs it. Closes when the program finishes.
 ```
 
-## Mixing
+## Mix presets
 
 Presets are a union, so write as many as you like, in any order. In TOML that means several tables under `[topology]`, plus any keys of
 your own; in Python, `|`. Here a lead runs a recursive team of workers, with a channel for alerts added by hand. `until` makes the tree
@@ -364,7 +370,7 @@ Three rules keep this safe:
 To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls, and give each a different channel name.
 Presets with fixed names (`pipeline`, `ring`, `map-reduce`, `git-swarm`) cannot be used twice over the same stage: write the second out.
 
-## A merge queue for worktrees
+## Merge worktrees through a queue
 
 Workers in worktrees of their own hand their branches to one merger, rather than merge each other's: a `merges` queue the workers
 add to and a `merger` role claims from, the merger in a worktree of its own. It is a queue and a role, so it is written out and is no
@@ -419,7 +425,7 @@ lead (claude) may message its workers and you. merger (claude, own worktree) may
 Workers add to queue `merges`; merger claims from it. lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.
 ```
 
-## Writing it out
+## Write a topology by hand
 
 A preset is a macro. Anything it does, you can write yourself, and `team.show(resolved=True)` prints exactly what it expanded to, as
 valid input. That form is what the manifest stores and hashes.
@@ -476,7 +482,7 @@ lead (claude) may message workers. Workers (codex) may message lead.
 lead adds to queue `tasks`; workers claim from it. Limits: hops 4. Closes when the session settles.
 ```
 
-## Checking before you spend
+## Check before you spend
 
 `team_check` is a pure function that reports every problem at once, with a suggestion where it can make one. It takes what is known of
 each harness, because a budget in a unit a harness cannot measure must never silently stop enforcing.
@@ -502,7 +508,7 @@ parent wakes the child and its answer wakes the parent, for as long as they go o
 spawn may ask it to, so `team check` warns of every role that may spawn one and can message it, unless `max_hops` bounds them. The
 `manager-worker` and `tree` presets bound them, at 8 unless you say otherwise.
 
-## Your own preset
+## Write your own preset
 
 A preset is a plain function that returns a `Topology`. Its TOML table is named after it, with dashes for underscores, and its keys are
 its arguments. List it on an extension and it has the same power as a built-in. Installing the extension activates nothing: a team must

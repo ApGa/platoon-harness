@@ -2,7 +2,17 @@
 
 From a terminal or CI, with harnesses you already use and their own logins. [cli.md](../reference/cli.md) is the full reference.
 
-## Check the machine
+**Goal:** check that a machine can run sessions, write a team, run it from a terminal or CI on the harnesses you already use,
+watch and steer it from another shell, and stop and resume it.
+
+**Prerequisites:**
+
+- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
+  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- the harnesses you use on your PATH, signed in as you usually are: `claude`, `codex` or `pi`, or the SDK's `openhands`
+  extra, as [Install](../getting-started/install.md#openhands) says.
+
+## 1. Check the machine
 
 ```console
 $ platoon-harness doctor
@@ -26,7 +36,7 @@ for a harness, an SDK or a host no result was made on. `doctor` says whether a k
 what it found. `openhands` is there once the SDK's `openhands` extra is installed for the interpreter it names, as
 [Install](../getting-started/install.md#openhands) says.
 
-## Write a team
+## 2. Write a team
 
 ```console
 $ platoon-harness init
@@ -45,7 +55,7 @@ of one that needs no file.
 [examples/mixed-team](../../examples/mixed-team/README.md) is such a team with a job to give it, which runs as below, and with no keys
 on scripted stand-ins.
 
-## Run it
+## 3. Run it
 
 ```console
 $ platoon-harness run --plan-login "Fix the flaky test in tests/test_cart.py"
@@ -81,7 +91,7 @@ repository and the removal of its folder. Where `release` is empty, `why` says w
 whose last look never finished, as when a session is cancelled before its stops ran, so what that agent last changed was not
 recorded. See [workspaces.md](workspaces.md).
 
-## From another shell
+## 4. Watch and steer it from another shell
 
 Each command under Ops on a session acts on it by its name, as a guest, and runs one op, the one an agent's `ph` would run:
 
@@ -100,7 +110,7 @@ settles each, such as `platoon-harness approval resolve ci-42 --id a7 --verdict 
 `events` reads and never writes, on a live session or a closed one. Each JSON line carries its `seq`: pass the last one as `--after`
 to go on exactly where you stopped. A person has no turn to park, so `wait` is no command: `events --follow` watches instead.
 
-## Stop, resume, serve
+## 5. Stop, resume or serve a session
 
 ```console
 $ platoon-harness session stop ci-42
