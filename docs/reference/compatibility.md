@@ -782,7 +782,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
   after a lead in run 36 sent its follow-up before the first answer. Told it stayed for the next message, a child held a `wait` for
   its parent instead of answering, in runs 23 and 24.
 - Teams past three agents, and work past a minute: everything in [the spike](../research/spikes/real-harness.md) was small and quick.
-- Auto compaction, a turn that fails and a child's approval on a real Codex model, and `fileChange` items anywhere: FakeModel offered no patch tool, so a stand-in is all that has shown one.
+- Auto compaction, a turn that fails and a child's approval on a real Codex model, and a `fileChange` item on one. On FakeModel, which offers no patch tool of Codex's own, Codex 0.167.0 took `apply_patch` run through its shell as a patch, and under a `read-only` sandbox started the item and then asked about it by its id, which `test_a_file_change_approval_on_the_real_binary_carries_its_patch` keeps.
 - Whether a steer that ended a model call on FakeModel does so on a real model.
 - Unix sockets from the Codex sandboxed shell, the `read-only` sandbox, and blocked user namespaces.
 - `omit_tools_from` durability: under-development `code_mode_only_strict_3p_tools` ignores it, and the model catalog is served remotely, so a live first-turn check belongs in conformance.

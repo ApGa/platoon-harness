@@ -6,7 +6,7 @@ of it. Every approval the harness asks for comes to the runtime, and a role's bu
 
 import asyncio
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -223,9 +223,15 @@ def _output(item: Mapping[str, Any]) -> str | None:
         case {"error": {"message": str(message)}}:
             return message
         case {"changes": list(changes)}:
-            return "\n".join(change["diff"] for change in changes)
+            return _patch(changes)
         case _:
             return None
+
+
+def _patch(changes: Sequence[Mapping[str, Any]]) -> str:
+    """A file change's patch: each file it changes, by its kind and path, then that file's change as Codex gives it, an
+    added or deleted file's text or an update's diff, which names no path."""
+    return "\n".join(f"{change['kind']['type']} {change['path']}\n{change['diff']}" for change in changes)
 
 
 def _reply(method: str, params: Mapping[str, Any], verdict: Verdict) -> Mapping[str, Any]:
@@ -276,6 +282,7 @@ class CodexDriver:
         self._unlanded: set[str] = set()
         self._asking: dict[str, _Asked] = {}
         self._deciding: dict[str, str] = {}
+        self._patches: dict[str, str] = {}  # Each file change of ours under way, by its item, which an approval names.
         self._compacting = False
         self._measured = False
 
@@ -468,11 +475,13 @@ class CodexDriver:
         return _reply(method, params, await asked.verdict)
 
     def _ask(self, method: str, params: Mapping[str, Any]) -> str | None:
-        """The whole of what a request asks: a command's command, and any other request's params as JSON, for
-        permissions or a tool of the user's own. A file change names its item and no patch, so its ask is unknown."""
+        """The whole of what a request asks: a command's command, a file change's patch, which the item it names holds,
+        as Codex starts that item before it asks, and any other request's params as JSON, for permissions or a tool of
+        the user's own. A file change whose item was not seen to start, as no native child's item is, asks nothing
+        known."""
         match method, params:
             case "item/fileChange/requestApproval", _:
-                return None
+                return self._patches.get(params.get("itemId") or "")
             case _, {"command": str(command)}:
                 return command
             case _:
@@ -528,6 +537,7 @@ class CodexDriver:
                 self._compacting = True
                 self._measured = False
             case {"type": "fileChange", "id": id}:
+                self._patches[id] = _patch(item["changes"])
                 self._process.put(
                     Item(kind="patch", phase="started", gist=self._process.gist(_name(item)), native_id=id)
                 )
@@ -549,7 +559,8 @@ class CodexDriver:
                 pass
             case {"type": "contextCompaction"}:
                 self._compacted()
-            case {"type": "fileChange", "id": _}:
+            case {"type": "fileChange", "id": id}:
+                self._patches.pop(id, None)
                 self._process.put(self._finished("patch", item))
             case {"type": type, "id": _} if type in _TOOLS:
                 self._process.put(self._finished("tool", item))
@@ -607,6 +618,7 @@ class CodexDriver:
         reason = "interrupted" if self._interrupted and self._ending == "stopped" else self._ending
         self._process.put(TurnEnded(reason=reason))
         self._interrupted, self._ending = False, "stopped"
+        self._patches.clear()  # A file change the turn left under way asks nothing after it.
         if reason != "stopped":
             self._unlanded.clear()
 

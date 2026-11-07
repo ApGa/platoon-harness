@@ -18,7 +18,8 @@ named here is closed.
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which
   `blob.get` reads at `approval/<id>@1` and `body.tombstone` redacts. `approval.request` takes the two too. A driver that sends no
   body still asks, with its ask unknown, as a wire program written before this does. Claude Code's approval carries the tool's
-  name and its input, Codex's a command's command and a request for permissions or for a tool of the user's own as its params,
+  name and its input, Codex's a command's command, a file change's patch, which the item its `itemId` names holds, as Codex
+  starts that item before it asks, and a request for permissions or for a tool of the user's own as its params,
   pi's what our gate asks pi to confirm, the tool's name and its input, or a user's own extension's title and message, and the
   OpenHands worker's each action of the step it asks about. `ScriptedDriver`'s `Ask(gist, body)` scripts one, and the approval
   its own tool asks for carries the tool's name and input. An approval said only its first 280 characters,
@@ -614,6 +615,10 @@ named here is closed.
 
 ### Changes
 
+- **A Codex patch names each file it changes.** A `fileChange` item's body held each file's change alone, an added file's text
+  or an update's diff, which Codex gives with no path, so nobody could tell which file a change was of. Its body now names each
+  file by its kind and path, `add a.py`, before that file's change, as the approval asking about it does. See
+  [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries alone, which the kernel refuses for an op that writes, so nothing can be written through it, and
   a view link reaches it as it reaches SwarmChat's `view_*`: `provenance`, where `x_provenance` was, which goes with no alias, and `attention`, every place the person must act but

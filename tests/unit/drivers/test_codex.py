@@ -491,8 +491,15 @@ async def test_a_tool_says_it_began_then_what_came_of_it(tmp_path, stand):
     assert items[4].body == "refused"
 
 
+CHANGES = [
+    {"path": "a.py", "kind": {"type": "add"}, "diff": "a = 1\n"},
+    {"path": "b.py", "kind": {"type": "update", "move_path": None}, "diff": "@@ -1 +1 @@\n-b = 1\n+b = 2\n"},
+]
+PATCH = "add a.py\na = 1\n\nupdate b.py\n@@ -1 +1 @@\n-b = 1\n+b = 2\n"
+
+
 async def test_a_patch_names_its_paths_and_holds_its_diff(tmp_path, stand):
-    changes = [{"path": "a.py", "kind": {"type": "add"}, "diff": "+a"}, {"path": "b.py", "kind": {}, "diff": "+b"}]
+    changes = CHANGES
     reports = await played(
         stand,
         tmp_path,
@@ -505,7 +512,7 @@ async def test_a_patch_names_its_paths_and_holds_its_diff(tmp_path, stand):
         ("patch", "started", "a.py b.py"),
         ("patch", "completed", "a.py b.py completed"),
     ]
-    assert items[1].body == "+a\n+b"
+    assert items[1].body == PATCH
 
 
 async def test_usage_is_what_the_total_rose_by_and_says_one_model_call_with_no_id(tmp_path, stand):
@@ -782,6 +789,30 @@ async def test_a_command_approval_carries_its_whole_command(tmp_path, stand):
         await heard.until(TurnEnded)
 
     assert (asked.body, asked.gist) == (command, command[:280])
+
+
+async def test_a_file_change_approval_carries_the_patch_of_the_item_it_names(tmp_path, stand):
+    """Codex names the item it holds up and no patch, and starts that item, holding each file's change, before it asks.
+    A request naming an item never seen to start asks nothing known."""
+    patching = started("fileChange", "f1", changes=CHANGES, status="inProgress")
+    asked_of = {"command": None, "itemId": "f1"}
+    stand.install(
+        turns=[
+            [began(), patching, asking("item/fileChange/requestApproval", **asked_of)],
+            [began(), asking("item/fileChange/requestApproval", command=None, itemId="f9", reason="outside the root")],
+        ],
+        on_answer=[completed("fileChange", "f1", changes=CHANGES, status="completed"), ended()],
+    )
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "allow")
+        await heard.until(TurnEnded)
+        await driver.deliver(delivery("42"))
+        unseen = await heard.until(ApprovalRequested, lambda later: later is not asked)
+
+    assert (asked.body, asked.gist) == (PATCH, PATCH)
+    assert (unseen.body, unseen.gist) == (None, "outside the root")
 
 
 async def test_an_approval_s_id_is_its_own_across_agents_and_processes(tmp_path, stand):

@@ -656,6 +656,28 @@ async def test_a_denied_command_never_runs_and_the_item_says_so(tmp_path):
     assert (decided.approval, decided.outcome, decided.native_id) == (asked.id, "declined", "call_gated")
 
 
+async def test_a_file_change_approval_on_the_real_binary_carries_its_patch(tmp_path):
+    """FakeModel has Codex run `apply_patch` through its shell, which Codex takes as a patch of its own, and under a
+    read-only sandbox asks before it applies it: the request names the item it started, which holds the patch."""
+    patch = "*** Begin Patch\n*** Add File: hello.txt\n+hello\n*** End Patch\n"
+    patching = ToolCall("exec_command", {"cmd": f"apply_patch <<'EOF'\n{patch}EOF\n"}, id="call_patch")
+
+    async with FakeModel(patching, "done") as model:
+        spec = on_fake_model(tmp_path, model, goal="make hello.txt", sandbox="read-only")
+        driver, heard = CodexDriver(), Heard()
+        await driver.start(spec, heard)
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "allow")
+        applied = await heard.until(Item, lambda item: item.approval == asked.id)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    started = next(item for item in heard.of(Item) if (item.kind, item.phase) == ("patch", "started"))
+    assert asked.body == f"add {started.gist}\nhello\n" and started.gist.endswith("hello.txt")
+    assert (applied.native_id, applied.outcome, applied.body) == ("call_patch", "completed", asked.body)
+    assert (spec.cwd / "hello.txt").read_text() == "hello\n"
+
+
 async def test_a_required_server_that_refuses_us_fails_the_start_and_says_why(tmp_path):
     async with FakeModel() as model, FakeTools() as tools:
         binding = tools.binding(tmp_path).model_copy(update={"token": Secret("not-the-token")})
