@@ -24,7 +24,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import CHOOSE, Dock
+from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _value
 
 from ..runtime.support import SECONDS, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
@@ -393,29 +393,47 @@ async def test_a_frame_cut_short_by_its_screen_going_is_dropped(root, monkeypatc
         assert running == [False] and app.is_running
 
 
-async def test_the_palette_s_session_commands_are_the_command_line_s_worded_for_a_person(root):
-    """Each command a person may run, as the command line words it, but a takeover, whose terminal is not built. A read
-    is what the screen draws, so the palette offers none."""
+async def test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_gives_it(root):
+    """After the session's acts by their typed commands, each op `ops.list` says the person holds that is no query and
+    no wait, named with a space for its dot and worded as its command's help, a takeover among them, which holds an
+    agent's deliveries as the command line's does; and each runs through its form."""
     async with attached(team(), root) as (owner, app, pilot):
-        commands = {title: said for title, said, _ in workspace(app).commands()}
-        for name, operation in person_ops().items():
-            title = name.replace(".", " ")
-            if operation.query or operation.exposes:
-                assert title not in commands
-            elif name == "agent.takeover":
-                assert commands[title].startswith("Not built yet: driving an agent's own terminal is planned")
-            else:
-                assert commands[title] == _command(operation).__doc__.split("\n\n")[0]
+        held = await owner.ops()
+        acts = {key.typed for key in (*keys("everywhere"), *keys("workspace"))}
+        commands = {title: said for title, said, _ in workspace(app).commands() if title not in acts}
+        writes = [entry["name"] for entry in held if not (entry["query"] or entry["exposes"] or _waits(entry))]
+
+        assert sorted(commands) == sorted(name.replace(".", " ") for name in writes)
+        for name in writes:
+            assert commands[name.replace(".", " ")] == _command(person_ops()[name]).__doc__.split("\n\n")[0]
+        assert "agent takeover" in commands
 
         await pilot.press("ctrl+p", *"agent retire")
         await pilot.press("enter")
-        await drawn(pilot, lambda text: "agent:" in text)
+        await drawn(pilot, lambda text: "agent: An agent, as `@agent`." in text)
         await pilot.press("enter")
-        await drawn(pilot, lambda text: "cannot be taken back" in text)
+        await drawn(pilot, lambda text: "agent retire @lead? It cannot be taken back." in text)
         await pilot.press("y")
         ended = await until(lambda: of_type(owner, "agent.ended"), owner)
 
         assert [(event.agent, event.data["status"]) for event in ended] == [("lead", "retired")]
+
+
+async def test_the_palette_offers_no_wait_and_no_query(root):
+    """A person holds `wait`, the ops on a wait and every query, as `ops.list` says, and the palette offers none of
+    them: a wait parks a turn and a person has none, and a query is what the screen draws and the command line
+    prints."""
+    async with attached(team(), root) as (owner, app, _):
+        held = await owner.ops()
+        titles = {title for title, _, _ in workspace(app).commands()}
+        left = {entry["name"] for entry in held if entry["query"] or entry["exposes"] or _waits(entry)}
+
+        assert {"wait", "wait.cancel", "wait.progress", "attention.list", "blob.get", "view.watch"} <= left
+        assert titles.isdisjoint(name.replace(".", " ") for name in left)
+
+
+def _waits(entry: dict) -> bool:
+    return entry["name"].partition(".")[0] == "wait"
 
 
 @pytest.mark.parametrize("width", [120, 59])
@@ -979,15 +997,14 @@ async def test_body_tombstone_from_the_palette_asks_once(root):
         assert await of_type(owner, "body.tombstoned") == []
 
 
-def test_a_yes_or_no_field_takes_only_yes_or_no():
-    from platoon_harness_cli.ops import flags
-    from platoon_harness_cli.tui.workspace import _value
+async def test_a_yes_or_no_field_takes_only_yes_or_no(root):
+    async with attached(team(), root) as (_, app, _):
+        interrupt = next(form for form in workspace(app).forms if form.op == "agent.interrupt")
+        below = next(field for field in interrupt.fields if field.name == "below")
 
-    below = next(field for field in flags(person_ops()["agent.interrupt"]) if field.name == "below")
-
-    assert (_value(below, "yes"), _value(below, "No"), _value(below, "1")) == (True, False, True)
-    with pytest.raises(ValueError, match="below is yes or no"):
-        _value(below, "ture")
+        assert (_value(below, "yes"), _value(below, "No"), _value(below, "1")) == (True, False, True)
+        with pytest.raises(ValueError, match="below is yes or no"):
+            _value(below, "ture")
 
 
 async def test_ctrl_home_goes_to_the_start_of_the_transcript(root):

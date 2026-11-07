@@ -1,15 +1,17 @@
 """A command for each op a person may run, made from the op registry and its schemas, so that the command line cannot
 drift from the ops. An agent's `ph task.claim --queue tasks` is a person's `platoon-harness task claim SESSION --queue
-tasks`: the op's name split at its dot, then the session, then a flag per argument."""
+tasks`: the op's name split at its dot, then the session, then a flag per argument. A form, in the terminal's palette
+and in the page's, is made from the same flags."""
 
 import inspect
 import json
 import re
 import shlex
-from collections.abc import Awaitable, Callable, Mapping
+import types
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from cyclopts import App, Parameter
 from pydantic import BaseModel
@@ -60,13 +62,18 @@ _PURPOSES = {
 """What each group of commands is for, as its help says first."""
 
 
+def _parks(name: str) -> bool:
+    """Whether an op is `wait` or one on a wait, which parks a turn: a person has none."""
+    return name.partition(".")[0] == "wait"
+
+
 def person_ops() -> dict[str, Op]:
     """The ops a person may run: every op the SDK holds that is kept to neither the runtime nor an agent, but `wait` and
     the ops on a wait, as a wait parks a turn and a person has none."""
     return {
         name: operation
         for name, operation in _OPS.items()
-        if not (operation.runtime or operation.agent or name.partition(".")[0] == "wait")
+        if not (operation.runtime or operation.agent or _parks(name))
     }
 
 
@@ -119,17 +126,80 @@ def groups(found: dict[str, App]) -> dict[str, App]:
 
 @dataclass(frozen=True)
 class Flag:
-    """One argument of an op, as a flag. `json` takes JSON text, and `body` stored text, or a file's with `-file`."""
+    """One argument of an op, as a flag of its command and a field of its form. `json` takes JSON text, and `body`
+    stored text, or at a command line a file's with `-file`. `help` is what it is in a person's words."""
 
     name: str
     annotation: Any
     default: Any
     json: bool
     body: bool
+    help: str
 
     @property
     def flag(self) -> str:
         return f"--{self.name.replace('_', '-')}"
+
+    @property
+    def required(self) -> bool:
+        return self.default is inspect.Parameter.empty
+
+    @property
+    def kind(self) -> str:
+        """What a form takes for it: `body`, `json`, `yes-no`, `choice`, `list`, `integer`, `number` or `text`."""
+        if self.body or self.json:
+            return "body" if self.body else "json"
+        found = _branch(self.annotation)
+        if get_origin(found) is Literal:
+            return "choice"
+        if get_origin(found) is tuple:
+            return "list"
+        return {bool: "yes-no", int: "integer", float: "number"}.get(found, "text")
+
+    @property
+    def choices(self) -> tuple[Any, ...]:
+        """What a `choice` takes, and nothing for any other kind."""
+        return get_args(_branch(self.annotation)) if self.kind == "choice" else ()
+
+
+def _branch(annotation: Any) -> Any:
+    """A flag's type, None taken out of it."""
+    if get_origin(annotation) in (Union, types.UnionType):
+        return next(branch for branch in get_args(annotation) if branch is not type(None))
+    return annotation
+
+
+@dataclass(frozen=True)
+class Form:
+    """A write op as a person runs it from a form, in the terminal's palette and in the page's alike: the op, what it
+    does as its command's help says it, and a field per flag of its command but `via`, what an act was decided through,
+    which each client says itself where `via` says the op takes one."""
+
+    op: str
+    said: str
+    fields: tuple[Flag, ...]
+    via: bool
+
+    @property
+    def title(self) -> str:
+        """The op as a person reads its name: `agent spawn`."""
+        return self.op.replace(".", " ")
+
+
+def forms(held: Iterable[Mapping[str, Any]]) -> list[Form]:
+    """The write ops a person may run, of those `ops.list` says they hold, each as its form, by the one rule both
+    clients keep: every op but a query, which a pane draws, and but `wait` and the ops on a wait, as a wait parks a turn
+    and a person has none. What a person holds no grant for, `ops.list` leaves out already."""
+    found = []
+    for entry in sorted(held, key=lambda entry: entry["name"]):
+        if entry["query"] or entry["exposes"] or _parks(entry["name"]):
+            continue
+        schema = entry["schema"]
+        fields = _fields(schema)
+        named = tuple(field for field in fields if field.name != "via")
+        said = _described(entry["description"] or "", schema.get("properties", {}))
+        found.append(Form(entry["name"], said, named, named != fields))
+    return found
 
 
 def _type_of(field: Mapping[str, Any]) -> tuple[Any, bool]:
@@ -148,20 +218,13 @@ def _type_of(field: Mapping[str, Any]) -> tuple[Any, bool]:
     return (found | None if nullable else found), kind not in _KINDS and kind != "array" and "enum" not in branch
 
 
-def flags(operation: Op) -> list[Flag]:
-    """The flags an op's command takes, a flag per argument."""
-    return _fields(operation.input.model_json_schema())
-
-
-def described(operation: Op) -> str:
-    """An op's description in a person's words, as its command's help says it."""
-    return _described(operation.fn.__doc__ or "", flags(operation))
-
-
-def _fields(schema: Mapping[str, Any]) -> list[Flag]:
+def _fields(schema: Mapping[str, Any]) -> tuple[Flag, ...]:
+    """A flag per argument of a schema, each with its help: its description in a person's words, and as JSON where it
+    takes JSON."""
     required = set(schema.get("required", ()))
+    properties = schema.get("properties", {})
     fields = []
-    for name, field in schema.get("properties", {}).items():
+    for name, field in properties.items():
         body = any(branch.get("pattern") == BODY_REF for branch in field.get("anyOf", [field]))
         annotation, is_json = (str | None, False) if body else _type_of(field)
         annotation = str | None if is_json else annotation
@@ -170,35 +233,27 @@ def _fields(schema: Mapping[str, Any]) -> list[Flag]:
             default = inspect.Parameter.empty
         elif is_json or isinstance(default, list | dict):
             default = None if is_json else tuple(default)
-        fields.append(Flag(name, annotation, default, is_json, body))
-    return fields
+        said = _described(field.get("description", ""), properties)
+        fields.append(Flag(name, annotation, default, is_json, body, f"{said} As JSON.".strip() if is_json else said))
+    return tuple(fields)
 
 
-def _described(text: str, fields: list[Flag]) -> str:
+def _described(text: str, names: Iterable[str]) -> str:
     """An op's own words as a person reads them at a command line: each op it names as the command that runs it, with a
-    sentence that names one with no command left out, as an agent's are, and each of its arguments as a flag."""
-    flags = {field.name: field.flag for field in fields}
+    sentence that names one with no command left out, as an agent's are, and each of its arguments, among `names`, as
+    a flag."""
+    flags = {name: f"--{name.replace('_', '-')}" for name in names}
     said = taught(text, command_of, _OPS, _PERSON)
     return OP_NAMED.sub(lambda named: f"`{flags[named[1]]}`" if named[1] in flags else named[0], said)
 
 
-def _help(field: Mapping[str, Any], found: Flag, fields: list[Flag]) -> str:
-    said = _described(field.get("description", ""), fields)
-    if found.json:
-        said = f"{said} As JSON.".strip()
-    if found.body:
-        said = f"{said} {found.flag}-file reads it from a file.".strip()
-    return said
-
-
-def _parameters(schema: Mapping[str, Any], fields: list[Flag]) -> list[inspect.Parameter]:
-    properties = schema.get("properties", {})
+def _parameters(fields: tuple[Flag, ...]) -> list[inspect.Parameter]:
     parameters = []
     for found in fields:
         flag = bool in (found.annotation, *getattr(found.annotation, "__args__", ()))
         option = Parameter(
             name=found.flag,
-            help=_help(properties[found.name], found, fields),
+            help=f"{found.help} {found.flag}-file reads it from a file.".strip() if found.body else found.help,
             negative=f"--no-{found.flag[2:]}" if flag else (),
             show_default=found.default not in (None, (), "", False),
         )
@@ -219,14 +274,14 @@ def _parameters(schema: Mapping[str, Any], fields: list[Flag]) -> list[inspect.P
     return parameters
 
 
-def _example(name: str, fields: list[Flag]) -> str:
+def _example(name: str, fields: tuple[Flag, ...]) -> str:
     """The command with what it needs, each value named for what it is."""
     needed = [field for field in fields if field.default is inspect.Parameter.empty]
     flags = (field.flag if field.annotation is bool else f"{field.flag} {field.name.upper()}" for field in needed)
     return " ".join(["platoon-harness", *name.split("."), "SESSION", *flags])
 
 
-async def _arguments(session: Session, fields: list[Flag], given: Mapping[str, Any]) -> dict[str, Any]:
+async def _arguments(session: Session, fields: tuple[Flag, ...], given: Mapping[str, Any]) -> dict[str, Any]:
     """What the op takes from the flags given: a list for a repeated flag, JSON parsed, and a body stored first. A flag
     left out leaves the op its own default."""
     args: dict[str, Any] = {}
@@ -293,10 +348,10 @@ def derived(
         async with Session.attach(named[0], view=reads) as attached:
             return await run(attached, await _arguments(attached, fields, given), given)
 
-    first, _, rest = _described(doc, fields).partition(". ")
+    first, _, rest = _described(doc, schema.get("properties", {})).partition(". ")
     described = f"{first.rstrip('.')}.\n\n{rest}".rstrip()
     command: Any = run_command
-    command.__signature__ = inspect.Signature([_SESSION, *_parameters(schema, fields)])
+    command.__signature__ = inspect.Signature([_SESSION, *_parameters(fields)])
     command.__doc__ = (
         f"{described}\n\nFor example:\n\n    {_example(name, fields)}\n\n"
         f"Parameters\n----------\nsession\n    {_SESSION_HELP}"

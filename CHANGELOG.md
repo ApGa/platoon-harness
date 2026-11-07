@@ -559,6 +559,13 @@ named here is closed.
 
 ### Changes
 
+- **The terminal's palette offers each write op the session says you hold.** It was made from the SDK's own ops, so an op a
+  team's extension adds was never offered. It is now made from the session's `ops.list`, by one rule the command line's package
+  states for the terminal and the page: every op you hold but a query, which the views draw, and but `wait` and the ops on a
+  wait, as a wait parks a turn and a person has none. Each is worded as its command's help, and its form asks for each flag in
+  that flag's words, with `via` said as `tui`. `agent takeover` runs, holding an agent's deliveries as the command line's does,
+  where it said it was not built; `/takeover` still says driving its terminal is not built. See
+  [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The architecture page marks what STATUS calls planned.** [docs/architecture.md](docs/architecture.md) sends a newcomer to
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking
   STATUS: the library tier, `topology.patch` and `topology.show`, the topology table's team, board and tasks views,

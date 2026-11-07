@@ -1,6 +1,7 @@
 """The workspace: one session, as a person works with it every day."""
 
 import json
+import re
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
@@ -20,7 +21,8 @@ from platoon_harness.config import Manifest
 from platoon_harness.kernel import Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
-from ..ops import CONFIRMED, Flag, cut, described, flags, person_ops
+from .. import ops
+from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
 from ..roster import detail_of, why_said
 from .composer import ADDRESS, Composer
@@ -44,9 +46,6 @@ GROUPS = (
 GLYPHS = {group: (glyph, style) for group, _, glyph, style in GROUPS}
 UNREAD = 100
 """The most unread lines a badge counts: past it, it says `99+`."""
-UNBUILT = {"agent.takeover": "take_over"}
-"""Commands whose purpose the TUI cannot carry out yet, by the key that says why: a takeover holds an agent's deliveries
-for a person to drive its own terminal, which is not built, so the palette says so rather than hold them."""
 CHOOSE = f"{next(key.shown for key in keys('list') if key.action == 'cursor_down')} chooses a place"
 """How a place is chosen in the dock once it has focus."""
 
@@ -154,6 +153,7 @@ class Workspace(Screen[None]):
         self._queued: dict[str, Any] | None = None
         self._inspected: dict[str, Any] | None = None
         self._unmarked = False
+        self.forms: list[ops.Form] = []
 
     def compose(self) -> ComposeResult:
         yield Static(id="header")
@@ -185,6 +185,7 @@ class Workspace(Screen[None]):
             session = self._given or await Session.attach(self.session_name)
             self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal
             through = await session.head()
+            self.forms = forms(await session.ops())
         except Refused as refused:
             self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))
             return
@@ -1010,82 +1011,74 @@ class Workspace(Screen[None]):
         else:
             self.app.exit(self.left())
 
-    # The palette: the acts of a session, each by its typed command, then the commands a person may run, worded as
-    # the command line words them.
+    # The palette: the acts of a session, each by its typed command, then the write ops the person holds, each by its
+    # form, worded as the command line words them.
 
     def commands(self) -> list[tuple[str, str, Any]]:
         acts = (*keys("everywhere"), *keys("workspace"))
         found: list[tuple[str, str, Any]] = [(key.typed, key.said, partial(self.run_action, key.runs)) for key in acts]
-        for name, operation in sorted(person_ops().items()):
-            if operation.query or operation.exposes:  # A read is what the screen draws, and the command line prints.
-                continue
-            title = name.replace(".", " ")
-            if (planned := UNBUILT.get(name)) is not None:
-                key = next(key for key in KEYMAP if key.action == planned)
-                found.append((title, f"Not built yet: {key.planned}", partial(self.action_planned, planned)))
-            else:
-                first = described(operation).partition(". ")[0].rstrip(".")
-                found.append((title, f"{first}.", partial(self._run_op, name)))
+        for form in self.forms:
+            found.append((form.title, f"{form.said.partition('. ')[0].rstrip('.')}.", partial(self._run_op, form)))
         return found
 
     @work(group="act")
-    async def _run_op(self, name: str) -> None:
+    async def _run_op(self, form: ops.Form) -> None:
         live = self.live
         if live is None:
             return
-        operation = person_ops()[name]
-        schema = operation.input.model_json_schema()
-        fields = flags(operation)
         given = {
             "agent": f"@{self.focus_on.agent}" if self.focus_on and self.focus_on.agent else "",
             "to": self.target or "",
         }
         asked = [
-            (
-                field.name,
-                SafeText(f"{field.flag[2:]}: {schema['properties'][field.name].get('description', '')}"),
-                given.get(field.name, ""),
-            )
-            for field in fields
+            (field.name, SafeText(f"{field.flag[2:]}: {field.help}"), given.get(field.name, ""))
+            for field in form.fields
         ]
-        answer = await self.app.push_screen_wait(Form(SafeText(name.replace(".", " "), "bold"), asked)) if asked else {}
+        title = SafeText(form.title, "bold")
+        answer = await self.app.push_screen_wait(Form(title, asked)) if asked else {}
         if answer is None:
             return
         try:
-            args = {field.name: _value(field, answer[field.name]) for field in fields if field.name in answer}
+            args = {field.name: _value(field, answer[field.name]) for field in form.fields if field.name in answer}
         except ValueError as error:
             note(self, str(error), severity="error")
             return
-        for field in fields:
+        for field in form.fields:
             if field.body and field.name in args:
                 args[field.name] = await live.session.put_body(args[field.name].encode())
-        if name in CONFIRMED:
-            question = SafeText(
-                f"{name.replace('.', ' ')} {' '.join(map(str, args.values()))}? It cannot be taken back."
-            )
+        if form.op in CONFIRMED:
+            question = SafeText(f"{form.title} {' '.join(map(str, args.values()))}? It cannot be taken back.")
             if not await self.app.push_screen_wait(Confirm(question)):
                 return
-        outcome = await live.session.submit(name, **args)
+        outcome = await live.session.submit(form.op, **args, **({"via": "tui"} if form.via else {}))
         if outcome.refusal is not None:
             note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
         else:
-            note(self, f"{name.replace('.', ' ')}: done")
+            note(self, f"{form.title}: done")
 
 
 def _value(field: Flag, text: str) -> Any:
-    """A form's text as the value an op's field takes, or a `ValueError` saying what it takes."""
-    if field.json:
-        return json.loads(text)
-    kinds = [
-        kind for kind in (*getattr(field.annotation, "__args__", ()), field.annotation) if kind in (int, float, bool)
-    ]
-    if bool in kinds:
-        said = text.lower()
-        if said not in ("y", "yes", "true", "1", "n", "no", "false", "0"):
-            raise ValueError(f"{field.name} is yes or no")
-        return said in ("y", "yes", "true", "1")
-    if kinds:
-        return kinds[0](text)
-    if "tuple" in str(field.annotation):
-        return [part.strip() for part in text.split(",") if part.strip()]
+    """A form's text as the value an op's field takes, by its kind, or a `ValueError` saying what it takes."""
+    match field.kind:
+        case "json":
+            try:
+                return json.loads(text)
+            except ValueError as error:
+                raise ValueError(f"{field.flag} takes JSON: {error}") from None
+        case "yes-no":
+            said = text.lower()
+            if said not in ("y", "yes", "true", "1", "n", "no", "false", "0"):
+                raise ValueError(f"{field.name} is yes or no")
+            return said in ("y", "yes", "true", "1")
+        case "integer":
+            if not re.fullmatch(r"-?\d+", text):
+                raise ValueError(f"{field.name} is a whole number")
+            return int(text)
+        case "number":
+            try:
+                return float(text)
+            except ValueError:
+                raise ValueError(f"{field.name} is a number") from None
+        case "list":
+            return [part.strip() for part in text.split(",") if part.strip()]
     return text

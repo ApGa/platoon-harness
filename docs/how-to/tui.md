@@ -116,10 +116,14 @@ takes it with it, so a key never acts on a place you did not choose. An answer a
 as theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
 below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows disabled,
 pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves. Retiring
-or cancelling an agent, closing or cancelling the session, and every other command a person may run are in the palette,
-`/palette`, worded as the command line words them, after the acts by their typed commands, and the ones that end an
-agent or the session, erase a body, or run a commit's code as you, ask once. A read is what the screen draws, so the palette offers none: the
-command line prints any. A takeover says it is not built yet, as `/takeover` does.
+or cancelling an agent, closing or cancelling the session, and every other op you hold that writes are in the palette,
+`/palette`, after the acts by their typed commands: each op the session's `ops.list` says you hold, an extension's
+among them, named with a space for its dot and worded as the command line words its command. Each opens one form, a
+field per flag, in the flag's words, and the ones that end an agent or the session, erase a body, or run a commit's code
+as you, ask once. A read is what the screen draws, so the palette offers no query: the command line prints any. `wait`
+and the ops on a wait are left out too, as a wait parks a turn and you have none. `agent takeover` holds an agent's
+deliveries, as the command line's does, while driving its own terminal from here is not built yet, as `/takeover`
+says.
 
 ### Review what changed
 
