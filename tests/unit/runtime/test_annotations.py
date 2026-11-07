@@ -162,6 +162,15 @@ def test_writers_at_once_on_a_folder_with_no_annotations_file_each_write(tmp_pat
             assert list(pool.map(write, [folder] * 4, [threading.Barrier(4)] * 4)) == [1] * 4
 
 
+def test_a_writer_makes_the_table_in_an_annotations_file_that_has_none(tmp_path):
+    """A writer that switched the file to WAL and stopped before its table was written left it so."""
+    statement = Annotate.model_validate({**CREDIT, "target": "agent/bob@1", "status": "invalid", "head_seq": 1})
+    with contextlib.closing(sqlite3.connect(tmp_path / ANNOTATIONS, autocommit=True)) as db:
+        db.execute("PRAGMA journal_mode=WAL")
+
+    assert _annotate(tmp_path, statement, 0.0).id == 1
+
+
 def test_annotations_have_one_checked_way_in():
     """`Session.annotate` checks a statement against the journal, and the module beside it is a schema, no writer."""
     defined = [

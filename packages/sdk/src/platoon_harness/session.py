@@ -951,16 +951,14 @@ def _annotation(row: sqlite3.Row) -> Annotation:
 
 
 def _annotations_made(folder: Path) -> Path:
-    """The annotations file, which its first writer makes aside, in WAL mode with its table, and links into place:
-    SQLite refuses at once, rather than after a wait, one of two writers that switch a new file to WAL together."""
+    """The annotations file, which its first writer makes aside in WAL mode and links into place: SQLite refuses at
+    once, rather than after a wait, one of two writers that switch a new file to WAL together."""
     path = folder / ANNOTATIONS
     if not path.exists():
         aside = folder / f".{ANNOTATIONS}.{uuid4().hex}"
         try:
             with contextlib.closing(sqlite3.connect(aside, autocommit=True)) as db:
                 db.execute("PRAGMA journal_mode=WAL")
-                db.execute(_ANNOTATIONS_TABLE)
-                db.execute(_ANNOTATIONS_INDEX)
             with contextlib.suppress(FileExistsError):
                 os.link(aside, path)
         finally:
@@ -984,6 +982,8 @@ def _annotate(folder: Path, statement: Annotate, wall_time: float) -> Annotation
         with contextlib.closing(sqlite3.connect(_annotations_made(folder), timeout=_CLIENT_SECONDS * 5)) as db, db:
             db.row_factory = sqlite3.Row
             db.execute("BEGIN IMMEDIATE")
+            db.execute(_ANNOTATIONS_TABLE)
+            db.execute(_ANNOTATIONS_INDEX)
             found = db.execute(
                 """
                 SELECT * FROM annotations WHERE producer = :producer AND producer_version = :producer_version
