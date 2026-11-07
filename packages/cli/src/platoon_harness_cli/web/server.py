@@ -3,8 +3,9 @@
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
 of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours, which
-answers from the session's query ops alone. Every mutation is `/x/command` into `Session.submit`, the op path the
-terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
+reads through the session's queries alone, where the kernel refuses an op that writes. Every mutation is `/x/command`
+into `Session.submit`, the op path the terminal uses, and the kernel's grants decide what the person may do. Every
+answer says `no-store`.
 """
 
 import asyncio
@@ -282,8 +283,9 @@ class Web(Server[Request]):
         return response(200, data, *headers, *_PAGE)
 
     async def _read(self, params: Mapping[str, Any]) -> dict[str, Any]:
-        """One pane of the page, which `pane` names, in the words of the command line's package and from the session's
-        query ops alone, so a view link reads it too and nothing is written through it."""
+        """One pane of the page, which `pane` names, in the words of the command line's package, read through the
+        session's queries alone, which the kernel runs on a read connection and refuses for any op that writes, so
+        nothing is written through it on the owner's credential `web` holds, and a view link reads it too."""
         match params.get("pane"):
             case "provenance":
                 return await self._provenance(params)
@@ -294,10 +296,12 @@ class Web(Server[Request]):
     async def _attention(self) -> dict[str, Any]:
         """Where the person must act: every row of the runtime's `attention` view but a mention, which is a message to
         read in its chat, as the page keeps no marks to say which were read."""
-        outcome = await self.session.submit("attention.list")
-        if (refusal := outcome.refusal) is not None:
-            raise replies.Error(403 if refusal.code == "not_permitted" else 400, f"{refusal.code}: {refusal.detail}")
-        return {"rows": [row for row in outcome.result if row["kind"] != "mention"]}
+        try:
+            rows = await self.session.attention()
+        except Refused as refused:
+            code = refused.refusal.code
+            raise replies.Error(403 if code == "not_permitted" else 400, f"{code}: {refused.refusal.detail}") from None
+        return {"rows": [row for row in rows if row["kind"] != "mention"]}
 
     async def _provenance(self, params: Mapping[str, Any]) -> dict[str, Any]:
         """What the session's provenance queries say of the event `ref`, in the lines the terminal draws, and `at`, the

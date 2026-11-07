@@ -408,9 +408,12 @@ async def test_provenance_of_what_is_no_event_is_refused_saying_why(web, ref, st
     assert reply.status == status and reply.json()["error"].startswith(said)
 
 
-async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command(root, clock):
+async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command(
+    root, clock, monkeypatch
+):
     """Provenance and where the person must act are each a pane of `x_read`, read by a view link as it reads `view_*`,
-    writing nothing, and a mention is a message to read in its chat. A pane it does not name is none, and the route that
+    through the session's queries alone, which the kernel refuses for an op that writes, so no pane submits an op or
+    writes anything, and a mention is a message to read in its chat. A pane it does not name is none, and the route that
     was provenance's alone is gone. The view link is refused at `/x/command`, the one route that writes."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
         await in_state(session, "lead", "idle")
@@ -422,14 +425,23 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
         await caught_up(web, session)
         head = await session.head()
         browser = await Browser(web).opened("view")
-        attention = await browser.view("x_read", {"pane": "attention"})
-        provenance = await browser.view("x_read", {"pane": "provenance", "ref": "agent/w1@1"})
+        submitted, submit = [], session.submit
+
+        async def recorded(op: str, /, **args: object) -> object:
+            submitted.append(op)
+            return await submit(op, **args)
+
+        with monkeypatch.context() as patched:
+            patched.setattr(session, "submit", recorded)
+            attention = await browser.view("x_read", {"pane": "attention"})
+            provenance = await browser.view("x_read", {"pane": "provenance", "ref": "agent/w1@1"})
         unnamed = await browser.request("POST", "/v1/x_read", {"pane": "spans"})
         gone = await browser.request("POST", "/v1/x_provenance", {"ref": "agent/w1@1"})
         command = {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": key(1)}
         refused = await browser.request("POST", "/x/command", command)
 
         assert await session.head() == head, "a read wrote an event"
+        assert submitted == [], "a pane submitted an op, which may write"
         rows = await session.attention()
     places = attention["rows"]
     assert [place["id"] for place in places] == [row["id"] for row in rows if row["kind"] != "mention"]

@@ -15,8 +15,8 @@ The terminal's palette and a new palette in the page each offer every write op t
 one function of the command line's package, by one rule: every op but `wait` and the ops on a wait, as a wait parks a turn and a
 person has none, and but a query, which a pane draws. Each is worded as its command's help, and runs through one form made from
 its schema, which asks once before each op the terminal asks about. Every pane of the page reads through one route, `/v1/x_read`,
-which answers in the command line package's words from the session's query ops, which a view link reaches, and through which
-nothing can be written. `x_provenance` becomes its `provenance` pane, and Needs you reads its `attention` pane. This is step 1 of 2:
+which answers in the command line package's words through the session's queries alone, where the kernel refuses an op that
+writes, so nothing can be written through it, and which a view link reaches. `x_provenance` becomes its `provenance` pane, and Needs you reads its `attention` pane. This is step 1 of 2:
 step 2 lets an attention action fix only the arguments it knows and leave the rest to its op's form.
 
 ## Motivation
@@ -92,11 +92,13 @@ POST /v1/x_read {"pane": "provenance", "ref": "agent/w1@1"} -> {"ref", "at", "li
 POST /v1/x_read {"pane": "attention"}                       -> {"rows"}
 ```
 
-Each pane answers in the command line package's words, from the session's query ops, which the kernel's grants decide:
-`provenance` what `x_provenance` answered ([RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)), and `attention`
-every row of the runtime's `attention` view but a mention, which is a message to read in its chat. A view link reaches it as it
-reaches `view_*`. It runs queries alone, so nothing can be written through it. `/x/command` stays the one route that writes, and the
-page sends it no read.
+Each pane answers in the command line package's words: `provenance` what `x_provenance` answered
+([RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)), and `attention` every row of the runtime's `attention` view
+but a mention, which is a message to read in its chat. A pane reads through the session's queries alone, which the kernel runs on a
+read connection and refuses for any op that writes, so nothing can be written through it, whatever a pane asks. It reads on the
+owner's credential that `web` holds, as every read of the page's does, and `web` lets a view link reach it by the link's class, as
+it reaches `view_*`: the kernel's grants on the owner's credential, not the link's, decide what a pane may read. `/x/command` stays
+the one route that writes, and the page sends it no read.
 
 This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read through `/x/command` and whose page acted on a few ops,
 [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)'s route, and the TUI and Web rows of architecture section 6.

@@ -177,7 +177,8 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
-as it asks the others. It runs queries alone, so nothing is written through it. Its `provenance` pane is one event's provenance,
+as it asks the others. It reads through the session's queries alone, which the kernel refuses for an op that writes, so nothing
+is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
 
 ## Not built yet
