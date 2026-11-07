@@ -7,10 +7,12 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session
+from platoon_harness import Session, Team
 from platoon_harness.drivers.process import Record
 from platoon_harness.kernel import Event, Refused
-from platoon_harness.runtime.paths import OWNER_TOKEN, read_running
+from platoon_harness.rpc import Closed
+from platoon_harness.runtime.control import Remote
+from platoon_harness.runtime.paths import OWNER_TOKEN, VIEW_TOKEN, read_running
 
 from ..unit.drivers.support import group_of
 from ..unit.runtime.support import in_state, of_type, rebuilt_equals_live, until
@@ -80,6 +82,32 @@ async def test_a_killed_runtime_is_resumed_with_nothing_lost_and_nothing_done_tw
     assert {"agent": "w1", "what": "crash_window", "plane": "control", "count": 1} in ending.gaps
     await rebuilt_equals_live(folder)
     assert list(folder.rglob("proc.json")) == []
+
+
+async def test_a_killed_runtime_s_token_files_are_dead_and_the_next_stop_removes_them(tmp_path: Path):
+    """A kill leaves the token files, which no runtime answers: the next one issues its own and refuses them, and its
+    stop takes the files away."""
+    guest = await Session.start(
+        Team.model_validate({"roles": {"bob": {"harness": wire("listening")}}}), name="s", root=tmp_path, detach=True
+    )
+    await in_state(guest, "bob", "idle")
+    await kill_the_runtime(guest)
+    await guest.status()
+    await guest.leave()
+    folder = guest.folder
+    left = {name: (folder / name).read_text() for name in (OWNER_TOKEN, VIEW_TOKEN)}
+
+    for view in (False, True):
+        with pytest.raises(Closed):
+            await Remote.connect(folder, view=view)
+    async with Session.resume("s", root=tmp_path) as owner:
+        issued = {name: (folder / name).read_text() for name in (OWNER_TOKEN, VIEW_TOKEN)}
+        for token in left.values():
+            with pytest.raises(Refused, match="unknown credential"):
+                owner._runtime.control.bind(token)
+
+    assert all(issued[name] != left[name] for name in left)
+    assert [name for name in left if (folder / name).exists()] == []
 
 
 async def assert_what_a_crash_leaves(
