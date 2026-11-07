@@ -4,7 +4,7 @@ email address but one under `.invalid`, which IETF RFC 2606 keeps from ever nami
 
 The scan covers every text file git tracks and every new file it does not ignore outside hidden directories, and the
 names of all of them. A file is text when its first 8000 bytes hold no NUL byte, as git judges it. A file may hold what
-the scan catches only in a text that `ALLOWED` lists, with the reason.
+the scan catches only where `ALLOWED` lists that text's digest, with the reason.
 
 Banned words are stored as SHA-256 digests, so that this file does not publish them itself. A line has its camelCase
 words split (`FooBar` reads as `foo_bar`), is lower-cased and is split into words of letters and digits. A word matches
@@ -15,8 +15,7 @@ trailing `s` (a plural). To ban another word, add `hashlib.sha256(word.lower().e
 import hashlib
 import re
 import subprocess
-import tomllib
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterator
 from functools import cache
 from pathlib import Path
 
@@ -42,16 +41,23 @@ BANNED_PATTERNS = (
 """A path into a home directory, group storage or a per-user data directory, whoever it belongs to, but a URL's path and
 a `<placeholder>` for the account; a key, its letters bracketed so that this file does not match itself; and an email
 address."""
-AUTHOR = tomllib.loads((ROOT / "packages/sdk/pyproject.toml").read_text())["project"]["authors"][0]["email"]
 ALLOWED: dict[tuple[str, str], str] = {
-    (f"packages/{package}/pyproject.toml", AUTHOR): "the author's contact, which each package publishes"
+    (f"packages/{package}/pyproject.toml", "7fccfaca2ed8a3a9110f45f36230e10f0a66acf1eb1051407532bc492279bde8"): (
+        "the author's contact, which each package publishes"
+    )
     for package in ("sdk", "cli")
 }
-"""(file, text) -> why the file may hold that text although the scan catches it. Every entry must still be needed (see
-the last test). Keep the list short: reword the file instead wherever its readers lose nothing."""
+"""(file, the SHA-256 digest of a text the scan catches there) -> why the file may hold that text. A digest, so that
+this file does not hold the text either, and another text in its place fails until it is reviewed; the words inside an
+allowed text are still scanned. Every entry must still be needed (see the last test). Keep the list short: reword the
+file instead wherever its readers lose nothing."""
 
 _WORD = re.compile(r"[a-z0-9]+")
 _CAMEL_CASE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 @cache
@@ -59,19 +65,23 @@ def _banned(word: str) -> bool:
     """Whether a lower-case word is banned, or is once cut at its first digit, either also without a trailing `s`."""
     cut = re.split(r"\d", word, maxsplit=1)[0]
     candidates = {word, cut, word.removesuffix("s"), cut.removesuffix("s")} - {""}
-    return any(hashlib.sha256(candidate.encode()).hexdigest() in BANNED_DIGESTS for candidate in candidates)
+    return any(_digest(candidate) in BANNED_DIGESTS for candidate in candidates)
 
 
-def _hits(text: str, allowed: Iterable[str] = ()) -> list[str]:
-    """`line N: 'match'` for each banned word, path, key or email address in `text`, outside the `allowed` texts."""
-    for exempt in allowed:
-        text = text.replace(exempt, "")
-    hits = []
+def _found(text: str) -> Iterator[tuple[int, str]]:
+    """Each banned word, path, key or email address in `text`, with the number of its line."""
     for number, line in enumerate(text.split("\n"), 1):
-        found = [word for word in _WORD.findall(_CAMEL_CASE.sub("_", line).lower()) if _banned(word)]
-        found += [match.group(0) for pattern in BANNED_PATTERNS for match in pattern.finditer(line)]
-        hits += [f"line {number}: {item!r}" for item in found]
-    return hits
+        for word in _WORD.findall(_CAMEL_CASE.sub("_", line).lower()):
+            if _banned(word):
+                yield number, word
+        for pattern in BANNED_PATTERNS:
+            for match in pattern.finditer(line):
+                yield number, match.group(0)
+
+
+def _hits(text: str, allowed: Collection[str] = ()) -> list[str]:
+    """`line N: 'match'` for each banned word, path, key or email address in `text`, but those `allowed` by digest."""
+    return [f"line {number}: {found!r}" for number, found in _found(text) if _digest(found) not in allowed]
 
 
 def _git_files(root: Path, *options: str) -> list[Path]:
@@ -129,7 +139,8 @@ def test_the_matcher_finds_a_word_a_numbered_host_and_an_account(made_up_bans):
     assert _banned(f"{account}12345xy") and not _banned(f"{account}x1")
     assert _hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}'"]
     assert _hits(f"x\nssh login1.{site}.example") == [f"line 2: '{site}'"]
-    assert _hits(f"x {site} y", allowed=[f"{site} y"]) == []
+    assert _hits(f"x {site} y", allowed={_digest(site)}) == []
+    assert _hits(f"x {site}@example.com", allowed={_digest(f"{site}@example.com")}) == [f"line 1: '{site}'"]
 
 
 HOME, USERS, GROUPS = ("/".join(("", top, "someone", "notes")) for top in ("home", "Users", "groups"))
@@ -176,7 +187,7 @@ def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(
 @pytest.mark.parametrize("path", FILES, ids=lambda path: path.as_posix())
 def test_no_internal_references(path):
     text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
-    hits = _hits(text, [exempt for (file, exempt) in ALLOWED if file == path.as_posix()])
+    hits = _hits(text, {digest for (file, digest) in ALLOWED if file == path.as_posix()})
 
     assert not hits, f"{path} names a site, an account, a local path, a key or an email address:\n" + "\n".join(hits)
 
@@ -188,7 +199,7 @@ def test_no_file_name_names_a_site_or_an_account():
 
 
 def test_every_allowed_text_is_still_needed():
-    for (file, exempt), reason in ALLOWED.items():
-        assert reason.strip(), f"say why {file} may hold {exempt!r}"
-        assert exempt in (ROOT / file).read_text(encoding="utf-8", errors="replace"), f"{file} no longer holds it"
-        assert _hits(exempt), f"{exempt!r} is caught by nothing: drop its ALLOWED entry"
+    for (file, digest), reason in ALLOWED.items():
+        assert reason.strip(), f"say why {file} may hold the text of digest {digest}"
+        found = {_digest(text) for _, text in _found((ROOT / file).read_text(encoding="utf-8", errors="replace"))}
+        assert digest in found, f"{file} holds nothing the scan catches of digest {digest}: drop its ALLOWED entry"
