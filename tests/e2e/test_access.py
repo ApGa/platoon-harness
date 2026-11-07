@@ -21,14 +21,17 @@ pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 VIEW = "This is a view link: it shows the session and acts on nothing."
 STEP = """() => {
-    const walked = window.walked ||= new Set(), el = document.activeElement, again = walked.has(el);
-    walked.add(el);
+    const at = window.at ||= el =>
+        el.parentElement ? `${at(el.parentElement)}/${[...el.parentElement.children].indexOf(el)}` : '';
+    const walked = window.walked ||= new Set(), el = document.activeElement, again = walked.has(at(el));
+    walked.add(at(el));
     return {again, why: el.getAttribute('aria-disabled') === 'true' ? el.title : null};
 }"""
-"""Note where Tab took focus, saying whether it was there before and, for a disabled control, its reason."""
+"""Note where Tab took focus, saying whether it was there before and, for a disabled control, its reason. A place is
+where it stands in the page, which a control drawn again as the session moves keeps, where the element is a new one."""
 UNREACHED = """() => [...document.querySelectorAll('[aria-disabled="true"]')]
-    .filter(el => el.checkVisibility() && !window.walked.has(el)).map(el => el.outerHTML)"""
-"""Each disabled control shown that Tab never reached."""
+    .filter(el => el.checkVisibility() && !window.walked.has(window.at(el))).map(el => el.outerHTML)"""
+"""Each disabled control shown whose place Tab never reached."""
 PLACES = {
     "a chat with an approval": ("#layout=chat", "w1 & you", "#main .msg:has([data-x-card]) [data-x-reply]"),
     "a chat with a person's message": (
