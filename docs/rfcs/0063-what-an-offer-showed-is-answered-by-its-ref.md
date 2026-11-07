@@ -67,8 +67,9 @@ fields a commit shows beside its gist by one more, which `repo.commit` and the q
 
 - A training system shows a step's inputs by `Session.shown`, and builds no shown form of its own. The bridge's rebuilt form can
   go once it pins a commit that holds this.
-- A gist the SDK comes to show in a new form needs a text here. The test that makes every kind of offer and proves each item's
-  text fails until it has one.
+- A gist the SDK comes to show in a new form needs a text here, or the query answers null for it. The test that makes every kind
+  of offer the SDK makes today and proves each item's text has to be given the new kind by hand, as nothing lists the kinds for
+  it.
 - A body past 64 KiB is null here though its bytes are kept, and a whole one is still read by its digest with `get_body`.
 
 ## Evidence
@@ -76,7 +77,8 @@ fields a commit shows beside its gist by one more, which `repo.commit` and the q
 - [tests/unit/primitives/test_provenance.py](../../tests/unit/primitives/test_provenance.py),
   `test_context_show_gives_the_text_each_item_of_an_offer_showed`: every kind of offer the SDK makes, a launch, a handover of an
   announce and of a child's report, and reads of a board entry with its fields and its lines, a message with its body, a task and
-  its result and a commit, each item's text held to its digest, and the form of a board entry's gist with its fields pinned;
+  its result, a commit and the lines of a body, each item's text held to its digest, a surface's offer of a body held outside the
+  journal, null, and the form of a board entry's gist with its fields pinned;
   `test_context_show_says_null_for_what_the_journal_no_longer_proves`; and the scenario's answers, alike after a rebuild and on a
   closed copy.
 - [tests/unit/runtime/test_session.py](../../tests/unit/runtime/test_session.py),

@@ -988,7 +988,8 @@ def shown(kernel: Kernel, offer: Any) -> list[str | None]:
 async def test_context_show_gives_the_text_each_item_of_an_offer_showed(kernel):
     """Every way an offer is made: a launch's goal, its body and its instructions, a handover of a board's announce and
     of a child's report, each shown by the event it carries, and reads of a board entry with its fields and its lines, a
-    message with its body, a task and its result, and a commit."""
+    message with its body, a task and its result, a commit and the lines of a body, and a surface's offer of a body held
+    outside the journal, which is null."""
     await channel(kernel, "notes", kind="board", delivery="wake")
     await channel(kernel, "work", kind="queue")
     alice, bob = await spawn(kernel, "alice", goal=""), Principal(id="agent:bob")
@@ -1020,11 +1021,15 @@ async def test_context_show_gives_the_text_each_item_of_an_offer_showed(kernel):
     reported = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "bob"}))["input"]
     await recorded(kernel, [commit(ROOT, [], "@alice", [])])
     result_of(await kernel.submit(bob, "repo.commit", {"sha": ROOT}))
+    result_of(await kernel.submit(bob, "blob.get", {"ref": "board/notes/spec@1#L1-2"}))
+    big = await send(kernel, bob, "@alice", "big", body=await stored(kernel, "a long line\n" * 8000))
+    offered = {"agent": "bob", "ref": f"{big['ref']}#L1-1", "digest": sha256(b"a long line\n").hexdigest()}
+    result_of(await kernel.submit(kernel.runtime, "blob.offer", offered))
 
-    offers = of_type(kernel, "context.offered")
+    *offers, held = of_type(kernel, "context.offered")
     texts = {offer.seq: shown(kernel, offer) for offer in offers}
 
-    assert [offer.data["how"] for offer in offers] == ["launch", "wake", *["read"] * 5, "wake", "read"]
+    assert [offer.data["how"] for offer in (*offers, held)] == ["launch", "wake", *["read"] * 5, "wake", *["read"] * 3]
     for offer in offers:
         digests = [item["digest"] for item in offer.data["items"]]
         assert [sha256(text.encode()).hexdigest() for text in texts[offer.seq]] == digests
@@ -1036,7 +1041,9 @@ async def test_context_show_gives_the_text_each_item_of_an_offer_showed(kernel):
     assert texts[offers[4].seq] == ["see this", "the details\n"]
     assert [texts[offer.seq] for offer in offers[5:7]] == [["fix it"], ["fix it", "fixed"]]
     assert texts[reported] == ["carol turn failed"]
-    assert texts[offers[-1].seq] == [json.dumps([f"{ROOT[:12]} aaaa", {"made_in": "@alice", "sha": ROOT}])]
+    assert texts[offers[-2].seq] == [json.dumps([f"{ROOT[:12]} aaaa", {"made_in": "@alice", "sha": ROOT}])]
+    assert texts[offers[-1].seq] == ["one\ntwo\n"]
+    assert shown(kernel, held) == [None]
 
 
 async def test_context_show_says_null_for_what_the_journal_no_longer_proves(kernel, ada):
