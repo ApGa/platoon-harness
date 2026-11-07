@@ -24,7 +24,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _value
+from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _asked, _value
 
 from ..runtime.support import BALLOT, SECONDS, extension, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
@@ -410,7 +410,7 @@ async def test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_giv
 
         await pilot.press("ctrl+p", *"agent retire")
         await pilot.press("enter")
-        await drawn(pilot, lambda text: "agent: An agent, as `@agent`." in text)
+        await drawn(pilot, lambda text: "agent (needed): An agent, as `@agent`." in text)
         await pilot.press("enter")
         await drawn(pilot, lambda text: "agent retire @lead? It cannot be taken back." in text)
         await pilot.press("y")
@@ -449,10 +449,11 @@ async def test_the_palette_offers_an_extension_s_op_with_no_core_edit_and_never_
         commands = {title: said for title, said, _ in workspace(app).commands()}
         await pilot.press("ctrl+p", *"ballot cast")
         await pilot.press("enter")
-        await drawn(pilot, lambda text: "agent: The agent whose work it is on" in text)
+        await drawn(pilot, lambda text: "agent (needed): The agent whose work it is on" in text)
         await pilot.press("enter", *"yes", "enter")
         voted = await until(lambda: of_type(owner, "ballot.voted"), owner)
-        await drawn(pilot, lambda _: any(notice.message == "ballot cast: done" for notice in app._notifications))
+        done = 'ballot cast: done. {"choice":"yes"}'
+        await drawn(pilot, lambda _: any(notice.message == done for notice in app._notifications))
 
     assert commands["ballot cast"] == "Cast a vote on an agent's work, kept among that agent's own events."
     assert [(event.actor, event.data) for event in voted] == [("human:you", {"agent": "@lead", "choice": "yes"})]
@@ -1053,6 +1054,34 @@ async def test_a_yes_or_no_field_takes_only_yes_or_no(root):
         assert (_value(below, "yes"), _value(below, "No"), _value(below, "1")) == (True, False, True)
         with pytest.raises(ValueError, match="below is yes or no"):
             _value(below, "ture")
+
+
+async def test_a_field_says_whether_it_is_needed_what_it_takes_and_what_stands_left_empty_as_the_page_does(root):
+    """The terminal's form asks for a field as the page's shows it: whether it is needed, the choices it takes, which
+    are all it takes, and the op's own default, which stands for it left empty."""
+    async with attached(team(), root) as (_, app, _):
+        forms = {form.op: {field.name: field for field in form.fields} for form in workspace(app).forms}
+        kind = forms["channel.create"]["kind"]
+
+        assert _asked(kind) == "kind (needed): What sort of channel this is. One of topic, queue, board."
+        assert _asked(forms["budget.set"]["scope"]).endswith(" Left empty: shared.")
+        assert _asked(forms["agent.interrupt"]["below"]).endswith(" One of yes, no. Left empty: no.")
+        assert _value(kind, "queue") == "queue"
+        with pytest.raises(ValueError, match="--kind is one of topic, queue, board"):
+            _value(kind, "forum")
+
+
+async def test_the_palette_says_what_an_op_answered(root):
+    """Done, with the op's answer as the page and the command line give it, so a person sees the task or ref they
+    made."""
+    async with attached(team(), root) as (owner, app, pilot):
+        await pilot.press("ctrl+p", *"channel create")
+        await pilot.press("enter")
+        await drawn(pilot, lambda text: "What sort of channel this is." in text)
+        await pilot.press(*"ideas", "enter", *"topic", "enter", "enter", "enter", "enter")
+        await until(lambda: of_type(owner, "channel.created"), owner)
+        done = 'channel create: done. {"name":"#ideas","kind":"topic"}'
+        await drawn(pilot, lambda _: any(notice.message == done for notice in app._notifications))
 
 
 async def test_ctrl_home_goes_to_the_start_of_the_transcript(root):

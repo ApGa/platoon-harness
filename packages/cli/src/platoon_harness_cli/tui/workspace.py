@@ -1030,10 +1030,7 @@ class Workspace(Screen[None]):
             "agent": f"@{self.focus_on.agent}" if self.focus_on and self.focus_on.agent else "",
             "to": self.target or "",
         }
-        asked = [
-            (field.name, SafeText(f"{field.flag[2:]}: {field.help}"), given.get(field.name, ""))
-            for field in form.fields
-        ]
+        asked = [(field.name, SafeText(_asked(field)), given.get(field.name, "")) for field in form.fields]
         title = SafeText(form.title, "bold")
         answer = await self.app.push_screen_wait(Form(title, asked)) if asked else {}
         if answer is None:
@@ -1054,7 +1051,30 @@ class Workspace(Screen[None]):
         if outcome.refusal is not None:
             note(self, f"{outcome.refusal.code}: {outcome.refusal.detail}", severity="warning")
         else:
-            note(self, f"{form.title}: done")
+            shown = json.dumps(outcome.result, ensure_ascii=False, separators=(",", ":"))
+            note(self, f"{form.title}: done." + ("" if outcome.result is None else f" {shown}"))
+
+
+def _asked(field: Flag) -> str:
+    """What a form's field asks for, as the page's form shows it: its flag, whether it is needed, its help, what it
+    takes where it takes one of a few, and what stands when it is left empty."""
+    said = f"{field.flag[2:]}{' (needed)' if field.required else ''}: {field.help}"
+    if field.kind in ("choice", "yes-no"):
+        said += f" One of {', '.join(map(_shown, field.choices or (True, False)))}."
+    if not field.required and (default := _shown(field.default)):
+        said += f" Left empty: {default}."
+    return said
+
+
+def _shown(value: Any) -> str:
+    """A value as a form shows it: yes or no, several separated by commas, JSON as its text, and nothing for none."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, list | tuple):
+        return ", ".join(map(_shown, value))
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return "" if value is None else str(value)
 
 
 def _value(field: Flag, text: str) -> Any:
@@ -1079,6 +1099,11 @@ def _value(field: Flag, text: str) -> Any:
                 return float(text)
             except ValueError:
                 raise ValueError(f"{field.flag} is a number") from None
+        case "choice":
+            found = [choice for choice in field.choices if str(choice) == text]
+            if not found:
+                raise ValueError(f"{field.flag} is one of {', '.join(map(str, field.choices))}")
+            return found[0]
         case "list":
             return [part.strip() for part in text.split(",") if part.strip()]
     return text

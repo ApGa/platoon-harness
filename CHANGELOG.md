@@ -589,9 +589,12 @@ named here is closed.
   team's extension adds was never offered. It is now made from the session's `ops.list`, by one rule the command line's package
   states for the terminal and the page: every op you hold but a query, which the views draw, and but `wait` and the ops on a
   wait, as a wait parks a turn and a person has none. Each is worded as its command's help, and its form asks for each flag in
-  that flag's words, with `via` said as `tui`. A body's ref typed in a body's field is cited, as the command line's flag cites
-  one, where the form stored the ref's text as a body of its own. `agent takeover` runs, holding an agent's deliveries as the
-  command line's does, where it said it was not built; `/takeover` still says driving its terminal is not built. See
+  that flag's words, with `via` said as `tui`. Each field says, as the page's form does, whether it is needed, the choices it
+  takes, which are all it takes, and what stands when it is left empty, and what came of an op is said with what it
+  answered, so a person sees the task or ref they made, where it said only done. A body's ref typed in a body's field is
+  cited, as the command line's flag cites one, where the form stored the ref's text as a body of its own. `agent takeover`
+  runs, holding an agent's deliveries as the command line's does, where it said it was not built; `/takeover` still says
+  driving its terminal is not built. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The architecture page marks what STATUS calls planned.** [docs/architecture.md](docs/architecture.md) sends a newcomer to
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking
