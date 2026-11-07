@@ -68,8 +68,9 @@ own default stands, and the kernel refuses a required one left out, saying which
 field: each client says it, `tui` or `browser`, as each says it for an approval today.
 
 Before an op in `CONFIRMED`, the form asks once. `CONFIRMED` is the command line package's list, the ops that end an agent or the
-session, erase a body, or run a commit's code as you, so an extension's op is never asked about: none needs it yet, and the
-extension guide says so.
+session, erase a body, or run a commit's code as you, so an extension's op is never asked about: none needs it yet. Architecture
+section 17, STATUS and the page's guide say so, and the extension guide, which milestone 4 plans and nobody has written yet, is to
+say it too.
 
 ### 3. In the terminal
 
@@ -136,8 +137,9 @@ This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read throu
 
 ## Rollout plan
 
-Each milestone lands beside this draft. Once the owner accepts it and they are all on main, a last change sets its status to
-`Implemented`; step 2, an attention action that fixes only the arguments it knows, then amends it.
+Its four milestones were built while it is a draft, ahead of the acceptance the RFC process asks for, so the owner decides on code
+already written. Accepted, a last change sets its status to `Implemented` once they are all on main, and step 2, an attention action
+that fixes only the arguments it knows, then amends it. Rejected, their commits are reverted.
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|

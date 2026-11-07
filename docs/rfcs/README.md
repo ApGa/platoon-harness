@@ -43,7 +43,7 @@ amended or extended an RFC.
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
 | [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted |
-| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
+| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
 | [0031](0031-a-workspace-is-a-place-git-already-knows.md) | A workspace is a place git already knows | Accepted |
@@ -58,7 +58,7 @@ amended or extended an RFC.
 | [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) | Pi names what landed and which call made a tool call | Accepted |
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
 | [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | Accepted |
-| [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
+| [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
 | [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted |
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Accepted |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Accepted |

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
+| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
 
 **Amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)**: Provenance among a
 message's actions is built, and opens a pane.
