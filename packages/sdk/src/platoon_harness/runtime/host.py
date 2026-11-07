@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -968,8 +969,7 @@ class Host:
                 report = report.model_copy(update={"body": await self._stored(body)})
             case ApprovalRequested(body=str(body), cut=cut):  # Masked, so a cut splits no secret.
                 kept, left = bounded(body)
-                stored = f"sha256:{await self._kernel.put_body(kept)}"
-                report = report.model_copy(update={"body": stored, "cut": cut + left})
+                report = report.model_copy(update={"body": await self._asked(kept), "cut": cut + left})
             case Compacted(forgotten=forgotten, summary=summary):
                 listed = None if forgotten is None else json.dumps(forgotten)
                 stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}
@@ -986,6 +986,16 @@ class Host:
     async def _stored(self, text: str | None) -> str | None:
         """Text from a report as the ref of a stored body, since a journal event holds 16 KiB."""
         return None if text is None else f"sha256:{await self._kernel.put_body(text.encode(errors='replace'))}"
+
+    async def _asked(self, ask: bytes) -> str:
+        """An approval's ask as the ref of a stored body. Redacted content does not come back, so one a person redacted
+        is the ref of nothing the journal holds, which the journal refuses, and the approval is answered `deny`."""
+        try:
+            return f"sha256:{await self._kernel.put_body(ask)}"
+        except Refused as refused:
+            if refused.refusal.code != "conflict":
+                raise
+            return f"sha256:{hashlib.sha256(ask).hexdigest()}"
 
     async def _taken(self, link: DriverLink, report: Report, outcome: Outcome) -> None:
         """What comes of a report the journal refused: it is dropped. But an approval is answered `deny`, as a harness

@@ -122,7 +122,9 @@ def ask(txn: Txn, id: str, agent: Agent, gist: str, body: str | None = None, cut
     if txn.view(Approvals).get(id) is not None:
         raise Refused("conflict", f"approval {id} exists")
     if body is not None and inline_body(txn, body) is None:
-        raise Refused("invalid", f"an ask is kept in a body the journal holds, of at most {ASK_LIMIT // 1024} KiB")
+        raise Refused(
+            "invalid", f"an ask is a body the journal holds, of at most {ASK_LIMIT // 1024} KiB and not redacted"
+        )
     role = txn.view(SessionRecord).settings().roles.get(agent.role)
     policy = "ask" if role is None else role.approvals
     data = {"id": id, "policy": policy, "body": body, "cut": cut}

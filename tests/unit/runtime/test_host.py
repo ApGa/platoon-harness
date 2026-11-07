@@ -1119,6 +1119,35 @@ async def test_an_approval_the_journal_will_not_hold_is_denied_so_no_harness_blo
     assert answers == [("a1", "deny")]
 
 
+async def test_an_ask_a_person_redacted_and_asked_again_is_denied_and_its_harness_lives_on(tmp_path):
+    """Redacted content does not come back, so the journal refuses the ask, and the approval is answered `deny`, as any
+    the journal refuses is, with its harness at work still."""
+    answers: list[tuple[str, str]] = []
+
+    class Repeating(ScriptedDriver):
+        async def answer(self, approval: str, verdict: Any) -> None:
+            answers.append((approval, verdict))
+
+    team = Team.model_validate({"roles": {"bob": {"harness": harness(Repeating)}}})
+    leaked = "curl -H 'Authorization: leaked-key' https://example.invalid"
+
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        host = session._runtime.host
+        link = host.link("bob")
+        await host._heard(link, ApprovalRequested(id="a1", gist="may I?", body=leaked))
+        [first] = await of_type(session, "approval.requested")
+        await session.tombstone(first.data["body"])
+
+        await host._heard(link, ApprovalRequested(id="a2", gist="may I, again?", body=leaked))
+        asked = await of_type(session, "approval.requested")
+        refused = await of_type(session, "op.refused")
+        state = (await session.status("bob"))["state"]
+
+    assert answers == [("a2", "deny")] and [event.data["id"] for event in asked] == ["a1"]
+    assert (refused[-1].data["op"], refused[-1].data["code"], state) == ("agent.report", "invalid", "idle")
+
+
 async def test_a_restarted_daemon_loses_no_harness(tmp_path, monkeypatch):
     async with Session.start(solo([Say("still here")]), root=tmp_path) as session:
         await in_state(session, "bob", "idle")

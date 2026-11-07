@@ -16,7 +16,8 @@ named here is closed.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report,
   then keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body,
-  which `blob.get` reads at `approval/<id>@1` and `body.tombstone` redacts. `approval.request` takes the two too. A driver that
+  which `blob.get` reads at `approval/<id>@1` and `body.tombstone` redacts, though not its gist. The same ask asked again once
+  redacted is refused and denied, and its agent lives on. `approval.request` takes the two too. A driver that
   sends no body still asks, with its ask unknown, as a wire program written before this does. Claude Code's approval carries the
   tool's name and its input, Codex's a command's command, a file change's patch, which the item its `itemId` names holds, as
   Codex starts that item before it asks, and a request for permissions or for a tool of the user's own as its params, pi's what

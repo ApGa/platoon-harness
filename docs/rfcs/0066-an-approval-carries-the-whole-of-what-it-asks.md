@@ -77,8 +77,10 @@ records them at payload version 2:
 The event's body is the ask, so a client reads it by the body's ref, as it reads any body, and `blob.get` reads it at
 `approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body held in the
 journal's row. An agent reads its own, as the event is its, and nobody else's. A body the journal does
-not hold in its row is refused `invalid`, as `blob.get` could not read it, and the host then answers the approval `deny`, as it
-does any approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body, for a secret the mask did not know.
+not hold in its row, one past 64 KiB or one a person redacted, is refused `invalid`, as `blob.get` could not read it, and the host
+then answers the approval `deny`, as it does any approval the journal refuses. `body.tombstone` redacts an ask as it redacts any
+body, for a secret the mask did not know, and redacted content does not come back: the same ask asked again is refused, and its
+approval answered `deny` with nobody asked.
 A version 1 payload has neither field, which a reader takes as an ask nobody said and nothing cut. The `Approvals` view and the
 attention row are unchanged: a client reads the ask by its ref when it shows it.
 
@@ -122,7 +124,9 @@ exists outside this repository.
 
 - **A secret outside the known set.** The mask knows the credentials the agent holds, and an ask can carry one it does not, a key a
   model read from a file and put into a command. It becomes a stored body. `body.tombstone` redacts it, and the person who sees it
-  first is the one deciding, which is the reason to show it.
+  first is the one deciding, which is the reason to show it. A tombstone redacts the body and not the gist, which can hold the
+  ask's first 280 characters and which nothing redacts, so a secret among them stays. A model often asks again after a denial, and the same ask, once
+  redacted, is refused and denied with nobody asked, and its agent lives on.
 - **A large ask on the wire.** A wire program's line is at most 16 MiB, and one past it stops the agent with a gap. A program with
   an ask that large cuts it and says so in `cut`.
 - **Hostile text.** An ask is whatever a model wrote. Step 2 draws it through `SafeText` in the terminal and as text under the

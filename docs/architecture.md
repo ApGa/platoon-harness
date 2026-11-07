@@ -906,7 +906,9 @@ the harness), and the observed item outcome. Codex's `accept` does not fix the r
 
 An approval carries the whole of what it asks, the command, the patch or the tool's input, as the body of its `approval.requested`,
 `approval/<id>@1`: masked as every report is, then kept to its first 64 KiB, cut at a character's end, with `cut` counting the bytes
-it left out. A driver that cannot say what its harness asks sends none, which is unknown and not an empty ask. See
+it left out. A driver that cannot say what its harness asks sends none, which is unknown and not an empty ask. An ask the journal
+will not hold, one past 64 KiB or one a person redacted, is refused and its approval answered `deny`, so a model that asks again
+what a person redacted is denied and its agent lives on. A tombstone redacts the body and not the gist. See
 [RFC 0066](rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md).
 
 `resolve` carries `expected_version`: the first commit wins, and the loser gets `conflict{resolved_by, via}`, shown as
