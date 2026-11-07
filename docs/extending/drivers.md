@@ -429,8 +429,8 @@ agents start keeps its socket in the directory every tmux of the user's shares. 
   what a step asks to run once a message came during its model call, and a message after it would come between a call and its
   result. One that comes while a run goes on asks the run to pause, which it does after the step under way.
 - **Approvals:** every action asks the runtime but a call of our tools and a lone `finish` or `think`, which the SDK never asks
-  about, and one approval covers what a step holds, as the SDK confirms a step whole; `deny` rejects it with `The runtime denied
-  this.`
+  about, and one approval covers what a step holds, as the SDK confirms a step whole, with each of its actions, its tool's name
+  and its arguments as the model gave them, as its whole ask; `deny` rejects it with `The runtime denied this.`
 - **An interrupt** cancels the run under way, which abandons a model call in flight that a gateway may have recorded all the same,
   so then the turn says its usage is a lower bound, and an approval left open is answered as cut off.
 - **A turn ends** when `arun()` returns with nothing it was handed left to run on: `stopped` when the agent finished,

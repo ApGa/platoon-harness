@@ -17,8 +17,11 @@ named here is closed.
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which
   `blob.get` reads at `approval/<id>@1` and `body.tombstone` redacts. `approval.request` takes the two too. A driver that sends no
-  body still asks, with its ask unknown, as a wire program written before this does. `ScriptedDriver`'s `Ask(gist, body)` scripts
-  one, and the approval its own tool asks for carries the tool's name and input. An approval said only its first 280 characters,
+  body still asks, with its ask unknown, as a wire program written before this does. Claude Code's approval carries the tool's
+  name and its input, Codex's a command's command and a request for permissions or for a tool of the user's own as its params,
+  pi's what our gate asks pi to confirm, the tool's name and its input, or a user's own extension's title and message, and the
+  OpenHands worker's each action of the step it asks about. `ScriptedDriver`'s `Ask(gist, body)` scripts one, and the approval
+  its own tool asks for carries the tool's name and input. An approval said only its first 280 characters,
   so a person allowed a long command or an edit having read part of it. Neither client shows the body yet. See
   [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose

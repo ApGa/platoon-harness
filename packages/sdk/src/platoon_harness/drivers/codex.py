@@ -462,9 +462,21 @@ class CodexDriver:
         id = uuid4().hex
         asked = _Asked(params.get("turnId"), params.get("itemId"), asyncio.get_running_loop().create_future())
         self._asking[id] = asked
-        said = params.get("command") or params.get("message") or params.get("reason") or method
-        self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said)))
+        whole = self._ask(method, params)
+        said = params.get("command") or params.get("message") or params.get("reason") or whole or method
+        self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said), body=whole))
         return _reply(method, params, await asked.verdict)
+
+    def _ask(self, method: str, params: Mapping[str, Any]) -> str | None:
+        """The whole of what a request asks: a command's command, and any other request's params as JSON, for
+        permissions or a tool of the user's own. A file change names its item and no patch, so its ask is unknown."""
+        match method, params:
+            case "item/fileChange/requestApproval", _:
+                return None
+            case _, {"command": str(command)}:
+                return command
+            case _:
+                return json.dumps(params)
 
     def _begin(self, thread: str, turn: str) -> None:
         if not self._turns:

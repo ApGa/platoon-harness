@@ -343,7 +343,8 @@ class ClaudeDriver:
                 },
             }:
                 self._asking[id] = (tool, input)
-                self._process.put(ApprovalRequested(id=id, gist=self._process.gist(f"{name} {json.dumps(input)}")))
+                said = f"{name} {json.dumps(input)}"
+                self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said), body=said))
             case {"type": "control_request", "request_id": id}:
                 self._refuse(id)
                 self._process.unknown(_kind(frame), line.decode(errors="replace"))

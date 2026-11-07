@@ -94,8 +94,13 @@ def spend(usd: float = 0.5) -> dict[str, Any]:
     return result(model_usage_since_last_result={"m": {**SPENT["m"], "costUSD": usd}})
 
 
-def asking(id: str = "ask-1", tool: str = "toolu_1") -> dict[str, Any]:
-    request = {"subtype": "can_use_tool", "tool_name": "Bash", "input": {"command": "touch x"}, "tool_use_id": tool}
+def asking(id: str = "ask-1", tool: str = "toolu_1", name: str = "Bash", **input: Any) -> dict[str, Any]:
+    request = {
+        "subtype": "can_use_tool",
+        "tool_name": name,
+        "input": input or {"command": "touch x"},
+        "tool_use_id": tool,
+    }
     return {"type": "control_request", "request_id": id, "request": request}
 
 
@@ -936,10 +941,22 @@ async def test_an_approval_goes_to_the_runtime_and_its_answer_to_the_harness(tmp
         await heard.until(TurnEnded)
 
     reply = next(frame for frame in stand.heard if frame["type"] == "control_response")["response"]
-    assert (asked.id, asked.gist) == ("ask-1", 'Bash {"command": "touch x"}')
+    assert (asked.id, asked.gist, asked.body) == ("ask-1", 'Bash {"command": "touch x"}', 'Bash {"command": "touch x"}')
     assert (reply["request_id"], reply["subtype"]) == ("ask-1", "success")
     assert reply["response"] == {"behavior": "allow", "updatedInput": {"command": "touch x"}}
     assert (decided.approval, decided.outcome, decided.native_id) == ("ask-1", "completed", "toolu_1")
+
+
+async def test_an_edit_approval_carries_its_whole_input(tmp_path, stand):
+    """The text it would write, past what a gist holds, which the gist begins."""
+    edit = {"file_path": "app.py", "old_string": "x = 1", "new_string": "".join(f"line {n}\n" for n in range(100))}
+    stand.install(turns=[[STARTED, assistant(using(name="Edit", **edit)), asking(name="Edit", **edit)]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        asked = await heard.until(ApprovalRequested)
+
+    assert asked.body == f"Edit {json.dumps(edit)}"
+    assert len(asked.gist) == 280 and asked.body.startswith(asked.gist) and asked.cut == 0
 
 
 async def test_a_denial_says_so_and_its_outcome_is_read_from_the_harness(tmp_path, stand):

@@ -828,9 +828,21 @@ async def test_an_approval_goes_to_the_runtime_and_its_answer_to_the_harness(tmp
         decided = await heard.until(Item, lambda item: item.approval is not None)
         await heard.until(TurnEnded)
 
-    assert (asked.id, asked.gist) == ("ask-1", 'bash {"command":"ls"}')
+    assert (asked.id, asked.gist, asked.body) == ("ask-1", 'bash {"command":"ls"}', 'bash {"command":"ls"}')
     assert stand.sent("extension_ui_response")[0]["confirmed"] is True
     assert (decided.approval, decided.outcome, decided.native_id) == ("ask-1", "completed", "call_1")
+
+
+async def test_the_gate_s_approval_carries_its_whole_input(tmp_path, stand):
+    """What our extension asks pi to confirm, the tool's name and its whole input, past what a gist holds."""
+    said = "write " + json.dumps({"path": "app.py", "content": "".join(f"line {n}\n" for n in range(100))})
+    stand.install(turns=[[BEGAN, tool_began(), confirm(message=said)]], on_answer=[tool_ended(), ENDED])
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "deny")
+
+    assert (asked.body, asked.gist) == (said, said[:280])
 
 
 async def test_a_denial_says_so_and_its_outcome_is_read_from_the_harness(tmp_path, stand):
@@ -853,7 +865,7 @@ async def test_a_confirm_of_a_user_s_own_is_an_approval_with_no_tool_behind_it(t
         await driver.answer(asked.id, "allow")
         await heard.until(TurnEnded)
 
-    assert asked.gist == "Clear session? All will be lost."
+    assert asked.gist == asked.body == "Clear session? All will be lost."
     assert not [item for item in heard.of(Item) if item.approval is not None]
 
 

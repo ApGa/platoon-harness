@@ -508,10 +508,12 @@ class PiDriver:
             self._lines.settle(id, DriverError(self._process.redact(str(frame.get("error")))))
 
     def _asked(self, id: str, title: str, said: str) -> None:
-        """A `confirm` is an approval, the gate's or one a user's extension wants. Our gate's title is its tool call."""
+        """A `confirm` is an approval, the gate's or one a user's extension wants. Our gate's title is its tool call,
+        and its message the whole ask, the tool's name and its input as JSON."""
         tool = title if title in self._tools else None
         self._asking[id] = tool
-        self._report(ApprovalRequested(id=id, gist=self._process.gist(said if tool else f"{title} {said}".strip())))
+        asked = said if tool else f"{title} {said}".strip()
+        self._report(ApprovalRequested(id=id, gist=self._process.gist(asked), body=asked))
 
     def _cancel(self, id: str) -> None:
         """Answer what nobody here can, since an extension is waiting on it."""

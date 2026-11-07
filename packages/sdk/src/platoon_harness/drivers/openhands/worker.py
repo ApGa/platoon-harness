@@ -340,14 +340,14 @@ class Worker:
         return await self._decide(_said(actions), [action.tool_call_id for action in actions])
 
     async def _decide(self, said: str, calls: Iterable[str] = ()) -> Verdict | None:
-        """What the runtime answers an approval, which `calls` record as theirs, or None: for one an interrupt cut off,
-        and at once, without asking, outside a turn that goes on."""
+        """What the runtime answers an approval whose whole ask is `said`, which `calls` record as theirs, or None: for
+        one an interrupt cut off, and at once, without asking, outside a turn that goes on."""
         if self._turn is None or self._interrupted:
             return None
         id, verdict = uuid4().hex, asyncio.get_running_loop().create_future()
         self._asking = (id, verdict)
         self._decided |= dict.fromkeys(calls, id)
-        self._put(ApprovalRequested(id=id, gist=self._gist(said)))
+        self._put(ApprovalRequested(id=id, gist=self._gist(said), body=said))
         try:
             return await verdict
         finally:

@@ -772,6 +772,18 @@ async def test_a_verdict_answers_the_request_that_asked(tmp_path, stand, method,
     assert asked.gist == "touch x"
 
 
+async def test_a_command_approval_carries_its_whole_command(tmp_path, stand):
+    command = "/bin/bash -lc 'echo " + " ".join(f"word{n}" for n in range(80)) + "'"
+    stand.install(turns=[[began(), asking(command=command)]], on_answer=[ended()])
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "deny")
+        await heard.until(TurnEnded)
+
+    assert (asked.body, asked.gist) == (command, command[:280])
+
+
 async def test_an_approval_s_id_is_its_own_across_agents_and_processes(tmp_path, stand):
     """Ids are journaled per session, and a process counts from one, so a count would collide: a report the journal
     refuses is answered `deny`, and the second agent to ask would be turned down with nobody asked."""
@@ -802,7 +814,7 @@ async def test_a_tool_of_the_user_s_own_asks_by_elicitation(tmp_path, stand, ver
         await driver.answer(asked.id, verdict)
         await heard.until(TurnEnded)
 
-    assert asked.gist == "Allow the tool?"
+    assert asked.gist == "Allow the tool?" and json.loads(asked.body or "")["message"] == "Allow the tool?"
     assert stand.answers() == [{"id": 0, "result": answer}]
 
 
@@ -821,6 +833,7 @@ async def test_a_request_for_permissions_grants_what_it_asked_or_nothing(tmp_pat
         await heard.until(TurnEnded)
 
     assert stand.answers() == [{"id": 0, "result": {"permissions": granted, "scope": "turn"}}]
+    assert json.loads(asked.body or "")["permissions"] == wanted
 
 
 async def test_what_comes_of_an_answer_is_read_from_the_item(tmp_path, stand):

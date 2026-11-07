@@ -215,6 +215,7 @@ async def test_its_own_agents_when_allowed_are_unseen_and_ask_the_runtime_before
         await driver.stop(2.0)
 
     asked = [report.gist for report in heard.of(ApprovalRequested)]
+    assert all(report.body and report.body.startswith(report.gist) for report in heard.of(ApprovalRequested))
     assert "task" in model.calls[0].tools
     assert sorted(path.name for path in spec.cwd.iterdir()) == ["made-by-the-child"]
     assert len(asked) == 2 and asked[0].startswith("task ") and "touch made-by-the-child" in asked[1]
