@@ -104,7 +104,7 @@ async def test_a_disabled_control_takes_focus_and_its_reason_is_its_accessible_d
     assert await session.head() == head
     await page.context.close()
 
-    assert len(reasons) >= 7 and set(reasons) == {VIEW}
+    assert len(reasons) >= 6 and set(reasons) == {VIEW}
     assert unreached == []
     assert errors == []
 

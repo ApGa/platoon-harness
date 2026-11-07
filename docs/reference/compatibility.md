@@ -400,7 +400,7 @@ the installed package and held to these SHA-256 values when it starts. A file th
   in the test alone, and through ours, and holds every reply the page uses to the same keys of the same types: `view_info`,
   `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_posts`, `view_search`, `view_activity`, `view_as`,
   `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by, and the one read
-  of ours, `x_provenance`, is asked only by our overlay.
+  of ours, `x_read`, is asked only by our overlay.
 - The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
   It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `route`, `onKey`, `apply`, `onClick`, `renderTop`, `avatar`,
   `messageHtml`, `systemHtml`, `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`,

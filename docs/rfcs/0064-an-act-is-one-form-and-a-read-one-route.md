@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`tui/workspace.py`](../../packages/cli/src/platoon_harness_cli/tui/workspace.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/overlay.js`](../../packages/cli/src/platoon_harness_cli/web/overlay.js), [architecture sections 6, 12 and 17](../architecture.md#6-operations), [RFC 0026](0026-every-act-from-any-terminal.md), [RFC 0028](0028-acting-from-the-page.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
 | Discussion | Milestone 4's plan and the audits and critiques behind it, kept outside the repository |
-| Implementation | `refactor: Build the palette from the write ops a person holds, by one rule both clients share` |
+| Implementation | `refactor: Build the palette from the write ops a person holds, by one rule both clients share`; `refactor: Read every pane of the page through one route, which x_provenance becomes` |
 
 ## Summary
 
@@ -136,7 +136,7 @@ This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read throu
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 The rule | `forms` in the command line's package, and the terminal's palette made of it from `ops.list` | `test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_gives_it`, `test_the_palette_offers_no_wait_and_no_query` | `refactor: Build the palette from the write ops a person holds, by one rule both clients share` |
-| M2 One read route | `/v1/x_read`, its `provenance` and `attention` panes, and `x_provenance` gone | `test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command`, and `tests/e2e/test_provenance.py` through it | |
+| M2 One read route | `/v1/x_read`, its `provenance` and `attention` panes, and `x_provenance` gone | `test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command`, and `tests/e2e/test_provenance.py` through it | `refactor: Read every pane of the page through one route, which x_provenance becomes` |
 | M3 The page's form | Each form in `view_info`, Commands, and the form in the pane | `test_the_page_is_given_each_write_op_s_form_worded_as_the_command_line_s_help`, `test_the_page_runs_every_write_op_the_person_holds_through_one_form`, `test_an_op_that_ends_an_agent_or_erases_a_body_is_asked_about_once_in_the_page`, `test_a_json_field_takes_only_json_and_shows_it_as_text`, `test_on_a_view_link_or_on_history_every_form_is_disabled_saying_why` | |
 | M4 An extension's op | An extension's op offered in both palettes, and its event drawn | `test_the_palette_offers_an_extension_s_op_with_no_core_edit_and_never_asks_about_it`, `test_an_extension_s_event_is_drawn_by_its_gist` | |
 

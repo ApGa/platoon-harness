@@ -135,7 +135,7 @@ moves drops focus from a control in it.
 | A reply | Reply on a message opens its thread, with a composer at the foot that answers that message | `message.send` with `reply_to`, the entry the message is in the journal. What an agent said in its turn, and an approval, are no entry a reply can cite, so their Reply is disabled, saying so |
 | A file | Attach, beside Send, whose title says the most a body may be. A file larger is refused before it is sent, saying both sizes | The file to `/x/body`, saying how much has gone, then `message.send` with it as the body. A body keeps no name, so the gist is your text and the file's name, `TEXT (file NAME)`, or `file NAME` alone, made by the function the terminal's composer calls, and refused when the two run past 280 characters, as there |
 | An approval | A card in the agent's chat with you, Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
-| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A conflict an agent's merge stopped on is one, with no action, since the runtime never resolves one, saying on which files and where to resolve it. So is a daemon that keeps failing, saying where its traceback is and what starts it anew. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
+| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions, read through `x_read`, so a view link and history show it too, each action disabled, saying why | Each action as the runtime's `attention` view offers it, with the version it was drawn from. A conflict an agent's merge stopped on is one, with no action, since the runtime never resolves one, saying on which files and where to resolve it. So is a daemon that keeps failing, saying where its traceback is and what starts it anew. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
 | A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
@@ -173,8 +173,9 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_posts` | Real: posts from one chat, or from every channel and group, sorted new or active, and with `as` an agent's chats alone. Hot and top are refused, saying why, and a post's `votes` is null, which is unknown, never 0 |
 | `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
-The page asks one read of ours beside them, `x_provenance`: one event's provenance, by its ref, in the terminal's words, and the
-message it is in its chat, if one shows it. A view link may ask it, as it asks the others.
+The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
+as it asks the others. It runs queries alone, so nothing is written through it. Its `provenance` pane is one event's provenance,
+by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
 
 ## Not built yet
 

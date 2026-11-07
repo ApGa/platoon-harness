@@ -281,7 +281,7 @@ async def test_on_history_every_act_says_how_to_resume_and_a_runtime_coming_back
         await expect(composer).to_have_accessible_description(
             re.compile("`platoon-harness session resume s` resumes it")
         )
-        await expect(page.locator("[data-x-needs]")).to_be_disabled()
+        await expect(page.locator("[data-x-needs]")).to_be_enabled(timeout=SECONDS)
         await page.goto(web.link("control").partition("#")[0] + "#person=bob")
         for act in await page.locator("[data-x-act]").all():
             await expect(act).to_have_accessible_description(re.compile("platoon-harness session resume s"))

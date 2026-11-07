@@ -375,9 +375,9 @@ async def test_provenance_is_a_read_a_view_link_reaches_naming_where_a_chat_show
             line for line in (await browser.view("view_messages", {"chat": between}))["messages"] if "x_shows" in line
         ]
         goal, report = lines[0], lines[-1]
-        carried = await browser.view("x_provenance", {"ref": report["x_shows"]})
-        started = await browser.view("x_provenance", {"ref": goal["x_shows"]})
-        offered = await browser.view("x_provenance", {"ref": "context/w1@1"})
+        carried = await browser.view("x_read", {"pane": "provenance", "ref": report["x_shows"]})
+        started = await browser.view("x_read", {"pane": "provenance", "ref": goal["x_shows"]})
+        offered = await browser.view("x_read", {"pane": "provenance", "ref": "context/w1@1"})
 
         assert await session.head() == head, "a read wrote an event"
     assert goal["x_shows"] == "agent/w1@1" and started["at"] == goal["id"]
@@ -401,9 +401,43 @@ async def test_provenance_is_a_read_a_view_link_reaches_naming_where_a_chat_show
 async def test_provenance_of_what_is_no_event_is_refused_saying_why(web, ref, status, said):
     browser = await Browser(web).opened("view")
 
-    reply = await browser.request("POST", "/v1/x_provenance", {"ref": ref})
+    reply = await browser.request("POST", "/v1/x_read", {"pane": "provenance", "ref": ref})
 
     assert reply.status == status and reply.json()["error"].startswith(said)
+
+
+async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command(root, clock):
+    """Provenance and where the person must act are each a pane of `x_read`, read by a view link as it reads `view_*`,
+    writing nothing, and a mention is a message to read in its chat. A pane it does not name is none, and the route that
+    was provenance's alone is gone. The view link is refused at `/x/command`, the one route that writes."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "Fix the flaky test")
+        approvals = await until(session.approvals, session)
+        await until(
+            lambda: of_type(session, "turn.ended"), session, lambda found: [e.agent for e in found].count("lead") == 2
+        )
+        await caught_up(web, session)
+        head = await session.head()
+        browser = await Browser(web).opened("view")
+        attention = await browser.view("x_read", {"pane": "attention"})
+        provenance = await browser.view("x_read", {"pane": "provenance", "ref": "agent/w1@1"})
+        unnamed = await browser.request("POST", "/v1/x_read", {"pane": "spans"})
+        gone = await browser.request("POST", "/v1/x_provenance", {"ref": "agent/w1@1"})
+        command = {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": key(1)}
+        refused = await browser.request("POST", "/x/command", command)
+
+        assert await session.head() == head, "a read wrote an event"
+        rows = await session.attention()
+    places = attention["rows"]
+    assert [place["id"] for place in places] == [row["id"] for row in rows if row["kind"] != "mention"]
+    assert [(place["kind"], place["agent"]) for place in places] == [("approval", "w1")]
+    assert [action["op"] for action in places[0]["actions"]] == ["approval.resolve"] * 2
+    assert places[0]["actions"][0]["args"]["id"] == approvals[0]["id"]
+    assert provenance["ref"] == "agent/w1@1" and "heading" in {line["kind"] for line in provenance["lines"]}
+    assert unnamed.status == 404 and "provenance and attention" in unnamed.json()["error"]
+    assert gone.status == 404
+    assert refused.status == 403 and "acts on nothing" in refused.json()["error"]
 
 
 async def test_browsing_writes_no_event_and_moves_no_cursor_or_mark(root, clock):

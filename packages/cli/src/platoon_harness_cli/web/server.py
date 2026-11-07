@@ -2,9 +2,9 @@
 
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
-of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_provenance`, which answers from
-the session's provenance queries. Every mutation is `/x/command` into `Session.submit`, the op path the terminal uses,
-and the kernel's grants decide what the person may do. Every answer says `no-store`.
+of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours, which
+answers from the session's query ops alone. Every mutation is `/x/command` into `Session.submit`, the op path the
+terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
 """
 
 import asyncio
@@ -39,8 +39,8 @@ _KEY = re.compile(r"[0-9a-f]{32}")
 _PAGE = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
 _JSON = "Content-Type: application/json"
 _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
-_READS = ("/v1/x_provenance",)
-"""The page's reads of our own, beside SwarmChat's `view_*`, which a view credential reaches as it reaches those."""
+_READS = ("/v1/x_read",)
+"""The page's one read of our own, beside SwarmChat's `view_*`, which a view credential reaches as it reaches those."""
 _SPENT = "this link was used already or has expired: ask for a new one"
 
 
@@ -186,8 +186,8 @@ class Web(Server[Request]):
                     return _json(await self._text(params))
                 case "view_download":
                     return await self._download(params)
-                case "x_provenance":
-                    return _json(await self._provenance(params))
+                case "x_read":
+                    return _json(await self._read(params))
             raise replies.Error(404, f"There is no request named '{name}'.")
         except replies.Error as error:
             raise Rejected(error.status, why=str(error)) from None
@@ -282,6 +282,24 @@ class Web(Server[Request]):
         found, data = await self._body(params)
         headers = (f"Content-Type: {found['type']}", f"X-Attachment: {json.dumps(found)}")
         return response(200, data, *headers, *_PAGE)
+
+    async def _read(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """One pane of the page, which `pane` names, in the words of the command line's package and from the session's
+        query ops alone, so a view link reads it too and nothing is written through it."""
+        match params.get("pane"):
+            case "provenance":
+                return await self._provenance(params)
+            case "attention":
+                return await self._attention()
+        raise replies.Error(404, "there is no such pane: the page's panes are provenance and attention")
+
+    async def _attention(self) -> dict[str, Any]:
+        """Where the person must act: every row of the runtime's `attention` view but a mention, which is a message to
+        read in its chat, as the page keeps no marks to say which were read."""
+        outcome = await self.session.submit("attention.list")
+        if (refusal := outcome.refusal) is not None:
+            raise replies.Error(403 if refusal.code == "not_permitted" else 400, f"{refusal.code}: {refusal.detail}")
+        return {"rows": [row for row in outcome.result if row["kind"] != "mention"]}
 
     async def _provenance(self, params: Mapping[str, Any]) -> dict[str, Any]:
         """What the session's provenance queries say of the event `ref`, in the lines the terminal draws, and `at`, the

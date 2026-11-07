@@ -4,7 +4,7 @@
 // declares at its top level, and puts new markup only through its html template, which escapes all it is given. What
 // it changes says what is so: delivered where SwarmChat says read, agents and people told apart, and what a person
 // may do, each act through /x/command, and each act they may not take shown, disabled, with the reason, which the
-// keyboard and a screen reader reach as the mouse does.
+// keyboard and a screen reader reach as the mouse does. Every pane of ours reads through x_read, in Python's words.
 
 // What this page may do, read from view_info before the page starts: `credential`, view or control, `live`, whether a
 // runtime holds the session, `person`, who acts here, `may`, the ops their grants hold, `confirmed`, the ops asked
@@ -442,14 +442,16 @@ X.upload = (file, progress) => new Promise((resolve, reject) => {
 
 // ---------------------------------------------------------------------- where the person must act
 
-// Every row of the runtime's own attention view but a mention, which is a message to read in its chat: each place the
-// person must act, with the actions that settle it. Null until read, and on a page that may not read it.
+// Each place the person must act, with the actions that settle it, read through x_read's attention pane, as it was when
+// last read, and why it cannot be shown while it is null: until it is first read, or when web would not read it.
 X.needs = null;
+X.needsWhy = 'Reading where you must act.';
 X.needed = throttle(async () => {
-  if (X.cannot('attention.list')) X.needs = null;
-  else {
-    const r = await X.send(X.key(), {op: 'attention.list', args: {}});
-    X.needs = !r || r.refusal ? null : r.result.filter(row => row.kind !== 'mention');
+  try {
+    X.needs = (await api('x_read', {pane: 'attention'})).rows;
+    X.needsWhy = null;
+  } catch (e) {
+    if (e.status) { X.needs = null; X.needsWhy = e.message; }
   }
   buildSide();
   if (X.needsBox && X.needsBox.isConnected) X.drawNeeds(X.needsBox);
@@ -659,7 +661,7 @@ chatRows = () => {
     return as ? drawn.replace(html`<span class="t">${`${first(as)}'s unread`}</span>`.s, () => html`<span class="t">What waits for ${first(as)}</span>`.s) : drawn;
   }}));
   if (S.filter) return rows;
-  const why = X.cannot('attention.list'), n = X.needs ? X.needs.length : 0;
+  const why = X.needs ? null : X.needsWhy, n = X.needs ? X.needs.length : 0;
   rows.splice(1, 0, {open: X.openNeeds, html: i => html`<div class="row special" data-i="${i}" data-x-needs role="button" tabindex="0"${why ? X.disabled(why) : html` title="Where you must act"`}><span class="ico">⚠</span><span class="t">Needs you</span>${n ? html`<span class="badge">${num(n)}</span>` : ''}</div>`.s});
   return rows;
 };
@@ -722,7 +724,7 @@ X.Provenance = class {
   }
   async load() {
     let r;
-    try { r = await api('x_provenance', {ref: this.ref}); } catch (e) {
+    try { r = await api('x_read', {pane: 'provenance', ref: this.ref}); } catch (e) {
       if (!this.dead) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
       return;
     }

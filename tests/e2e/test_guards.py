@@ -56,6 +56,8 @@ async def posted(page: Page, path: str, body: str) -> int:
 
 
 async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_why(browser: Browser, root: Path):
+    """A view link reads where the person must act, as every pane of the page is a read, and each action there is
+    disabled, saying why, as every other control that acts is."""
     why = "This is a view link: it shows the session and acts on nothing."
     async with Session.start(asking(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
         await in_state(session, "bob", "idle")
@@ -80,8 +82,12 @@ async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_wh
             await expect(control).to_be_disabled(timeout=SECONDS)
             await expect(control).to_have_accessible_description(why)
         needs = page.locator("[data-x-needs]")
-        await expect(needs).to_be_disabled()
-        await expect(needs).to_have_accessible_description(why)
+        await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
+        await needs.click()
+        for action in await page.locator(".x-needs .x-need").get_by_role("button").all():
+            await expect(action).to_be_disabled()
+            await expect(action).to_have_accessible_description(why)
+        await page.keyboard.press("Escape")
         await page.goto(web.link("view").partition("#")[0] + "#person=you")
         for act in await page.locator("[data-x-act]").all():
             await expect(act).to_be_disabled()

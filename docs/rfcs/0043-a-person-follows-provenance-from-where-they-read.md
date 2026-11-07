@@ -2,7 +2,10 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05 |
+| Status | Accepted, 2026-11-05; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
+
+**Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**, a draft: the pane reads `x_read`'s `provenance` pane, the page's one read of its own, where it read
+`x_provenance`, which goes.
 
 ## Summary
 

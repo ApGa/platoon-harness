@@ -559,6 +559,12 @@ named here is closed.
 
 ### Changes
 
+- **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
+  from the session's query ops, which a view link reaches as it reaches SwarmChat's `view_*`, and through which nothing can be
+  written: `provenance`, where `x_provenance` was, which goes with no alias, and `attention`, every place the person must act but
+  a mention, which Needs you read through `/x/command`, a route a view link cannot reach. So a view link and history now show
+  where the person must act, each action disabled, saying why, where Needs you was disabled. See
+  [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The terminal's palette offers each write op the session says you hold.** It was made from the SDK's own ops, so an op a
   team's extension adds was never offered. It is now made from the session's `ops.list`, by one rule the command line's package
   states for the terminal and the page: every op you hold but a query, which the views draw, and but `wait` and the ops on a
