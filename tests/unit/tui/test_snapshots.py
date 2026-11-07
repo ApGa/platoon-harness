@@ -47,8 +47,7 @@ async def _history(root: Path) -> None:
     async with Session.start(team(), name="s", root=root, cwd=root) as owner:
         await in_state(owner, "lead", "idle")
         await owner.send("@lead", "fix the parser, with a worker")
-        await until(lambda: of_type(owner, "turn.ended"), owner, lambda ended: len(ended) == 2)
-        await in_state(owner, "lead", "idle")
+        await until(owner.status, owner, lambda status: status["settled"])
 
 
 @pytest.fixture
