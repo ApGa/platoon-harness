@@ -386,8 +386,9 @@ def said(outcome: Outcome) -> int:
     return 0
 
 
-def command_line(session: str, op: str, args: Mapping[str, Any]) -> str:
-    """The command that runs `op` with `args`, as a person would type it, which is how an action is shown."""
+def command_line(session: str, op: str, args: Mapping[str, Any], *, form: bool = False) -> str:
+    """The command that runs `op` with `args`, as a person would type it, which is how an action is shown. One whose
+    action leaves the rest to its op's `form` ends in `...`, the flags still to give, so it runs only once they are."""
     words = [*command_of(op).split(), session]
     for name, value in args.items():
         flag = f"--{name.replace('_', '-')}"
@@ -398,4 +399,4 @@ def command_line(session: str, op: str, args: Mapping[str, Any]) -> str:
                 words += [flag, str(item)]
         else:
             words += [flag, json.dumps(value) if isinstance(value, dict) else str(value)]
-    return shlex.join(words)
+    return shlex.join(words) + (" ..." if form else "")

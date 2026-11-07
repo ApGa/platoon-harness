@@ -51,8 +51,9 @@ async def list_sessions(*, json: bool = False) -> int:
 async def show(session: str, /) -> int:
     """Say how a session stands: who is working, on what, what is blocked, and where you must act.
 
-    Each place you must act comes with the command that would settle it. `session status`, `view watch` and `attention
-    list` say the same as JSON.
+    Each place you must act comes with the command that would settle it, ending in `...` where it fixes only what the
+    place knows and leaves the rest of its flags to you. `session status`, `view watch` and `attention list` say the
+    same as JSON.
 
     For example:
 
@@ -77,7 +78,8 @@ async def show(session: str, /) -> int:
     for row in attention:
         lines.append(f"  needs you: {row['kind']} {row['id']}, {row['gist']}")
         lines += [
-            f"    {action['label']}: {command_line(session, action['op'], action['args'])}" for action in row["actions"]
+            f"    {action['label']}: {command_line(session, action['op'], action['args'], form=action['form'])}"
+            for action in row["actions"]
         ]
     say(safe("\n".join(lines)))
     return 0

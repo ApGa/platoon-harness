@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from rich.cells import cell_len
 from textual.strip import Strip
+from textual.widgets import Input
 
 from platoon_harness import Session, Team
 from platoon_harness import session as session_module
@@ -22,6 +23,7 @@ from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
+from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _asked, _value
@@ -742,6 +744,28 @@ def _effects(rows: list[dict]) -> list[str]:
 
 def _said_so(events: list) -> list[str]:
     return [event.gist for event in events if event.gist.endswith("says so")]
+
+
+async def test_an_action_that_leaves_arguments_opens_its_op_s_form_prefilled(root):
+    """A wake a spent budget refused waits in the dock, and `/yes` there opens `budget set`'s form with the scope its
+    action fixes filled in, leaving the limits to the person, and runs it as the palette's form would."""
+    limited = Team.model_validate({**team([Say("done")], [Say("again")]).canonical(), "budget": {"turns": 1}})
+    async with attached(limited, root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await until(lambda: of_type(owner, "turn.ended"), owner)
+        await pilot.press(*"more", "enter")
+        await drawn(pilot, lambda text: "budget @lead" in text)
+        await pilot.press(*"/next-place", "enter")
+        await drawn(pilot, lambda text: "/yes Set the budget  wake of lead refused: over_budget" in text)
+        await pilot.press(*"/yes", "enter")
+        await drawn(pilot, lambda _: isinstance(app.screen, Form))
+        filled = {name: app.screen.query_one(f"#field-{name}", Input).value for name in ("scope", "limits", "estimate")}
+        await pilot.press("enter", *'{"turns": 5}', "enter", "enter")
+        set_it = (await until(lambda: of_type(owner, "budget.set"), owner, lambda found: len(found) == 2))[-1]
+        await until(owner.attention, owner, lambda rows: not rows)
+
+    assert filled == {"scope": "shared", "limits": "", "estimate": ""}
+    assert (set_it.actor, set_it.data["scope"], set_it.data["limits"]) == ("human:you", "shared", {"turns": 5})
 
 
 async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_screen_cuts_only_the_gist(root):

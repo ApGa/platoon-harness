@@ -161,6 +161,16 @@ def test_an_action_is_shown_as_the_command_that_runs_it():
     }
 
 
+def test_an_action_that_leaves_flags_to_you_is_shown_with_them_still_to_give():
+    """`budget set` with only its scope would set no limits, so the line that shows such an action does not run as it
+    stands."""
+    line = command_line("fix-auth", "budget.set", {"scope": "shared"}, form=True)
+
+    assert line == "platoon-harness budget set fix-auth --scope shared ..."
+    with pytest.raises(CycloptsError):
+        parsed(shlex.split(line)[1:])
+
+
 def test_every_way_a_session_ends_has_an_exit_code():
     assert set(ENDINGS) == set(get_args(Reason))
     assert ENDINGS["settled"] == 0 and ENDINGS["cancelled"] == 130

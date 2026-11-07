@@ -324,6 +324,39 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
     assert errors == []
 
 
+async def test_needs_you_settles_a_budget_place_through_the_form(browser: Browser, root: Path):
+    """A wake a spent budget refused is a place in Needs you, whose action opens `budget set`'s form in the pane, with
+    the scope it fixes filled in and the limits left to the person, whose Run settles it."""
+    limited = Team.model_validate({**solo([Say("done")], [Say("again")]).canonical(), "budget": {"turns": 1}})
+    async with Session.start(limited, name="s", root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await session.send("@bob", "more")
+        await until(lambda: session.attention(), session)
+        async with serving("s", root) as web:
+            page, errors = await opened(browser, web.link("control"))
+            needs = page.locator("[data-x-needs]")
+            await expect(needs.locator(".badge")).to_have_text("1", timeout=SECONDS)
+            await needs.click()
+            place = page.locator(".x-needs .x-need")
+            refused = r"⚠ budget .*bob: wake of bob refused: over_budgetSet the budget$"
+            await expect(place).to_have_text(re.compile(refused), timeout=SECONDS)
+            await place.get_by_role("button", name="Set the budget").click()
+            await expect(page.locator("#pane h2")).to_have_text("budget set", timeout=SECONDS)
+            filled = [await field(page, flag).input_value() for flag in ("--scope", "--limits", "--estimate")]
+            await fill(page, {"--limits": '{"turns": 5}'})
+            await page.locator("#pane [data-x-run]").click()
+            await expect(page.locator("#pane .x-said")).to_have_text("budget set: done.", timeout=SECONDS)
+            await expect(needs.locator(".badge")).to_have_count(0, timeout=SECONDS)
+            set_it = (await of_type(session, "budget.set"))[-1]
+            await page.context.close()
+
+    assert filled == ["shared", "", ""]
+    assert (set_it.actor, set_it.data["scope"], set_it.data["limits"]) == ("human:you", "shared", {"turns": 5})
+    assert errors == []
+
+
 async def test_an_approval_answered_from_two_browsers_at_once_takes_effect_once(browser: Browser, root: Path):
     """Each answer is held on its way until both are, so both reach web at once, whatever the host's load."""
     team = solo([Ask("Ship the fix?"), Say("shipped")])

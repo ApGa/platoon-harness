@@ -494,3 +494,48 @@ async def test_a_daemon_that_keeps_failing_stands_in_attention_until_a_run_of_it
     )
     assert [row["gist"].rpartition(": ")[2] for row in latest] == ["worse"]
     assert lowered == [] and attention(kernel) == []
+
+
+async def offered(kernel, name: str) -> None:
+    """Queue something for an agent and offer it a turn, as the courier would."""
+    await send(kernel, kernel.runtime, f"@{name}", "go")
+    await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name})
+
+
+async def test_a_budget_place_offers_budget_set_with_its_scope_fixed(kernel, ada, clock):
+    """Setting a budget settles every place a budget held up: the scope the record names is fixed, and the limits are
+    the person's to give, in its op's form."""
+    await spawn(kernel, "bob")
+    over = {"scope": "role:worker", "limits": {"tokens": 10}, "estimate": {"tokens": 99}}
+    result_of(await kernel.submit(kernel.runtime, "budget.set", over))
+    await offered(kernel, "bob")
+    refused = attention(kernel)
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}}))
+    clock.advance(60.0)
+    result_of(await kernel.submit(kernel.runtime, "budget.lapse", {}))
+    lapsed = [row for row in attention(kernel) if row["id"] == "budget/shared"]
+
+    set_it = {"label": "Set the budget", "op": "budget.set", "form": True}
+    assert [(row["id"], row["kind"], row["actions"]) for row in refused] == [
+        ("wake/bob", "budget", [{**set_it, "args": {"scope": "role:worker"}}])
+    ]
+    assert [row["actions"] for row in lapsed] == [[{**set_it, "args": {"scope": "shared"}}]]
+    result_of(await kernel.submit(ada, "budget.set", {**lapsed[0]["actions"][0]["args"], "limits": {"wall": 600}}))
+    assert attention(kernel) == []
+
+
+async def test_an_action_names_only_the_arguments_it_knows(kernel):
+    """A limit no amount can hold refuses a wake in words that name no scope, so its action fixes none, and leaves the
+    scope to its op's form with the limits."""
+    await spawn(kernel, "bob")
+    await offered(kernel, "bob")
+    await start_turn(kernel, "bob")
+    await end_turn(kernel, "bob")
+    limited = {"limits": {"tokens": 1000}, "estimate": {"tokens": 1}}
+    result_of(await kernel.submit(kernel.runtime, "budget.set", limited))
+
+    await offered(kernel, "bob")
+
+    [row] = attention(kernel)
+    assert (row["kind"], row["gist"]) == ("budget", "wake of bob refused: unavailable")
+    assert [(action["op"], action["args"], action["form"]) for action in row["actions"]] == [("budget.set", {}, True)]

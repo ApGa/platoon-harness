@@ -31,6 +31,12 @@ named here is closed.
   `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
   `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
   it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **A place that needs you opens the form that settles it.** An action of the `attention` view may fix only the arguments it
+  knows, which the record names, and say with `form` that it leaves the rest to its op's form. The terminal's dock and the
+  page's Needs you open that form, the palette's and Commands', filled in with what the action fixes, and `session show` writes
+  it as its command ending in `...`, so it does not run as it stands. A wake a budget refused, or the shared wall budget run
+  out, offers Set the budget, `budget.set` with the scope the record names and its limits left to you, where it offered
+  nothing. See [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and
@@ -625,6 +631,9 @@ named here is closed.
   or an update's diff, which Codex gives with no path, so nobody could tell which file a change was of. Its body now names each
   file by its kind and path, `add a.py`, before that file's change, as the approval asking about it does. See
   [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **Each action of `attention` says `form`.** An action is its `label`, its `op`, the `args` it fixes and `form`, whether it
+  leaves the rest to its op's form, so a client that runs every action as it stands would run `budget.set` with no limits. The
+  view is at version 5, so an older session's is refolded as it opens.
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries alone, which the kernel refuses for an op that writes, so nothing can be written through it, and
   a view link reaches it as it reaches SwarmChat's `view_*`: `provenance`, where `x_provenance` was, which goes with no alias, and `attention`, every place the person must act but

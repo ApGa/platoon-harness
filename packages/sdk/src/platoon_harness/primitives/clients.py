@@ -27,14 +27,20 @@ Group = Literal["needs_you", "working", "blocked", "idle", "done", "failed"]
 """The navigator's groups: what a person must do about an agent, derived in the view so every client says the same."""
 
 
+def _action(label: str, op: str, args: dict[str, Any], *, form: bool = False) -> dict[str, Any]:
+    """An action as an op reference: its label, its op, the arguments it fixes, and `form`, whether it leaves the rest
+    to its op's form, as one that knows only some of them does."""
+    return {"label": label, "op": op, "args": args, "form": form}
+
+
 def _resolve_actions(event: Event) -> list[dict[str, Any]]:
     """Buttons as op references, each with the version it was drawn from."""
     return [
-        {
-            "label": verdict.capitalize(),
-            "op": "approval.resolve",
-            "args": {"id": event.data["id"], "verdict": verdict, "expected_version": event.version},
-        }
+        _action(
+            verdict.capitalize(),
+            "approval.resolve",
+            {"id": event.data["id"], "verdict": verdict, "expected_version": event.version},
+        )
         for verdict in ("allow", "deny")
     ]
 
@@ -42,16 +48,22 @@ def _resolve_actions(event: Event) -> list[dict[str, Any]]:
 def _settle_actions(event: Event) -> list[dict[str, Any]]:
     """Whether an effect happened is for a person to say, and the first to say wins."""
     return [
-        {"label": label, "op": "effect.settle", "args": {"id": event.data["id"], "happened": happened}}
+        _action(label, "effect.settle", {"id": event.data["id"], "happened": happened})
         for label, happened in (("It happened", True), ("It did not", False))
     ]
+
+
+def _budget_actions(scope: str | None) -> list[dict[str, Any]]:
+    """Setting a budget settles every place one held up: the scope that held it up is fixed where the record names
+    one, and its limits are the person's to give."""
+    return [_action("Set the budget", "budget.set", {} if scope is None else {"scope": scope}, form=True)]
 
 
 class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
     look found conflicted paths is kept, so that its row comes back after the next look that still finds them."""
 
-    version = 4
+    version = 5
     schema = """
     CREATE TABLE v_attention(
         id TEXT PRIMARY KEY,
@@ -171,11 +183,17 @@ class Attention(View):
 
     @fold("wake.refused")
     def wake_refused(self, event: Event) -> None:
-        self._raise(f"wake/{event.agent}", "hops" if event.data["why"] == "hops" else "budget", event)
+        """A wake past `max_hops`, or one a budget refused, naming its scope where it was over that scope's limit."""
+        if event.data["why"] == "hops":
+            self._raise(f"wake/{event.agent}", "hops", event)
+            return
+        detail = event.data["detail"]
+        scope = detail.get("scope") if isinstance(detail, dict) else None
+        self._raise(f"wake/{event.agent}", "budget", event, _budget_actions(scope))
 
     @fold("budget.lapsed")
     def budget_lapsed(self, event: Event) -> None:
-        self._raise(event.stream, "budget", event)
+        self._raise(event.stream, "budget", event, _budget_actions("shared"))
 
     @fold("budget.set")
     def budget_set(self, event: Event) -> None:

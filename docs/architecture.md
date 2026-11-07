@@ -1641,7 +1641,10 @@ turn did not stop on its own, until the next begins. `why` is typed: `Approval(i
 view so every client says the same, and no state: `needs_you` while an attention row other than a mention names it, `done` or
 `failed` once it has ended, `working` in a turn, on its way to one or held, `blocked` while `why` names what it waits on, and `idle`
 otherwise. A mention is the person's to read, which their marks say, so it names no group. `actions[]` are
-op references, each with whatever keeps a stale button from deciding anything, so any client can draw them.
+op references, each with whatever keeps a stale button from deciding anything, so any client can draw them. An action fixes only
+the arguments it knows, which the record names, and with `form` leaves the rest to its op's form, which a client opens filled in
+with what it fixes, as a budget's place offers `budget.set` with its scope and leaves its limits to the person
+([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft).
 
 - **TUI.** Textual, in the CLI package, which `platoon-harness` opens on a terminal and a headless command never imports. It starts a
   session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most 15 frames a second,

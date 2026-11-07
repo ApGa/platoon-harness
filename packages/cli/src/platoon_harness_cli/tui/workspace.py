@@ -3,6 +3,7 @@
 import json
 import re
 from collections import defaultdict
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -854,7 +855,7 @@ class Workspace(Screen[None]):
     @work(group="act")
     async def _act(self, index: int, chosen: str | None) -> None:
         """Take an action of the place you were at when you asked, as its row offers it, with the version it was drawn
-        from."""
+        from, or open its op's form filled in with what it fixes, where it leaves the rest to the form."""
         live = self.live
         place = live.attention.get(chosen or "") if live else None
         if live is None or place is None or index >= len(place["actions"]):
@@ -862,6 +863,13 @@ class Workspace(Screen[None]):
             note(self, f"Nothing here takes that action: {how}.", severity="warning")
             return
         action = place["actions"][index]
+        if action["form"]:
+            form = next((form for form in self.forms if form.op == action["op"]), None)
+            if form is None:
+                note(self, f"{action['label']}: your grants hold no {action['op']}.", severity="warning")
+            else:
+                self._run_op(form, action["args"])
+            return
         args = {**action["args"], **({"via": "tui"} if action["op"] == "approval.resolve" else {})}
         outcome = await live.session.submit(action["op"], **args)
         refusal = outcome.refusal
@@ -1022,13 +1030,15 @@ class Workspace(Screen[None]):
         return found
 
     @work(group="act")
-    async def _run_op(self, form: ops.Form) -> None:
+    async def _run_op(self, form: ops.Form, fixed: Mapping[str, Any] | None = None) -> None:
+        """Run an op through its form, filled in from where you are, and with what a place's action fixes."""
         live = self.live
         if live is None:
             return
         given = {
             "agent": f"@{self.focus_on.agent}" if self.focus_on and self.focus_on.agent else "",
             "to": self.target or "",
+            **{name: _shown(value) for name, value in (fixed or {}).items()},
         }
         asked = [(field.name, SafeText(_asked(field)), given.get(field.name, "")) for field in form.fields]
         title = SafeText(form.title, "bold")

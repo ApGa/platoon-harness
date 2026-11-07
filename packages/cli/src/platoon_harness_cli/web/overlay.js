@@ -196,13 +196,15 @@ setLive = state => {
 
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
-// a thread or what had reached an agent takes it from provenance or an op's form, and provenance from a form.
-KEYS.push('provenance', 'act');
+// a thread or what had reached an agent takes it from provenance or an op's form, and provenance from a form. A form's
+// `args` go with it.
+KEYS.push('provenance', 'act', 'args');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
   if (r.thread || r.knew) { delete r.provenance; delete r.act; }
   if (r.provenance) delete r.act;
+  if (!r.act) delete r.args;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
     if (r.sort) toast(X.UNVOTED);
@@ -212,9 +214,9 @@ readRoute = () => {
 };
 
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, or an op's form,
-// `act=`. SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and
-// otherwise leaves it to this one. A form drawn again for the same op keeps what was typed in it, and says again what
-// it may do now.
+// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes. SwarmChat's own
+// route takes the pane for a thread, for what had reached an agent and for the map, and otherwise leaves it to this
+// one. A form drawn again for the same op and args keeps what was typed in it, and says again what it may do now.
 X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form;
 const baseRoute = route;
 route = async function () {
@@ -227,18 +229,18 @@ route = async function () {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
   }
-  if (!(S.pane instanceof Pane && S.pane.name === r[key])) {
+  if (!(S.pane instanceof Pane && S.pane.name === r[key] && S.pane.args === r.args)) {
     if (S.pane && S.pane.destroy) S.pane.destroy();
-    S.pane = new Pane(r[key]);
+    S.pane = new Pane(r[key], r.args);
   } else if (S.pane.paint) S.pane.paint();
-  S.paneKey = `${key}|${r[key]}`;
+  S.paneKey = `${key}|${r[key]}|${r.args || ''}`;
   pane.classList.add('open');
 };
 
 // Esc closes a pane of ours as it closes SwarmChat's own.
 const baseKey = onKey;
 onKey = e => e.key === 'Escape' && !overlay.on && (S.route.provenance || S.route.act)
-  ? go({provenance: null, act: null}, true) : baseKey(e);
+  ? go({provenance: null, act: null, args: null}, true) : baseKey(e);
 
 // A popover gives focus back as it closes to what had it as it opened, or to what `X.back` finds in its place once that
 // was drawn again, so the keyboard goes on from where it was.
@@ -531,7 +533,7 @@ X.openCommands = () => {
       : html`<div class="grp">${X.caps.forms.length ? 'No command holds those words.' : 'You hold no op that writes.'}</div>`).s;
     mark();
   };
-  const choose = form => { overlay.close(); go({act: form.op, provenance: null, thread: null, knew: null}, true); };
+  const choose = form => { overlay.close(); go({act: form.op, args: null, provenance: null, thread: null, knew: null}, true); };
   input.addEventListener('input', () => { at = 0; draw(); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { at = Math.min(found.length - 1, at + 1); mark(); e.preventDefault(); }
@@ -562,17 +564,34 @@ X.field = (field, i) => {
 
 // An op's form in the pane, made from what view_info gives of it: what the op does, as its command's help says it, a
 // field for each of its command's flags, and Run, which asks once first for an op the terminal asks about. Every field
-// and Run are disabled where the page may not run the op, saying why. What came of the act is said under Run.
+// and Run are disabled where the page may not run the op, saying why. What came of the act is said under Run. Opened
+// by an action of a place in Needs you, its fields hold what that action fixes, `args`, as JSON in the address.
 X.Form = class {
-  constructor(op) {
+  constructor(op, args) {
     this.name = op;
+    this.args = args;
     this.form = X.caps.forms.find(form => form.op === op);
     const f = this.form;
     $('#pane').innerHTML = html`<div class="phead"><h2>${f ? f.title : op}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll">${f
       ? html`<form class="x-form" data-x-op="${op}"><p class="x-about">${f.said}</p>${f.fields.map(X.field)}<div class="x-acts"><button class="btn primary" data-x-run>Run</button></div><p class="x-said" aria-live="polite"></p></form>`
       : html`<div class="note">${`No op ${op} that writes is yours to run here: Commands lists each one you hold.`}</div>`}</div>`.s;
     this.box = $('#pane .x-form');
+    if (this.box && args) this.fill(args);
     this.paint();
+  }
+  fill(args) {
+    let given = null;
+    try { given = JSON.parse(args); } catch (_) { /* said below */ }
+    if (!given || typeof given !== 'object' || Array.isArray(given)) {
+      $('.x-said', this.box).textContent = 'The address\'s args are no JSON object, so no field is filled in from them.';
+      return;
+    }
+    this.form.fields.forEach((field, i) => {
+      if (!Object.hasOwn(given, field.name)) return;
+      const el = $(`[data-x-field="${i}"]`, this.box), value = given[field.name];
+      if (el.tagName !== 'SELECT') el.value = X.shown(value);
+      else el.value = String((field.kind === 'yes-no' ? [true, false] : field.choices).indexOf(value));
+    });
   }
   paint() {
     if (!this.box) return;
@@ -892,7 +911,7 @@ X.followed = null;
 X.provenance = (ref, followed) => {
   X.followed = followed ? ref : null;
   if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
-  go({provenance: ref, thread: null, knew: null, act: null}, true);
+  go({provenance: ref, thread: null, knew: null, act: null, args: null}, true);
 };
 X.reveal = (at, ref) => {
   const [chat, seq] = at.split(':');
@@ -1001,11 +1020,17 @@ X.decide = async el => {
   for (const b of buttons) X.disable(b, X.cannot('approval.resolve'));
 };
 
+// An action of a place in Needs you: its op, at once, or where it leaves the rest to its op's form, that form in the
+// pane, filled in with what it fixes.
 X.action = async el => {
   const row = (X.needs || []).find(found => found.id === el.dataset.xPlace);
   if (!row) return;
-  X.disable(el, X.WAITING);
   const action = row.actions[+el.dataset.xAction];
+  if (action.form) {
+    overlay.close();
+    return go({act: action.op, args: JSON.stringify(action.args), provenance: null, thread: null, knew: null}, true);
+  }
+  X.disable(el, X.WAITING);
   const r = await X.act(action.op, action.args);
   toast(!r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : `${action.label}: ${row.gist}`);
   X.needed();
@@ -1014,7 +1039,7 @@ X.action = async el => {
 const baseClick = onClick;
 onClick = e => {
   const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands]');
-  if (!el && (S.route.provenance || S.route.act) && e.target.closest('[data-close-pane]')) return go({provenance: null, act: null}, true);
+  if (!el && (S.route.provenance || S.route.act) && e.target.closest('[data-close-pane]')) return go({provenance: null, act: null, args: null}, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
   if ('xCommands' in d) return X.openCommands();

@@ -410,8 +410,9 @@ platoon-harness session show SESSION
 
 Say how a session stands: who is working, on what, what is blocked, and where you must act.
 
-Each place you must act comes with the command that would settle it. `session status`, `view watch` and `attention
-list` say the same as JSON.
+Each place you must act comes with the command that would settle it, ending in `...` where it fixes only what the
+place knows and leaves the rest of its flags to you. `session status`, `view watch` and `attention list` say the
+same as JSON.
 
 For example:
 

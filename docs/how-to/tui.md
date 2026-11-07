@@ -120,9 +120,10 @@ says why it does not.
 
 Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
 place you must act, and `/yes` and `/no` take its first and second action, Allow and Deny for an approval, each carrying
-the version it was drawn from. With the dock reached by Shift+Tab, the arrows choose a place, Enter goes to it, and `y`
-and `n` take the same two actions. Only you move where you are: a place that goes, answered here or by another client,
-takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows
+the version it was drawn from. An action that leaves arguments to you, as a budget's Set the budget leaves its limits,
+opens its op's form, the palette's, filled in with what it fixes. With the dock reached by Shift+Tab, the arrows choose a
+place, Enter goes to it, and `y` and `n` take the same two actions. Only you move where you are: a place that goes,
+answered here or by another client, takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows
 as theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
 below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows disabled,
 pressing it again says the runtime's reason and sends nothing, and it comes back once that agent's row moves. Retiring
