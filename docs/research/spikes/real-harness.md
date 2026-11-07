@@ -1,5 +1,7 @@
 # Spike: real teams and real crashes
 
+> Background research, dated 2026-11-03 to 2026-11-04 and not maintained: [reference/compatibility.md](../../reference/compatibility.md) is current.
+
 ## Question
 
 What do real models do with our tools, our words and our crashes, that scripted harnesses could not show? The runs decide
@@ -7,7 +9,7 @@ bug-coordination-9, bug-coordination-12, the 60 second bounds and the wording of
 
 ## Method
 
-- **Host:** shared x86-64 Linux login node, sequential runs, the session folders on local disk.
+- **Host:** a shared x86-64 Linux host, sequential runs, the session folders on local disk.
 - **Clients:** Claude Code 2.1.316 on `claude-haiku-5-5`, Codex 0.164.0 on `gpt-6-luna`, each at low effort on its own plan login, with
   `plan_login=True`, through the public `Session` in throwaway git repositories. Every session had a `Budget`.
 - **Spent:** 279 model calls counted from 33 journals, and 29.6 minutes from their first event to their last. About 13 more reached no

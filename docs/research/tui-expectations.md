@@ -1,5 +1,7 @@
 # TUI expectations: what users expect from an agent TUI, and how to build ours
 
+> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 Milestone 0 research, retrieved 2026-11-02. Tags such as [E7] resolve in the Evidence appendix.
 
 ## Inspected

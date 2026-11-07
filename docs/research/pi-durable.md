@@ -1,5 +1,7 @@
 # Pi Durable
 
+> Background research, dated 2026-11-03 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 Reviewed on 2026-11-03 against Pi v1.5.0 (`packages/durable`, MIT) and platoon-harness commit `4d5e6c5`. Pi paths are relative to the Pi
 repository, ours to this one.
 
@@ -84,7 +86,7 @@ Why: platoon-harness@4d5e6c5:docs/architecture.md:910 promises 32 KiB and querie
 
 Why: Harness frames hold both ids (docs/research/fixtures/pi-sample.jsonl:18), the envelope already has the slots (kernel/model.py:105-106), and without a field the driver drops the link. The alternative is inference, which AGENTS.md forbids. Our op to pi's toolCallId stays unanchored (packages/mcp/src/client.ts:405-409), so that stays turn quality. Serves BRIEF sections 6 and 7.
 
-**11. Report pi's `responseId`, fix the compat row (adapt).** In the drivers stage, report `ModelCall(call_id=message.responseId, ...)` from `message_end` and correct platoon-harness@4d5e6c5:docs/compatibility.md:83 and docs/research/adapter-others.md:264. Declare `call_ids="call"` for Platoon's gateway only at M3, after a loopback test with real pi on the real gateway.
+**11. Report pi's `responseId`, fix the compat row (adapt).** In the drivers stage, report `ModelCall(call_id=message.responseId, ...)` from `message_end` and correct platoon-harness@4d5e6c5:docs/compatibility.md:83 and platoon-harness@4d5e6c5:docs/research/adapter-others.md:264. Declare `call_ids="call"` for Platoon's gateway only at M3, after a loopback test with real pi on the real gateway.
 
 Why: Our own fixture contradicts the row. The id comes from the first chunk (packages/ai/src/api/openai-completions.ts:548), and by source Platoon sets chunk ids to its call_id (Platoon platoon/gateway/dialects/openai_chat.py:101). Spike s8 matched on a fake model only; no real gateway or provider was observed. Exceptions: a budget stop, a stream error, retry.provider.maxRetries above 0, and compaction.
 
@@ -98,7 +100,7 @@ Why: The summary is model text that entered the context, and we cannot represent
 
 **14. Draw a child under the call that started it (adapt).** the drivers stage: a conformance row, conditional on the harness, that `Item.native_id` equals the MCP anchor where one exists. the clients stage: join `event.native` to `native_id`, falling back to the turn. `agent.spawned.turn` is None because `agent` is the child, so take the parent's open turn at that seq.
 
-Why: The tool plane stamps the anchor, so no convention is needed, where Pi relies on a tool calling api.details itself (spec.md:4046-4049). Claude Code matched 8 of 8 and Codex 0 of 2 (docs/research/spikes/tools-and-parking.md:27-28, read by one analyst only). Serves BRIEF line 160.
+Why: The tool plane stamps the anchor, so no convention is needed, where Pi relies on a tool calling api.details itself (spec.md:4046-4049). Claude Code matched 8 of 8 and Codex 0 of 2 (platoon-harness@4d5e6c5:docs/research/spikes/tools-and-parking.md:27-28, read by one analyst only). Serves BRIEF line 160.
 
 **15. Implement `reconcile` on pi through get_entries (already in the contract; a driver detail).** In the pi driver, search user entries from get_entries for the delivery id.
 
@@ -110,7 +112,7 @@ Why: The hand-over property transfers because we own the ring (spec.md:4729-4736
 
 **17. A stop that reaches a subtree and keeps its agents (adapt).** A client gesture calling `agent.interrupt` over the focused agent's descendants, Stop all as the same loop over every agent, and `session.cancel` a separate labelled action. The client walks `parent`, tolerates `conflict`, and says on screen that it stops turns, not waits.
 
-Why: A human often wants everything below to stop without losing the agents, and today only one agent or the irreversible `session.cancel` is available (primitives/lifecycle.py:219-228, 523-534; docs/research/tui-expectations.md:95). It needs the roster's `parent` and works only once an interrupted child's report goes out at `next-turn`, or each report wakes a parked parent.
+Why: A human often wants everything below to stop without losing the agents, and today only one agent or the irreversible `session.cancel` is available (primitives/lifecycle.py:219-228, 523-534; platoon-harness@4d5e6c5:docs/research/tui-expectations.md:95). It needs the roster's `parent` and works only once an interrupted child's report goes out at `next-turn`, or each report wakes a parked parent.
 
 **18. A failed commit ends the runtime (adapt).** Try the rule with no constant: a failed commit ends the runtime, as in Pi. Add a count only if a transient case is shown. This needs a small new path from writer to `Runtime.run`, which has no failure channel (runtime/__init__.py:103-111). tests/unit/kernel/test_writer.py and platoon-harness@4d5e6c5:docs/architecture.md:222 must change.
 
@@ -166,7 +168,7 @@ Spike questions, all seven of which truly ran, against a fake model, each once u
 - Queue visibility, starting from `unread` for the chip, with a view name added only when the dock line is built.
 - TUI notes, ideas only and our own code: a picker that replaces the composer, a spawn row that jumps to the child, a queue line above the composer. No client command queue.
 - Draw status from views and read events only for the transcript. Pi deleted watchEvents() for this reason (packages/durable/CHANGELOG.md:56).
-- Three decisions needed by the clients stage: the Esc mechanism, how a human steers, and whether withdraw exists. docs/research/tui-expectations.md:86 and :89 depend on them.
+- Three decisions needed by the clients stage: the Esc mechanism, how a human steers, and whether withdraw exists. platoon-harness@4d5e6c5:docs/research/tui-expectations.md:86 and :89 depend on them.
 
 ## What we already do as well or better
 
@@ -262,8 +264,8 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - RESOLVED, reading the harness's log after a loss: watch at M2. Both attackers agree `concepts_added: none` is false: recovered reports need a label and dedupe, and the gaps are honest as they stand.
 - RESOLVED, failFast on gather: no change to on(...); decide the rest at M4 with gather in hand. Any view can be watched: watch at M4, since both attackers moved it there. Demo interactions: drop the client command queue, because rpc.py:94 already runs each request in its own task; keep the rest as the clients stage notes. Queue rows: both keep them.
 - LEFT CONTESTED, Esc and what was waiting (bug-coordination-7): both agree the proposal fails, since v_deliveries_blocked is wiped by any agent's turn end, nothing clears it on message.sent, and wake.refused shows as Budget (primitives/messages.py:236-239, primitives/clients.py:104-106). Both keep the report half. One side wants a per-reader 'no wake up to seq' column with the interrupt recording that a human asked. The other wants one fold on turn.ended{reason: interrupted} that needs no telling a human from a parent. The question is whether a parent's interrupt of a child should also quiet the child's queue.
-- LEFT CONTESTED, how a human steers: one side wants a human-only `steer: bool` on message.send, hidden from tool schemas. The other wants no argument: a person's message to an inbox set to wake lands at the earliest boundary the harness has. The second is derived, but Session.send from a script is a human principal too (runtime/opening.py:142), so a script would steer, and docs/research/tui-expectations.md:86 changes.
-- LEFT CONTESTED, withdraw a queued message: the fact-checker upheld the case for message.withdraw with Pi's three answers (packages/durable/src/harness/submissions.ts:148-161). The taste reviewer rejects it: one op, one event and a fold for a row in a research keymap, when the brief does not ask and a human can send again. The two proposals also disagree on who may withdraw. If rejected, delete docs/research/tui-expectations.md:89.
+- LEFT CONTESTED, how a human steers: one side wants a human-only `steer: bool` on message.send, hidden from tool schemas. The other wants no argument: a person's message to an inbox set to wake lands at the earliest boundary the harness has. The second is derived, but Session.send from a script is a human principal too (runtime/opening.py:142), so a script would steer, and platoon-harness@4d5e6c5:docs/research/tui-expectations.md:86 changes.
+- LEFT CONTESTED, withdraw a queued message: the fact-checker upheld the case for message.withdraw with Pi's three answers (packages/durable/src/harness/submissions.ts:148-161). The taste reviewer rejects it: one op, one event and a fold for a row in a research keymap, when the brief does not ask and a human can send again. The two proposals also disagree on who may withdraw. If rejected, delete platoon-harness@4d5e6c5:docs/research/tui-expectations.md:89.
 - LEFT CONTESTED, resume a harness that exits alone (bug-coordination-9): both say cost M, because turn.lost is emitted only at runtime start and reconcile runs only at recovery. The fact-checker wants it in the drivers stage with the notice. The taste reviewer wants a watch at M2, since it reverses the design of record and we do not know which exits a resume cures. the drivers stage runs would show that.
 - RAISED, NOT RULED: a clean stop has the same hole as a crash. _hand_back ends an open turn with TurnEnded(reason='the owner stopped') (runtime/__init__.py:143-151); the reason is dropped on the way to the parent, and a resumed worker sits idle on its lease with no notice. The crash notice as written covers only turn.lost. Decide whether it extends.
 - RAISED, NOT RULED: keep_running restarts a failing daemon for ever with only a log line (kernel/daemon.py:26-40), so a courier failing every pass looks like a quiet session. Worth a look at M2 as one attention row. Not probed.
@@ -300,7 +302,7 @@ All were confirmed by the fact-checker at `4d5e6c5`, and severity is its ruling.
 - 'Only the change is sent, so the prompt cache stays valid' holds only for models flagged in the catalog (packages/ai/src/utils/transcript.ts:115-120).
 - The 15,000 line claim is stale: true at v1.0.0, and 30,230 lines at v1.5.0 without src/testing.
 - packages/durable/docs/group-commit.md still says 'design', and it shipped in 1.5.0.
-- Ours: platoon-harness@4d5e6c5:docs/compatibility.md:83 and docs/research/adapter-others.md:264 are wrong that pi has no per-call id. It has one on RPC, at 1.4.0 too; the research read headers, not frames.
+- Ours: platoon-harness@4d5e6c5:docs/compatibility.md:83 and platoon-harness@4d5e6c5:docs/research/adapter-others.md:264 are wrong that pi has no per-call id. It has one on RPC, at 1.4.0 too; the research read headers, not frames.
 - Ours: platoon-harness@4d5e6c5:docs/compatibility.md:83 and :384 should record that HTTP MCP is now probed on pi against our real ToolServer.
 - Ours: platoon-harness@4d5e6c5:docs/compatibility.md:236 says pi's append path was not researched; pi has --append-system-prompt (packages/coding-agent/src/cli/args.ts:123).
 - Ours: primitives/waits.py:347 'Wait without spending a turn' is false for a join today.

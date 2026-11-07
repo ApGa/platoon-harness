@@ -1,8 +1,8 @@
 # platoon-harness product brief (verbatim)
 
-> Provenance: this is the project owner's brief, reproduced verbatim.
-> Implementation status against this brief is tracked in `docs/STATUS.md`,
-> not here.
+> Provenance: this is the project owner's brief, reproduced verbatim. Implementation status against this brief is
+> tracked in `docs/STATUS.md`, not here. It is kept as the source of STATUS's acceptance cases and cited by RFCs as
+> evidence; the RFCs it names are Platoon's.
 
 I want to build `platoon-harness`: a production-quality, harness-agnostic multi-agent SDK and CLI, co-designed with Platoon's training interfaces.
 

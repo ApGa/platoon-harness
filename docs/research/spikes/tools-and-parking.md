@@ -1,12 +1,14 @@
 # Spike: tools and parking with real harnesses
 
+> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../../reference/compatibility.md) is current.
+
 ## Question
 
 Does a stdlib, tools-only MCP server work with real Claude Code and Codex? Does a live Codex model see the tool? Is parking (`wait`, then end of turn) reliable enough to be the default, and what is the fallback? What launch settings must the drivers use?
 
 ## Method
 
-- **Host:** shared x86-64 Linux login node, 192 logical CPUs, kernel 5.14, Python 3.12.13. No GPU. Runs were sequential.
+- **Host:** a shared x86-64 Linux host, 192 logical CPUs, kernel 5.14, Python 3.12.13. No GPU. Runs were sequential.
 - **Clients:** Claude Code 2.1.316 (`claude-haiku-5-5`, stream-json, native login). Codex 0.164.0 (`gpt-6-luna`, effort low, `codex app-server` over stdio, ChatGPT login).
 - **Server:** 142 lines, stdlib only, `asyncio.start_server`, loopback HTTP, bearer per agent, tools `note`, `read_notes`, `wait`. The count includes a 2-line slow-init test hook. Sample log: [mcp-http-probe.jsonl](../fixtures/mcp-http-probe.jsonl).
 - **Budget:** 38 harness turns (Claude 14, Codex 24), against a limit of 40. That is about 89 model requests: 28 Claude messages plus about 61 Codex usage updates. If the limit meant model requests, it was exceeded.

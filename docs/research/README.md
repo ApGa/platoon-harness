@@ -1,4 +1,4 @@
-# Research index and verification
+# Background research (dated; not maintained; reference/compatibility.md is current)
 
 Milestone 0 research for `platoon-harness`, reviewed adversarially on 2026-11-02. The reports hold the detail. This page holds the index, what was re-verified, what was corrected, and what is still open. "Probe" below means a run by the critic on 2026-11-02 with real binaries, loopback models and dummy credentials, with no paid calls. Probe scripts are not in this repository.
 

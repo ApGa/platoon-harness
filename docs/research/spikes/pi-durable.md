@@ -1,5 +1,7 @@
 # Spike: Pi Durable and pi RPC
 
+> Background research, dated 2026-11-03 and not maintained: [reference/compatibility.md](../../reference/compatibility.md) is current.
+
 Run on 2026-11-03 for the [Pi Durable review](../pi-durable.md): Pi Durable, pi-ai and chord 1.5.0, pi-coding-agent 1.4.0 and 1.5.0, Node
 26.13.0, on our `FakeModel` (chat dialect) and pi-ai's faux provider. Dummy keys and no paid call. Nothing below is a real model. Each
 scenario ran once unless stated, and timings are from a shared machine on a network filesystem, so treat them as an order of magnitude.

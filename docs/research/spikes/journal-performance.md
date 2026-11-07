@@ -1,5 +1,7 @@
 # Spike: single-writer SQLite journal performance and durability
 
+> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../../reference/compatibility.md) is current.
+
 Run 2026-11-02. Prototype and benchmark are throwaway and are not in this repository.
 
 ## Question
@@ -12,7 +14,7 @@ Prototype as specified: writer thread, drain up to 64 commands, `BEGIN IMMEDIATE
 
 **"500 events per second" is 250 commands per second,** at a mean of 2 events per command. The 1,000 ev/s row covers the other reading. Load is open-loop Poisson. Ack latency runs from the intended send time, so backlog is not hidden. `svc` runs from the actual submit and excludes event-loop timer jitter.
 
-Compute node: 32 CPUs of a shared node, 2x Xeon Platinum 8558, node-local xfs on Micron 7450 NVMe. **Its `/tmp` is tmpfs, not a disk.** Login node: shared by about 47 users, 2x Xeon Platinum 8468, `/tmp` is xfs on a RAID-controller LUN. Lustre: cluster home and group areas, mounted with `flock`. Types were detected with `statfs` and confirmed in mountinfo. Python 3.12.13, SQLite 3.53.1, `THREADSAFE=1`, Linux 5.14. Two jobs, plus short login runs.
+Server: 32 CPUs of a shared machine, 2x Xeon Platinum 8558, local xfs on Micron 7450 NVMe. **Its `/tmp` is tmpfs, not a disk.** Shared host: in use by about 47 users, 2x Xeon Platinum 8468, `/tmp` is xfs on a RAID-controller LUN. Lustre: the home and group areas, mounted with `flock`. Types were detected with `statfs` and confirmed in mountinfo. Python 3.12.13, SQLite 3.53.1, `THREADSAFE=1`, Linux 5.14. Two jobs on the server, plus short runs on the shared host.
 
 Both local disks are server hardware with near-instant flush, so neither stands in for a laptop. To model slower storage, an `LD_PRELOAD` shim added a fixed delay to each `fsync` and `fdatasync` ("injected" below). It does not model device queueing. Its counter confirms FULL really syncs: 1.04 syncs per commit, against 0.04 for NORMAL.
 
@@ -22,36 +24,36 @@ Both local disks are server hardware with near-instant flush, so neither stands 
 
 | Storage | Load, seconds | Ack p50 / p95 / p99 / max | `svc` p99 | Commit p50 | Verdict |
 |---|---|---|---|---|---|
-| Compute NVMe | 500 ev/s, 60 | 1.3 / 2.2 / **2.8** / 14.7 | 1.5 | 0.31 | Pass |
-| Compute NVMe | 1,000 ev/s, 30 | 1.2 / 2.0 / 2.4 / 3.7 | 1.6 | 0.21 | Pass |
-| Compute NVMe, NORMAL | 500 ev/s, 30 | 0.9 / 1.6 / 2.4 / 4.0 | 1.5 | 0.04 | FULL costs 0.4 at p99 |
+| Server NVMe | 500 ev/s, 60 | 1.3 / 2.2 / **2.8** / 14.7 | 1.5 | 0.31 | Pass |
+| Server NVMe | 1,000 ev/s, 30 | 1.2 / 2.0 / 2.4 / 3.7 | 1.6 | 0.21 | Pass |
+| Server NVMe, NORMAL | 500 ev/s, 30 | 0.9 / 1.6 / 2.4 / 4.0 | 1.5 | 0.04 | FULL costs 0.4 at p99 |
 | `/dev/shm` floor | 500 ev/s, 60 | 0.9 / 1.6 / 2.3 / 3.4 | 0.7 | 0.03 | No-fsync floor |
-| Login `/tmp` | 500 ev/s, 60 | 1.0 / 2.0 / 4.8 / 22.1 | 3.8 | 0.17 | Pass, noisy host |
-| Lustre, compute | 500 ev/s, 15 | 2.4 / 4.1 / 9.6 / 12.9 | 8.7 | 1.05 | Pass |
-| Lustre home, login | 500 ev/s, 10 | 2.6 / 5.6 / 9.1 / 19.8 | 8.3 | 1.12 | Pass |
+| Shared host `/tmp` | 500 ev/s, 60 | 1.0 / 2.0 / 4.8 / 22.1 | 3.8 | 0.17 | Pass, noisy host |
+| Lustre, server | 500 ev/s, 15 | 2.4 / 4.1 / 9.6 / 12.9 | 8.7 | 1.05 | Pass |
+| Lustre home, shared host | 500 ev/s, 10 | 2.6 / 5.6 / 9.1 / 19.8 | 8.3 | 1.12 | Pass |
 
 Mean batch was 1.16, so group commit is idle at design load. Process CPU was 0.08 cores. Most of the p99 on fast disks is event-loop timer jitter, as the floor shows. With Python CPU on the event loop at 50% and 90% of a core, p99 was 4.1 and 5.9. A 0.5 ms switch interval changed nothing (4.0, 5.5).
 
 **2. Saturated load, closed loop, 10 s.** Sustained events per second.
 
-| Batch cap | Compute NVMe | `/dev/shm` | Login `/tmp` | Injected 20 ms sync |
+| Batch cap | Server NVMe | `/dev/shm` | Shared host `/tmp` | Injected 20 ms sync |
 |---|---|---|---|---|
 | 1 (one fsync per command) | **9,731** | 15,942 | 6,953 | - |
 | 16 (8: 17,079; 32: 21,202 on NVMe) | - | - | - | 1,378 |
 | 64 | **24,723** | 28,269 | 17,212 | 4,779 |
 | 256 (128: 24,457 on NVMe) | 26,328 | - | - | 12,811 |
 
-Group commit gains 2.5x on NVMe. The ceiling is Python, not the disk: the writer runs at 84% of a core and `/dev/shm` beats NVMe by only 14%. Lustre reached 12,910 at batch 64 (6 s). Login runs were 8 s.
+Group commit gains 2.5x on NVMe. The ceiling is Python, not the disk: the writer runs at 84% of a core and `/dev/shm` beats NVMe by only 14%. Lustre reached 12,910 at batch 64 (6 s). Runs on the shared host were 8 s.
 
-**3. Filesystems.** `fdatasync` of an appended 4 KiB block, p50 / p99: compute NVMe 0.036 / 0.063, login `/tmp` 0.073 / 0.150, tmpfs 0.000 / 0.000, Lustre 0.62 / 5.19 from compute and 0.62 / 1.33 on home from login.
+**3. Filesystems.** `fdatasync` of an appended 4 KiB block, p50 / p99: server NVMe 0.036 / 0.063, shared host `/tmp` 0.073 / 0.150, tmpfs 0.000 / 0.000, Lustre 0.62 / 5.19 from the server and 0.62 / 1.33 on home from the shared host.
 
-**WAL on Lustre is a negative result against our expectation.** One host passes the latency mark. Two hosts on one file (login and compute) corrupted nothing here, but they stalled.
+**WAL on Lustre is a negative result against our expectation.** One host passes the latency mark. Two hosts on one file (the shared host and the server) corrupted nothing here, but they stalled.
 
 | Test | Acked | Lost | `integrity_check` | Reader anomalies | Rate, worst stall |
 |---|---|---|---|---|---|
 | 1 writer per host, WAL, 10 s | 3,478 | 0 | ok | not checked | 348/s, 1.9 s |
 | 3 writers + 1 reader per host, autocheckpoint 20, 20 s, two runs | 2,352 | 0 | ok | 0 in 2,118 reads | 59/s, **6.4 s** |
-| 1 writer per host, DELETE journal, 10 s | 1,733 | 0 | ok | not checked | Compute 1,732, login 1 (`database is locked`) |
+| 1 writer per host, DELETE journal, 10 s | 1,733 | 0 | ok | not checked | Server 1,732, shared host 1 (`database is locked`) |
 
 We did not establish why it held. SQLite states that "WAL does not work over a network filesystem". This mount has coherent `flock`. Other mounts and NFS were not available. A short pass is not evidence of safety.
 
@@ -65,9 +67,9 @@ magic = int.from_bytes(buf.raw[:8], sys.byteorder) & 0xFFFFFFFF
 
 Refuse: Lustre `0x0BD00BD0`, NFS `0x6969`, CIFS `0xFF534D42`, SMB2 `0xFE534D42`, SMB `0x517B`, GPFS `0x47504653`, BeeGFS `0x19830326`, Ceph `0x00C36400`, PanFS `0xAAD7AAEA`, GFS2 `0x01161970`, OCFS2 `0x7461636F`, AFS `0x5346414F`, kAFS `0x6B414653`, ACFS `0x61636673`, vboxsf `0x786F4256`, 9p `0x01021997` (WSL `/mnt/c`; coreutils calls it local, but it carries host shares). FUSE is `0x65735546`: consult the subtype. Exercised live: xfs, tmpfs, Lustre, `fusectl`, `proc`, a path that does not exist yet (walk up to the nearest ancestor), and a symlink from tmpfs into Lustre. statfs and mountinfo agreed. The other magics come from Linux `magic.h` and coreutils `stat.c` and were not exercised. macOS: `statfs(2)` gives `f_flags & MNT_LOCAL` (`0x1000`) and `f_fstypename`, with `statfs$INODE64` on x86-64. Written from the man page and **not run**.
 
-**4. Rebuild, 100,180 events, compute NVMe.** All modes matched the live views. FULL committing every 64: 2.20 s. **FULL in one transaction: 1.70 s** (58,976 ev/s). NORMAL: 1.49 s. OFF: 1.38 s. OFF with 256 MiB cache: 1.37 s. One transaction peaked at 9.5 MiB of WAL. Setting `synchronous` inside a transaction raises `Safety level may not be changed inside a transaction`, so it must precede `BEGIN`.
+**4. Rebuild, 100,180 events, server NVMe.** All modes matched the live views. FULL committing every 64: 2.20 s. **FULL in one transaction: 1.70 s** (58,976 ev/s). NORMAL: 1.49 s. OFF: 1.38 s. OFF with 256 MiB cache: 1.37 s. One transaction peaked at 9.5 MiB of WAL. Setting `synchronous` inside a transaction raises `Safety level may not be changed inside a transaction`, so it must precede `BEGIN`.
 
-**5. Slow reader, 500 ev/s, compute NVMe, reader active 30 s, then 10 s without it.**
+**5. Slow reader, 500 ev/s, server NVMe, reader active 30 s, then 10 s without it.**
 
 | Reader | WAL peak MiB | WAL at end MiB | Ack p99 / max | Page read p50 / p99 |
 |---|---|---|---|---|
@@ -78,7 +80,7 @@ Refuse: Lustre `0x0BD00BD0`, NFS `0x6969`, CIFS `0xFF534D42`, SMB2 `0xFE534D42`,
 
 Checkpointing starves completely: up to 84,100 frames unbackfilled, at **11.4 MiB/s, or 40 GiB per hour of pinning**. It recovers fully when the reader ends, at the cost of one stall. That rate is also the write volume: about 23 KiB per event at design load, since each small commit rewrites about 14 pages, against 729 bytes per event at rest. **A half-read Python cursor pins the WAL too, while `Connection.in_transaction` says `False`.** `wal_checkpoint(TRUNCATE)` returned busy until `cursor.close()`.
 
-**6. Followers: 100 cursors at 500 ev/s, 30 s, compute NVMe, in the writer's process.** With no followers: ack p99 2.56, 0.074 cores.
+**6. Followers: 100 cursors at 500 ev/s, 30 s, server NVMe, in the writer's process.** With no followers: ack p99 2.56, 0.074 cores.
 
 | Fan-out | Ack p99 / max | Process cores | Lag p50 / p99 | Reads/s | Behind at end |
 |---|---|---|---|---|---|
@@ -95,8 +97,8 @@ A private read per follower does not keep up and slows the writer: handler time 
 
 | Run | Rounds | Acked | Rejected | Retries deduped | Violations | First open, max ms |
 |---|---|---|---|---|---|---|
-| Compute NVMe, FULL | 20 | 131,506 | 8,227 | 3,835 | **0** | 2.2 |
-| Login `/tmp`, hybrid checkpoints | 20 | 95,301 | 5,968 | 3,837 | **0** | 3.1 |
+| Server NVMe, FULL | 20 | 131,506 | 8,227 | 3,835 | **0** | 2.2 |
+| Shared host `/tmp`, hybrid checkpoints | 20 | 95,301 | 5,968 | 3,837 | **0** | 3.1 |
 | **Negative control:** ack before commit | 10 | 26,964 | 1,691 | 1,340 | **363, as intended** | 0.9 |
 
 After each kill: every acked command present with all rows, nothing from rejected commands, no partial command, view totals equal the events, `integrity_check` ok. The hybrid run left 60 commands committed but never acked. Recovery scales with the WAL: 84 ms at 302 MiB, 282 ms at 1,005 MiB, 0 violations.
@@ -107,12 +109,12 @@ After each kill: every acked command present with all rows, nothing from rejecte
 
 | Sync delay | Auto 1,000 | Auto 4,000 | After acks, on writer | Background | **Hybrid 16,000** |
 |---|---|---|---|---|---|
-| None | 2.7 | 2.5 | 2.6 | 2.5 | 6.7 (login, noisy) |
+| None | 2.7 | 2.5 | 2.6 | 2.5 | 6.7 (shared host, noisy) |
 | 5 ms | **23.8** (warn) | 17.7 | 20.0 | 12.4 | **17.1** |
 | 20 ms | **96.8** (forced) | 80.8 | 91.4 | 43.0 | **46.7** |
 | WAL peak at saturation, MiB | 4.8 | - | 161.7 | **1,902.8** | **63.5** |
 
-Background alone is unsafe: PASSIVE cannot reset the WAL while writes keep arriving. Hybrid is that thread plus `wal_autocheckpoint` as a hard cap. It ran on the login node, where auto 1,000 gave 25.3 and 97.5, matching compute. Its max stayed near 104 at 20 ms. Ack p99 is at least twice the sync time, so a sync above about 20 ms misses the 50 ms mark whatever we do. At 1 ms and 2 ms, p99 was 4.2 and 6.8 with checkpoints after acks.
+Background alone is unsafe: PASSIVE cannot reset the WAL while writes keep arriving. Hybrid is that thread plus `wal_autocheckpoint` as a hard cap. It ran on the shared host, where auto 1,000 gave 25.3 and 97.5, matching the server. Its max stayed near 104 at 20 ms. Ack p99 is at least twice the sync time, so a sync above about 20 ms misses the 50 ms mark whatever we do. At 1 ms and 2 ms, p99 was 4.2 and 6.8 with checkpoints after acks.
 
 ## Verdict
 
@@ -141,6 +143,6 @@ Background alone is unsafe: PASSIVE cannot reset the WAL while writes keep arriv
 - **macOS is unmeasured, and it is a required platform.** Real `F_FULLFSYNC` latency decides this: past about 20 ms it misses the 50 ms mark. Run this benchmark on a real Mac before Milestone 1 closes.
 - **Many sessions in one process.** Each has a writer thread and they share the GIL. Only one session was tested.
 - **Lagging followers at scale.** All followers stayed at the tail, so the SQL path for many reconnecting clients is unmeasured.
-- **Hybrid checkpoints** ran only in short login runs, and injected delay does not model consumer SSD queueing, so the background and hybrid columns are optimistic.
+- **Hybrid checkpoints** ran only in short runs on the shared host, and injected delay does not model consumer SSD queueing, so the background and hybrid columns are optimistic.
 - **Power loss,** devices that ignore flush, and other filesystems: NFS, CIFS, GPFS, BeeGFS, and Lustre without `flock`.
 - **Payloads above 4 KiB, cold-cache rebuild, and soak** beyond 60 s. Sustained 500 ev/s writes about 0.9 TiB per day, so SSD wear needs a look if real load gets near that.

@@ -1,5 +1,7 @@
 # Persistent agents
 
+> Background research, dated 2026-11-03 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 Do other systems keep a spawned agent alive after its first task so that it can take follow-ups? Who chooses, how does a
 follow-up reach it, is the parent woken by the answer, and how does it end? Reviewed on 2026-11-03.
 

@@ -1,5 +1,7 @@
 # SwarmChat research report
 
+> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 ## Inspected
 
 | Project | Commit or version | Date | License |

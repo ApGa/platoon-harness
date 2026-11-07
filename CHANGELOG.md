@@ -483,6 +483,11 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The research is marked as dated background: its index is titled so, and each note opens with its date, that it is not
+  maintained and that [reference/compatibility.md](docs/reference/compatibility.md) is current. The hosts the notes ran
+  on are described neutrally, and pi-durable's citations of other notes by line are pinned to the commit it read. The
+  brief says why it is kept and that the RFCs it names are Platoon's, and compatibility's section 8 asks as open
+  questions what waited on the owner, and says what DAO is.
 - The scan for local paths and account details is `tests/unit/test_no_internal_references.py`, after Platoon's, and reads
   every text file git tracks, every new one it does not ignore outside hidden folders, and the name of each, the tests and
   the configuration among them. It holds the site's words only as SHA-256 digests, so it no longer spells them out, and

@@ -1,5 +1,7 @@
 # OpenHands adapter research
 
+> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 ## Inspected
 
 | Project | Commit or version | Date | License |
@@ -46,7 +48,7 @@ Labels used: IMPLEMENTED, DOCUMENTED-ONLY, DRAFT/RFC, EXPERIMENTAL. "Probe" mean
 | `import openhands.sdk` | 8.2 to 9.9 s wall, 210 MB RSS, 3,946 modules (litellm is loaded eagerly) |
 | `import openhands.sdk` + `openhands.tools.terminal` | 11.2 s |
 
-Import times are from a shared login node on network storage and should be treated as an upper bound. The weight is still real: never import this from the core SDK, and run it in a subprocess worker rather than the runtime process. `litellm` is capped below 1.106, so the SDK resolves poorly alongside anything needing `mcp>=2`.
+Import times are from a shared Linux host on network storage and should be treated as an upper bound. The weight is still real: never import this from the core SDK, and run it in a subprocess worker rather than the runtime process. `litellm` is capped below 1.106, so the SDK resolves poorly alongside anything needing `mcp>=2`.
 
 ## 2. Agent, Conversation and Event APIs (IMPLEMENTED unless noted)
 

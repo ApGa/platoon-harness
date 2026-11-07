@@ -1,5 +1,7 @@
 # Landscape
 
+> Background research, dated 2026-11-03 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+
 Which existing projects are like ours? Reviewed on 2026-11-03.
 
 Four sweeps each covered one category: tools that run and coordinate existing coding-agent CLIs, multi-agent frameworks, durable

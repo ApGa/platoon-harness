@@ -756,11 +756,12 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 
 ## 8. Known unknowns
 
-**Blocked on the owner.**
+**Open questions.**
 
-- Prime Agent: approve a live probe or leave it unclaimed.
+- Prime Agent: run a live probe, or leave it unclaimed?
 - Training through Claude Code against a non-Claude policy: its system prompt and tool descriptions would enter datasets. Blocked until decided.
-- DAO is undefined. Scenario 2 implements only the brief's table row.
+- DAO is the owner's research on training self-organizing teams with Platoon and this SDK.
+  [Scenario 2](../research/swarm-patterns.md#6-example-scenarios-for-brief-section-10) implements only the brief's table row.
 
 **Terms and licenses.**
 
