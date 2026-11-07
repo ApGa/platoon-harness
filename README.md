@@ -84,27 +84,30 @@ $ uv run platoon-harness uses dns --ref board/notes/risks@1
 it read the closed session: the sessions there are, the task on the queue, the note on the board, and what cites the
 note.
 
-**2. Run your own harnesses.**
+**2. Run your own harnesses.** Agents work where you start a session, so do this in a repository of yours, with the
+checkout's environment active:
 
 ```console
-$ uv run platoon-harness doctor     # what this machine has
-$ uv run platoon-harness init       # a starter platoon-harness.toml from the harnesses it found
-$ uv run platoon-harness            # the terminal UI
+$ source path/to/platoon-harness/.venv/bin/activate
+$ platoon-harness doctor     # what this machine has
+$ platoon-harness init       # a starter platoon-harness.toml from the harnesses it found
+$ platoon-harness            # the terminal UI
 ```
 
 `doctor` says `usable` when this machine can run a session. With the `dev` group it says so even with no harness on
 PATH, as the group installs the SDK's `openhands` extra and OpenHands runs on the runtime's own interpreter. Without the
 group and with no harness on PATH, it says `not usable`.
 
-**3. Watch and steer.** While a session runs, from another shell:
+**3. Watch and steer.** While a session runs, from another shell in the checkout:
 
 ```console
 $ uv run platoon-harness attach dns    # the terminal UI, as a guest of the running session
 $ uv run platoon-harness web dns       # SwarmChat's page; open the control link it prints
 ```
 
-A message from either goes to whoever you address, and a person's message steers. [The terminal UI](docs/how-to/tui.md)
-and [the browser](docs/how-to/web.md) say what each shows and how to act.
+A message from either goes to whoever you address, and a person's message steers. On step 1's `dns`, which has closed,
+both show its history read-only, as neither starts or resumes a session, which can spend money.
+[The terminal UI](docs/how-to/tui.md) and [the browser](docs/how-to/web.md) say what each shows and how to act.
 
 **4. Read it back.** `uses` says what cites an event, and `contributors` whose work the record ties to one, on a live
 session or a closed one. The mixed team's [What to look at](examples/mixed-team/README.md#3-what-to-look-at) walks from
