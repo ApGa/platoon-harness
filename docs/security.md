@@ -41,8 +41,8 @@ did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) say
   outside those folders and everything you can read elsewhere, on the same kernel. It is experimental, Linux only, and has
   passed its escape tests on one host.
 - **The network, from an agent.** Nothing confines an agent's network access, an isolated one's included.
-- **Resources.** No agent's CPU, memory or disk is limited. Reporting each agent's use is `session.metrics`, which is
-  planned, and it will report use, never limit it.
+- **Resources.** No agent's CPU, memory or disk is limited. `session.metrics`, which is planned, is to report each
+  agent's use; that it reports use and limits none is the default, pending the owner's ruling on per-agent limits.
 - **macOS.** Nothing has run there yet, and no isolation exists for it.
 
 ## Credentials
@@ -112,5 +112,6 @@ Keep secrets out of what agents read, and tombstone a body that holds one.
 
 ## Reporting a vulnerability
 
-The repository has no disclosure policy yet. `SECURITY.md`, through GitHub's private vulnerability reporting, is planned,
-awaiting its owner's ruling: see [STATUS](STATUS.md#packaging-and-docs).
+The repository has no disclosure policy yet. `SECURITY.md`, through GitHub's private vulnerability reporting, is
+planned, as the default pending its owner's ruling, though nothing of it is built and no work toward it is scheduled
+yet: see [STATUS](STATUS.md#packaging-and-docs).
