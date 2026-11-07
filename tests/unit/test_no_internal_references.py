@@ -1,15 +1,16 @@
 """Nothing the repository holds names the machines it was built on or anyone's account: no site, host, reservation,
-account or group of theirs, no path into a home directory, group storage or a per-user data directory, no key, and no
-email address but one under `.invalid`, which IETF RFC 2606 keeps from ever naming an account.
+resource type, account or group of theirs, no path into a home directory, group storage or a per-user data directory, no
+key, and no email address but one under `.invalid`, which IETF RFC 2606 keeps from ever naming an account.
 
 The scan covers every text file git tracks and every new file it does not ignore outside hidden directories, and the
 names of all of them. A file is text when its first 8000 bytes hold no NUL byte, as git judges it. A file may hold what
 the scan catches only where `ALLOWED` lists that text's digest, with the reason.
 
 Banned words are stored as SHA-256 digests, so that this file does not publish them itself. A line has its camelCase
-words split (`FooBar` reads as `foo_bar`), is lower-cased and is split into words of letters and digits. A word matches
-when it is banned, or is once cut at its first digit (a numbered host, account or group), either also without a
-trailing `s` (a plural). To ban another word, add `hashlib.sha256(word.lower().encode()).hexdigest()`.
+words split (`FooBar` and `FOOBar` read as `foo_bar`, and `FOOs` as `foos`), is lower-cased and is split into names of
+letters, digits and underscores. A name matches when a run of its underscore-separated words is banned (a resource type
+is two words), or is once cut at its first digit (a numbered host, account or group), either also without a trailing `s`
+(a plural). To ban another word, add `hashlib.sha256(word.lower().encode()).hexdigest()`.
 """
 
 import hashlib
@@ -27,6 +28,8 @@ BANNED_DIGESTS = frozenset(
         "691c1224a07863335713b1c9f6b5d345529a6519636b7d52428234b0fef76b2e",  # the site
         "092bf25babc151516ee10f1a279ee6ff18c985232ce50922039e6160af87bc20",  # the prefix of its hosts' names
         "09a23692b3d972ae19593ac7d765c589f058f4ed0ad8c76d48b23bafd7d590e1",  # a reservation there
+        "ca2bdd5b6d4548191177406fbe92213341a4201b3512f1713716b9d63e7f81cd",  # a resource type there
+        "2fdc2e3915489d997e73282db1deae5a35620be49c0e8a89a3dac569868346a2",  # another resource type there
         "9f10f645170216d32bff57fe46f386ad5a3f46e30db179411561bfbbcdb279fe",  # the prefix of its accounts
         "ad99ee823dce531770957d20a75e6a5c052b2f18acfd291aa186eccb9182cbed",  # the prefix of its groups
     }
@@ -52,8 +55,8 @@ this file does not hold the text either, and another text in its place fails unt
 allowed text are still scanned. Every entry must still be needed (see the last test). Keep the list short: reword the
 file instead wherever its readers lose nothing."""
 
-_WORD = re.compile(r"[a-z0-9]+")
-_CAMEL_CASE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NAME = re.compile(r"[a-z0-9_]+")
+_CAMEL_CASE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z]{2})")
 
 
 def _digest(text: str) -> str:
@@ -61,19 +64,22 @@ def _digest(text: str) -> str:
 
 
 @cache
-def _banned(word: str) -> bool:
-    """Whether a lower-case word is banned, or is once cut at its first digit, either also without a trailing `s`."""
-    cut = re.split(r"\d", word, maxsplit=1)[0]
-    candidates = {word, cut, word.removesuffix("s"), cut.removesuffix("s")} - {""}
+def _banned(name: str) -> bool:
+    """Whether a run of a lower-case name's underscore-separated words is banned, or is once cut at its first digit,
+    either also without a trailing `s`."""
+    words = [word for word in name.split("_") if word]
+    runs = {"_".join(words[start:end]) for start in range(len(words)) for end in range(start + 1, len(words) + 1)}
+    candidates = runs | {re.split(r"\d", run, maxsplit=1)[0] for run in runs}
+    candidates = (candidates | {candidate.removesuffix("s") for candidate in candidates}) - {""}
     return any(_digest(candidate) in BANNED_DIGESTS for candidate in candidates)
 
 
 def _found(text: str) -> Iterator[tuple[int, str]]:
     """Each banned word, path, key or email address in `text`, with the number of its line."""
     for number, line in enumerate(text.split("\n"), 1):
-        for word in _WORD.findall(_CAMEL_CASE.sub("_", line).lower()):
-            if _banned(word):
-                yield number, word
+        for name in _NAME.findall(_CAMEL_CASE.sub("_", line).lower()):
+            if _banned(name):
+                yield number, name
         for pattern in BANNED_PATTERNS:
             for match in pattern.finditer(line):
                 yield number, match.group(0)
@@ -116,9 +122,9 @@ def test_the_scan_covers_every_text_file():
         assert any(name.startswith(prefix) for name in names), prefix
 
 
-MADE_UP_BANS = ("zorbix", "qnode", "qac")
-"""A site, the prefix of its hosts' names and that of its accounts that nothing real is called: the matcher's tests ban
-them, so that they need no banned word."""
+MADE_UP_BANS = ("zorbix", "qnode", "qac", "zq_hx")
+"""A site, the prefix of its hosts' names, that of its accounts and a resource type that nothing real is called: the
+matcher's tests ban them, so that they need no banned word."""
 
 
 @pytest.fixture
@@ -131,13 +137,17 @@ def made_up_bans(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     _banned.cache_clear()
 
 
-def test_the_matcher_finds_a_word_a_numbered_host_and_an_account(made_up_bans):
-    site, host, account = MADE_UP_BANS
+def test_the_matcher_finds_a_word_a_numbered_host_an_account_and_a_resource_type(made_up_bans):
+    site, host, account, resource = MADE_UP_BANS
 
     assert _banned(site) and _banned(f"{site}s") and not _banned(f"g{site}") and not _banned("platoon")
     assert _banned(f"{host}042") and _banned(f"{host}s") and not _banned(f"{host}x") and not _banned("q1")
     assert _banned(f"{account}12345xy") and not _banned(f"{account}x1")
-    assert _hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}'"]
+    assert _banned(resource) and _banned(f"a_{resource}_small") and not _banned("zq") and not _banned("hx_zq")
+    assert _hits(f"RTYPE={resource.upper()}") == [f"line 1: '{resource}'"]
+    assert _hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}_bridge'"]
+    assert _hits(f"class {site.upper()}Bridge:") == [f"line 1: '{site}_bridge'"]
+    assert _hits(f"two {site.upper()}s and {resource.upper()}s") == [f"line 1: '{site}s'", f"line 1: '{resource}s'"]
     assert _hits(f"x\nssh login1.{site}.example") == [f"line 2: '{site}'"]
     assert _hits(f"x {site} y", allowed={_digest(site)}) == []
     assert _hits(f"x {site}@example.com", allowed={_digest(f"{site}@example.com")}) == [f"line 1: '{site}'"]
