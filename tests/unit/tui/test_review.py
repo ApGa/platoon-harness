@@ -1,6 +1,7 @@
 """What changed, in the terminal: the header, `/review`, the inspector's workspace and a conflict in the dock, on a
 session in a repository of the test's own, with its agent in a worktree."""
 
+import asyncio
 import contextlib
 import subprocess
 from collections.abc import AsyncIterator, Callable
@@ -70,7 +71,18 @@ async def test_the_header_says_what_changed_or_why_nothing_is_observed(root, rep
     assert "1 commit, 1 path uncommitted" in after
 
 
-async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(root, repo):
+async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(root, repo, monkeypatch):
+    marked: asyncio.Future[int] = asyncio.get_running_loop().create_future()
+    mark = Session.mark
+
+    async def written(session: Session, stream: str, seq: int) -> None:
+        try:
+            await mark(session, stream, seq)
+        finally:
+            if stream == "repo/repo" and not marked.done():
+                marked.set_result(seq)
+
+    monkeypatch.setattr(Session, "mark", written)
     async with attached(team(worked), root, repo) as (owner, pilot):
         await pilot.press(*"go", "enter")
         await looked(owner)
@@ -79,10 +91,8 @@ async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(roo
         await pilot.press("alt+d")
         text = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
         head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
-        await pilot.pause()  # The review has looked at its end, so the mark is being written.
-        for worker in [worker for worker in pilot.app.workers if worker.group == "marks"]:
-            await worker.wait()
-        marked = await owner.marks()
+        read = await marked
+        kept = await owner.marks()
         await pilot.press("escape")
         await pilot.press("alt+d")
         again = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
@@ -90,7 +100,7 @@ async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(roo
     assert f"● {head[:12]} add work  +1 -0" in text
     assert "● untracked    notes.txt  +? -?" in text
     assert "Diffs come with review, which is planned." in text
-    assert marked["repo/repo"] == newest
+    assert read == kept.get("repo/repo") == newest
     assert f"  {head[:12]} add work" in again and "● untracked" not in again
 
 
