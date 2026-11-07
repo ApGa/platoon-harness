@@ -36,8 +36,9 @@ jobs:
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
   # The fast suite on each Python the packages' classifiers name. UV_PYTHON has uv sync and uv run use the job's
-  # Python. With bubblewrap, the bwrap tests confine where the runner lets them, and skip saying why where it does not.
-  # Git 2.47.3 is the only git the workspace tests have run on, so an older one fails the job.
+  # Python. Ubuntu's AppArmor keeps unprivileged processes from making user namespaces, which bubblewrap needs, so the
+  # job lifts that restriction and the bwrap tests confine rather than skip. Git 2.47.3 is the only git the workspace
+  # tests have run on, so an older one fails the job.
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -54,6 +55,9 @@ jobs:
 
       - name: Install bubblewrap
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Let unprivileged processes make user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Check that git is 2.47 or later
         run: git --version && printf '2.47\n%s\n' "$(git --version | cut -d' ' -f3)" | sort -V -C

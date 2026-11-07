@@ -127,7 +127,7 @@ While you work, run what you touch, such as `uv run pytest -q tests/unit/primiti
 
 | Tests | Skip when |
 |---|---|
-| `tests/unit/runtime/test_bwrap.py`, and those of `tests/unit/runtime/test_isolation.py` on real bubblewrap | `bwrap` is not on `PATH`, or cannot confine here, as where unprivileged user namespaces are blocked |
+| `tests/unit/runtime/test_bwrap.py`, and those of `tests/unit/runtime/test_isolation.py` on real bubblewrap | `bwrap` is not on `PATH`, or cannot confine here, as where unprivileged user namespaces are blocked. Ubuntu's AppArmor blocks them unless `kernel.apparmor_restrict_unprivileged_userns` is 0, which CI's `test` job sets |
 | One test of `tests/unit/runtime/test_bwrap.py` | There is no writable folder outside `/tmp` |
 | One test each of `tests/unit/tools/test_ph.py` and `tests/unit/tools/test_shim.py` | The machine has no system `python3` |
 | One test of `tests/unit/drivers/test_process.py` | There is no `/dev/full` |
@@ -238,7 +238,7 @@ stacked on another one is checked too, and for pushes to `main`. A new push canc
 |---|---|---|
 | `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
-| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it | git is older than 2.47, or a test fails |
+| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, and with unprivileged user namespaces allowed, so the bwrap tests confine | git is older than 2.47, or a test fails |
 | `e2e` | The browser tests | A browser test fails |
 
 The commands, job by job:
@@ -249,6 +249,7 @@ uv sync --locked
 uv run pre-commit run --all-files --show-diff-on-failure
 # test
 sudo apt-get update && sudo apt-get install -y bubblewrap
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 git --version && printf '2.47\n%s\n' "$(git --version | cut -d' ' -f3)" | sort -V -C
 uv sync --locked
 uv run pytest -q -n auto
