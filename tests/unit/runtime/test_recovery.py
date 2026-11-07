@@ -878,6 +878,11 @@ async def test_a_failed_commit_ends_the_runtime_as_a_kill_would_and_a_resume_tel
     session = await Session.start(comes_back(), name="s", root=tmp_path)
     await session.send("@bob", "go")
     await in_state(session, "bob", "running")
+    await until(
+        lambda: of_type(session, "effect.finished"),
+        session,
+        lambda found: any(event.data["kind"] == "deliver" for event in found),
+    )
     runtime = session._runtime
     assert runtime is not None
     head = runtime.kernel.head
