@@ -31,6 +31,14 @@ named here is closed.
   `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
   `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
   it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **Diffs in the terminal's `/review`.** Enter on a commit opens its patch, and on a workspace or one of its paths what it holds
+  uncommitted, each asked for with `repo diff` and drawn a page at a time as `blob get` gives it, each line numbered as a
+  citation names it and drawn as text, whatever it holds. Above it are its record's words and where it was read, and for an
+  uncommitted diff when; below a cut patch, that it was cut at 64 KiB and the rest is in git. A file git takes for binary is
+  named and never drawn, and a patch that is not UTF-8 is not drawn, saying why. A commit's patch opened again shows what was
+  kept. `t` tests the chosen commit, once you say yes, where Enter did, and the list's words are the command line package's,
+  which the page is to say too. Diffs were drawn disabled, saying they were planned. See
+  [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **Every place that needs you carries its act, or says what settles it.** A lost turn, a wake past `max_hops`, and an agent's
   failure or conflict, which its next turn settles, offer Write to it, a message to it in `message send`'s form, as a person's
   message is no hop. A mention offers Reply where its sender takes one. A dead task offers Add it again, `task add` on its
@@ -83,8 +91,8 @@ named here is closed.
   is the patch: its first 64 KiB, cut at a line's end and saying where, which `blob.get` reads and a message cites lines of, its
   gist saying when it is not UTF-8, so no line can be cited, and how many untracked repositories it shows no file of. A file git
   takes for binary, by its content or the workspace's attributes, is named and never shown. A commit's patch is read once, and
-  asked for again gives its ref; an uncommitted diff names the HEAD it is against and when it was read, and each ask reads it
-  again. An agent is refused, as it is `repo.test`, and reads a commit through `repo.commit` or its own git, which is the
+  asked for again gives the effect that read it and its ref; an uncommitted diff names the HEAD it is against and when it was
+  read, and each ask reads it again. Each record names the workspace whose repository it was read in. An agent is refused, as it is `repo.test`, and reads a commit through `repo.commit` or its own git, which is the
   default pending the owner's ruling. A look reads no patch. See
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run

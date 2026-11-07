@@ -465,12 +465,12 @@ def diff(txn: Txn, a: Diffing) -> dict[str, int | str]:
     """Read the patch of a recorded commit against its first parent, or what a workspace holds uncommitted against its
     HEAD, as `of` names, where that workspace lives, and keep it on `repo/<name>` as `repo.diffed`, whose body is the
     patch, cut at a line's end past 64 KiB, naming the `effect` this gives back. A commit's patch never changes, so it
-    is read once: asked again while it is read, this gives the same `effect`, and once it is kept, its `ref`. What a
-    workspace holds uncommitted is read at each ask, and its record says when. A person or a program asks for this,
-    never an agent. Refused `not_permitted` to an agent, which reads a commit through `repo.commit` or its own git;
-    `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what
-    you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the
-    session is closing."""
+    is read once: asked again while it is read, this gives the same `effect`, and once it is kept, that `effect` and the
+    record's `ref`. What a workspace holds uncommitted is read at each ask, and its record says when. A person or a
+    program asks for this, never an agent. Refused `not_permitted` to an agent, which reads a commit through
+    `repo.commit` or its own git; `not_found` while the commit is not recorded yet, and for a workspace the session
+    holds none of; `invalid` when what you gave names several commits; `unsupported` when the session observes no
+    repository; and `conflict` once the session is closing."""
     if txn.me.kind == "agent":
         raise Refused("not_permitted", "an agent reads a commit through `repo.commit` or its own git, not as a diff")
     session = txn.view(SessionRecord)
@@ -485,7 +485,7 @@ def diff(txn: Txn, a: Diffing) -> dict[str, int | str]:
         asked = {"sha": event.data["sha"], "found_in": event.data.get("found_in")}
         if (kept := txn.view(Looks).diff(asked["sha"])) is not None:
             if kept["ref"] is not None:
-                return {"ref": kept["ref"]}
+                return {"effect": kept["effect"], "ref": kept["ref"]}
             effect = txn.view(Effects).get(kept["effect"])
             if effect is not None and effect.state in ("requested", "started", "uncertain"):
                 return {"effect": effect.id}
@@ -495,13 +495,15 @@ def diff(txn: Txn, a: Diffing) -> dict[str, int | str]:
 class Diffed(Args):
     """What a diff `effect` read: a recorded commit's patch against its first parent, by its `sha`, or a `workspace`'s
     uncommitted diff against `head`, None before its first commit, as it was when its reading began, `read_at`, on the
-    session's clock; as its `body` the patch, which `cut` says ends at the end of the last line within `PATCH_LIMIT`
-    bytes, as it was longer, with how many `untracked_repositories` in the work tree it shows no file of; or `why` it
-    could not be read."""
+    session's clock; the workspace whose repository git read it in, `read_in`, which for a commit is the one its look
+    found it in, or yours, `shared`, once that had gone; as its `body` the patch, which `cut` says ends at the end of
+    the last line within `PATCH_LIMIT` bytes, as it was longer, with how many `untracked_repositories` in the work tree
+    it shows no file of; or `why` it could not be read."""
 
     effect: int
     sha: Sha | None = None
     workspace: Where | None = None
+    read_in: Where | None = None
     head: Sha | None = None
     read_at: float | None = None
     body: BodyRef | None = None

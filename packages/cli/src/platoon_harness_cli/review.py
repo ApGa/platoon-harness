@@ -1,9 +1,16 @@
 """What changed, which the terminal and the browser say alike: each workspace's commits and uncommitted paths, from the
-`changes` view, each line in parts that each client draws by its tone."""
+`changes` view, and a commit's patch or a workspace's uncommitted diff, read a page at a time, each line in parts or a
+tone that each client draws its own way."""
 
+import re
+import time
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from platoon_harness import Refused, Session
+from platoon_harness.kernel import Event
+from platoon_harness.primitives.repo import PATCH_LIMIT
 
 Tone = Literal["", "strong", "faint", "good", "bad", "warn"]
 """How a part of a line is drawn: plainly, as a heading, quieter, or as what passed, failed or needs a look."""
@@ -12,18 +19,22 @@ Part = tuple[str, Tone]
 NOBODY = "nobody's"
 """Where the commits go that no agent's workspace made: in your checkout, or in no workspace or in two."""
 TESTS: dict[str, Tone] = {"passed": "good", "failed": "bad", "error": "warn"}
+SIGNS: dict[str, Tone] = {"+": "good", "-": "bad"}
+"""How a line of a hunk is drawn by its first character: added, removed, or neither."""
 
 
 @dataclass(frozen=True)
 class Change:
     """One line of what changed: a workspace's `heading`, a `commit`, an uncommitted `path`, how many `more` paths a
     workspace holds than its reading lists, or `nothing` measured yet. Its words, in parts each with its tone; the
-    `key` of its row in the `changes` view, which a person chooses, or None; whether it is `new`, past the person's
+    `key` of its row in the `changes` view, which a person chooses, or None; what `repo.diff` reads for it, `of`: a
+    commit's SHA for its patch, or a workspace for what it holds uncommitted; whether it is `new`, past the person's
     mark; and for a commit the acts the view offers on it, the one that tests it."""
 
     kind: Literal["heading", "commit", "path", "more", "nothing"]
     parts: tuple[Part, ...]
     key: str | None = None
+    of: str | None = None
     new: bool = False
     actions: tuple[Mapping[str, Any], ...] = ()
 
@@ -83,7 +94,8 @@ def changes_of(
             ((", a snapshot, whose commits are in its own repository", "faint"),) if group in snapshots else ()
         )
         under_way = ((f", a {reading['under_way']} under way", "warn"),) if reading and reading["under_way"] else ()
-        found.append(Change("heading", (title, *apart, *under_way)))
+        heading = (title, *apart, *under_way)
+        found.append(Change("heading", heading, reading["id"], group) if reading else Change("heading", heading))
         for commit in (commit for commit in commits if _owner(commit) == group):
             parts: tuple[Part, ...] = (
                 (commit["gist"], ""),
@@ -91,7 +103,8 @@ def changes_of(
                 *_tests(commit),
                 *(((" dropped", "bad"),) if commit["dropped"] else ()),
             )
-            found.append(Change("commit", parts, commit["id"], new(commit), tuple(commit.get("actions") or ())))
+            acts = tuple(commit.get("actions") or ())
+            found.append(Change("commit", parts, commit["id"], commit["commit"], new(commit), acts))
         held = [path for path in paths if path["workspace"] == group]
         for path in held:
             parts = (
@@ -99,9 +112,124 @@ def changes_of(
                 (path["path"], ""),
                 (f"  {_lines(path['added'], path['removed'])}", "faint"),
             )
-            found.append(Change("path", parts, path["id"], new(path)))
+            found.append(Change("path", parts, path["id"], group, new(path)))
         if reading and (more := (reading["total"] or 0) - len(held)) > 0:
             found.append(Change("more", ((f"{more} more", "faint"),)))
     if not found:
         return [Change("nothing", (("Nothing measured yet: a look runs at the end of each agent's turn.", "faint"),))]
     return found
+
+
+@dataclass(frozen=True)
+class Line:
+    """One line of a patch: its `number`, which a citation of its lines names, its `text`, and its `tone`: a file's
+    first line strong, what heads a file or a hunk faint, an added line good and a removed one bad, and a file git
+    takes for binary, which it names and never shows, warn."""
+
+    number: int
+    text: str
+    tone: Tone
+
+
+@dataclass(frozen=True)
+class Page:
+    """Lines of a patch as `blob.get` reads them, a page at a time: these, how many lines the patch has in all, and the
+    ref of the lines after these, or None at its end."""
+
+    lines: tuple[Line, ...]
+    total: int
+    rest: str | None
+
+
+@dataclass(frozen=True)
+class Diff:
+    """A diff as a person reads it: the `ref` of its record, which `blob.get` reads and a citation names lines of; the
+    words `above` its patch, what it is of and how long, then where it was read and, for what a workspace holds
+    uncommitted, when; its `first` page, or None where it has no text to draw; and the words `below` its last line,
+    where it was cut or why it is not drawn."""
+
+    ref: str
+    above: tuple[str, ...]
+    first: Page | None
+    below: str | None
+
+
+async def kept(session: Session, effect: int) -> Event:
+    """The record of what the diff `effect` read, once the journal holds it: its `repo.diffed`, past its request.
+    Refused `unavailable` when the effect failed, saying why, or when nothing more can come."""
+    async for event in session.events(effect, match="repo/*", streams=[f"effect/{effect}"], follow=True):
+        if event.type == "repo.diffed" and event.data["effect"] == effect:
+            return event
+        if event.type == "effect.failed" and event.stream == f"effect/{effect}":
+            raise Refused("unavailable", f"the diff was not read: {event.data['error']}")
+    raise Refused("unavailable", "the session's runtime went before the diff was read")
+
+
+async def read(session: Session, effect: int) -> Diff:
+    """The diff the effect `effect` read, as `repo.diff` gave it, once it is recorded, with its first page."""
+    record = await kept(session, effect)
+    data, ref = record.data, f"{record.stream}@{record.version}"
+    above = [record.gist]
+    if data["body"] is not None:
+        read_in = data["read_in"]
+        mode = None if read_in == "shared" else ((await session.status(read_in))["workspace"] or {}).get("mode")
+        where = place(read_in, mode, commit=data["sha"] is not None)
+        when = data["read_at"]
+        above.append(f"Read in {where}." if when is None else f"What it held at {_clock(when)}, read in {where}.")
+    first = None if data["body"] is None else await page(session, ref)
+    below = None
+    if data["body"] is not None and first is None:
+        below = "It is not UTF-8, so it is not drawn, and no line of it can be cited."
+    elif data["cut"]:
+        rest = f"in git, at {data['sha'][:12]}" if data["sha"] else f"uncommitted in {_whose(data['workspace'])}"
+        below = f"Cut here, at the end of the last line within {PATCH_LIMIT // 1024} KiB: the rest is {rest}."
+    return Diff(ref, tuple(above), first, below)
+
+
+async def page(session: Session, ref: str) -> Page | None:
+    """The lines of a patch that `blob.get` gives by `ref`, its record's or a page's `rest`, or None for a patch that
+    is no text."""
+    got = await session.blob(ref)
+    if got["text"] is None:
+        return None
+    first = int(found[1]) if (found := re.search(r"#L(\d+)-", got["ref"])) else 1
+    return Page(lines_of(first, got["text"]), got["lines"], got["rest"])
+
+
+def lines_of(first: int, text: str) -> tuple[Line, ...]:
+    """The lines of a page of a patch from line `first`, each with its tone. A page that begins past the patch's first
+    line is taken to begin in a hunk, until a file's first line says otherwise."""
+    found = []
+    hunk = first > 1
+    for number, said in enumerate(text.splitlines(), first):
+        if said.startswith("diff --git "):
+            hunk, tone = False, "strong"
+        elif said.startswith("@@"):
+            hunk, tone = True, "faint"
+        elif not hunk:
+            tone = "warn" if said.startswith("Binary files ") else "faint"
+        else:
+            tone = SIGNS.get(said[:1], "")
+        found.append(Line(number, said, tone))
+    return tuple(found)
+
+
+def place(read_in: str, mode: str | None, *, commit: bool) -> str:
+    """Where a diff was read, in words: your checkout, or for a commit your repository, or an agent's workspace,
+    `read_in`, by its `mode`."""
+    if read_in == "shared":
+        return "your repository" if commit else "your checkout"
+    return {
+        "worktree": f"{read_in}'s worktree",
+        "snapshot": f"{read_in}'s own repository, a snapshot",
+        "isolated": f"{read_in}'s own repository, inside its isolation",
+    }.get(mode, f"{read_in}'s workspace")
+
+
+def _whose(workspace: str) -> str:
+    return "your checkout" if workspace == "shared" else f"{workspace}'s workspace"
+
+
+def _clock(at: float) -> str:
+    """A time on the session's clock as the transcript says one."""
+    return time.strftime("%H:%M:%S", time.localtime(at))

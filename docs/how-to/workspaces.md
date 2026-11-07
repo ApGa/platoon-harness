@@ -318,7 +318,7 @@ into any of them and none of their own config applies. The command gets what eve
 when it could not run to its end, as when its timeout came first, which ends everything it started. It names the command, its exit, the
 seconds it took and the bytes it printed, and carries the last 64 KiB of that as its body, which `platoon-harness blob get <session>
 --ref repo/<name>@<version>` reads, a page at a time. The `changes` view's commit row gives the latest outcome as `tests`, with why it failed or
-erred and the ref of its record, and the terminal's `/review` shows the outcome and the reason and tests the chosen commit with Enter. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
+erred and the ref of its record, and the terminal's `/review` shows the outcome and the reason and tests the chosen commit with `t`. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
 session resumes. [RFC 0056](../rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
 
@@ -349,7 +349,7 @@ against, and a commit's patch is from the first parent its own object names, wha
 who writes a repository's refs and files can change which patch is recorded for a SHA.
 
 `repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace, the HEAD it was read against and `read_at`, when its
-reading began, and the patch as its body, which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at
+reading began, `read_in`, the workspace whose repository it was read in, and the patch as its body, which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at
 a time, and which a message cites lines of by its ref, `repo/<name>@<version>#L40-52`. A patch past 64 KiB, as much as the journal
 holds in an event's own body, is cut at the end of the last line that fits; the record says `cut` and its gist where, as
 `3f9c2a1b2c3d patch, cut after 1022 lines at 64 KiB`, and the rest is in git. A file git takes for binary is named,
@@ -361,7 +361,9 @@ when the session resumes. A look reads no patch, so a turn's end costs what it d
 [RFC 0065](../rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md) has why.
 
 A commit's patch never changes, so it is read once: asked for again while it is read, `repo diff` gives the same effect, and once
-it is kept, the ref of its record, reading nothing. What a workspace holds uncommitted is read at each ask.
+it is kept, that effect and the ref of its record, reading nothing. What a workspace holds uncommitted is read at each ask. The
+terminal's `/review` opens each commit's patch and each workspace's uncommitted diff, a page at a time
+([tui.md](tui.md#review-what-changed)).
 
 What a diff cannot show: an untracked repository inside the tree, of which git shows no file, which its record counts as
 `untracked_repositories` and its gist as `2 untracked repositories not shown`, and an untracked file past the bound, which `cut`

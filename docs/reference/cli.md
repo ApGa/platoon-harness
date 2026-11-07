@@ -1662,7 +1662,7 @@ platoon-harness repo diff --of STR [OPTIONS] SESSION
 
 Read the patch of a recorded commit against its first parent, or what a workspace holds uncommitted against its HEAD, as `--of` names, where that workspace lives, and keep it on `repo/<name>` as `repo.diffed`, whose body is the patch, cut at a line's end past 64 KiB, naming the `effect` this gives back.
 
-A commit's patch never changes, so it is read once: asked again while it is read, this gives the same `effect`, and once it is kept, its `ref`. What a workspace holds uncommitted is read at each ask, and its record says when. A person or a program asks for this, never an agent. Refused `not_permitted` to an agent, which reads a commit through `platoon-harness repo commit` or its own git; `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the session is closing.
+A commit's patch never changes, so it is read once: asked again while it is read, this gives the same `effect`, and once it is kept, that `effect` and the record's `ref`. What a workspace holds uncommitted is read at each ask, and its record says when. A person or a program asks for this, never an agent. Refused `not_permitted` to an agent, which reads a commit through `platoon-harness repo commit` or its own git; `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the session is closing.
 
 For example:
 

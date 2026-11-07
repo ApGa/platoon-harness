@@ -1,6 +1,7 @@
 """The workspace's layout at each size the guide names, as snapshots, on a session's history so nothing moves."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -9,10 +10,12 @@ from textual.app import App
 
 from platoon_harness import Session, Team
 from platoon_harness.annotations import Annotation
+from platoon_harness.kernel import Event
 from platoon_harness.primitives import Contributors, Lineage, Uses
 from platoon_harness.testing import Call, Say, ScriptedDriver
 from platoon_harness_cli.tui.app import CSS, TerminalUI
 from platoon_harness_cli.tui.provenance import Provenance
+from platoon_harness_cli.tui.review import Patch
 
 from ..cli.test_provenance import opened
 from ..primitives.test_provenance import ask, scenario
@@ -26,6 +29,7 @@ ASSETS = Path(__file__).parents[3] / "docs" / "assets"
 SCREENSHOTS = {
     **{f"tui-{size}.svg": f"test_the_workspace_s_layout_at_each_size[{size}].raw" for size in SIZES},
     "tui-review.svg": "test_review_lists_what_changed.raw",
+    "tui-patch.svg": "test_the_review_draws_a_patch.raw",
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
 }
 """Each screenshot the docs show, in docs/assets, by the snapshot below that it is a copy of."""
@@ -112,6 +116,85 @@ def test_review_lists_what_changed(snap_compare, reviewed):
         await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
 
     assert snap_compare(TerminalUI("s"), terminal_size=(120, 32), run_before=opened)
+
+
+SHA = "3f9c2a1b2c3d4e5f60718293a4b5c6d7e8f90a1b"
+PATCH = """\
+diff --git a/parser.py b/parser.py
+index 3b18e51..a4c2d8f 100644
+--- a/parser.py
++++ b/parser.py
+@@ -1,2 +1,5 @@
+ def parse(text):
+-    return text.split()
++    \"\"\"The words of `text`, and none for blank text.\"\"\"
++    if not text.strip():
++        return []
++    return text.split()
+diff --git a/logo.png b/logo.png
+new file mode 100644
+index 0000000..e69de29
+Binary files /dev/null and b/logo.png differ
+"""
+"""A commit's patch as git shows it: a text file's change, and a file git takes for binary, which it names."""
+
+
+class Read:
+    """A session as the review's patch asks one, answering what a session that kept one commit's patch would, so that
+    every ref and number is the same each run."""
+
+    def __init__(self) -> None:
+        self._record = Event.model_validate(
+            {
+                "v": 1,
+                "seq": 40,
+                "stream": "repo/app",
+                "version": 12,
+                "type": "repo.diffed",
+                "actor": "runtime",
+                "agent": None,
+                "turn": None,
+                "context_version": None,
+                "episode": None,
+                "topology_rev": 1,
+                "correlation": None,
+                "cause": (),
+                "based_on": (),
+                "native": {},
+                "model": None,
+                "wall_time": 0.0,
+                "gist": f"{SHA[:12]} patch, {PATCH.count(chr(10))} lines",
+                "data": {"effect": 38, "sha": SHA, "workspace": None, "read_in": "@lead", "body": "sha256:" + "0" * 64}
+                | {"head": None, "read_at": None, "cut": False, "untracked_repositories": 0, "why": None},
+                "outcome": None,
+            }
+        )
+
+    async def repo_diff(self, of: str) -> dict[str, Any]:
+        return {"effect": 38, "ref": "repo/app@12"}
+
+    async def events(self, after: int, match: str | None = None, **_: Any) -> AsyncIterator[Event]:
+        yield self._record
+
+    async def status(self, agent: str) -> dict[str, Any]:
+        return {"workspace": {"mode": "worktree"}}
+
+    async def blob(self, ref: str) -> dict[str, Any]:
+        return {"ref": ref, "text": PATCH, "lines": PATCH.count("\n"), "rest": None}
+
+
+class Patched(App[None]):
+    CSS = CSS
+
+    def on_mount(self) -> None:
+        self.push_screen(Patch(Read(), SHA[:12]))  # type: ignore[arg-type]
+
+
+def test_the_review_draws_a_patch(snap_compare):
+    async def read(pilot) -> None:
+        await drawn(pilot, lambda text: "Read in @lead's worktree." in text)
+
+    assert snap_compare(Patched(), terminal_size=(100, 28), run_before=read)
 
 
 class Answered:

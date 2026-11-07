@@ -1810,12 +1810,12 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   is ended once it has printed past the bound. Each object is read as it is stored: no replace ref stands in for one, and a
   commit's patch is from the tree of the first parent its own object names, so no graft or shallow list changes it. `repo.diffed`
   on `repo/<name>`, with no agent in the envelope, names the commit, or the workspace, the HEAD it was read against and `read_at`,
-  when its reading began, and keeps the patch as its body, which `blob.get` reads and a citation names lines of: all of it, or its
+  when its reading began, `read_in`, the workspace whose repository it was read in, and keeps the patch as its body, which `blob.get` reads and a citation names lines of: all of it, or its
   first 64 KiB cut at the end of the last line that fits, which `cut` and its gist say, and its gist says too when it is not
   UTF-8, so no line of it can be cited, and how many untracked repositories in the tree an uncommitted diff passed over, which git
   shows no file of. What git takes for binary, by a file's content or by the workspace's attributes, is named and never shown, and
   a diff that could not be read says why. A commit's patch is kept once: asked for again while it is read, `repo.diff` gives the
-  same effect, and once it is kept, its ref, reading nothing, while what a workspace holds uncommitted is read at each ask. The
+  same effect, and once it is kept, that effect and its ref, reading nothing, while what a workspace holds uncommitted is read at each ask. The
   effect keeps the session from settling until it ends, finishes from the journal when its `repo.diffed` is held, and otherwise
   reads again. A look reads no patch. See [RFC 0065](rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or

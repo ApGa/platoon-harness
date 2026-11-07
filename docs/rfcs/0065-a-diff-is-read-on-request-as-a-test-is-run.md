@@ -5,9 +5,9 @@
 | Status | Draft |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
-| Builds on | [`primitives/repo.py`](../../packages/sdk/src/platoon_harness/primitives/repo.py), [`runtime/git.py`](../../packages/sdk/src/platoon_harness/runtime/git.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [architecture section 5.4](../architecture.md#54-effects) and [section 13](../architecture.md#13-workspaces), [RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md), [RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) and [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) |
+| Builds on | [`primitives/repo.py`](../../packages/sdk/src/platoon_harness/primitives/repo.py), [`runtime/git.py`](../../packages/sdk/src/platoon_harness/runtime/git.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`review.py`](../../packages/cli/src/platoon_harness_cli/review.py), [`tui/review.py`](../../packages/cli/src/platoon_harness_cli/tui/review.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/overlay.js`](../../packages/cli/src/platoon_harness_cli/web/overlay.js), [architecture section 5.4](../architecture.md#54-effects) and [section 13](../architecture.md#13-workspaces), [RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md), [RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md), [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Read a commit's patch or a workspace's diff on request, as an effect` and `feat: Keep a commit's patch once and say when an uncommitted diff was read` |
+| Implementation | `feat: Read a commit's patch or a workspace's diff on request, as an effect`; `feat: Keep a commit's patch once and say when an uncommitted diff was read`; `refactor: Word what changed once for the terminal and the page`; `feat: Draw a commit's patch and a workspace's diff in the review, a page at a time`; `feat: Comment on a diff's lines as a message that cites them`; `feat: List what changed in the page, with each commit's test and patch` |
 
 ## Summary
 
@@ -18,7 +18,10 @@ own among them, inside the isolation for an isolated one, with no external diff,
 object as it is stored. The runtime keeps it on
 `repo/<name>` as a `repo.diffed` event of its own, whose body is the patch, cut at the end of a line within 64 KiB and saying so.
 A commit's patch is kept once, and asked for again gives its ref. An uncommitted diff is a moment's reading: it names the HEAD it
-is against and when it was read, and asked for again is read again. A look reads no patch.
+is against and when it was read, and asked for again is read again. A look reads no patch. In step 2, the terminal's `/review`
+and the page's Review changes list what changed in one wording, open each commit's patch and each workspace's uncommitted diff a
+page at a time, test a commit after one question, and send a comment on chosen lines as a person's message to the change's
+maker that cites them, or the commit.
 
 ## Motivation
 
@@ -45,7 +48,7 @@ class Diffing(Args):
     of: str  # a recorded commit, by its SHA or its first 4 or more hex digits, or a workspace, `@ada` or `shared`
 
 @op("repo.diff")
-def diff(txn: Txn, a: Diffing) -> dict[str, Any]: ...  # {"effect": id}, or {"ref": ref} for a commit's patch kept
+def diff(txn: Txn, a: Diffing) -> dict[str, Any]: ...  # {"effect": id}, and "ref" beside it for a commit's patch kept
 ```
 
 `repo.diff` takes what it reads the diff `of`: a recorded commit, by the name `repo.test` takes, or a workspace in the address
@@ -108,6 +111,7 @@ class Diffed(Args):
     effect: int
     sha: Sha | None = None          # a commit's patch,
     workspace: Where | None = None  # or a workspace's uncommitted diff,
+    read_in: Where | None = None    # read in this workspace's repository,
     head: Sha | None = None         # against this commit,
     read_at: float | None = None    # read at this time, on the session's clock
     body: BodyRef | None = None     # the patch
@@ -124,13 +128,15 @@ cite the lines it is about. Git shows as text a file with no NUL byte near its s
 that is not UTF-8 is kept as git printed it, but is no text: `blob.get` gives it as none, no citation can name its lines, and its
 gist says so, as `3f9c2a1b2c3d patch, 6 lines, not UTF-8, so no line of it can be cited`. An uncommitted diff's gist names the
 untracked repositories it passed over, as `, 2 untracked repositories not shown`. A diff that could not be read, of a workspace
-that has gone or a commit no repository it may read holds, records `why` and no body.
+that has gone or a commit no repository it may read holds, records `why` and no body. `read_in` names the workspace whose
+repository git read it in, or was to: a workspace's own for its uncommitted diff, and for a commit's patch the one its look found
+it in, or yours, `shared`, once that had gone, which only the runtime knows when it reads, so a client can say where it was read.
 
 ### 4. A commit's patch is kept once, and an uncommitted diff is read each time
 
 A recorded commit never changes, so neither does its patch. The `Looks` view keeps each commit's diff: the effect reading it, then
-its record's ref. Asked for again while it is read, `repo.diff` gives the same effect, and once it is kept, its ref, reading
-nothing. A record that says why it could not be read holds no patch, so the next ask reads again.
+its record's ref. Asked for again while it is read, `repo.diff` gives the same effect, and once it is kept, that effect and the
+record's ref, reading nothing, so a client finds the record past the effect's request whichever it was given. A record that says why it could not be read holds no patch, so the next ask reads again.
 
 A workspace's uncommitted diff is what the workspace held when it was read. Its record names the `head` it is against and
 `read_at`, when its reading began, and its gist names the workspace and that head, as `@ada uncommitted against 3f9c2a1b2c3d, 40
@@ -145,6 +151,55 @@ reads again from the start. Reading changes nothing, so reading again costs only
 ### 6. A look reads no patch
 
 A look goes on recording lines, files and paths, and no patch, so a handover costs what it did.
+
+### 7. Reviewed in both clients (step 2)
+
+Reviewing, in milestone 4, is a person reading diffs and commenting on them, with no noun for a review: an agent reviewer is a
+role in the review example. Both clients say what changed in the words of one module of the command line's package,
+`review.py`, as provenance's are ([RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)):
+
+- **What changed** is the `changes` view's rows as lines, grouped by workspace as `/review` grouped them, each line in parts that
+  each carry a tone, plain, strong, faint, good, bad or warn, which the terminal draws in its colours and the page by class. A
+  commit's line opens its patch, and a workspace's heading or one of its paths what it holds uncommitted. A line past the
+  person's mark on `repo/<name>` is new, and the page, which keeps no marks, marks none.
+- **A diff is asked for and awaited.** A client asks `repo.diff`, then follows the repository's streams and the effect's own past
+  the effect's request until its `repo.diffed`, which it finds whether the effect reads now or read before, as `repo.diff` gives
+  the effect either way. An effect that failed is said, with its error.
+- **A page at a time.** `blob.get` reads the patch by its record's ref, as much as a result holds, and gives the ref of the lines
+  after; a client reads on when the person asks. Each line is numbered as a citation names it and toned by what it is: a file's
+  first line strong, what heads a file or a hunk faint, an added line good, a removed one bad, and git's `Binary files` line,
+  which names a file and shows none of it, warn. A page that begins past the first line is taken to begin in a hunk.
+- **Above and below.** Above the patch, the record's gist, then where it was read, by `read_in` and the mode of that
+  workspace: your repository or your checkout, an agent's worktree, a snapshot's own repository, or inside an isolation; and for
+  an uncommitted diff when, as `What it held at 14:02:11, read in @ada's worktree.`, since it changes as its agent works. Below
+  the last line of a cut patch, that it was cut at the end of the last line within 64 KiB and the rest is in git at its commit,
+  or uncommitted in its workspace. A patch that is no text is not drawn, saying so.
+- **Text stays text.** The terminal draws every line through `SafeText`, so a control shows as its escape and markup as
+  itself, and the page puts every word through its `html` template under its hash-only policy.
+- **A test, after one question.** A commit's act from the `changes` view, `repo.test`, is taken from either client after the
+  person says yes to its label, which says whose code it runs as them, unconfined, or is disabled, saying why.
+- **A comment is a message.** A comment is the person's `message.send` to the change's maker, the agent whose workspace made the
+  commit, or the agent whose workspace an uncommitted diff is of, with `based_on` citing the lines chosen of the diff,
+  `repo/app@12#L40-52`, or with none chosen, the commit's `repo.committed` or an uncommitted diff's record whole. It needs no new
+  op. A change no agent's workspace made, a commit that is nobody's or your checkout's diff, has nobody to take a comment, and its
+  comment is disabled, saying so. A comment's text becomes its gist and body as the composer's does.
+- **The page reads through `x_read`** ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), with two panes more:
+  `changes`, the lines of what changed, and `diff`, which by an `effect` holds until that effect's record is in the journal, for at
+  most the 25 s the feed holds, and gives the diff and its first page, and by a `ref` gives the page that ref names. A pane
+  reads, and the record by following the journal, which writes nothing either. Asking for a diff, testing and commenting go
+  through `/x/command`, so on a view link and on history they are disabled, saying why, as every act is.
+
+```text
+POST /v1/x_read {"pane": "changes"}                        -> {"repo", "lines"}
+POST /v1/x_read {"pane": "diff", "effect": 38}             -> {"reading": true} or {"diff"}
+POST /v1/x_read {"pane": "diff", "ref": "repo/app@12#L..."} -> {"page"}
+```
+
+The terminal's `/review` lists what changed, Enter opens a diff and `t` tests the chosen commit. In the diff Space chooses lines
+from where it was pressed to the cursor, and `c` writes a comment in a composer at the foot. The page's Review changes, in its top
+bar and on an agent's page, opens the list in the pane, each commit with Patch and Test and each workspace with Uncommitted diff,
+and the diff in the same pane, `review=` in the address naming what it shows, where a click on a line's number chooses it,
+Shift and a click a range, and Comment sends what is written below.
 
 ## Alternatives
 
@@ -166,6 +221,11 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 | Show untracked files through a scratch index, with `git add -N` | `git add -N` writes the empty blob into the workspace's object store, and the scratch index needs a place an isolated agent can write, from which the runtime would then remove it |
 | Leave untracked files out | A new file an agent has not added is often most of its uncommitted work, and a diff without it would mislead |
 | Read on past the bound to count a cut patch's length | A patch of gigabytes would cost the runtime the time to read it all. What a commit added and removed is on its `repo.committed`, and a workspace's paths on its `workspace.changed` |
+| A query that gives a diff's record by its ref, for a client given a kept patch's ref alone | A concept more, for one use: the record is past its effect's request, so `repo.diff` giving the effect beside the ref lets a client follow the journal to it, whichever it was given |
+| A client that says where a commit's patch was read from the workspace its look found it in | Once that workspace has gone the runtime reads it in yours, and only the runtime knows which it did, so its record says |
+| A review, a noun with its own ops, states and verdicts | Nothing in milestone 4 needs a review to be more than the messages that cite what they are about, and the default pending the owner's ruling has none |
+| A comment citing both the commit and the lines | A citation of lines names their record, whose gist names the commit, and the plan asks for the commit or the lines. One citation says what the comment is about |
+| A comment to whoever the person names | The composer already writes to anyone. A comment on a change goes to its maker, whom the record names, so it needs no address |
 
 ## Consequences
 
@@ -184,13 +244,17 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 - An agent cannot read a patch through the runtime. A message that cites lines of one hands it the message, and not the patch.
 - What a diff costs on a repository past 100,000 files or on Lustre is unmeasured. It is paid only on request, and twice for a
   read a crash cut off.
+- A person reads what changed, and comments on it, from either client in the same words, and a comment is a message, so its
+  maker hears it as it hears any, and provenance follows it to the lines it cites.
+- Asking for a diff is an act, so a view link and a session's history read none, not even a commit's patch kept, and say why.
+- A comment on a change no agent's workspace made has nobody to take it, and a person writes about it in the composer instead.
 
 ## Rollout plan
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 read on request | `repo.diff`, the `diff` effect and its recovery, `repo.keep` and `repo.diffed`, a commit's patch kept once and an uncommitted diff saying when it was read | `tests/unit/primitives/test_repo.py`, `tests/unit/runtime/test_diffs.py`, and `test_a_diff_left_uncertain_by_a_crash_is_read_again` in `tests/unit/runtime/test_recovery.py` | |
-| M2 reviewed in both clients | `/review` and the page's Review changes draw a patch a page at a time through one shared wording, and a comment is a person's message that cites the commit or lines of its patch | The review tests of milestone 4's stage S06 | |
+| M2 reviewed in both clients | `/review` and the page's Review changes draw a patch a page at a time through one shared wording, and a comment is a person's message that cites the commit or lines of its patch | `tests/unit/tui/test_review.py`: `test_a_commit_s_patch_is_asked_for_once_and_drawn_a_page_at_a_time_through_safetext`, `test_a_cut_patch_says_where_it_was_cut`, `test_a_binary_file_is_named_and_never_drawn`, `test_an_uncommitted_diff_says_when_it_was_read`, `test_a_comment_on_chosen_lines_is_a_message_to_the_commit_s_maker_citing_them`, `test_a_snapshot_or_isolated_workspace_s_diff_says_where_it_was_read`; `test_the_review_draws_a_patch` in `tests/unit/tui/test_snapshots.py`; `tests/e2e/test_review.py`: `test_review_changes_lists_each_commit_with_its_test_and_patch`, `test_a_commit_is_tested_from_the_page_after_one_question`, `test_a_hostile_patch_stays_text_under_the_page_s_policy`, `test_a_comment_from_the_page_cites_the_lines_it_is_on`; and the `changes` and `diff` panes in `tests/unit/web/test_server.py` | `refactor: Word what changed once for the terminal and the page`; `feat: Draw a commit's patch and a workspace's diff in the review, a page at a time`; `feat: Comment on a diff's lines as a message that cites them`; `feat: List what changed in the page, with each commit's test and patch` |
 
 ## Open questions
 
@@ -198,8 +262,8 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
    as a test is, and an agent reads a commit through `repo.commit` or its own git. A yes would make `repo.diff` a tool and record
    an agent's read of a patch as its exposure, and would remove nothing M1 builds. Needed before an agent may ask.
 2. What does reviewing mean in milestone 4? The default, pending the owner's ruling, is that a person asks for and reads diffs in
-   both clients and comments as a message that cites the commit or lines of its patch, with no noun for a review. Needed before
-   M2.
+   both clients and comments as a message that cites the commit or lines of its patch, with no noun for a review. M2 builds the
+   default. A noun for a review would sit beside the messages that cite a change, and would remove nothing M2 builds.
 
 ## Evidence
 

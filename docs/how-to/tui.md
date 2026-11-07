@@ -147,15 +147,28 @@ it failed or erred, `untested` where none ran and the team names a test, a dropp
 workspace's uncommitted paths, conflicted first, with their state and lines, `?` where nobody measured them, and how many more there
 are than the list holds; your checkout's paths when a role works there; and last the commits that are nobody's, made in your checkout
 or in no workspace the session knows. A snapshot's group, an isolated one's among them, says its commits are in its own repository,
-until you fetch them. Enter on a commit tests it, once you say yes to its act, which says whose code it runs as you, unconfined; one a
-look of an isolated workspace found, or one built on it, says instead why it cannot be tested ([workspaces.md](workspaces.md#test-a-commit)).
+until you fetch them. `t` on a commit tests it, once you say yes to its act,
+which says whose code it runs as you, unconfined; one a look of an isolated workspace found, or one built on it, says instead why it
+cannot be tested ([workspaces.md](workspaces.md#test-a-commit)).
 A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
-marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
+marked `●`, and reading the list to its end moves the mark. A
 conflict an agent's merge stopped on waits in the dock, saying to tell the agent or to resolve it in your own checkout, never in
 its workspace, with Write to it, since the runtime never resolves one ([workspaces.md](workspaces.md#resolve-an-agents-conflict)).
 The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
 shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
+
+Enter on a commit opens its patch, and on a workspace or one of its paths what that workspace holds uncommitted. Each asks the
+runtime with `repo diff`, which reads it where the workspace lives ([workspaces.md](workspaces.md#read-a-diff)), so a commit's patch
+is read once and opened again shows what was kept, while an uncommitted diff is read again each time it opens. Above the patch
+are its record's words, what it is of and how many lines, and where it was read: your repository or your checkout, an agent's
+worktree, a snapshot's own repository, or inside an isolation; an uncommitted diff says when, `What it held at 14:02:11`, as it
+changes while its agent works. Each line is numbered as a citation names it and drawn as text, whatever it holds, so a control
+shows as its escape and markup as itself. `blob get` reads the patch a page at a time, and Enter on the last row,
+`312 more lines: Enter reads on`, reads the next. A file git takes for binary is named, as git names it, and never drawn. Below a
+cut patch's last line it says it was cut at 64 KiB and that the rest is in git, at its commit, and a patch that is not UTF-8 is not
+drawn, saying why. A session that is its history cannot ask for a diff, and says what restarts it.
+[Its snapshot](../assets/tui-patch.svg) shows a commit's patch with a file git takes for binary.
 
 ### Follow a line's provenance
 
@@ -269,7 +282,7 @@ before the session's. `^` is Ctrl.
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
-| `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths |
+| `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
@@ -315,13 +328,19 @@ before the session's. `^` is Ctrl.
 | `↑` | On the first line, what you sent or ran before |
 | `↓` | On the last line, what you sent or ran after |
 
-### A list: the sessions, the navigator, the dock, the help, provenance
+### A list: sessions, agents, places, help, provenance, what changed
 
 | Keys | Does |
 |---|---|
 | `↑` | Choose the row above, or scroll up the help |
 | `↓` | Choose the row below, or scroll down the help |
 | `Enter` | Open the chosen row, or show the chosen place |
+
+### What changed
+
+| Keys | Does |
+|---|---|
+| `t` | Test the chosen commit, once you say yes, as that runs its code as you |
 
 ### The provenance panel
 
@@ -346,7 +365,7 @@ before the session's. `^` is Ctrl.
 
 ## Not built yet
 
-Disabled where a control for it would be, or absent from the palette: diffs and review comments, search in a transcript,
+Disabled where a control for it would be, or absent from the palette: review comments, search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, an approval and who answered it in the transcript, copying a selection from
 the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in

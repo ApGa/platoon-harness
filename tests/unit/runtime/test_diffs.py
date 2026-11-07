@@ -92,7 +92,7 @@ async def test_an_uncommitted_diff_says_when_it_was_read(repo, tmp_path):
     assert earlier.gist == f"@ada uncommitted against {sha[:12]}, {patches[0].count(b'\n')} lines"
     assert patches[0].endswith(b"-first\n+second\n") and patches[1].endswith(b"-first\n+third\n")
     assert of_commit.data["read_at"] is None
-    assert again == {"ref": f"{of_commit.stream}@{of_commit.version}"}
+    assert again == {"effect": of_commit.data["effect"], "ref": f"{of_commit.stream}@{of_commit.version}"}
 
 
 async def test_a_patch_past_its_bound_is_cut_and_says_where(repo, tmp_path):
@@ -272,9 +272,31 @@ async def test_a_snapshot_s_diff_is_read_in_its_own_repository(repo, tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         git("cat-file", "-e", f"{sha}^{{commit}}", cwd=repo)
     assert of_commit.data["sha"] == sha and patches[0].endswith(b"@@ -0,0 +1 @@\n+snapshot's\n")
+    assert of_commit.data["read_in"] == of_workspace.data["read_in"] == "@ada"
     assert of_workspace.data["head"] == sha
     assert patches[1].endswith(b"@@ -1 +1 @@\n-hello\n+changed in the snapshot\n")
     assert of_workspace.gist == f"@ada uncommitted against {sha[:12]}, {patches[1].count(b'\n')} lines"
+
+
+async def test_a_commit_s_patch_is_read_in_your_repository_once_its_workspace_has_gone(repo, tmp_path):
+    """A worker that has done its work ends, and its stop removes its workspace, as your repository reaches every commit
+    it held. The record says where the patch was read."""
+    async with Session.start(
+        team_of(lambda cwd: commit(cwd, "work.txt", "done\n")), name="s", root=tmp_path, cwd=repo
+    ) as session:
+        await session.spawn("ada", "worker", "work")
+        [sha] = await committed(session, 1)
+
+        async def removed() -> list[Any]:
+            finished = await of_type(session, "effect.finished")
+            return [event for event in finished if event.data["kind"] == "stop" and event.data["result"]["removed"]]
+
+        await until(removed, session)
+        record = await diff_of(session, sha)
+        kept = await patch_of(session, record)
+
+    assert record.data["read_in"] == "shared" and record.data["why"] is None
+    assert kept.endswith(b"@@ -0,0 +1 @@\n+done\n")
 
 
 async def test_an_isolated_workspace_s_diff_is_read_inside_its_isolation(repo, tmp_path):

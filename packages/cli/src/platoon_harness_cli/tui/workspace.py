@@ -959,7 +959,8 @@ class Workspace(Screen[None]):
         await resumed.leave()
 
     def action_review(self) -> None:
-        """List what changed. Reading the list to its end moves your mark on the repository's stream."""
+        """List what changed, each commit and workspace opening its diff. Reading the list to its end moves your mark on
+        the repository's stream."""
         live = self.live
         if live is None:
             return
@@ -972,8 +973,8 @@ class Workspace(Screen[None]):
             self.marks[stream] = seq
             self._write_mark(live.session, stream, seq)
 
-        snapshots = snapshots_of(live.roster)
-        self.app.push_screen(Review(live.changes, self.marks.get(stream, 0), read, self._test, snapshots))
+        mark = self.marks.get(stream, 0)
+        self.app.push_screen(Review(live.session, live.changes, mark, read, self._test, snapshots_of(live.roster)))
 
     @work(group="act")
     async def _test(self, action: dict[str, Any]) -> None:

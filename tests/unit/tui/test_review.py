@@ -4,6 +4,7 @@ session in a repository of the test's own, with its agent in a worktree."""
 import asyncio
 import contextlib
 import subprocess
+import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,11 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
-from platoon_harness_cli.review import snapshots_of
+from platoon_harness.kernel import Clock, ManualClock
+from platoon_harness_cli import review
+from platoon_harness_cli.review import Diff, Page, place, snapshots_of
 from platoon_harness_cli.tui.app import TerminalUI
-from platoon_harness_cli.tui.review import rows_of
+from platoon_harness_cli.tui.review import Patch, patch_rows, rows_of
 
 from ..runtime.gitting import commit, git, repository, working
 from ..runtime.support import in_state, of_type, until
@@ -33,20 +36,47 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return repository(tmp_path / "repo", monkeypatch)
 
 
-def team(*work: Callable[[Path], Any], **fields: Any) -> Team:
-    lead = {"harness": working(*work), "workspace": "worktree"}
+def team(*work: Callable[[Path], Any], workspace: str = "worktree", **fields: Any) -> Team:
+    lead = {"harness": working(*work), "workspace": workspace}
     return Team.model_validate({"roles": {"lead": lead}, "topology": {"edges": {"lead": ["human"]}}, **fields})
 
 
 @contextlib.asynccontextmanager
-async def attached(team: Team, root: Path, repo: Path) -> AsyncIterator[tuple[Session, object]]:
+async def attached(
+    team: Team, root: Path, repo: Path, clock: Clock | None = None
+) -> AsyncIterator[tuple[Session, object]]:
     """A session the test owns in `repo`, with `lead` up, and the TUI attached to it."""
-    async with Session.start(team, name="s", root=root, cwd=repo) as owner:
+    async with Session.start(team, name="s", root=root, cwd=repo, clock=clock) as owner:
         await in_state(owner, "lead", "idle")
         app = TerminalUI("s")
         async with app.run_test(size=(140, 32)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text)
             yield owner, pilot
+
+
+@contextlib.asynccontextmanager
+async def worked_on(team: Team, root: Path, repo: Path) -> AsyncIterator[Session]:
+    """A session the test owns in `repo`, once `lead` has taken a turn and the look after it has run."""
+    async with Session.start(team, name="s", root=root, cwd=repo) as owner:
+        await in_state(owner, "lead", "idle")
+        await owner.send("@lead", "go")
+        await looked(owner)
+        yield owner
+
+
+async def read_whole(session: Session, of: str) -> tuple[Diff, list[Page]]:
+    """The diff of `of`, as `/review` asks for it, and every page of it."""
+    diff = await review.read(session, (await session.repo_diff(of))["effect"])
+    pages = [] if diff.first is None else [diff.first]
+    while pages and (rest := pages[-1].rest) is not None:
+        found = await review.page(session, rest)
+        assert found is not None
+        pages.append(found)
+    return diff, pages
+
+
+def diffs_read(session_events: list[Any]) -> list[Any]:
+    return [event for event in session_events if event.data["kind"] == "diff"]
 
 
 async def looked(owner: Session) -> None:
@@ -72,7 +102,7 @@ async def test_the_header_says_what_changed_or_why_nothing_is_observed(root, rep
     assert "1 commit, 1 path uncommitted" in after
 
 
-async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(root, repo, monkeypatch):
+async def test_review_lists_what_changed_and_reading_it_to_its_end_moves_your_mark(root, repo, monkeypatch):
     marked: asyncio.Future[int] = asyncio.get_running_loop().create_future()
     mark = Session.mark
 
@@ -100,7 +130,7 @@ async def test_review_lists_what_changed_and_draws_diffs_disabled_saying_why(roo
 
     assert f"● {head[:12]} add work  +1 -0" in text
     assert "● untracked    notes.txt  +? -?" in text
-    assert "Diffs come with review, which is planned." in text
+    assert "Enter: its diff" in text
     assert read == kept.get("repo/repo") == newest
     assert f"  {head[:12]} add work" in again and "● untracked" not in again
 
@@ -138,14 +168,14 @@ async def test_a_conflict_in_the_dock_says_to_tell_its_agent_or_resolve_it_in_yo
 
 
 async def test_review_tests_a_commit_once_you_say_yes_and_shows_what_it_came_to(root, repo):
-    """Choosing a commit takes its act, which says whose code it runs as you, and asks first."""
+    """The key that tests takes the chosen commit's act, which says whose code it runs as you, and asks first."""
     async with attached(team(worked, test={"command": ["true"], "timeout": "1m"}), root, repo) as (owner, pilot):
         await pilot.press(*"go", "enter")
         await looked(owner)
         await drawn(pilot, lambda text: "1 commit," in text)
         await pilot.press("alt+d")
         listed = await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
-        await pilot.press("enter")
+        await pilot.press("down", "t")
         asked = await drawn(pilot, lambda text: "Run it?" in text)
         await pilot.press("y")
         await until(lambda: of_type(owner, "repo.tested"), owner)
@@ -154,7 +184,7 @@ async def test_review_tests_a_commit_once_you_say_yes_and_shows_what_it_came_to(
         again = await drawn(pilot, lambda text: "tests passed" in text)
 
     head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
-    assert f"{head[:12]} add work  +1 -0  untested" in listed and "Enter on a commit: test it" in listed
+    assert f"{head[:12]} add work  +1 -0  untested" in listed and "t: test the chosen commit" in listed
     assert "Test: runs @lead's commit as you, unconfined. Run it?" in asked
     assert f"{head[:12]} add work  +1 -0  tests passed" in again
 
@@ -287,3 +317,128 @@ def test_review_says_why_a_commit_s_test_failed_or_erred():
         "  bbbb made  +1 -0  tests error: its timeout came first",
         "  aaaa made  +1 -0  tests failed: exit 2",
     ]
+
+
+HOSTILE = "\x1b]0;owned\x07 [bold]not markup[/bold]"
+"""A line of a file an agent wrote: a control that would retitle a terminal, and markup."""
+
+
+async def test_a_commit_s_patch_is_asked_for_once_and_drawn_a_page_at_a_time_through_safetext(root, repo):
+    """Enter on a commit asks for its patch, which the runtime reads once: opened again, it gives the patch it kept.
+    `blob.get` gives its lines a page at a time, and Enter on the last row reads on. Each line is text, whatever it
+    holds: a control shows as its escape, and markup as itself."""
+    lines = "".join(f"line {number} of a long file\n" for number in range(800))
+
+    async with attached(team(lambda cwd: commit(cwd, "long.txt", f"{HOSTILE}\n{lines}")), root, repo) as (
+        owner,
+        pilot,
+    ):
+        await pilot.press(*"go", "enter")
+        await looked(owner)
+        await drawn(pilot, lambda text: "1 commit" in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: "What changed" in text and "add long.txt" in text)
+        await pilot.press("down", "enter")
+        first = await drawn(pilot, lambda text: "Read in @lead's worktree." in text)
+        await pilot.press("up")
+        last = await drawn(pilot, lambda text: "more lines: Enter reads on" in text)
+        await pilot.press("enter")
+        patch = pilot.app.screen
+        assert isinstance(patch, Patch)
+        on = await drawn(pilot, lambda text: len(patch.pages) == 2)
+        await pilot.press("escape")
+        await drawn(pilot, lambda text: "What changed" in text)
+        await pilot.press("enter")
+        again = await drawn(pilot, lambda text: "Read in @lead's worktree." in text)
+        asked = diffs_read(await of_type(owner, "effect.requested"))
+        records = await of_type(owner, "repo.diffed")
+
+    head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
+    second = patch.pages[1]
+    assert f"{head[:12]} patch, {second.total} lines" in first
+    assert "    7 +\\x1b]0;owned\\x07 [bold]not markup[/bold]" in first
+    assert f"{second.total - second.lines[0].number + 1} more lines: Enter reads on" in last
+    assert f"{second.lines[0].number:>5} {second.lines[0].text}" in on and second.rest is None
+    assert [line.number for page in patch.pages for line in page.lines] == list(range(1, second.total + 1))
+    assert f"{head[:12]} patch, {second.total} lines" in again
+    assert len(asked) == len(records) == 1
+
+
+async def test_a_cut_patch_says_where_it_was_cut(root, repo):
+    """At the end of the last line within 64 KiB, below its last line, and that the rest is in git at its commit."""
+    lines = "".join(f"line {number} of a long file\n" for number in range(4000))
+
+    async with worked_on(team(lambda cwd: commit(cwd, "long.txt", lines)), root, repo) as owner:
+        sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
+        diff, pages = await read_whole(owner, sha)
+
+    rows = [row.line.plain.rstrip() for row in patch_rows(diff, pages, 120)]
+    kept = pages[-1].lines[-1].number
+    assert diff.above[0] == f"{sha[:12]} patch, cut after {kept} lines at 64 KiB"
+    assert rows[-2] == f"{kept:>5} {pages[-1].lines[-1].text}"
+    assert rows[-1] == f"Cut here, at the end of the last line within 64 KiB: the rest is in git, at {sha[:12]}."
+
+
+async def test_a_binary_file_is_named_and_never_drawn(root, repo):
+    """As git names it, while what it holds is never drawn; and a patch that is no text is not drawn at all, saying
+    why."""
+    secret = "\x00\x01 bytes nobody reads \x00" * 8
+
+    def work(cwd: Path) -> None:
+        commit(cwd, "blob.bin", secret)
+        (cwd / "latin.txt").write_bytes(b"caf\xe9\n")
+        git("add", "latin.txt", cwd=cwd)
+        git("commit", "-q", "-m", "add latin.txt", cwd=cwd)
+
+    async with attached(team(work), root, repo) as (owner, pilot):
+        await pilot.press(*"go", "enter")
+        await looked(owner)
+        await drawn(pilot, lambda text: "2 commits" in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: "What changed" in text and "add blob.bin" in text)
+        await pilot.press("down", "down", "enter")
+        binary = await drawn(pilot, lambda text: "Binary files" in text)
+        latin = (await of_type(owner, "repo.committed"))[1].data["sha"]
+        diff, pages = await read_whole(owner, latin)
+
+    assert "    4 Binary files /dev/null and b/blob.bin differ" in binary and "bytes nobody reads" not in binary
+    assert diff.first is None and pages == []
+    assert [row.line.plain for row in patch_rows(diff, pages, 120)] == [
+        "It is not UTF-8, so it is not drawn, and no line of it can be cited."
+    ]
+
+
+async def test_an_uncommitted_diff_says_when_it_was_read(root, repo):
+    """Enter on a workspace asks for what it holds uncommitted, read at each ask, and says the HEAD it is against and
+    when its reading began, on the session's clock."""
+    clock = ManualClock(1000.0)
+    async with attached(team(worked), root, repo, clock) as (owner, pilot):
+        await pilot.press(*"go", "enter")
+        await looked(owner)
+        await drawn(pilot, lambda text: "1 commit," in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
+        await pilot.press("enter")
+        text = await drawn(pilot, lambda text: "What it held at" in text)
+
+    head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
+    at = time.strftime("%H:%M:%S", time.localtime(1000.0))
+    assert f"@lead uncommitted against {head[:12]}, " in text
+    assert f"What it held at {at}, read in @lead's worktree." in text
+    assert "+unfinished" in text
+
+
+async def test_a_snapshot_or_isolated_workspace_s_diff_says_where_it_was_read(root, repo):
+    """In the repository git read it in: a snapshot's own, an isolated one's inside its isolation, an agent's worktree,
+    or for a commit whose workspace has gone, yours."""
+    async with worked_on(team(worked, workspace="snapshot"), root, repo) as owner:
+        sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
+        (of_commit, _), (of_workspace, _) = [await read_whole(owner, of) for of in (sha, "@lead")]
+
+    assert of_commit.above[1] == "Read in @lead's own repository, a snapshot."
+    assert of_workspace.above[1].startswith("What it held at ")
+    assert of_workspace.above[1].endswith(", read in @lead's own repository, a snapshot.")
+    assert place("@ada", "isolated", commit=True) == "@ada's own repository, inside its isolation"
+    assert place("@ada", "worktree", commit=False) == "@ada's worktree"
+    assert place("shared", None, commit=True) == "your repository"
+    assert place("shared", None, commit=False) == "your checkout"

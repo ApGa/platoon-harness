@@ -17,6 +17,7 @@ from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
 from platoon_harness_cli.tui.keymap import KEYMAP, TYPED, command, keys, reference, regenerate
 from platoon_harness_cli.tui.provenance import Provenance
+from platoon_harness_cli.tui.review import Patch, Review
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
@@ -35,6 +36,8 @@ PLACES = {
     Dock: ("panel",),
     Rows: ("list",),
     Provenance: ("provenance",),
+    Review: ("dialog", "review"),
+    Patch: ("dialog",),
     Confirm: ("question",),
     Form: ("dialog",),
     Help: ("dialog",),

@@ -830,21 +830,20 @@ class Host:
 
     async def _diff(self, effect: Effect) -> dict[str, Any]:
         """Read a recorded commit's patch, or a workspace's uncommitted diff, where that workspace lives, and record it,
-        or why it could not be read, and an uncommitted diff with when its reading began. A commit is read in the
-        repository of the workspace its look was of, or yours once that has gone, and git runs in an isolated workspace
-        under its agent's wrap. A diff the journal recorded is not read again, as when a crash came between its record
-        and its finish, and one a crash cut off is read again."""
+        or why it could not be read, with the workspace it was read in, and an uncommitted diff with when its reading
+        began. A commit is read in the repository of the workspace its look was of, or yours once that has gone, and git
+        runs in an isolated workspace under its agent's wrap. A diff the journal recorded is not read again, as when a
+        crash came between its record and its finish, and one a crash cut off is read again."""
         if effect.attempts and (ref := self._recorded(effect.id, "repo.diffed")) is not None:
             return {"ref": ref}
-        sha, where = effect.data.get("sha"), effect.data.get("workspace")
-        diffed: dict[str, Any] = {"effect": effect.id, "sha": sha, "workspace": where}
+        sha, workspace, found_in = (effect.data.get(name) for name in ("sha", "workspace", "found_in"))
+        where = workspace or (found_in if found_in and self._root(found_in).is_dir() else "shared")
+        diffed: dict[str, Any] = {"effect": effect.id, "sha": sha, "workspace": workspace, "read_in": where}
         try:
+            root, wrap = await self._place(where)
             if sha is not None:
-                found_in = effect.data["found_in"]
-                root, wrap = await self._place(found_in if found_in and self._root(found_in).is_dir() else "shared")
                 read = await asyncio.to_thread(patch, root, sha, wrap=wrap)
             else:
-                root, wrap = await self._place(where)
                 diffed["read_at"] = self._kernel.clock.now()
                 diffed["head"], read = await asyncio.to_thread(uncommitted, root, wrap=wrap)
         except (GitError, OSError) as error:

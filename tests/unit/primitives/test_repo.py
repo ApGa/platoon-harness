@@ -798,6 +798,7 @@ async def test_a_message_cites_lines_of_a_diff_by_its_ref(kernel, ada):
         "effect": effect,
         "sha": ONE,
         "workspace": None,
+        "read_in": None,
         "head": None,
         "read_at": None,
         "body": None,
@@ -838,8 +839,8 @@ async def test_a_diff_s_gist_says_what_of_it_cannot_be_read_as_text_or_shown(ker
 
 async def test_a_recorded_commit_s_patch_is_read_once_and_asked_again_gives_its_ref(kernel, ada):
     """A commit never changes, so neither does its patch: asked again while it is read, the same effect, and once it is
-    kept, its ref, reading nothing. A record saying why it could not be read holds no patch, so the next ask reads
-    again. What a workspace holds uncommitted is read at each ask."""
+    kept, that effect and its ref, reading nothing. A record saying why it could not be read holds no patch, so the next
+    ask reads again. What a workspace holds uncommitted is read at each ask."""
     await spawned_in(kernel, "bob", "worktree")
     await looked(kernel, commits=[commit(ONE), commit(TWO, ONE)], reading=reading(TWO))
 
@@ -855,7 +856,7 @@ async def test_a_recorded_commit_s_patch_is_read_once_and_asked_again_gives_its_
 
     requested = [event.data["id"] for event in requested_diffs(kernel)]
     assert first == again == {"effect": requested[0]}
-    assert kept == {"ref": ref}
+    assert kept == {"effect": requested[0], "ref": ref}
     assert unread == {"effect": requested[1]} and retried == {"effect": requested[2]}
     assert workspaces == [{"effect": requested[3]}, {"effect": requested[4]}]
     assert len(requested) == 5
