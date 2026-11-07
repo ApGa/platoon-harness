@@ -143,7 +143,7 @@ async def test_an_act_answered_only_by_an_ended_session_goes_again_from_a_new_li
         sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
         await page.context.close()
 
-    assert kept == [{"op": "message.send", "args": {"to": "@bob", "gist": "only once"}}]
+    assert kept == [{"op": "message.send", "args": {"to": "@bob"}, "text": "only once"}]
     assert sent == ["only once"]
     assert errors == []
 

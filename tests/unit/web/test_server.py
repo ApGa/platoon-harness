@@ -588,7 +588,7 @@ async def test_an_approval_takes_its_version_and_says_browser_and_the_loser_hear
 async def test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it(web, session):
     browser = await Browser(web).opened("control")
     text = "a long line " * 40
-    command = {"op": "message.send", "args": {"to": "#general", "gist": text}, "key": key(4)}
+    command = {"op": "message.send", "args": {"to": "#general"}, "text": text, "key": key(4)}
 
     first = (await browser.request("POST", "/x/command", command)).json()
     again = (await browser.request("POST", "/x/command", command)).json()
@@ -605,7 +605,7 @@ async def test_a_file_too_long_to_name_beside_its_words_or_named_by_nothing_is_r
     browser = await Browser(web).opened("control")
     stored = (await browser.request("POST", "/x/body", b"a file")).json()["ref"]
     head = await session.head()
-    command = {"op": "message.send", "args": {"to": "#general", "gist": gist, "body": stored}, "key": key(5)}
+    command = {"op": "message.send", "args": {"to": "#general", "body": stored}, "text": gist, "key": key(5)}
 
     reply = await browser.request("POST", "/x/command", command | {"file": file})
 
@@ -617,13 +617,31 @@ async def test_a_body_is_stored_for_a_command_to_cite(web, session):
     browser = await Browser(web).opened("control")
 
     stored = (await browser.request("POST", "/x/body", b"the whole of it")).json()
-    args = {"to": "#general", "gist": "a file", "body": stored["ref"]}
-    command = {"op": "message.send", "args": args, "key": key(6), "file": "whole.txt"}
+    args = {"to": "#general", "body": stored["ref"]}
+    command = {"op": "message.send", "args": args, "text": "a file", "file": "whole.txt", "key": key(6)}
     sent = (await browser.request("POST", "/x/command", command)).json()
 
     assert stored["ref"].startswith("sha256:") and sent["refusal"] is None
     assert await session.get_body(stored["ref"]) == b"the whole of it"
     assert [event.gist for event in await of_type(session, "message.sent")] == ["a file (file whole.txt)"]
+
+
+async def test_a_form_s_message_goes_as_the_command_line_sends_one(web, session):
+    """A message from its form goes as its flags would at a command line: its body's text stored, a ref cited as it
+    stands, and a gist too long for one refused, where the composer's text is cut."""
+    browser = await Browser(web).opened("control")
+    cited = await session.put_body(b"stored before")
+    sent = []
+    for n, body in enumerate(("The whole of it.", cited), start=1):
+        args = {"to": "#general", "gist": f"from the form {n}", "body": body}
+        sent.append(await browser.request("POST", "/x/command", {"op": "message.send", "args": args, "key": key(n)}))
+    command = {"op": "message.send", "args": {"to": "#general", "gist": "x" * 300}, "key": key(3)}
+    too_long = (await browser.request("POST", "/x/command", command)).json()
+
+    messages = await of_type(session, "message.sent")
+    assert [reply.json()["refusal"] for reply in sent] == [None, None]
+    assert [await session.get_body(event.data["body"]) for event in messages] == [b"The whole of it.", b"stored before"]
+    assert too_long["refusal"]["code"] == "invalid" and len(messages) == 2
 
 
 @pytest.mark.parametrize("kind", ["view", "control"])

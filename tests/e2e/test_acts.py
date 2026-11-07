@@ -517,7 +517,7 @@ async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(br
         erased = (await session.put_body(b"something to erase")).removeprefix("sha256:")
         runs = {
             "channel.create": {"--name": "ideas", "--kind": "topic"},
-            "message.send": {"--to": "@lead", "--gist": "from the form"},
+            "message.send": {"--to": "@lead", "--gist": "from the form", "--body": "The whole of it."},
             "board.post": {
                 "--board": "notes",
                 "--name": "spec",
@@ -568,12 +568,15 @@ async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(br
             await expect(said).to_have_text(re.compile(rf"^{re.escape(title)}: "), timeout=SECONDS)
             answers[op] = await said.text_content()
         keyed = [event.outcome async for event in session.events() if event.outcome is not None]
+        sent = [event for event in await of_type(session, "message.sent") if event.gist == "from the form"]
+        body = await session.get_body(sent[0].data["body"])
         await page.context.close()
 
     assert sorted(offered) == sorted(runs)
     assert sorted({outcome.op for outcome in keyed if (outcome.key or "").startswith("web/")}) == sorted(runs)
     refused = {op for op, answer in answers.items() if not answer.startswith(f"{op.replace('.', ' ')}: done.")}
     assert refused <= {"task.fail", "task.release", "approval.resolve", "effect.settle", "repo.test", "agent.interrupt"}
+    assert len(sent) == 1 and body == b"The whole of it."
     assert answers["task.fail"] == "task fail: stale_fence: you hold no live lease on jobs"
     assert answers["board.post"] == 'board post: done. {"ref":"board/notes/spec@1","version":1}'
     assert errors == []

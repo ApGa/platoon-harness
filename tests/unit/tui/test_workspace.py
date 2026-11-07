@@ -1027,6 +1027,24 @@ async def test_body_tombstone_from_the_palette_asks_once(root):
         assert await of_type(owner, "body.tombstoned") == []
 
 
+async def test_a_body_field_cites_a_ref_as_it_stands_and_stores_any_other_text(root):
+    """A form's body takes what the command line's flag takes: a body's ref, which it cites, or any other text, which
+    it stores as a body of its own."""
+    async with attached(team(), root) as (owner, _, pilot):
+        cited = await owner.put_body(b"stored before")
+        for gist, body in (("cited", cited), ("stored", "The whole of it.")):
+            await pilot.press("ctrl+p", *"message send")
+            await pilot.press("enter")
+            await drawn(pilot, lambda text: "Anything longer than the gist." in text)
+            await pilot.press("enter", *gist, "enter", *body, "enter", "enter", "enter", "enter")
+            sent = await until(
+                lambda: of_type(owner, "message.sent"), owner, lambda found, gist=gist: gist in [e.gist for e in found]
+            )
+
+        bodies = [await owner.get_body(event.data["body"]) for event in sent if event.actor == "human:you"]
+        assert bodies == [b"stored before", b"The whole of it."]
+
+
 async def test_a_yes_or_no_field_takes_only_yes_or_no(root):
     async with attached(team(), root) as (_, app, _):
         interrupt = next(form for form in workspace(app).forms if form.op == "agent.interrupt")

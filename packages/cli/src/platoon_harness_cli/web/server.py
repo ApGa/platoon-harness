@@ -20,7 +20,7 @@ from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__
-from ..ops import CONFIRMED, Form, cut, forms, person_ops
+from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import read
 from ..roster import status_of
 from . import replies
@@ -323,8 +323,8 @@ class Web(Server[Request]):
         """One op, as `Session.submit` runs it, and its outcome, a refusal among them. `key` is 128 random bits the page
         made for one draft or press and keeps until the act is answered, under `web/`, so a retry is one operation from
         whichever link sends it, and no other client's key meets it. `expected_version` is the op's argument of that
-        name, and `via` is said here. A message's text is made its gist as the terminal makes it: cut when it is too
-        long for one, and beside the name of the file that is its body, which `file` says."""
+        name. The args of an op the person holds a form for are completed as the terminal completes its form's: each
+        body's text made a ref by `body_ref`, and `via` said where the form takes it."""
         op, args, key = params.get("op"), params.get("args", {}), params.get("key")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(key, str) or not _KEY.fullmatch(key):
             raise Rejected(400, why="a command is an op, its args, and a key of 32 lowercase hex the page made for it")
@@ -334,23 +334,18 @@ class Web(Server[Request]):
             if "expected_version" in args:
                 raise Rejected(400, why="expected_version is said once")
             args = {**args, "expected_version": version}
-        if (operation := person_ops().get(op)) is not None and "via" in operation.input.model_fields:
-            args = {**args, "via": "browser"}
+        if "text" in params or "file" in params:
+            args = _message(op, args, params)
         key = f"web/{key}"
-        if op == "message.send" and isinstance(gist := args.get("gist"), str):
-            file = params.get("file")
-            if not isinstance(file, str | None) or (file is None) != (args.get("body") is None):
-                raise Rejected(400, why="a body the page sends is a file, which `file` names")
+        held = (await self.session.submit("ops.list")).result or []
+        if (form := next((form for form in forms(held) if form.op == op), None)) is not None:
+            args = {**args, **({"via": "browser"} if form.via else {})}
             try:
-                gist, body = cut(gist, file=file)
-            except ValueError as error:
-                raise Rejected(400, why=str(error)) from None
-            args = {**args, "gist": gist}
-            if body is not None:
-                try:
-                    args["body"] = await self.session.put_body(body.encode())
-                except Refused as refused:
-                    return Outcome(op=op, key=key, args_hash="", refusal=refused.refusal).model_dump(mode="json")
+                for field in form.fields:
+                    if field.body and isinstance(text := args.get(field.name), str):
+                        args[field.name] = await body_ref(self.session, text)
+            except Refused as refused:
+                return Outcome(op=op, key=key, args_hash="", refusal=refused.refusal).model_dump(mode="json")
         outcome = await self.session.submit(op, key=key, **args)
         return outcome.model_dump(mode="json")
 
@@ -360,6 +355,22 @@ class Web(Server[Request]):
             return {"ref": await self.session.put_body(body)}
         except Refused as refused:
             return {"refusal": refused.refusal.model_dump(mode="json")}
+
+
+def _message(op: str, args: dict[str, Any], params: Mapping[str, Any]) -> dict[str, Any]:
+    """A message the composer sends, whose `text`, said beside its args, is made its gist and body as the terminal makes
+    them: cut when too long for a gist, and beside the name of the file that is its body, which `file` says. A form's
+    `gist` is sent as given, as any field is, and refused as the command line's is when too long."""
+    text, file = params.get("text"), params.get("file")
+    if op != "message.send" or not isinstance(text, str) or not isinstance(file, str | None) or "gist" in args:
+        raise Rejected(400, why="text and file are a message's words and its file's name, said in place of its gist")
+    if (file is None) != (args.get("body") is None):
+        raise Rejected(400, why="beside a message's text, a body is a file, which `file` names")
+    try:
+        gist, body = cut(text, file=file)
+    except ValueError as error:
+        raise Rejected(400, why=str(error)) from None
+    return {**args, "gist": gist, **({"body": body} if body is not None else {})}
 
 
 def _page_form(form: Form) -> dict[str, Any]:

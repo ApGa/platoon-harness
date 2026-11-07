@@ -1045,7 +1045,7 @@ class Workspace(Screen[None]):
             return
         for field in form.fields:
             if field.body and field.name in args:
-                args[field.name] = await live.session.put_body(args[field.name].encode())
+                args[field.name] = await ops.body_ref(live.session, args[field.name])
         if form.op in CONFIRMED:
             question = SafeText(f"{form.title} {' '.join(map(str, args.values()))}? It cannot be taken back.")
             if not await self.app.push_screen_wait(Confirm(question)):

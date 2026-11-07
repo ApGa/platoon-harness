@@ -314,7 +314,7 @@ async def _arguments(session: Session, fields: tuple[Flag, ...], given: Mapping[
 
 
 async def _body(session: Session, field: Flag, text: str | None, path: Path | None) -> str | None:
-    """A body as a ref: text stored, or a file's bytes, or a ref as it stands."""
+    """A body as a ref: a file's bytes stored, or its text as `body_ref` makes it one."""
     if text is not None and path is not None:
         raise Usage(f"give {field.flag} or {field.flag}-file, not both")
     if path is not None:
@@ -322,9 +322,13 @@ async def _body(session: Session, field: Flag, text: str | None, path: Path | No
             return await session.put_body(path.read_bytes())
         except OSError as error:
             raise Usage(f"{field.flag}-file: {error}") from None
-    if text is None or re.fullmatch(BODY_REF, text):
-        return text
-    return await session.put_body(text.encode())
+    return None if text is None else await body_ref(session, text)
+
+
+async def body_ref(session: Session, text: str) -> str:
+    """A body's text as the ref its op cites, at a command line and in either client's form alike: a ref as it stands,
+    and any other text stored as a body."""
+    return text if re.fullmatch(BODY_REF, text) else await session.put_body(text.encode())
 
 
 def _command(operation: Op) -> Callable[..., Awaitable[int]]:

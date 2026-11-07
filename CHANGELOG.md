@@ -27,10 +27,11 @@ named here is closed.
   `ops.list` says you hold, an extension's among them, but a query and `wait` and the ops on a wait, by the rule the terminal's
   palette keeps. Choosing one opens its form in the pane: what the op does, as its command's help says it, and a field per
   flag in that flag's words, each taking what its kind takes, JSON alone for a JSON field, which says why before anything is
-  sent, and a body's text stored first. Run asks once first for an op the terminal asks about, and says under it what came of
-  the act, the op's answer as text, or its refusal. Each act keeps its key until it is answered, as every act of the page's
-  does. On a view link and on history every field and Run are disabled, saying why. Spawning an agent, erasing a body,
-  budgets, channels, tasks, boards and episodes were the terminal's and the command line's alone. See
+  sent, and a body's text stored, or cited where it is a body's ref, as the command line's flag takes it. Run asks once
+  first for an op the terminal asks about, and says under it what came of the act, the op's answer as text, or its
+  refusal. Each act keeps its key until it is answered, as every act of the page's does. On a view link and on history
+  every field and Run are disabled, saying why. Spawning an agent, erasing a body, budgets, channels, tasks, boards and
+  episodes were the terminal's and the command line's alone. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run
   in, comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it
@@ -588,8 +589,9 @@ named here is closed.
   team's extension adds was never offered. It is now made from the session's `ops.list`, by one rule the command line's package
   states for the terminal and the page: every op you hold but a query, which the views draw, and but `wait` and the ops on a
   wait, as a wait parks a turn and a person has none. Each is worded as its command's help, and its form asks for each flag in
-  that flag's words, with `via` said as `tui`. `agent takeover` runs, holding an agent's deliveries as the command line's does,
-  where it said it was not built; `/takeover` still says driving its terminal is not built. See
+  that flag's words, with `via` said as `tui`. A body's ref typed in a body's field is cited, as the command line's flag cites
+  one, where the form stored the ref's text as a body of its own. `agent takeover` runs, holding an agent's deliveries as the
+  command line's does, where it said it was not built; `/takeover` still says driving its terminal is not built. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The architecture page marks what STATUS calls planned.** [docs/architecture.md](docs/architecture.md) sends a newcomer to
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking

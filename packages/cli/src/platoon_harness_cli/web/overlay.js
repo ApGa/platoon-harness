@@ -413,18 +413,18 @@ document.addEventListener('submit', e => {
 });
 
 // Send a draft: its file first, if it has one, saying how much has gone, then the message, whose gist web makes of the
-// text and the file's name as the terminal makes it. Once it is sent, the draft lets go of what it sent, and of nothing
-// chosen since.
+// text, said beside its args, and the file's name as the terminal makes it. Once it is sent, the draft lets go of what
+// it sent, and of nothing chosen since.
 X.post = async f => {
   const draft = f.dataset.xDraft, d = X.draft(draft), text = d.text.trim(), file = d.file;
   if (d.sending || (!text && !file) || X.unsendable(f)) return;
-  const args = {to: S.chats.get(f.dataset.xChat).x_to, gist: text};
+  const args = {to: S.chats.get(f.dataset.xChat).x_to};
   if (f.dataset.xReplyTo) args.reply_to = f.dataset.xReplyTo;
   const show = said => { d.sending = said; X.paint(draft); };
   try {
     if (file) args.body = await X.upload(file, share => show(`Sending ${file.name}: ${Math.round(100 * share)}%`));
     show('Sending…');
-    const r = await X.act('message.send', args, file ? {file: file.name} : {});
+    const r = await X.act('message.send', args, file ? {text, file: file.name} : {text});
     d.said = !r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : '';
     if (r && !r.refusal) {
       d.text = '';
@@ -605,9 +605,9 @@ X.args = (form, box) => {
   return args;
 };
 
-// Run a form's op: the args its fields make, one question first for an op the terminal asks about, each body stored
-// for the op to cite, then the act, kept until it is answered, and what came of it said under Run: done, with what the
-// op answered as text, or its refusal.
+// Run a form's op: the args its fields make, one question first for an op the terminal asks about, then the act, kept
+// until it is answered, whose body's text web stores for the op to cite, and what came of it said under Run: done, with
+// what the op answered as text, or its refusal.
 X.run = async box => {
   const pane = S.pane, form = pane && pane.form, said = $('.x-said', box), run = $('[data-x-run]', box);
   if (!(pane instanceof X.Form) || pane.box !== box || pane.sending || X.cannot(form.op)) return;
@@ -619,9 +619,6 @@ X.run = async box => {
   pane.paint();
   said.textContent = X.WAITING;
   try {
-    for (const field of form.fields) {
-      if (field.kind === 'body' && field.name in args) args[field.name] = await X.upload(new File([args[field.name]], field.flag), () => {});
-    }
     const r = await X.act(form.op, args);
     said.textContent = !r ? X.UNANSWERED : r.refusal ? `${form.title}: ${X.refused(r.refusal)}`
       : `${form.title}: done.${r.result == null ? '' : ` ${JSON.stringify(r.result)}`}`;
