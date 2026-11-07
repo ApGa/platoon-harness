@@ -67,8 +67,10 @@ def test_each_driver_s_state_on_the_compatibility_page_is_the_one_status_gives()
 
 
 def test_the_compatibility_page_names_no_pin_the_lock_does_not_hold():
-    """A pin is spelled as a requirement, such as `swarmchat==0.1.0`, which the version the lock holds meets. A range
-    that names no distribution pins nothing anyone can check, and an extra the page names is one a package declares."""
+    """A pin is spelled as a requirement, such as `swarmchat==0.1.0`, which the version the lock holds meets. A
+    dependency's own range spelled so is held to the lock too, as `litellm`'s is, which `openhands-sdk` asks and the
+    page says is not ours. A range that names no distribution pins nothing anyone can check, and an extra the page
+    names is one a package declares."""
     pins = [Requirement(text) for text in PIN.findall(PAGE)]
     named = {extra for pin in pins for extra in pin.extras} | set(EXTRA.findall(PAGE))
 
