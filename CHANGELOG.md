@@ -40,9 +40,10 @@ named here is closed.
   `observed` offers a harness said it took, `cause` and `ancestry`, each apart and never summed, with the offers no harness has
   said it took counted beside them as unknown, and the answer is open while one of those went to an agent that has not ended.
   Each agent is named with why what reached it is unknown, so one no pair names never reads as reached by nobody. Pairs and
-  agents come 32 of each a page, every page at the first one's head, and each page walks the journal, storing nothing. A person
-  or a program reads it, on a view credential too, and it is no agent's tool. That it is a query listed in both clients'
-  provenance, and not on SwarmChat's Map, is the default pending the owner's ruling. See
+  agents come 32 of each a page, every page at the first one's head, and each page walks the journal, storing nothing. The
+  answer is `Interactions`, of `Pair` and `Unknowns`, in `platoon_harness.primitives`. A person or a program reads it, on a view
+  credential too, and it is no agent's tool. That it is a query listed in both clients' provenance, and not on SwarmChat's Map,
+  is the default pending the owner's ruling. See
   [RFC 0067](docs/rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md), a draft.
 - **A diff read on request.** `repo.diff{of}`, with `Session.repo_diff(of)` and the command `repo diff`, asks the runtime for a
   recorded commit's patch against its first parent, or for what a workspace, `@ada` or `shared`, holds uncommitted against its

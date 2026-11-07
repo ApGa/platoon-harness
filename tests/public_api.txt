@@ -245,6 +245,8 @@ platoon_harness.primitives.Native
 platoon_harness.primitives.NotSeen
 platoon_harness.primitives.on
 platoon_harness.primitives.OWNER_STOP
+platoon_harness.primitives.Pair
+platoon_harness.primitives.Pair(*,who,whom,declared,observed,cause,ancestry,unconfirmed,first)
 platoon_harness.primitives.Plane
 platoon_harness.primitives.Policy
 platoon_harness.primitives.PRIMITIVES
@@ -270,6 +272,8 @@ platoon_harness.primitives.Tasks
 platoon_harness.primitives.TurnEnded
 platoon_harness.primitives.TurnStarted
 platoon_harness.primitives.Unknown
+platoon_harness.primitives.Unknowns
+platoon_harness.primitives.Unknowns(*,agent,unproved,incidents,older_offers)
 platoon_harness.primitives.Usage
 platoon_harness.primitives.Uses
 platoon_harness.primitives.Verdict

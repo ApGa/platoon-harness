@@ -8,8 +8,7 @@ import pytest
 
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Kernel, ManualClock, Principal, registry
-from platoon_harness.primitives import PRIMITIVES, Interactions, Unknown
-from platoon_harness.primitives.provenance import Pair
+from platoon_harness.primitives import PRIMITIVES, Interactions, Pair, Unknown
 from platoon_harness.testing import Say
 
 from ..runtime import support as running
