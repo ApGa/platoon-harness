@@ -79,6 +79,7 @@ amended or extended an RFC.
 | [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted |
 | [0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) | A child ends cancelled with its parent only for a turn under way | Accepted |
 | [0063](0063-what-an-offer-showed-is-answered-by-its-ref.md) | What an offer showed is answered by its ref | Accepted |
+| [0064](0064-an-act-is-one-form-and-a-read-one-route.md) | A person's act is an op completed by one form, and a pane's read is one route | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
