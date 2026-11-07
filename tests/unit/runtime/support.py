@@ -17,7 +17,9 @@ from platoon_harness.testing import FakeModel, ScriptedDriver
 
 from ..kernel.support import dump
 
-SECONDS = 15.0
+# How long a wait here may take before it fails as a hang: it bounds no claim, so it is sized for the slowest machine
+# that runs the suite, GitHub's runners, whose disks made one git-heavy wait outlast 15 s.
+SECONDS = 60.0
 
 _NAMED: dict[str, Callable[[], Driver] | Extension] = {}
 
