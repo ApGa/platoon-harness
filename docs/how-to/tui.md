@@ -153,7 +153,8 @@ A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
 conflict an agent's merge stopped on waits in the dock, saying to tell the agent or to resolve it in your own checkout, never in
-its workspace, with Write to it, since the runtime never resolves one. The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
+its workspace, with Write to it, since the runtime never resolves one ([workspaces.md](workspaces.md#resolve-an-agents-conflict)).
+The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
 shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
 
 ### Follow a line's provenance

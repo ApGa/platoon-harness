@@ -228,7 +228,8 @@ look changes no ref, index or file, and records on `repo/<name>`, `<name>` being
 
 - each new commit its workspace's HEAD reaches, and each commit those cite in an `Informed-By` trailer, parents first, once each;
 - whose each commit is: the agent's whose workspace's HEAD reflog records making it, at the commit's own committer time, so a worker
-  that builds on another's commit never takes it; a commit made in your checkout is nobody's, as is one no workspace made, or two;
+  that builds on another's commit never takes it, and whoever ran git there, you included, as [below](#resolve-an-agents-conflict);
+  a commit made in your checkout is nobody's, as is one no workspace made, or two;
 - what a branch no longer reaches of the commits it had, after a reset, an amend or a rebase;
 - each workspace's head, branch, any merge, rebase, cherry-pick, revert or bisect under way, and its uncommitted paths, conflicted
   first, with their lines added and removed, or `?` for an untracked or binary file, which nobody measured.
@@ -243,9 +244,9 @@ fetched from elsewhere, or made in your checkout, cites no event here. Anything 
 with why it cites nothing. [provenance.md](provenance.md) says how lineage and contributors read a commit's citations.
 
 The terminal's header counts what changed, `/review` lists it, and a merge stopped on conflicts waits in the dock, and under Needs you
-in the browser, saying where to resolve it, until its agent's next turn. What an agent wrote of a commit is cut to fit: its author and
-each `Informed-By` value to 256 characters, ending in `…` where cut, and a commit's first 16 values, with how many it had. What a look
-cannot see:
+in the browser, saying what settles it, as [below](#resolve-an-agents-conflict), until its agent's next turn. What an agent wrote of
+a commit is cut to fit: its author and each `Informed-By` value to 256 characters, ending in `…` where cut, and a commit's first 16
+values, with how many it had. What a look cannot see:
 
 - a one-turn agent's work, until its turn has ended;
 - a commit made and undone within one turn, as by an amend or a reset before the turn ended, which only the workspace's reflog
@@ -274,6 +275,21 @@ before you fetch from it, as you would any repository you did not make. The runt
 and never moves a branch an agent has. For a team whose workers hand their branches to one merger, [topologies.md](topologies.md#merge-worktrees-through-a-queue)
 writes out the merge queue: a queue and a merger in a worktree, whose look records each merge or conflict, and a conflict that goes
 back to its worker through the task.
+
+## Resolve an agent's conflict
+
+A merge, rebase or cherry-pick an agent's git stopped on conflicts is the agent's to resolve. Tell it, as the conflict's Write to it
+does in the dock and under Needs you, and its next turn takes it up. Or resolve it in your own checkout, from the agent's branch, as
+you would take its work. Never resolve it in the agent's workspace: a commit made there is recorded as that agent's, whoever made it,
+since whose a commit is reads that workspace's HEAD reflog, which says the workspace made it and not who ran git, and nothing records
+who committed. That record is evidence at the workspace's assurance, never proof. The conflict's own words say so:
+
+```text
+merge stopped on conflicts in 1 file, README: tell @ada, or resolve it in your own checkout, never in its workspace, where any commit is recorded as @ada's
+```
+
+A conflict in your checkout, where a role works in it, is yours, and says to resolve it there. A commit made in your checkout is
+nobody's.
 
 ## Test a commit
 

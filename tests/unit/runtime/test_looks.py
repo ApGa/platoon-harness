@@ -66,6 +66,22 @@ def test_a_commit_is_the_agent_s_whose_workspace_made_it(repo, tmp_path):
     assert found.commits[0]["branch"] == "platoon-harness/s/ada"
 
 
+def test_a_commit_made_in_an_agent_s_worktree_is_recorded_as_that_agent_s_whoever_made_it(repo, tmp_path):
+    """Whose a commit is reads the workspace's HEAD reflog, which says the workspace made it and not who ran git, so a
+    conflict you resolve and commit in an agent's worktree is the agent's, as the workspace guide warns."""
+    opened = tips(repo)
+    ada, base = worktree(repo, tmp_path, "ada")
+    (ada / "README").write_text("resolved by you\n")
+    you = ("-c", "user.name=You", "-c", "user.email=you@example.invalid")
+    git(*you, "commit", "-q", "-am", "resolve the conflict", cwd=ada)
+    yours = git("rev-parse", "HEAD", cwd=ada).strip()
+
+    found = seen("@ada", ada, base, opened, {"@ada": ada, "shared": repo}, record=False)
+
+    assert made_in(found) == {yours: "@ada"}
+    assert found.commits[0]["author"] == "You"
+
+
 def test_a_commit_is_its_maker_s_whatever_order_the_looks_run_in(repo, tmp_path):
     opened = tips(repo)
     (ada, base), (bob, _) = worktree(repo, tmp_path, "ada"), worktree(repo, tmp_path, "bob")

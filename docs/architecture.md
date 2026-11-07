@@ -1774,7 +1774,8 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   own committer time, and nobody's when that workspace is the shared one, when none records it, or when two do. Git writes that entry
   when the commit is made, so it does not depend on which look runs first, and a worker that builds on another's commit never takes it.
   Every workspace still on disk is read, and one another agent's stop removed while a look read it is gone, as one removed before is.
-  It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof. See
+  It reads what the agent's own git wrote, so it is evidence at the workspace's assurance, never proof, and a commit anyone makes in
+  an agent's workspace, a person included, is that agent's, as nothing records who ran git there. See
   [RFC 0032](rfcs/0032-the-runtime-looks-and-never-moves-a-branch.md).
 - **`Informed-By`** is the one way to declare what a commit rests on. A value of 4 to 40 hex digits naming one commit in the commit's
   own repository is resolved to its full SHA once, at the commit's first record, and `based_on` cites that commit's record. A value
