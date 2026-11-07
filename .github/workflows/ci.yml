@@ -2,7 +2,8 @@ name: CI
 
 # Pull requests into any branch, so that a pull request stacked on another one is checked too, and pushes to main.
 # Every job runs while the repository is private too, so that collaborators get checks. The slow tests need harness
-# binaries, so they stay out of CI, and the live tests spend model calls on a person's logins, so they never run here.
+# binaries, so they stay out of CI, but for those of the installed wheels, which release.yml runs, and the live tests
+# spend model calls on a person's logins, so they never run here.
 on:
   pull_request:
   push:

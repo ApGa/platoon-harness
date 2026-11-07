@@ -58,7 +58,10 @@ $ UV_NO_DEV=1 uv sync --all-packages --extra openhands
 `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own terms. The
 checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it, and the worker runs without
 it. [Drivers](../extending/drivers.md#openhands-a-wire-worker) says why, and how to run the worker on an interpreter of
-its own. OpenHands keeps no login, so its role needs an auth profile that names its key.
+its own. A wheel carries no such exclusion, so the extra installed from the SDK's wheel, as a published install would
+be, brings `lmnr-claude-code-proxy` unless you exclude it: with uv, by `exclude-dependencies` in your own project's
+`[tool.uv]`, as the checkout's `pyproject.toml` does, or by `uv pip install --excludes` with a file that names it.
+OpenHands keeps no login, so its role needs an auth profile that names its key.
 
 ## Check the installation
 

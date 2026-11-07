@@ -105,7 +105,7 @@ To run them on 3.13, set `UV_PYTHON=3.13` for both `uv sync` and `uv run`, as CI
 | Tests | Marker | Need | In CI |
 |---|---|---|---|
 | Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
-| Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so | No |
+| Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so. Those of the installed wheels need uv's cache to hold what they install, as [Releases](#releases) says | Only those of the installed wheels, in the release workflow |
 | Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes, once in each of the three, as the workflow says, which no runner has shown yet |
 | Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are. Each file's docstring states the model calls its tests may spend | Never |
 
@@ -268,7 +268,8 @@ uv run pytest -q -m e2e
 # build, of the release workflow, as Releases shows
 ```
 
-The slow tests need harness binaries that CI does not have, so CI never runs them, and it never runs the live ones.
+The slow tests need harness binaries that CI does not have, so CI runs none of them but those of the installed wheels,
+which need none, and it never runs the live ones.
 
 **The pull request.** Push your branch and open a pull request into `main`. The
 [pull request template](.github/pull_request_template.md) asks for each of these:
@@ -394,10 +395,20 @@ each push to `main`, as CI's other jobs run. Its `build` job runs:
 uv build --all-packages --no-sources
 uvx twine check --strict dist/*
 uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
+uv sync --locked
+uv run pytest -q -m slow tests/integration/test_installed.py
 ```
 
 `uv build` writes each package's sdist to `dist/`, then its wheel, built from the sdist, so an sdist that leaves out a
 file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
 `twine check --strict` checks each distribution's metadata, and that its README renders as its PyPI description, failing
 on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
-their metadata requires, so a requirement only the workspace gave fails there.
+their metadata requires, so a requirement only the workspace gave fails there. The workflow runs every step on Python
+3.12, the oldest the packages name, with `UV_PYTHON=3.12`.
+
+`tests/integration/test_installed.py`, slow tests, build the wheels again and install them in an environment of their
+own: the command line runs and says its version, a headless run of [examples/sdk-script](examples/sdk-script/README.md)
+settles on the `exec` driver and the command line reads it back, each wheel holds every file git tracks in its package,
+and the SDK's `openhands` extra requires what [Install](docs/getting-started/install.md#openhands) says. They take no
+network, so uv's cache must hold the build backend and each requirement, as the steps before them leave it; where it
+does not, they fail, saying so, and never skip.

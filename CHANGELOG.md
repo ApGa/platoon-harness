@@ -72,6 +72,13 @@ named here is closed.
   release would publish. CONTRIBUTING shows its commands under Releases. Its commands pass when run by hand, and that
   they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as the names, the tag and the
   trusted publisher a release would publish with are the owner's to rule on.
+- **The packages tested as a person installs them.** Slow tests, `tests/integration/test_installed.py`, build the
+  wheels and install them, offline, in an environment of their own: the command line says its version, a headless run
+  of `examples/sdk-script` settles on the `exec` driver and the command line reads it back, each wheel holds every file
+  its package tracks, and the SDK's `openhands` extra requires what the install guide says. The release workflow runs
+  them. Where uv's cache lacks what they install, they fail, saying so. The install guide, and the SDK's description,
+  now say that the extra installed from a wheel brings `lmnr-claude-code-proxy` unless you exclude it, as the
+  checkout's exclusion does not travel in a wheel.
 - **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
   author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
   `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the
