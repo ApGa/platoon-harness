@@ -6,7 +6,9 @@
 
 **Amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md)**: a finished agent's `said` is the ref its
 end's report carries, so one that finishes with a turn that leaves nothing to come says its last words by the message that said
-them, which that end's report holds, and not by its end.
+them, which that end's report holds, and not by its end. So the credit test below, which closed one tree on each `said` and
+another on each last message, two closings that are now one, closes one tree on each `said`, as
+`test_a_tree_that_does_not_stay_credits_each_agent_alike_on_the_last_message_its_said_names`.
 
 ## Summary
 

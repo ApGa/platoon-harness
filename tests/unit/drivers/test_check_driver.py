@@ -496,7 +496,7 @@ async def test_an_item_with_another_id_than_the_anchor_fails(tmp_path):
 
 
 class Unanchored(Filtered):
-    """A harness whose MCP client names no call, as OpenHands' does."""
+    """A harness that sends no id the tool server takes as a harness's, as OpenHands sends only the shim's own."""
 
     async def _mcp(self, server, method, params):
         return await super()._mcp(server, method, {key: value for key, value in params.items() if key != "_meta"})

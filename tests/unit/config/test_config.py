@@ -499,10 +499,10 @@ def test_a_bad_set_line_is_not_repeated(layers):
 
 
 @pytest.mark.parametrize(
-    ("span", "expected"), [("90s", 90.0), ("30m", 1800.0), ("2h", 7200.0), ("1d", 86400.0), (1.5, 1.5)]
+    ("duration", "expected"), [("90s", 90.0), ("30m", 1800.0), ("2h", 7200.0), ("1d", 86400.0), (1.5, 1.5)]
 )
-def test_a_duration_converts_to_seconds(span, expected):
-    assert seconds(span) == expected
+def test_a_duration_converts_to_seconds(duration, expected):
+    assert seconds(duration) == expected
 
 
 def test_a_duration_that_is_none_says_what_one_looks_like():

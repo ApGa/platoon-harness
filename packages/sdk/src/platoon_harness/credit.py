@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from platoon_harness.drivers import Gateway
 from platoon_harness.kernel import Refused
 from platoon_harness.primitives import WALK_LIMIT, Lineage, Span
-from platoon_harness.primitives.provenance import Offer
 from platoon_harness.session import Session
 
 __all__ = ["PROPAGATE", "propagate"]
@@ -130,7 +129,7 @@ async def _agent(session: Session, name: str) -> _Agent | None:
     found = await session.lineage(spans[-1].ref) if spans else None
     while found is not None:
         for offer in found.history or ():
-            if not isinstance(offer, Offer) or offer.confirmed is None:
+            if offer.kind != "observed" or offer.confirmed is None:
                 continue
             seq, taking = offer.confirmed.seq, bisect.bisect(seqs, offer.confirmed.seq)
             if taking == len(seqs) or bisect.bisect(launches, seq) != bisect.bisect(launches, seqs[taking]):
@@ -165,14 +164,14 @@ async def _walk(
             traced[ref] = await session.lineage(ref)
         return traced[ref]
 
-    async def part(agent: _Agent, found: Lineage, carried: str | None) -> Span | None:
+    async def span_of(agent: _Agent, found: Lineage, carried: str | None) -> Span | None:
         """The span of an agent's event: its call's, for an entry that carries an event that event's, or its turn's
         when that turn is one span. What an entry carries never carries another."""
         if found.made.call is not None:
             return agent.holding.get(found.made.call)
         if carried is not None:
             carrying = await trace(carried)
-            return await part(agent, carrying, None) if carrying.made.maker == f"agent:{agent.name}" else None
+            return await span_of(agent, carrying, None) if carrying.made.maker == f"agent:{agent.name}" else None
         whole = [span for span in agent.spans if found.made.turn is not None and span.turn == found.made.turn]
         return whole[0] if len(whole) == 1 else None
 
@@ -214,7 +213,7 @@ async def _walk(
             if (agent := agents[name]) is not None:
                 targets.append(agent.started)
                 carried = await _carried(session, found)
-                if (span := await part(agent, found, carried)) is not None:
+                if (span := await span_of(agent, found, carried)) is not None:
                     targets.append(span.ref)
                     edges += [] if carried is not None else await takes(agent, span, found)
         keeping = share * retained if edges else share

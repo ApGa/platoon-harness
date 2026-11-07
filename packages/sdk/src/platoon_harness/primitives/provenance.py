@@ -126,16 +126,10 @@ class References(View):
         rows = self.db.execute("SELECT seq FROM v_references_parents WHERE sha = ? ORDER BY seq", (sha,))
         return [row["seq"] for row in rows]
 
-    def anchored(self, agent: str, anchor: str) -> list[int]:
-        """The seqs of an agent's events that came under one tool call's id."""
-        rows = self.db.execute(
-            "SELECT seq FROM v_references_anchors WHERE agent = ? AND anchor = ? ORDER BY seq", (agent, anchor)
-        )
-        return [row["seq"] for row in rows]
-
-    def under_ids(self, agent: str) -> list[int]:
-        """The seqs of an agent's events that came under any tool call's id, oldest first."""
-        rows = self.db.execute("SELECT seq FROM v_references_anchors WHERE agent = ? ORDER BY seq", (agent,))
+    def anchored(self, agent: str, anchor: str | None = None) -> list[int]:
+        """The seqs of an agent's events that came under one tool call's id, or with none under any, oldest first."""
+        where, args = ("agent = ?", (agent,)) if anchor is None else ("agent = ? AND anchor = ?", (agent, anchor))
+        rows = self.db.execute(f"SELECT seq FROM v_references_anchors WHERE {where} ORDER BY seq", args)
         return [row["seq"] for row in rows]
 
 
@@ -1087,7 +1081,7 @@ def _handed_only(txn: Txn, makers: dict[str | None, dict[str, Any]]) -> tuple[Ha
 # Spans.
 
 
-class OfAgent(Args):
+class AskedOfAgent(Args):
     agent: Annotated[AgentName, Field(description="The agent, as `@agent`.")]
     after: Annotated[str | None, Field(max_length=64, description="A `cursor` from an earlier answer.")] = None
 
@@ -1132,8 +1126,8 @@ def _cut(turn: str, calls: Sequence[Event], chose: Mapping[int, Sequence[str]]) 
 
 
 @op("spans", query=True)
-def spans(txn: Txn, a: OfAgent) -> Spans:
-    """Cut each turn of an agent into spans, oldest first: a turn is cut after each model call that chose a write of
+def spans(txn: Txn, a: AskedOfAgent) -> Spans:
+    """Show each span of an agent, oldest first: a turn is cut after each model call that chose a write of
     content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece
     with no write joins the span before it, so each call its harness reported in a turn lies in one span. Each is named
     by its last call's `model.called`, with its first call, its turn and the writes the record ties to its calls. Pass
@@ -1147,7 +1141,7 @@ def spans(txn: Txn, a: OfAgent) -> Spans:
     if a.after is not None and not a.after.isdecimal():
         raise Refused("invalid", "`after` is a `cursor` from an earlier answer")
     stamps, chose = txn.view(Stamps), defaultdict[int, list[str]](list)
-    for seq in txn.view(References).under_ids(a.agent):
+    for seq in txn.view(References).anchored(a.agent):
         event = _at(stamps, seq)
         if _written(event, a.agent) and (call := _join(txn, event).call) is not None:
             chose[call.seq].append(_ref(event))

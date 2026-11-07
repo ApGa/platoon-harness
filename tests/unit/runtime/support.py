@@ -3,7 +3,7 @@ reached as an attribute of this file."""
 
 import asyncio
 import sqlite3
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -53,14 +53,16 @@ def solo(*turns: Any, **role: Any) -> Team:
 
 
 class Gateways:
-    """An authority that admits each agent through `model` acting as its gateway, on a bearer and a backend id of its
-    own, so a scripted harness's `AskModel` steps ask it."""
+    """An authority that admits each agent through FakeModel acting as its gateway, on a bearer and a backend id of its
+    own, so a scripted harness's `AskModel` steps ask it: one model for every agent, or each agent's own by its name, so
+    each agent's replies come in its own order however the agents' turns interleave."""
 
-    def __init__(self, model: FakeModel) -> None:
-        self.model = model
+    def __init__(self, models: FakeModel | Mapping[str, FakeModel]) -> None:
+        self.models = models
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
-        access = self.model.gateway(f"bearer-of-{spawn.agent}")
+        model = self.models if isinstance(self.models, FakeModel) else self.models[spawn.agent]
+        access = model.gateway(f"bearer-of-{spawn.agent}")
         return Admission(token=Secret(f"token-of-{spawn.agent}"), access=access, backend={"agent_id": spawn.agent})
 
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:

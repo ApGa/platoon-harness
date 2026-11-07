@@ -18,7 +18,6 @@ from platoon_harness.config import Manifest
 from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
-from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, SpawnRequest
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
 
@@ -221,9 +220,9 @@ async def test_an_agents_credit_targets_its_first_start_never_its_spawn(tmp_path
         assert row.target != f"agent/{agent}@1"
 
 
-async def tree(tmp_path, name: str, on: str) -> tuple[dict[str, str], dict[str, float | None]]:
+async def tree(tmp_path) -> tuple[dict[str, str], dict[str, str], dict[str, float | None]]:
     """A root that does not stay and the child it waits on, each ended with its turn, and the episode closed on each
-    one's `said` or on its last message: the refs it closed on, and the credit of each."""
+    one's `said`: each `said`, each one's last message, and the credit of each."""
     spawned = Call("agent_spawn", {"name": "kid", "child_role": "helper", "goal": "craft three"})
     crafter = [[spawned, Call("wait", {"agents": ["@kid"], "timeout": 1200})], [Say("all three are crafted")]]
     roles = {
@@ -233,30 +232,31 @@ async def tree(tmp_path, name: str, on: str) -> tuple[dict[str, str], dict[str, 
     topology = {"edges": {"crafter": ["children"]}, "until": "role:crafter"}
     team = Team.model_validate({"roles": roles, "topology": topology})
     clock = ManualClock(1000.0)
-    async with Session.start(team, name=name, root=tmp_path, clock=clock, principal=PROGRAM) as session:
+    async with Session.start(team, name="tree", root=tmp_path, clock=clock, principal=PROGRAM) as session:
         await session.open_episode("e")
         await session.send("@crafter", "craft three")
         await asyncio.wait_for(session.settled(), SECONDS)
         said = {row["agent"]: row["said"] for row in await session.agents()}
         messages = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "message"]
-        closing = said if on == "said" else {event.agent: f"{event.stream}@{event.version}" for event in messages}
-        await session.close_episode(based_on=list(closing.values()))
-    attached = await Session.attach(name, root=tmp_path)
+        await session.close_episode(based_on=list(said.values()))
+    attached = await Session.attach("tree", root=tmp_path)
     await rewarded(attached, ("scored", 1.0))
     await propagate(attached, "e", judge=None, retained=0.5)
-    return closing, values(await credited(attached))
+    return (
+        said,
+        {event.agent or "": f"{event.stream}@{event.version}" for event in messages},
+        values(await credited(attached)),
+    )
 
 
-async def test_a_tree_that_does_not_stay_credits_each_agent_alike_on_its_said_or_its_last_message(tmp_path):
+async def test_a_tree_that_does_not_stay_credits_each_agent_alike_on_the_last_message_its_said_names(tmp_path):
     """Each ends with a turn whose last words are its report, so its `said` is what its end carries, that turn's last
     message, which follows from nothing and cites nothing, and each agent keeps all its ref was handed, the child as
     the root."""
-    on_said, by_said = await tree(tmp_path, "said", "said")
-    on_last, by_last = await tree(tmp_path, "last", "last")
+    said, messages, credit = await tree(tmp_path)
 
-    assert {ref.partition("@")[0] for ref in on_said.values()} == {"turn/crafter", "turn/kid"}
-    assert on_said == on_last
-    assert by_said == by_last == {"crafter": 0.5, "kid": 0.5}
+    assert said == messages and set(said) == {"crafter", "kid"}
+    assert credit == {"crafter": 0.5, "kid": 0.5}
 
 
 # Spans, on a journal driven op by op as drivers and a runtime drive one.
@@ -1092,20 +1092,6 @@ async def test_propagate_credits_a_spawn_through_the_goal_its_child_took(tmp_pat
     }
 
 
-class OwnModels:
-    """An authority that admits each agent through a FakeModel of its own as its gateway, so each agent's replies come
-    in its own order, however the agents' turns interleave."""
-
-    def __init__(self, models: dict[str, FakeModel]) -> None:
-        self.models = models
-
-    async def admit(self, spawn: SpawnRequest) -> Admission:
-        return await Gateways(self.models[spawn.agent]).admit(spawn)
-
-    async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
-        return None
-
-
 async def test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took(tmp_path):
     """The GPU run's failure, scripted: peers that stay and never finish, closed on what each said last, which follows
     from and cites nothing. `a` spawns `h`, which posts its plan and reports; `a`, woken by the report, tells `b`, whose
@@ -1128,7 +1114,7 @@ async def test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_s
     notes = {"kind": "board", "writers": "all", "readers": "all"}
     topology = {"edges": {"a": ["all"], "b": ["all"]}, "channels": {"notes": notes}, "limits": {"max_hops": 8}}
     team = Team.model_validate({"roles": roles, "topology": topology})
-    start: dict[str, Any] = {"root": tmp_path, "principal": PROGRAM, "authority": OwnModels(models)}
+    start: dict[str, Any] = {"root": tmp_path, "principal": PROGRAM, "authority": Gateways(models)}
     async with contextlib.AsyncExitStack() as stack:
         for model in models.values():
             await stack.enter_async_context(model)
