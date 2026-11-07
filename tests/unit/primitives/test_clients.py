@@ -5,6 +5,7 @@ import pytest
 from platoon_harness.primitives import clients
 
 from .support import channel, end_turn, refusal, report, result_of, send, spawn, start_turn
+from .test_repo import BASE, ONE, conflicted, looked, path, reading
 
 
 def roster(kernel, name: str) -> dict:
@@ -539,3 +540,112 @@ async def test_an_action_names_only_the_arguments_it_knows(kernel):
     [row] = attention(kernel)
     assert (row["kind"], row["gist"]) == ("budget", "wake of bob refused: unavailable")
     assert [(action["op"], action["args"], action["form"]) for action in row["actions"]] == [("budget.set", {}, True)]
+
+
+async def in_flight(kernel, name: str, kind: str) -> dict:
+    """Start the one effect of `kind` that waits, as a daemon would, and give its id and attempt."""
+    effect = next(row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["kind"] == kind)
+    assert effect["agent"] == name
+    started = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+    return {"id": effect["id"], "attempt": started}
+
+
+REPO = {"name": "app", "top": "/work/app", "prefix": "", "head": BASE, "branch": "main", "repository": "/work/.git"}
+KINDS = {"approval", "uncertain", "mention", "conflict", "failed", "dead_task", "hops", "budget", "daemon"}
+SETTLED_BY = {
+    "conflict": "resolve it in",
+    "failed": "nothing tries it again",
+    "daemon": "`session stop` then `session resume` start it anew",
+}
+"""What the gist of a place with no action says settles it, by its kind."""
+
+
+@pytest.mark.parametrize(("limits", "repo"), [({"max_hops": 0}, REPO)])
+async def test_every_kind_of_place_carries_an_action_or_names_what_settles_it(kernel, ada, clock, limits, repo):
+    """Each kind of place the view raises, from each event that raises it, carries an action, or says in its gist what
+    settles it. A mention is the person's to read, which their marks say, with a Reply where its sender takes one."""
+    await spawn(kernel, "carol", goal="")
+    await send(kernel, kernel.runtime, "@carol", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "carol"}))
+    uncertain = await in_flight(kernel, "carol", "deliver")
+    await spawn(kernel, "dave")
+    await start_turn(kernel, "dave")
+    await kernel.recover()
+    await spawn(kernel, "erin")
+    result_of(await kernel.submit(kernel.runtime, "approval.request", {"id": "a1", "agent": "erin", "gist": "may I"}))
+    frank = await spawn(kernel, "frank")
+    asked = await send(kernel, frank, "@ada", "got a minute?")
+    gus = await spawn(kernel, "gus", by=ada)
+    result_of(await kernel.submit(gus, "agent.finish", {"gist": "here is the result"}))
+    kim = await spawn(kernel, "kim")
+    result_of(await kernel.submit(kim, "agent.finish", {"gist": "nobody asked, but here"}))
+    await spawn(kernel, "bob")
+    await conflicted(kernel, "a.py")
+    await looked(kernel, "shared", reading={**reading(ONE, path("a.py", "conflicted")), "branch": "main"})
+    await spawn(kernel, "hank", goal="")
+    await send(kernel, kernel.runtime, "@hank", "go")
+    result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "hank"}))
+    failing = await in_flight(kernel, "hank", "deliver")
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", {**failing, "error": "the pipe broke"}))
+    erased = (await kernel.put_body(b"something to erase")).removeprefix("sha256:")
+    result_of(await kernel.submit(ada, "body.tombstone", {"sha256": erased}))
+    erasing = await in_flight(kernel, None, "erase")
+    result_of(await kernel.submit(kernel.runtime, "effect.fail", {**erasing, "error": "the disk went"}))
+    await channel(kernel, "q", kind="queue", max_attempts=1)
+    ivan = await spawn(kernel, "ivan")
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "x"}))
+    result_of(await kernel.submit(ivan, "task.claim", {"queue": "q"}))
+    result_of(await kernel.submit(ivan, "task.fail", {"queue": "q"}))
+    alice = await spawn(kernel, "alice")
+    await spawn(kernel, "judy")
+    first = await send(kernel, alice, "@alice", "to myself")
+    await send(kernel, alice, "@judy", "past the limit", reply_to=first["ref"])
+    result_of(await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60}}))
+    clock.advance(60.0)
+    result_of(await kernel.submit(kernel.runtime, "budget.lapse", {}))
+    failed = {"daemon": "courier", "error": "RuntimeError: no luck"}
+    result_of(await kernel.submit(kernel.runtime, "daemon.fail", failed))
+
+    rows = attention(kernel)
+    acts = {row["id"]: [(act["label"], act["op"], act["args"], act["form"]) for act in row["actions"]] for row in rows}
+    assert {row["kind"] for row in rows} == KINDS
+    for row in rows:
+        assert row["actions"] or row["kind"] == "mention" or SETTLED_BY[row["kind"]] in row["gist"], row
+    write_to = [("Write to it", "message.send", {"to": f"@{name}"}, True) for name in ("dave", "bob", "hank", "judy")]
+    assert [acts[id] for id in ("turn/dave", "conflict/@bob", f"effect/{failing['id']}", "wake/judy")] == [
+        [act] for act in write_to
+    ]
+    assert acts[asked["ref"]] == [("Reply", "message.send", {"to": "@frank", "reply_to": asked["ref"]}, True)]
+    reports = [row for row in rows if row["kind"] == "mention" and row["id"] != asked["ref"]]
+    assert [(row["gist"], acts[row["id"]]) for row in reports] == [
+        ("here is the result", []),
+        ("kim finished: nobody asked, but here", []),
+    ]
+    assert acts["task/q/1"] == [("Add it again", "task.add", {"queue": "q", "based_on": ["task/q/1@1"]}, True)]
+    assert acts["budget/shared"] == [("Set the budget", "budget.set", {"scope": "shared"}, True)]
+    assert [act[:2] for act in acts["approval/a1"]] == [("Allow", "approval.resolve"), ("Deny", "approval.resolve")]
+    assert [act[:2] for act in acts[f"effect/{uncertain['id']}"]] == [
+        ("It happened", "effect.settle"),
+        ("It did not", "effect.settle"),
+    ]
+    assert [row["gist"] for row in rows if not row["actions"] and row["kind"] == "failed"] == [
+        "erase failed, and nothing tries it again: the disk went"
+    ]
+
+
+async def test_a_dead_task_s_place_closes_once_a_task_citing_it_is_added(kernel, ada):
+    """Its action adds it again, citing it, which settles it; a task that cites nothing leaves it standing."""
+    await channel(kernel, "q", kind="queue", max_attempts=1)
+    bob = await spawn(kernel, "bob")
+    result_of(await kernel.submit(kernel.runtime, "task.add", {"queue": "q", "gist": "fix the flaky test"}))
+    result_of(await kernel.submit(bob, "task.claim", {"queue": "q"}))
+    result_of(await kernel.submit(bob, "task.fail", {"queue": "q"}))
+    [row] = attention(kernel)
+    action = row["actions"][0]
+
+    result_of(await kernel.submit(ada, "task.add", {"queue": "q", "gist": "something else"}))
+    standing = attention(kernel)
+    result_of(await kernel.submit(ada, action["op"], {**action["args"], "gist": "fix the flaky test, again"}))
+
+    assert [found["id"] for found in standing] == ["task/q/1"]
+    assert attention(kernel) == []

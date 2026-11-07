@@ -712,7 +712,8 @@ One stream per task. States: `open → claimed → done | failed | dead`. A `fai
   reassignment.
 - **Fence default.** The caller's live lease, because a model can lose an integer to compaction.
 - **Renewal.** The host renews from observed harness activity up to `lease_max`. `task.renew` stays for programs.
-- **Retries.** `max_attempts`, then `dead`, shown in attention. Each claim spends an attempt, and `task.release` returns it.
+- **Retries.** `max_attempts`, then `dead`, shown in attention until a task added citing it takes its place. Each claim spends an
+  attempt, and `task.release` returns it.
 - **Results.** What `task.complete` or `task.fail` reports stays on the task, and `task.list` shows it, as evidence for an agent.
   A task goes by the ref of its `task.added`, which `task.add`, `task.claim` and `task.list` give, and a result by `result_ref`,
   the ref `task.complete` and `task.fail` return.
@@ -1643,7 +1644,11 @@ view so every client says the same, and no state: `needs_you` while an attention
 otherwise. A mention is the person's to read, which their marks say, so it names no group. `actions[]` are
 op references, each with whatever keeps a stale button from deciding anything, so any client can draw them. An action fixes only
 the arguments it knows, which the record names, and with `form` leaves the rest to its op's form, which a client opens filled in
-with what it fixes, as a budget's place offers `budget.set` with its scope and leaves its limits to the person
+with what it fixes, as a budget's place offers `budget.set` with its scope and leaves its limits to the person. Every kind of
+place carries such an action or says in its gist what settles it. A lost turn, a wake past `max_hops`, and an agent's failure or
+conflict, which its next turn settles, offer to write to it, as a person's message is no hop; a mention is read, and offers a reply
+where its sender takes one; a dead task offers to add it again, citing it, which closes it; your checkout's conflict and a daemon
+that keeps failing say in their gist what settles them; and a failure of no agent's says that nothing tries it again, and stands
 ([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft).
 
 - **TUI.** Textual, in the CLI package, which `platoon-harness` opens on a terminal and a headless command never imports. It starts a

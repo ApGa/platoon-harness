@@ -59,6 +59,12 @@ def _budget_actions(scope: str | None) -> list[dict[str, Any]]:
     return [_action("Set the budget", "budget.set", {} if scope is None else {"scope": scope}, form=True)]
 
 
+def _write_to(agent: str | None) -> list[dict[str, Any]]:
+    """What settles a place its agent's next turn settles: a message from the person, whose words are theirs to give,
+    and which is no hop, so it wakes the agent. A place of no agent's has none."""
+    return [] if agent is None else [_action("Write to it", "message.send", {"to": f"@{agent}"}, form=True)]
+
+
 class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
     look found conflicted paths is kept, so that its row comes back after the next look that still finds them."""
@@ -131,8 +137,12 @@ class Attention(View):
 
     @fold("message.sent")
     def mention(self, event: Event) -> None:
+        """A message to a person, which a reply settles, as reading it does in the person's marks. The runtime's report
+        of an agent takes no reply."""
         if event.data["mention"] is not None:
-            self._raise(f"{event.stream}@{event.version}", "mention", event)
+            ref, sender = f"{event.stream}@{event.version}", event.data["sender"]
+            reply = _action("Reply", "message.send", {"to": sender, "reply_to": ref}, form=True)
+            self._raise(ref, "mention", event, [] if sender == "runtime" else [reply])
         if event.data["reply_to"] is not None:
             self._lower(event, "id = ?", event.data["reply_to"])
 
@@ -167,25 +177,39 @@ class Attention(View):
         where = f"@{event.agent}"
         found = self.db.execute("SELECT gist FROM v_attention_conflicts WHERE workspace = ?", (where,)).fetchone()
         if found is not None:
-            self._raise(f"conflict/{where}", "conflict", event, agent=event.agent, gist=found["gist"])
+            self._raise(f"conflict/{where}", "conflict", event, _write_to(event.agent), gist=found["gist"])
 
     @fold("effect.failed")
     def failed(self, event: Event) -> None:
-        """A failure is news, unless a person said so, who has nothing left to do here."""
-        if event.actor == "runtime":
-            self._raise(f"effect/{event.data['id']}", "failed", event)
+        """A failure is news, unless a person said so, who has nothing left to do here. An agent's next turn settles
+        its own. Nothing tries one of no agent's again, which only the runtime's own error or an extension's daemon
+        makes, as a test and a diff record their own failures."""
+        id = f"effect/{event.data['id']}"
+        if event.actor != "runtime":
+            self._lower(event, "id = ?", id)
+        elif event.agent is not None:
+            self._raise(id, "failed", event, _write_to(event.agent))
         else:
-            self._lower(event, "id = ?", f"effect/{event.data['id']}")
+            said = f"{event.data['kind']} failed, and nothing tries it again: {event.data['error']}"
+            self._raise(id, "failed", event, gist=said[:GIST_LIMIT])
 
     @fold("task.died")
     def dead_task(self, event: Event) -> None:
-        self._raise(event.stream, "dead_task", event)
+        """A task past its attempts is added again citing it, its `task.added`, which settles it."""
+        again = {"queue": event.data["queue"], "based_on": [f"{event.stream}@1"]}
+        self._raise(event.stream, "dead_task", event, [_action("Add it again", "task.add", again, form=True)])
+
+    @fold("task.added")
+    def task_again(self, event: Event) -> None:
+        """A task added citing a dead one takes its place."""
+        for ref in event.based_on:
+            self._lower(event, "id = ? AND kind = 'dead_task'", ref.partition("@")[0])
 
     @fold("wake.refused")
     def wake_refused(self, event: Event) -> None:
         """A wake past `max_hops`, or one a budget refused, naming its scope where it was over that scope's limit."""
         if event.data["why"] == "hops":
-            self._raise(f"wake/{event.agent}", "hops", event)
+            self._raise(f"wake/{event.agent}", "hops", event, _write_to(event.agent))
             return
         detail = event.data["detail"]
         scope = detail.get("scope") if isinstance(detail, dict) else None
@@ -216,7 +240,7 @@ class Attention(View):
     @fold("turn.lost")
     def turn_lost(self, event: Event) -> None:
         """Nobody knows what a lost turn did, until its agent's next turn has looked."""
-        self._raise(f"turn/{event.agent}", "uncertain", event)
+        self._raise(f"turn/{event.agent}", "uncertain", event, _write_to(event.agent))
 
     @fold("turn.ended", "turn.lost")
     def approval_moot(self, event: Event) -> None:

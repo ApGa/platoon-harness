@@ -231,8 +231,8 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
 
 
 async def test_needs_you_lists_a_conflict_its_agent_rests_on(browser: Browser, root: Path, monkeypatch):
-    """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, with no action here,
-    saying on which files and where to resolve it, and naming its agent once."""
+    """The runtime never resolves a conflict, so one an agent's merge stopped on needs a person, saying on which files
+    and where to resolve it, naming its agent once, and offering to write to it, which opens `message send`'s form."""
     repo = repository(root / "repo", monkeypatch)
     git("checkout", "-q", "-b", "theirs", cwd=repo)
     commit(repo, "README", "theirs\n")
@@ -255,9 +255,11 @@ async def test_needs_you_lists_a_conflict_its_agent_rests_on(browser: Browser, r
             await needs.click()
             place = page.locator(".x-needs .x-need")
             where = re.escape(str((root / "home" / "sessions" / "s" / "agents" / "bob" / "workspace").resolve()))
-            said = rf"⚠ conflict .*bob: merge stopped on conflicts in 1 file, README: resolve it in {where}$"
+            said = rf"⚠ conflict .*bob: merge stopped on conflicts in 1 file, README: resolve it in {where}Write to it$"
             await expect(place).to_have_text(re.compile(said), timeout=SECONDS)
-            await expect(place.get_by_role("button")).to_have_count(0)
+            await place.get_by_role("button", name="Write to it").click()
+            await expect(page.locator("#pane h2")).to_have_text("message send", timeout=SECONDS)
+            await expect(field(page, "--to")).to_have_value("@bob")
             await page.context.close()
 
     assert errors == []

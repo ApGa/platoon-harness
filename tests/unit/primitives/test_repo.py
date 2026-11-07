@@ -371,7 +371,8 @@ async def test_a_conflict_needs_you_while_its_agent_rests_on_it(kernel):
 
     [row] = attention(kernel)
     rostered = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))["rows"]
-    assert (row["id"], row["kind"], row["agent"], row["actions"]) == ("conflict/@bob", "conflict", "bob", [])
+    assert (row["id"], row["kind"], row["agent"]) == ("conflict/@bob", "conflict", "bob")
+    assert row["actions"] == [{"label": "Write to it", "op": "message.send", "args": {"to": "@bob"}, "form": True}]
     assert row["gist"] == f"merge stopped on conflicts in 2 files, a.py, b.py: resolve it in {WORKTREE}"
     assert next(found for found in rostered if found["agent"] == "bob")["group"] == "needs_you"
 

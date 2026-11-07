@@ -31,6 +31,12 @@ named here is closed.
   `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
   `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
   it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **Every place that needs you carries its act, or says what settles it.** A lost turn, a wake past `max_hops`, and an agent's
+  failure or conflict, which its next turn settles, offer Write to it, a message to it in `message send`'s form, as a person's
+  message is no hop. A mention offers Reply where its sender takes one. A dead task offers Add it again, `task add` on its
+  queue citing it, and a task added that cites it closes its place, where it stood until the session ended. A failure of no
+  agent's says that nothing tries it again. Each of these had no action and said nothing of what settles it. See
+  [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **A place that needs you opens the form that settles it.** An action of the `attention` view may fix only the arguments it
   knows, which the record names, and say with `form` that it leaves the rest to its op's form. The terminal's dock and the
   page's Needs you open that form, the palette's and Commands', filled in with what the action fixes, and `session show` writes

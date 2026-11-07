@@ -86,7 +86,7 @@ read back as history.*
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
 | Focus pane | One agent or one channel at a time, so live text is never merged |
 | Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from, a line on what an isolated one still reaches, and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
-| Dock | Each place you must act, from the `attention` view, with its actions. A conflict has none, and says where to resolve it. Nor has a daemon that keeps failing, which says where its traceback is and what starts it anew |
+| Dock | Each place you must act, from the `attention` view, with its actions. A place its agent's next turn settles, a lost turn, a wake past `max_hops`, a failure or a conflict of an agent's, offers Write to it, a mention Reply, and a dead task Add it again, each opening its op's form. Your checkout's conflict has none, and says where to resolve it, a failure of no agent's that nothing tries it again, and a daemon that keeps failing where its traceback is and what starts it anew |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
 
 The groups come from the roster's `group`, so every client says the same. Your unread counts and the mentions you have
@@ -152,8 +152,8 @@ look of an isolated workspace found, or one built on it, says instead why it can
 A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
-conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves
-one. The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
+conflict an agent's merge stopped on waits in the dock, saying where to resolve it, with Write to it, since the runtime never
+resolves one. The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
 shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
 
 ### Follow a line's provenance
