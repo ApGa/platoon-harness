@@ -908,9 +908,10 @@ An approval carries the whole of what it asks, the command, the patch or the too
 `approval.requested`, `approval/<id>@1`: masked as every report is, then kept to its first 64 KiB, cut at a character's end, with
 `cut` counting the bytes it left out. A client reads it whole by its ref, as `blob.get` gives no text for a line longer than one
 result holds, as a one-line ask past some 12 KiB is. A driver that cannot say what its harness asks sends none, which is unknown
-and not an empty ask. An ask the journal will not hold, one past 64 KiB or one a person redacted, is refused and its approval
-answered `deny`, so a model that asks again what a person redacted is denied and its agent lives on. A tombstone redacts the body
-and not the gist. See [RFC 0066](rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md).
+and not an empty ask, and its record's `cut` is null, not 0. An ask the journal will not hold, one past 64 KiB or one a person
+redacted, is refused and its approval answered `deny`, so a model that asks again what a person redacted is denied and its agent
+lives on. A tombstone redacts the body and not the gist. See
+[RFC 0066](rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md).
 
 `resolve` carries `expected_version`: the first commit wins, and the loser gets `conflict{resolved_by, via}`, shown as
 information. **Approval policy is a durable session setting** (`ask`, `deny`, `allow`, per role), journaled at open, and

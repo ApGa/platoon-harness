@@ -215,6 +215,21 @@ async def test_an_approval_s_whole_ask_is_its_body_redacted_and_bounded(kernel, 
     assert refusal(await kernel.submit(ada, "blob.get", {"ref": "approval/a1@1"})).code == "not_found"
 
 
+async def test_an_ask_nobody_said_has_no_cut_and_a_cut_needs_an_ask(kernel):
+    """How much of an unknown ask was left out is unknown too, so its record's `cut` is null and never 0, and a cut of
+    no body is refused."""
+    await spawn(kernel, "bob")
+
+    await ask(kernel)
+    refused = await kernel.submit(
+        kernel.runtime, "approval.request", {"id": "a2", "agent": "bob", "gist": "may I?", "cut": 5}
+    )
+
+    [asked] = of_type(kernel, "approval.requested")
+    assert (asked.data["body"], asked.data["cut"]) == (None, None)
+    assert refusal(refused).code == "invalid"
+
+
 async def test_an_ask_past_its_bound_is_cut_and_says_where(tmp_path):
     """At the end of the last whole character within 64 KiB, which here falls inside a line and between a character's
     two bytes, so the ask stays text that `blob.get` reads, and its record counts the bytes it left out, so a reader can

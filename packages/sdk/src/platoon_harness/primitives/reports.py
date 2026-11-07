@@ -158,7 +158,7 @@ class ApprovalRequested(Args):
     """A harness waits on a decision. `body` is the whole of what it asks to do, the command, the patch or the tool's
     input, as it gave it, until the host stores it, and None when the driver cannot say. `cut` counts the bytes of the
     whole ask that `body` leaves out: a driver sends the ask whole, and the host, masking it first, keeps its first
-    `ASK_LIMIT` bytes and counts the rest here."""
+    `ASK_LIMIT` bytes and counts the rest here. With no body there is nothing to count, and a cut is refused."""
 
     type: Literal["approval.requested"] = "approval.requested"
     id: Name

@@ -51,7 +51,7 @@ class ApprovalRequested(Args):
 `body` is the whole of what the harness asks to do, as it gave it, and its gist is a line saying what that is. It is text until
 the host stores it, as an item's body is. None means the driver cannot say, which is unknown and not an empty ask. A driver sends
 the ask whole. A wire program that cut it already, so that its frame stays within a line, says in `cut` how many bytes it left
-out.
+out. A cut with no body is refused, as there is nothing it could count.
 
 ### 2. The host masks it, then bounds it
 
@@ -75,6 +75,8 @@ records them at payload version 2:
 {"id": "a1", "policy": "ask", "body": "sha256:…", "cut": 0}
 ```
 
+`cut` is null where `body` is, as how much of an ask nobody said was left out is unknown too, and never 0.
+
 The event's body is the ask, so a client reads it whole by the body's ref, as it reads any body. `blob.get` reads it at
 `approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body, and a line
 longer than one result holds, some 12 KiB, comes back with `text` null and nothing to page on to. Claude Code's, pi's and the
@@ -83,8 +85,8 @@ own, as the event is its, and nobody else's. A body the journal does not hold it
 refused `invalid`, so the op holds to the bound as the host does, and the host then answers the approval `deny`, as it does any
 approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body, for a secret the mask did not know, and
 redacted content does not come back: the same ask asked again is refused, and its approval answered `deny` with nobody asked. A
-version 1 payload has neither field, which a reader takes as an ask nobody said and nothing cut. The `Approvals` view and the
-attention row are unchanged: a client reads the ask by its ref when it shows it.
+version 1 payload has neither field, which a reader takes as both null: an ask nobody said, and how much of it was cut unknown.
+The `Approvals` view and the attention row are unchanged: a client reads the ask by its ref when it shows it.
 
 ### 4. What each driver sends
 

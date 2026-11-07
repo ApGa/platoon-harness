@@ -117,17 +117,19 @@ def bounded(ask: str) -> tuple[bytes, int]:
 
 def ask(txn: Txn, id: str, agent: Agent, gist: str, body: str | None = None, cut: int = 0) -> None:
     """Record that a harness is waiting on a decision, with `body`, the whole of what it asks, as a body the journal
-    holds, and `cut`, the bytes of it that body leaves out. Then apply the role's policy, which `ask` leaves to a
-    person."""
+    holds, and `cut`, the bytes of it that body leaves out, unknown where the ask is. Then apply the role's policy,
+    which `ask` leaves to a person."""
     if txn.view(Approvals).get(id) is not None:
         raise Refused("conflict", f"approval {id} exists")
+    if body is None and cut:
+        raise Refused("invalid", "`cut` counts what a body leaves out, and there is no body")
     if body is not None and inline_body(txn, body) is None:
         raise Refused(
             "invalid", f"an ask is a body the journal holds, of at most {ASK_LIMIT // 1024} KiB and not redacted"
         )
     role = txn.view(SessionRecord).settings().roles.get(agent.role)
     policy = "ask" if role is None else role.approvals
-    data = {"id": id, "policy": policy, "body": body, "cut": cut}
+    data = {"id": id, "policy": policy, "body": body, "cut": None if body is None else cut}
     refs = [body] if body is not None else ()
     txn.emit("approval.requested", f"approval/{id}", gist=gist, agent=agent.name, refs=refs, data=data, v=2)
     if policy != "ask":
