@@ -61,7 +61,7 @@ _BEARER = "conformance-bearer"
 _EFFORT = "low"
 _ASKED = "touch asked # " + " ".join(f"part{n:03d}" for n in range(40))
 """A command longer than a gist holds, which writes a file, so that a harness asks about it as it would about any
-write: Claude Code allows a command that writes nothing unasked."""
+write: Claude Code runs an `echo` unasked."""
 _SAID_EFFORT = re.compile(rb'effort"\s*:\s*"' + _EFFORT.encode() + rb'"')
 
 Factory = Callable[[], Driver]

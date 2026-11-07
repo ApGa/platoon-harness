@@ -106,10 +106,11 @@ A completed patch item's body is the same text, so a person reads one patch whet
 
 ### 6. A check proves it
 
-`approval_shows_its_ask` scripts the harness's gated tool with a harmless command longer than a gist holds, waits for the
-approval, denies it, and passes when the approval's body holds that command whole. It needs `approvals`, as `approval_answered`
-does. FakeModel's log is the ground truth: the command is what the model asked to run. A failure leaves `operational` unmet, as one
-of `approval_answered` or `denial_holds` does, since a person cannot control what they cannot see.
+`approval_shows_its_ask` scripts the harness's gated tool with a command longer than a gist holds, `touch asked` and a comment,
+waits for the approval, denies it, and passes when the approval's body holds that command whole. The command writes a file, as
+Claude Code runs an `echo` without asking, and the denial keeps it from running. It needs `approvals`, as
+`approval_answered` does. FakeModel's log is the ground truth: the command is what the model asked to run. A failure leaves
+`operational` unmet, as one of `approval_answered` or `denial_holds` does, since a person cannot control what they cannot see.
 
 ### 7. The wire
 
@@ -175,6 +176,10 @@ exists outside this repository.
 - On Codex 0.167.0 against FakeModel, with the sandbox `read-only`, a model's `exec_command` running `apply_patch` made the item
   start and then the request for it under the same id, which `test_a_file_change_approval_on_the_real_binary_carries_its_patch`
   in `tests/integration/test_codex.py` keeps.
+- `approval_shows_its_ask` passed on Claude Code 2.1.319, Codex 0.167.0, pi 1.5.0 and the OpenHands SDK 1.59.0 against
+  FakeModel, in each harness's `test_the_<harness>_driver_conforms`, and on `ScriptedDriver` and a wire program in
+  `tests/conformance`. With `echo` in place of `touch`, no approval came from Claude Code 2.1.319, which ran the command unasked and
+  sent its output to the model as the tool's result.
 - The bound is the most the journal holds in an event's own row, 64 KiB, as for a test's output and a patch. How often an ask
   passes it is unmeasured: a command is short, and an `Edit`, a `Write` or a patch carries the text it writes (UNVERIFIED).
 - The tests named in the rollout plan's M1.

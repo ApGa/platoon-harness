@@ -123,6 +123,7 @@ async def test_the_pi_driver_conforms(tmp_path, monkeypatch):
 
     print(result)
     assert result.failed == (), str(result)
+    assert result.get("approval_shows_its_ask").state == "passed"
     assert (result.driver, result.version) == ("pi", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == {
