@@ -218,9 +218,9 @@ one's claim in the first one's span, which keeps that claim's share.
 Its incentives: citing, and taking, give away all but `retained` of what reaches the event, being cited or taken by a credited
 span earns credit, broadcasting draws more takes, reading in a last turn costs, and work nobody cites or takes earns nothing from
 it. The default template asks every agent to cite, so training under it pulls against that request: watch the citation rate, and
-what each span read and sent. Rows like these are fractions of the team reward, so a training system centres them per role, as
+what each span read and sent. Rows like these are fractions of the team reward, so a training system centers them per role, as
 Platoon's keyed credit does at a group size above one. A span's row is a slice of its agent's, so pooling spans as agents of their
-own would tie an agent's advantage to how many spans it was cut into: centre agents' rows per role, train each scored span's calls
+own would tie an agent's advantage to how many spans it was cut into: center agents' rows per role, train each scored span's calls
 on its row less its agent's baseline shared equally by that agent's scored spans, and the calls no scored span holds on nothing.
 
 ## The export

@@ -450,11 +450,12 @@
   does, takes nothing of its own, as it reaches that event, and what it took, as its cause; by the entry's own bound, which is its
   commit, a read in a trailing call became an edge of words that never saw it. An agent that never started, as one whose launch
   failed, gets no row, as it has no start for one to target, and what its events keep is in no row, where the walk refused the
-  whole episode once a read took its report. Where no span took another principal's event, its rows are version 2's. A span's row is now the one annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were
-  targets nothing wrote. See [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+  whole episode once a read took its report. Where no span took another principal's event, its rows are version 2's. A span's
+  row is now the one annotation target below an agent's: a turn's `turn.started` and a call's `model.called` were targets
+  nothing wrote. See [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - "Span" means one thing, a stretch of one turn of an agent: `primitives.Lines.span`, the `#L<first>-<last>` a result shows of a
   body, is `Lines.range`, as the read tools' argument already was, `schema.seconds` takes a `duration`, the facade's own alias for a
-  duration is gone in favour of `schema.Duration | float`, and an episode is a part of a session. See
+  duration is gone in favor of `schema.Duration | float`, and an episode is a part of a session. See
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - `ScriptedDriver` sends each tool call a model chose under the id the model gave it, as `scripted/toolCallId` in MCP's `_meta`,
   which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and two identical calls one

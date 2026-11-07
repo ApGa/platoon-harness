@@ -8,7 +8,8 @@
 `propagate@2`, which keeps what each event kept for its span too and writes a row on each span it reaches, and then to
 `propagate@3`, which also passes credit along what a span took, another principal's event its harness confirmed taking. So it
 walks offers after all, but never an unconfirmed one, and a walk that meets an edge to an event no older than its own makes every
-row `invalid`. The signature, the producer's name and every agent's row where no span took anything stay as decided here.
+row `invalid`. The signature, the producer's name and every agent's row where no span took another principal's event stay as
+decided here.
 
 ## Summary
 

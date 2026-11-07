@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture sections 11 and 14](../architecture.md#11-provenance), [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md), [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
 | Discussion | The owner's request and a design review with two critiques, kept outside the repository |
-| Implementation | `fix: Say a finished agent's last words by what its report carries`; `feat: Send each scripted tool call's id as a harness does`; `feat: Cut each agent's turns into spans at its writes`; `feat: Keep propagated credit per span`; `feat: Follow what a span took` |
+| Implementation | `fix: Say a finished agent's last words by what its report carries`; `feat: Send each scripted tool call's id as a harness does`; `feat: Cut each agent's turns into spans at its writes`; `feat: Keep propagated credit per span`; `feat: Follow what a span took`; and the fixes the rollout plan lists beside them |
 
 ## Summary
 
@@ -135,7 +135,7 @@ switch and no second producer.
 ### 6. One word, one meaning
 
 `primitives.Lines.span`, the line range a result shows, is `Lines.range`, as the read tools' argument already was; the facade's
-own alias for a duration is gone in favour of `schema.Duration | float`, and `schema.seconds` takes a `duration`; an episode is
+own alias for a duration is gone in favor of `schema.Duration | float`, and `schema.seconds` takes a `duration`; an episode is
 a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` are added, and the command `spans` is derived.
 
 ## The hard parts
@@ -145,7 +145,8 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
   `invalid`, and say so, rather than lose credit silently.
 - **Where a call is reported.** pi and ScriptedDriver report `model.called` at a call's end, so a take confirmed during call N is
   N's; Claude Code reports at a call's start, so such a take is N+1's. The same take can fall one call apart between harnesses at
-  a span's edge.
+  a span's edge. UNVERIFIED on pi and Claude Code: it follows from where each driver reports a call, and no real binary has shown
+  a take at a span's edge.
 - **Coverage.** OpenHands joins no tool call to its call, so each of its turns is one span; Codex gives no id per model call, so no
   tool call joins one, each of its turns is one span, and its calls carry no id to train by; `exec` reports no call, so it has none.
   A worker that does several tasks in one turn there gets one span for all of them.
@@ -181,7 +182,8 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 ## Consequences
 
 - A persistent worker's tasks are credited apart, each to the span whose call completed it, on harnesses that join a tool call to
-  its call: pi, Claude Code and ScriptedDriver.
+  its call: pi, Claude Code and ScriptedDriver. UNVERIFIED on pi and Claude Code: their joins are tested, but no real binary has
+  shown a turn cut at a write.
 - A helper whose report a credited span took is reached, cited or not, and a spawn is credited through the goal its child took.
   An uncited report keeps all that reaches it on the span that wrote it. An agent that wants its crafting span reached cites its
   own earlier write, which carries credit only once its harness has taken that write back, by a read, as an agent's citation
@@ -200,14 +202,16 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 
 ## Rollout plan
 
+Every milestone lands with this RFC, so once they are on main a last change sets its status to `Implemented`. Training each span
+on its row is a training system's to build, apart from this repository, as Consequences says, and is no milestone of it.
+
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the four beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries` |
-| M2 Scripted ids | `scripted/toolCallId`, and an id per tool call | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, `test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives` and `test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does` |
-| M3 Spans | The `spans` query and the renames | `tests/unit/primitives/test_spans.py` | `feat: Cut each agent's turns into spans at its writes` |
-| M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`, over generated journals whose citations a read can make seen, which M5 put in the place of `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` | `feat: Keep propagated credit per span` |
-| M5 `propagate@3` | The take and the older-edge rule | The take tests in `test_credit.py`, and `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took` | `feat: Follow what a span took` |
-| M6 Training on spans | A training system trains each span on its row | The training system's own tests | Built apart from this repository |
+| M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the four beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries`; `fix: Decide a finish's own words by its gist or its body alike` |
+| M2 Scripted ids | `scripted/toolCallId`, and an id per tool call | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, `test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives` and `test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does`; `fix: Give each tool call FakeModel makes an id of its own` |
+| M3 Spans | The `spans` query and the renames | `tests/unit/primitives/test_spans.py` | `feat: Cut each agent's turns into spans at its writes`; `refactor: Name the spans reads as their neighbors are named` |
+| M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`, over generated journals whose citations a read can make seen, which M5 put in the place of `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` | `feat: Keep propagated credit per span`; `docs: Say an end out of a turn lies in the span of its call`; `test: Hold seen citations to propagate@1 in the reduction property` |
+| M5 `propagate@3` | The take and the older-edge rule | The take tests in `test_credit.py`, and `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took` | `feat: Follow what a span took`; `fix: Give a carried entry no takes and a never-started agent no row` |
 
 ## Open questions
 
@@ -236,8 +240,8 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
   turn-finish test, which asserts `said` and `carries` name the message that said the last words.
 - [tests/unit/drivers/test_scripted.py](../../tests/unit/drivers/test_scripted.py) and the conformance suite, for section 2.
 - [tests/integration/test_contract.py](../../tests/integration/test_contract.py): a row for each agent and for the span its last
-  words lie in, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass.
+  words lie in, on ScriptedDriver in the fast pass and on pi 1.5.0 and OpenHands 1.59.0 against FakeModel in the slow pass.
 - A throwaway reimplementation of these rules, written for the design and kept outside the repository, gives the numbers these
   tests assert on the owner's case, the claims made in a completing call and the never-finishing mesh, read off the same
-  sessions; on that mesh without takes it keeps each peer's half on its last span and gives the helper nothing. No real harness,
-  no live model and no GPU run has produced a span row.
+  sessions; on that mesh without takes it keeps each peer's half on its last span and gives the helper nothing. No live model and
+  no GPU run has produced a span row, and no real binary has shown a turn cut at a write.

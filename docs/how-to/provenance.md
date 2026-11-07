@@ -121,8 +121,8 @@ the journal: it names its producer and version, the events it is about and rests
 trace, and each of those events lies at or below that head. Its status is `scored`, `invalid`, `error`, `timeout` or `cancelled`,
 and a value is given when it is `scored` and only then, so no other is ever zero; an event nobody said anything of is unscored,
 which no status says. A team's reward targets its episode's `episode.closed`, an agent's its first `agent.started`, never the
-spawn its spawner made, and a span's the `model.called` of its last call, which names it. A second estimator, or a second version, writes
-beside the first. This one is a toy, labelled as one, and its target is an event of each agent's own, the first the walk reached,
+spawn its spawner made, and a span's the `model.called` of its last call, which names it. A second estimator, or a second
+version, writes beside the first. This one is a toy, labelled as one, and its target is an event of each agent's own, the first the walk reached,
 never a spawn:
 
 ```python
