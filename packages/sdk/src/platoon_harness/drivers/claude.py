@@ -81,6 +81,9 @@ _LOGINS: Mapping[str, Login] = {"claude.ai": "plan", "api_key": "key"}
 _INSTRUCTIONS = "instructions.md"
 _SYNTHETIC = "<synthetic>"
 _DENIED = "The runtime denied this."
+_BESIDE = ("decision_reason", "blocked_path")
+"""What a request for a tool says beside the tool's input, which a person allows too: why it asks, as a hook can say,
+and the path that made it ask, such as one outside the folders it may reach."""
 _SAYS_NOTHING = frozenset(
     {
         "rate_limit_event",
@@ -340,11 +343,12 @@ class ClaudeDriver:
                     "tool_name": str(name),
                     "input": input,
                     "tool_use_id": str(tool),
-                },
+                } as request,
             }:
                 self._asking[id] = (tool, input)
                 said = f"{name} {json.dumps(input)}"
-                self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said), body=said))
+                beside = "".join(f"{key}: {request[key]}\n" for key in _BESIDE if request.get(key) is not None)
+                self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said), body=beside + said))
             case {"type": "control_request", "request_id": id}:
                 self._refuse(id)
                 self._process.unknown(_kind(frame), line.decode(errors="replace"))

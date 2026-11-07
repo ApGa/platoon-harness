@@ -959,6 +959,19 @@ async def test_an_edit_approval_carries_its_whole_input(tmp_path, stand):
     assert len(asked.gist) == 280 and asked.body.startswith(asked.gist) and asked.cut == 0
 
 
+async def test_an_ask_carries_why_claude_code_asks_and_the_path_that_made_it(tmp_path, stand):
+    """Each a line before the tool's name and input, as a person allows them too."""
+    frame = asking(command="cat /etc/hosts")
+    frame["request"] |= {"decision_reason": "a hook asks", "blocked_path": "/etc/hosts", "agent_id": None}
+    stand.install(turns=[[STARTED, assistant(using(command="cat /etc/hosts")), frame]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        asked = await heard.until(ApprovalRequested)
+
+    said = 'Bash {"command": "cat /etc/hosts"}'
+    assert (asked.body, asked.gist) == (f"decision_reason: a hook asks\nblocked_path: /etc/hosts\n{said}", said)
+
+
 async def test_a_denial_says_so_and_its_outcome_is_read_from_the_harness(tmp_path, stand):
     stand.install(
         turns=[[STARTED, assistant(using()), asking()]],

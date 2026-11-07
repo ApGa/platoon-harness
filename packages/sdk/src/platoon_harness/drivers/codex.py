@@ -74,6 +74,9 @@ _KEYED = (
 )
 _LOGINS: Mapping[str, Login] = {"Logged in using ChatGPT": "plan", "API key configured": "key"}
 _ASKS = "on-request"
+_BESIDE = ("reason", "cwd", "networkApprovalContext", "grantRoot")
+"""What a request says beside the command or patch it asks about, which a person allows too: why, the folder a command
+runs in, the host it would reach, and the root a patch would write under for the rest of the session."""
 _TOOL_TIMEOUT_S = 300.0
 _TOOLS = frozenset(
     {
@@ -232,6 +235,12 @@ def _patch(changes: Sequence[Mapping[str, Any]]) -> str:
     """A file change's patch: each file it changes, by its kind and path, then that file's change as Codex gives it, an
     added or deleted file's text or an update's diff, which names no path."""
     return "\n".join(f"{change['kind']['type']} {change['path']}\n{change['diff']}" for change in changes)
+
+
+def _beside(params: Mapping[str, Any]) -> str:
+    """Each of `_BESIDE` a request gives, a line each, as `name: value`."""
+    given = ((name, params.get(name)) for name in _BESIDE)
+    return "".join(f"{name}: {v if isinstance(v, str) else json.dumps(v)}\n" for name, v in given if v is not None)
 
 
 def _reply(method: str, params: Mapping[str, Any], verdict: Verdict) -> Mapping[str, Any]:
@@ -476,14 +485,15 @@ class CodexDriver:
 
     def _ask(self, method: str, params: Mapping[str, Any]) -> str | None:
         """The whole of what a request asks: a command's command, a file change's patch, which the item it names holds,
-        as Codex starts that item before it asks, and any other request's params as JSON, for permissions or a tool of
-        the user's own. A file change whose item was not seen to start, as no native child's item is, asks nothing
-        known."""
+        as Codex starts that item before it asks, each after what the request says beside it, and any other request's
+        params as JSON, for permissions or a tool of the user's own. A file change whose item was not seen to start, as
+        no native child's item is, asks nothing known."""
         match method, params:
             case "item/fileChange/requestApproval", _:
-                return self._patches.get(params.get("itemId") or "")
+                patch = self._patches.get(params.get("itemId") or "")
+                return None if patch is None else _beside(params) + patch
             case _, {"command": str(command)}:
-                return command
+                return _beside(params) + command
             case _:
                 return json.dumps(params)
 

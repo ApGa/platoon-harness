@@ -48,10 +48,11 @@ class ApprovalRequested(Args):
     cut: int = 0             # bytes of the whole ask the body leaves out
 ```
 
-`body` is the whole of what the harness asks to do, as it gave it, and its gist is a line saying what that is. It is text until
-the host stores it, as an item's body is. None means the driver cannot say, which is unknown and not an empty ask. A driver sends
-the ask whole. A wire program that cut it already, so that its frame stays within a line, says in `cut` how many bytes it left
-out. A cut with no body is refused, as there is nothing it could count.
+`body` is the whole of what the harness asks to do, as it gave it, with what its request says beside it, such as why it asks or
+where a command runs, as a person allows that too, and its gist is a line saying what that is. It is text until the host stores
+it, as an item's body is. None means the driver cannot say, which is unknown and not an empty ask. A driver sends the ask whole. A
+wire program that cut it already, so that its frame stays within a line, says in `cut` how many bytes it left out. A cut with no
+body is refused, as there is nothing it could count.
 
 ### 2. The host masks it, then bounds it
 
@@ -80,21 +81,22 @@ records them at payload version 2:
 
 The event's body is the ask, so a client reads it whole by the body's ref, as it reads any body. `blob.get` reads it at
 `approval/<id>@1`, the first event of the approval's stream, a page of whole lines at a time, as it reads any body, and a line
-longer than one result holds, some 12 KiB, comes back with `text` null and nothing to page on to. Claude Code's, pi's and the
-OpenHands worker's asks are one line, and so is a command, so such an ask past a page is read by its ref only. An agent reads its
-own, as the event is its, and nobody else's. A body the journal does not hold itself, one past 64 KiB or one a person redacted, is
-refused `invalid`, so the op holds to the bound as the host does, and the host then answers the approval `deny`, as it does any
-approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body, for a secret the mask did not know, and
-redacted content does not come back: the same ask asked again is refused, and its approval answered `deny` with nobody asked. A
-version 1 payload has neither field, which a reader takes as both null: an ask nobody said, and how much of it was cut unknown.
-The `Approvals` view and the attention row are unchanged: a client reads the ask by its ref when it shows it.
+longer than one result holds, some 12 KiB, comes back with `text` null and nothing to page on to. A tool's input, in Claude
+Code's, pi's and the OpenHands worker's asks, is one line of JSON, and a command is often one line too, so such a line past a page
+is read by its ref only. An agent reads its own, as the event is its, and nobody else's. A body the journal does not hold itself,
+one past 64 KiB or one a person redacted, is refused `invalid`, so the op holds to the bound as the host does, and the host then
+answers the approval `deny`, as it does any approval the journal refuses. `body.tombstone` redacts an ask as it redacts any body,
+for a secret the mask did not know, and redacted content does not come back: the same ask asked again is refused, and its approval
+answered `deny` with nobody asked. A version 1 payload has neither field, which a reader takes as both null: an ask nobody said,
+and how much of it was cut unknown. The `Approvals` view and the attention row are unchanged: a client reads the ask by its ref
+when it shows it.
 
 ### 4. What each driver sends
 
 | Driver | The ask |
 |---|---|
-| `claude` | The tool's name, then its input as JSON, the text the gist begins with |
-| `codex` | A command's `command`; a file change's patch, below; and any other request, for permissions or a tool of the user's own, its params as JSON |
+| `claude` | The tool's name, then its input as JSON, the text the gist begins with, after a line for each of `decision_reason`, why it asks, as a hook can say, and `blocked_path`, the path that made it ask, that the request gives |
+| `codex` | A command's `command`, and a file change's patch, below, each after a line for each of `reason`, `cwd`, `networkApprovalContext` and `grantRoot`, the root a patch would write under for the rest of the session, that the request gives; and any other request, for permissions or a tool of the user's own, its params as JSON |
 | `pi` | What the gate asks pi to confirm, the tool's name and its input as JSON, or a user's own extension's title and message |
 | `openhands` | Each action of the step it asks about, its tool's name and its arguments as the model gave them, as one approval covers a step |
 | `ScriptedDriver` | The gated tool's name and its input as JSON; `Ask(gist, body)` scripts one |

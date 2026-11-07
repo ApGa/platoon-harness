@@ -815,6 +815,44 @@ async def test_a_file_change_approval_carries_the_patch_of_the_item_it_names(tmp
     assert (unseen.body, unseen.gist) == (None, "outside the root")
 
 
+@pytest.mark.parametrize(
+    ("frames", "beside"),
+    [
+        (
+            [
+                asking(
+                    command="curl https://example.invalid",
+                    cwd="/work/sub",
+                    reason="it reaches the network",
+                    networkApprovalContext={"host": "example.invalid", "protocol": "https"},
+                )
+            ],
+            "reason: it reaches the network\ncwd: /work/sub\n"
+            'networkApprovalContext: {"host": "example.invalid", "protocol": "https"}\n'
+            "curl https://example.invalid",
+        ),
+        (
+            [
+                started("fileChange", "f1", changes=CHANGES, status="inProgress"),
+                asking("item/fileChange/requestApproval", command=None, itemId="f1", reason="past", grantRoot="/work"),
+            ],
+            f"reason: past\ngrantRoot: /work\n{PATCH}",
+        ),
+    ],
+)
+async def test_an_ask_carries_what_codex_says_beside_it(tmp_path, stand, frames, beside):
+    """Why, the folder a command runs in, the host it would reach and the root a patch would write under for the rest
+    of the session, each a line before the command or the patch, as a person allows them too."""
+    stand.install(turns=[[began(), *frames]], on_answer=[ended()])
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        asked = await heard.until(ApprovalRequested)
+        await driver.answer(asked.id, "deny")
+        await heard.until(TurnEnded)
+
+    assert asked.body == beside
+
+
 async def test_an_approval_s_id_is_its_own_across_agents_and_processes(tmp_path, stand):
     """Ids are journaled per session, and a process counts from one, so a count would collide: a report the journal
     refuses is answered `deny`, and the second agent to ask would be turned down with nobody asked."""
