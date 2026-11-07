@@ -238,7 +238,7 @@ stacked on another one is checked too, and for pushes to `main`. A new push canc
 |---|---|---|
 | `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
-| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, and with unprivileged user namespaces allowed, so the bwrap tests confine | git is older than 2.47, or a test fails |
+| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs | git is older than 2.47, or a test fails |
 | `e2e` | The browser tests | A browser test fails |
 
 The commands, job by job:
