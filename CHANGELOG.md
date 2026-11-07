@@ -607,9 +607,10 @@ named here is closed.
   `tests/unit/test_no_internal_references.py`, after Platoon's, and reads every text file git tracks, every new one it does not
   ignore outside hidden folders, and the name of each, the tests and the configuration among them. It holds the site's words,
   its resource types among them, only as SHA-256 digests, so it no longer spells them out, and takes a numbered host, account or
-  group by the letters before its first digit. It catches a key of the shapes Anthropic, OpenAI, GitHub and AWS give out:
-  `sk-` keys, OpenAI's project and service account keys among them, GitHub's tokens, classic and fine-grained, and an AWS
-  access key id. Each exemption names its text by its digest and says why; the only one is the author's contact each package
+  group by the letters before its first digit. It catches an AWS access key id and a key of the shapes Anthropic, OpenAI
+  and GitHub give out: `sk-` keys, OpenAI's project and service account keys among them, and GitHub's tokens, classic
+  and fine-grained, each also just after a name's underscore, an escaped newline in a JSON capture or a URL escape. Each
+  exemption names its text by its digest and says why; the only one is the author's contact each package
   publishes. `test_boundaries.py` keeps the import boundaries.
 - **A README rebuilt for a newcomer.** The README follows Platoon's outline: the project's one sentence, what it gives you, each
   point as STATUS has it, the nine words of architecture section 2, installing from a checkout, a quickstart that begins with
