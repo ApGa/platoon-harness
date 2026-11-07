@@ -25,13 +25,14 @@ from platoon_harness.runtime.paths import MANIFEST
 from .. import ops
 from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
+from ..review import snapshots_of
 from ..roster import detail_of, why_said
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
 from .provenance import Provenance
-from .review import Review, snapshots_of
+from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .transcript import PAGE, Focus, Transcript

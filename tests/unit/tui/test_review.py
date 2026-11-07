@@ -11,8 +11,9 @@ from typing import Any
 import pytest
 
 from platoon_harness import Session, Team
+from platoon_harness_cli.review import snapshots_of
 from platoon_harness_cli.tui.app import TerminalUI
-from platoon_harness_cli.tui.review import rows_of, snapshots_of
+from platoon_harness_cli.tui.review import rows_of
 
 from ..runtime.gitting import commit, git, repository, working
 from ..runtime.support import in_state, of_type, until
