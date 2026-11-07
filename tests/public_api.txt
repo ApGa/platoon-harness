@@ -326,6 +326,7 @@ platoon_harness.runtime.diffs.uncommitted
 platoon_harness.runtime.Gateway
 platoon_harness.runtime.git.git
 platoon_harness.runtime.git.GitError
+platoon_harness.runtime.git.head_at
 platoon_harness.runtime.git.SECONDS
 platoon_harness.runtime.GRACE
 platoon_harness.runtime.host.DriverLink

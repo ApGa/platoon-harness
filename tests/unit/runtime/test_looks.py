@@ -394,6 +394,19 @@ def test_a_look_that_sees_head_move_records_the_gap_not_a_mixed_state(repo, tmp_
         seen("@ada", ada, base, opened, {"@ada": ada, "shared": repo}, record=True)
 
 
+def test_a_look_never_reads_the_repository_around_a_work_tree_that_lost_its_own(repo, tmp_path):
+    """Git would find yours around it and read your state as its agent's, so the look fails, which records the gap."""
+    opened = tips(repo)
+    tree = repo / "agents" / "ada" / "workspace"
+    tree.mkdir(parents=True)
+    (repo / "README").write_text("yours, uncommitted\n")
+
+    with pytest.raises(GitError) as refused:
+        seen("@ada", tree, None, opened, {"shared": repo}, record=True)
+
+    assert str(refused.value) == f"git finds no repository of {tree}'s own, but {repo.resolve()}'s"
+
+
 def test_a_look_changes_no_ref_index_or_file(repo, tmp_path):
     opened = tips(repo)
     ada, base = worktree(repo, tmp_path, "ada")

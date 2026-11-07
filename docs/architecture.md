@@ -1718,8 +1718,10 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
 - **Making a worktree** takes three steps, each leaving a fact git keeps: a branch whose one reflog entry names the effect, a registration
   locked with our reason from its first write, and a fill. The effect is retried after a crash, each attempt adopts what an earlier
   one made, and one fails, naming it, on a branch, registration or folder the runtime did not make.
-- **The runtime's own git** goes through one runner, which runs no hook, no fsmonitor and no gc, and never changes what an agent made:
-  no `-B`, no `--force` or `reset` in a tree an agent has run in, no `prune`, and no `update-ref` of a branch an agent has.
+- **The runtime's own git** goes through one runner, which runs no hook, no fsmonitor and no gc, reaches no remote, as it allows no
+  transport and fetches no object a partial clone lacks, and never changes what an agent made: no `-B`, no `--force` or `reset` in a
+  tree an agent has run in, no `prune`, and no `update-ref` of a branch an agent has. It reads a workspace's HEAD only where git
+  finds that work tree's own repository at its root, never one around it.
 - **Ending one.** An agent's stop removes its worktree only when nothing would go with it: its processes proved gone, no path in its
   status, whatever your config says of untracked files and submodules, ignored ones included, no operation under way, no index entry
   hidden from status while its file is in the tree, and every commit its HEAD, reflog and own refs hold its base or reachable from a
@@ -1782,14 +1784,17 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   repository of the workspace its look was of, a snapshot's own among them, or in yours once that has gone, and in an isolated
   workspace inside its isolation. Every diff passes `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own prefixes, so
   nothing a repository's config names runs to show it, though a filter runs for an uncommitted diff as it does at a look, and git
-  is ended once it has printed past the bound. `repo.diffed` on `repo/<name>`, with no agent in the envelope, names the commit, or
-  the workspace, the HEAD it was read against and `read_at`, when its reading began, and keeps the patch as its body, which
-  `blob.get` reads and a citation names lines of: all of it, or its first 64 KiB cut at the end of the last line that fits, which
-  `cut` and its gist say. What git takes for binary is named and never shown, and a diff that could not be read says why. A
-  commit's patch is kept once: asked for again while it is read, `repo.diff` gives the same effect, and once it is kept, its ref,
-  reading nothing, while what a workspace holds uncommitted is read at each ask. The effect keeps the session from settling until
-  it ends, finishes from the journal when its `repo.diffed` is held, and otherwise reads again. A look reads no patch. See
-  [RFC 0065](rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md).
+  is ended once it has printed past the bound. Each object is read as it is stored: no replace ref stands in for one, and a
+  commit's patch is from the tree of the first parent its own object names, so no graft or shallow list changes it. `repo.diffed`
+  on `repo/<name>`, with no agent in the envelope, names the commit, or the workspace, the HEAD it was read against and `read_at`,
+  when its reading began, and keeps the patch as its body, which `blob.get` reads and a citation names lines of: all of it, or its
+  first 64 KiB cut at the end of the last line that fits, which `cut` and its gist say, and its gist says too when it is not
+  UTF-8, so no line of it can be cited, and how many untracked repositories in the tree an uncommitted diff passed over, which git
+  shows no file of. What git takes for binary, by a file's content or by the workspace's attributes, is named and never shown, and
+  a diff that could not be read says why. A commit's patch is kept once: asked for again while it is read, `repo.diff` gives the
+  same effect, and once it is kept, its ref, reading nothing, while what a workspace holds uncommitted is read at each ask. The
+  effect keeps the session from settling until it ends, finishes from the journal when its `repo.diffed` is held, and otherwise
+  reads again. A look reads no patch. See [RFC 0065](rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
   its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit
   is recorded at the look after the turn that made it', until then. Every agent holds it. See

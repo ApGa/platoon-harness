@@ -16,7 +16,7 @@ from typing import Any
 
 from platoon_harness.primitives.repo import CITED_LIMIT, TEXT_LIMIT
 
-from .git import GitError, git
+from .git import GitError, git, head_at
 from .workspaces import STATUS, UNDER_WAY, operations, status_of
 
 PAGE = 64
@@ -63,7 +63,7 @@ def look(
     reaches that neither the session's `tips` at open, its `base` nor its `last` look's head reach. `makers` is every
     workspace still on disk by name, with the wrap git runs under there, whose HEAD reflogs say who made each. With
     `record`, its uncommitted state is read too."""
-    head = git("rev-parse", "-q", "--verify", "HEAD^{commit}", cwd=root, ok=(0, 1), wrap=wrap).strip() or None
+    head = head_at(root, wrap=wrap)
     branch = git("symbolic-ref", "-q", "--short", "HEAD", cwd=root, ok=(0, 1), wrap=wrap).strip() or None
     known = [*tips, *filter(None, (base,))]
     looked = None if last is None else last["head"]

@@ -13,6 +13,8 @@ import pytest
 
 from platoon_harness import Refused, Session, Team
 from platoon_harness.kernel import Extension, ManualClock
+from platoon_harness.runtime.diffs import patch, uncommitted
+from platoon_harness.runtime.git import GitError
 
 from .gitting import commit, git, repository, working
 from .support import SECONDS, extension, harness, in_state, of_type, scripted, until
@@ -138,8 +140,10 @@ async def test_a_binary_file_is_named_in_a_patch_and_never_shown(repo, tmp_path)
 
 async def test_a_hostile_repository_config_runs_no_external_diff_textconv_or_hook(repo, tmp_path):
     """A snapshot agent writes its repository's config: an external diff, a diff driver's command and textconv for every
-    file, an fsmonitor, hooks, a pager, colour and no prefixes. None of it runs or shapes the patch, of its commit or of
-    what it left uncommitted."""
+    file, an fsmonitor, hooks, a pager, colour and no prefixes. Once its commit is recorded, it drops an object of it
+    and names a promisor remote whose transport is a program, which git would fetch that object from. None of it runs
+    or shapes the patch, of its commit or of what it left uncommitted, and git reads the dropped object's file from the
+    work tree."""
     ran, hooks, program = tmp_path / "ran", tmp_path / "hooks", tmp_path / "program"
     program.write_text(f'#!/bin/sh\necho "$0 $*" >> {ran}\ncat "$1"\n')
     hooks.mkdir()
@@ -149,6 +153,8 @@ async def test_a_hostile_repository_config_runs_no_external_diff_textconv_or_hoo
         made.chmod(made.stat().st_mode | stat.S_IXUSR)
 
     def hostile(cwd: Path) -> None:
+        (cwd / "kept.txt").write_text("kept\n")
+        git("add", "kept.txt", cwd=cwd)
         commit(cwd, "value.txt", "old\n")
         with (cwd / ".git" / "config").open("a") as config:
             config.write(
@@ -165,15 +171,89 @@ async def test_a_hostile_repository_config_runs_no_external_diff_textconv_or_hoo
     async with Session.start(team_of(hostile, workspace="snapshot"), name="s", root=tmp_path, cwd=repo) as session:
         await session.spawn("ada", "worker", "work")
         [sha] = await committed(session, 1)
+        snapshot = Path((await session.status("@ada"))["workspace"]["path"])
+        dropped = git("rev-parse", "HEAD:kept.txt", cwd=snapshot).strip()
+        (snapshot / ".git" / "objects" / dropped[:2] / dropped[2:]).unlink()
+        with (snapshot / ".git" / "config").open("a") as config:
+            config.write(
+                f'[extensions]\n\tpartialClone = evil\n[remote "evil"]\n\tpromisor = true\n\turl = ext::{program} %S\n'
+                '[protocol "ext"]\n\tallow = always\n'
+            )
         patches = [await patch_of(session, await diff_of(session, of)) for of in (sha, "@ada")]
 
     assert not ran.exists()
-    assert patches[0].startswith(b"diff --git a/value.txt b/value.txt\nnew file mode 100644\n")
+    assert patches[0].startswith(b"diff --git a/kept.txt b/kept.txt\nnew file mode 100644\n")
+    assert b"@@ -0,0 +1 @@\n+kept\ndiff --git a/value.txt b/value.txt\nnew file mode 100644\n" in patches[0]
     assert patches[0].endswith(b"+++ b/value.txt\n@@ -0,0 +1 @@\n+old\n")
     assert patches[1].startswith(b"diff --git a/value.txt b/value.txt\n")
     assert b"--- a/value.txt\n+++ b/value.txt\n@@ -1 +1 @@\n-old\n+new\n" in patches[1]
     assert patches[1].endswith(b"--- /dev/null\n+++ b/fresh.txt\n@@ -0,0 +1 @@\n+fresh\n")
     assert b"\x1b" not in b"".join(patches)
+
+
+def test_a_commit_s_patch_is_its_own_whatever_a_replace_ref_graft_or_shallow_list_says(repo):
+    """An agent writes the refs and the files of its repository: a replace ref standing in for a commit, and a graft and
+    a shallow list naming other parents for it. None changes which patch is recorded for its SHA, read from its own
+    object against the first parent that object names, nor the tree an uncommitted diff is read against."""
+    first = git("rev-parse", "HEAD", cwd=repo).strip()
+    commit(repo, "value.txt", "two\n")
+    third = commit(repo, "value.txt", "three\n")
+    git("checkout", "-q", "--orphan", "impostor", cwd=repo)
+    impostor = commit(repo, "value.txt", "impostor\n")
+    git("checkout", "-q", "-f", "main", cwd=repo)
+    own = patch(repo, third)
+    git("replace", third, impostor, cwd=repo)
+    (repo / ".git" / "info" / "grafts").write_text(f"{third} {first}\n")
+    (repo / ".git" / "shallow").write_text(f"{third}\n")
+    changed(repo, "value.txt", "four\n")
+
+    planted = patch(repo, third)
+    head, held = uncommitted(repo)
+
+    assert own.text.endswith(b"--- a/value.txt\n+++ b/value.txt\n@@ -1 +1 @@\n-two\n+three\n")
+    assert planted == own
+    assert head == third and held.text.endswith(b"@@ -1 +1 @@\n-three\n+four\n")
+
+
+def test_an_uncommitted_diff_never_reads_the_repository_around_its_work_tree(repo):
+    """A work tree whose own repository has gone, inside yours, would have git find yours: what you hold uncommitted is
+    never read as its agent's."""
+    tree = repo / "agents" / "ada" / "workspace"
+    tree.mkdir(parents=True)
+    changed(tree, "work.txt", "the agent's\n")
+    changed(repo, "README", "yours, uncommitted\n")
+
+    with pytest.raises(GitError) as refused:
+        uncommitted(tree)
+
+    assert str(refused.value) == f"git finds no repository of {tree}'s own, but {repo.resolve()}'s"
+
+
+async def test_an_untracked_repository_is_counted_and_none_of_its_files_shown(repo, tmp_path):
+    """Git shows no file of a repository nested in a work tree, so an uncommitted diff passes over it, and its record
+    and gist say how many it passed over, as a cut patch says where it was cut."""
+
+    def work(cwd: Path) -> None:
+        nested = cwd / "vendor" / "lib"
+        nested.mkdir(parents=True)
+        git("init", "-q", cwd=nested)
+        changed(nested, "inside.txt", "the nested repository's\n")
+        changed(cwd, "notes.txt", "the agent's\n")
+
+    async with Session.start(team_of(work), name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "work")
+
+        async def looked() -> list[Any]:
+            found = await of_type(session, "workspace.changed")
+            return [event for event in found if event.data["workspace"] == "@ada" and event.data.get("paths")]
+
+        await until(looked, session)
+        record = await diff_of(session, "@ada")
+        held = await patch_of(session, record)
+
+    assert held.endswith(b"+++ b/notes.txt\n@@ -0,0 +1 @@\n+the agent's\n") and b"inside" not in held
+    assert record.data["untracked_repositories"] == 1
+    assert record.gist.endswith(", 1 untracked repository not shown")
 
 
 async def test_a_snapshot_s_diff_is_read_in_its_own_repository(repo, tmp_path):

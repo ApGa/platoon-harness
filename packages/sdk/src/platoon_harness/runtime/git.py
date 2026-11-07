@@ -1,4 +1,5 @@
-"""The runtime's own git: one runner, which runs no hook, no fsmonitor and no gc, and asks nothing of a terminal.
+"""The runtime's own git: one runner, which runs no hook, no fsmonitor and no gc, reaches no remote, and asks nothing
+of a terminal.
 
 An agent's git is its own and is never touched. Paths come from `rev-parse`, never from a literal `.git/`.
 """
@@ -21,7 +22,16 @@ _SETTINGS = (
     "core.fsmonitor=false",
     "core.logAllRefUpdates=true",
 )
-_ENVIRONMENT = (("GIT_OPTIONAL_LOCKS", "0"), ("LC_ALL", "C"), ("GIT_TERMINAL_PROMPT", "0"))
+_ENVIRONMENT = (
+    ("GIT_OPTIONAL_LOCKS", "0"),
+    ("LC_ALL", "C"),
+    ("GIT_TERMINAL_PROMPT", "0"),
+    ("GIT_NO_LAZY_FETCH", "1"),
+    ("GIT_ALLOW_PROTOCOL", ""),
+)
+"""What every git of the runtime's has set. A partial clone's missing object is fetched from nowhere, and no transport
+is allowed whatever a config allows, which is what stops that fetch before git 2.44, so no remote or program a config
+names is reached through one."""
 _LOCAL = (  # What `git rev-parse --local-env-vars` names: another repository's, if inherited.
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_CONFIG",
@@ -40,7 +50,7 @@ _LOCAL = (  # What `git rev-parse --local-env-vars` names: another repository's,
     "GIT_COMMON_DIR",
 )
 
-__all__ = ["SECONDS", "GitError", "git"]
+__all__ = ["SECONDS", "GitError", "git", "head_at"]
 
 
 class GitError(Exception):
@@ -83,7 +93,7 @@ def git(
             )
             printed, code, said = done.stdout, done.returncode, done.stderr
         else:
-            printed, code, said = _head(argv, cwd, env, limit)
+            printed, code, said = _bounded(argv, cwd, env, limit)
     except subprocess.TimeoutExpired:
         raise GitError(f"git {args[0]} took longer than {SECONDS:.0f} s") from None
     except OSError as error:
@@ -93,7 +103,18 @@ def git(
     return printed
 
 
-def _head(argv: Sequence[str], cwd: Path, env: Mapping[str, str], limit: int) -> tuple[str, int | None, str]:
+def head_at(root: Path, *, wrap: Sequence[str] = ()) -> str | None:
+    """The commit HEAD names in the work tree at `root`, as git run under `wrap` reads it, or None before its first
+    commit. Raises `GitError` where the work tree git finds is not the one at `root`, as around a folder that lost its
+    own repository, so another repository is never read as this one."""
+    found = git("rev-parse", "--show-toplevel", "-q", "--verify", "HEAD^{commit}", cwd=root, ok=(0, 1), wrap=wrap)
+    top, _, sha = found.partition("\n")
+    if Path(top) != root.resolve():
+        raise GitError(f"git finds no repository of {root}'s own, but {top}'s")
+    return sha.strip() or None
+
+
+def _bounded(argv: Sequence[str], cwd: Path, env: Mapping[str, str], limit: int) -> tuple[str, int | None, str]:
     """The first `limit` bytes and one more of what `argv` printed, its exit, None once it printed more, and what it
     said on stderr, which goes to a file, so that a command saying much there never waits on us."""
     with (

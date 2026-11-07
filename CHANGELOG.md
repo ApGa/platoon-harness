@@ -46,13 +46,15 @@ named here is closed.
 - **A diff read on request.** `repo.diff{of}`, with `Session.repo_diff(of)` and the command `repo diff`, asks the runtime for a
   recorded commit's patch against its first parent, or for what a workspace, `@ada` or `shared`, holds uncommitted against its
   HEAD, its untracked files as new ones. A `diff` effect reads it where the workspace lives, in a snapshot's own repository and
-  inside an isolated workspace's isolation, with no external diff, textconv, hook or colour, and keeps it on `repo/<name>` as
-  `repo.diffed`, whose body is the patch: its first 64 KiB, cut at a line's end and saying where, which `blob.get` reads and a
-  message cites lines of. A file git takes for binary is named and never shown. A commit's patch is read once, and asked for
-  again gives its ref; an uncommitted diff names the HEAD it is against and when it was read, and each ask reads it again. An
-  agent is refused, as it is `repo.test`, and reads a commit through `repo.commit` or its own git, which is the default pending
-  the owner's ruling. A look reads no patch. See [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a
-  draft.
+  inside an isolated workspace's isolation, with no external diff, textconv, hook or colour, and each object as it is stored, so
+  no replace ref, graft or shallow list changes which patch a SHA has. It keeps it on `repo/<name>` as `repo.diffed`, whose body
+  is the patch: its first 64 KiB, cut at a line's end and saying where, which `blob.get` reads and a message cites lines of, its
+  gist saying when it is not UTF-8, so no line can be cited, and how many untracked repositories it shows no file of. A file git
+  takes for binary, by its content or the workspace's attributes, is named and never shown. A commit's patch is read once, and
+  asked for again gives its ref; an uncommitted diff names the HEAD it is against and when it was read, and each ask reads it
+  again. An agent is refused, as it is `repo.test`, and reads a commit through `repo.commit` or its own git, which is the
+  default pending the owner's ruling. A look reads no patch. See
+  [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run
   in, comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it
   names none. CI's `e2e` job is written to run them once in each of Chromium, Firefox and WebKit, which is inferred from
@@ -947,6 +949,14 @@ named here is closed.
 
 ### Fixes
 
+- **The runtime's git reaches no remote.** A look, a stop or a diff in a repository whose config names a partial clone's
+  promisor remote fetched an object its store had dropped from there, which ran the transport program or `ssh` command that
+  config names, as you for a snapshot or a worktree. The one runner now allows no transport and fetches no missing object, so
+  the read fails, saying why, unless git finds the file in the work tree.
+- **A look never reads the repository around a work tree.** A workspace that lost its own repository had git find the one
+  around it, and a look recorded that one's HEAD and uncommitted paths as the agent's. A look and an uncommitted diff now read
+  HEAD only where git finds the work tree's own repository at its root, and record the gap `workspace_unobserved`, or why,
+  otherwise.
 - **A name that resolves to a wildcard is refused to `web`.** `web` refused a wildcard only written as an address, so
   `--host 0`, which resolves to `0.0.0.0`, passed with TLS and served every interface. It now resolves the name and
   refuses it if any address it has is a wildcard.

@@ -562,13 +562,15 @@ def test_a_folder_in_the_way_fails_with_git_s_words(repo, tmp_path):
 
 
 def test_the_runtime_s_git_runs_no_hook_no_fsmonitor_and_no_gc(repo, tmp_path, monkeypatch):
-    """Ground truth twice over: what each git call was given, and that no hook or fsmonitor of the repository ran."""
+    """Ground truth twice over: what each git call was given, and that no hook or fsmonitor of the repository ran. Each
+    call allows no transport and fetches no missing object, so it reaches no remote."""
     real = git("--exec-path", cwd=repo).strip()
     shims = tmp_path / "shims"
     shims.mkdir()
     log = tmp_path / "calls"
     (shims / "git").write_text(
-        f'#!/bin/sh\nprintf "%s|%s|%s|%s\\n" "$GIT_OPTIONAL_LOCKS" "$LC_ALL" "$GIT_TERMINAL_PROMPT" "$*" >> {log}\n'
+        '#!/bin/sh\nprintf "%s|%s|%s|%s|%s|%s\\n" "$GIT_OPTIONAL_LOCKS" "$LC_ALL" "$GIT_TERMINAL_PROMPT" '
+        f'"$GIT_NO_LAZY_FETCH" "${{GIT_ALLOW_PROTOCOL+allowed:$GIT_ALLOW_PROTOCOL}}" "$*" >> {log}\n'
         f'exec {real}/git "$@"\n'
     )
     (shims / "git").chmod(0o755)
@@ -590,7 +592,7 @@ def test_the_runtime_s_git_runs_no_hook_no_fsmonitor_and_no_gc(repo, tmp_path, m
     calls = log.read_text().splitlines()
     assert calls and not marker.exists()
     flags = "-c gc.auto=0 -c maintenance.auto=false -c core.hooksPath=/dev/null -c core.fsmonitor=false"
-    assert all(call.startswith(f"0|C|0|{flags} -c core.logAllRefUpdates=true ") for call in calls), calls
+    assert all(call.startswith(f"0|C|0|1|allowed:|{flags} -c core.logAllRefUpdates=true ") for call in calls), calls
 
 
 # Launching and resuming in a workspace.

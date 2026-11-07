@@ -848,7 +848,8 @@ class Host:
         except (GitError, OSError) as error:
             diffed["why"] = str(error)
         else:
-            diffed |= {"body": f"sha256:{await self._kernel.put_body(read.text)}", "cut": read.cut}
+            body = f"sha256:{await self._kernel.put_body(read.text)}"
+            diffed |= {"body": body, "cut": read.cut, "untracked_repositories": read.untracked_repositories}
         return {"ref": (await self.insist("repo.keep", diffed)).result}
 
     async def _place(self, where: str) -> tuple[Path, tuple[str, ...]]:

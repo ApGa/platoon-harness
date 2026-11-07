@@ -13,7 +13,7 @@ from pydantic import Field
 from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Effects, Event, Refused, Stamps, Txn, View, fold, op
 
 from .agents import Agents
-from .common import BodyRef, Exposed, Name, cited, event_at, expose_read, inline_body, parts_of
+from .common import BodyRef, Exposed, Name, cited, decoded, event_at, expose_read, inline_body, parts_of
 from .exposures import readable
 from .reports import record_gap
 from .sessions import SessionRecord
@@ -483,7 +483,8 @@ class Diffed(Args):
     """What a diff `effect` read: a recorded commit's patch against its first parent, by its `sha`, or a `workspace`'s
     uncommitted diff against `head`, None before its first commit, as it was when its reading began, `read_at`, on the
     session's clock; as its `body` the patch, which `cut` says ends at the end of the last line within `PATCH_LIMIT`
-    bytes, as it was longer; or `why` it could not be read."""
+    bytes, as it was longer, with how many `untracked_repositories` in the work tree it shows no file of; or `why` it
+    could not be read."""
 
     effect: int
     sha: Sha | None = None
@@ -492,25 +493,31 @@ class Diffed(Args):
     read_at: float | None = None
     body: BodyRef | None = None
     cut: bool = False
+    untracked_repositories: Annotated[int, Field(ge=0)] = 0
     why: str | None = None
 
 
-def _diffed(a: Diffed, lines: int | None) -> str:
-    """A diff's record in a line: what it is of, and how many lines its patch has and where it was cut, or why it could
-    not be read."""
+def _diffed(a: Diffed, patch: bytes | None) -> str:
+    """A diff's record in a line: what it is of, how many lines its patch has and where it was cut, whether it is no
+    text that `blob.get` reads or a citation names lines of, and what it passed over; or why it could not be read."""
     what = f"{a.sha[:12]} patch" if a.sha is not None else f"{a.workspace} uncommitted"
-    if lines is None:
+    if patch is None:
         return f"{what} could not be read: {a.why}"
     if a.sha is None:
         what += f" against {'no commit' if a.head is None else a.head[:12]}"
-    cut = f"cut after {_some(lines, 'line')} at {PATCH_LIMIT // 1024} KiB" if a.cut else _some(lines, "line")
-    return f"{what}, {cut}"
+    lines = _some(patch.count(b"\n"), "line")
+    said = [what, f"cut after {lines} at {PATCH_LIMIT // 1024} KiB" if a.cut else lines]
+    if decoded(patch) is None:
+        said.append("not UTF-8, so no line of it can be cited")
+    if n := a.untracked_repositories:
+        said.append(f"{n} untracked {'repository' if n == 1 else 'repositories'} not shown")
+    return ", ".join(said)
 
 
 @op("repo.keep", runtime=True)
 def keep(txn: Txn, a: Diffed) -> str:
     """Keep what a diff read, on `repo/<name>` with no agent in the envelope, its `why` cut to fit, and give its ref.
-    Its body must be one the journal holds, which its gist counts the lines of."""
+    Its body must be one the journal holds, which its gist counts the lines of and says when it is not UTF-8."""
     repo = txn.view(SessionRecord).settings().repo
     if repo is None:
         raise Refused("unsupported", "this session observes no repository")
@@ -519,7 +526,7 @@ def keep(txn: Txn, a: Diffed) -> str:
         raise Refused("invalid", "a patch is kept in a body the journal holds")
     why = None if a.why is None else a.why[:_WHY_LIMIT]
     data = a.model_copy(update={"why": why})
-    gist = _diffed(data, None if patch is None else patch.count(b"\n"))[:GIST_LIMIT]
+    gist = _diffed(data, patch)[:GIST_LIMIT]
     event = txn.emit("repo.diffed", f"repo/{repo.name}", gist=gist, refs=[a.body] if a.body else (), data=data)
     return f"{event.stream}@{event.version}"
 

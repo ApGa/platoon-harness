@@ -778,12 +778,38 @@ async def test_a_message_cites_lines_of_a_diff_by_its_ref(kernel, ada):
         "read_at": None,
         "body": None,
         "cut": False,
+        "untracked_repositories": 0,
         "why": None,
     }
     [message] = [event for event in of_type(kernel, "message.sent") if f"{event.stream}@{event.version}" == sent["ref"]]
     assert message.based_on == (f"{ref}#L6-7",)
     assert refusal(past).code == "invalid" and "past the end" in refusal(past).detail["detail"]
     assert read["text"] == "@@ -1 +1 @@\n-old\n+new\n" and read["lines"] == 7
+
+
+async def test_a_diff_s_gist_says_what_of_it_cannot_be_read_as_text_or_shown(kernel, ada):
+    """A patch git printed from a file that is not UTF-8 is kept as printed, but `blob.get` gives it as no text and no
+    citation can name its lines, which its gist says; and an uncommitted diff counts the untracked repositories in its
+    tree, of which it shows no file."""
+    await spawned_in(kernel, "bob", "worktree")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+    effect = result_of(await kernel.submit(ada, "repo.diff", {"of": ONE}))["effect"]
+    latin = b"diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-caf\xe9\n+th\xe9\n"
+    kept = {"effect": effect, "sha": ONE, "body": f"sha256:{await kernel.put_body(latin)}"}
+    ref = result_of(await kernel.submit(kernel.runtime, "repo.keep", kept))
+    effect = result_of(await kernel.submit(ada, "repo.diff", {"of": "@bob"}))["effect"]
+    body = f"sha256:{await kernel.put_body(b'diff --git a/y b/y\n')}"
+    held = {"effect": effect, "workspace": "@bob", "head": ONE, "body": body, "untracked_repositories": 2}
+    result_of(await kernel.submit(kernel.runtime, "repo.keep", held))
+
+    cited = await kernel.submit(ada, "message.send", {"to": "@bob", "gist": "this?", "based_on": [f"{ref}#L5-5"]})
+    read = result_of(kernel.query(ada, "blob.get", {"ref": ref}))
+
+    latin_record, workspace_record = of_type(kernel, "repo.diffed")
+    assert latin_record.gist == f"{ONE[:12]} patch, 6 lines, not UTF-8, so no line of it can be cited"
+    assert read == {"ref": ref, "text": None} and refusal(cited).code == "invalid"
+    assert workspace_record.gist == f"@bob uncommitted against {ONE[:12]}, 1 line, 2 untracked repositories not shown"
+    assert workspace_record.data["untracked_repositories"] == 2
 
 
 async def test_a_recorded_commit_s_patch_is_read_once_and_asked_again_gives_its_ref(kernel, ada):

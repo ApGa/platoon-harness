@@ -14,7 +14,8 @@
 `repo.diff`, a person's or a program's command that an agent is refused, as `repo.test` is, asks the runtime for a recorded
 commit's patch against its first parent or a workspace's uncommitted diff against its HEAD. A `diff` effect reads it with the
 runtime's one git runner where the workspace lives: in the repository of the workspace a look found the commit in, a snapshot's
-own among them, inside the isolation for an isolated one, and with no external diff, textconv or hook. The runtime keeps it on
+own among them, inside the isolation for an isolated one, with no external diff, textconv or hook, reaching no remote, and each
+object as it is stored. The runtime keeps it on
 `repo/<name>` as a `repo.diffed` event of its own, whose body is the patch, cut at the end of a line within 64 KiB and saying so.
 A commit's patch is kept once, and asked for again gives its ref. An uncommitted diff is a moment's reading: it names the HEAD it
 is against and when it was read, and asked for again is read again. A look reads no patch.
@@ -62,24 +63,37 @@ person may run.
 
 ### 2. Read where the workspace lives
 
-The host performs a `diff` effect with the runtime's one git runner, which runs no hook, no fsmonitor and no gc, and writes no index:
+The host performs a `diff` effect with the runtime's one git runner, which runs no hook, no fsmonitor and no gc, reaches no
+remote, and writes no index:
 
-- **A commit's patch** is what `git diff-tree -p --root --diff-merges=first-parent -M` shows of it, against the first parent a
-  look counted its lines against. It is read in the repository of the workspace the look that recorded the commit was of, its
-  `found_in`: a snapshot's own repository, which may be the only one that holds it, and an isolated one's under its isolation's
-  wrap. Once that workspace has gone it is read in your repository, which a stop removes a workspace only for reaching every
-  commit it held.
+- **A commit's patch** is what `git diff-tree -p -M <parent> <sha>` shows of it, from the tree of the first parent its own
+  object names, the one a look counted its lines against, or from the empty tree for a root. It is read in the repository of the
+  workspace the look that recorded the commit was of, its `found_in`: a snapshot's own repository, which may be the only one
+  that holds it, and an isolated one's under its isolation's wrap. Once that workspace has gone it is read in your repository,
+  which a stop removes a workspace only for reaching every commit it held.
 - **A workspace's uncommitted diff** is what `git diff-index -p -M` shows of its work tree against the HEAD it reads first,
   staged or not, then each untracked file git does not ignore, as a new file, as `git diff --no-index` shows it, until the patch
   passes its bound. It is read in the workspace's work tree, your checkout's top for `shared`, and under its wrap for an isolated
-  one. An untracked repository inside the tree is passed over, as git shows no file of it.
-- **Nothing runs that a repository's config names to show a diff.** Every diff passes `--no-ext-diff`, `--no-textconv` and
-  `--no-color` and names its prefixes `a/` and `b/`, so neither `diff.external`, nor a `diff` attribute's `command` or
-  `textconv`, nor a colour or a prefix setting reaches the patch. A commit's patch is read with no porcelain, so
-  `log.showSignature` starts no `gpg`. A `filter` a config names does run for an uncommitted diff, as it does at a look and in
-  your own `git status`, inside the isolation for an isolated workspace, where the agent's own config names it.
+  one, and only where git finds the work tree's own repository at its root: one whose repository has gone, inside yours, would
+  have git read yours as the agent's, so it records why instead, as a look records the gap. An untracked repository inside the
+  tree is passed over, as git shows no file of it, and its record counts each one it passed over.
+- **No program a repository's config names runs to show a diff, but a filter.** Every diff passes `--no-ext-diff`,
+  `--no-textconv` and `--no-color` and names its prefixes `a/` and `b/`, so neither `diff.external`, nor a `diff` attribute's
+  `command` or `textconv`, nor a colour or a prefix setting reaches the patch. A commit's patch is read with no porcelain, so
+  `log.showSignature` starts no `gpg`. The runner allows no transport, `GIT_ALLOW_PROTOCOL` set and empty, and fetches no missing
+  object, `GIT_NO_LAZY_FETCH`, so a partial clone's promisor remote, a transport program or an `ssh` command a config names is
+  never reached, as it would be to fetch an object a diff needs that the store has dropped. A `filter` a config names does run for
+  an uncommitted diff, as it does at a look and in your own `git status`, inside the isolation for an isolated workspace, where
+  the agent's own config names it.
+- **Each object is read as it is stored.** Every git of a diff sets `GIT_NO_REPLACE_OBJECTS`, so no replace ref stands in for
+  the commit a SHA names or for the HEAD an uncommitted diff is against, and a commit's first parent is read from its own object,
+  so no graft and no shallow list names another. Whoever writes a repository's refs and files, an agent its snapshot's, cannot
+  change which patch is recorded for a SHA.
 - **What git takes for binary is named and never shown,** as `Binary files a/x and b/x differ`, since no diff passes `--binary`
-  or `--text`. A file a `diff` attribute marks as text git shows as text.
+  or `--text`. Git takes a file for binary by its content or by the attributes the workspace's tree and repository give it, so a
+  `-diff` or `binary` attribute, or a `diff` driver whose config sets `binary`, makes a text change read as binary, and a `diff`
+  attribute that marks a file as text has git show it as text. The line is git's either way, and says nothing of which
+  decided.
 
 Git runs with a bound on what it prints. The runner reads the bound and one byte more, then closes its end of the pipe, which
 ends git, so a patch of any size costs the runtime no more memory than the bound.
@@ -98,6 +112,7 @@ class Diffed(Args):
     read_at: float | None = None    # read at this time, on the session's clock
     body: BodyRef | None = None     # the patch
     cut: bool = False
+    untracked_repositories: int = 0 # in the work tree, of which it shows no file
     why: str | None = None          # or why it could not be read
 ```
 
@@ -105,8 +120,11 @@ Its body is the patch: all of it, or its first 64 KiB cut at the end of the last
 says where, as `3f9c2a1b2c3d patch, cut after 1022 lines at 64 KiB`. A cut at a line's end splits no character, so a patch that
 is text stays text, and `blob.get` reads it a page at a time by the record's ref. A citation names lines of it,
 `repo/app@12#L40-52`, checked as any citation is ([section 7](../architecture.md#refs-and-citations)), so a person's message can
-cite the lines it is about. A diff that could not be read, of a workspace that has gone or a commit no repository it may read
-holds, records `why` and no body.
+cite the lines it is about. Git shows as text a file with no NUL byte near its start, whatever its encoding, so a patch of a file
+that is not UTF-8 is kept as git printed it, but is no text: `blob.get` gives it as none, no citation can name its lines, and its
+gist says so, as `3f9c2a1b2c3d patch, 6 lines, not UTF-8, so no line of it can be cited`. An uncommitted diff's gist names the
+untracked repositories it passed over, as `, 2 untracked repositories not shown`. A diff that could not be read, of a workspace
+that has gone or a commit no repository it may read holds, records `why` and no body.
 
 ### 4. A commit's patch is kept once, and an uncommitted diff is read each time
 
@@ -138,6 +156,11 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 | A tool an agent calls | An agent's read of a patch is evidence the record would have to account for, as `blob.get` does by exposure, and milestone 4 does not take it on. An agent reads a commit through `repo.commit` and its own git. That an agent is refused is the default, pending the owner's ruling |
 | Read every diff in your repository | A snapshot's commit may be only in its own repository, and an isolated agent's config, which names what git runs, is the agent's, so its git stays inside its isolation |
 | `git show` for a commit's patch | It verifies a signature where `log.showSignature` is set, which starts the program `gpg.program` names. `diff-tree` shows the same patch and starts nothing |
+| `git diff-tree --root --diff-merges=first-parent <sha>`, which finds the parent itself | Git takes a commit's parents from a graft or a shallow list where one names it, so whoever writes the repository's files could have another parent's patch, or the whole tree's, recorded for the SHA. Its own object names the parent, and for every commit of this repository the two print the same bytes |
+| Honouring replace refs, grafts and shallow lists, as your own git does | A recorded patch is the SHA's, which a person and a citation take it for. A replace ref the agent wrote would have another commit's patch recorded under it with nothing to say so |
+| Reaching a promisor remote for an object the store has dropped | Fetching runs what the config names, a transport program or an `ssh` command, as you or, for an isolated workspace, inside its isolation with the network it has. The runtime never means to fetch, so a dropped object fails the read, saying why, unless git finds its file in the work tree |
+| Recording each path an uncommitted diff passed over | A path is the agent's text of any length and number. A count says the patch is not all the tree holds, and the workspace's reading at its last look names each untracked path |
+| Recording the diff through `repo.record`, which records a test | An op takes one kind of `Args` and records one event, as `repo.report` records a look and `repo.record` a test, so a diff's record is an op of its own, `repo.keep`. Its name is the verb the plan and these docs give a read patch, kept beside its commit; an op may not be past tense, and `repo.diff` is the person's command |
 | Keep a whole patch of any size | A body past 64 KiB is held outside the journal's row, in `blobs/`, which no op reads, so `blob.get` would give no text and a citation's lines would go unchecked |
 | Cut at 64 KiB exactly | It can split a character, which leaves a text patch no text, and a line, which a citation names whole |
 | Show untracked files through a scratch index, with `git add -N` | `git add -N` writes the empty blob into the workspace's object store, and the scratch index needs a place an isolated agent can write, from which the runtime would then remove it |
@@ -153,6 +176,11 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 - An uncommitted diff is a moment's reading. A workspace whose agent is in a turn changes as it is read, and a file removed
   between the list of untracked files and its reading fails the read, saying so, so the next ask reads again.
 - A filter a repository's config names runs for an uncommitted diff, as it does at every look.
+- A workspace's own attributes decide what git takes for binary, so an agent can have a text change read as binary, and a reviewer
+  reads that line as git's, not as proof of what the file holds.
+- A patch of a file that is not UTF-8 is kept and read whole, but cannot be read as text or cited by its lines.
+- The runtime's git reaches no remote at a look or a stop either, so a partial clone's dropped object fails them, saying why,
+  where it would have been fetched.
 - An agent cannot read a patch through the runtime. A message that cites lines of one hands it the message, and not the patch.
 - What a diff costs on a repository past 100,000 files or on Lustre is unmeasured. It is paid only on request, and twice for a
   read a crash cut off.
@@ -177,7 +205,7 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 
 - The bound is the most the journal holds in an event's own body, 64 KiB, as for a test's output
   ([RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md)), and a measurement says how often it
-  cuts. Each of the 442 commits of this repository at `04e34f1`, as M1 reads it:
+  cuts. Each of the 442 commits of this repository at `04e34f1`, as git shows its patch against its first parent:
 
   ```console
   $ git rev-list 04e34f1 | while read sha; do
@@ -188,5 +216,7 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
   361 of them, 81.7%, fit in 64 KiB. Half fit in 16 KiB, 91% in 128 KiB and 97% in 256 KiB; the 90th percentile is 111 KiB and
   the largest 1.4 MiB. Each took a median 21 ms to read and 157 ms at most, on a Lustre file system from a shared host with 192
   threads of Xeon Platinum 8468. These commits are larger than most an agent makes in one turn, as each holds a whole change
-  with its tests and docs, so the share cut in a session is likely smaller (UNVERIFIED).
+  with its tests and docs, so the share cut in a session is likely smaller (UNVERIFIED). M1 names the first parent the commit's
+  own object holds, `git diff-tree -p -M <parent> <sha>` with the empty tree for a root, which printed the same bytes as the
+  command above for all 442, the root among them, and for a merge made to check it.
 - The tests named in the rollout plan's M1.

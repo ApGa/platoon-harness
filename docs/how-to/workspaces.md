@@ -326,24 +326,34 @@ The runtime reads it where the workspace lives: a commit in the repository of th
 snapshot may be the only one that holds it, or in yours once that workspace has gone, and an isolated workspace inside its
 isolation. It reads with `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own `a/` and `b/` prefixes, so no external
 diff, diff driver, textconv, pager or colour a repository's config names runs or shapes it, and its git runs no hook and no
-fsmonitor. A filter a config names does run for an uncommitted diff, as it does at every look and in your own `git status`.
+fsmonitor and reaches no remote, so no promisor remote, transport program or `ssh` command a config names is reached for an object
+the store has dropped. A filter a config names does run for an uncommitted diff, as it does at every look and in your own
+`git status`. Each object is read as it is stored: no replace ref stands in for a commit or for the HEAD an uncommitted diff is
+against, and a commit's patch is from the first parent its own object names, whatever a graft or a shallow list says, so nobody
+who writes a repository's refs and files can change which patch is recorded for a SHA.
 
 `repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace, the HEAD it was read against and `read_at`, when its
 reading began, and the patch as its body, which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at
 a time, and which a message cites lines of by its ref, `repo/<name>@<version>#L40-52`. A patch past 64 KiB, as much as the journal
 holds in an event's own body, is cut at the end of the last line that fits; the record says `cut` and its gist where, as
 `3f9c2a1b2c3d patch, cut after 1022 lines at 64 KiB`, and the rest is in git. A file git takes for binary is named,
-`Binary files a/x and b/x differ`, and never shown. A diff that could not be read, as of a workspace gone from under its agent,
-records why. A diff keeps its session from settling until it is read, and one a crash cut off is read again when the session
-resumes. A look reads no patch, so a turn's end costs what it did.
+`Binary files a/x and b/x differ`, and never shown. A patch of a file that is not UTF-8 is kept as git printed it, but `blob get`
+gives it as no text and no message can cite its lines, which its gist says, as
+`3f9c2a1b2c3d patch, 6 lines, not UTF-8, so no line of it can be cited`. A diff that could not be read, as of a workspace gone
+from under its agent, records why. A diff keeps its session from settling until it is read, and one a crash cut off is read again
+when the session resumes. A look reads no patch, so a turn's end costs what it did.
 [RFC 0065](../rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md) has why.
 
 A commit's patch never changes, so it is read once: asked for again while it is read, `repo diff` gives the same effect, and once
 it is kept, the ref of its record, reading nothing. What a workspace holds uncommitted is read at each ask.
 
-What a diff cannot show: an untracked repository inside the tree, of which git shows no file, and an untracked file past the
-bound. An uncommitted diff is a moment's reading, so one of an agent in a turn changes as it is read, and a file removed while it
-is read fails the read, saying so.
+What a diff cannot show: an untracked repository inside the tree, of which git shows no file, which its record counts as
+`untracked_repositories` and its gist as `2 untracked repositories not shown`, and an untracked file past the bound, which `cut`
+says. Git takes a file for binary by its content or by the attributes the workspace gives it, so an agent's `-diff` or `binary`
+attribute, or a diff driver its config marks `binary`, has a text change read as `Binary files a/x and b/x differ`: the line is
+git's, and says nothing of which decided. A workspace whose own repository has gone is not read, since git would find the one
+around it: its record says why, as a look records the gap. An uncommitted diff is a moment's reading, so one of an agent in a turn
+changes as it is read, and a file removed while it is read fails the read, saying so.
 
 ## Read workspaces from a script
 
