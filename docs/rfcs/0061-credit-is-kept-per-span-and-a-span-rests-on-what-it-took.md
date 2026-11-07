@@ -205,7 +205,7 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 | M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the four beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries` |
 | M2 Scripted ids | `scripted/toolCallId`, and an id per tool call | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, `test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives` and `test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does` |
 | M3 Spans | The `spans` query and the renames | `tests/unit/primitives/test_spans.py` | `feat: Cut each agent's turns into spans at its writes` |
-| M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_2_writes_the_agent_rows_propagate_1_wrote`, over generated journals | `feat: Keep propagated credit per span` |
+| M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`, over generated journals whose citations a read can make seen, which M5 put in the place of `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` | `feat: Keep propagated credit per span` |
 | M5 `propagate@3` | The take and the older-edge rule | The take tests in `test_credit.py`, and `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took` | `feat: Follow what a span took` |
 | M6 Training on spans | A training system trains each span on its row | The training system's own tests | Built apart from this repository |
 
@@ -219,15 +219,17 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 ## Evidence
 
 - [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py): a test named for each rule of sections 4 and 5,
-  among them two properties over generated journals, `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`,
-  against RFC 0054's rule read off the journal, and `test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_span`;
+  among them two properties over generated journals,
+  `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`, against RFC 0054's rule read off the
+  journal, whose journals confirm reads in a span before the one that writes, so their citations can be seen while no span takes
+  what lies in it, and `test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_span`; one such journal always,
+  `test_propagate_3_writes_propagate_1s_rows_along_a_citation_seen_by_a_read_an_earlier_span_took`;
   the owner's case on ScriptedDriver against FakeModel acting as a gateway,
   `test_a_persistent_worker_credits_each_task_to_the_span_whose_call_completed_it`, with a claim made in the call that completed the
   task before and two claims open at once; and the GPU run's failure on ScriptedDriver,
   `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took`, where the helper gets three sixteenths of the
-  reward. Before `propagate@3` replaced it,
-  `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` held `propagate@2`'s agent rows to `propagate@1`'s rule on generated
-  journals that confirmed offers.
+  reward. Before `propagate@3` replaced it, `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` held `propagate@2`'s agent
+  rows to `propagate@1`'s rule on generated journals that confirmed offers.
 - [tests/unit/primitives/test_spans.py](../../tests/unit/primitives/test_spans.py): a test named for each rule of section 3, among
   them a property over generated reports, `test_every_call_reported_in_a_turn_lies_in_exactly_one_span`.
 - [tests/unit/primitives/test_lifecycle.py](../../tests/unit/primitives/test_lifecycle.py): the five `said` tests, and RFC 0060's

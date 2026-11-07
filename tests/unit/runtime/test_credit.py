@@ -569,7 +569,7 @@ async def test_an_end_out_of_a_turn_lies_in_the_span_of_the_call_joined_to_it_an
 
 moves = st.lists(
     st.tuples(
-        st.sampled_from(["send", "send", "revise", "wake", "wake", "turn"]),
+        st.sampled_from(["send", "send", "revise", "wake", "wake", "turn", "look", "look"]),
         st.sampled_from(["a", "b", "a", "b", "trainer"]),
         st.booleans(),
         st.booleans(),
@@ -579,9 +579,11 @@ moves = st.lists(
     max_size=16,
 )
 """What two agents, each in a turn to begin with, and the program do: a turn ended or begun; a turn ended, if one was
-under way, and the next begun on what waits, which no harness says it took, so no span takes anything; or a message or
-a board entry's next version, after a model call or not, by the agent's latest call or by none, citing what was sent to
-its writer, and answering it."""
+under way, and the next begun on what waits, which no harness says it took; in a turn, a read whose result its harness
+took, then a model call that chooses nothing, and the turn's end, so what the read showed is seen by every later call
+and taken by that one call alone, whose span holds no event made after it, and no span takes anything that lies in it;
+or a message or a board entry's next version, after a model call or not, by the agent's latest call before any read's
+or by none, citing what was sent to its writer, and answering it."""
 
 
 async def played(kernel: Kernel, script: list[tuple[Any, ...]]) -> list[str]:
@@ -597,7 +599,7 @@ async def played(kernel: Kernel, script: list[tuple[Any, ...]]) -> list[str]:
     for name in turns:
         await driven.start_turn(kernel, name, f"{name}-0")
     for number, (move, name, calling, joined, back) in enumerate(script, 1):
-        if move in ("turn", "wake") and name == "trainer":
+        if move in ("turn", "wake", "look") and name == "trainer":
             continue
         if move == "turn":
             turns[name] = not turns[name]
@@ -610,6 +612,13 @@ async def played(kernel: Kernel, script: list[tuple[Any, ...]]) -> list[str]:
             await kernel.submit(kernel.runtime, "delivery.offer", {"agent": name})
             await driven.start_turn(kernel, name, f"{name}-{number}")
             turns[name] = True
+        elif move == "look":
+            if turns[name]:
+                await ran(kernel, name, f"c{number}", "message.read", {}, tool=f"read-{number}")
+                await returned(kernel, name, f"read-{number}")
+                await called(kernel, name, f"c{number}")
+                await driven.end_turn(kernel, name)
+                turns[name] = False
         else:
             if calling and name != "trainer":
                 calls[name] = f"c{number}"
@@ -669,24 +678,46 @@ async def propagated_play(
     return session, *(await walked_by_propagate_1(session))
 
 
+async def held_to_propagate_2(session: Session, kept: dict[str, float], makers: dict[str, str | None]) -> None:
+    """The rows are `propagate@2`'s: an agent's row is what its events kept on `propagate@1`'s walk, and a span's what
+    its own events kept there."""
+    rows: dict[str, float] = defaultdict(float)
+    for ref, share in kept.items():
+        if (makers[ref] or "").startswith("agent:"):
+            rows[(makers[ref] or "").removeprefix("agent:")] += share
+    assert values(await credited(session)) == rows
+    for span in (await spanned(session)).values():
+        assert span.value == sum(kept[ref] for ref in span.evidence)
+
+
 @settings(max_examples=25, deadline=None)
 @given(script=moves)
 def test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event(tmp_path_factory, script):
-    """Where no span took anything, the rows are `propagate@2`'s: an agent's row is what its events kept on
-    `propagate@1`'s walk, and a span's what its own events kept there."""
+    """Where no span took another principal's event, whatever its writers saw, the rows are `propagate@2`'s, whose
+    agent rows are `propagate@1`'s."""
 
     async def body() -> None:
         session, kept, makers = await propagated_play(tmp_path_factory.mktemp("credit"), script)
-        rows: dict[str, float] = defaultdict(float)
-        for ref, share in kept.items():
-            if (makers[ref] or "").startswith("agent:"):
-                rows[(makers[ref] or "").removeprefix("agent:")] += share
-        assert values(await credited(session)) == rows
-        for span in (await spanned(session)).values():
-            assert span.value == sum(kept[ref] for ref in span.evidence)
+        await held_to_propagate_2(session, kept, makers)
         await session.leave()
 
     asyncio.run(body())
+
+
+async def test_propagate_3_writes_propagate_1s_rows_along_a_citation_seen_by_a_read_an_earlier_span_took(tmp_path):
+    """`a` reads `b`'s message in its first turn, by a call that chooses nothing, and in its next answers it, citing it:
+    the citation is seen, so it carries credit, as under `propagate@1`, and the read is no take of the answer's span.
+    Closed on both, the answer keeps half its half and passes the rest to `b`'s message, by its reply and its
+    citation."""
+    script = [("send", "b", True, True, 0), ("look", "a", False, False, 0), ("turn", "a", False, False, 0)]
+    script.append(("send", "a", True, True, 0))
+
+    session, kept, makers = await propagated_play(tmp_path, script)
+
+    [cited] = (await session.lineage((await credited(session))["a"].evidence[0])).declared
+    assert (cited.maker, cited.exposure and cited.exposure.answer) == ("agent:b", "seen")
+    await held_to_propagate_2(session, kept, makers)
+    assert values(await credited(session)) == {"a": 0.25, "b": 0.75}
 
 
 @settings(max_examples=25, deadline=None)
