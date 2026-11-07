@@ -315,14 +315,19 @@ class Which(Args):
     sha: Given
 
 
+def commit_fields(event: Event) -> dict[str, Any]:
+    """What an offer shows beside a recorded commit's gist: its `sha` and the workspace it was `made_in`."""
+    return {"sha": event.data["sha"], "made_in": event.data["made_in"]}
+
+
 @op("repo.commit", exposes=True, tool=True)
 def commit(txn: Txn, a: Which) -> dict[str, Any]:
     """Give a commit's `ref`, which `based_on` cites, its `sha`, `gist`, and the workspace it was `made_in`. Refused
     `not_found` until the look after the turn that made it records it, and `invalid` when `sha` names several."""
     event = _recorded(txn, a.sha)
-    ref, sha, made_in = f"{event.stream}@{event.version}", event.data["sha"], event.data["made_in"]
-    expose_read(txn, [Exposed.gist(ref, event.gist, {"sha": sha, "made_in": made_in})])
-    return {"ref": ref, "sha": sha, "gist": event.gist, "made_in": made_in}
+    ref, fields = f"{event.stream}@{event.version}", commit_fields(event)
+    expose_read(txn, [Exposed.gist(ref, event.gist, fields)])
+    return {"ref": ref, "gist": event.gist, **fields}
 
 
 class Testing(Args):

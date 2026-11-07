@@ -37,7 +37,7 @@ from .common import (
 )
 from .exposures import Exposures
 from .messages import Deliveries
-from .repo import Looks, Uncited
+from .repo import Looks, Uncited, commit_fields
 from .reports import GAPS, Surface
 
 WALK_LIMIT = 4096
@@ -1191,7 +1191,7 @@ def _gists(txn: Txn, ref: str) -> Iterator[str]:
     if event.type == "agent.spawned":
         yield event.data["goal"]
     elif event.type == "repo.committed":
-        yield shown_gist(event.gist, {"sha": event.data["sha"], "made_in": event.data["made_in"]})
+        yield shown_gist(event.gist, commit_fields(event))
     else:
         yield shown_gist(event.gist, event.data.get("fields"))
 

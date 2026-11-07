@@ -51,7 +51,8 @@ the one whose hash is the item's digest, so it is never another's text. It reads
 
 ### 3. One shown form
 
-The text an offer shows of a gist with fields is made by one function, which the offer's digest and the query both use.
+The text an offer shows of a gist with fields is made by one function, which the offer's digest and the query both use, and the
+fields a commit shows beside its gist by one more, which `repo.commit` and the query both use.
 
 ## Alternatives
 
