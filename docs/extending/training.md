@@ -63,11 +63,12 @@ class MyAuthority:
 - **`finish`** tells you how an agent ended: its `status`, `finished`, `cancelled`, `retired`, `lost` or `failed`, and its
   report, the gist, which is the agent's own for a finish and the session's words for any other end, and then the body, its last
   words. A child that ended with its parent is `cancelled` only if a turn of its was under way, and `retired` otherwise, even on
-  its way to a turn, as every turn it took is whole
-  ([RFC 0062](../rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md)). It comes last in the agent's stop, once its harness has ended or failed to, and until it returns the agent's parent is
-  handed nothing and a `wait` the parent holds open does not answer `released`, so settle the agent there and return once you
-  have. A parent at work on its own when the agent ended can still read of the end first, by a call it makes. A stop that a crash
-  cut is said again, alike, so take a second telling as the first.
+  its way to a turn, as its parent's end cut no turn of its
+  ([RFC 0062](../rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md)). It comes last in the agent's
+  stop, once its harness has ended or failed to, and until it returns the agent's parent is handed nothing and a `wait` the
+  parent holds open does not answer `released`, so settle the agent there and return once you have. A parent at work on its own
+  when the agent ended can still read of the end first, by a call it makes. A stop that a crash cut is said again, alike, so take
+  a second telling as the first.
 - **Budgets** stay the session's. Count steps at your gateway.
 
 A refusal of yours wins: `admit` raises, and the spawn fails with your words. An admission is never retried.

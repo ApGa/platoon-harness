@@ -22,15 +22,16 @@ RFC 0023 ended a child that ends with its parent `retired` unless a turn of its 
 training system drops a cancelled child's tokens and an idle child was cut off from nothing. Its reason was that every turn such a
 child took is whole. The "on its way" half reached past that reason. A child is on its way to a turn while a goal it has not
 begun, a wake that is due, a wait that holds or a handover waits to start one, and none of these has begun: the record holds no
-`turn.started` for it and no call in it, so every turn the child took is whole, and RFC 0023's own test says `retired`.
+`turn.started` for it and no call in it, so the parent's end cuts no turn of the child's, as it cuts none of an idle child's.
 
 Platoon's bridge met the cost. At a rollout's end its close retires each agent left, deepest first, and cancels one that refuses,
 as one on its way to a turn refuses `agent.retire`. On its first GPU runs on pi that ended 4 to 26 of each step's 128 rollouts
-cancelled, every turn of theirs whole, and the training system dropped their tokens, so the bridge now reads an agent its close
-cancels with no turn under way as retired. But its close is not the only way a child ends with a parent. When a parent is cancelled while a child of its is on its
-way to a turn, woken by a message or a report, or holding a handover its harness took and had begun no turn on, the SDK ended
-that child `cancelled`, and the training system dropped its tokens though no turn of its was cut. The bridge left this to the
-SDK, as one end read two ways is a contract with two meanings. How often it happened on those runs was not measured.
+cancelled, by agents with a handover pending, and the training system dropped their tokens, so the bridge now reads an agent its
+close cancels with no turn under way as retired. But its close is not the only way a child ends with a parent. When a parent is
+cancelled while a child of its is on its way to a turn, woken by a message or a report, or holding a handover its harness took
+and had begun no turn on, the SDK ended that child `cancelled`, and the training system dropped its tokens though no turn of its
+was cut. The bridge left this to the SDK, as one end read two ways is a contract with two meanings. How often it happened on
+those runs was not measured.
 
 ## Proposal
 

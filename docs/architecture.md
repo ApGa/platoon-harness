@@ -868,9 +868,9 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   a budget the cut turn's charge leaves no room in refuses it, and the session ends `needs_human`.
 - **`on_parent_exit`** is a role policy: `cancel-subtree` or `adopt`. Orphans under `adopt` belong to the session. A child that ends
   with its parent ends `cancelled` if a turn of its is under way, from its harness's `turn.started` to that turn's end, which the
-  end cuts, and `retired` otherwise, idle, parked or on its way to a turn, since every turn it took is whole and a training system
-  drops a cancelled child's tokens: a turn on its way has not begun. `session.cancel` ends every agent `cancelled`, each parent
-  before its children, so that no report goes to a parent ending with it. See
+  end cuts, and `retired` otherwise, idle, parked or on its way to a turn, since its parent's end cut no turn of its and a training
+  system drops a cancelled child's tokens: a turn on its way has not begun. `session.cancel` ends every agent `cancelled`, each
+  parent before its children, so that no report goes to a parent ending with it. See
   [RFC 0062](rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md).
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While it is at work, in a turn or
   on its way to one, it is refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
