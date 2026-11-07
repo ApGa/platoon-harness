@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job runs on a Python that uv manages, as a contributor's machine does, never the runner's own: Ubuntu's 3.12.3
+# warns that sqlite's numbered placeholders are named, which later 3.12 releases do not.
+env:
+  UV_PYTHON_PREFERENCE: only-managed
+
 jobs:
   # Every hook of the pre-commit stage on every file: ruff's lint and format, and ty. `--locked` fails when uv.lock is
   # out of date with a pyproject.toml, rather than locking again on the runner.
