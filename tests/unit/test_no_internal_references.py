@@ -6,11 +6,12 @@ The scan covers every text file git tracks and every new file it does not ignore
 names of all of them. A file is text when its first 8000 bytes hold no NUL byte, as git judges it. A file may hold what
 the scan catches only where `ALLOWED` lists that text's digest, with the reason.
 
-Banned words are stored as SHA-256 digests, so that this file does not publish them itself. A line has its camelCase
-words split (`FooBar` and `FOOBar` read as `foo_bar`, and `FOOs` as `foos`), is lower-cased and is split into names of
-letters, digits and underscores. A name matches when a run of its underscore-separated words is banned (a resource type
-is two words), or is once cut at its first digit (a numbered host, account or group), either also without a trailing `s`
-(a plural). To ban another word, add `hashlib.sha256(word.lower().encode()).hexdigest()`.
+Banned words are stored as SHA-256 digests, so that this file does not publish them itself. A digest keeps a word out of
+plain text and out of a search, but not secret: a short word is found by trying every word that short. A line has its
+camelCase words split (`FooBar` and `FOOBar` read as `foo_bar`, and `FOOs` as `foos`), is lower-cased and is split into
+names of letters, digits and underscores. A name matches when a run of its underscore-separated words is banned (a
+resource type is two words), or is once cut at its first digit (a numbered host, account or group), either also without
+a trailing `s` (a plural). To ban another word, add `hashlib.sha256(word.lower().encode()).hexdigest()`.
 """
 
 import hashlib
