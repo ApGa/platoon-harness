@@ -14,7 +14,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 
 | Upstream | Inspected | License and constraint | How we use it | IMPLEMENTED versus DRAFT | Most important fact |
 |---|---|---|---|---|---|
-| Platoon | `efe3b277c82c`, 0.5.0 | MIT AND Apache-2.0 (tool parsers). Optional extension; keep its NOTICE if parser code is ever copied | Training authority through an extension, pinned `>=0.5,<0.6` | IMPLEMENTED: gateway, child mint, trajectories, env forks, extensions. EXPERIMENTAL: credit, policies, Responses and Messages dialects. DRAFT: `AgentGraph`, `RewardEvent`, attribution levels, native selectors, `bus` | The only exact identity for an external agent is one key per agent, from `POST /v1/platoon/agents` |
+| Platoon | `efe3b277c82c`, 0.5.0 | MIT AND Apache-2.0 (tool parsers). Optional extension; keep its NOTICE if parser code is ever copied | Training authority through its own extension, `platoon-teams`, on the contract this repository holds ([RFC 0049](../rfcs/0049-the-contract-a-training-authority-gets.md)). Nothing here depends on Platoon | IMPLEMENTED: gateway, child mint, trajectories, env forks, extensions. EXPERIMENTAL: credit, policies, Responses and Messages dialects. DRAFT: `AgentGraph`, `RewardEvent`, attribution levels, native selectors, `bus` | The only exact identity for an external agent is one key per agent, from `POST /v1/platoon/agents` |
 | SwarmChat | `fb5aa6a05b40`, PyPI 0.1.0 | MIT. Its notice heads each of its scripts we serve. Exact pin, `swarmchat==0.1.0` in the CLI package | Second client: its five page files, each held to its SHA-256, over our own backend, from `platoon-harness web`, with an overlay of ours that acts through `/x/command`. Its server never runs | IMPLEMENTED: server, agent API and a read-only viewer. No composer exists or is documented. Nothing DRAFT | Messages have no idempotency key, no metadata and no caller ids, so a projection into its server cannot be idempotent |
 | Toad | `dd4f90e8b370`, 0.6.20 | AGPL-3.0. Ideas only: no code, no dependency. Its `textual-diff-view` is AGPL too | Interaction reference | IMPLEMENTED: own ACP v1 client. Nothing DRAFT | Copying is ruled out by license, not merely unnecessary |
 | OpenHands | SDK `988494576218`, wheels 1.59.0. CLI `283c6ac3610f`, `openhands` 1.16.0 | MIT. The SDK requires proprietary `lmnr-claude-code-proxy` 0.2.0 through `lmnr`: the worker runs without it, the workspace lock excludes it, and the extra installed from an index brings it in unless excluded | Wire worker on SDK `arun()`, from the SDK's `openhands` extra | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
@@ -42,7 +42,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 
 | Protocol | Pin | Negotiation rule | Refuse |
 |---|---|---|---|
-| **ACP** | Protocol `1`, schema v1. `agent-client-protocol>=0.12.1,<2` in the `[acp]` extra, 1.0.0rc3 locked, CI on both | Send `protocolVersion: 1` once per connection. An agent that supports it echoes it, otherwise it answers its own latest. Disconnect on anything but `1` | v2 unless an explicit experimental flag is set. An unstable feature unless it has its own opt-in, a capability check, a version guard and a fixture. Negotiating v1 implies none of them |
+| **ACP** | Protocol `1`, schema v1. No driver speaks it yet, so nothing is pinned: the lock holds `agent-client-protocol` 0.12.1 only as `openhands-sdk`'s dependency | Send `protocolVersion: 1` once per connection. An agent that supports it echoes it, otherwise it answers its own latest. Disconnect on anything but `1` | v2 unless an explicit experimental flag is set. An unstable feature unless it has its own opt-in, a capability check, a version guard and a fixture. Negotiating v1 implies none of them |
 | **MCP** | Handshake era: `2025-11-25` and `2025-06-18`. Core tools use `2025-06-18` semantics. Our stdlib server, not the `mcp` package | Answer `server/discover` with -32601, so clients fall back to `initialize`. Answer `initialize` with the client's version when it is one of those two, and with `2025-11-25` otherwise. Observe the settled version per connection | Sessions, SSE and `GET` or `DELETE` (405). Undeclared arguments return `isError: true`. Identity from `clientInfo`, `_meta` or arguments |
 | **Driver wire** | `protocol: 1`. Line-delimited JSON-RPC 2.0 on stdio, split on LF only, logs on stderr | `start` carries one integer. An unknown integer is refused. There is no range and no fallback | Any verb outside the seven `Driver` methods. An unknown report frame becomes `native` plus a gap, never a log line |
 
@@ -52,20 +52,20 @@ Consequences:
   nothing, since `openhands acp` returned 99 when asked for 99. Capabilities omitted are unsupported. Claude and Codex
   adapters already parse the v2 `initialize` shape, so v1 lifecycle assumptions stay inside the driver.
 - **ACP SDK.** Unknown `sessionUpdate` kinds are dropped in the notification handler and the client never sees them.
-  `observers` run before parsing, so raw frames are captured there, and a parse failure becomes a gap.
+  `observers` run before parsing, so a client could keep raw frames there.
 - **MCP.** Revision 2026-07-28 makes `server/discover` mandatory to implement, so our server does not claim that revision. A
   modern-only client cannot reach it. Neither real client needs that. Modern-only features (multi round-trip results,
   `subscriptions/listen`, tasks) carry no core semantics.
 - **Dependencies.** The core SDK depends on neither `mcp` nor `agent-client-protocol`. `openhands-sdk` 1.59.0 is unsatisfiable
-  with `mcp==2.3.0` or `agent-client-protocol==1.0.0rc3`, and unpinned it resolves silently to 1.49.1 and 1.44.1. The SDK's
-  `openhands` extra pins it and `openhands-tools` exactly, so an environment with the extra holds OpenHands' pins, and one that
-  cannot runs the worker from an environment of its own, as a wire command. `litellm`, which the worker imports too, is not
-  pinned: it floats in the range `openhands-sdk` asks, `>=1.93.0,<1.106`, and every test here ran on 1.105.7. The effort refusal
-  reads the catalog of whichever is installed, the one that would drop the field. The workspace's one lock holds the extra beside the
-  rest, which moved `filelock` from 4.2.6 to 3.32.7, a package the core reaches only through `pre-commit` in its dev group, and
-  leaves out `lmnr-claude-code-proxy`, which the extra installed from an index brings in unless excluded, as uv's `--excludes`
-  does. The planned `[acp]` extra's `agent-client-protocol` 1.0.0rc3 cannot share that lock with the SDK's 0.12.1, so when that
-  extra lands, no one environment holds both.
+  with `mcp` 2.3.0 or `agent-client-protocol` 1.0.0rc3, and unpinned it resolves silently to 1.49.1 and 1.44.1. The SDK's
+  `openhands` extra pins `openhands-sdk==1.59.0` and `openhands-tools==1.59.0`, so an environment with the extra holds
+  OpenHands' pins, and one that cannot runs the worker from an environment of its own, as a wire command. `litellm`, which the
+  worker imports too, is not pinned: it floats in the range `openhands-sdk` asks, `litellm>=1.93.0,<1.106`, and every test here
+  ran on 1.105.7. The effort refusal reads the catalog of whichever is installed, the one that would drop the field. The
+  workspace's one lock holds the extra beside the rest, which moved `filelock` from 4.2.6 to 3.32.7, a package the core reaches
+  only through `pre-commit` in its dev group, and leaves out `lmnr-claude-code-proxy`, which the extra installed from an index
+  brings in unless excluded, as uv's `--excludes` does. A driver on `agent-client-protocol` 1.0.0rc3 could not share that lock
+  with the 0.12.1 `openhands-sdk` brings.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, checked on this machine by `doctor --check`, which keeps what it
   found for the version it ran on, under that SDK on that host, and recorded from `ready` on `agent.started` and `agent.resumed`, with
   that result when it speaks for the harness that runs. Adapters seen:
@@ -94,22 +94,23 @@ Unknown is not no. Reports label OpenCode and pi runs `[LIVE]` against a fake se
 | **opencode** 2.2.5 via ACP | yes. `opencode acp`, private server per process [L] | partial. `session/update`; less detail than HTTP [L] | partial. `mcpServers` landed behind Code Mode, even with `codemode: false` in config [L] | partial. Turn boundary. A second prompt fails -32603 [L] | yes. `session/cancel`, stop reason `cancelled` [L] | partial. `session/request_permission`, only under an `ask` rule. No rule, no ask [L] | unverified. Advertised, not exercised over ACP [L] | partial. Child sessions seen on HTTP [L]; ACP updates need opt-in [S] | yes. `OPENCODE_CONFIG_CONTENT`; reaches the tool shell. Always pin a model [L] | partial. Session level by header, one credential per process; title calls unlabelled [L] | unknown. Untested through the gateway. Title calls would train as `policy` [U] |
 | **prime** 0.10.2 | unverified. Version and help ran; no model turn. Needs `uv` and Python [S] | unverified [S] | unverified. Through the Python REPL [S] | unverified. `steer`, `follow_up` on RPC [S] | unverified. Children and kernels must stop too [S] | no. None in the crates [S] | unverified. CLI only in source; ACP `load_session: false` [S] | unverified. `rlm.spawn`, reported by the harness [S] | unverified. `models.json` [S] | unknown. No parent header found; kernel calls unknown [U] | unknown. No live probe [U] |
 | **generic ACP**, protocol 1 | yes. Baseline required of every agent [S]; SDK checked on a fake agent [L] | partial. 14 stable update kinds; the SDK drops unknown ones [S] [L] | unverified. `mcpServers`, stdio mandatory. Visibility varies by agent [S] | unverified. Next turn. A second prompt mid-turn is undefined [S] | unverified. `session/cancel` is baseline. `openhands acp` maps it to `pause()` [S] | unverified. `session/request_permission` is a baseline client method. Whether an agent asks is per agent [S] | unverified. Only if advertised [S] | no. Stable has none; `subagent_update` is unstable [S] | no. `providers/*` is unstable [S] | no. `toolCallId` only [S] | no. Only through a gateway, per agent [S] |
-| **generic exec**, one-shot | unknown. Any command; `exec` driver is planned [U] | unknown. Stdout only, no structured events [U] | unknown. `ph` on `PATH`; a sandbox may block it [U] | no. No input after launch; cannot park [S] | unknown. Process group only [U] | unknown. No answer path in the design [U] | unknown. Depends on the command [U] | unknown. Opaque [U] | unknown. Whatever the command accepts [U] | unverified. Exact only if it uses its own key alone [S] | unknown. Per command; Platoon admits a custom agent on its own key [S] |
+| **generic exec**, one-shot | unknown. Any command [U] | unknown. Stdout only, no structured events [U] | unknown. `ph` on `PATH`; a sandbox may block it [U] | no. No input after launch; cannot park [S] | unknown. Process group only [U] | unknown. No answer path in the design [U] | unknown. Depends on the command [U] | unknown. Opaque [U] | unknown. Whatever the command accepts [U] | unverified. Exact only if it uses its own key alone [S] | unknown. Per command; Platoon admits a custom agent on its own key [S] |
 
 ### Driver status
 
 A driver fills in its row when `check_driver` passes, with the result pinned to the harness version. A cell above is never upgraded
-by a driver landing; only the row below changes.
+by a driver landing; only the row below changes. Each driver's state is the one
+[STATUS](../STATUS.md#drivers-platoon_harnessdrivers-platoon_harnessrpc-platoon_harnesstesting) gives it, which a test holds.
 
 | Driver | Path | Depends on | Driver status | Conformance result |
 |---|---|---|---|---|
-| `claude` | Stream-json plus control protocol | User's binary | implemented | 2.1.319 on FakeModel: 26 passed, 0 failed, 4 skipped (`one_shot_exits`: it is persistent; `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`: it declares no sealed launch; `declared_but_unproven`: no check proves `coverage`). Operational and observable met. It passed on 2.1.316 and 2.1.318 before |
-| `codex` | `codex app-server` over stdio | User's binary | implemented | 0.167.0 on FakeModel: 25 passed, 0 failed, 5 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`: it declares no sealed launch; `declared_but_unproven`: no check proves `tool_timeout_s`, `coverage` or `sandboxes`). Operational and observable met. It passed on 0.164.0 before, and still does |
-| `pi` | `pi --mode rpc` | User's install | implemented | 1.5.0 on FakeModel: 26 passed, 0 failed, 4 skipped (`native_children_off_by_default` and `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met, and trainable on a gateway login, from its sealed checks on FakeModel acting as a gateway. No live model has run: pi has no login on the machine that ran this |
-| `openhands` | `WireDriver`, worker `python -P -m platoon_harness.drivers.openhands` on SDK `arun()` | `[openhands]` extra | implemented | 1.59.0 on FakeModel: 26 passed, 0 failed, 4 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_child_seen`: its native children are opaque, and `tests/integration/test_openhands.py` holds an allowed child to the runtime's approvals; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met, and trainable on a gateway login, from its sealed checks on FakeModel acting as a gateway; never for a role that allows its own agents, as they are opaque. No live model has run: no OpenHands login or provider key is on the machine that ran this |
-| ACP, covering `opencode` | Generic driver, protocol 1 | `[acp]` extra | planned | none |
-| `prime` | Decided after a live probe | User's install | planned | none |
-| `exec` | One-shot command, `ph` only | Nothing | planned | none |
+| `claude` | Stream-json plus control protocol | User's binary | experimental | 2.1.319 on FakeModel: 26 passed, 0 failed, 4 skipped (`one_shot_exits`: it is persistent; `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`: it declares no sealed launch; `declared_but_unproven`: no check proves `coverage`). Operational and observable met. It passed on 2.1.316 and 2.1.318 before |
+| `codex` | `codex app-server` over stdio | User's binary | experimental | 0.167.0 on FakeModel: 25 passed, 0 failed, 5 skipped (`call_ids_reported`: it has no id per model call; `one_shot_exits`: it is persistent; `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request`: it declares no sealed launch; `declared_but_unproven`: no check proves `tool_timeout_s`, `coverage` or `sandboxes`). Operational and observable met. It passed on 0.164.0 before, and still does |
+| `pi` | `pi --mode rpc` | User's install | experimental | 1.5.0 on FakeModel: 26 passed, 0 failed, 4 skipped (`native_children_off_by_default` and `native_child_seen`: it has none by design; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met, and trainable on a gateway login, from its sealed checks on FakeModel acting as a gateway. No live model has run: pi has no login on the machine that ran this |
+| `openhands` | `WireDriver`, worker `python -P -m platoon_harness.drivers.openhands` on SDK `arun()` | `[openhands]` extra | experimental | 1.59.0 on FakeModel: 26 passed, 0 failed, 4 skipped (`tool_item_carries_its_anchor`: it sends no anchor; `native_child_seen`: its native children are opaque, and `tests/integration/test_openhands.py` holds an allowed child to the runtime's approvals; `one_shot_exits`: it is persistent; `declared_but_unproven`: no check proves `tool_timeout_s` or `coverage`). Operational and observable met, and trainable on a gateway login, from its sealed checks on FakeModel acting as a gateway; never for a role that allows its own agents, as they are opaque. No live model has run: no OpenHands login or provider key is on the machine that ran this |
+| ACP, covering `opencode` | Generic driver, protocol 1 | Undecided | planned | none |
+| `prime` | Decided after a live probe | User's install | planned, awaiting the owner's ruling | none |
+| `exec` | One-shot command, `ph` only | Nothing | tested | On `tests/conformance/one_shot.py`, a command that asks FakeModel once, with no version to pin to: 6 passed, 0 failed, 24 skipped, as a one-shot declares no persistent session, resume, approvals, MCP path, dialect, measures or boundary inside a turn |
 
 ### Evidence
 
@@ -690,11 +691,11 @@ Milestone 1 closes.
 
 | Prerequisite | Requirement |
 |---|---|
-| `platoon-harness` | Python 3.12+. ACP wheels cap at `<3.15` |
+| `platoon-harness` | Python 3.12+ |
 | `claude`, `codex` | User-installed binary |
 | `opencode` | `@opencode/cli`, platform binary, no Node at runtime. Check the major version: bins are `opencode` and `opencode2` |
 | `pi` | Node >= 22.19 |
-| `openhands` | The SDK's `openhands` extra, in the runtime's environment or, run as a wire command, one of its own: Python 3.12+. An environment of the worker with OpenHands' tools and without the proxy was 498 MB, and 387 MB without the tools. The OpenHands CLI needs `==3.12.*` and is not used |
+| `openhands` | The SDK's `openhands` extra, in the runtime's environment or, run as a wire command, one of its own: Python 3.12+. An environment of the worker with OpenHands' tools and without the proxy was 498 MB, and 387 MB without the tools. The OpenHands CLI needs Python 3.12 alone and is not used |
 | `prime` | Release tarball, `uv`, Python >= 3.11 kernel |
 | Codex sandbox on Linux | Bubblewrap and user namespaces. A bundled `bwrap` is the fallback. With user namespaces blocked, sandboxed commands cannot run (docs, not reproduced). Never fall back to `danger-full-access` silently |
 | `isolated` workspaces | The SDK's `bwrap` extension: Linux, `bwrap` on `PATH` and unprivileged user namespaces, which a kernel setting, AppArmor or a container's seccomp can block, and which its probe says before any cost. Run on bubblewrap 0.4.1 alone. No provider for macOS |

@@ -855,6 +855,12 @@ named here is closed.
 
 ### Fixes
 
+- **The compatibility page claimed pins and states nothing held.** It called the `exec` driver planned, where STATUS tests it,
+  and the `claude`, `codex`, `pi` and `openhands` drivers implemented, where STATUS calls them experimental. It pinned
+  `agent-client-protocol` in an `[acp]` extra with 1.0.0rc3 locked and CI on both, where no such extra, lock entry or CI job
+  exists, and Platoon at `>=0.5,<0.6`, which nothing here depends on since the bridge became Platoon's own extension. Its rows
+  now say what STATUS and the lock hold, and `tests/unit/docs/test_compatibility.py` holds each driver's state to STATUS and
+  each pin the page spells to `uv.lock`.
 - **A mark still being written as you leave the terminal UI is kept.** The workspace wrote each mark in a worker of its
   screen, and leaving takes the screen down, which cancels its workers, so a channel read just before leaving could come back
   unread, as a test found with marks written slowly. Leaving now writes each mark still being written before it goes.
