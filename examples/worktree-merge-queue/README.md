@@ -21,6 +21,8 @@ decided.
   it;
 - a git repository with a commit, from which you start the session: each agent's branch is made there, so a scratch
   one does;
+- git that knows your name and email, as `git config user.name` and `git config user.email` say, since the workers
+  commit and the merger merges as you;
 - for a run on real models, `claude` and `codex` on your PATH and signed in as you usually are. The run with no keys
   needs neither.
 
@@ -75,12 +77,12 @@ Whichever worker adds its task first is merged, so `ada` and `bob` may be the ot
 settled, exit 0
   @ada             finished  merged platoon-harness/contributors/ada
   @bob             finished  conflict in CONTRIBUTORS.md: rebase platoon-harness/contributors/bob onto mine and add it again
-  @lead            finished  Both branches went to the merger: one merged, and the other's conflict is in its task's result.
+  @lead            finished  Both workers have ended: each one's report says what came of its branch.
   @merger          waiting
 ```
 
-Each agent works on the branch `platoon-harness/contributors/<agent>`, in a worktree in the session's folder, made at
-your HEAD: nothing of it is in your checkout. `tests/integration/test_examples.py` runs the `platoon-harness` commands on
+The workers and the merger each work on the branch `platoon-harness/contributors/<agent>`, in a worktree in the
+session's folder, made at your HEAD: nothing of it is in your checkout. `tests/integration/test_examples.py` runs the `platoon-harness` commands on
 this page as shown, in a repository of its own. A session's name is taken once, so a second run needs another `--name`.
 
 ## 3. Read it back

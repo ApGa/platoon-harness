@@ -115,7 +115,7 @@ class Lead(Templated):
 CONTRIBUTORS = ["ada", "bob"]
 """The workers of the worktree example's job."""
 ADDING = "Add a line naming yourself at the end of CONTRIBUTORS.md, and hand your branch to the merger."
-MERGED = "Both branches went to the merger: one merged, and the other's conflict is in its task's result."
+ENDED = "Both workers have ended: each one's report says what came of its branch."
 
 
 def _answer(result: Any) -> Any:
@@ -126,9 +126,15 @@ def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
 
 
+def _why(done: subprocess.CompletedProcess[str]) -> str:
+    """The first line git said of a command that failed."""
+    said = (done.stderr or done.stdout).strip()
+    return said.splitlines()[0] if said else f"exit {done.returncode}"
+
+
 class Spawning(Templated):
     """The worktree example's lead: it spawns ada and bob, then goes back to its wait on them until it holds, and
-    finishes."""
+    finishes saying they have ended and no more, as it may read no task on `merges`."""
 
     spawned = False
 
@@ -139,13 +145,13 @@ class Spawning(Templated):
                 await self._call("agent_spawn", {"name": name, "child_role": "worker", "goal": ADDING})
         if _answer(await self._call("wait", {"agents": CONTRIBUTORS}))["state"] != "released":
             return "stopped"
-        return await super()._walk([Call("task_list", {"queue": "merges"}), Call("agent_finish", {"gist": MERGED})])
+        return await super()._walk([Call("agent_finish", {"gist": ENDED})])
 
 
 class Contributing(Templated):
     """The worktree example's worker: its first turn adds a line naming it at the end of CONTRIBUTORS.md, commits it on
     its branch and adds a task to `merges` naming the branch; each turn then waits on that task, and once it has
-    settled finishes with its result."""
+    settled finishes with its result. If its commit fails, it finishes saying so and adds no task."""
 
     task: str | None = None
 
@@ -156,7 +162,10 @@ class Contributing(Templated):
             with (cwd / "CONTRIBUTORS.md").open("a") as names:
                 names.write(f"{self._spec.agent}\n")
             await asyncio.to_thread(_git, "add", "CONTRIBUTORS.md", cwd=cwd)
-            await asyncio.to_thread(_git, "commit", "-q", "-m", f"Add {self._spec.agent} to the contributors", cwd=cwd)
+            message = f"Add {self._spec.agent} to the contributors"
+            committed = await asyncio.to_thread(_git, "commit", "-q", "-m", message, cwd=cwd)
+            if committed.returncode != 0:
+                return await super()._walk([Call("agent_finish", {"gist": f"git commit failed: {_why(committed)}"})])
             self.task = _answer(await self._call("task_add", {"queue": "merges", "gist": f"merge {branch}"}))["task"]
         if _answer(await self._call("wait", {"tasks": [f"merges/{self.task}"]}))["state"] != "released":
             return "stopped"
@@ -167,9 +176,9 @@ class Contributing(Templated):
 
 class Merging(ScriptedDriver):
     """The worktree example's merger: each turn claims each task on `merges`, merges the branch it names into its own
-    with git, and completes it with what came of that, a conflict naming its paths and left for a person to see, until
-    a wait for work on the queue parks it. Each call carries an id of its own, as a harness's do, so a second claim in
-    a turn is no repeat of the first."""
+    with git, and completes it with what came of that, a conflict naming its paths and left for a person to see, or why
+    git could not merge, until a wait for work on the queue parks it. Each call carries an id of its own, as a harness's
+    do, so a second claim in a turn is no repeat of the first."""
 
     async def _call_anew(self, tool: str, arguments: dict[str, Any]) -> Any:
         return await self._call(tool, arguments, native_id=f"merging-{uuid.uuid4().hex}")
@@ -187,8 +196,11 @@ class Merging(ScriptedDriver):
             if merged.returncode == 0:
                 gist = f"merged {branch}"
             else:
-                paths = await asyncio.to_thread(_git, "diff", "--name-only", "--diff-filter=U", cwd=cwd)
-                gist = f"conflict in {', '.join(paths.stdout.split())}: rebase {branch} onto mine and add it again"
+                unmerged = await asyncio.to_thread(_git, "diff", "--name-only", "--diff-filter=U", cwd=cwd)
+                if paths := unmerged.stdout.split():
+                    gist = f"conflict in {', '.join(paths)}: rebase {branch} onto mine and add it again"
+                else:
+                    gist = f"git merge failed: {_why(merged)}"
             await self._call_anew("task_complete", {"queue": "merges", "gist": gist})
 
 
