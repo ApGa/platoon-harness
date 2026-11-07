@@ -2866,6 +2866,28 @@ async def test_a_finish_out_of_a_turn_says_its_end_which_holds_its_citations(ker
     assert (ended.data["carries"], ended.data["report"], ended.based_on) == (None, "all done", ("agent/bob@1",))
 
 
+async def test_a_finish_has_words_of_its_own_by_its_gist_or_its_body_in_a_turn_or_out_of_one(kernel):
+    """One test for both: a finish that gives a body and no gist has words of its own, so out of a turn its end says
+    them and holds what it cites, and an empty finish has none, so its last message says them, body and all."""
+    body = f"sha256:{await kernel.put_body(b'the whole answer')}"
+    bob = await spawn(kernel, "bob")
+    amy = await spawn(kernel, "amy")
+    for name in ("bob", "amy"):
+        await start_turn(kernel, name)
+        await report(kernel, name, "item", kind="message", gist=f"{name} is done", body=body)
+    await end_turn(kernel, "bob")
+    result_of(await kernel.submit(amy, "agent.finish", {}))
+
+    finished = result_of(await kernel.submit(bob, "agent.finish", {"body": body, "based_on": ["agent/bob@1"]}))
+    await end_turn(kernel, "amy")
+
+    messages = {event.agent: f"{event.stream}@{event.version}" for event in of_type(kernel, "item.recorded")}
+    ends = {event.agent: event for event in of_type(kernel, "agent.ended")}
+    assert state_of(kernel, "bob")["said"] == finished["ref"] == f"{ends['bob'].stream}@{ends['bob'].version}"
+    assert (ends["bob"].data["carries"], ends["bob"].based_on) == (None, ("agent/bob@1",))
+    assert state_of(kernel, "amy")["said"] == ends["amy"].data["carries"] == messages["amy"]
+
+
 async def test_an_end_recorded_before_carries_says_itself(kernel, folder, clock):
     """An end written before it recorded what its report carries said a finished agent's last words by itself, and a
     journal of one folds as it was written."""

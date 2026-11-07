@@ -45,10 +45,11 @@ nothing.
 `end()` works out the ref its report carries before it emits, and records it on `agent.ended`, payload 2, as `carries`, None
 meaning the end itself; the `Agents` fold reads it, and an end written before payload 2 says itself, so no existing event folds
 differently. In one sentence, for each way an agent ends: once an agent has finished, its `said` is the ref its end's report
-carries, which is that call's `agent.finished` for an `agent.finish` with a report in a turn, its `agent.ended` for one with a
-gist out of a turn, and for any other finish, an empty one, a one-shot's stopped turn or a turn that leaves nothing to come, the
-latest turn's last message, whose words the report took, or its `agent.ended` where that turn said nothing; an agent cancelled,
-retired, lost or failed says its latest turn's last message, as a live one does, or None where that turn said nothing.
+carries, which for an `agent.finish` with a gist or a body is that call's `agent.finished` in a turn and its `agent.ended` out of
+one, and for any other finish, an empty one, a one-shot's stopped turn or a turn that leaves nothing to come, the latest turn's
+last message, whose words the report took, or its `agent.ended` where that turn said nothing; an agent cancelled, retired, lost
+or failed says its latest turn's last message, as a live one does, or None where that turn said nothing. A finish has words of
+its own by its gist or its body alike, in a turn or out of one, so an empty finish after a message with a body says that message.
 
 This amends RFC 0060, whose `said` named the end of an agent that finishes with a turn that leaves nothing to come: it now names
 the message that said those words, which that end's report holds.
@@ -195,7 +196,7 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the three beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries` |
+| M1 `said` | The ref an end's report carries, on `agent.ended` payload 2 | `test_a_finished_agents_said_is_what_its_report_carries` and the four beside it in `test_lifecycle.py` | `fix: Say a finished agent's last words by what its report carries` |
 | M2 Scripted ids | `scripted/toolCallId`, and an id per tool call | `test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_call`, `test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives` and `test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_sent`, and `tool_item_carries_its_anchor` passing on ScriptedDriver | `feat: Send each scripted tool call's id as a harness does` |
 | M3 Spans | The `spans` query and the renames | `tests/unit/primitives/test_spans.py` | `feat: Cut each agent's turns into spans at its writes` |
 | M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_2_writes_the_agent_rows_propagate_1_wrote`, over generated journals | `feat: Keep propagated credit per span` |
@@ -223,7 +224,7 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
   journals that confirmed offers.
 - [tests/unit/primitives/test_spans.py](../../tests/unit/primitives/test_spans.py): a test named for each rule of section 3, among
   them a property over generated reports, `test_every_call_reported_in_a_turn_lies_in_exactly_one_span`.
-- [tests/unit/primitives/test_lifecycle.py](../../tests/unit/primitives/test_lifecycle.py): the four `said` tests, and RFC 0060's
+- [tests/unit/primitives/test_lifecycle.py](../../tests/unit/primitives/test_lifecycle.py): the five `said` tests, and RFC 0060's
   turn-finish test, which asserts `said` and `carries` name the message that said the last words.
 - [tests/unit/drivers/test_scripted.py](../../tests/unit/drivers/test_scripted.py) and the conformance suite, for section 2.
 - [tests/integration/test_contract.py](../../tests/integration/test_contract.py): a row for each agent and for the span its last

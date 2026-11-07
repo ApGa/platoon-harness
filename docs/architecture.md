@@ -1826,8 +1826,9 @@ class AgentOutcome(Model):
   else can act (§12), and which cannot detach, at a start or a resume. It sends its task to `Team.recipients()`, every agent the
   session starts, ends every agent, deepest first, retiring one at rest and cancelling one at work, and closes the episode on each
   starting agent's `said`, the ref of its last words that `Session.agents()` and `Session.status(agent)` give (§6): for a finished
-  agent what its end's report carries and records as `carries`, a finish's `agent.finished` or the message whose words that report
-  took, and else its own end, and for any other its latest turn's last message.
+  agent what its end's report carries and records as `carries`, for a finish with a gist or a body its `agent.finished` in a turn
+  and its end out of one, and for any other finish the message whose words that report took, or its end where its latest turn said
+  nothing; and for any other agent its latest turn's last message, or None where that turn said nothing.
 - **Trainable is checked before any harness launches.** `trainable_problems(team)` reads the team alone, as a training system's load
   check reads it with no driver to ask: a model or an auth profile a role names, approvals left to `ask`, a harness's own agents
   allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches, with approvals judged by the

@@ -210,7 +210,8 @@ def end(
     """The ended transition: one event every view folds, then what no fold may do. Any open turn ends with it, whoever
     spawned the agent hears how it ended, by the ref of what said it, and what it had still to start never does. Only a
     turn is charged. A finish's report is the agent's, so `based_on` is its claim. The end records the ref its report
-    carries as `carries`: a finish's `agent.finished`, the latest turn's last message, or None for the end itself."""
+    carries as `carries`: for a finish with a gist or a body its `agent.finished`, or out of a turn, where it has none,
+    None for the end itself, and for any other finish the latest turn's last message, or None where it said nothing."""
     name = agent.name
     owned = txn.view(Tasks).owned(agent.id)
     if txn.view(Stamps).turn(name) is not None or txn.view(Budgets).turn_usage(name):
@@ -218,14 +219,10 @@ def end(
     reason = reason and reason[:_REASON_LIMIT]
     ending = f"{name} {status}: {reason}" if reason else f"{name} {status}"
     report = gist or agent.final_gist if status == "finished" else ending[:GIST_LIMIT]
+    carries = None if status != "finished" else _said(txn, agent.finish_ref if gist or body else agent.final_ref)
     body = body or agent.final_body
     wake = False if txn.me.id == agent.parent else _wakes(txn, agent, ended=True, badly=status != "finished")
     follows = txn.view(Deliveries).heard(name)
-    carries = None
-    if status == "finished" and agent.finishing and (gist or body):
-        carries = _said(txn, agent.finish_ref)
-    elif status == "finished" and gist is None:
-        carries = _said(txn, agent.final_ref)
     carried = None if carries is None else f"{carries.stream}@{carries.version}"
     ended = txn.emit(
         "agent.ended",

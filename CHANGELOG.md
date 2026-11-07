@@ -719,9 +719,11 @@
 - A finished agent's `said` named its end even where that end's report carried the agent's own `agent.finished` or its last
   message, so an episode closed on it walked from an event that cites nothing and that no model call chose, and a finish's
   citations carried no credit. `said` is now the ref the end's report carries, which
-  `agent.ended`, payload 2, records as `carries`: the `agent.finished` of an `agent.finish` with a report in a turn, the end itself
-  for one with a gist out of a turn, and else the latest turn's last message, whose words the report took, or the end where that
-  turn said nothing. An end written before payload 2 says itself, as it did.
+  `agent.ended`, payload 2, records as `carries`: for an `agent.finish` with a gist or a body, its `agent.finished` in a turn and
+  the end itself out of one, and else the latest turn's last message, whose words the report took, or the end where that turn said
+  nothing. An end written before payload 2 says itself, as it did. A finish with a body and no gist has words of its own, in a turn
+  or out of one, and an empty finish has none, even after a message with a body, so its report carries that message: one act is
+  decided one way.
   [RFC 0061](docs/rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) amends RFC 0060 so.
 - A tree of agents that do not stay could sit until a person ended it, as one did for 19 minutes on the first GPU run of a team on
   OpenHands: a child reported and never called `agent.finish`, so it stayed live and idle, and its parent, woken by the report,

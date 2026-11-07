@@ -102,8 +102,8 @@ async with Session.start(
   roles do not stay settles on its own. Its `said` names the message that said those words, which its end carries.
 - **Close the episode** on what each agent that started came to, with `close_episode(based_on=...)`: its `said`, in its row of
   `session.agents()` or in `session.status(agent)`, is the ref of its last words. For a finished agent it is what its end's report
-  carries: the `agent.finished` of an `agent.finish` with a report in a turn, its `agent.ended` for one with a gist out of a turn,
-  and else the latest turn's last message, whose words the report took, or its `agent.ended` where that turn said nothing. For any
+  carries: for an `agent.finish` with a gist or a body, its `agent.finished` in a turn and its `agent.ended` out of one, and else
+  the latest turn's last message, whose words the report took, or its `agent.ended` where that turn said nothing. For any
   other it is its latest turn's last message, and None while it has said nothing since that turn began. Credit walks back from
   these refs, so an episode closed on an end the session wrote, or on nothing, credits nobody's work. What it was worth is an
   annotation's to say.
