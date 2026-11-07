@@ -384,9 +384,42 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 
 ## Releases
 
-Nothing is published or tagged yet, and nothing publishes without the owner: the names, the tag and the trusted
-publisher a release would publish with are the owner's to rule on. How to cut a release is written here before the
-first one.
+The SDK and the command line release together, at one version. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor
+release may change the Python API, the team file or the command line, and a patch release only fixes bugs. Nothing is
+published or tagged yet. Only the owner tags or publishes, and the names, the tag and the trusted publisher a release
+would publish with are the owner's to rule on.
+
+### Cut a release
+
+**Goal:** a commit on `main` that holds a release's version, its dated notes, and distributions the release workflow
+built and checked, ready for the owner to tag and publish.
+
+1. Choose the version: the next patch release if the release only fixes bugs, and the next minor release otherwise.
+
+2. In one pull request, set it:
+
+   - in `packages/sdk/src/platoon_harness/version.py`, the one place either package's version is set;
+   - for a minor release, in the command line's requirement on the SDK in `packages/cli/pyproject.toml`, to that minor
+     release's range, such as `platoon-harness-sdk>=0.2,<0.3`, with `uv lock` run after it, as the requirement is in
+     `uv.lock` too;
+   - in [CHANGELOG.md](CHANGELOG.md), by dating the release's heading, `## 0.2.0 (unreleased)` becoming
+     `## 0.2.0 (YYYY-MM-DD)` with the day it merges;
+   - on each page that shows what `--version` prints, `platoon-harness 0.1.0, SDK 0.1.0` today: this guide, whose line a
+     test holds to the version, [Install](docs/getting-started/install.md) and
+     [the headless quickstart](docs/how-to/headless.md).
+
+   For the first release, also say how to install from PyPI where the package READMEs, the install guide and
+   CHANGELOG's opening say that nothing is published or released yet.
+
+3. Check the pull request as the release workflow does, with the commands below, and run the slow tests, which need the
+   harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says.
+
+4. Merge it once CI and the release workflow pass on it. The release workflow runs again on the commit on `main`.
+
+5. Tagging and publishing are the owner's. The release workflow publishes nothing: a job that publishes comes with the
+   owner's ruling on the names, the tag and the trusted publisher.
+
+### The release workflow
 
 The release workflow, `.github/workflows/release.yml`, builds every distribution and checks it, on each pull request and
 each push to `main`, as CI's other jobs run. Its `build` job runs:

@@ -69,9 +69,9 @@ named here is closed.
 - **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the SDK's and the command
   line's sdists and wheels on each pull request and each push to `main`, each wheel from its sdist, checks every one with
   `twine check --strict`, and runs the command line from the wheels in an environment of its own. Nothing checked what a
-  release would publish. CONTRIBUTING shows its commands under Releases. Its commands pass when run by hand, and that
-  they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as the names, the tag and the
-  trusted publisher a release would publish with are the owner's to rule on.
+  release would publish. CONTRIBUTING says under Releases how to cut a release, and shows the workflow's commands, which
+  pass when run by hand; that they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as
+  the names, the tag and the trusted publisher a release would publish with are the owner's to rule on.
 - **The packages tested as a person installs them.** Slow tests, `tests/integration/test_installed.py`, build the
   wheels and install them, offline, in an environment of their own: the command line says its version, a headless run
   of `examples/sdk-script` settles on the `exec` driver and the command line reads it back, each wheel holds every file
