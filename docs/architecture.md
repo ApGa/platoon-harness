@@ -1823,9 +1823,10 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   [RFC 0057](rfcs/0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md).
 - **The runtime never merges, rebases or resolves.** A merge is a commit an agent or a person made, and a conflict is what a look found:
   a `conflict` row in `attention` is open while its agent rests on it, from the end of each look that still finds conflicted paths to
-  its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says where to resolve
-  it. For your checkout it is open
-  while its latest look found conflicts. The Ending names the agents whose last look never finished as `unobserved`. A merge queue
+  its next turn's start, and moot once its agent ends, when the Ending names the workspace kept for it. Its gist says to tell its
+  agent, or to resolve it in your own checkout, never in the agent's workspace, where any commit is recorded as that agent's,
+  whoever made it, and offers to write to it. For your checkout it is open while its latest look found conflicts, and its gist
+  says to resolve it there. The Ending names the agents whose last look never finished as `unobserved`. A merge queue
   for worktree teams is a queue and a merger in a worktree, written out in [topologies.md](how-to/topologies.md), not a preset: the merger
   merges with git, the look records the merge or the conflict, and the merger completes the task naming any conflict, which reaches
   its worker through the task. See [RFC 0058](rfcs/0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md).

@@ -988,6 +988,11 @@ named here is closed.
 
 ### Fixes
 
+- **A conflict sends you to its agent or your own checkout.** A conflict an agent's merge stopped on said to resolve it in the
+  agent's own workspace, where any commit you make is recorded as that agent's, as its HEAD reflog says that workspace made it.
+  Its gist now says to tell the agent, or to resolve it in your own checkout, never in its workspace, and your checkout's says
+  to resolve it there. The files it names are cut where long, saying so, so those words always fit in the gist. That the
+  conflict says this is the default, pending the owner's ruling.
 - **The runtime's git reaches no remote.** A look, a stop or a diff in a repository whose config names a partial clone's
   promisor remote fetched an object its store had dropped from there, which ran the transport program or `ssh` command that
   config names, as you for a snapshot or a worktree. The one runner now allows no transport and fetches no missing object, so

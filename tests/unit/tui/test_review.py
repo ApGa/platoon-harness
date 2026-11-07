@@ -114,7 +114,8 @@ async def test_the_inspector_names_the_agent_s_workspace(root, repo):
         assert said in text
 
 
-async def test_a_conflict_in_the_dock_says_where_to_resolve_it(root, repo):
+async def test_a_conflict_in_the_dock_says_to_tell_its_agent_or_resolve_it_in_your_own_checkout(root, repo):
+    """Never in the agent's worktree, whose path it does not give, as a commit made there is recorded as the agent's."""
     git("checkout", "-q", "-b", "theirs", cwd=repo)
     commit(repo, "README", "theirs\n")
     git("checkout", "-q", "main", cwd=repo)
@@ -131,8 +132,8 @@ async def test_a_conflict_in_the_dock_says_where_to_resolve_it(root, repo):
         text = await drawn(pilot, lambda text: "conflict @lead" in text)
 
     line = next(line for line in text.splitlines() if "conflict @lead" in line)
-    assert "conflict @lead merge stopped on conflicts in 1 file, README: resolve it in" in line
-    assert path[:20] in line
+    assert "conflict @lead merge stopped on conflicts in 1 file, README: tell @lead, or resolve it in your own" in line
+    assert path[:20] not in line
 
 
 async def test_review_tests_a_commit_once_you_say_yes_and_shows_what_it_came_to(root, repo):

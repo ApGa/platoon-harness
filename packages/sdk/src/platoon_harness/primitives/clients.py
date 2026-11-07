@@ -161,7 +161,7 @@ class Attention(View):
         it never comes for an agent that has ended, whose stop looked last."""
         where = event.data["workspace"]
         if event.data["conflicted"]:
-            gist = unsettled(event.data)[:GIST_LIMIT]
+            gist = unsettled(where, event.data)
             self.db.execute("INSERT OR REPLACE INTO v_attention_conflicts VALUES (?, ?)", (where, gist))
             if where == "shared":
                 self._raise("conflict/shared", "conflict", event, gist=gist)

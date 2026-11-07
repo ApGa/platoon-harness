@@ -169,8 +169,9 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
   Python gives the page every word, flag and kind, so the script decides only how a widget takes them.
 - **One form's question replaces nothing.** Asking first opens a popover beside Run, and the form stays in the pane under it, so a
   person who answers no keeps what they typed.
-- **A gist is cut at 280 characters.** What settles a place goes before what may run long, as the daemon's does before its error,
-  or after a list cut to a few names, as a conflict's does after three files and how many more.
+- **A gist is cut at 280 characters.** What settles a place goes where no cut reaches it: before what may run long, as the
+  daemon's does before its error, or after a list cut to fit, as a conflict's does after its files, at most three and how many
+  more, cut further with `…` where long names would push it out.
 
 ## Alternatives
 

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness.kernel import Kernel
+from platoon_harness.kernel import GIST_LIMIT, Kernel
 from platoon_harness.primitives.repo import NOT_RECORDED
 
 from .support import end_turn, events_of, of_type, refusal, result_of, send, settle_effects, spawn, start, start_turn
@@ -373,7 +373,7 @@ async def test_a_conflict_needs_you_while_its_agent_rests_on_it(kernel):
     rostered = result_of(kernel.query(kernel.runtime, "view.watch", {"name": "roster"}))["rows"]
     assert (row["id"], row["kind"], row["agent"]) == ("conflict/@bob", "conflict", "bob")
     assert row["actions"] == [{"label": "Write to it", "op": "message.send", "args": {"to": "@bob"}, "form": True}]
-    assert row["gist"] == f"merge stopped on conflicts in 2 files, a.py, b.py: resolve it in {WORKTREE}"
+    assert row["gist"].startswith("merge stopped on conflicts in 2 files, a.py, b.py: tell @bob")
     assert next(found for found in rostered if found["agent"] == "bob")["group"] == "needs_you"
 
     await start_turn(kernel, "bob", "t2")
@@ -420,6 +420,29 @@ async def test_a_conflict_in_your_checkout_needs_you_while_its_latest_look_found
     await looked(kernel, "shared", reading={**reading(TWO), "branch": "main"})
 
     assert attention(kernel) == []
+
+
+async def test_a_conflict_says_to_tell_its_agent_or_resolve_it_in_your_own_checkout(kernel):
+    """Never in the agent's workspace, where a commit is recorded as the agent's whoever made it. Your checkout's is
+    resolved there. Names too long to fit are cut, and what settles it never is."""
+    await spawn(kernel, "bob")
+    await conflicted(kernel, "a.py", "b.py")
+    long = [f"{name * 120}.py" for name in "xyz"]
+    shared = {**reading(ONE, *(path(name, "conflicted") for name in long)), "path": "/src/app", "branch": "main"}
+    await looked(kernel, "shared", reading=shared)
+
+    gists = {row["id"]: row["gist"] for row in attention(kernel)}
+    changed = [event.gist for event in of_type(kernel, "workspace.changed")]
+
+    assert gists["conflict/@bob"] == (
+        "merge stopped on conflicts in 2 files, a.py, b.py: tell @bob, or resolve it in your own checkout, never in "
+        "its workspace, where any commit is recorded as @bob's"
+    )
+    assert gists["conflict/shared"].startswith(f"work stopped on conflicts in 3 files, {'x' * 120}.py, yyy")
+    assert gists["conflict/shared"].endswith("…: resolve it in your checkout, /src/app")
+    assert len(gists["conflict/shared"]) == GIST_LIMIT
+    assert changed[0] == f"@bob: {gists['conflict/@bob']}"
+    assert changed[1].endswith("…: resolve it in your checkout, /src/app") and len(changed[1]) == GIST_LIMIT
 
 
 # The roster, the status and the Ending.

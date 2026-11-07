@@ -232,18 +232,31 @@ def _some(count: int, what: str) -> str:
     return f"{count} {what}{'' if count == 1 else 's'}"
 
 
-def unsettled(reading: Mapping[str, Any]) -> str:
-    """A conflict a reading found, in a line: what stopped on it, in which files, and where to resolve it."""
+def unsettled(where: str, reading: Mapping[str, Any], limit: int = GIST_LIMIT) -> str:
+    """A conflict a reading of `where` found, in a line of at most `limit` characters: what stopped on it, in which
+    files, as many as fit, and what settles it. Your checkout's is resolved there. An agent's is for you to tell it of,
+    or to resolve in your own checkout, and never in its workspace, where any commit is recorded as that agent's,
+    whoever made it, as its HEAD reflog says its workspace made it."""
     named = [path["path"] for path in reading["paths"] or () if path["state"] == "conflicted"][:_NAMED]
     more = f" and {reading['conflicted'] - len(named)} more" if reading["conflicted"] > len(named) else ""
-    files = f"{_some(reading['conflicted'], 'file')}, {', '.join(named)}{more}"
-    return f"{reading['under_way'] or 'work'} stopped on conflicts in {files}: resolve it in {reading['path']}"
+    what = f"{reading['under_way'] or 'work'} stopped on conflicts in {_some(reading['conflicted'], 'file')}"
+    if where == "shared":
+        settles = f"resolve it in your checkout, {reading['path']}"
+    else:
+        settles = (
+            f"tell {where}, or resolve it in your own checkout, never in its workspace, where any commit is recorded "
+            f"as {where}'s"
+        )
+    files, room = f"{', '.join(named)}{more}", limit - len(what) - len(settles) - 4
+    if len(files) > room:
+        files = f"{files[: max(room - 1, 0)]}…"
+    return f"{what}, {files}: {settles}"[:limit]
 
 
 def _said(where: str, reading: Reading) -> str:
     """A reading in a line: its conflicts, else how much it holds uncommitted, else where it stands."""
     if reading.conflicted:
-        return f"{where}: {unsettled(reading.model_dump(mode='json'))}"
+        return f"{where}: {unsettled(where, reading.model_dump(mode='json'), GIST_LIMIT - len(where) - 2)}"
     if reading.total:
         under_way = f", a {reading.under_way} under way" if reading.under_way else ""
         return f"{where}: {_some(reading.total, 'path')} uncommitted{under_way}"
