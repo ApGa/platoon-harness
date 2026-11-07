@@ -325,8 +325,9 @@ ballot = "my_package:extension"
 ```
 
 Installing it activates nothing: a team names it in `extensions = [...]`. It uses only the kernel's public names, as the
-core's primitives do, and its ops are usable through the SDK, MCP, `ph` and the generic UI with no core edit, though the
-command line has no command for them yet ([architecture §17](docs/architecture.md#17-extensions-and-configuration)).
+core's primitives do, and its ops are usable through the SDK, MCP and `ph` with no core edit, though the command line and
+the terminal UI have no command for them yet ([architecture §17](docs/architecture.md#17-extensions-and-configuration),
+[STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)).
 Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`
 ([Drivers, Extensions](docs/extending/drivers.md#extensions)).
 
