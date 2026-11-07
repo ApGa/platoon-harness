@@ -14,8 +14,9 @@ the session as you, and give someone else a link that only reads.
   environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
 - a session: one a runtime holds, to act on, as `web` starts and resumes nothing, or one no runtime holds, to read its
   history;
-- a browser on this machine, or on another that can forward a port to it. The page's tests pass in Chromium and Firefox,
-  and WebKit, Safari's engine, is untested ([compatibility](../reference/compatibility.md#6-supported-platforms)).
+- a browser on this machine, or on another that can forward a port to it. The page's tests pass in Chromium, Firefox
+  and WebKit, Safari's engine, headless, WebKit on GitHub's Linux runners alone
+  ([compatibility](../reference/compatibility.md#6-supported-platforms)).
 
 ## Open it
 

@@ -142,9 +142,10 @@ named here is closed.
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run
   in, comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it
-  names none. CI's `e2e` job is written to run them once in each of Chromium, Firefox and WebKit, which is inferred from
-  the workflow until a runner shows it. They pass in Chromium and Firefox on the hosts we run on. WebKit does not start
-  there, as Playwright's build of it needs glibc 2.38, so it is untested, as the compatibility page's section 6 says.
+  names none. CI's `e2e` job runs them once in each of Chromium, Firefox and WebKit, on GitHub's Ubuntu runners, and
+  each passed in CI run 42401544126 and in each run on `main` since. They pass in Chromium and Firefox on the hosts we
+  run on too. WebKit does not start there, as Playwright's build of it needs glibc 2.38, so it is tested on GitHub's
+  runners alone, as the compatibility page's section 6 says.
   The three, each claimed only where it passes, are the default pending the owner's ruling.
 - **A disabled control in the page takes focus and says why.** Every control SwarmChat's page draws disabled stays in
   the keyboard's order, which `disabled` took it out of, and its reason, a title the mouse alone found, is its
