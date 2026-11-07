@@ -2,10 +2,14 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-03; amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) |
+| Status | Accepted, 2026-11-03; amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) and [RFC 0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) |
 
 **Amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md)**:
 an agent that does not stay finishes with a turn that stops on its own with nothing more to come for it, and is told so.
+
+**Amended by [RFC 0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md)**: a child that ends
+with its parent ends `cancelled` only if a turn of its is under way, as a turn on its way has not begun, so nothing of it is
+cut.
 
 ## Summary
 

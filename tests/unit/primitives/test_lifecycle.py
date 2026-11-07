@@ -255,7 +255,7 @@ async def test_a_parent_ended_first_hears_nothing_and_stops_nothing(kernel, ada)
 
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
 
-    assert state_of(kernel, "bob")["status"] == "cancelled"
+    assert state_of(kernel, "bob")["state"] == "ended"
     assert of_type(kernel, "message.sent") == []
 
 
@@ -894,6 +894,8 @@ async def test_on_parent_exit_cancel_subtree_ends_descendants(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
     child = await spawn(kernel, "child", role="linked", by=lead)
     await spawn(kernel, "grandchild", role="linked", by=child)
+    await start_turn(kernel, "child")
+    await start_turn(kernel, "grandchild")
 
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
 
@@ -911,23 +913,40 @@ async def test_on_parent_exit_adopt_gives_orphans_to_the_session(kernel, ada):
     assert of_type(kernel, "agent.adopted")[0].agent == "child"
 
 
-async def test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_cut_off(kernel, ada):
+async def test_a_child_that_ends_with_its_parent_is_cancelled_only_if_a_turn_of_its_is_under_way(kernel, ada):
+    """A turn on its way, by a goal not begun, a wake that is due or a handover its harness took, has not begun."""
     lead = await spawn(kernel, "lead", role="lead")
-    for name in ("idle", "parked", "busy", "woken"):
+    for name in ("idle", "parked", "busy", "woken", "taken"):
         await spawn(kernel, name, role="linked", by=lead, goal="")
+    await spawn(kernel, "unbegun", role="linked", by=lead)
     await start_turn(kernel, "parked")
     result_of(await kernel.submit(agent("parked"), "wait", {"from": ["lead"]}))
     await end_turn(kernel, "parked")
     await start_turn(kernel, "busy")
     await send(kernel, ada, "@woken", "go on")
+    await send(kernel, ada, "@taken", "go on")
+    handed = result_of(await kernel.submit(kernel.runtime, "delivery.offer", {"agent": "taken"}))
+    await settle_effects(kernel, "taken")
+    await confirm(kernel, "taken", handed["input"])
+    children = ("idle", "parked", "busy", "woken", "taken", "unbegun")
+    assert [state_of(kernel, name)["state"] for name in children] == [
+        "idle",
+        "waiting",
+        "running",
+        "idle",
+        "waking",
+        "idle",
+    ]
 
     result_of(await kernel.submit(ada, "agent.cancel", {"agent": "lead"}))
 
-    assert {name: state_of(kernel, name)["status"] for name in ("idle", "parked", "busy", "woken")} == {
+    assert {name: state_of(kernel, name)["status"] for name in children} == {
         "idle": "retired",
         "parked": "retired",
         "busy": "cancelled",
-        "woken": "cancelled",
+        "woken": "retired",
+        "taken": "retired",
+        "unbegun": "retired",
     }
     assert {event.data["reason"] for event in of_type(kernel, "agent.ended")[1:]} == {"parent lead ended"}
 

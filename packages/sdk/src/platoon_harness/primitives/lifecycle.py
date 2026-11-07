@@ -254,13 +254,12 @@ def end(
     for task in owned:
         bury_if_spent(txn, task, txn.view(Channels).require(f"queue/{task.queue}"))
     regroup(txn, name, agent.role, joined=False)
-    at_work = _at_work(txn)
     cancelled = txn.view(SessionRecord).state() == "cancelled"
     for child in txn.view(Agents).children(agent.id):
         if child.on_parent_exit == "adopt":
             txn.emit("agent.adopted", f"agent/{child.name}", gist=f"{child.name} adopted", agent=child.name)
-        else:  # One with every turn whole is no failure, and is not dropped from training as a cancelled one is.
-            status = "cancelled" if cancelled or child.name in at_work else "retired"
+        else:  # Only a turn under way is cut, so one with none is no failure, and is not dropped from training.
+            status = "cancelled" if cancelled or txn.view(Stamps).turn(child.name) is not None else "retired"
             end(txn, child, status, reason=f"parent {name} ended")
     return ended
 

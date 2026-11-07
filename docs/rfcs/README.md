@@ -38,7 +38,7 @@ amended or extended an RFC.
 | [0020](0020-finish-and-handover-wait-for-the-turn.md) | Finish and handover wait for the turn | Accepted |
 | [0021](0021-what-a-harness-leaves-behind.md) | What a harness leaves behind | Accepted |
 | [0022](0022-what-a-harness-took-is-the-runtime-s-again.md) | What a harness took is the runtime's again | Accepted |
-| [0023](0023-agents-that-stay.md) | Agents that stay | Accepted; amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) |
+| [0023](0023-agents-that-stay.md) | Agents that stay | Accepted; amended by [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) and [RFC 0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) |
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | Accepted |
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
@@ -77,6 +77,7 @@ amended or extended an RFC.
 | [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Accepted |
 | [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted |
+| [0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) | A child ends cancelled with its parent only for a turn under way | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
