@@ -230,6 +230,10 @@ async def looked_at(session: Session, workspace: str) -> list[Any]:
     return [event for event in await of_type(session, "workspace.changed") if event.data["workspace"] == workspace]
 
 
+async def diffs(session: Session, effect: int) -> list[Any]:
+    return [event for event in await of_type(session, "repo.diffed") if event.data["effect"] == effect]
+
+
 async def stops(session: Session) -> list[Any]:
     return [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "stop"]
 
@@ -245,9 +249,9 @@ def confining() -> None:
 
 @pytest.mark.usefixtures("confining")
 async def test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation(repo, tmp_path, monkeypatch):
-    """An agent's own config names a filter, which the runtime's look runs as your git would: inside the isolation,
-    where what it would write outside its folder is not there to be written, and on the allowlist its harness gets, so
-    a variable only the runtime's environment holds never reaches it."""
+    """An agent's own config names a filter, which the runtime's look, and then a diff of its workspace, run as your
+    git would: inside the isolation, where what it would write outside its folder is not there to be written, and on
+    the allowlist its harness gets, so a variable only the runtime's environment holds never reaches it."""
     monkeypatch.setenv("PH_RUNTIME_ONLY", "leaked")
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -267,7 +271,14 @@ async def test_an_isolated_agent_s_git_config_runs_nothing_outside_its_isolation
         await in_state(session, "bob", "idle")
         await session.send("@bob", "configure your git")
         await until(lambda: looked_at(session, "@bob"), session)
-    folder = agent_folder(session.folder, "bob")
+        folder = agent_folder(session.folder, "bob")
+        looked = (folder / "filtered").read_text().splitlines()
+        (folder / "filtered").unlink()
+        effect = (await session.repo_diff("@bob"))["effect"]
+        [diffed] = await until(lambda: diffs(session, effect), session)
+        patch = await session.get_body(diffed.data["body"])
+        read = (folder / "filtered").read_text().splitlines()
 
-    assert (folder / "filtered").read_text().splitlines()[-1] == "locks=0 runtime="
+    assert looked[-1] == read[-1] == "locks=0 runtime="
+    assert patch.endswith(b"-hello\n+changed\n")
     assert not (outside / "escaped").exists()

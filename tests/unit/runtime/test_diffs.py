@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 
 from platoon_harness import Refused, Session, Team
-from platoon_harness.kernel import ManualClock
+from platoon_harness.kernel import Extension, ManualClock
 
 from .gitting import commit, git, repository, working
-from .support import SECONDS, of_type, scripted, until
+from .support import SECONDS, extension, harness, in_state, of_type, scripted, until
 from .test_commit_tests import committed
 
 pytestmark = pytest.mark.timeout(60)
@@ -195,6 +195,40 @@ async def test_a_snapshot_s_diff_is_read_in_its_own_repository(repo, tmp_path):
     assert of_workspace.data["head"] == sha
     assert patches[1].endswith(b"@@ -1 +1 @@\n-hello\n+changed in the snapshot\n")
     assert of_workspace.gist == f"@ada uncommitted against {sha[:12]}, {patches[1].count(b'\n')} lines"
+
+
+async def test_an_isolated_workspace_s_diff_is_read_inside_its_isolation(repo, tmp_path):
+    """Its commit's patch and what it holds uncommitted, each git of them run in its tree under its isolation's wrap, as
+    its agent's own config names what git runs there. The look after its turn read no patch."""
+    from .test_isolation import Fence, Placed
+
+    def work(cwd: Path) -> None:
+        commit(cwd, "work.txt", "isolated\n")
+        changed(cwd, "work.txt", "still isolated\n")
+        changed(cwd, "fresh.txt", "new\n")
+
+    fence = Fence(tmp_path / "fenced")
+    bob = {"harness": harness(lambda: Placed(work)), "workspace": "isolated"}
+    team = Team.model_validate({"extensions": [extension(Extension("fence", isolation=fence))], "roles": {"bob": bob}})
+    async with Session.start(team, name="s", root=tmp_path / "home", cwd=repo) as session:
+        await in_state(session, "bob", "idle")
+        tree = Path((await session.status("@bob"))["workspace"]["path"])
+        await session.send("@bob", "work")
+        [sha] = await committed(session, 1)
+        looked = fence.lines()
+        patches = [await patch_of(session, await diff_of(session, of)) for of in (sha, "@bob")]
+        diffing = fence.lines()[len(looked) :]
+
+    def ran(*words: str) -> bool:
+        return any(all(f" {word} " in f" {what} " for word in words) for _, what in diffing)
+
+    assert {where for where, _ in diffing} == {str(tree)}
+    assert ran("diff-tree", "-p", sha) and ran("diff-index", "-p") and ran("ls-files", "--others")
+    assert ran("diff", "--no-index", "/dev/null", "fresh.txt")
+    assert not any(word in f" {what} " for _, what in looked for word in (" -p ", " diff-tree ", " --no-index "))
+    assert patches[0].endswith(b"@@ -0,0 +1 @@\n+isolated\n")
+    assert b"@@ -1 +1 @@\n-isolated\n+still isolated\n" in patches[1]
+    assert patches[1].endswith(b"+++ b/fresh.txt\n@@ -0,0 +1 @@\n+new\n")
 
 
 async def test_a_diff_that_cannot_be_read_says_why(repo, tmp_path):
