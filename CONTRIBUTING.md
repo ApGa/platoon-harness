@@ -367,9 +367,9 @@ primitive, needs:
 
 An example is a folder of `examples/`: a `README.md` that states the goal, what it needs, the steps and what to expect,
 with the files it runs. Each has a CPU test that runs it as its README does, on scripted stand-ins or `FakeModel`, so it
-cannot break unseen: `tests/integration/test_examples.py` runs [the mixed team](examples/mixed-team/README.md) and
-[the SDK script](examples/sdk-script/README.md). A cost the README quotes comes from a run that was made, as the mixed
-team's does.
+cannot break unseen: `tests/integration/test_examples.py` runs each of them. Its stand-ins live in its folder and import
+nothing from the tests, which a test there holds, and its README says what a run on them cannot show. A cost the README
+quotes comes from a run that was made, as the mixed team's does.
 
 ## When a change needs an RFC
 

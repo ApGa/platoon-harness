@@ -2,11 +2,11 @@
 scripted stand-ins of its `stand_ins.py` in for its harnesses through `--set`, as the project's README and the first
 session's guide run it too, and on the real binaries against FakeModel, each model saying what a stand-in does; real
 models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver. The
-worktree team: its README's commands, in a repository of their own, on the stand-ins of `scripts.py` through `--set`.
-The review team: its README's commands, in a repository of their own, on the stand-ins of its own `stand_ins.py`
-through `--set`, which show its flow and nothing of what a harness's sandbox or approvals stop, which only a run on
-the real harnesses does."""
+worktree team and the review team: each README's commands, in a repository of their own, on the stand-ins of the
+example's own `stand_ins.py` through `--set`. Stand-ins show each flow, and none shows what a harness's sandbox or
+approvals stop, which only a run on the real harnesses does."""
 
+import ast
 import asyncio
 import importlib.util
 import json
@@ -112,10 +112,12 @@ def the_other_way(ending: str) -> str:
     return "".join([first, other, one, *rest])
 
 
-async def test_the_worktree_team_hands_each_branch_to_its_merger_and_a_conflict_back_through_the_task(repo: Cli):
-    """Its page's commands as it shows them, on the stand-ins it names: the team checks and says what it allows, and
-    the run settles as the page says, one branch merged by a commit the look records as the merger's and the other's
-    conflict in its task's result, which its worker finishes with, the merger under Needs you while it rests on it."""
+async def test_the_merge_queue_example_runs_on_its_own_stand_ins(repo: Cli):
+    """Its page's commands as it shows them, on the stand-ins of its own `stand_ins.py`, with no test code on the path:
+    the team checks and says what it allows, and the run settles as the page says, one branch merged by a commit the
+    look records as the merger's and the other's conflict in its task's result, which its worker finishes with, the
+    merger under Needs you while it rests on it. The stand-ins show the flow, and nothing of what Codex's sandbox and
+    each role's approvals let its git do, which only a run on the real harnesses shows."""
     check, show = shown(WORKTREE, where="team check")[1:]
     [run] = shown(WORKTREE, where="--prompt-file")
     listing, showing = shown(WORKTREE, where="task list")
@@ -198,6 +200,35 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
         ("human:you", ref(answer)),
         ("runtime", ref(record)),
     ]
+
+
+def imported(path: Path) -> set[str]:
+    """Every module a Python file imports by its full name."""
+    found = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Import):
+            found |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            found.add(node.module)
+    return found
+
+
+def test_no_example_imports_the_test_suite():
+    """No module of an example imports one of the test suite, and no page or team file of an example names one, as a
+    harness among them, so each example runs from its own folder, as a copy of it would."""
+    examples = ROOT / "examples"
+    importing = {
+        str(path.relative_to(ROOT)): sorted(name for name in imported(path) if name.partition(".")[0] == "tests")
+        for path in examples.rglob("*.py")
+    }
+    naming = [
+        str(path.relative_to(ROOT))
+        for path in sorted(examples.rglob("*"))
+        if path.suffix in (".md", ".toml") and re.search(r"\btests\.\w", path.read_text())
+    ]
+
+    assert len(importing) >= 4
+    assert ({path: names for path, names in importing.items() if names}, naming) == ({}, [])
 
 
 def ref(event: dict) -> str:

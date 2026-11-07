@@ -26,12 +26,13 @@ decided.
 - for a run on real models, `claude` and `codex` on your PATH and signed in as you usually are. The run with no keys
   needs neither.
 
-The example has two files:
+The example has three files:
 
 | File | What it is |
 |---|---|
 | [`team.toml`](team.toml) | The team: the `manager-worker` preset for the lead and its workers, a merger, the queue `merges` that workers add to and the merger claims from, each role's instructions, and a budget of 20 turns and 15 minutes, so a runaway stops itself. The workers and the merger allow their approvals, as each git command of theirs that writes may ask for one |
 | [`job.md`](job.md) | What you ask: two workers, a line each in `CONTRIBUTORS.md` handed to the merger, and what came of each merge |
+| [`stand_ins.py`](stand_ins.py) | Scripted stand-ins for the three harnesses, for the run with no keys |
 
 ## 1. Check it
 
@@ -58,18 +59,19 @@ you can. Without those two lines, `team check` warns of the commits and names th
 
 ## 2. Run it with no keys
 
-The test suite's scripted stand-ins, in `tests/integration/scripts.py`, do what the job asks with git and no model at
-all:
+Scripted stand-ins, in [stand_ins.py](stand_ins.py), do what the job and each role's instructions ask with git and no
+model at all:
 
 ```console
-$ PYTHONPATH=path/to/platoon-harness platoon-harness run \
+$ PYTHONPATH=path/to/platoon-harness/examples/worktree-merge-queue platoon-harness run \
     --team path/to/platoon-harness/examples/worktree-merge-queue/team.toml \
     --prompt-file path/to/platoon-harness/examples/worktree-merge-queue/job.md --name contributors \
-    --set 'roles.lead.harness = "tests.integration.scripts:spawning_contributors"' \
-    --set 'roles.worker.harness = "tests.integration.scripts:contributing"' \
-    --set 'roles.merger.harness = "tests.integration.scripts:merging"'
+    --set 'roles.lead.harness = "stand_ins:lead"' \
+    --set 'roles.worker.harness = "stand_ins:worker"' \
+    --set 'roles.merger.harness = "stand_ins:merger"'
 ```
 
+`PYTHONPATH` lets the runtime import the stand-ins, and each `--set` puts a role on one of them in place of its harness.
 It prints a line per event as the session journals it, and ends with how the session ended and each agent's last words.
 Whichever worker adds its task first is merged, so `ada` and `bob` may be the other way round:
 
@@ -82,8 +84,9 @@ settled, exit 0
 ```
 
 The workers and the merger each work on the branch `platoon-harness/contributors/<agent>`, in a worktree in the
-session's folder, made at your HEAD: nothing of it is in your checkout. `tests/integration/test_examples.py` runs the `platoon-harness` commands on
-this page as shown, in a repository of its own. A session's name is taken once, so a second run needs another `--name`.
+session's folder, made at your HEAD: nothing of it is in your checkout. `tests/integration/test_examples.py` runs the
+`platoon-harness` commands on this page as shown, in a repository of its own. A session's name is taken once, so a
+second run needs another `--name`.
 
 ## 3. Read it back
 
@@ -101,7 +104,17 @@ session: `/review` lists what changed, grouped by workspace, and the conflict wa
 it, as [Review what changed](../../docs/how-to/tui.md#review-what-changed) says, with a
 [snapshot](../../docs/assets/tui-review.svg) of the list for one scripted harness's worktree.
 
-## 4. Run it on your harnesses
+## 4. What a run with no keys cannot show
+
+The stand-ins show the flow: each branch handed to the merger through the queue, a merge commit the look records as the
+merger's, and the other branch's conflict back to its worker through its task. They run in the runtime's own process,
+so a run with no keys cannot show what each role's harness holds it to: that Codex's sandbox keeps `.git` read-only, so
+each worker's commit escalates and runs once `approvals = "allow"` allows it, or what your Claude Code settings let the
+merger's git do. Nor can it show that real models follow their instructions: that a worker hands over its branch, that
+the merger leaves a conflict for a person rather than resolving it, or that the lead finishes only once both workers
+have. Only a run on the real harnesses shows those.
+
+## 5. Run it on your harnesses
 
 The same command with neither `PYTHONPATH` nor the three `--set` lines, and with `--plan-login` and a new `--name`, runs
 the team on `claude` and `codex`. `--plan-login` says you mean to run several agents on plan logins at once, which a

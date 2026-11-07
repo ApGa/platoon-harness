@@ -166,9 +166,9 @@ named here is closed.
 - **A worktree team with its merge queue written out.** [examples/worktree-merge-queue](examples/worktree-merge-queue/README.md):
   a Claude Code lead, Codex workers each in a worktree of its own and a Claude Code merger in a worktree of its own, the
   `merges` queue of RFC 0058 with each role's instructions saying its part, and a README that checks it, runs it with no keys
-  on the test suite's stand-ins, reads back each merge and the conflict that reaches its worker as its task's result, and
-  says how to run it on real harnesses, which it has not run on yet. A test runs the README's commands as it shows them, in a
-  repository of its own.
+  on stand-ins of its own, reads back each merge and the conflict that reaches its worker as its task's result, says what a
+  run with no keys cannot show, and says how to run it on real harnesses, which it has not run on yet. A test runs the
+  README's commands as it shows them, in a repository of its own.
 - **Spans: each agent's turns cut at its writes.** `spans(agent)`, a query op with `Session.spans` and the command `spans`: each
   turn of an agent cut after each model call that chose a write of content, one of the eight it made itself, as the record joins
   the op's anchor, the tool item holding it and that item's call, with a trailing piece that has no write joining the span
@@ -675,6 +675,14 @@ named here is closed.
   leaves the rest to its op's form, so a client that runs every action as it stands would write words or limits the person never
   gave. The view is at version 6, and keeps what each budget scope was last set to, so an older session's is refolded as it
   opens.
+- **Each Git example runs on stand-ins of its own.** The worktree team's no-keys run took the test suite's stand-ins,
+  `tests.integration.scripts:spawning_contributors` and the rest, with the checkout on `PYTHONPATH`, so a copy of the
+  example could not run alone. Its stand-ins are now its own, in `examples/worktree-merge-queue/stand_ins.py`, as
+  `stand_ins:lead`, `stand_ins:worker` and `stand_ins:merger`, with only the example's folder on `PYTHONPATH`, and leave
+  the test suite. Its README says what such a run cannot show: what Codex's sandbox and each role's approvals let its git
+  do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
+  harness, no module of the tests.
+
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,
   which it reads and never writes, so nothing is written through it, and a view link reaches it as it reaches SwarmChat's

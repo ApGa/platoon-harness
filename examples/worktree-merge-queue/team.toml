@@ -2,7 +2,8 @@
 # Workers add their branches to the queue `merges`, and the merger merges each into its own branch with git: the runtime
 # never merges. Each role's instructions say its part. The workers commit and the merger merges, and each git command
 # that writes asks for an approval, which nobody is there to answer in a headless run, so those two roles allow theirs:
-# they run git as you. Swap a harness with `--set`, as the mixed team's README shows.
+# they run git as you. README.md runs it with no keys, each harness swapped with `--set` for a stand-in of
+# stand_ins.py.
 
 [roles.lead]
 harness = "claude"
