@@ -9,6 +9,7 @@ import pytest
 
 from platoon_harness.drivers import (
     AgentSpec,
+    ApprovalRequested,
     Capabilities,
     ChildSeen,
     DriverError,
@@ -84,6 +85,7 @@ def test_every_check_a_level_reads_exists():
         "native_children_off_by_default",
         "native_child_seen",
         "denial_holds",
+        "approval_shows_its_ask",
         "effort_honored_or_refused",
         "reconcile_claims_nothing_unseen",
     } <= names
@@ -301,6 +303,18 @@ async def test_a_denial_turned_into_an_allow_fails(tmp_path):
     result = await check(Lenient, tmp_path)
 
     assert result.get("denial_holds").reason == "the tool ran after it was denied"
+
+
+async def test_a_driver_that_cuts_its_ask_to_a_gist_fails_approval_shows_its_ask(tmp_path):
+    def cut(report):
+        return report.model_copy(update={"body": report.gist}) if isinstance(report, ApprovalRequested) else report
+
+    whole = await check(Filtered, tmp_path / "whole")
+    gisted = await check(lambda: Filtered(cut), tmp_path / "gisted")
+
+    assert whole.get("approval_shows_its_ask").state == "passed"
+    assert gisted.get("approval_shows_its_ask").reason == "its approval does not carry the whole command it asks"
+    assert gisted.get("approval_answered").state == "passed"
 
 
 async def test_an_effort_dropped_fails_and_one_refused_passes(tmp_path):
@@ -553,6 +567,7 @@ async def test_unsupported_is_a_skip_with_a_reason_never_a_pass(tmp_path):
         "interrupt": "it declares no interrupt",
         "resume": "it declares no resume",
         "approval_answered": "it declares no approvals",
+        "approval_shows_its_ask": "it declares no approvals",
         "steers_at_declared_boundary": "it declares no boundary inside a turn",
         "measures_reported": "it declares no measures",
         "call_ids_reported": "it declares no id per model call",

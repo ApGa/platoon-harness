@@ -45,6 +45,7 @@ _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "resume",
             "approval_answered",
             "denial_holds",
+            "approval_shows_its_ask",
             "effort_honored_or_refused",
             "reconcile_claims_nothing_unseen",
             "steers_at_declared_boundary",

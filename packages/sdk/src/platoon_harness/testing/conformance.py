@@ -59,6 +59,9 @@ _PREAMBLE = "conformance preamble: the third word is viridian"
 _USERS = "conformance project instructions: the fourth word is vermilion"
 _BEARER = "conformance-bearer"
 _EFFORT = "low"
+_ASKED = "touch asked # " + " ".join(f"part{n:03d}" for n in range(40))
+"""A command longer than a gist holds, which writes a file, so that a harness asks about it as it would about any
+write: Claude Code allows a command that writes nothing unasked."""
 _SAID_EFFORT = re.compile(rb'effort"\s*:\s*"' + _EFFORT.encode() + rb'"')
 
 Factory = Callable[[], Driver]
@@ -419,6 +422,19 @@ async def denial_holds(rig: _Rig) -> None:
     await rig.until(TurnEnded)
 
     _expect(not (rig.folder / "work" / "denied").exists(), "the tool ran after it was denied")
+
+
+@_check(_approving)
+async def approval_shows_its_ask(rig: _Rig) -> None:
+    """An approval carries the whole command it asks about as its body, past what a gist holds. Ground truth is the
+    command the model asked to run, which is denied, so it never runs."""
+    rig.model.script([rig.options.gated(_ASKED)])
+    await rig.start()
+
+    asked = await rig.until(ApprovalRequested)
+    await rig.driver.answer(asked.id, "deny")
+
+    _expect(asked.body is not None and _ASKED in asked.body, "its approval does not carry the whole command it asks")
 
 
 @_check()

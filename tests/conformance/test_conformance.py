@@ -37,6 +37,7 @@ ONE_SHOT_SKIPS = {
     "native_children_off_by_default",
     "native_child_seen",
     "denial_holds",
+    "approval_shows_its_ask",
     "effort_honored_or_refused",
     "reconcile_claims_nothing_unseen",
 }

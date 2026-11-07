@@ -523,6 +523,7 @@ async def test_my_driver_conforms(tmp_path):
 | `reconcile_claims_nothing_unseen` | After a restart, an input that landed is no `not_landed`, and one never sent is no `landed`. Needs `resume` |
 | `approval_answered` | An approval is requested, and its answer reaches the model. Needs `approvals` |
 | `denial_holds` | A tool denied never runs: the file only its command makes is not there. Needs `approvals` |
+| `approval_shows_its_ask` | An approval carries as its body the whole command it asks about, past what a gist holds. Needs `approvals` |
 | `exit_reported` | A harness killed from outside is reported gone |
 | `stop_leaves_no_process` | Every recorded group is gone after `stop`. Skipped for a driver that starts no process |
 | `runs_in_its_workspace` | A shell tool runs in `spec.cwd`, a folder that is no default: its `pwd -P`, written to a pipe, names that folder. Pass `shell`, or it is skipped, and `operational` stays `unverified` |
