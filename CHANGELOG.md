@@ -681,6 +681,10 @@ named here is closed.
   leaves the rest to its op's form, so a client that runs every action as it stands would write words or limits the person never
   gave. The view is at version 6, and keeps what each budget scope was last set to, so an older session's is refolded as it
   opens.
+- **CI's actions pinned to commits, and its token reading only.** Each action a workflow uses is pinned to a commit,
+  with its release beside it, where a tag its owner could move named it, so a moved tag changes nothing CI runs. Each
+  commit is the one its tag named, so nothing CI runs changed. Each workflow's token reads the repository and nothing
+  more, a job that needs more asks only to read, and each checkout keeps no credentials for a later step to read.
 - **One version for the SDK and the command line, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets
   the version both packages release at, and each package's `pyproject.toml` reads it, where five places set it, which a
   release had to change alike. A test holds the command line to requiring the SDK of its own minor release. That the two

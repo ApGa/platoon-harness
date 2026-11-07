@@ -13,23 +13,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The workflow's token reads the repository and nothing more, and no job asks for more.
+permissions:
+  contents: read
+
 # Every job runs on a Python that uv manages, as a contributor's machine does, never the runner's own: Ubuntu's 3.12.3
 # warns that sqlite's numbered placeholders are named, which later 3.12 releases do not.
 env:
   UV_PYTHON_PREFERENCE: only-managed
 
-# setup-uv publishes no major tag since v8, so it is pinned to a release. It caches nothing: jobs that start together on one
-# cache key race to save it, and each that loses warns.
+# Each action is pinned to a commit, the release beside it, so that a tag moved upstream changes nothing here, and the
+# checkout keeps no credentials for a later step to read. setup-uv caches nothing: jobs that start together on one cache
+# key race to save it, and each that loses warns.
 jobs:
   # Every hook of the pre-commit stage on every file: ruff's lint and format, and ty. `--locked` fails when uv.lock is
   # out of date with a pyproject.toml, rather than locking again on the runner.
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: false
 
@@ -52,10 +59,12 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: false
 
@@ -85,10 +94,12 @@ jobs:
     env:
       PLATOON_HARNESS_BROWSERS: ${{ matrix.browser }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: false
 

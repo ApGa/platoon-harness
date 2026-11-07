@@ -230,13 +230,16 @@ uv run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-m
 ```
 
 **Pull request titles.** A pull request's title has the form of a commit subject. Maintainers squash-merge pull requests,
-so the title becomes the subject of the commit on `main`. CI's `pr-title` job (`amannn/action-semantic-pull-request@v6`)
+so the title becomes the subject of the commit on `main`. CI's `pr-title` job (`amannn/action-semantic-pull-request` v6.1.2)
 checks that the title is a Conventional Commit whose type is one of those above, with no scope and a summary that starts
 with a capital letter and has no final period. When a pull request has a single commit, the job checks that commit's
 subject too, because GitHub suggests it for the squashed commit. The job runs again whenever you edit the title.
 
 **What CI runs.** Each job runs on GitHub's Ubuntu runners for pull requests into any branch, so that a pull request
-stacked on another one is checked too, and for pushes to `main`. A new push cancels the run it makes stale.
+stacked on another one is checked too, and for pushes to `main`. A new push cancels the run it makes stale. Each
+workflow's token reads the repository and nothing more, and a job that needs more asks only to read, as `pr-title`
+reads its pull request. Each action is pinned to a commit, with its release beside it, so that a tag moved upstream
+changes nothing CI runs, and each checkout keeps no credentials for a later step to read.
 
 | Job | Checks | Fails when |
 |---|---|---|

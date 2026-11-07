@@ -40,6 +40,8 @@ BY_HAND = {
     ),
 }
 """Each command the guide shows that neither CI nor a hook runs, and why it is run by hand."""
+PINNED = re.compile(r"(?P<action>[\w.-]+/[\w./-]+)@(?P<commit>[0-9a-f]{40})  # (?P<release>v\d+\.\d+\.\d+)")
+"""An action pinned to a commit, with the release it is beside it."""
 FENCE = re.compile(r"^(?P<indent> *)```(?P<language>[\w-]*)$")
 PATH = re.compile(r"`((?:\.github|docs|examples|packages|tests)/[\w./-]*|[\w.-]+\.(?:md|toml|yaml|txt))`")
 
@@ -87,6 +89,16 @@ def steps(workflow: str = "*") -> list[dict[str, Any]]:
 def ci_runs(workflow: str = "*") -> list[str]:
     """Each line of each `run` of each step of the workflows `workflow` names."""
     return [line for step in steps(workflow) if "run" in step for line in step["run"].strip().splitlines()]
+
+
+def actions() -> list[str]:
+    """What each step of each workflow `uses`, as it is written, with its comment."""
+    return [
+        line.split("uses: ", 1)[1]
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        for line in path.read_text().splitlines()
+        if line.lstrip("- ").startswith("uses: ")
+    ]
 
 
 def hooks() -> list[dict[str, Any]]:
@@ -159,7 +171,8 @@ def test_the_commit_types_are_the_ones_the_hook_and_the_title_check_accept():
     assert hook["rev"] == "v4.0.0", "the guide gives v4.0.0's rules"
     assert types == sorted([arg for arg in hook.get("args", []) if not arg.startswith("-")] or DEFAULT_TYPES)
     assert types == sorted(str(check.get("with", {}).get("types", "")).split() or DEFAULT_TYPES)
-    assert f"`{check['uses']}`" in TEXT
+    [pin] = [PINNED.fullmatch(action) for action in actions() if action.startswith(TITLE_CHECK)]
+    assert pin is not None and f"`{TITLE_CHECK}` {pin['release']}" in TEXT
 
 
 def test_the_example_messages_are_ones_the_title_check_accepts():
@@ -178,6 +191,18 @@ def test_the_example_messages_are_ones_the_title_check_accepts():
         kind, _, text = subject.partition(": ")
         assert kind.removesuffix("!") in types, subject
         assert summary.fullmatch(text), subject
+
+
+def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_default():
+    """A tag moved upstream changes nothing a workflow runs, and a workflow's token reads only, as the guide says."""
+    workflows = [yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")]
+    jobs = [job for workflow in workflows for job in workflow["jobs"].values()]
+
+    assert len(actions()) == len([step for step in steps() if "uses" in step]) > 0
+    assert [action for action in actions() if PINNED.fullmatch(action) is None] == []
+    assert [workflow.get("permissions") for workflow in workflows] == [{"contents": "read"}] * len(workflows)
+    assert {access for job in jobs for access in job.get("permissions", {}).values()} <= {"read"}
+    assert "Each action is pinned to a commit" in " ".join(TEXT.split())
 
 
 def test_the_ruff_hook_runs_the_ruff_the_dev_group_pins():
