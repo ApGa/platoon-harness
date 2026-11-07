@@ -229,7 +229,7 @@ async def test_a_prompt_piped_to_run_dash_reaches_the_agent(cli: Cli):
 async def test_a_prompt_that_cannot_be_read_exits_64_saying_why(cli: Cli, args: tuple[str, ...], said: str):
     team = cli.write("solo.toml", solo("saying"))
 
-    done = await cli.run("run", *args, "--team", team, "--trust", input=b"\xff\xfe go")
+    done = await cli.run("run", *args, "--team", team, "--trust", input=b"\xff\xfe go", LC_ALL="C.UTF-8")
 
     assert (done.code, done.stdout) == (64, ""), done.stderr
     assert said in done.stderr and "Traceback" not in done.stderr

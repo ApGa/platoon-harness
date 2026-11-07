@@ -50,10 +50,12 @@ def as_given() -> Generator[None]:
 
 
 def _stdin() -> str:
+    """Stdin read to its end as UTF-8, whatever the locale: under a C or C.UTF-8 locale Python's own reader would let
+    bytes that are not UTF-8 through as surrogates."""
     if sys.stdin is None:
         raise Usage("stdin is closed, so there is no prompt to read")
     try:
-        return sys.stdin.read()
+        return sys.stdin.buffer.read().decode()
     except UnicodeDecodeError as error:
         raise Usage(f"stdin: {error}") from None
 

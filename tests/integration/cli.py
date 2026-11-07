@@ -85,8 +85,8 @@ class Cli:
         self.started.append(process)
         return process
 
-    async def run(self, *args: str, input: bytes | None = None) -> Done:
-        process = await self.start(*args, stdin=asyncio.subprocess.DEVNULL if input is None else PIPE)
+    async def run(self, *args: str, input: bytes | None = None, **env: str) -> Done:
+        process = await self.start(*args, stdin=asyncio.subprocess.DEVNULL if input is None else PIPE, **env)
         return await finished(process, input)
 
     async def as_shown(self, command: str) -> Done:
