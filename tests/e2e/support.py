@@ -17,8 +17,9 @@ from ..unit.web.support import served
 SECONDS = 20_000
 """How long a locator waits for what it expects, in milliseconds."""
 REBOUND = "rebound.localhost"
-"""A name that reaches loopback, as a rebinding attacker's name would: each browser resolves a name under `localhost` to
-loopback itself, so none needs a flag of its own."""
+"""A name that reaches loopback, as a rebinding attacker's name would: Chromium and Firefox resolve a name under
+`localhost` to loopback themselves, so neither needs a flag of its own. Whether WebKit does is unverified until CI's
+WebKit job runs, as WebKit has run nowhere yet."""
 
 
 def watched(page: Page, *expected: str) -> list[str]:

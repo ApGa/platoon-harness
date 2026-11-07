@@ -106,7 +106,7 @@ To run them on 3.13, set `UV_PYTHON=3.13` for both `uv sync` and `uv run`, as CI
 |---|---|---|---|
 | Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
 | Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so | No |
-| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes, once in each of the three |
+| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes, once in each of the three, as the workflow says, which no runner has shown yet |
 | Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are. Each file's docstring states the model calls its tests may spend | Never |
 
 ```bash
@@ -243,7 +243,7 @@ stacked on another one is checked too, and for pushes to `main`. A new push canc
 | `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
 | `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs | git is older than 2.47, or a test fails |
-| `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it | A browser test fails in that browser |
+| `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it, as the workflow says, which no runner has shown yet | A browser test fails in that browser |
 
 The commands, job by job:
 
