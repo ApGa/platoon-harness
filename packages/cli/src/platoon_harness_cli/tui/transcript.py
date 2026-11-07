@@ -524,6 +524,11 @@ class Transcript(ScrollView, can_focus=True):
     def on_resize(self, event: events.Resize) -> None:
         self._layout()
 
+    def watch_show_vertical_scrollbar(self, shown: bool) -> None:
+        """Draw a scrollbar that appears where the lines are, as Textual moves one only when they move."""
+        if shown:
+            self.vertical_scrollbar.position = self.scroll_y
+
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
         old, new = old_value, new_value

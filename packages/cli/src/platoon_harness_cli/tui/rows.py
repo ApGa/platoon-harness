@@ -69,6 +69,11 @@ class Rows(ScrollView, can_focus=True):
         self.scroll_to_region(Region(0, index, 1, 1), animate=False, immediate=True, force=True)
         self.refresh()
 
+    def watch_show_vertical_scrollbar(self, shown: bool) -> None:
+        """Draw a scrollbar that appears where the rows are, as Textual moves one only when they move."""
+        if shown:
+            self.vertical_scrollbar.position = self.scroll_y
+
     def step(self, by: int) -> str | None:
         """The key `by` rows from the cursor, round the ends, or None with nothing to choose."""
         keys = self.keys

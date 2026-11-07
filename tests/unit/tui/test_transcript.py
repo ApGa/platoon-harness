@@ -174,3 +174,16 @@ async def test_a_lead_draws_its_own_children_and_no_one_else_s():
             "✓ mine finished",
             "✓ before finished",
         ]
+
+
+async def test_a_scrollbar_shown_once_the_transcript_is_at_its_end_is_drawn_at_its_end():
+    journal = Journal([said(n, f"said {n}") for n in range(1, 21)])
+    app = Alone()
+    async with app.run_test(size=(80, 10)) as pilot:
+        transcript = app.query_one(Transcript)
+
+        await transcript.show(Focus.of_agent("lead"), journal, 20)  # type: ignore[arg-type]
+        await pilot.pause()
+
+        assert transcript.scroll_y == transcript.max_scroll_y > 0
+        assert transcript.vertical_scrollbar.position == transcript.scroll_y

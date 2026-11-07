@@ -850,6 +850,11 @@ named here is closed.
   reader, which under a C or C.UTF-8 locale, as on GitHub's runners, lets bytes that are not UTF-8 through as surrogates, so
   such a prompt started a session whose first message was refused and the run ended 0, where it exits 64 saying why. It now
   reads stdin's bytes and decodes them as UTF-8 whatever the locale.
+- **A scrollbar that appears is drawn where the lines are.** Textual moves a scrollbar only as the lines move, so a transcript
+  that reached its end before its scrollbar appeared drew the thumb at the top, as the slim and short layouts' snapshots had
+  recorded it, and a list whose row was chosen as it was drawn, as the navigator's is when the focus changes, did the same. The
+  transcript and every list now put a scrollbar that appears where they are. The slim layout's snapshot test failed under load
+  whenever the scrollbar happened to appear first, which drew it right.
 - **Each command group's help says what it is for.** The help of `agent`, `task` and the 13 other groups of commands that run
   ops on a session was one sentence they all shared, "The `task` ops, each on one session, ...", which said nothing of any; each
   now says what it holds and what you can do with it. `peers --help` said "in `platoon-harness peers`" where the op's words
