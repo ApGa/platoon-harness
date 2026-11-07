@@ -349,6 +349,8 @@ An op is a named, typed, synchronous function, and the only way to change a sess
 line all derive from the op table ([architecture §6](docs/architecture.md#6-operations)). A new op of the core, or a new
 primitive, needs:
 
+- an RFC first, as it changes the op table and so the command line
+  ([When a change needs an RFC](#when-a-change-needs-an-rfc));
 - names under the [naming law](docs/architecture.md#naming-law);
 - its public names in `tests/public_api.txt`;
 - for each promise it makes in [architecture §7](docs/architecture.md#7-primitive-semantics), a test named for it;
