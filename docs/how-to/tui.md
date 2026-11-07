@@ -57,16 +57,19 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 ## The sessions screen
 
 Every session under the root, whether a runtime holds it and its state, and it works with none. With nothing where the
-project's `platoon-harness.toml` goes, in the folder you started it in, it offers once, as it opens, to write one from the
-harnesses on your PATH, as `init` does: a lead on the first, which starts workers on the second. Only `y` takes the offer,
-and turned down it is not made again until the screen opens anew. It writes over nothing, nor through a link: anything put
-there meanwhile stays as it is, and it says nothing was written. With no harness on your PATH it says so. `n` starts a
-session from the project's `platoon-harness.toml` or a team file. When several agents would run on your own plan login it
-asks once whether this is your own work, which is the SDK's `plan_login`. `r` resumes a session whose runtime has gone, after saying that it
-can spend money. `s` stops one as its owner would, after one confirmation, and it stays resumable. Enter opens one: live
-as a guest, or as read-only history when no runtime holds it, with `/resume` offered to resume it. `/detach` comes back
-here from a session opened here, which runs on. `l` looks again, `?` shows every key, `p` opens the palette and `q`
-quits. In a form, Enter goes to the next field, and from the last sends it.
+project's `platoon-harness.toml` goes, in the folder you started it in, it offers once, as it opens, to write one from
+the harnesses on your PATH, as `init` does: a lead on the first, which starts workers on the second. Only `y` takes the
+offer, and turned down it is not made again until the screen opens anew. It writes over nothing, nor through a link:
+anything put there meanwhile stays as it is, and it says nothing was written. With no harness on your PATH it says so.
+`n` starts a session from the project's `platoon-harness.toml` or a team file. When several agents would run on your own
+plan login it asks once whether this is your own work, which is the SDK's `plan_login`. An agent the session starts with
+whose harness cannot start fails, as the workspace shows, and for a harness `doctor` looks for, the terminal UI also
+says what `doctor` finds of it, in its words: not on PATH, or its version, the kind of its login and what its checks
+found. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
+would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
+runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
+on. `l` looks again, `?` shows every key, `p` opens the palette and `q` quits. In a form, Enter goes to the next field,
+and from the last sends it.
 
 ## The workspace
 

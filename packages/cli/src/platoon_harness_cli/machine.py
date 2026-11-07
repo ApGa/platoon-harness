@@ -226,14 +226,9 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
 def _say_report(report: dict[str, Any], problems: list[str]) -> None:
     lines = [f"platoon-harness {__version__}, SDK {sdk_version}"]
     for harness in report["harnesses"]:
-        if harness["found"]:
-            login = f"{harness['login']} login" if harness["login"] else "login unknown"
-            said = f"{harness['name']:<10} {harness['version'] or 'version unknown'}, {login}"
-            lines.append(f"{said}, {_said_checked(harness['name'], harness['checked'])}")
-            if "unchecked" in harness:
-                lines.append(f"{'':<10} --check kept nothing: {harness['unchecked']}")
-        else:
-            lines.append(f"{harness['name']:<10} {harness['reason']}")
+        lines.append(f"{harness['name']:<10} {_said(harness)}")
+        if "unchecked" in harness:
+            lines.append(f"{'':<10} --check kept nothing: {harness['unchecked']}")
     if (node := report["node"]) is not None:
         enough = "" if node["enough"] else f", and pi needs {'.'.join(map(str, _NODE))} or later"
         lines.append(f"{'node':<10} {node['version'] or 'not on PATH'}{enough}")
@@ -247,6 +242,22 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
     lines += [f"problem    {problem}" for problem in problems]
     lines.append("usable" if not problems else "not usable")
     say(safe("\n".join(lines)))
+
+
+def finding(name: str) -> str | None:
+    """What `doctor` says of the harness `name`, after its name, or None where it looks for no harness of that name."""
+    driver = dict(harnesses()).get(name)
+    return None if driver is None else _said(_harness(name, driver, find_root()))
+
+
+def _said(harness: dict[str, Any]) -> str:
+    """What `doctor` says of a harness after its name: why it is not here, or its version, its login's kind and what
+    its checks found."""
+    if not harness["found"]:
+        return harness["reason"]
+    login = f"{harness['login']} login" if harness["login"] else "login unknown"
+    checked = _said_checked(harness["name"], harness["checked"])
+    return f"{harness['version'] or 'version unknown'}, {login}, {checked}"
 
 
 def _said_checked(name: str, checked: dict[str, Any] | None) -> str:

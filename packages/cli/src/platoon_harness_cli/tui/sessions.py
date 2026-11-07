@@ -16,7 +16,7 @@ from platoon_harness import ConfigError, Refused, Session
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.runtime.paths import find_root, listing
 
-from ..machine import Starter
+from ..machine import Starter, finding
 from ..sessions import ask_to_stop
 from ..teams import Source
 from .dialogs import Confirm, Form
@@ -120,7 +120,8 @@ class Sessions(Screen[None]):
 
     @work(group="act")
     async def action_new(self) -> None:
-        """Start a session as the TUI does: a detached runtime, which outlives the TUI, with the TUI as its guest."""
+        """Start a session as the TUI does: a detached runtime, which outlives the TUI, with the TUI as its guest. A
+        harness that cannot start then says what `doctor` finds of it."""
         team = PROJECT_FILE if Path(PROJECT_FILE).exists() else ""
         fields = [
             ("team", SafeText("A team file. Left empty, the project's own."), team),
@@ -156,6 +157,38 @@ class Sessions(Screen[None]):
                 return
             break
         self.app.push_screen(Workspace(session.name, session))
+        await self._say_what_doctor_finds(session.name)
+
+    async def _say_what_doctor_finds(self, name: str) -> None:
+        """Follow a session just started until each agent it started with has launched or failed to, and say what
+        `doctor` finds of the harness of each that failed, where doctor looks for a harness of that name."""
+        harnesses: dict[str | None, Any] = {}
+        launching: set[str | None] = set()
+        try:
+            async with Session.attach(name, view=True) as attached:
+                head = await attached.head()
+                async for event in attached.events(0, follow=True):
+                    match event.type, event.data.get("kind"):
+                        case "agent.spawned", _:
+                            harnesses[event.data["name"]] = event.data["harness"]
+                        case "effect.requested", "launch":
+                            launching.add(event.agent)
+                        case "effect.failed", "launch":
+                            launching.discard(event.agent)
+                            await self._say_what_doctor_finds_of(event.agent, harnesses.get(event.agent))
+                        case "effect.finished" | "effect.cancelled", "launch":
+                            launching.discard(event.agent)
+                    if event.seq >= head and not launching:
+                        return
+        except Refused:
+            return  # Its runtime went, which the workspace says.
+
+    async def _say_what_doctor_finds_of(self, agent: str | None, harness: Any) -> None:
+        """Say what `doctor` finds of an agent's harness that could not start. A harness a command names is none it
+        looks for."""
+        found = await asyncio.to_thread(finding, harness) if isinstance(harness, str) else None
+        if found is not None:
+            note(self, f"@{agent} could not start, and doctor finds {harness} {found}", severity="error")
 
     @work(group="act")
     async def action_resume(self) -> None:

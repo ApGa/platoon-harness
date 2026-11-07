@@ -457,6 +457,29 @@ async def test_writing_a_team_from_the_tui_never_overwrites_nor_writes_through_a
         await pilot.press("ctrl+q")
 
 
+@pytest.mark.parametrize("found", [True, False], ids=["exiting-at-once", "not-on-path"])
+async def test_a_harness_that_cannot_start_says_what_doctor_finds(tmp_path, monkeypatch, found):
+    """A lead on `claude`, which says its version and exits at once, or which is not on PATH: the session starts from
+    the project's team, its lead fails, and the person is told what `platoon-harness doctor` says of claude, in its
+    words."""
+    on_path(monkeypatch, tmp_path, *(["claude"] if found else []))
+    (tmp_path / PROJECT_FILE).write_text('[roles.lead]\nharness = "claude"\n')
+    doctor = [Path(sys.executable).parent / "platoon-harness", "doctor"]
+    said = (await asyncio.to_thread(subprocess.run, doctor, capture_output=True, text=True, timeout=60)).stdout
+    claude = " ".join(next(line for line in said.splitlines() if line.startswith("claude ")).split(maxsplit=1))
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press("enter", *"crew", "enter", "enter")
+        told = f"@lead could not start, and doctor finds {claude}"
+        await drawn(pilot, lambda text: "lead failed" in text and told in [n.message for n in app._notifications])
+        await pilot.press("ctrl+q")
+
+    assert claude.startswith("claude 9.9.9 (fake), login unknown, not checked" if found else "claude not on PATH")
+
+
 def test_a_terminal_ui_that_fails_exits_1(monkeypatch):
     """Textual shows what went wrong, and the command says it failed, as any refused command does."""
     from platoon_harness_cli import tui

@@ -13,6 +13,10 @@ named here is closed.
 
 ### New features
 
+- **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
+  harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor` finds of that
+  harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and what its checks found.
+  The runtime's reason, such as `claude is gone`, left a newcomer to run `doctor` on the command line to learn more.
 - **A team written from the terminal UI.** With nothing where the project's `platoon-harness.toml` goes, the sessions
   screen offers once, as it opens, to write the team `init` writes from the harnesses on your PATH, and `y` takes the
   offer. It writes over nothing, nor through a link, and says nothing was written if something came to be there while it

@@ -110,4 +110,5 @@ terminal UI, whose sessions screen starts a session from the project's team.
 
 You can set up the same team with no command line but `platoon-harness` itself. Where no team is, the sessions screen
 offers once, as it opens, to write the one `init` writes, and `y` takes the offer. It never overwrites a file either, and
-`n` then starts a session from it.
+`n` then starts a session from it. If a harness of it cannot start, the terminal UI says what `doctor` finds of that
+harness.
