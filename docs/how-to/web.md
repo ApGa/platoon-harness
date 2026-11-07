@@ -189,11 +189,13 @@ What the whole of platoon-harness protects, and what it does not, is in [securit
 
 - **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
   is refused without them. A wildcard such as `0.0.0.0` is refused, since a browser's requests must name the host served.
-  A session on a plan login, one started with `--plan-login` or one of whose agents' harnesses came up last on a plan
-  login, as its own status command said, is served on loopback alone, and another address exits 78, saying why. That is
-  checked as `web` starts, and while it serves another address `web` stops with 78 once an agent comes up on one. A
-  harness that cannot say which login it has is not counted, as the runtime does not count it either. From another
-  machine, forward the loopback port, as Open it shows.
+  A session on a plan login is served on loopback alone, and another address exits 78, saying why: one started with
+  `--plan-login`, one of whose agents' harnesses came up last on a plan login, or one with a role that names no auth
+  profile and whose harness says, by its own status command, that it is signed in on one, as a control link can spawn an
+  agent of any role. That is checked as `web` starts, before anything listens. While it serves another address, `web`
+  stops with 78 once an agent comes up on a plan login after all, as when a harness was signed in on one since, and what
+  a control link did before then stands. A harness that cannot say which login it has is not counted, as the runtime
+  does not count it either. From another machine, forward the loopback port, as Open it shows.
   A name with several addresses, as `localhost` has, is served on one port at each, so no other program on the machine can
   take that port on one of them and be what a browser reaches. A port that is the scheme's own, 80 or 443, is left out of
   the address, as a browser leaves it out.

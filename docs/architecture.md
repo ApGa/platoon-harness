@@ -1929,8 +1929,10 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. A browser on
   a control link acts as the session's person, and nothing tells a second person from the first, so a control link is the owner's to
   use and a view link is what another gets. So `web` serves a session on a plan login on loopback alone, and refuses any
-  other address with 78: one whose manifest keeps the opt-in, or one of whose agents' harnesses came up last on a plan
-  login, as the roster says, at its start or, while it serves, once one comes up.
+  other address with 78 as it starts: one whose manifest keeps the opt-in, one of whose agents' harnesses came up last
+  on a plan login, as the roster says, or one with a role that names no auth profile whose harness says now that it is
+  on one, as a control link can spawn any role. While it serves another address it stops with 78 once an agent comes up
+  on a plan login after all, and what a control link did before then stands.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
   project or team file: `--trust` on the command line, `trust_project` to `load_team`. The trust step covers a test's command and not

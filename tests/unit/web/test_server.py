@@ -10,13 +10,15 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import ConfigError, Session, Team
-from platoon_harness.drivers import DriverInfo
+from platoon_harness.config import Manifest
+from platoon_harness.drivers import DriverError, DriverInfo
+from platoon_harness.extensions import Installed
 from platoon_harness.http import SECONDS
 from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Hang, ScriptedDriver
 from platoon_harness_cli.ops import cut
-from platoon_harness_cli.web import LOOK, follow
+from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
 from platoon_harness_cli.web.page import load
@@ -721,3 +723,27 @@ async def test_followed_past_loopback_the_page_stops_once_an_agent_comes_up_on_a
         projection.close()
 
     assert "session s runs on a plan login, as w1 came up on one" in str(refused.value)
+
+
+class Unsure(ScriptedDriver):
+    """A harness whose status command fails, so it cannot say which login it has."""
+
+    def describe(self) -> DriverInfo:
+        raise DriverError("its status command failed")
+
+
+def test_a_role_is_on_a_plan_login_past_loopback_as_the_runtime_counts_one():
+    """A role names no auth profile and its harness says it is signed in on a plan, but not in a trainable session,
+    whose agents run on its authority's gateway. A harness that cannot say runs nothing."""
+    on_a_plan = harness(lambda: OnAPlan([]))
+    roles = {
+        "lead": {"harness": harness(lambda: ScriptedDriver([]))},
+        "planned": {"harness": on_a_plan, "count": 0},
+        "keyed": {"harness": on_a_plan, "count": 0, "auth": "keyed"},
+        "unsure": {"harness": harness(lambda: Unsure([])), "count": 0},
+    }
+    team = Team.model_validate({"auth": {"keyed": {"env": ["KEY"]}}, "roles": roles})
+    manifest = Manifest.of(team.resolved(Installed()), cwd=str(Path.cwd()))
+
+    assert plan_roles(manifest) == ["planned"]
+    assert plan_roles(manifest.model_copy(update={"trainable": True})) == []

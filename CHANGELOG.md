@@ -31,11 +31,14 @@ named here is closed.
   you; an agent's network; resources; and macOS. It says where each credential lives and when it goes, that a session keeps
   everything until its folder is deleted, what tombstoning a body erases and what it does not reach, and that only what the
   runtime gave a harness is redacted.
-- **A session on a plan login stays on loopback.** `platoon-harness web` serves a session on a plan login on loopback alone,
-  as a control link acts as you, on your login, and refuses another address with exit 78, saying why and what to do: a
-  session started with `--plan-login`, or one of whose agents' harnesses came up last on a plan login, as the roster says.
-  It checks as it starts, and while it serves another address it stops with 78 once an agent comes up on one. A harness that
-  cannot say which login it has is not counted, as the runtime does not count it for its own refusal.
+- **A session on a plan login stays on loopback.** `platoon-harness web` serves a session on a plan login on loopback
+  alone, as a control link acts as you, on your login, and refuses another address with exit 78 as it starts, saying why
+  and what to do: a session started with `--plan-login`, one of whose agents' harnesses came up last on a plan login, as
+  the roster says, or one with a role that names no auth profile and whose harness says it is signed in on one, as a
+  control link can spawn any role. While it serves another address it stops with 78 once an agent comes up on a plan
+  login after all, as when a harness was signed in on one since, and what a control link did before then stands. A
+  trainable session's agents and a harness that cannot say which login it has are not counted, as the runtime counts
+  neither for its own refusal.
 - **What an offer showed, by its ref.** `context.show(offer)`, a query op with `Session.shown(offer)` and the command
   `context show`: the text each item of an offer showed, in the offer's order, a gist as it was shown, with any fields beside
   it, and a body or the lines of one, each where the journal proves it by the item's digest, a child's report and a board's

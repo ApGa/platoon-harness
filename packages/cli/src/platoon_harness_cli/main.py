@@ -103,9 +103,10 @@ async def web(
 
     It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
     loopback it also says how to reach it from another machine: forward its port under the same number. A session on a
-    plan login, one whose owner said several agents may run on one or one of whose agents' harnesses came up last on
-    one, it serves on loopback alone, as a control link acts as you: another address exits 78, as it starts or once
-    such an agent comes up.
+    plan login, one whose owner said several agents may run on one, one of whose agents' harnesses came up last on one,
+    or one with a role that names no auth profile and whose harness says it is signed in on one, it serves on loopback
+    alone, as a control link acts as you: another address exits 78 as it starts, or once an agent comes up on one while
+    it serves.
 
     For example:
 

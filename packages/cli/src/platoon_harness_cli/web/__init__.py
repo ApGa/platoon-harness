@@ -16,10 +16,12 @@ import socket
 import ssl
 from pathlib import Path
 
-from platoon_harness import ConfigError, Refused, Session
+from platoon_harness import ConfigError, Refused, Session, Team
 from platoon_harness.config import Manifest
+from platoon_harness.drivers import DriverError
 from platoon_harness.kernel import Clock, Event, Refusal, SystemClock, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
+from platoon_harness.runtime.opening import make_driver
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import Problem
 
@@ -87,6 +89,21 @@ async def refuse_a_plan_login(session: Session) -> None:
         raise past_loopback(session.name, f"{', '.join(on)} came up on one")
 
 
+def plan_roles(manifest: Manifest) -> list[str]:
+    """The roles of a session's team whose agents would start on a plan login: each names no auth profile, and its
+    harness says now that it is signed in on one. A trainable session's agents run on its authority's gateway, and a
+    harness that cannot say runs nothing, so the runtime counts neither, nor does this. It blocks, as a harness may say
+    it by running."""
+    if manifest.trainable:
+        return []
+    team, cwd, found = Team.loads(manifest.team), Path(manifest.cwd), []
+    for name, role in team.roles.items():
+        with contextlib.suppress(ConfigError, DriverError):
+            if role.auth is None and make_driver(role, cwd).describe().login == "plan":
+                found.append(name)
+    return found
+
+
 async def bodies(session: Session, event: Event) -> dict[str, bytes | Refusal]:
     """What the fold of `event` shows of the bodies it cites: their bytes, or why they could not be read."""
     found: dict[str, bytes | Refusal] = {}
@@ -149,6 +166,8 @@ async def serve(
                 if manifest.plan_login:
                     raise past_loopback(name, "its owner said several agents may run on one")
                 await refuse_a_plan_login(session)
+                if roles := await asyncio.to_thread(plan_roles, manifest):
+                    raise past_loopback(name, f"{', '.join(roles)} would start on one")
             projection = Projection(session.folder, name, name_of(manifest.principal))
             web = Web(session, projection, page, clock, host=host, scheme="https" if tls else "http")
             try:

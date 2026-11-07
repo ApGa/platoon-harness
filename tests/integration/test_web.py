@@ -251,17 +251,28 @@ async def test_web_serves_tls_with_the_certificate_it_is_given(cli: Cli, tmp_pat
     assert "ssh -N -L" not in done.stderr
 
 
+SPARE = f"""{solo("listening")}
+[roles.helper]
+harness = "tests.integration.scripts:planned"
+count = 0
+"""
+"""A team whose `bob` listens, beside a role on a plan login that starts no agent, as a person can spawn it."""
+
+
 async def test_a_session_on_a_plan_login_is_refused_any_address_but_loopback_with_78(cli: Cli, tmp_path: Path):
     """A control link acts as you, on your login, so a session on a plan login stays on loopback, whether its owner said
-    several agents may run on one or one agent came up on one alone."""
+    several agents may run on one, one agent came up on one alone, or a role none of whose agents has started would
+    start one there, as a control link could spawn it."""
     certificate, key = await asyncio.to_thread(certified, tmp_path)
     remote = ("--host", "192.0.2.7", "--certificate", str(certificate), "--key", str(key))
     said_so = await cli.start(
         "serve", "--team", cli.write("said.toml", solo("listening")), "--name", "said", "--trust", "--plan-login"
     )
     alone = await cli.start("serve", "--team", cli.write("alone.toml", solo("planned")), "--name", "alone", "--trust")
+    spare = await cli.start("serve", "--team", cli.write("spare.toml", SPARE), "--name", "spare", "--trust")
     await said(said_so, "serving session said")
     await said(alone, "serving session alone")
+    await said(spare, "serving session spare")
     following = await cli.start("events", "alone", "--follow", "--json")
     await line_where(following, [], "type", "agent.started")
     following.send_signal(signal.SIGTERM)
@@ -269,15 +280,18 @@ async def test_a_session_on_a_plan_login_is_refused_any_address_but_loopback_wit
 
     owner_said = await cli.run("web", "said", *remote)
     came_up = await cli.run("web", "alone", *remote)
+    would_start = await cli.run("web", "spare", *remote)
     web = await cli.start("web", "alone")
     found = await links(web)
     web.send_signal(signal.SIGTERM)
     done = await finished(web)
-    for name, serving in (("said", said_so), ("alone", alone)):
+    for name, serving in (("said", said_so), ("alone", alone), ("spare", spare)):
         await cli.run("session", "stop", name)
         await finished(serving)
+    refused = owner_said.stderr + came_up.stderr + would_start.stderr
 
     assert owner_said.code == 78 and "runs on a plan login, as its owner said" in owner_said.stderr
     assert came_up.code == 78 and "runs on a plan login, as bob came up on one" in came_up.stderr
-    assert "forward its port" in came_up.stderr and "view link" not in owner_said.stderr + came_up.stderr
+    assert would_start.code == 78 and "runs on a plan login, as helper would start on one" in would_start.stderr
+    assert "forward its port" in came_up.stderr and "view link" not in refused
     assert found["control"].startswith("http://127.0.0.1:") and done.code == 0, done.stderr
