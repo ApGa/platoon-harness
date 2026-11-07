@@ -675,6 +675,11 @@ named here is closed.
   leaves the rest to its op's form, so a client that runs every action as it stands would write words or limits the person never
   gave. The view is at version 6, and keeps what each budget scope was last set to, so an older session's is refolded as it
   opens.
+- **One version for the SDK and the command line, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets
+  the version both packages release at, and each package's `pyproject.toml` reads it, where five places set it, which a
+  release had to change alike. A test holds the command line to requiring the SDK of its own minor release. That the two
+  release together is the default, pending the owner's ruling.
+
 - **Each Git example runs on stand-ins of its own.** The worktree team's no-keys run took the test suite's stand-ins,
   `tests.integration.scripts:spawning_contributors` and the rest, with the checkout on `PYTHONPATH`, so a copy of the
   example could not run alone. Its stand-ins are now its own, in `examples/worktree-merge-queue/stand_ins.py`, as

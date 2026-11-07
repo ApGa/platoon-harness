@@ -3051,7 +3051,6 @@ wheels = [
 
 [[package]]
 name = "platoon-harness"
-version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "platoon-harness-cli" },
@@ -3098,7 +3097,6 @@ dev = [
 
 [[package]]
 name = "platoon-harness-cli"
-version = "0.1.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "cyclopts" },
@@ -3119,7 +3117,6 @@ requires-dist = [
 
 [[package]]
 name = "platoon-harness-sdk"
-version = "0.1.0"
 source = { editable = "packages/sdk" }
 dependencies = [
     { name = "pydantic" },

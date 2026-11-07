@@ -1,6 +1,7 @@
 [project]
 name = "platoon-harness"
-version = "0.1.0"
+# The workspace's root is never built, and the SDK's version file sets the version of both packages.
+dynamic = ["version"]
 description = "Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 requires-python = ">=3.12"
 license = "MIT"

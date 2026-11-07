@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "platoon-harness-cli"
-version = "0.1.0"
+dynamic = ["version"]
 description = "The terminal UI and command line of platoon-harness: run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -36,8 +36,16 @@ Issues = "https://github.com/ApGa/platoon-harness/issues"
 [project.scripts]
 platoon-harness = "platoon_harness_cli.main:main"
 
+# The SDK's version file sets the version of both packages, which release together.
+[tool.hatch.version]
+path = "../sdk/src/platoon_harness/version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/platoon_harness_cli"]
+
+# uv makes the package's metadata again when its version changes, as it does when this file changes.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "../sdk/src/platoon_harness/version.py" }]
 
 [tool.uv.sources]
 platoon-harness-sdk = { workspace = true }

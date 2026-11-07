@@ -584,7 +584,7 @@ published or tagged, which is the owner's to ask for.
 
 | Capability | State | Evidence |
 |---|---|---|
-| One version for the SDK and the command line, set in one place | planned | Milestone 4. That the two ship in lockstep as `platoon-harness-sdk` and `platoon-harness-cli` under one tag, with no meta-distribution, is the default, pending the owner's ruling |
+| One version for the SDK and the command line, set in one place | tested | `tests/unit/test_packaging.py`, `test_each_version_is_set_once_and_the_sdk_and_cli_share_it`: `packages/sdk/src/platoon_harness/version.py` alone sets it, each package's `pyproject.toml` reads it through hatchling and has uv make its metadata again when it changes, and the command line's `__version__` is its installed metadata's; and `test_the_cli_requires_the_sdk_s_own_minor_release`. That the two release together as `platoon-harness-sdk` and `platoon-harness-cli` under one tag, with no meta-distribution, is the default, pending the owner's ruling |
 | A release workflow that builds and checks every distribution on each pull request, with `twine check --strict` and the command line run from its wheel, and publishes only on a tag the owner pushes, and CI's actions pinned to commits with read-only permissions | planned | Milestone 4. What it does on GitHub is inferred until a runner shows it |
 | The installed command line run from built wheels in a fresh environment, in a slow test | planned | Milestone 4. It takes no network, so it needs the build backend in uv's cache, and a skip is no pass |
 | Every runtime dependency's license held to an allowlist | planned | Milestone 4 |
