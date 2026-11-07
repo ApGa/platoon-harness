@@ -950,6 +950,24 @@ def _annotation(row: sqlite3.Row) -> Annotation:
     return Annotation.model_validate({**dict(row), "evidence": json.loads(row["evidence"])})
 
 
+def _annotations_made(folder: Path) -> Path:
+    """The annotations file, which its first writer makes aside, in WAL mode with its table, and links into place:
+    SQLite refuses at once, rather than after a wait, one of two writers that switch a new file to WAL together."""
+    path = folder / ANNOTATIONS
+    if not path.exists():
+        aside = folder / f".{ANNOTATIONS}.{uuid4().hex}"
+        try:
+            with contextlib.closing(sqlite3.connect(aside, autocommit=True)) as db:
+                db.execute("PRAGMA journal_mode=WAL")
+                db.execute(_ANNOTATIONS_TABLE)
+                db.execute(_ANNOTATIONS_INDEX)
+            with contextlib.suppress(FileExistsError):
+                os.link(aside, path)
+        finally:
+            aside.unlink(missing_ok=True)
+    return path
+
+
 def _annotate(folder: Path, statement: Annotate, wall_time: float) -> Annotation:
     """Write one statement beside a session's journal, with no runtime and no lock but the file's own, which it holds
     from its look for the key to its write. The file keeps a write-ahead log, so a reader never holds a writer up. The
@@ -963,12 +981,9 @@ def _annotate(folder: Path, statement: Annotate, wall_time: float) -> Annotation
     row = {**statement.model_dump(include={"target", "kind", "producer", "producer_version"}), **said}
     row |= {"params_hash": hashlib.sha256(params).hexdigest(), "wall_time": wall_time}
     try:
-        with contextlib.closing(sqlite3.connect(folder / ANNOTATIONS, timeout=_CLIENT_SECONDS * 5)) as db, db:
+        with contextlib.closing(sqlite3.connect(_annotations_made(folder), timeout=_CLIENT_SECONDS * 5)) as db, db:
             db.row_factory = sqlite3.Row
-            db.execute("PRAGMA journal_mode=WAL")
             db.execute("BEGIN IMMEDIATE")
-            db.execute(_ANNOTATIONS_TABLE)
-            db.execute(_ANNOTATIONS_INDEX)
             found = db.execute(
                 """
                 SELECT * FROM annotations WHERE producer = :producer AND producer_version = :producer_version
@@ -985,7 +1000,7 @@ def _annotate(folder: Path, statement: Annotate, wall_time: float) -> Annotation
             elif any(found[key] != value for key, value in said.items()):
                 raise Refused("conflict", f"annotation {found['id']} says otherwise under this producer and version")
             return _annotation(found)
-    except sqlite3.Error as error:
+    except (sqlite3.Error, OSError) as error:
         raise Refused("unavailable", f"annotations cannot be written: {error}") from None
 
 

@@ -1447,7 +1447,8 @@ score has a value, and a target with no statement is unscored, which no status s
 last call. `head_seq` names the exact trace, at or below which the target and each ref of `evidence` lie. `Session.annotate` and the
 `annotate` command write one, checked against the journal, with no runtime and no lock but the file's own, on a live session or a
 closed one, and `Session.annotations` reads them: the one way in and out. The file keeps a write-ahead log, so a reader never holds
-a writer up, and finds statements by target through an index. The same statement again is answered with the first, and another under the same key is refused
+a writer up, and finds statements by target through an index. Its first writer makes it aside and links it into place, since SQLite
+refuses at once one of two writers that switch a new file to WAL together. The same statement again is answered with the first, and another under the same key is refused
 `conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and nothing in the
 runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@3`, a heuristic run
 only when someone runs it (§14), and a client shows a value only with its producer and version, beside any other estimate of the

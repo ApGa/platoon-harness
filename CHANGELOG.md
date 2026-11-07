@@ -847,6 +847,10 @@ named here is closed.
 
 ### Fixes
 
+- **Estimators writing at once to a session with no annotations yet each write.** Every write switched `annotations.sqlite` to
+  WAL, and SQLite refuses at once, rather than after its five-second wait, one of two writers that switch a new file to WAL
+  together, so one of several first statements could be refused `unavailable: database is locked`, as one of sixteen was in a
+  run of the fast suite. Its first writer now makes the file aside, in WAL mode with its table, and links it into place.
 - **A caller that hears its commit failed finds the kernel closed.** The writer answered a failed batch's callers first and
   closed the kernel after, so a caller that had heard of the failure could still find `Kernel.closed` false, as the writer's
   own test did in two of three runs of the fast suite on two loaded cores. The kernel now closes before the callers hear.

@@ -4,11 +4,15 @@ import asyncio
 import contextlib
 import inspect
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
 from platoon_harness import Refused, Session, annotations
-from platoon_harness.annotations import ANNOTATIONS
+from platoon_harness.annotations import ANNOTATIONS, Annotate
+from platoon_harness.session import _annotate
 
 from .support import in_state, solo
 
@@ -140,6 +144,22 @@ async def test_estimators_writing_one_statement_at_once_write_it_once(tmp_path):
         )
 
         assert len({found.id for found in written}) == 1 and len(await session.annotations()) == 1
+
+
+def test_writers_at_once_on_a_folder_with_no_annotations_file_each_write(tmp_path):
+    """SQLite refuses at once, rather than after a wait, one of two writers that switch a new file to WAL together, so
+    each round starts with no file."""
+    statement = Annotate.model_validate({**CREDIT, "target": "agent/bob@1", "status": "invalid", "head_seq": 1})
+
+    def write(folder: Path, start: threading.Barrier) -> int:
+        start.wait()
+        return _annotate(folder, statement, 0.0).id
+
+    for round in range(25):
+        folder = tmp_path / str(round)
+        folder.mkdir()
+        with ThreadPoolExecutor(4) as pool:
+            assert list(pool.map(write, [folder] * 4, [threading.Barrier(4)] * 4)) == [1] * 4
 
 
 def test_annotations_have_one_checked_way_in():
