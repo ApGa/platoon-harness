@@ -34,7 +34,7 @@ LEAD = [
         Say("kestrel: I will split the work"),
         Call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "fix the parser"}),
     ],
-    [Say("**Done.** The parser is fixed:\n\n```python\ndef parse(text):\n    return text.split()\n```")],
+    [Say("Done: the worker fixed the parser, and its 3 tests pass.")],
 ]
 """The lead's turns: it splits the work and spawns a worker, and once the worker's report starts its next turn, says
 the parser is fixed."""
@@ -71,7 +71,7 @@ def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize("size", SIZES)
 def test_the_workspace_s_layout_at_each_size(snap_compare, history, size):
     async def ready(pilot) -> None:
-        await drawn(pilot, lambda text: "kestrel" in text and "Done" in text)
+        await drawn(pilot, lambda text: "kestrel" in text and "Done: the worker" in text)
 
     assert snap_compare(TerminalUI("s"), terminal_size=SIZES[size], run_before=ready)
 
