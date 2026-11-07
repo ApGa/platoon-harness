@@ -936,6 +936,90 @@ async def test_an_interrupt_walks_every_thread_at_work(tmp_path, stand):
     assert {params["threadId"] for params in interrupts} == {"thread-1", CHILD}
 
 
+def spawned(child: str, thread: str = "$thread") -> dict[str, Any]:
+    """A spawn of Codex's first generation of agents, as it completes, naming a child yet to start."""
+    states = {child: {"status": "pendingInit", "message": None}}
+    fields = {"tool": "spawnAgent", "status": "completed", "receiverThreadIds": [child], "agentsStates": states}
+    return completed("collabAgentToolCall", f"spawn-{child}", thread, **fields)
+
+
+SPAWNS = {
+    "first": spawned(CHILD),
+    "second": started("subAgentActivity", "call_child", kind="started", agentThreadId=CHILD, agentPath="/root/child1"),
+}
+
+
+@pytest.mark.parametrize("generation", SPAWNS)
+@pytest.mark.parametrize("child_first", [True, False], ids=["child_starts_first", "parent_ends_first"])
+async def test_a_spawned_child_holds_the_turn_open_whichever_comes_first(tmp_path, stand, generation, child_first):
+    """A child's `turn/started` can come after its parent's `turn/completed`, so the child counts from its spawn."""
+    child, parent = [began("child-1", CHILD)], [used(14), used(28), ended()]
+    rest = [used(14, CHILD), ended(turn="child-1", thread=CHILD)]
+    stand.install(turns=[[began(), SPAWNS[generation], *(child + parent if child_first else parent + child), *rest]])
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        await heard.until(Usage, lambda usage: usage.scope == "tree")
+        await heard.until(TurnEnded)
+
+    told = (TurnStarted, ChildSeen, TurnEnded)
+    assert [type(report) for report in heard.reports if isinstance(report, told)] == list(told)
+    assert [usage.scope for usage in heard.of(Usage)] == ["call", "call", "tree"]
+
+
+async def test_a_spawn_that_names_a_child_already_heard_from_holds_nothing(tmp_path, stand):
+    """A spawn saying `pendingInit` of a child whose turn has come and gone would otherwise hold the turn for good."""
+    reports = await played(
+        stand, tmp_path, began("child-1", CHILD), ended(turn="child-1", thread=CHILD), SPAWNS["first"]
+    )
+
+    assert [type(report) for report in reports if isinstance(report, ChildSeen | TurnEnded)] == [ChildSeen, TurnEnded]
+
+
+async def test_a_child_s_own_spawn_holds_the_turn_open_too(tmp_path, stand):
+    grandchild = "thread-grandchild"
+    stand.install(
+        turns=[
+            [
+                began(),
+                began("child-1", CHILD),
+                ended(),
+                spawned(grandchild, CHILD),
+                ended(turn="child-1", thread=CHILD),
+                began("grandchild-1", grandchild),
+                used(7, grandchild),
+                ended(turn="grandchild-1", thread=grandchild),
+            ]
+        ]
+    )
+
+    async with running(make_spec(tmp_path)) as (_, heard):
+        await heard.until(Usage)
+        await heard.until(TurnEnded)
+
+    assert [child.native for child in heard.of(ChildSeen)] == [CHILD, grandchild]
+    assert len(heard.of(TurnEnded)) == len(heard.of(TurnStarted)) == 1
+
+
+async def test_an_interrupt_cuts_a_spawned_child_s_turn_as_it_starts(tmp_path, stand):
+    stand.install(
+        turns=[[began(), SPAWNS["first"]]],
+        on_interrupt_of={
+            "turn-1": [ended("interrupted"), began("child-1", CHILD)],
+            "child-1": [ended("interrupted", "child-1", CHILD)],
+        },
+    )
+
+    async with running(make_spec(tmp_path)) as (driver, heard):
+        await heard.until(ChildSeen)
+        await driver.interrupt()
+        turn = await heard.until(TurnEnded)
+
+    interrupts = [frame["params"] for frame in stand.heard if frame.get("method") == "turn/interrupt"]
+    assert interrupts == [{"threadId": "thread-1", "turnId": "turn-1"}, {"threadId": CHILD, "turnId": "child-1"}]
+    assert turn.reason == "interrupted"
+    assert len(heard.of(TurnStarted)) == 1
+
+
 async def test_a_child_s_approval_comes_to_the_runtime_too(tmp_path, stand):
     request = asking(threadId=CHILD, turnId="child-1")
     stand.install(

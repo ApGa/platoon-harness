@@ -253,6 +253,8 @@ class _Asked:
 class CodexDriver:
     """One `codex app-server` with one thread. Our turn runs from the input that began it until the thread and every
     native child of it have stopped, since a child can outlive its parent's turn, and nothing else says it is at work.
+    A child counts from the first frame that names it, which can be its spawn, as its turn can start after its parent's
+    has ended.
 
     Frames are translated on the read loop, which never waits, so the pipe drains. An approval waits in a task of its
     own, which is what `Peer` gives a request.
@@ -264,8 +266,8 @@ class CodexDriver:
         self._peer: Peer | None = None
         self._native = ""
         self._folder = Path()
-        self._turns: dict[str, str] = {}
-        self._cut: asyncio.Task[None] | None = None
+        self._turns: dict[str, str | None] = {}  # Each thread at work and its turn's id, None until that turn starts.
+        self._cuts: set[asyncio.Task[None]] = set()
         self._children: set[str] = set()
         self._opening = False
         self._ending = "stopped"
@@ -349,13 +351,14 @@ class CodexDriver:
 
     async def interrupt(self) -> None:
         """Stop the turn, on this thread and on every child of it, as `turn/interrupt` stops one thread alone. A turn
-        an input on its way is about to begin has no id yet, so it is cut as it starts. A tool may run on, as an exec
-        session outlives a turn. What was steered and never landed is lost to the harness at this, and the runtime
-        offers it again."""
+        yet to start, of an input on its way or of a child its spawn named, has no id yet, so it is cut as it starts. A
+        tool may run on, as an exec session outlives a turn. What was steered and never landed is lost to the harness at
+        this, and the runtime offers it again."""
         self._interrupted = bool(self._turns or self._unlanded)
         try:
             for thread, turn in tuple(self._turns.items()):
-                await self._interrupt_turn(thread, turn)
+                if turn is not None:
+                    await self._interrupt_turn(thread, turn)
         except DriverError:
             self._interrupted = False
             raise
@@ -435,10 +438,12 @@ class CodexDriver:
             case "turn/completed", {"threadId": str(thread), "turn": {"id": str()} as turn}:
                 self._ended(thread, turn)
             case "item/started" | "item/completed", {"threadId": thread} if thread != self._native:
-                pass  # A native child's own work, which its turn and its usage stand for.
+                self._spawned(params.get("item"))  # Its turn and usage stand for a child's work, but for a spawn.
             case "item/started", {"item": {"type": str()} as item}:
+                self._spawned(item)
                 self._started(item)
             case "item/completed", {"item": {"type": str()} as item}:
+                self._spawned(item)
                 self._completed(item)
             case "item/agentMessage/delta", {"threadId": thread, "delta": text}:
                 if thread == self._native:
@@ -464,17 +469,35 @@ class CodexDriver:
     def _begin(self, thread: str, turn: str) -> None:
         if not self._turns:
             self._process.put(TurnStarted(turn=turn))
-            if self._interrupted:  # An interrupt came while this turn had no id to name.
-                self._cut = asyncio.create_task(self._interrupt_late(thread, turn))
+        if self._interrupted:  # An interrupt came while this turn had no id to name.
+            cut = asyncio.create_task(self._interrupt_late(thread, turn))
+            self._cuts.add(cut)
+            cut.add_done_callback(self._cuts.discard)
         self._turns[thread] = turn
         if thread == self._native:
             self._opening = True
         elif thread not in self._children:
-            self._children.add(thread)
-            self._process.put(
-                ChildSeen(native=thread),
-                GapReport(what="native_child_unattributed"),
-            )
+            self._seen(thread)
+
+    def _spawned(self, item: Any) -> None:
+        """A spawn names its child, most often before any frame of the child's own: `pendingInit` in the first
+        generation of Codex's agents, `started` in the second. A child it names first is at work from then on, its turn
+        yet to start."""
+        match item:
+            case {"type": "collabAgentToolCall", "agentsStates": dict(states)}:
+                named = [thread for thread, state in states.items() if state["status"] == "pendingInit"]
+            case {"type": "subAgentActivity", "kind": "started", "agentThreadId": str(thread)}:
+                named = [thread]
+            case _:
+                named = []
+        for thread in named:
+            if thread not in self._children:
+                self._turns[thread] = None
+                self._seen(thread)
+
+    def _seen(self, child: str) -> None:
+        self._children.add(child)
+        self._process.put(ChildSeen(native=child), GapReport(what="native_child_unattributed"))
 
     def _landed(self, item: Mapping[str, Any]) -> None:
         """An input reached the model's context: as what began a turn, or as a steer inside one."""

@@ -53,7 +53,8 @@ def answer(id: int, method: str, params: dict) -> None:
             play(played[turns - 1] if turns <= len(played) else (), turn)
         case "turn/interrupt":
             say({"id": id, "result": {}})
-            play(script.get("on_interrupt", ()), params["turnId"])
+            after = script.get("on_interrupt_of", {}).get(params["turnId"], script.get("on_interrupt", ()))
+            play(after, params["turnId"])
         case "thread/turns/list":
             say({"id": id, "result": {"data": script.get("history", [])}})
         case _:

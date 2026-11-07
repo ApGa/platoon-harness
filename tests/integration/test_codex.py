@@ -63,6 +63,9 @@ ESCALATED = {"sandbox_permissions": "require_escalated", "justification": "needs
 GATED = ToolCall("exec_command", {"cmd": "touch gated", **ESCALATED}, id="call_gated")
 PINNED = "0.167.0"
 CHILD = ToolCall("spawn_agent", {"message": "say so"}, id="call_child", namespace="multi_agent_v1")
+CATALOG_CHILD = ToolCall(
+    "spawn_agent", {"task_name": "child1", "message": "say so"}, id="call_child", namespace="collaboration"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -486,10 +489,14 @@ async def test_a_compaction_reports_its_call_and_a_gap_for_what_it_forgot(tmp_pa
     assert not [gap for gap in heard.of(GapReport) if gap.what == "hidden_call"]
 
 
-async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_path):
-    async with FakeModel(CHILD, "the parent is done", "the child is done") as model:
+@pytest.mark.parametrize(("name", "spawn"), [(MODEL, CHILD), ("gpt-6-luna", CATALOG_CHILD)], ids=["first", "second"])
+async def test_a_child_holds_the_turn_open_and_its_spending_is_on_the_tree(tmp_path, name, spawn):
+    """In each generation of Codex's own agents: the first a model outside the catalog gets, and the second a catalog
+    model gets, for which FakeModel stands in under that name."""
+    async with FakeModel(spawn, "the parent is done", "the child is done") as model:
         driver, heard = CodexDriver(), Heard()
-        await driver.start(on_fake_model(tmp_path, model, goal="spawn one", allow_native_children=True), heard)
+        spec = on_fake_model(tmp_path, model, goal="spawn one", model=name, allow_native_children=True)
+        await driver.start(spec, heard)
         child = await heard.until(ChildSeen)
         await heard.until(TurnEnded)
         await driver.stop(2.0)

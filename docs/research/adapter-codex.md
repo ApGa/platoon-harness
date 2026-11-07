@@ -135,7 +135,7 @@ Current default-on feature (`agents.enabled`, `features.multi_agent`), plus `fea
 | Context | Not checked | `fork_turns` defaults to `all`: the child request held parent history items |
 
 Child discovery, observed in both versions on one connection:
-- **No `thread/started` for a child.** First signal is `thread/status/changed` for an unknown id, then the spawn item. `thread_started` emits only from start and fork handlers (`codex@05c08d765523:codex-rs/app-server/src/request_processors/thread_processor.rs:1766,5937`).
+- **No `thread/started` for a child.** First signal in v1 is `thread/status/changed` for an unknown id, then the spawn item; in v2 the spawn item came first (`stubV2` in the fixture). `thread_started` emits only from start and fork handlers (`codex@05c08d765523:codex-rs/app-server/src/request_processors/thread_processor.rs:1766,5937`).
 - The connection then receives the child's `turn/*`, `item/*`, `thread/tokenUsage/updated` and approval requests, tagged with the child `threadId`. A child approval arrived and resolved on the parent connection (`stubApproval` in the fixture).
 - Stored `Thread` gives the links: `parentThreadId`, `source.subAgent.thread_spawn{parent_thread_id, depth, agent_path, agent_nickname, agent_role}`, `agentNickname`, `agentRole` (`codex@05c08d765523:codex-rs/protocol/src/protocol.rs:3203`). `thread/list.parentThreadId` needs opt-in.
 - Child `turn/started` has `rootTurnId` = the parent turn. `parentTurnId` is null or absent there. The exact parent turn appears only in wire metadata.
