@@ -5,6 +5,7 @@ import asyncio
 import json
 import stat
 import threading
+from concurrent.futures import Future
 from pathlib import Path
 from typing import Any
 
@@ -599,21 +600,24 @@ async def test_an_ended_agent_s_stop_looks_before_it_ends_its_workspace(repo, tm
 
 
 async def test_a_turn_the_owner_s_stop_cut_off_is_looked_at_on_resume(repo, tmp_path):
-    done = threading.Event()
+    made: Future[str] = Future()
 
     def work(cwd: Path) -> None:
-        commit(cwd, "work")
-        done.set()
+        try:
+            made.set_result(commit(cwd, "work"))
+        except Exception as error:
+            made.set_exception(error)
+            raise
 
     team = team_of(harness=harness(lambda: Working([work], [Hang()])))
     async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
         await session.spawn("ada", "worker", "work")
-        assert await asyncio.to_thread(done.wait, 10)
+        sha = await asyncio.wrap_future(made)
         assert await committed(session) == []
     async with Session.resume("s", root=tmp_path) as session:
         await looked(session)
         [found] = await until(lambda: committed(session), session)
         [cut] = [event for event in await of_type(session, "turn.ended") if event.agent == "ada"]
 
-    assert found.data["made_in"] == "@ada"
+    assert (found.data["sha"], found.data["made_in"]) == (sha, "@ada")
     assert cut.data["reason"] == "stopped by its owner" and found.cause == () and found.seq > cut.seq
