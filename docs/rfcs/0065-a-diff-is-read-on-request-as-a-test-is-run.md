@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/repo.py`](../../packages/sdk/src/platoon_harness/primitives/repo.py), [`runtime/git.py`](../../packages/sdk/src/platoon_harness/runtime/git.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [architecture section 5.4](../architecture.md#54-effects) and [section 13](../architecture.md#13-workspaces), [RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md), [RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) and [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | None yet |
+| Implementation | `feat: Read a commit's patch or a workspace's diff on request, as an effect` |
 
 ## Summary
 

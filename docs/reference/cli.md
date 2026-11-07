@@ -149,6 +149,7 @@ For example:
 - [`peers`](#platoon-harness-peers)
 - [`repo`](#platoon-harness-repo)
     - [`commit`](#platoon-harness-repo-commit)
+    - [`diff`](#platoon-harness-repo-diff)
     - [`test`](#platoon-harness-repo-test)
 - [`spans`](#platoon-harness-spans)
 - [`task`](#platoon-harness-task)
@@ -198,7 +199,7 @@ For example:
 * [`message`](#platoon-harness-message): Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.
 * [`ops`](#platoon-harness-ops): The ops you hold a grant for, with their schemas.
 * [`peers`](#platoon-harness-peers): List whom you may message directly now, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
-* [`repo`](#platoon-harness-repo): Commits the session recorded: look one up by its SHA, or run the team's test command on it.
+* [`repo`](#platoon-harness-repo): Commits the session recorded and its workspaces: look a commit up by its SHA, run the team's test command on it, or read its patch or a workspace's uncommitted diff.
 * [`spans`](#platoon-harness-spans): Show each span of an agent, oldest first: a turn is cut after each model call that chose a write of content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece with no write joins the span before it, so each call its harness reported in a turn lies in one span.
 * [`task`](#platoon-harness-task): Tasks on a queue: add one, claim it, renew its lease, then complete it, fail it or release it, and list them.
 * [`uses`](#platoon-harness-uses): Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
@@ -1604,7 +1605,7 @@ For example:
 
 ### platoon-harness repo
 
-Commits the session recorded: look one up by its SHA, or run the team's test command on it.
+Commits the session recorded and its workspaces: look a commit up by its SHA, run the team's test command on it, or read its patch or a workspace's uncommitted diff.
 
 #### platoon-harness repo commit
 
@@ -1627,6 +1628,29 @@ For example:
 **Parameters**:
 
 * `--sha`: A commit's SHA, or its first 4 or more hex digits. **[required]**
+
+#### platoon-harness repo diff
+
+```console
+platoon-harness repo diff --of STR [OPTIONS] SESSION
+```
+
+Read the patch of a recorded commit against its first parent, or what a workspace holds uncommitted against its HEAD, as `--of` names, where that workspace lives, and keep it on `repo/<name>` as `repo.diffed`, whose body is the patch, cut at a line's end past 64 KiB, naming the `effect` this gives back.
+
+A person or a program asks for this, never an agent. Refused `not_permitted` to an agent, which reads a commit through `platoon-harness repo commit` or its own git; `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the session is closing.
+
+For example:
+
+    platoon-harness repo diff SESSION --of OF
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--of`: A recorded commit's SHA, or its first 4 or more hex digits, for its patch; or a workspace, `@ada` for an agent's own or `shared` for the session's checkout, for what it holds uncommitted. **[required]**
+* `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness repo test
 

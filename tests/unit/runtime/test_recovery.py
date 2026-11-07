@@ -40,6 +40,7 @@ from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver, Wait
 
 from ...integration.scripts import ran_before
+from .gitting import repository
 from .support import SECONDS, harness, in_state, journal, of_type, offers, rebuilt_equals_live, scripted, solo, until
 
 pytestmark = pytest.mark.timeout(30)
@@ -61,8 +62,8 @@ async def abandon(session: Session) -> None:
     await runtime._close()
 
 
-def started(kind: str, agent: str = "bob") -> Callable[[Session], Awaitable[Any]]:
-    """Wait until an effect of this kind is in flight."""
+def started(kind: str, agent: str | None = "bob") -> Callable[[Session], Awaitable[Any]]:
+    """Wait until an effect of this kind is in flight, of `agent`'s, or of nobody's for None."""
 
     async def holds(session: Session) -> Any:
         async def found() -> list[Any]:
@@ -552,6 +553,44 @@ async def test_a_person_can_settle_an_answer_nobody_can_read_back(tmp_path, happ
 
         assert "answer" in [found.data["kind"] for found in await of_type(session, event)]
         assert row["id"] not in [found["id"] for found in await session.attention()]
+
+
+# Diff.
+
+
+async def test_a_diff_left_uncertain_by_a_crash_is_read_again(tmp_path, monkeypatch):
+    """Reading changes nothing, so a diff a crash cut off before its record is retried by the next runtime, and read and
+    recorded then."""
+    repo = repository(tmp_path / "repo", monkeypatch)
+    (repo / "README").write_text("changed\n")
+    session = await Session.start(solo(), name="s", root=tmp_path, cwd=repo)
+    runtime = session._runtime
+    assert runtime is not None
+
+    async def hangs(effect: Any) -> None:
+        await asyncio.Event().wait()
+
+    runtime.host._acts["diff"] = hangs
+    asked = await session.repo_diff("shared")
+    await started("diff", None)(session)
+    await abandon(session)
+
+    async with Session.resume("s", root=tmp_path) as session:
+        [record] = await until(lambda: of_type(session, "repo.diffed"), session)
+        patch = await session.get_body(record.data["body"])
+        events = await journal(session)
+
+    effects = [event for event in events if event.type.startswith("effect.") and event.data["kind"] == "diff"]
+    assert [event.type for event in effects] == [
+        "effect.requested",
+        "effect.started",
+        "effect.uncertain",
+        "effect.retried",
+        "effect.started",
+        "effect.finished",
+    ]
+    assert record.data["effect"] == asked["effect"] and patch.endswith(b"-hello\n+changed\n")
+    assert effects[-1].data["result"] == {"ref": f"{record.stream}@{record.version}"}
 
 
 # Interrupt and stop.

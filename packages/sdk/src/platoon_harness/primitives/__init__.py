@@ -148,7 +148,9 @@ PRIMITIVES = (
     Extension("lease", ops=[tasks.expire_lease, tasks.leases_due]),
     Extension("approval", ops=[approvals.request, approvals.resolve], views=[Approvals]),
     Extension("blob", ops=[blobs.get, blobs.hash_of, blobs.offer]),
-    Extension("repo", ops=[repo.report, repo.record, repo.looks, repo.commit, repo.test], views=[Looks]),
+    Extension(
+        "repo", ops=[repo.report, repo.record, repo.looks, repo.commit, repo.test, repo.diff, repo.keep], views=[Looks]
+    ),
     Extension("attention", ops=[clients.attention_list], views=[Attention]),
     Extension("view", ops=[clients.watch], views=[Changes, Gaps]),
     Extension("exposure", ops=[provenance.exposure], views=[Exposures]),

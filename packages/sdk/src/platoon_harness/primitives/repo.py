@@ -1,7 +1,7 @@
 """What the runtime finds in the session's repository, on `repo/<name>`: each commit, each rewrite of what the journal
-holds, and each workspace's head and uncommitted state, as its looks find them, and what each runtime test of a commit
-came to. The runtime's finding is not an act of an agent's, so none of these events names an agent in its envelope, and
-none claims a turn or a context."""
+holds, and each workspace's head and uncommitted state, as its looks find them, what each runtime test of a commit came
+to, and each diff a person or a program asked for. The runtime's finding is not an act of an agent's, so none of these
+events names an agent in its envelope, and none claims a turn or a context."""
 
 import json
 import sqlite3
@@ -12,7 +12,8 @@ from pydantic import Field
 
 from platoon_harness.kernel import GIST_LIMIT, NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
 
-from .common import BodyRef, Exposed, Name, cited, event_at, expose_read, parts_of
+from .agents import Agents
+from .common import BodyRef, Exposed, Name, cited, event_at, expose_read, inline_body, parts_of
 from .exposures import readable
 from .reports import record_gap
 from .sessions import SessionRecord
@@ -40,6 +41,9 @@ TEXT_LIMIT = 256
 """How many characters a look keeps of a commit's author and of each `Informed-By` value, which an agent wrote."""
 CITED_LIMIT = 16
 """How many `Informed-By` values of one commit a look keeps."""
+PATCH_LIMIT = 64 * 1024
+"""How many bytes of a patch its record keeps: as much as the journal holds in an event's own body, so that `blob.get`
+reads it and a citation's lines are checked."""
 _WHY_LIMIT = 512
 _NAMED = 3
 
@@ -388,6 +392,103 @@ def record(txn: Txn, a: Tested) -> str:
     refs = [a.body] if a.body else ()
     data = a.model_copy(update={"why": why})
     event = txn.emit("repo.tested", f"repo/{repo.name}", gist=gist, refs=refs, data=data)
+    return f"{event.stream}@{event.version}"
+
+
+class Diffing(Args):
+    of: Annotated[
+        str,
+        Field(
+            pattern=rf"^([0-9a-f]{{4,64}}|shared|@{NAME})$",
+            description="A recorded commit's SHA, or its first 4 or more hex digits, for its patch; or a workspace, "
+            "`@ada` for an agent's own or `shared` for the session's checkout, for what it holds uncommitted.",
+        ),
+    ]
+
+
+def _held(txn: Txn, where: str) -> str:
+    """`where`, a workspace the session holds: an agent's own once it is made and until its stop removes it, and your
+    checkout while a role works there, as a look records its state only then. Refused `not_found` otherwise."""
+    if where == "shared":
+        if not any(role.workspace == "shared" for role in txn.view(SessionRecord).settings().roles.values()):
+            raise Refused("not_found", "no role works in your checkout, so what it holds uncommitted is yours alone")
+        return where
+    agent = txn.view(Agents).get(where[1:])
+    if agent is None:
+        raise Refused("not_found", f"no agent is {where[1:]}")
+    if agent.workspace is None:
+        raise Refused("not_found", f"{where}'s workspace is not made yet")
+    if agent.workspace.mode == "shared":
+        raise Refused("not_found", f"{where[1:]} works in your checkout, which is `shared`")
+    if agent.removed:
+        raise Refused("not_found", f"{where}'s workspace went at its stop")
+    return where
+
+
+@op("repo.diff")
+def diff(txn: Txn, a: Diffing) -> dict[str, int]:
+    """Read the patch of a recorded commit against its first parent, or what a workspace holds uncommitted against its
+    HEAD, as `of` names, where that workspace lives, and keep it on `repo/<name>` as `repo.diffed`, whose body is the
+    patch, cut at a line's end past 64 KiB, naming the `effect` this gives back. A person or a program asks for this,
+    never an agent. Refused `not_permitted` to an agent, which reads a commit through `repo.commit` or its own git;
+    `not_found` while the commit is not recorded yet, and for a workspace the session holds none of; `invalid` when what
+    you gave names several commits; `unsupported` when the session observes no repository; and `conflict` once the
+    session is closing."""
+    if txn.me.kind == "agent":
+        raise Refused("not_permitted", "an agent reads a commit through `repo.commit` or its own git, not as a diff")
+    session = txn.view(SessionRecord)
+    if session.settings().repo is None:
+        raise Refused("unsupported", "this session observes no repository")
+    if not session.accepting():
+        raise Refused("conflict", f"the session is {session.state()}")
+    if a.of == "shared" or a.of.startswith("@"):
+        asked = {"workspace": _held(txn, a.of)}
+    else:
+        event = _recorded(txn, a.of)
+        asked = {"sha": event.data["sha"], "found_in": event.data.get("found_in")}
+    return {"effect": txn.effect("diff", asked, on_uncertain="retry")}
+
+
+class Diffed(Args):
+    """What a diff `effect` read: a recorded commit's patch against its first parent, by its `sha`, or a `workspace`'s
+    uncommitted diff against `head`, None before its first commit; as its `body` the patch, which `cut` says ends at the
+    end of the last line within `PATCH_LIMIT` bytes, as it was longer; or `why` it could not be read."""
+
+    effect: int
+    sha: Sha | None = None
+    workspace: Where | None = None
+    head: Sha | None = None
+    body: BodyRef | None = None
+    cut: bool = False
+    why: str | None = None
+
+
+def _diffed(a: Diffed, lines: int | None) -> str:
+    """A diff's record in a line: what it is of, and how many lines its patch has and where it was cut, or why it could
+    not be read."""
+    what = f"{a.sha[:12]} patch" if a.sha is not None else f"{a.workspace} uncommitted"
+    if lines is None:
+        return f"{what} could not be read: {a.why}"
+    if a.sha is None:
+        what += f" against {'no commit' if a.head is None else a.head[:12]}"
+    cut = f"cut after {_some(lines, 'line')} at {PATCH_LIMIT // 1024} KiB" if a.cut else _some(lines, "line")
+    return f"{what}, {cut}"
+
+
+@op("repo.keep", runtime=True)
+def keep(txn: Txn, a: Diffed) -> str:
+    """Keep what a diff read, on `repo/<name>` with no agent in the envelope, its `why` cut to fit, and give its ref.
+    Its body must be one the journal holds, which its gist counts the lines of."""
+    repo = txn.view(SessionRecord).settings().repo
+    if repo is None:
+        raise Refused("unsupported", "this session observes no repository")
+    patch = None if a.body is None else inline_body(txn, a.body)
+    if a.body is not None and patch is None:
+        raise Refused("invalid", "a patch is kept in a body the journal holds")
+    why = None if a.why is None else a.why[:_WHY_LIMIT]
+    data = a.model_copy(update={"why": why})
+    gist = _diffed(data, None if patch is None else patch.count(b"\n"))[:GIST_LIMIT]
+    event = txn.emit("repo.diffed", f"repo/{repo.name}", gist=gist, refs=[a.body] if a.body else (), data=data)
     return f"{event.stream}@{event.version}"
 
 

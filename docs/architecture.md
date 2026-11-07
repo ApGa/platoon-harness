@@ -350,6 +350,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
 | `workspace` | Path and branch | Repeat: each attempt adopts what an earlier one of the same effect made, from what git keeps of it, since no agent runs in a workspace before its effect finishes. Never discard uncommitted work |
 | `probe` | None | Repeat: a look records only what the journal does not hold, so a repeat records nothing twice |
 | `test` | None | Repeat unless recorded: one whose `repo.tested` the journal holds finishes from it and runs nothing, and one a crash cut off runs again from the start, once what it left is ended |
+| `diff` | None | Repeat unless recorded: one whose `repo.diffed` the journal holds finishes from it and reads nothing, and one a crash cut off reads again, as reading changes nothing |
 | `rest` | None | Repeat: ending a harness that has gone ends nothing, and `reap` proves what is ours |
 | `interrupt`, `stop` | None | Repeat. These bypass per-agent ordering, so Esc works while a delivery hangs, and an interrupt fails a handover under way, which queues it again to wake nothing and is no failure of its harness's (§7). A stop looks once more at what its agent left, then removes its workspace only when git says nothing would go with it, so a repeat finishes what the last one began and removes nothing twice |
 | `erase` | None | Repeat: erasing twice is harmless |
@@ -578,12 +579,12 @@ to do next.
 | Humans | `approval.resolve` `effect.settle` | `attention.list` `view.watch` |
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` `context.show` |
 | Evidence, kernel | `body.tombstone` | |
-| Repository | `repo.test` `repo.commit` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
+| Repository | `repo.test` `repo.diff` `repo.commit` | |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` `repo.keep` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list`, `blob.get` and `repo.commit` are commands; for a human or a
-program they run as queries and write nothing. `repo.test` is a person's or a program's act, and never a tool: it is refused to an
-agent whatever its grants (§13). `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
+program they run as queries and write nothing. `repo.test` and `repo.diff` are a person's or a program's acts, and never tools: each
+is refused to an agent whatever its grants (§13). `task.claim` writes a lease, so it is a command for everyone. `reply` is `send(reply_to=)`.
 `episode.close` closes the open episode on `based_on`, the refs of what it came to, checked as a citation is (§7), and what it was
 worth is an annotation's to say (§11), never the episode's.
 Broadcast is `send("+group")`. A join and a wait for any are `wait` with `mode`. Ack is `read(after=n)` or `wait(after=n)`. An op that
@@ -1667,7 +1668,8 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   last, so it is whole or absent, and a retry adopts a whole one.
 - **`isolated`** is a snapshot whose harness, and everything the runtime runs in its tree, one extension's isolation confines
   (`Extension.isolation`, §17): its looks, the check at a launch or a resume that the tree is a work tree of its repository, the stop's
-  reading of what removal would lose, making a kept snapshot whole, and finding its objects for the bundle. That git runs on the same
+  reading of what removal would lose, making a kept snapshot whole, finding its objects for the bundle, and each diff of it or of a
+  commit a look found there. That git runs on the same
   allowlist the harness gets, `PATH` and `HOME`, so a program the agent's own config names cannot read a variable the runtime holds.
   The runtime's own bookkeeping in the agent's folder it writes and reads following no symlink the confined harness could plant, so
   none of it lands outside the tree. The core says what it may
@@ -1751,6 +1753,21 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   its timeout is an `error`, and nothing it started runs on. The `test` effect is owned by no agent, keeps the session from settling until it ends, finishes from the journal when its `repo.tested` is held, and otherwise
   runs again from the start. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ from the agent's
   own run. See [RFC 0056](rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md).
+- **Reading a diff** is a person's or a program's act too, `repo.diff{of}`, and never a tool: an agent is refused whatever its
+  grants, and reads a commit through `repo.commit` or its own git. `of` names a recorded commit, as `repo.test` does, for its
+  patch against its first parent, or a workspace, `@ada` or `shared`, for what it holds uncommitted against its HEAD: its tracked
+  files, staged or not, then each untracked file git does not ignore, as a new one. The workspace must be one the session holds:
+  an agent's own once it is made and until its stop removes it, so a kept one too, and your checkout while a role works there. The
+  `diff` effect, owned by no agent, reads it with the runtime's one git runner where the workspace lives: a commit in the
+  repository of the workspace its look was of, a snapshot's own among them, or in yours once that has gone, and in an isolated
+  workspace inside its isolation. Every diff passes `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own prefixes, so
+  nothing a repository's config names runs to show it, though a filter runs for an uncommitted diff as it does at a look, and git
+  is ended once it has printed past the bound. `repo.diffed` on `repo/<name>`, with no agent in the envelope, names the commit, or
+  the workspace and the HEAD it was read against, and keeps the patch as its body, which `blob.get` reads and a citation names
+  lines of: all of it, or its first 64 KiB cut at the end of the last line that fits, which `cut` and its gist say. What git takes
+  for binary is named and never shown, and a diff that could not be read says why. The effect keeps the session from settling
+  until it ends, finishes from the journal when its `repo.diffed` is held, and otherwise reads again. A look reads no patch. See
+  [RFC 0065](rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md).
 - **An agent's read of a commit,** `repo.commit{sha}`, gives a recorded commit's `ref`, `sha`, `gist` and `made_in`, by its SHA or
   its first 4 or more hex digits naming one, and records the read as exposure; it is refused `not_found`, 'not recorded yet: a commit
   is recorded at the look after the turn that made it', until then. Every agent holds it. See

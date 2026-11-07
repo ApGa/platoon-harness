@@ -2,8 +2,8 @@
 
 Where each agent works, and what becomes of it.
 
-**Goal:** choose where each agent of a team works, know before any cost what each mode refuses, and take, test or let go of
-what an agent leaves behind.
+**Goal:** choose where each agent of a team works, know before any cost what each mode refuses, and read, take, test or let go
+of what an agent leaves behind.
 
 **Prerequisites:**
 
@@ -106,8 +106,8 @@ your global git config, so your global excludes do not apply there: a file only 
 keeps the workspace for it.
 
 Everything the runtime runs in that tree goes through the same isolation: each look, the check at a launch or a resume that the tree
-is still a work tree of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, and finding its
-objects for `commits.bundle`. So a filter or an fsmonitor an agent writes into its own repository's config runs inside, never as you,
+is still a work tree of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, finding its
+objects for `commits.bundle`, and each [diff](#read-a-diff) of it or of a commit a look found there. So a filter or an fsmonitor an agent writes into its own repository's config runs inside, never as you,
 and on the same allowlist its harness gets, `PATH` and `HOME` alone, never a variable the runtime's environment holds that the
 harness does not. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. The runtime's own
 bookkeeping files in the agent's folder — its process record, its log, its instructions, the `ph` shim — it writes and reads
@@ -306,13 +306,50 @@ erred and the ref of its record, and the terminal's `/review` shows the outcome 
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
 session resumes. [RFC 0056](../rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
 
+## Read a diff
+
+A person or a program can have the runtime read a recorded commit's patch, or what a workspace holds uncommitted, and keep it
+beside the commit:
+
+```console
+$ platoon-harness repo diff fix-auth --of 3f9c2a1
+$ platoon-harness repo diff fix-auth --of @ada
+```
+
+`--of` names a recorded commit, by its SHA or its first 4 or more hex digits, for its patch against its first parent, or a
+workspace, `@ada` for an agent's own or `shared` for your checkout, for what it holds uncommitted against its HEAD: its tracked
+files, staged or not, then each untracked file git does not ignore, as a new one. A workspace is read once it is made, and after
+its agent's stop if the stop kept it; your checkout only while a role works there, as your own edits are not the session's. An
+agent never asks for a diff: it reads a commit through `repo.commit` or its own git.
+
+The runtime reads it where the workspace lives: a commit in the repository of the workspace whose look recorded it, which for a
+snapshot may be the only one that holds it, or in yours once that workspace has gone, and an isolated workspace inside its
+isolation. It reads with `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own `a/` and `b/` prefixes, so no external
+diff, diff driver, textconv, pager or colour a repository's config names runs or shapes it, and its git runs no hook and no
+fsmonitor. A filter a config names does run for an uncommitted diff, as it does at every look and in your own `git status`.
+
+`repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace and the HEAD it was read against, and the patch as its body,
+which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at a time, and which a message cites lines of
+by its ref, `repo/<name>@<version>#L40-52`. A patch past 64 KiB, as much as the journal holds in an event's own body, is cut at
+the end of the last line that fits; the record says `cut` and its gist where, as
+`3f9c2a1b2c3d patch, cut after 1022 lines at 64 KiB`, and the rest is in git. A file git takes for binary is named,
+`Binary files a/x and b/x differ`, and never shown. A diff that could not be read, as of a workspace gone from under its agent,
+records why. A diff keeps its session from settling until it is read, and one a crash cut off is read again when the session
+resumes. A look reads no patch, so a turn's end costs what it did.
+[RFC 0065](../rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md) has why.
+
+What a diff cannot show: an untracked repository inside the tree, of which git shows no file, and an untracked file past the
+bound. An uncommitted diff is a moment's reading, so one of an agent in a turn changes as it is read, and a file removed while it
+is read fails the read, saying so.
+
 ## Read workspaces from a script
 
 `platoon-harness view watch <session> --name changes` gives the `changes` view's rows: each recorded commit, with its latest runtime
 test's outcome and, when the team names a test, the act that runs it, each workspace's last reading and each uncommitted path, with
 the `seq` that last moved it. An agent turns a commit's SHA into the ref its `based_on` cites with `repo.commit`, which records the read
 as its exposure and says 'not recorded yet' until the look after the turn that made it; a person or a program reads the same with
-`platoon-harness repo commit <session> --sha <sha>`. `platoon-harness session ending <session>` gives the Ending,
+`platoon-harness repo commit <session> --sha <sha>`, and a commit's patch or a workspace's uncommitted diff with
+`platoon-harness repo diff`, as [Read a diff](#read-a-diff) says. `platoon-harness session ending <session>` gives the Ending,
 whose `workspaces` are the kept ones with their reasons and any `release`, and whose `unobserved` names the agents whose last look
 never finished.
 

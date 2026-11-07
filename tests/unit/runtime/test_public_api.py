@@ -13,6 +13,7 @@ from platoon_harness import annotations, bwrap, credit, runtime, session
 from platoon_harness.runtime import (
     authority,
     control,
+    diffs,
     git,
     host,
     isolation,
@@ -31,6 +32,7 @@ MODULES = {
     "runtime": runtime,
     "runtime.authority": authority,
     "runtime.control": control,
+    "runtime.diffs": diffs,
     "runtime.git": git,
     "runtime.host": host,
     "runtime.isolation": isolation,

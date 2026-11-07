@@ -318,6 +318,9 @@ platoon_harness.runtime.control.Local
 platoon_harness.runtime.control.PROTOCOL
 platoon_harness.runtime.control.REFUSED
 platoon_harness.runtime.control.Remote
+platoon_harness.runtime.diffs.Diff
+platoon_harness.runtime.diffs.patch
+platoon_harness.runtime.diffs.uncommitted
 platoon_harness.runtime.Gateway
 platoon_harness.runtime.git.git
 platoon_harness.runtime.git.GitError
@@ -419,6 +422,7 @@ platoon_harness.session.Session.leave(grace)
 platoon_harness.session.Session.lineage(ref,*,after)
 platoon_harness.session.Session.open_episode(episode)
 platoon_harness.session.Session.page(*,after,before,match,streams,limit)
+platoon_harness.session.Session.repo_diff(of)
 platoon_harness.session.Session.resume(name,*,detach,root,clock)
 platoon_harness.session.Session.retire(agent)
 platoon_harness.session.Session.send(to,gist,*,body,thread,reply_to,based_on)

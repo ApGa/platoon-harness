@@ -56,7 +56,8 @@ _PURPOSES = {
     "training data.",
     "message": "Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.",
     "ops": "The ops you hold a grant for, with their schemas.",
-    "repo": "Commits the session recorded: look one up by its SHA, or run the team's test command on it.",
+    "repo": "Commits the session recorded and its workspaces: look a commit up by its SHA, run the team's test command "
+    "on it, or read its patch or a workspace's uncommitted diff.",
     "task": "Tasks on a queue: add one, claim it, renew its lease, then complete it, fail it or release it, and list "
     "them.",
     "view": "What a client follows, the roster, attention or changes: watch one, as a snapshot then keyed changes.",

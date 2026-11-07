@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from platoon_harness.kernel import Kernel
+from platoon_harness.primitives.repo import NOT_RECORDED
 
 from .support import end_turn, events_of, of_type, refusal, result_of, send, settle_effects, spawn, start, start_turn
 
@@ -669,3 +670,116 @@ async def test_repo_commit_says_a_session_with_no_repository_observes_none(kerne
     outcome = await kernel.submit(bob, "repo.commit", {"sha": ONE})
 
     assert refusal(outcome).code == "unsupported"
+
+
+# Diffs read on request.
+
+
+def requested_diffs(kernel: Kernel) -> list[Any]:
+    return [event for event in of_type(kernel, "effect.requested") if event.data["kind"] == "diff"]
+
+
+async def stopped(kernel: Kernel, name: str, *, removed: bool) -> None:
+    """End an agent, its stop removing its workspace or keeping it, as the host's does."""
+    result_of(await kernel.submit(kernel.runtime, "agent.cancel", {"agent": name}))
+    for effect in result_of(kernel.query(kernel.runtime, "effect.ready", {})):
+        attempt = result_of(await kernel.submit(kernel.runtime, "effect.start", {"id": effect["id"]}))
+        kept = None if removed else {"path": f"/s/agents/{name}/workspace", "host": "h", "branch": None, "bytes": None}
+        result = {"removed": removed, "kept": kept and {**kept, "why": [], "release": []}}
+        args = {"id": effect["id"], "attempt": attempt, "result": result if effect["kind"] == "stop" else None}
+        result_of(await kernel.submit(kernel.runtime, "effect.finish", args))
+
+
+async def test_repo_diff_asks_the_runtime_for_a_diff_as_an_effect(kernel, ada):
+    """A recorded commit's patch, read in the workspace whose look found it, or a workspace's uncommitted diff: each an
+    effect owned by no agent and retried after a crash, as a test is."""
+    await spawned_in(kernel, "bob", "snapshot")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+
+    asked = [result_of(await kernel.submit(ada, "repo.diff", {"of": of})) for of in (ONE[:7], "@bob", "shared")]
+    unrecorded, neither = [await kernel.submit(ada, "repo.diff", {"of": of}) for of in (TWO, "@bob,shared")]
+
+    requested = requested_diffs(kernel)
+    assert asked == [{"effect": event.data["id"]} for event in requested]
+    assert [event.data["data"] for event in requested] == [
+        {"sha": ONE, "found_in": "@bob"},
+        {"workspace": "@bob"},
+        {"workspace": "shared"},
+    ]
+    assert all(event.agent is None and event.data["on_uncertain"] == "retry" for event in requested)
+    assert refusal(neither).code == "invalid"
+    assert (refusal(unrecorded).code, refusal(unrecorded).detail) == ("not_found", NOT_RECORDED)
+
+
+async def test_an_agent_is_refused_repo_diff_saying_how_it_reads_a_commit(kernel):
+    """Not as a tool, and not as an op, even under a grant that covers it, as this fixture's `agent *` does."""
+    bob = await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+
+    outcome = await kernel.submit(bob, "repo.diff", {"of": ONE})
+
+    assert refusal(outcome).code == "not_permitted"
+    assert refusal(outcome).detail == "an agent reads a commit through `repo.commit` or its own git, not as a diff"
+    assert not kernel.ops["repo.diff"].tool
+    assert requested_diffs(kernel) == []
+
+
+async def test_a_diff_of_a_workspace_the_session_holds_none_of_is_refused(kernel, ada):
+    """An agent's own is read once it is made, and while its stop has kept it; your checkout is `shared`."""
+    await spawned_in(kernel, "bob", "worktree")
+    await spawned_in(kernel, "cy", "worktree")
+    await spawned_in(kernel, "dee", "shared")
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", {"name": "eve", "child_role": "worker"}))
+    await stopped(kernel, "bob", removed=True)
+    await stopped(kernel, "cy", removed=False)
+
+    outcomes = {name: await kernel.submit(ada, "repo.diff", {"of": name}) for name in ("@bob", "@dee", "@eve", "@zed")}
+    kept = result_of(await kernel.submit(ada, "repo.diff", {"of": "@cy"}))
+
+    assert {where: (refusal(outcome).code, refusal(outcome).detail) for where, outcome in outcomes.items()} == {
+        "@bob": ("not_found", "@bob's workspace went at its stop"),
+        "@dee": ("not_found", "dee works in your checkout, which is `shared`"),
+        "@eve": ("not_found", "@eve's workspace is not made yet"),
+        "@zed": ("not_found", "no agent is zed"),
+    }
+    assert [event.data["data"] for event in requested_diffs(kernel)] == [{"workspace": "@cy"}]
+    assert kept == {"effect": requested_diffs(kernel)[0].data["id"]}
+
+
+@pytest.mark.parametrize("repo", [None])
+async def test_repo_diff_says_a_session_with_no_repository_observes_none(kernel, ada):
+    outcome = await kernel.submit(ada, "repo.diff", {"of": "shared"})
+
+    assert refusal(outcome).code == "unsupported"
+
+
+async def test_a_message_cites_lines_of_a_diff_by_its_ref(kernel, ada):
+    """A comment on a diff is a person's message whose `based_on` cites lines of its patch, checked as any citation is,
+    and a person reads the patch a page at a time by the record's ref."""
+    await spawn(kernel, "bob")
+    await looked(kernel, commits=[commit(ONE)], reading=reading(ONE))
+    effect = result_of(await kernel.submit(ada, "repo.diff", {"of": ONE}))["effect"]
+    patch = b"diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+    body = f"sha256:{await kernel.put_body(patch)}"
+    ref = result_of(await kernel.submit(kernel.runtime, "repo.keep", {"effect": effect, "sha": ONE, "body": body}))
+
+    sent = await send(kernel, ada, "@bob", "why this change?", based_on=[f"{ref}#L6-7"])
+    past = await kernel.submit(ada, "message.send", {"to": "@bob", "gist": "and this?", "based_on": [f"{ref}#L7-8"]})
+    read = result_of(kernel.query(ada, "blob.get", {"ref": f"{ref}#L5-7"}))
+
+    [diffed] = of_type(kernel, "repo.diffed")
+    assert ref == f"{diffed.stream}@{diffed.version}" and diffed.stream == "repo/app"
+    assert (diffed.agent, diffed.turn, diffed.gist) == (None, None, f"{ONE[:12]} patch, 7 lines")
+    assert diffed.data | {"body": None} == {
+        "effect": effect,
+        "sha": ONE,
+        "workspace": None,
+        "head": None,
+        "body": None,
+        "cut": False,
+        "why": None,
+    }
+    [message] = [event for event in of_type(kernel, "message.sent") if f"{event.stream}@{event.version}" == sent["ref"]]
+    assert message.based_on == (f"{ref}#L6-7",)
+    assert refusal(past).code == "invalid" and "past the end" in refusal(past).detail["detail"]
+    assert read["text"] == "@@ -1 +1 @@\n-old\n+new\n" and read["lines"] == 7

@@ -56,6 +56,7 @@ from platoon_harness.tools import (
 )
 
 from .authority import Admission, AgentOutcome, AgentRef, Authority, SpawnRequest
+from .diffs import patch, uncommitted
 from .git import GitError
 from .isolation import Isolation, hidden
 from .looks import PAGE, look, tips_of
@@ -177,6 +178,7 @@ class Host:
             "stop": self._stop,
             "answer": self._answer,
             "test": self._test,
+            "diff": self._diff,
         }
 
     def link(self, agent: str | None) -> DriverLink | None:
@@ -766,7 +768,7 @@ class Host:
         if effect.attempts:
             await reap(folder, GRACE)
             await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
-            if (ref := self._tested(repo, effect.id)) is not None:
+            if (ref := self._recorded(effect.id, "repo.tested")) is not None:
                 return {"ref": ref}
         tmpdir(folder).mkdir(mode=0o700, parents=True)
         tested = {"effect": effect.id, "sha": sha, "command": test.command, "exit": None, "seconds": None}
@@ -824,14 +826,46 @@ class Host:
             return {**ran, "outcome": "failed", "why": exit_reason(code)}
         return {**ran, "exit": code, "outcome": "passed" if code == 0 else "failed"}
 
-    def _tested(self, repo: Repo, effect: int) -> str | None:
-        """The ref of the record of the test `effect` ran, which comes after its request, or None while the journal
-        holds none."""
-        kernel, after = self._kernel, effect
+    async def _diff(self, effect: Effect) -> dict[str, Any]:
+        """Read a recorded commit's patch, or a workspace's uncommitted diff, where that workspace lives, and record it,
+        or why it could not be read. A commit is read in the repository of the workspace its look was of, or yours once
+        that has gone, and git runs in an isolated workspace under its agent's wrap. A diff the journal recorded is not
+        read again, as when a crash came between its record and its finish, and one a crash cut off is read again."""
+        if effect.attempts and (ref := self._recorded(effect.id, "repo.diffed")) is not None:
+            return {"ref": ref}
+        sha, where = effect.data.get("sha"), effect.data.get("workspace")
+        diffed: dict[str, Any] = {"effect": effect.id, "sha": sha, "workspace": where}
+        try:
+            if sha is not None:
+                found_in = effect.data["found_in"]
+                root, wrap = await self._place(found_in if found_in and self._root(found_in).is_dir() else "shared")
+                read = await asyncio.to_thread(patch, root, sha, wrap=wrap)
+            else:
+                root, wrap = await self._place(where)
+                diffed["head"], read = await asyncio.to_thread(uncommitted, root, wrap=wrap)
+        except (GitError, OSError) as error:
+            diffed["why"] = str(error)
+        else:
+            diffed |= {"body": f"sha256:{await self._kernel.put_body(read.text)}", "cut": read.cut}
+        return {"ref": (await self.insist("repo.keep", diffed)).result}
+
+    async def _place(self, where: str) -> tuple[Path, tuple[str, ...]]:
+        """A workspace's work tree, and the wrap git runs under there, which only an isolated one's has."""
+        if where == "shared":
+            return self._root(where), ()
+        record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": where[1:]}).result[0]
+        workspace = Workspace.model_validate(record["workspace"])
+        return self._root(where), await self._wrap(record["name"], record["role"], workspace)
+
+    def _recorded(self, effect: int, type: str) -> str | None:
+        """The ref of the record of what `effect` came to, an event of `type` on `repo/<name>` after its request, or
+        None while the journal holds none."""
+        kernel, repo, after = self._kernel, self._repo(), effect
+        assert repo is not None  # Nothing asks for a test or a diff in a session that observes no repository.
         while True:
             page = kernel.read(kernel.runtime, after=after, streams=[f"repo/{repo.name}"])
             for event in page.events:
-                if event.type == "repo.tested" and event.data["effect"] == effect:
+                if event.type == type and event.data["effect"] == effect:
                     return f"{event.stream}@{event.version}"
             if (after := page.cursor) >= page.head:
                 return None

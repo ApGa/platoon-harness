@@ -841,6 +841,12 @@ class Session:
         came to."""
         return (await self._do("repo.test", commit=commit))["effect"]
 
+    async def repo_diff(self, of: str) -> dict[str, Any]:
+        """Ask for the patch of a recorded commit, by its SHA or its first 4 or more hex digits, or for what a
+        workspace, `@ada` or `shared`, holds uncommitted, which the runtime reads where that workspace lives and keeps
+        as `repo.diffed`: the `effect` that reads it, which that names."""
+        return await self._do("repo.diff", of=of)
+
     # Provenance.
 
     async def exposure(self, agent: str, ref: str, *, before: str | None = None) -> Seen | NotSeen | Unknown:
