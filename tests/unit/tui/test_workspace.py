@@ -530,6 +530,17 @@ async def test_a_channel_s_unread_count_and_a_mention_come_from_the_person_s_mar
         assert await owner.head() == head, "reading wrote nothing to the journal"
 
 
+async def test_an_agent_s_row_counts_what_waits_for_its_next_handover(root):
+    lead = {"harness": harness(lambda: ScriptedDriver([[Hang()]])), "delivery": "next-turn"}
+    async with attached(Team.model_validate({"roles": {"lead": lead}}), root) as (owner, _, pilot):
+        await owner.create_channel("news", "topic", readers=["role:lead"])
+        await owner.send("#news", "for the lead's next turn")
+
+        text = await drawn(pilot, lambda text: "↧1" in text)
+
+        assert "@lead" in next(line for line in text.splitlines() if "↧1" in line)
+
+
 async def test_the_inspector_says_why_an_agent_waits_what_it_runs_on_and_what_it_spent(root):
     async with attached(team([Ask("May I?")]), root) as (_, _, pilot):
         await pilot.press(*"go", "enter")
