@@ -1,8 +1,8 @@
 # Training on sessions
 
 A training system runs a session per rollout and trains on what its agents' model calls did. It builds on one contract, which this
-page describes, and the SDK names no training system in it. The first to build on it is Platoon's `platoon-teams` extension, in
-Platoon's own repository. [architecture.md](../architecture.md) section 14 is the design of record.
+page describes, and the SDK names no training system in it. The first to build on it is Platoon's `platoon-teams` extension, in a
+fork of Platoon's repository, not released. [architecture.md](../architecture.md) section 14 is the design of record.
 
 What the SDK owns is execution and evidence: the session, its journal and what the record says of each agent. What the training
 system owns is identity and model access, through its authority, and what trains.
