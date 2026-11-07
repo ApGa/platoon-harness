@@ -1904,7 +1904,7 @@ class AgentOutcome(Model):
 
 ## 15. Security
 
-Threat tiers stay separate, in docs and in events.
+Threat tiers stay separate, in docs and in events. [security.md](security.md) is the user's guide to this section.
 
 | Tier | Threat | Status |
 |---|---|---|

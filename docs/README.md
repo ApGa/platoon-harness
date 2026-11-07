@@ -50,6 +50,8 @@ Each example has a README that says what it does and how to run it.
   made from the schema.
 - [Compatibility](reference/compatibility.md): what each upstream is, how we use it, and what is known about it.
 - [Status](STATUS.md): what is implemented, what is tested and how, and what is planned.
+- [Security](security.md): what is protected and what is not, credentials, how long a session keeps what it records, and
+  what is redacted.
 
 ## Architecture and RFCs
 

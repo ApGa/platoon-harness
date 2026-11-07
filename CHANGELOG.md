@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **A security guide.** [docs/security.md](docs/security.md) says what platoon-harness protects, tier by tier, linking each
+  to architecture section 15, and what it does not: other users on the same machine, who reach loopback, where a bearer check
+  protects the data and not availability, which is the default pending the owner's ruling; an agent that runs commands as
+  you; an agent's network; resources; and macOS. It says where each credential lives and when it goes, that a session keeps
+  everything until its folder is deleted, what tombstoning a body erases and what it does not reach, and that only what the
+  runtime gave a harness is redacted.
 - **A session on a plan login stays on loopback.** `platoon-harness web` serves a session on a plan login on loopback alone,
   as a control link acts as you, on your login, and refuses another address with exit 78, saying why and what to do: a
   session started with `--plan-login`, or one of whose agents' harnesses came up last on a plan login, as the roster says.

@@ -1,5 +1,5 @@
-"""Every relative link in the repository's Markdown names a file inside it, and every anchor a heading there, and the
-docs' table of contents links every page."""
+"""Every relative link in the repository's Markdown names a file inside it, and every anchor a heading there, the docs'
+table of contents links every page, and the security guide links the design of record where it would copy it."""
 
 import re
 from pathlib import Path
@@ -83,3 +83,14 @@ def test_the_table_of_contents_links_every_page_and_the_readme_of_each_indexed_f
 
     assert ROOT / "docs" / "architecture.md" in pages
     assert sorted(str(page.relative_to(ROOT)) for page in pages - linked - {CONTENTS}) == []
+
+
+def test_the_security_guide_links_each_tier_of_architecture_section_15_and_the_web_guide_s_security():
+    """The guide is section 15's, which stays the design of record, so each tier has a row there linking the section."""
+    section = (ROOT / "docs" / "architecture.md").read_text().partition("## 15. Security\n")[2].partition("\n## ")[0]
+    tiers = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| Tier |")]
+    guide = ROOT / "docs" / "security.md"
+    rows = [line for _, line in prose(guide) if line.startswith("| ") and "](architecture.md#15-security)" in line]
+
+    assert len(rows) == len(tiers) > 0
+    assert "how-to/web.md#security" in {target for _, target in links(guide)}
