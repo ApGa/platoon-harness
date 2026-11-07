@@ -226,7 +226,7 @@ uv run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-m
 ```
 
 **Pull request titles.** A pull request's title has the form of a commit subject. Maintainers squash-merge pull requests,
-so the title becomes the subject of the commit on `main`. CI's `pr-title` job (`amannn/action-semantic-pull-request@v5`)
+so the title becomes the subject of the commit on `main`. CI's `pr-title` job (`amannn/action-semantic-pull-request@v6`)
 checks that the title is a Conventional Commit whose type is one of those above, with no scope and a summary that starts
 with a capital letter and has no final period. When a pull request has a single commit, the job checks that commit's
 subject too, because GitHub suggests it for the squashed commit. The job runs again whenever you edit the title.
