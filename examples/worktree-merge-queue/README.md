@@ -96,7 +96,8 @@ merger under needs you while its worktree rests on the conflict, with where to r
 agent has not ended; [When a workspace goes](../../docs/how-to/workspaces.md#when-a-workspace-goes) says when one is
 removed, and how to let go of one that stays. In the terminal UI, `platoon-harness attach contributors` opens the same
 session: `/review` lists what changed, grouped by workspace, and the conflict waits in the dock, saying where to resolve
-it, as [Review what changed](../../docs/how-to/tui.md#review-what-changed) says.
+it, as [Review what changed](../../docs/how-to/tui.md#review-what-changed) says, with a
+[snapshot](../../docs/assets/tui-review.svg) of the list for one scripted harness's worktree.
 
 ## 4. Run it on your harnesses
 

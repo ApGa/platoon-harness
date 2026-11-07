@@ -21,15 +21,27 @@ from ..runtime.support import in_state, of_type, until
 from .support import drawn
 
 SIZES = {"wide": (120, 32), "medium": (90, 28), "narrow": (70, 24), "slim": (52, 20), "short": (100, 14)}
+SNAPSHOTS = Path(__file__).parent / "__snapshots__" / "test_snapshots"
+ASSETS = Path(__file__).parents[3] / "docs" / "assets"
+SCREENSHOTS = {
+    **{f"tui-{size}.svg": f"test_the_workspace_s_layout_at_each_size[{size}].raw" for size in SIZES},
+    "tui-review.svg": "test_review_lists_what_changed.raw",
+    "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
+}
+"""Each screenshot the docs show, in docs/assets, by the snapshot below that it is a copy of."""
 LEAD = [
-    Say("kestrel: I will split the work"),
-    Call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "fix the parser"}),
-    Say("**Done.** The parser is fixed:\n\n```python\ndef parse(text):\n    return text.split()\n```"),
+    [
+        Say("kestrel: I will split the work"),
+        Call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "fix the parser"}),
+    ],
+    [Say("**Done.** The parser is fixed:\n\n```python\ndef parse(text):\n    return text.split()\n```")],
 ]
+"""The lead's turns: it splits the work and spawns a worker, and once the worker's report starts its next turn, says
+the parser is fixed."""
 
 
 def scripted_lead() -> ScriptedDriver:
-    return ScriptedDriver([LEAD])
+    return ScriptedDriver(LEAD)
 
 
 def scripted_worker() -> ScriptedDriver:
@@ -152,3 +164,12 @@ def test_the_provenance_panel_draws_each_link_with_how_it_is_known(snap_compare,
         await drawn(pilot, lambda text: "Credit and rewards" in text and "even-split" in text)
 
     assert snap_compare(Panel(Answered(answers), ref), terminal_size=(120, 48), run_before=read)
+
+
+def test_each_screenshot_the_docs_show_is_its_snapshot_byte_for_byte():
+    """So a screenshot shows what the terminal UI draws now, and nothing but what a test drew. On a failure, copy the
+    snapshot over the screenshot as the message says."""
+    assert sorted(path.name for path in ASSETS.glob("tui-*.svg")) == sorted(SCREENSHOTS)
+    for screenshot, snapshot in SCREENSHOTS.items():
+        copy = f"cp 'tests/unit/tui/__snapshots__/test_snapshots/{snapshot}' docs/assets/{screenshot}"
+        assert (ASSETS / screenshot).read_bytes() == (SNAPSHOTS / snapshot).read_bytes(), copy

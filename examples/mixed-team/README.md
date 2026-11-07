@@ -74,6 +74,10 @@ $ uv run platoon-harness attach dns    # the terminal UI, as a guest of the runn
 $ uv run platoon-harness web dns       # SwarmChat's page; open the control link it prints
 ```
 
+![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../../docs/assets/tui-wide.svg)
+
+*The terminal UI on another session, of scripted harnesses, as its snapshot test draws it.*
+
 A message from either goes to whoever you address, `@lead` or the worker, and a person's message steers. Or start the
 whole thing from the terminal UI: `uv run platoon-harness`, then start a session from `examples/mixed-team/team.toml` on
 its sessions screen, type the job in the composer, and `platoon-harness web` the session it made.

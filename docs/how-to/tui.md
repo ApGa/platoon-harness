@@ -65,6 +65,11 @@ quits. In a form, Enter goes to the next field, and from the last sends it.
 
 ## The workspace
 
+![The workspace on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../assets/tui-wide.svg)
+
+*The workspace on scripted harnesses, as its snapshot test draws it at 120 columns by 32 rows: a lead that spawned a worker,
+read back as history.*
+
 | Part | What it answers |
 |---|---|
 | Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
@@ -130,7 +135,8 @@ A look
 after each agent's turn finds them, so a one-turn agent's work shows once its turn has ended. A row past your mark on `repo/<name>` is
 marked `●`, and reading the list to its end moves the mark. Diffs are drawn disabled: they come with review, which is planned. A
 conflict an agent's merge stopped on waits in the dock with no action, saying where to resolve it, since the runtime never resolves
-one. The inspector says why a workspace was kept only once its agent's stop has kept it.
+one. The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
+shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
 
 ### Follow a line's provenance
 
@@ -153,7 +159,7 @@ read at; Sources says where it stops counting, below the model call that chose t
 commit's look; what an answer does not hold below there reads as not held there, never as never; and an answer whose turn had not
 ended says a later report can still confirm an offer or join a call. Yellow marks what is unknown, missing or cut, and a part an
 answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
-until the journal holds it.
+until the journal holds it. [Its snapshot](../assets/tui-provenance.svg) shows the panel alone, on a record its test scripted.
 
 ### Size
 
@@ -166,7 +172,9 @@ until the journal holds it.
 | under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
 
 A resize changes which parts show, and never the scroll position or the composer's target. It moves focus only by hiding
-the part that has it, which gives focus back to the composer.
+the part that has it, which gives focus back to the composer. The snapshot tests draw the same session at
+[120 by 32](../assets/tui-wide.svg), [90 by 28](../assets/tui-medium.svg), [70 by 24](../assets/tui-narrow.svg),
+[52 by 20](../assets/tui-slim.svg) and [100 by 14](../assets/tui-short.svg), in columns by rows.
 
 ### Reconnecting
 

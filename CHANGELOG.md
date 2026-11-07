@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **Screenshots of the terminal UI, from its snapshot tests.** `docs/assets/tui-*.svg` are the snapshot tests' seven SVGs, byte
+  for byte, which a test holds equal: the workspace at five sizes, the review list and the provenance panel, each drawn on
+  scripted harnesses. The README, the terminal UI guide and both team examples show or link them, each captioned with what drew
+  it. The snapshots' scripted lead says the parser is fixed in the turn its worker's report starts, so the transcript reads in
+  order and ends on its words.
 - **A worktree team with its merge queue written out.** [examples/worktree-merge-queue](examples/worktree-merge-queue/README.md):
   a Claude Code lead, Codex workers each in a worktree of its own and a Claude Code merger in a worktree of its own, the
   `merges` queue of RFC 0058 with each role's instructions saying its part, and a README that checks it, runs it with no keys

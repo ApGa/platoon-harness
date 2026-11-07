@@ -109,6 +109,10 @@ A message from either goes to whoever you address, and a person's message steers
 both show its history read-only, as neither starts or resumes a session, which can spend money.
 [The terminal UI](docs/how-to/tui.md) and [the browser](docs/how-to/web.md) say what each shows and how to act.
 
+![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](docs/assets/tui-wide.svg)
+
+*The terminal UI on scripted harnesses, as its snapshot test draws it: a lead that spawned a worker, read back as history.*
+
 **4. Read it back.** `uses` says what cites an event, and `contributors` whose work the record ties to one, on a live
 session or a closed one. The mixed team's [What to look at](examples/mixed-team/README.md#3-what-to-look-at) walks from
 the worker's note to the lead's answer, and [provenance](docs/how-to/provenance.md) says how to read each answer.
