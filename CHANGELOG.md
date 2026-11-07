@@ -859,6 +859,10 @@ named here is closed.
 
 ### Fixes
 
+- **A stopped session's folder holds no credential.** A runtime left its `owner.token` and `view.token` in the folder when it
+  stopped, dead, as the next runtime issues new ones, but still bearer-shaped in a folder that is the session's export and
+  gets copied. A stop or a close now removes them, and a killed runtime's, which stay dead, at the next stop, as RFC 0055's
+  export holding no key needs.
 - **The compatibility page claimed pins and states nothing held.** It called the `exec` driver planned, where STATUS tests it,
   and the `claude`, `codex`, `pi` and `openhands` drivers implemented, where STATUS calls them experimental. It pinned
   `agent-client-protocol` in an `[acp]` extra with 1.0.0rc3 locked and CI on both, where no such extra, lock entry or CI job

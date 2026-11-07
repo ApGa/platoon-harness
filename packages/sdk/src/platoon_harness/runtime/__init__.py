@@ -47,8 +47,8 @@ class Runtime:
     from the journal, then per agent reap, resume and reconcile.
 
     `stop` is the owner's shutdown: interrupt turns, wait `grace`, end the process trees, hand back what will not
-    happen, append `session.stopped`, and keep the folder resumable. A journal that stops answering holds up none of it
-    past `grace`, and nothing a driver does keeps it from letting go.
+    happen, append `session.stopped`, and keep the folder resumable, holding no credential. A journal that stops
+    answering holds up none of it past `grace`, and nothing a driver does keeps it from letting go.
     """
 
     def __init__(self, folder: Path, *, authority: Authority | None = None, clock: Clock | None = None) -> None:
@@ -215,9 +215,12 @@ class Runtime:
             await asyncio.gather(self._supervising, return_exceptions=True)
 
     async def _close(self) -> None:
-        """Let go of everything, in the order that leaves nobody hanging on what has gone."""
+        """Let go of everything, in the order that leaves nobody hanging on what has gone. The credential files go once
+        the socket that took them has closed and before the lock does, so no other runtime's are among them, and a
+        killed runtime's, which are dead, go at the next stop."""
         await self._end_daemons()
         await self.tools.stop()
         await self.control.stop()
-        (self.folder / RUNNING).unlink(missing_ok=True)
+        for name in (OWNER_TOKEN, VIEW_TOKEN, RUNNING):
+            (self.folder / name).unlink(missing_ok=True)
         self.kernel.close()

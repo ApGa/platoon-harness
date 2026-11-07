@@ -11,12 +11,13 @@ from pydantic_core import PydanticUndefined
 import platoon_harness
 from platoon_harness import Ending, Refused, Role, Session, Team, on
 from platoon_harness import session as session_module
-from platoon_harness.config import Manifest
+from platoon_harness.config import Manifest, Secret, forms
 from platoon_harness.drivers import Usage
 from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Op, Outcome, Txn, is_held, op, registry
 from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.runtime import Admission, LocalAuthority, SpawnRequest
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN, read_running
+from platoon_harness.runtime.paths import MANIFEST, MARKS, OWNER_TOKEN, VIEW_TOKEN, read_running
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver
 
 from ...integration.scripts import wire
@@ -621,6 +622,40 @@ async def test_fresh_credentials_are_issued_on_resume(tmp_path):
             session._runtime.kernel.authenticate(first)
         issued = [event for event in await of_type(session, "principal.issued") if event.data["id"] == "agent:bob"]
         assert len({event.data["token_hash"] for event in issued}) == 2
+
+
+class Issuing(LocalAuthority):
+    """`LocalAuthority`, keeping each agent's token it issues."""
+
+    def __init__(self, team: Team) -> None:
+        super().__init__(team)
+        self.tokens: list[Secret] = []
+
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        admission = await super().admit(spawn)
+        self.tokens.append(admission.token)
+        return admission
+
+
+async def test_after_a_clean_stop_or_close_a_session_s_folder_holds_no_credential(tmp_path):
+    """No token file and no form of any token its runtime issued, an agent's among them, so the folder as it ended,
+    which is the export, holds no key."""
+    left = {}
+    for name in ("stopped", "closed"):
+        team = solo()
+        authority = Issuing(team)
+        async with Session.start(team, name=name, root=tmp_path, authority=authority) as session:
+            await in_state(session, "bob", "idle")
+            issued = [Secret((session.folder / file).read_text()) for file in (OWNER_TOKEN, VIEW_TOKEN)]
+            if name == "closed":
+                await session.close()
+                await session.settled(timeout=SECONDS)
+        held = {form for secret in [*issued, *authority.tokens] for form in forms(secret)}
+        files = [path for path in session.folder.rglob("*") if path.is_file() and not path.is_symlink()]
+        left[name] = [path.name for path in files if any(form in path.read_bytes() for form in held)]
+
+    assert left == {"stopped": [], "closed": []}
+    assert len(authority.tokens) == 1
 
 
 async def test_a_session_folder_with_a_manifest_and_no_journal_opens_on_resume(tmp_path):

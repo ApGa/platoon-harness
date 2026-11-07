@@ -133,7 +133,7 @@ Each law is a sentence, and each has a test of the same name.
   runtime.json        pid, start time, socket path, incarnation: left by a crash, so only `lock` proves it true
   runtime.log         what a detached runtime said
   owner.token         0600: a control credential, fresh each incarnation, which a session a program started has none of
-  view.token          0600: a view credential, which reads and never writes
+  view.token          0600: a view credential, which reads and never writes; a stop removes both, and a kill leaves them dead
   lock                flock: held by the one live runtime
   commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
   tests/<effect>/     a runtime test of a commit while it runs: its clean checkout, what it printed, its group's record
@@ -187,7 +187,8 @@ can both be watched. Leaving only disconnects.
   lock is held and whose `runtime.json` names the incarnation the journal last started; a script's own process does what its handler
   says.
 - **Shutdown contract of an owner:** interrupt turns, wait `grace`, end the process trees it started, release
-  reservations, append `session.stopped`, keep the folder resumable. A start cut short, cancelled or failed, once its incarnation is
+  reservations, append `session.stopped`, keep the folder resumable, and remove `owner.token` and `view.token`, its own or
+  those a killed runtime left, so the folder holds no credential. A start cut short, cancelled or failed, once its incarnation is
   in the journal ends with this shutdown too. To release is to hand back what will not happen now: a turn
   still open ends, which reconciles its reservation and is told to its agent on resume (§7), and a handover that never started is
   cancelled, which queues its entries again and is no failure of its harness's, nor is one under way, which the next runtime fails. A spawn
