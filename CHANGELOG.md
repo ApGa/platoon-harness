@@ -79,6 +79,12 @@ named here is closed.
   them. Where uv's cache lacks what they install, they fail, saying so. The install guide, and the SDK's description,
   now say that the extra installed from a wheel brings `lmnr-claude-code-proxy` unless you exclude it, as the
   checkout's exclusion does not travel in a wheel.
+- **A license check of what installing the packages brings.** A test reads the license each distribution the two
+  packages require states, with the `openhands` extra and without, and holds it to an allowlist of permissive licenses
+  and MPL-2.0. A plain install brings nothing else. The extra brings five distributions that state no license on the
+  list, which the test names with what each states: OpenHands' SDK and tools and `agent-client-protocol` state none,
+  `func-timeout` the LGPL and `lupa` "MIT style", besides `lmnr-claude-code-proxy`, under Laminar's own terms, which no
+  checkout installs. Whether a published extra may bring them is the owner's to rule on.
 - **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
   author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
   `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the
