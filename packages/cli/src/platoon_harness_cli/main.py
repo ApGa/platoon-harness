@@ -1,9 +1,7 @@
 """The `platoon-harness` command: its commands, and the one place where what went wrong becomes an exit code."""
 
 import asyncio
-import ipaddress
 import logging
-import ssl
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -104,7 +102,10 @@ async def web(
     money. Ctrl+C or SIGTERM stops it.
 
     It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
-    loopback it also says how to reach it from another machine: forward its port under the same number.
+    loopback it also says how to reach it from another machine: forward its port under the same number. A session on a
+    plan login, one whose owner said several agents may run on one or one of whose agents' harnesses came up last on
+    one, it serves on loopback alone, as a control link acts as you: another address exits 78, as it starts or once
+    such an agent comes up.
 
     For example:
 
@@ -126,9 +127,10 @@ async def web(
         The certificate's private key, in PEM.
     """
     session_folder(find_root(), session)
-    tls = _tls(host, certificate, key)
-    from .web import serve
+    from .web import serve, tls_for
     from .web.page import Unpinned
+
+    tls = tls_for(host, certificate, key)
 
     stop = asyncio.Event()
     with stopping(stop.set):
@@ -140,28 +142,6 @@ async def web(
         except OSError as error:
             raise Usage(f"web cannot serve {host} on port {port}: {error}") from None
     return 0
-
-
-def _tls(host: str, certificate: Path | None, key: Path | None) -> ssl.SSLContext | None:
-    """TLS for `host`, which any address but loopback needs."""
-    if (certificate is None) != (key is None):
-        raise Usage("give --certificate and --key together")
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        address = None
-    if address is not None and address.is_unspecified:
-        raise Usage(f"--host {host} names no one address that a browser's requests could name: name the one to serve")
-    if certificate is None or key is None:
-        if host != "localhost" and (address is None or not address.is_loopback):
-            raise Usage(f"serving {host}, which is not loopback, needs TLS: give --certificate and --key")
-        return None
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    try:
-        context.load_cert_chain(certificate, key)
-    except (OSError, ssl.SSLError) as error:
-        raise Usage(f"--certificate and --key: {error}") from None
-    return context
 
 
 def build() -> App:

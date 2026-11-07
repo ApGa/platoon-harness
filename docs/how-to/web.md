@@ -56,7 +56,8 @@ open a new link. A page that acts can make more links of either kind, from your 
 says.
 
 A control link acts as you, on your login. Never hand one to somebody else: on a plan login that would be your login
-serving another person, which its terms do not allow. Give them a view link.
+serving another person, which its terms do not allow. Give them a view link. For the same reason `web` serves a session on
+a plan login on loopback alone: see [Security](#security).
 
 ## What the page shows
 
@@ -183,6 +184,11 @@ is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 
 - **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
   is refused without them. A wildcard such as `0.0.0.0` is refused, since a browser's requests must name the host served.
+  A session on a plan login, one started with `--plan-login` or one of whose agents' harnesses came up last on a plan
+  login, as its own status command said, is served on loopback alone, and another address exits 78, saying why. That is
+  checked as `web` starts, and while it serves another address `web` stops with 78 once an agent comes up on one. A
+  harness that cannot say which login it has is not counted, as the runtime does not count it either. From another
+  machine, forward the loopback port, as Open it shows.
   A name with several addresses, as `localhost` has, is served on one port at each, so no other program on the machine can
   take that port on one of them and be what a browser reaches. A port that is the scheme's own, 80 or 443, is left out of
   the address, as a browser leaves it out.

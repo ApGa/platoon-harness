@@ -240,7 +240,10 @@ nothing: on a session no runtime holds, the page shows its history and names `se
 money. Ctrl+C or SIGTERM stops it.
 
 It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
-loopback it also says how to reach it from another machine: forward its port under the same number.
+loopback it also says how to reach it from another machine: forward its port under the same number. A session on a
+plan login, one whose owner said several agents may run on one or one of whose agents' harnesses came up last on
+one, it serves on loopback alone, as a control link acts as you: another address exits 78, as it starts or once
+such an agent comes up.
 
 For example:
 

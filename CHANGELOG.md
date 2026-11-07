@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **A session on a plan login stays on loopback.** `platoon-harness web` serves a session on a plan login on loopback alone,
+  as a control link acts as you, on your login, and refuses another address with exit 78, saying why and what to do: a
+  session started with `--plan-login`, or one of whose agents' harnesses came up last on a plan login, as the roster says.
+  It checks as it starts, and while it serves another address it stops with 78 once an agent comes up on one. A harness that
+  cannot say which login it has is not counted, as the runtime does not count it for its own refusal.
 - **What an offer showed, by its ref.** `context.show(offer)`, a query op with `Session.shown(offer)` and the command
   `context show`: the text each item of an offer showed, in the offer's order, a gist as it was shown, with any fields beside
   it, and a body or the lines of one, each where the journal proves it by the item's digest, a child's report and a board's
@@ -532,8 +537,7 @@ named here is closed.
   [Concepts](docs/getting-started/concepts.md) first, and marks each part STATUS calls planned where it describes it, linking
   STATUS: the library tier, `topology.patch` and `topology.show`, the topology table's team, board and tasks views,
   `session.metrics`, the ACP driver, the step that adds the session id at export, a person driving an agent's native session
-  during a takeover, the agent interaction graph's display, and refusing an address other than loopback to a session on a plan
-  login.
+  during a takeover, and the agent interaction graph's display.
 - **Guides that say what you will do and need.** The how-to guides and the training guide open with their goal and
   prerequisites, and a section that is a task is headed by what you do there, the headless guide's as numbered steps. Their
   sentences are unchanged.

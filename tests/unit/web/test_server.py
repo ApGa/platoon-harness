@@ -9,19 +9,21 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness import Session
+from platoon_harness import ConfigError, Session, Team
+from platoon_harness.drivers import DriverInfo
 from platoon_harness.http import SECONDS
 from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
+from platoon_harness.testing import Hang, ScriptedDriver
 from platoon_harness_cli.ops import cut
-from platoon_harness_cli.web import LOOK
+from platoon_harness_cli.web import LOOK, follow
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
 from platoon_harness_cli.web.page import load
 from platoon_harness_cli.web.projection import Projection
 from platoon_harness_cli.web.server import Web
 
-from ..runtime.support import in_state, of_type, until
+from ..runtime.support import harness, in_state, of_type, until
 from .support import QUIET, Browser, caught_up, scenario, served, team
 
 pytestmark = pytest.mark.timeout(60)
@@ -689,3 +691,33 @@ async def test_web_folds_what_a_runtime_wrote_and_left_between_two_looks(root, c
         found = await (await Browser(web).opened("view")).view("view_search", {"text": "looked away"})
 
     assert [message["text"] for message in found["messages"]] == ["while web looked away"]
+
+
+class OnAPlan(ScriptedDriver):
+    """A harness signed in on a plan, as its status command would say."""
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"login": "plan"})
+
+
+async def test_followed_past_loopback_the_page_stops_once_an_agent_comes_up_on_a_plan_login(root, clock):
+    """As `web` refuses to start past loopback on a session on a plan login, it stops when one comes up while it
+    serves, which the command line exits 78 for."""
+    roles = {
+        "lead": {"harness": harness(lambda: ScriptedDriver([[Hang()]]))},
+        "worker": {"harness": harness(lambda: OnAPlan([[Hang()]])), "count": 0},
+    }
+    async with Session.start(Team.model_validate({"roles": roles}), name="s", root=root, cwd=root) as session:
+        await in_state(session, "lead", "idle")
+        projection, moved = Projection(session.folder, "s", "you"), asyncio.Condition()
+        following = asyncio.ensure_future(follow(session, projection, moved, clock, on_loopback=False))
+        head = await session.head()
+        async with asyncio.timeout(SECONDS), moved:
+            await moved.wait_for(lambda: projection.through >= head)
+
+        await session.spawn("w1", "worker")
+        with pytest.raises(ConfigError) as refused:
+            await asyncio.wait_for(following, SECONDS)
+        projection.close()
+
+    assert "session s runs on a plan login, as w1 came up on one" in str(refused.value)
