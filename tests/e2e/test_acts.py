@@ -549,6 +549,7 @@ async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(br
             "agent.release": {"--agent": "@lead"},
             "agent.cancel": {"--agent": "@w9"},
             "repo.test": {"--commit": "0" * 40},
+            "repo.diff": {"--of": "0" * 40},
             "agent.retire": {"--agent": "@lead"},
             "session.close": {"--if-done": "yes"},
             "session.cancel": {},
@@ -575,7 +576,7 @@ async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(br
     assert sorted(offered) == sorted(runs)
     assert sorted({outcome.op for outcome in keyed if (outcome.key or "").startswith("web/")}) == sorted(runs)
     refused = {op for op, answer in answers.items() if not answer.startswith(f"{op.replace('.', ' ')}: done.")}
-    assert refused == {"task.fail", "task.release", "approval.resolve", "effect.settle", "repo.test"}
+    assert refused == {"task.fail", "task.release", "approval.resolve", "effect.settle", "repo.test", "repo.diff"}
     assert len(sent) == 1 and body == b"The whole of it."
     assert answers["task.fail"] == "task fail: stale_fence: you hold no live lease on jobs"
     assert answers["board.post"] == 'board post: done. {"ref":"board/notes/spec@1","version":1}'
