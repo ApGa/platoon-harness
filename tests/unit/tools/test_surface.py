@@ -167,6 +167,13 @@ def test_a_description_leaves_what_is_no_op_alone():
     )
 
 
+def test_no_op_s_words_name_the_op_itself():
+    """Each surface turns its name there into the tool's, so a field of its result by that name would read as a tool."""
+    ops = [operation for extension in PRIMITIVES for operation in extension.ops]
+
+    assert [operation.name for operation in ops if f"`{operation.name}`" in (operation.fn.__doc__ or "")] == []
+
+
 async def test_a_schema_refuses_what_it_does_not_declare(every_tool):
     assert all(tool["inputSchema"]["additionalProperties"] is False for tool in list_tools(*every_tool))
 

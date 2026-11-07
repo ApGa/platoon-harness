@@ -36,6 +36,27 @@ _KEY = inspect.Parameter(
     ],
 )
 _OPS = registry(PRIMITIVES)
+_PURPOSES = {
+    "agent": "Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how "
+    "each stands.",
+    "approval": "Approvals, the decisions harnesses wait on: resolve one.",
+    "attention": "What needs a person now, each with the actions that would settle it.",
+    "blob": "Bodies that events carry: read one by its ref.",
+    "board": "Boards: post an object, revise it, read a version, and find objects by name, author, field or text.",
+    "body": "Stored bodies: redact one, keeping whole the events that cite it.",
+    "budget": "Budgets: set a scope's limits, and see what is spent and held against each.",
+    "channel": "Channels: create a topic, queue or board, and list those you may use.",
+    "effect": "Effects whose outcome is uncertain: say whether one happened, when nothing else can tell.",
+    "episode": "Episodes: open and close a part of the session with one outcome, as only events inside one can become "
+    "training data.",
+    "message": "Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.",
+    "ops": "The ops you hold a grant for, with their schemas.",
+    "repo": "Commits the session recorded: look one up by its SHA, or run the team's test command on it.",
+    "task": "Tasks on a queue: add one, claim it, renew its lease, then complete it, fail it or release it, and list "
+    "them.",
+    "view": "What a client follows, the roster, attention or changes: watch one, as a snapshot then keyed changes.",
+}
+"""What each group of commands is for, as its help says first."""
 
 
 def person_ops() -> dict[str, Op]:
@@ -85,11 +106,7 @@ def groups(found: dict[str, App]) -> dict[str, App]:
     for name, operation in sorted(person_ops().items()):
         namespace, _, verb = name.partition(".")
         if namespace not in found:
-            found[namespace] = App(
-                name=namespace,
-                help=f"The `{namespace}` ops, each on one session, with the arguments an agent's `ph {namespace}.<op>` "
-                "takes as flags.",
-            )
+            found[namespace] = App(name=namespace, help=_PURPOSES[namespace] if verb else None)
         command = _command(operation)
         if verb:
             found[namespace].command(command, name=verb)

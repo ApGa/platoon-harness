@@ -197,7 +197,7 @@ async def run(
 
     It exits with how the session ended: 0 settled, 1 an agent failed, 2 the budget ran out, 3 timed out, 4 it needs a
     person, and 130 cancelled, by Ctrl+C or `session stop` too. Ctrl+C runs the owner's shutdown first, which keeps the
-    session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost, and a
+    session resumable. It exits 64 before any cost when it cannot run as given, such as with a --name that is taken. A
     commit to its journal that fails ends it with exit 74, as a kill would, leaving it to `session resume`.
 
     The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role

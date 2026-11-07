@@ -839,6 +839,12 @@ named here is closed.
   reader, which under a C or C.UTF-8 locale, as on GitHub's runners, lets bytes that are not UTF-8 through as surrogates, so
   such a prompt started a session whose first message was refused and the run ended 0, where it exits 64 saying why. It now
   reads stdin's bytes and decodes them as UTF-8 whatever the locale.
+- **Each command group's help says what it is for.** The help of `agent`, `task` and the 13 other groups of commands that run
+  ops on a session was one sentence they all shared, "The `task` ops, each on one session, ...", which said nothing of any; each
+  now says what it holds and what you can do with it. `peers --help` said "in `platoon-harness peers`" where the op's words
+  meant the field of its result, which an agent read as `ph peers` or its harness's name for the tool, as every surface turns an
+  op's own name into its tool's: the op no longer names that field. `run --help` says plainly that it exits 64 before any cost
+  when it cannot run as given.
 - **A finish's citations carried no credit.** A finished agent's `said` named its end even where that end's report carried the
   agent's own `agent.finished` or its last message, so an episode closed on it walked from an event that cites nothing and that
   no model call chose, and a finish's citations carried no credit. `said` is now the ref the end's report carries, which

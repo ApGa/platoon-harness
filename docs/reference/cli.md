@@ -178,28 +178,28 @@ For example:
 
 **Ops on a session**:
 
-* [`agent`](#platoon-harness-agent): The `agent` ops, each on one session, with the arguments an agent's `ph agent.<op>` takes as flags.
-* [`approval`](#platoon-harness-approval): The `approval` ops, each on one session, with the arguments an agent's `ph approval.<op>` takes as flags.
-* [`attention`](#platoon-harness-attention): The `attention` ops, each on one session, with the arguments an agent's `ph attention.<op>` takes as flags.
-* [`blob`](#platoon-harness-blob): The `blob` ops, each on one session, with the arguments an agent's `ph blob.<op>` takes as flags.
-* [`board`](#platoon-harness-board): The `board` ops, each on one session, with the arguments an agent's `ph board.<op>` takes as flags.
-* [`body`](#platoon-harness-body): The `body` ops, each on one session, with the arguments an agent's `ph body.<op>` takes as flags.
-* [`budget`](#platoon-harness-budget): The `budget` ops, each on one session, with the arguments an agent's `ph budget.<op>` takes as flags.
-* [`channel`](#platoon-harness-channel): The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
+* [`agent`](#platoon-harness-agent): Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how each stands.
+* [`approval`](#platoon-harness-approval): Approvals, the decisions harnesses wait on: resolve one.
+* [`attention`](#platoon-harness-attention): What needs a person now, each with the actions that would settle it.
+* [`blob`](#platoon-harness-blob): Bodies that events carry: read one by its ref.
+* [`board`](#platoon-harness-board): Boards: post an object, revise it, read a version, and find objects by name, author, field or text.
+* [`body`](#platoon-harness-body): Stored bodies: redact one, keeping whole the events that cite it.
+* [`budget`](#platoon-harness-budget): Budgets: set a scope's limits, and see what is spent and held against each.
+* [`channel`](#platoon-harness-channel): Channels: create a topic, queue or board, and list those you may use.
 * [`contributors`](#platoon-harness-contributors): Name each maker a walk back from an outcome reaches along citations, causes and ancestry, in the order it reached them, with the kinds that reached each and the gaps on the way, and apart from them each maker whose work was only handed to one of them, which the walk does not go through.
-* [`effect`](#platoon-harness-effect): The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
+* [`effect`](#platoon-harness-effect): Effects whose outcome is uncertain: say whether one happened, when nothing else can tell.
 * [`eligibility`](#platoon-harness-eligibility): Say whether an agent's work in one episode can train, from the record alone: its attribution, `exact`, `forked` or none, and its verdict with each bar, of a closed set, and the same for a page of its model calls, oldest first, each eligible when its agent is and it has no bar of its own.
-* [`episode`](#platoon-harness-episode): The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
+* [`episode`](#platoon-harness-episode): Episodes: open and close a part of the session with one outcome, as only events inside one can become training data.
 * [`exposure`](#platoon-harness-exposure): Say whether an event reached an agent through us before another, `--before`, or by now: `seen`, with each offer of it its harness said it took and each compaction since, `not_seen`, or `unknown`, with the offers its harness had not said it took by then, the surfaces no result proves observed and the gaps content could have come through.
 * [`lineage`](#platoon-harness-lineage): Show one hop back from an event: who made it, in which turn and model call, what it cites, each with its citer's exposure, what it followed from, its previous version or a commit's parents, and a page of what its maker was offered and the gaps in its record below it, newest first, with true totals.
-* [`message`](#platoon-harness-message): The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
-* [`ops`](#platoon-harness-ops): The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
-* [`peers`](#platoon-harness-peers): List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
-* [`repo`](#platoon-harness-repo): The `repo` ops, each on one session, with the arguments an agent's `ph repo.<op>` takes as flags.
+* [`message`](#platoon-harness-message): Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.
+* [`ops`](#platoon-harness-ops): The ops you hold a grant for, with their schemas.
+* [`peers`](#platoon-harness-peers): List whom you may message directly now, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
+* [`repo`](#platoon-harness-repo): Commits the session recorded: look one up by its SHA, or run the team's test command on it.
 * [`spans`](#platoon-harness-spans): Show each span of an agent, oldest first: a turn is cut after each model call that chose a write of content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece with no write joins the span before it, so each call its harness reported in a turn lies in one span.
-* [`task`](#platoon-harness-task): The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
+* [`task`](#platoon-harness-task): Tasks on a queue: add one, claim it, renew its lease, then complete it, fail it or release it, and list them.
 * [`uses`](#platoon-harness-uses): Show one hop forward from an event, oldest first: what cites it, what follows from it, its next version or the commits that name it a parent, and each agent it was offered to, with whether its harness said it took it, and true totals.
-* [`view`](#platoon-harness-view): The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
+* [`view`](#platoon-harness-view): What a client follows, the roster, attention or changes: watch one, as a snapshot then keyed changes.
 
 ### platoon-harness attach
 
@@ -266,7 +266,7 @@ Start a session, give it a prompt, and own it in the foreground until it settles
 
 It exits with how the session ended: 0 settled, 1 an agent failed, 2 the budget ran out, 3 timed out, 4 it needs a
 person, and 130 cancelled, by Ctrl+C or `session stop` too. Ctrl+C runs the owner's shutdown first, which keeps the
-session resumable. What it cannot run as given, a name that is taken among it, exits 64 before any cost, and a
+session resumable. It exits 64 before any cost when it cannot run as given, such as with a --name that is taken. A
 commit to its journal that fails ends it with exit 74, as a kill would, leaving it to `session resume`.
 
 The team is the project file, `platoon-harness.toml`, or the file --team names over it, and --harness adds a role
@@ -770,7 +770,7 @@ For example:
 
 ### platoon-harness agent
 
-The `agent` ops, each on one session, with the arguments an agent's `ph agent.<op>` takes as flags.
+Agents: start one, interrupt a turn, take one over and release it, cancel or retire one, and see how each stands.
 
 #### platoon-harness agent cancel
 
@@ -979,7 +979,7 @@ For example:
 
 ### platoon-harness approval
 
-The `approval` ops, each on one session, with the arguments an agent's `ph approval.<op>` takes as flags.
+Approvals, the decisions harnesses wait on: resolve one.
 
 #### platoon-harness approval resolve
 
@@ -1009,7 +1009,7 @@ For example:
 
 ### platoon-harness attention
 
-The `attention` ops, each on one session, with the arguments an agent's `ph attention.<op>` takes as flags.
+What needs a person now, each with the actions that would settle it.
 
 #### platoon-harness attention list
 
@@ -1029,7 +1029,7 @@ For example:
 
 ### platoon-harness blob
 
-The `blob` ops, each on one session, with the arguments an agent's `ph blob.<op>` takes as flags.
+Bodies that events carry: read one by its ref.
 
 #### platoon-harness blob get
 
@@ -1055,7 +1055,7 @@ For example:
 
 ### platoon-harness board
 
-The `board` ops, each on one session, with the arguments an agent's `ph board.<op>` takes as flags.
+Boards: post an object, revise it, read a version, and find objects by name, author, field or text.
 
 #### platoon-harness board get
 
@@ -1172,7 +1172,7 @@ For example:
 
 ### platoon-harness body
 
-The `body` ops, each on one session, with the arguments an agent's `ph body.<op>` takes as flags.
+Stored bodies: redact one, keeping whole the events that cite it.
 
 #### platoon-harness body tombstone
 
@@ -1199,7 +1199,7 @@ For example:
 
 ### platoon-harness budget
 
-The `budget` ops, each on one session, with the arguments an agent's `ph budget.<op>` takes as flags.
+Budgets: set a scope's limits, and see what is spent and held against each.
 
 #### platoon-harness budget set
 
@@ -1244,7 +1244,7 @@ For example:
 
 ### platoon-harness channel
 
-The `channel` ops, each on one session, with the arguments an agent's `ph channel.<op>` takes as flags.
+Channels: create a topic, queue or board, and list those you may use.
 
 #### platoon-harness channel create
 
@@ -1320,7 +1320,7 @@ For example:
 
 ### platoon-harness effect
 
-The `effect` ops, each on one session, with the arguments an agent's `ph effect.<op>` takes as flags.
+Effects whose outcome is uncertain: say whether one happened, when nothing else can tell.
 
 #### platoon-harness effect settle
 
@@ -1372,7 +1372,7 @@ For example:
 
 ### platoon-harness episode
 
-The `episode` ops, each on one session, with the arguments an agent's `ph episode.<op>` takes as flags.
+Episodes: open and close a part of the session with one outcome, as only events inside one can become training data.
 
 #### platoon-harness episode close
 
@@ -1469,7 +1469,7 @@ For example:
 
 ### platoon-harness message
 
-The `message` ops, each on one session, with the arguments an agent's `ph message.<op>` takes as flags.
+Messages: send one to `@agent`, `#channel` or `+group`, and read your inbox, a channel or a group.
 
 #### platoon-harness message read
 
@@ -1529,7 +1529,7 @@ For example:
 
 ### platoon-harness ops
 
-The `ops` ops, each on one session, with the arguments an agent's `ph ops.<op>` takes as flags.
+The ops you hold a grant for, with their schemas.
 
 #### platoon-harness ops list
 
@@ -1553,7 +1553,7 @@ For example:
 platoon-harness peers [OPTIONS] SESSION
 ```
 
-List whom you may message directly now, in `platoon-harness peers`, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
+List whom you may message directly now, with the true `total` and a `cursor` to pass as `--after`, or none at the end.
 
 Targets change as agents come and go, so ask rather than remember. `roles` lists the roles you may start an agent in.
 
@@ -1571,7 +1571,7 @@ For example:
 
 ### platoon-harness repo
 
-The `repo` ops, each on one session, with the arguments an agent's `ph repo.<op>` takes as flags.
+Commits the session recorded: look one up by its SHA, or run the team's test command on it.
 
 #### platoon-harness repo commit
 
@@ -1643,7 +1643,7 @@ For example:
 
 ### platoon-harness task
 
-The `task` ops, each on one session, with the arguments an agent's `ph task.<op>` takes as flags.
+Tasks on a queue: add one, claim it, renew its lease, then complete it, fail it or release it, and list them.
 
 #### platoon-harness task add
 
@@ -1854,7 +1854,7 @@ For example:
 
 ### platoon-harness view
 
-The `view` ops, each on one session, with the arguments an agent's `ph view.<op>` takes as flags.
+What a client follows, the roster, attention or changes: watch one, as a snapshot then keyed changes.
 
 #### platoon-harness view watch
 

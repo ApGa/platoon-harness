@@ -883,9 +883,9 @@ def agent_status(txn: Txn, a: Named) -> dict[str, Any]:
 
 @op("peers", query=True, tool=True)
 def peers(txn: Txn, a: Paging) -> dict[str, Any]:
-    """List whom you may message directly now, in `peers`, with the true `total` and a `cursor` to pass as `after`, or
-    none at the end. Targets change as agents come and go, so ask rather than remember. `roles` lists the roles you may
-    start an agent in."""
+    """List whom you may message directly now, with the true `total` and a `cursor` to pass as `after`, or none at the
+    end. Targets change as agents come and go, so ask rather than remember. `roles` lists the roles you may start an
+    agent in."""
     grants = txn.view(Grants)
     roles = txn.view(SessionRecord).settings().roles
     live = txn.view(Principals).select(txn.me, "all")

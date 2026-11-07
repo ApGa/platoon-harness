@@ -20,7 +20,7 @@ from platoon_harness.session import Reason
 from platoon_harness.tools.surface import body_fields
 from platoon_harness_cli.exits import ENDINGS, SHARED
 from platoon_harness_cli.main import build
-from platoon_harness_cli.ops import command_line, cut, person_ops
+from platoon_harness_cli.ops import _PURPOSES, command_line, cut, person_ops
 from platoon_harness_cli.output import event_line, safe
 from platoon_harness_cli.reference import reference
 
@@ -102,6 +102,14 @@ def test_every_flag_of_every_command_has_help(name: str):
     for parameter in inspect.signature(command).parameters.values():
         if parameter.kind is inspect.Parameter.KEYWORD_ONLY:
             assert parameter.annotation.__metadata__[0].help, f"{name} --{parameter.name}"
+
+
+def test_each_command_group_says_what_it_is_for():
+    """In a sentence of its own, as one sentence every group shared said nothing of any."""
+    namespaces = {name.partition(".")[0] for name in person_ops() if "." in name} - {"session"}
+
+    assert {namespace: APP[namespace].help for namespace in namespaces} == _PURPOSES
+    assert len(set(_PURPOSES.values())) == len(_PURPOSES)
 
 
 def test_a_command_s_help_names_commands_and_flags_where_its_op_names_ops_and_arguments():
