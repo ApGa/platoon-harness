@@ -3,8 +3,9 @@
 **Goal:** run a team from a Python script on the SDK alone, wait for it to settle, and read back what each agent said,
 with no key and no model.
 
-**Prerequisites:** a checkout of this repository with its packages installed, by `uv sync` or `uv sync --no-dev`. The
-script imports only `platoon_harness`, the SDK, and needs no harness on `PATH`: its one role runs a Python one-liner.
+**Prerequisites:** a checkout of this repository with its packages installed, by `uv sync`, or with `UV_NO_DEV=1` set
+as [Install](../../docs/getting-started/install.md#install-from-a-checkout) says. The script imports only
+`platoon_harness`, the SDK, and needs no harness on `PATH`: its one role runs a Python one-liner.
 
 | File | What it is |
 |---|---|

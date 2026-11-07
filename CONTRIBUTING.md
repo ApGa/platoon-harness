@@ -62,7 +62,9 @@ The fast and browser tests need no harness, login or model key.
 
    The `dev` group holds pytest and its plugins, hypothesis, pyte, Playwright, pre-commit, ruff, ty, and the SDK's
    `openhands` extra. `--locked` refuses when `uv.lock` is out of date with a `pyproject.toml`: after changing a
-   requirement, run `uv lock` and commit `uv.lock` with it.
+   requirement, run `uv lock` and commit `uv.lock` with it. If you set `UV_NO_DEV=1` to use the packages alone, as
+   [Install](docs/getting-started/install.md#install-from-a-checkout) has it, unset it first: while it is set, `uv sync`
+   leaves the group out, and the hooks and the tests run from it.
 
 3. Install the git hooks. `.pre-commit-config.yaml` names both kinds, so this installs the `pre-commit` hook, which runs
    the checks of CI's `lint` job on what you commit, and the `commit-msg` hook, which checks each commit message:
