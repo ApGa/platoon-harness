@@ -549,12 +549,13 @@ async def test_a_look_that_fails_records_the_gap_and_its_agent_works_on(repo, tm
 
 async def test_looks_run_one_at_a_time(repo, tmp_path, monkeypatch):
     entered: list[str] = []
-    gate = threading.Event()
+    inside, gate = threading.Event(), threading.Event()
     real = host.look
 
     def held(root: Path, **options: Any) -> Any:
         entered.append("shared" if root == repo else root.parent.name)
         if len(entered) == 1:
+            inside.set()
             assert gate.wait(10)
         return real(root, **options)
 
@@ -568,6 +569,7 @@ async def test_looks_run_one_at_a_time(repo, tmp_path, monkeypatch):
             return [event for event in await of_type(session, "effect.started") if event.data["kind"] == "probe"]
 
         await until(started, session, lambda found: len(found) == 2)
+        assert await asyncio.to_thread(inside.wait, 10)
         held_back = list(entered)
         gate.set()
         await looked(session, 2)
