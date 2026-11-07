@@ -7,7 +7,7 @@ import pytest
 
 from .support import exchange, request
 
-FIXTURE = Path(__file__).parents[3] / "docs/research/fixtures/mcp-http-probe.jsonl"
+FIXTURE = Path(__file__).parents[3] / "tests/fixtures/mcp-http-probe.jsonl"
 RECORDS = [json.loads(line) for line in FIXTURE.read_text().splitlines()[1:]]
 REQUESTS = [record for record in RECORDS if record.get("rpc") != "tools/call"]
 

@@ -27,7 +27,8 @@ Milestone 0 research for `platoon-harness`, reviewed adversarially on 2026-11-02
 | [persistent-agents.md](persistent-agents.md) | Spawned agents that take follow-ups: who chooses, the follow-up, the answer, the end, and Platoon's limits | RFC 0023, agents that stay |
 | [landscape.md](landscape.md) | Projects like ours on four axes, the closest ten, licenses, ideas to borrow | Positioning, what to borrow and when |
 
-Fixtures are in [fixtures/](fixtures/). `prime-agent-sample.md` states that it holds no capture.
+Fixtures are in [fixtures/](fixtures/). `prime-agent-sample.md` states that it holds no capture. The MCP probe's log, which a
+test replays, is [tests/fixtures/mcp-http-probe.jsonl](../../tests/fixtures/mcp-http-probe.jsonl).
 
 ## Inspected upstreams
 

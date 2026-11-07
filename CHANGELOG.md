@@ -483,6 +483,8 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The MCP probe's log, which `tests/unit/tools/test_replay.py` replays, is a test input, so it moved from
+  `docs/research/fixtures/` to `tests/fixtures/`, where the research and RFC 0009 link it.
 - The research is marked as dated background: its index is titled so, and each note opens with its date, that it is not
   maintained and that [reference/compatibility.md](docs/reference/compatibility.md) is current. The hosts the notes ran
   on are described neutrally, and pi-durable's citations of other notes by line are pinned to the commit it read. The
