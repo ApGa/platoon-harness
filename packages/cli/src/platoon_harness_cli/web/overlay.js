@@ -3,7 +3,8 @@
 // platoon-harness's overlay, which follows SwarmChat's script in this one script. It uses only the names that script
 // declares at its top level, and puts new markup only through its html template, which escapes all it is given. What
 // it changes says what is so: delivered where SwarmChat says read, agents and people told apart, and what a person
-// may do, each act through /x/command, and each act they may not take shown, disabled, with the reason.
+// may do, each act through /x/command, and each act they may not take shown, disabled, with the reason, which the
+// keyboard and a screen reader reach as the mouse does.
 
 // What this page may do, read from view_info before the page starts: `credential`, view or control, `live`, whether a
 // runtime holds the session, `person`, who acts here, `may`, the ops their grants hold, `confirmed`, the ops asked
@@ -46,6 +47,60 @@ X.cannot = (op, chat) => {
   return caps.may.includes(op) ? null : `Your grants hold no ${op}.`;
 };
 
+// A control the person cannot use now, and why. `disabled` would take it out of the keyboard's order, so it is
+// `aria-disabled`, and its reason is its title, which is its accessible description: a screen reader reads it with the
+// control, and the mouse shows it over it. Focus or a press shows it beside the control too, and a press does nothing
+// else. `X.disabled` draws a control so, and `X.disable` makes one so, or with no reason usable again, its own title back.
+X.disabled = why => why ? html` aria-disabled="true" title="${why}"` : html``;
+X.disable = (el, why) => {
+  const was = el.getAttribute('aria-disabled') === 'true';
+  if (why) {
+    if (!was && el.title) el.dataset.xTitle = el.title;
+    el.setAttribute('aria-disabled', 'true');
+    el.title = why;
+  } else if (was) {
+    el.removeAttribute('aria-disabled');
+    if (el.dataset.xTitle) el.title = el.dataset.xTitle; else el.removeAttribute('title');
+    delete el.dataset.xTitle;
+  }
+};
+X.disabledAt = target => target.closest && target.closest('[aria-disabled="true"]');
+X.showWhy = el => {
+  const tip = $('#tip'), r = el.getBoundingClientRect();
+  clearTimeout(toastTimer);
+  tip.textContent = el.title;
+  tip.style.transform = '';
+  tip.style.left = Math.max(8, Math.min(r.left, innerWidth - 370)) + 'px';
+  tip.classList.add('on');
+  tip.style.top = (r.bottom + 6 + tip.offsetHeight > innerHeight ? r.top - 6 - tip.offsetHeight : r.bottom + 6) + 'px';
+};
+document.addEventListener('focusin', e => {
+  const el = X.disabledAt(e.target);
+  if (el) X.showWhy(el);
+});
+document.addEventListener('focusout', e => {
+  const el = X.disabledAt(e.target);
+  if (el && $('#tip').textContent === el.title) $('#tip').classList.remove('on');
+});
+document.addEventListener('click', e => {
+  const el = X.disabledAt(e.target);
+  if (!el) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  X.showWhy(el);
+}, true);
+
+// What a control the person pressed says while it waits for the act's answer.
+X.WAITING = 'Sent, and waiting for its answer.';
+
+// What the page draws as a button that is no button element takes Enter and Space as a button does.
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"]')) {
+    e.preventDefault();
+    e.target.click();
+  }
+});
+
 X.kind = id => (user(id).fields || {}).kind;
 
 // Read what this page may do again, and draw what it shows again with it.
@@ -75,7 +130,6 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-said:empty { display: none; }
 .pop .it.x-need { display: grid; gap: 6px; cursor: default; }
 .pop.x-ask { max-width: 380px; }
-.row.special.x-off, .pop .it.x-off, .votes.x-off { opacity: .55; cursor: not-allowed; }
 .x-provenance .x-part { padding: 12px 14px 4px; font-weight: 700; }
 .x-provenance .x-line { display: grid; grid-template-columns: 76px 1fr; gap: 8px; width: 100%; padding: 5px 14px; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; line-height: 1.45; text-align: left; overflow-wrap: anywhere; }
 .x-provenance .x-line[data-x-follow] { cursor: pointer; }
@@ -84,7 +138,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .msg:hover .actions, .msg:focus-within .actions { opacity: 1; pointer-events: auto; }
 .x-provenance .x-kind { color: var(--faint); }
 .x-provenance .x-warn { color: var(--warn); }
-button[disabled] { opacity: .55; cursor: not-allowed; }
+[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
 $('#login p').textContent = 'This page opens from a link that platoon-harness web says, or one a page acting for you ' +
@@ -275,8 +329,9 @@ X.paint = draft => {
   if (!f) return;
   const d = X.draft(draft), why = X.unsendable(f);
   const t = $('textarea', f);
-  t.readOnly = !!d.sending;
-  for (const b of [t, ...$$('button', f)]) { b.disabled = !!(why || (d.sending && b !== t)); if (why) b.title = why; }
+  t.readOnly = !!(why || d.sending);
+  X.disable(t, why);
+  for (const b of $$('button', f)) X.disable(b, why || d.sending || null);
   $('.x-file', f).textContent = d.file ? `With ${d.file.name}, ${bytes(d.file.size)}, as its body.` : '';
   $('.x-why', f).textContent = why || d.sending || d.said;
 };
@@ -379,7 +434,7 @@ X.drawNeeds = box => {
   const rows = X.needs || [];
   box.innerHTML = html`<div class="ph">${rows.length ? `Needs you: ${plural(rows.length, 'place')}` : 'Nothing needs you now.'}</div>${rows.map(row => html`<div class="it x-need"><span class="t"${row.agent ? html` data-x-goto="${row.agent}"` : ''}>⚠ <b>${row.kind}</b>${row.agent ? html` ${avatar(row.agent, 'sm')} ${name(row.agent)}` : ''}: ${row.gist}</span><span class="x-acts">${row.actions.map((action, i) => {
     const why = X.cannot(action.op);
-    return html`<button class="btn" data-x-action="${i}" data-x-place="${row.id}"${why ? html` disabled title="${why}"` : ''}>${action.label}</button>`;
+    return html`<button class="btn" data-x-action="${i}" data-x-place="${row.id}"${X.disabled(why)}>${action.label}</button>`;
   })}</span></div>`)}`.s;
 };
 
@@ -418,18 +473,18 @@ peopleRows = () => {
   try { return basePeopleRows(); } finally { S.users = users; }
 };
 
-// Seeing as someone, offered for everyone, and taken only for an agent.
+// Seeing as someone, offered for everyone, each a button the keyboard reaches, and taken only for an agent.
 const baseOpenAsPicker = openAsPicker;
 openAsPicker = anchor => {
   baseOpenAsPicker(anchor);
   const box = $('#overlay .pop');
   const off = () => {
     for (const it of $$('[data-as]', box)) {
+      it.setAttribute('role', 'button');
+      it.tabIndex = 0;
       if (!it.dataset.as || X.kind(it.dataset.as) === 'agent') continue;
       it.removeAttribute('data-as');
-      it.classList.add('x-off');
-      it.setAttribute('aria-disabled', 'true');
-      it.title = X.AS_AGENT;
+      X.disable(it, X.AS_AGENT);
     }
   };
   off();
@@ -447,11 +502,11 @@ messageHtml = (m, prev, o = {}) => {
   const knew = html`<button data-knew="${m.id}" title="How far ${u.name} had marked messages read in each chat when sending this">What had ${first(m.from)} read?</button>`.s;
   const reached = X.kind(m.from) === 'agent'
     ? html`<button data-knew="${m.id}" title="How much of each chat had been delivered to ${u.name} when it sent this">What had reached ${first(m.from)}?</button>`
-    : html`<button disabled title="A person's reading leaves no evidence, so nothing says what had reached them">What had reached ${first(m.from)}?</button>`;
+    : html`<button${X.disabled('A person\'s reading leaves no evidence, so nothing says what had reached them')}>What had reached ${first(m.from)}?</button>`;
   const why = X.cannot('message.send', S.chats.get(m.chat)) || (m.x_ref ? null : m.x_approval
     ? 'An approval is answered with Allow or Deny, not a reply.'
     : `What ${first(m.from)} said in its turn is no message a reply can cite: write to ${first(m.from)} in the chat.`);
-  const reply = html`<button data-x-reply="${m.id}" data-x-ref="${m.x_ref || ''}"${why ? html` disabled title="${why}"` : ''}>Reply</button>`;
+  const reply = html`<button data-x-reply="${m.id}" data-x-ref="${m.x_ref || ''}"${X.disabled(why)}>Reply</button>`;
   const provenance = html`<button data-x-provenance="${m.x_shows}" title="What ${m.x_shows} rests on, what came of it and whose work it reaches">Provenance</button>`;
   return new Safe(drawn.s
     .replace(knew, () => reached.s)
@@ -468,7 +523,7 @@ X.card = m => {
   }
   if (a.state === 'moot') return html`<div class="x-card x-done" data-x-card="${a.id}">Moot: the turn that asked for it has ended</div>`;
   const why = X.cannot('approval.resolve');
-  const button = (verdict, label) => html`<button class="btn" data-x-decide="${verdict}" data-x-approval="${a.id}" data-x-version="${a.version}"${why ? html` disabled title="${why}"` : ''}>${label}</button>`;
+  const button = (verdict, label) => html`<button class="btn" data-x-decide="${verdict}" data-x-approval="${a.id}" data-x-version="${a.version}"${X.disabled(why)}>${label}</button>`;
   return html`<div class="x-card" data-x-card="${a.id}"><span>${first(m.from)} asks you to approve this</span>${button('allow', 'Allow')}${button('deny', 'Deny')}</div>`;
 };
 
@@ -553,7 +608,7 @@ chatRows = () => {
   }}));
   if (S.filter) return rows;
   const why = X.cannot('attention.list'), n = X.needs ? X.needs.length : 0;
-  rows.splice(1, 0, {open: () => why ? toast(why) : X.openNeeds(), html: i => html`<div class="row special${why ? ' x-off' : ''}" data-i="${i}" data-x-needs title="${why || 'Where you must act'}"${why ? html` aria-disabled="true"` : ''}><span class="ico">⚠</span><span class="t">Needs you</span>${n ? html`<span class="badge">${num(n)}</span>` : ''}</div>`.s});
+  rows.splice(1, 0, {open: X.openNeeds, html: i => html`<div class="row special" data-i="${i}" data-x-needs role="button" tabindex="0"${why ? X.disabled(why) : html` title="Where you must act"`}><span class="ico">⚠</span><span class="t">Needs you</span>${n ? html`<span class="badge">${num(n)}</span>` : ''}</div>`.s});
   return rows;
 };
 
@@ -649,14 +704,14 @@ X.reveal = (at, ref) => {
 
 // A queue's or a board's own view, of its tasks or its entries, drawn disabled in its chat, saying why.
 X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)
-  ? html`<button class="btn" disabled title="${X.unbuilt.tasks}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
+  ? html`<button class="btn"${X.disabled(X.unbuilt.tasks)}>${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
   : html``;
 
 // Posts, with the sorts that rank by votes disabled, saying why, and a queue's or a board's own view beside them.
 BoardView = class extends BoardView {
   constructor(main, chatId, sort) {
     super(main, chatId, sort);
-    for (const b of $$('[data-sort="hot"], [data-sort="top"]', main)) { b.disabled = true; b.title = X.UNVOTED; }
+    for (const b of $$('[data-sort="hot"], [data-sort="top"]', main)) X.disable(b, X.UNVOTED);
     $('.sorts', main).insertAdjacentHTML('afterend', X.tasksView(S.chats.get(chatId)).s);
   }
 };
@@ -665,7 +720,7 @@ BoardView = class extends BoardView {
 const basePostHtml = postHtml;
 postHtml = (p, o) => new Safe(basePostHtml({...p, votes: 0}, o).s.replace(
   html`<div class="votes" title="No reactions">${new Safe(ARROW)}<span>0</span></div>`.s,
-  () => html`<div class="votes x-off" aria-disabled="true" title="${X.UNVOTED}">${new Safe(ARROW)}</div>`.s));
+  () => html`<div class="votes" role="button" tabindex="0" aria-label="Vote"${X.disabled(X.UNVOTED)}>${new Safe(ARROW)}</div>`.s));
 
 // The map's pane offers to see as whoever is under the mouse, and only an agent can be seen as. Its busiest list holds
 // everyone who writes, people and the runtime too. Its timeline and window count the chats of whoever it sees as, so
@@ -674,7 +729,7 @@ MapView = class extends MapView {
   showPane() {
     super.showPane();
     const see = $('#pane [data-see-as]');
-    if (see && X.kind(see.dataset.seeAs) !== 'agent') { see.disabled = true; see.title = X.AS_AGENT; }
+    if (see && X.kind(see.dataset.seeAs) !== 'agent') X.disable(see, X.AS_AGENT);
     const busiest = $('#pane .ph3');
     if (busiest && busiest.textContent === 'Agents') busiest.textContent = 'Who writes';
   }
@@ -693,17 +748,17 @@ PersonView = class extends PersonView {
     const card = $('.card', main), agent = X.kind(id) === 'agent', mine = id === X.caps.person;
     if (!agent) {
       const see = $('[data-see-as]', card);
-      if (see) { see.disabled = true; see.title = X.AS_AGENT; }
+      if (see) X.disable(see, X.AS_AGENT);
     }
     if (!agent && !mine) return;
     const acts = (agent ? ['interrupt', 'stop-below', 'retire', 'cancel'] : ['close', 'cancel-session']).map(act => {
       const why = X.cannot(X.acts[act][1]);
-      return html`<button class="btn" data-x-act="${act}" data-x-agent="${id}"${why ? html` disabled title="${why}"` : ''}>${X.acts[act][0]}</button>`;
+      return html`<button class="btn" data-x-act="${act}" data-x-agent="${id}"${X.disabled(why)}>${X.acts[act][0]}</button>`;
     });
     const why = X.caps.credential === 'view' ? X.caps.cannot : null;
     const more = agent
-      ? [['activity', 'Tool activity'], ['review', 'Review changes']].map(([k, label]) => html`<button class="btn" disabled title="${X.unbuilt[k]}">${label}</button>`)
-      : ['view', 'control'].map(kind => html`<button class="btn" data-x-link="${kind}"${why ? html` disabled title="${why}"` : ''}>New ${kind} link</button>`);
+      ? [['activity', 'Tool activity'], ['review', 'Review changes']].map(([k, label]) => html`<button class="btn"${X.disabled(X.unbuilt[k])}>${label}</button>`)
+      : ['view', 'control'].map(kind => html`<button class="btn" data-x-link="${kind}"${X.disabled(why)}>New ${kind} link</button>`);
     card.insertAdjacentHTML('afterend', html`<div class="x-acts">${acts}</div><div class="x-acts">${more}</div><p class="x-said" aria-live="polite"></p>`.s);
   }
 };
@@ -711,7 +766,7 @@ PersonView = class extends PersonView {
 // Make a link of either kind, which opens once, within ten minutes, and say it.
 X.mint = async el => {
   const said = $('.x-said', el.closest('.person')), kind = el.dataset.xLink;
-  el.disabled = true;
+  X.disable(el, X.WAITING);
   try {
     const r = await fetch('/x/link', {method: 'POST', body: JSON.stringify({class: kind}),
       headers: {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}});
@@ -721,7 +776,7 @@ X.mint = async el => {
   } catch (_) {
     said.textContent = 'web could not be reached, so no link was made.';
   }
-  el.disabled = false;
+  X.disable(el, null);
 };
 
 // Take an act of a person's page, asking first where its op is one that nothing takes back, and say what came of it.
@@ -730,27 +785,28 @@ X.lifecycle = async el => {
   const said = $('.x-said', el.closest('.person'));
   const what = agent ? `${label} ${agent}` : label;
   if (X.caps.confirmed.includes(op) && !await X.ask(el, `${what}? It cannot be taken back.`, label)) return;
-  el.disabled = true;
+  X.disable(el, X.WAITING);
   const r = await X.act(op, agent ? {agent, ...more} : {});
-  el.disabled = false;
+  X.disable(el, null);
   said.textContent = !r ? X.UNANSWERED : r.refusal ? `${what}: ${X.refused(r.refusal)}`
     : op === 'agent.interrupt' ? `Stopped the turns of ${r.result.stopped.join(', ')}. It stops turns, not waits: one parked on a wait is left to it.`
       : `${what}: done.`;
 };
 
 X.decide = async el => {
-  const card = el.closest('[data-x-card]');
-  for (const b of $$('button', card)) b.disabled = true;
+  const buttons = $$('button', el.closest('[data-x-card]'));
+  for (const b of buttons) X.disable(b, X.WAITING);
   const r = await X.act('approval.resolve', {id: el.dataset.xApproval, verdict: el.dataset.xDecide, expected_version: +el.dataset.xVersion});
   if (!r) return toast(X.UNANSWERED);
-  if (r.refusal) toast(X.refused(r.refusal));
-  if (r.refusal && card.isConnected && !X.cannot('approval.resolve')) for (const b of $$('button', card)) b.disabled = false;
+  if (!r.refusal) return;
+  toast(X.refused(r.refusal));
+  for (const b of buttons) X.disable(b, X.cannot('approval.resolve'));
 };
 
 X.action = async el => {
   const row = (X.needs || []).find(found => found.id === el.dataset.xPlace);
   if (!row) return;
-  el.disabled = true;
+  X.disable(el, X.WAITING);
   const action = row.actions[+el.dataset.xAction];
   const r = await X.act(action.op, action.args);
   toast(!r ? X.UNANSWERED : r.refusal ? X.refused(r.refusal) : `${action.label}: ${row.gist}`);
@@ -762,7 +818,6 @@ onClick = e => {
   const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow]');
   if (!el && S.route.provenance && e.target.closest('[data-close-pane]')) return go({provenance: null}, true);
   if (!el) return baseClick(e);
-  if (el.disabled) return;
   const d = el.dataset;
   if (d.xProvenance) return X.provenance(d.xProvenance, false);
   if (d.xFollow) return X.provenance(d.xFollow, true);

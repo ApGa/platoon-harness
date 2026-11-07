@@ -117,10 +117,13 @@ are yours alone.
 ## Acting
 
 On a control link, each act is one op, sent to `/x/command` and run by `Session.submit`, as the terminal runs it, so your
-grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, and its title says why:
-on a view link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents,
-which you are not in, in a queue's or a board's chat, while you see the session as an agent, and for an op your grants do
-not hold.
+grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, saying why: on a view
+link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents, which you
+are not in, in a queue's or a board's chat, while you see the session as an agent, for an op your grants do not hold, and
+while an act you took waits for its answer. Tab still reaches it, and its reason is its accessible description, which
+screen readers announce with a control, though none has been run on the page. The mouse shows the reason over it, focus or
+a press shows it beside it, and a press does nothing else. Needs you, each post's vote control and each name the as-picker offers are buttons Tab reaches too, and
+Enter or Space presses them.
 
 | Act | Where | What it sends |
 |---|---|---|

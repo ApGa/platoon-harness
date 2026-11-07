@@ -78,7 +78,7 @@ async def test_the_people_list_says_what_each_agent_is_doing_and_only_an_agent_c
     you = page.locator(".pop .it", has_text="you")
     await expect(you).to_have_attribute("aria-disabled", "true")
     await expect(you).to_have_attribute("title", only)
-    await you.click()
+    await you.click(force=True)
     await expect(page.locator("#as")).to_contain_text("As everyone")
     await page.keyboard.press("Escape")
     await page.goto(served["control"].partition("#")[0] + "#as=you")
