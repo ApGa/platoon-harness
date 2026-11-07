@@ -48,6 +48,7 @@ Workspace.short #composer { max-height: 3; }
 .dialog .about { margin-top: 1; color: $text-muted; }
 ModalScreen { align: center middle; }
 #help { height: 1fr; }
+#comment { height: auto; min-height: 3; max-height: 8; border-top: solid $panel; }
 """
 
 

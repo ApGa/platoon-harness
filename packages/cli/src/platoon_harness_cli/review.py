@@ -12,6 +12,8 @@ from platoon_harness import Refused, Session
 from platoon_harness.kernel import Event
 from platoon_harness.primitives.repo import PATCH_LIMIT
 
+from .ops import cut
+
 Tone = Literal["", "strong", "faint", "good", "bad", "warn"]
 """How a part of a line is drawn: plainly, as a heading, quieter, or as what passed, failed or needs a look."""
 Part = tuple[str, Tone]
@@ -146,12 +148,20 @@ class Diff:
     """A diff as a person reads it: the `ref` of its record, which `blob.get` reads and a citation names lines of; the
     words `above` its patch, what it is of and how long, then where it was read and, for what a workspace holds
     uncommitted, when; its `first` page, or None where it has no text to draw; and the words `below` its last line,
-    where it was cut or why it is not drawn."""
+    where it was cut or why it is not drawn. `of` says what it is of. A comment on it goes `to` the change's maker, the
+    agent whose workspace made the commit or holds what is uncommitted, or where none did, `unsendable` says why it has
+    nobody to go to; and a comment on no lines cites `whole`, the commit, or an uncommitted diff's record, which
+    `about` says."""
 
     ref: str
     above: tuple[str, ...]
     first: Page | None
     below: str | None
+    of: str
+    to: str | None
+    unsendable: str | None
+    whole: str
+    about: str
 
 
 async def kept(session: Session, effect: int) -> Event:
@@ -176,6 +186,16 @@ async def read(session: Session, effect: int) -> Diff:
         where = place(read_in, mode, commit=data["sha"] is not None)
         when = data["read_at"]
         above.append(f"Read in {where}." if when is None else f"What it held at {_clock(when)}, read in {where}.")
+    if data["sha"] is not None:
+        commit = await session.repo_commit(data["sha"])
+        maker, whole = commit["made_in"] or "", commit["ref"]
+        of, about, nobody = f"{data['sha'][:12]}'s patch", f"the commit {data['sha'][:12]}", "this commit"
+    else:
+        maker, whole = data["workspace"], ref
+        of = about = f"{'your checkout' if maker == 'shared' else maker}'s uncommitted diff"
+        nobody = "your checkout"
+    to = maker if maker.startswith("@") else None
+    unsendable = None if to else f"A comment goes to whoever made the change, and no agent's workspace made {nobody}."
     first = None if data["body"] is None else await page(session, ref)
     below = None
     if data["body"] is not None and first is None:
@@ -183,7 +203,33 @@ async def read(session: Session, effect: int) -> Diff:
     elif data["cut"]:
         rest = f"in git, at {data['sha'][:12]}" if data["sha"] else f"uncommitted in {_whose(data['workspace'])}"
         below = f"Cut here, at the end of the last line within {PATCH_LIMIT // 1024} KiB: the rest is {rest}."
-    return Diff(ref, tuple(above), first, below)
+    return Diff(ref, tuple(above), first, below, of, to, unsendable, whole, about)
+
+
+def on(diff: Diff, lines: tuple[int, int] | None) -> str:
+    """What a comment on `lines` of a diff, its first and last, is on, in words, or with none chosen, on the diff's
+    `whole`."""
+    if lines is None:
+        return diff.about
+    first, last = lines
+    return f"line {first} of {diff.of}" if first == last else f"lines {first} to {last} of {diff.of}"
+
+
+def cites(diff: Diff, lines: tuple[int, int] | None) -> str:
+    """What a comment on `lines` of a diff cites: those lines, by its record's ref, or with none chosen its `whole`."""
+    return diff.whole if lines is None else f"{diff.ref}#L{lines[0]}-{lines[1]}"
+
+
+async def comment(session: Session, diff: Diff, lines: tuple[int, int] | None, text: str) -> str:
+    """Send a comment on `lines` of a diff, a person's message to the change's maker whose `based_on` cites what it is
+    on, its text made its gist and body as the composer's is, and give what it cites. Refused `not_found` where no
+    agent made the change."""
+    if diff.to is None:
+        raise Refused("not_found", diff.unsendable or "no agent made this change")
+    gist, body = cut(text)
+    cited = cites(diff, lines)
+    await session.send(diff.to, gist, body=body, based_on=[cited])
+    return cited
 
 
 async def page(session: Session, ref: str) -> Page | None:

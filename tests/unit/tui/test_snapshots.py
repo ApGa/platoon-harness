@@ -179,6 +179,9 @@ class Read:
     async def status(self, agent: str) -> dict[str, Any]:
         return {"workspace": {"mode": "worktree"}}
 
+    async def repo_commit(self, sha: str) -> dict[str, Any]:
+        return {"ref": "repo/app@9", "sha": SHA, "gist": f"{SHA[:12]} fix the parser", "made_in": "@lead"}
+
     async def blob(self, ref: str) -> dict[str, Any]:
         return {"ref": ref, "text": PATCH, "lines": PATCH.count("\n"), "rest": None}
 

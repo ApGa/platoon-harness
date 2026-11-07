@@ -170,6 +170,15 @@ cut patch's last line it says it was cut at 64 KiB and that the rest is in git, 
 drawn, saying why. A session that is its history cannot ask for a diff, and says what restarts it.
 [Its snapshot](../assets/tui-patch.svg) shows a commit's patch with a file git takes for binary.
 
+A comment on a diff is a message to whoever made the change: the agent whose workspace made the commit, or whose workspace
+holds what is uncommitted. Space chooses the line under the cursor, marked `┃`; pressed on another line it chooses every line from
+the first to that one, and pressed again, or on the one line chosen alone, it chooses none. `c` opens a composer at the foot,
+saying whom the comment goes to and what it is on, `Comment to @ada on lines 40 to 52 of 3f9c2a1b2c3d's patch`, and Enter sends
+it, its `based_on` citing those lines, `repo/<name>@12#L40-52`, or with none chosen the commit, or an uncommitted diff whole. Its
+words become its gist and body as the composer's do, and Esc goes back to the patch, keeping what you wrote. A change no agent's
+workspace made, a commit that is nobody's or what your checkout holds, has nobody to take a comment, and `c` says so: write about
+it in the composer instead.
+
 ### Follow a line's provenance
 
 `/provenance`, or `p` with the transcript in focus, shows where the chosen line came from: the newest line while the transcript
@@ -342,6 +351,13 @@ before the session's. `^` is Ctrl.
 |---|---|
 | `t` | Test the chosen commit, once you say yes, as that runs its code as you |
 
+### A diff
+
+| Keys | Does |
+|---|---|
+| `Space` | Choose the line under the cursor; on another, every line from the first to it; again, none |
+| `c` | Comment on the chosen lines, or with none on the commit, as a message to its maker |
+
 ### The provenance panel
 
 | Keys | Does |
@@ -365,7 +381,7 @@ before the session's. `^` is Ctrl.
 
 ## Not built yet
 
-Disabled where a control for it would be, or absent from the palette: review comments, search in a transcript,
+Disabled where a control for it would be, or absent from the palette: search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, an approval and who answered it in the transcript, copying a selection from
 the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in

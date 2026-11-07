@@ -31,6 +31,11 @@ named here is closed.
   `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
   `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
   it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+- **A comment on a diff's lines, from the terminal.** In a diff `/review` opens, Space chooses a line, and on another every
+  line between, and `c` writes a comment at the foot, sent as your message to the agent whose workspace made the change, its
+  `based_on` citing those lines by the record's ref, or with none chosen the commit, or an uncommitted diff whole. A change no
+  agent's workspace made has nobody to take a comment, and `c` says so. See
+  [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **Diffs in the terminal's `/review`.** Enter on a commit opens its patch, and on a workspace or one of its paths what it holds
   uncommitted, each asked for with `repo diff` and drawn a page at a time as `blob get` gives it, each line numbered as a
   citation names it and drawn as text, whatever it holds. Above it are its record's words and where it was read, and for an

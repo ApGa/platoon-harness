@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Refused, Session, Team
 from platoon_harness.kernel import Clock, ManualClock
 from platoon_harness_cli import review
 from platoon_harness_cli.review import Diff, Page, place, snapshots_of
@@ -442,3 +442,66 @@ async def test_a_snapshot_or_isolated_workspace_s_diff_says_where_it_was_read(ro
     assert place("@ada", "worktree", commit=False) == "@ada's worktree"
     assert place("shared", None, commit=True) == "your repository"
     assert place("shared", None, commit=False) == "your checkout"
+
+
+async def test_a_comment_on_chosen_lines_is_a_message_to_the_commit_s_maker_citing_them(root, repo):
+    """Space chooses a line of the patch and, on another, every line between; `c` writes a comment at the foot, which
+    goes to the agent whose workspace made the commit, its `based_on` citing those lines by the record's ref. Esc goes
+    back to the patch keeping what was written. With no line chosen it cites the commit."""
+
+    def work(cwd: Path) -> None:
+        commit(cwd, "notes.txt", "one\ntwo\nthree\n")
+
+    async with attached(team(work), root, repo) as (owner, pilot):
+        await pilot.press(*"go", "enter")
+        await looked(owner)
+        await drawn(pilot, lambda text: "1 commit" in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: "What changed" in text and "add notes.txt" in text)
+        await pilot.press("down", "enter")
+        await drawn(pilot, lambda text: "Read in @lead's worktree." in text)
+        await pilot.press(*["down"] * 6, "space", "down", "space", "c")
+        about = await drawn(pilot, lambda text: "Comment to @lead" in text)
+        await pilot.press(*"why", "escape")
+        kept = await drawn(pilot, lambda text: "Comment to @lead" not in text)
+        await pilot.press("c")
+        await drawn(pilot, lambda text: "Comment to @lead" in text)
+        await pilot.press("space", *"these?", "enter")
+        [lines] = await until(lambda: comments(owner), owner)
+        await pilot.press("c")
+        await drawn(pilot, lambda text: "Comment to @lead on the commit" in text)
+        await pilot.press(*"and", "space", *"this?", "enter")
+        _, whole = await until(lambda: comments(owner), owner, lambda found: len(found) == 2)
+        [record] = await of_type(owner, "repo.diffed")
+        [made] = await of_type(owner, "repo.committed")
+
+    sha = made.data["sha"]
+    assert f"Comment to @lead on lines 7 to 8 of {sha[:12]}'s patch" in about
+    assert "c: comment" in kept and "Read in @lead's worktree." in kept
+    assert (lines.stream, lines.gist, lines.based_on) == (
+        "inbox/lead",
+        "why these?",
+        (f"{record.stream}@{record.version}#L7-8",),
+    )
+    assert (whole.gist, whole.based_on) == ("and this?", (f"{made.stream}@{made.version}",))
+
+
+async def comments(session: Session) -> list[Any]:
+    """What you sent that cites something, as only a comment of the test's does."""
+    return [event for event in await of_type(session, "message.sent") if event.actor == "human:you" and event.based_on]
+
+
+async def test_a_comment_on_a_change_no_agent_made_has_nobody_to_go_to(root, repo):
+    """Your checkout is no agent's workspace, so a comment on what it holds uncommitted is refused, saying why, and
+    nothing is sent."""
+    lead = {"harness": working(lambda cwd: (cwd / "README").write_text("edited\n")), "workspace": "shared"}
+    shared = Team.model_validate({"roles": {"lead": lead}, "topology": {"edges": {"lead": ["human"]}}})
+    async with worked_on(shared, root, repo) as owner:
+        diff = await review.read(owner, (await owner.repo_diff("shared"))["effect"])
+        with pytest.raises(Refused) as refused:
+            await review.comment(owner, diff, (1, 2), "who did this?")
+        sent = await comments(owner)
+
+    assert diff.to is None and sent == []
+    assert diff.unsendable == "A comment goes to whoever made the change, and no agent's workspace made your checkout."
+    assert refused.value.refusal.code == "not_found"

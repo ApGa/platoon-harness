@@ -37,7 +37,7 @@ PLACES = {
     Rows: ("list",),
     Provenance: ("provenance",),
     Review: ("dialog", "review"),
-    Patch: ("dialog",),
+    Patch: ("dialog", "patch"),
     Confirm: ("question",),
     Form: ("dialog",),
     Help: ("dialog",),

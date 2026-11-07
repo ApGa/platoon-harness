@@ -195,8 +195,9 @@ POST /v1/x_read {"pane": "diff", "effect": 38}             -> {"reading": true} 
 POST /v1/x_read {"pane": "diff", "ref": "repo/app@12#L..."} -> {"page"}
 ```
 
-The terminal's `/review` lists what changed, Enter opens a diff and `t` tests the chosen commit. In the diff Space chooses lines
-from where it was pressed to the cursor, and `c` writes a comment in a composer at the foot. The page's Review changes, in its top
+The terminal's `/review` lists what changed, Enter opens a diff and `t` tests the chosen commit. In the diff Space chooses the
+line under the cursor, and pressed on another every line from the first to it, and `c` writes a comment in a composer at the
+foot. The page's Review changes, in its top
 bar and on an agent's page, opens the list in the pane, each commit with Patch and Test and each workspace with Uncommitted diff,
 and the diff in the same pane, `review=` in the address naming what it shows, where a click on a line's number chooses it,
 Shift and a click a range, and Comment sends what is written below.
