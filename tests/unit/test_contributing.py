@@ -1,7 +1,7 @@
 """CONTRIBUTING.md stays true: each command it shows is one CI or a hook runs, one that makes a generated page, or one
-it runs by hand for a stated reason; it shows every command CI runs and every hook; its commit types are the ones the
-hook and the title check accept; the ruff hook runs the ruff the dev group pins; the paths it names and the version it
-shows are real; and the pull request template asks for what it asks."""
+it runs by hand for a stated reason; it shows every command CI runs, the release workflow's under Releases, and every
+hook; its commit types are the ones the hook and the title check accept; the ruff hook runs the ruff the dev group pins;
+the paths it names and the version it shows are real; and the pull request template asks for what it asks."""
 
 import re
 import tomllib
@@ -44,9 +44,9 @@ FENCE = re.compile(r"^(?P<indent> *)```(?P<language>[\w-]*)$")
 PATH = re.compile(r"`((?:\.github|docs|examples|packages|tests)/[\w./-]*|[\w.-]+\.(?:md|toml|yaml|txt))`")
 
 
-def blocks(language: str) -> list[str]:
+def blocks(language: str, text: str = TEXT) -> list[str]:
     """Each fenced block of `language`, without the indentation of a block inside a list."""
-    found, lines, index = [], TEXT.splitlines(), 0
+    found, lines, index = [], text.splitlines(), 0
     while index < len(lines):
         fence = FENCE.match(lines[index])
         index += 1
@@ -62,23 +62,31 @@ def blocks(language: str) -> list[str]:
     return found
 
 
-def shown() -> list[str]:
+def shown(text: str = TEXT) -> list[str]:
     """Each command of the guide's shell blocks, one per line, but comments."""
-    return [line for block in blocks("bash") for line in block.splitlines() if line and not line.startswith("#")]
+    return [line for block in blocks("bash", text) for line in block.splitlines() if line and not line.startswith("#")]
 
 
-def steps() -> list[dict[str, Any]]:
+def section(heading: str) -> str:
+    """The guide's section under `## heading`, up to the next."""
+    start = TEXT.index(f"\n## {heading}\n")
+    end = TEXT.find("\n## ", start + 1)
+    return TEXT[start : end if end != -1 else None]
+
+
+def steps(workflow: str = "*") -> list[dict[str, Any]]:
+    """Each step of each job of the workflows `workflow` names, a file name without `.yml`, or all of them."""
     return [
         step
-        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        for path in sorted((ROOT / ".github" / "workflows").glob(f"{workflow}.yml"))
         for job in yaml.safe_load(path.read_text())["jobs"].values()
         for step in job["steps"]
     ]
 
 
-def ci_runs() -> list[str]:
-    """Each line of each `run` of each CI step."""
-    return [line for step in steps() if "run" in step for line in step["run"].strip().splitlines()]
+def ci_runs(workflow: str = "*") -> list[str]:
+    """Each line of each `run` of each step of the workflows `workflow` names."""
+    return [line for step in steps(workflow) if "run" in step for line in step["run"].strip().splitlines()]
 
 
 def hooks() -> list[dict[str, Any]]:
@@ -110,6 +118,14 @@ def test_every_command_shown_is_run_by_ci_a_hook_or_a_generator_or_by_hand_for_a
 def test_every_command_ci_runs_is_shown():
     assert ci_runs()
     assert [command for command in ci_runs() if command not in shown()] == []
+
+
+def test_every_command_the_release_workflow_runs_is_shown():
+    """Under Releases, in the order the workflow runs them, so a release is checked by hand as CI checks it."""
+    runs = ci_runs("release")
+
+    assert runs
+    assert [command for command in shown(section("Releases")) if command in runs] == runs
 
 
 def test_each_generated_page_names_the_command_that_makes_it_again():

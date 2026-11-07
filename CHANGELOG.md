@@ -66,6 +66,12 @@ named here is closed.
   out, offers Set the budget, `budget.set` with the scope the record names, filled in with the limits and estimate it was set
   to, which `budget.set` replaces whole, for you to change, where it offered nothing. A wake refused by a limit no amount can
   hold says in its gist to remove it, and its refusal `unavailable` names its scope and unit as data, as `over_budget` does. See [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
+- **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the SDK's and the command
+  line's sdists and wheels on each pull request and each push to `main`, each wheel from its sdist, checks every one with
+  `twine check --strict`, and runs the command line from the wheels in an environment of its own. Nothing checked what a
+  release would publish. CONTRIBUTING shows its commands under Releases. Its commands pass when run by hand, and that
+  they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as the names, the tag and the
+  trusted publisher a release would publish with are the owner's to rule on.
 - **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
   author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
   `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the

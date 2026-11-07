@@ -244,6 +244,7 @@ stacked on another one is checked too, and for pushes to `main`. A new push canc
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
 | `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs | git is older than 2.47, or a test fails |
 | `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it, as the workflow says, which no runner has shown yet | A browser test fails in that browser |
+| `build`, of the release workflow | Every distribution built and checked, as [Releases](#releases) says, and nothing published | A build or a check fails |
 
 The commands, job by job:
 
@@ -261,6 +262,7 @@ uv run pytest -q -n auto
 uv sync --locked
 uv run playwright install --with-deps --only-shell "$PLATOON_HARNESS_BROWSERS"
 uv run pytest -q -m e2e
+# build, of the release workflow, as Releases shows
 ```
 
 The slow tests need harness binaries that CI does not have, so CI never runs them, and it never runs the live ones.
@@ -378,4 +380,21 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 
 ## Releases
 
-Nothing is published yet. How to cut a release is written here before the first one.
+Nothing is published or tagged yet, and nothing publishes without the owner: the names, the tag and the trusted
+publisher a release would publish with are the owner's to rule on. How to cut a release is written here before the
+first one.
+
+The release workflow, `.github/workflows/release.yml`, builds every distribution and checks it, on each pull request and
+each push to `main`, as CI's other jobs run. Its `build` job runs:
+
+```bash
+uv build --all-packages --no-sources
+uvx twine check --strict dist/*
+uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
+```
+
+`uv build` writes each package's sdist to `dist/`, then its wheel, built from the sdist, so an sdist that leaves out a
+file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
+`twine check --strict` checks each distribution's metadata, and that its README renders as its PyPI description, failing
+on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
+their metadata requires, so a requirement only the workspace gave fails there.

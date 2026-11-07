@@ -1,0 +1,39 @@
+name: Release
+
+# Builds the SDK's and the command line's sdists and wheels, and checks them, on the events ci.yml runs on: what a release
+# would publish, checked before anything is published. It publishes nothing: the names, the tag and the trusted
+# publisher a release would publish with are the owner's to rule on (CONTRIBUTING.md, "Releases").
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# As in ci.yml, on a Python that uv manages.
+env:
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
+
+      # Each wheel is built from its sdist, and --no-sources builds each package as PyPI would, without the
+      # workspace's sources.
+      - name: Build every distribution
+        run: uv build --all-packages --no-sources
+
+      - name: Check their metadata and their PyPI descriptions
+        run: uvx twine check --strict dist/*
+
+      - name: Run the command line from the wheels in an environment of its own
+        run: uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
