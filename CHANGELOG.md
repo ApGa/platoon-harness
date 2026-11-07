@@ -847,6 +847,10 @@ named here is closed.
 
 ### Fixes
 
+- **A scripted turn whose step raises ends failed, saying why.** `ScriptedDriver` ended a turn failed on a `DriverError` alone,
+  so a step or a subclass that raised anything else, such as a script reading a refused tool result as JSON, left its turn open
+  with no error, and its session never settled. Such a turn now ends `failed:` with the type and words of what was raised, as a
+  harness's own error ends its turn, and the next turn runs.
 - **A Codex turn holds a native child open from the spawn that names it.** The `codex` driver learned of a native child only
   from the child's `turn/started`, and Codex can send that after its parent's `turn/completed`, as it did in about one run in
   six with Codex short of CPU, so the turn ended with the parent, and the child's turn was reported as one of its own, which the

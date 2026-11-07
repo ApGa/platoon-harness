@@ -1,5 +1,9 @@
 """ScriptedDriver: each step, its capabilities as data, and real MCP and model calls."""
 
+import json
+from collections.abc import Sequence
+from typing import Any
+
 import pytest
 
 from platoon_harness import Session, Team
@@ -189,6 +193,25 @@ async def test_fail_ends_the_turn_and_not_the_harness(tmp_path):
     driver, heard = await started(tmp_path, [Fail("boom")], [Say("still here")])
 
     assert (await heard.until(TurnEnded)).reason == "failed: boom"
+    await driver.deliver(delivery())
+    assert (await heard.until(Item)).gist == "still here"
+    await driver.stop(1)
+
+
+async def test_a_step_that_breaks_ends_its_turn_failed_saying_why_and_not_the_harness(tmp_path):
+    """As a script that reads a tool's refusal as JSON does."""
+
+    class Breaking(ScriptedDriver):
+        async def _walk(self, steps: Sequence[Any]) -> str:
+            if self._turn_count == 1:
+                json.loads("refused: no task 7")
+            return await super()._walk(steps)
+
+    driver, heard = Breaking([[], [Say("still here")]]), Heard()
+    await driver.start(make_spec(tmp_path), heard)
+
+    turn = await heard.until(TurnEnded)
+    assert turn.reason == "failed: JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
     await driver.deliver(delivery())
     assert (await heard.until(Item)).gist == "still here"
     await driver.stop(1)

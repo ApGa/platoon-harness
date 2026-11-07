@@ -629,7 +629,8 @@ until the model only talks. A tool call the model chose goes under the id the mo
 `_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
 `tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since its op would join the
 call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
-one in the same turn is answered as a repeat.
+one in the same turn is answered as a repeat. A step that raises, of its own or of a subclass's, fails its turn saying what it
+raised, and the next turn runs.
 
 ### Extensions
 

@@ -161,7 +161,8 @@ class _Exiting(Exception):
 
 class ScriptedDriver:
     """A harness made of `turns`, each a list of steps: the first runs on the goal if it has one, and each next on a
-    delivery. A turn with no steps left ends, and turns run out into empty ones.
+    delivery. A turn with no steps left ends, and turns run out into empty ones. A turn whose step raises ends failed,
+    saying what was raised, as a harness's own error ends its turn.
 
     Its capabilities are data, and it holds to them: one that is not `persistent` exits after its first turn, one with
     no `resume` refuses to resume, and a boundary it does not declare is refused. A turn's name counts within one
@@ -272,8 +273,12 @@ class ScriptedDriver:
             if not self._interrupted:
                 raise
             reason = "interrupted"
+        except _Exiting:
+            raise
         except DriverError as error:
             reason = f"failed: {error}"[:SHORT_LIMIT]
+        except Exception as error:
+            reason = f"failed: {type(error).__name__}: {error}"[:SHORT_LIMIT]
         self._steps = None
         self._transcript.parent.mkdir(parents=True, exist_ok=True)
         self._transcript.write_text(json.dumps(self._messages))
