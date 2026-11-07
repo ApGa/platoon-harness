@@ -1083,7 +1083,7 @@
   }
  },
  "control_sequences_observed": {
-  "_comment": "Class names in callback order, from the control-plane probes (SDK 1.59.0). Timings were measured on a shared login node.",
+  "_comment": "Class names in callback order, from the control-plane probes (SDK 1.59.0). Timings were measured on a shared Linux host.",
   "arun_send_message_during_llm_call": {
    "send_blocked_s": 0.05,
    "events": [

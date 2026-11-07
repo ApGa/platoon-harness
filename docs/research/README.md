@@ -149,7 +149,6 @@ Scanned all reports and fixtures for local paths, cluster and account names, ema
 - **Terms.** Training through Claude Code against a non-Claude policy is blocked pending an owner decision. OpenAI's Terms pages returned 403, so those clauses come from search snippets and need review.
 - **Hidden calls.** OpenCode title calls and any unlabelled side call would train as `policy`. Untested through the gateway.
 - **Not tested:** parking and cold resume on any harness, Codex MCP tools under Code Mode on a live model, ACP past `initialize` on real agents (steering was only advertised), `rollout_isolation: process`, mint over a Unix socket, OpenHands condenser through the gateway.
-- **Fixture review.** `claude-stream-sample.jsonl` holds short strings authored by a proprietary CLI. Review before the repository goes public.
 
 ## Clean-room statement
 

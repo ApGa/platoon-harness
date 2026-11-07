@@ -483,6 +483,11 @@
 - `FakeModel` gives a tool call its script names no id `call_<reply>_<place>`, by the reply's number and its place in it, where
   every such call was `call_1`, so no two calls share an id, as a model's never do: under one id, a harness that sends it joined
   each later op to the first call and took an identical one in a later turn for a repeat. `ToolCall.id` defaults to None.
+- The seven live captures are reviewed for session and thread ids, paths, account and organization fields and what a
+  model's account says. In the Claude Code capture the two texts Claude Code itself wrote, its frame around a subagent's
+  report and its message around a compaction's summary, are each reduced to their length, and the OpenHands capture
+  describes its host neutrally; the others needed nothing. Compatibility's section 8 and the research index no longer
+  ask for the review.
 - The MCP probe's log, which `tests/unit/tools/test_replay.py` replays, is a test input, so it moved from
   `docs/research/fixtures/` to `tests/fixtures/`, where the research and RFC 0009 link it.
 - The research is marked as dated background: its index is titled so, and each note opens with its date, that it is not
