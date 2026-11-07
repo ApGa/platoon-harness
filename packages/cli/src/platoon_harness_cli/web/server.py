@@ -20,7 +20,7 @@ from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__
-from ..ops import CONFIRMED, cut, person_ops
+from ..ops import CONFIRMED, Form, cut, forms, person_ops
 from ..provenance import read
 from ..roster import status_of
 from . import replies
@@ -201,10 +201,9 @@ class Web(Server[Request]):
 
     async def _info(self, held: Held) -> dict[str, Any]:
         """The server, and in `x` what this page may do: the credential's class, whether a runtime holds the session,
-        who the person is, the ops their grants hold, the ops asked about before they run, the most bytes a body may
-        be, and why the page may do nothing, when it may not."""
+        who the person is, the ops their grants hold, a form for each op they hold that writes, on any link, the ops
+        asked about before they run, the most bytes a body may be, and why the page may do nothing, when it may not."""
         live, name = self.live(), self.session.name
-        may: list[str] = []
         cannot = None
         if held.kind == "view":
             cannot = "This is a view link: it shows the session and acts on nothing."
@@ -213,15 +212,14 @@ class Web(Server[Request]):
                 f"No runtime holds this session, so this is its history: `platoon-harness session resume {name}` "
                 "resumes it, which can spend money."
             )
-        else:
-            outcome = await self.session.submit("ops.list")
-            may = sorted(op["name"] for op in outcome.result or ())
+        ops = (await self.session.submit("ops.list")).result or []
         x = {
             "credential": held.kind,
             "live": live,
             "person": self.projection.person,
             "session": name,
-            "may": may,
+            "may": [] if cannot else sorted(op["name"] for op in ops),
+            "forms": [_page_form(form) for form in forms(ops)],
             "confirmed": sorted(CONFIRMED),
             "body_limit": BODY_LIMIT,
             "cannot": cannot,
@@ -362,6 +360,24 @@ class Web(Server[Request]):
             return {"ref": await self.session.put_body(body)}
         except Refused as refused:
             return {"refusal": refused.refusal.model_dump(mode="json")}
+
+
+def _page_form(form: Form) -> dict[str, Any]:
+    """A form as the page takes it: each field's flag, help and kind, the choices a choice takes, whether it is needed,
+    and what stands when it is left empty."""
+    fields = [
+        {
+            "name": field.name,
+            "flag": field.flag,
+            "help": field.help,
+            "kind": field.kind,
+            "choices": list(field.choices),
+            "required": field.required,
+            "default": None if field.required else field.default,
+        }
+        for field in form.fields
+    ]
+    return {"op": form.op, "title": form.title, "summary": form.summary, "said": form.said, "fields": fields}
 
 
 def _json(value: Any) -> bytes:

@@ -404,7 +404,7 @@ the installed package and held to these SHA-256 values when it starts. A file th
 - The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
   It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `route`, `onKey`, `apply`, `onClick`, `renderTop`, `avatar`,
   `messageHtml`, `systemHtml`, `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`,
-  `ThreadPane`, `PersonView`, `KnewPane`, `UnreadView`, `BoardView` and `MapView`, adds `provenance` to the address keys `KEYS`, and
+  `ThreadPane`, `PersonView`, `KnewPane`, `UnreadView`, `BoardView` and `MapView`, adds `provenance` and `act` to the address keys `KEYS`, puts Commands before `#find`, and
   uses `S`, `TOKEN`, `ARROW`, `go`, `overlay`, `toast`, `throttle`, `buildSide` and the helpers `html`, `Safe`, `$` and `$$`. An upgrade that renames one breaks the browser tests,
   which fail on any page error.
 - The link exchange is a script of ours before the gate's. It hands the gate the session token through the `#token=` the gate

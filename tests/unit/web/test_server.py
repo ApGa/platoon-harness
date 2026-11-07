@@ -2,9 +2,11 @@
 
 import asyncio
 import errno
+import inspect
 import json
 import socket
 import sqlite3
+import typing
 from pathlib import Path
 
 import pytest
@@ -17,7 +19,7 @@ from platoon_harness.http import SECONDS
 from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Hang, ScriptedDriver
-from platoon_harness_cli.ops import cut
+from platoon_harness_cli.ops import _command, cut, person_ops
 from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
@@ -710,6 +712,47 @@ async def test_capabilities_name_the_person_their_grants_and_what_is_asked_first
         "session.close",
     ]
     assert x["body_limit"] == BODY_LIMIT
+
+
+async def test_the_page_is_given_each_write_op_s_form_worded_as_the_command_line_s_help(web, session):
+    """On either link, a form for each op `ops.list` says the person holds but a query and a wait, as the terminal's
+    palette has them: what it does as its command's help says it, and a field per flag, in that flag's help but for how
+    a command line reads a file, with its kind, its choices, whether it is needed and what stands when it is left out.
+    `via` is no field, as web says it."""
+    held = await session.ops()
+    writes = sorted(op["name"] for op in held if not (op["query"] or op["exposes"] or op["name"].startswith("wait")))
+    given = {kind: (await (await Browser(web).opened(kind)).view("view_info"))["x"] for kind in ("control", "view")}
+    forms = given["control"]["forms"]
+
+    assert [form["op"] for form in forms] == writes and given["view"]["forms"] == forms
+    for form in forms:
+        command = _command(person_ops()[form["op"]])
+        assert (form["title"], form["summary"]) == (form["op"].replace(".", " "), command.__doc__.split("\n\n")[0])
+        assert form["said"].startswith(form["summary"].removesuffix("."))
+        for field in form["fields"]:
+            said = typing.get_args(inspect.signature(command).parameters[field["name"]].annotation)[1].help
+            said = said.removesuffix(f" {field['flag']}-file reads it from a file.")
+            assert field["help"] == (f"{said} Separate several with commas." if field["kind"] == "list" else said)
+    shapes = {form["op"]: [_shape(field) for field in form["fields"]] for form in forms}
+    assert shapes["approval.resolve"] == [
+        ("--id", "text", [], True, None),
+        ("--verdict", "choice", ["allow", "deny"], True, None),
+        ("--expected-version", "integer", [], True, None),
+    ]
+    assert shapes["budget.set"] == [
+        ("--scope", "text", [], False, "shared"),
+        ("--limits", "json", [], False, None),
+        ("--estimate", "json", [], False, None),
+    ]
+    assert shapes["agent.spawn"][3:] == [
+        ("--body", "body", [], False, None),
+        ("--stays", "yes-no", [], False, None),
+        ("--based-on", "list", [], False, []),
+    ]
+
+
+def _shape(field: dict) -> tuple:
+    return field["flag"], field["kind"], field["choices"], field["required"], field["default"]
 
 
 async def test_web_folds_what_a_runtime_wrote_and_left_between_two_looks(root, clock):

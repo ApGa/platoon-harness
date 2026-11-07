@@ -11,13 +11,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from playwright.async_api import Browser, Route, expect
+from playwright.async_api import Browser, Locator, Page, Route, expect
 
 from platoon_harness import Session, Team
 from platoon_harness.primitives import delivery
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say
-from platoon_harness_cli.ops import cut
+from platoon_harness_cli.ops import CONFIRMED, cut
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.transcript import Transcript
 
@@ -470,3 +470,181 @@ async def test_an_agent_s_acts_ask_first_where_marked_and_say_what_came_of_them(
     assert commands == ["agent.interrupt"]
     assert made.startswith(served) and credential == "view"
     assert errors == [] and viewer_errors == []
+
+
+def acting() -> Team:
+    """`lead`, which may start a `worker` and works on, and a queue `jobs` and a board `notes` anyone may use."""
+    roles = {
+        "lead": {"harness": scripted([Hang()]), "may_spawn": ["worker"]},
+        "worker": {"harness": scripted([Hang()]), "count": 0},
+    }
+    channels = {
+        "jobs": {"kind": "queue", "writers": "all", "readers": "all"},
+        "notes": {"kind": "board", "writers": "all", "readers": "all"},
+    }
+    topology = {"edges": {"lead": ["children", "human"], "worker": ["parent"]}, "channels": channels}
+    return Team.model_validate({"roles": roles, "topology": {**topology, "limits": {"max_depth": 2}}})
+
+
+async def form(page: Page, title: str) -> None:
+    """Open an op's form from Commands, choosing it by its title, and wait for it in the pane."""
+    await page.locator("[data-x-commands]").click()
+    await page.locator(".palette .it", has=page.locator(".t", has_text=re.compile(rf"^{re.escape(title)}$"))).click()
+    await expect(page.locator("#pane h2")).to_have_text(title, timeout=SECONDS)
+
+
+def field(page: Page, flag: str) -> Locator:
+    """A field of the form in the pane, by its flag."""
+    return page.locator("#pane .x-form").get_by_label(re.compile(rf"^{re.escape(flag)}( \(needed\))?$"))
+
+
+async def fill(page: Page, values: dict[str, str]) -> None:
+    """Fill the form in the pane, a value per flag, a choice by the words it shows."""
+    for flag, value in values.items():
+        control = field(page, flag)
+        if await control.evaluate("el => el.tagName") == "SELECT":
+            await control.select_option(label=value)
+        else:
+            await control.fill(value)
+
+
+async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(browser: Browser, root: Path):
+    """Commands lists a form for each op the person holds that writes, and each goes to the session through its form,
+    under the page's key, answered done or refused, and said under it. An op that ends an agent or the session, erases
+    a body or runs a commit's code is asked about once first."""
+    async with Session.start(acting(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "lead", "idle")
+        erased = (await session.put_body(b"something to erase")).removeprefix("sha256:")
+        runs = {
+            "channel.create": {"--name": "ideas", "--kind": "topic"},
+            "message.send": {"--to": "@lead", "--gist": "from the form"},
+            "board.post": {
+                "--board": "notes",
+                "--name": "spec",
+                "--gist": "the spec",
+                "--body": "Step one.",
+                "--fields": '{"owner": "you"}',
+            },
+            "board.revise": {
+                "--board": "notes",
+                "--name": "spec",
+                "--gist": "the spec, revised",
+                "--expected-version": "1",
+            },
+            "task.add": {"--queue": "jobs", "--gist": "fix the flaky test", "--body": "It fails one run in ten."},
+            "task.claim": {"--queue": "jobs"},
+            "task.renew": {"--queue": "jobs"},
+            "task.complete": {"--queue": "jobs", "--gist": "fixed"},
+            "task.fail": {"--queue": "jobs"},
+            "task.release": {"--queue": "jobs"},
+            "episode.open": {"--episode": "first"},
+            "episode.close": {},
+            "budget.set": {"--limits": '{"turns": 50}'},
+            "approval.resolve": {"--id": "nothing", "--verdict": "allow", "--expected-version": "1"},
+            "effect.settle": {"--id": "1", "--happened": "yes"},
+            "body.tombstone": {"--sha256": erased},
+            "agent.spawn": {"--name": "w9", "--child-role": "worker", "--goal": "take work", "--stays": "no"},
+            "agent.interrupt": {"--agent": "@lead", "--below": "yes"},
+            "agent.takeover": {"--agent": "@lead"},
+            "agent.release": {"--agent": "@lead"},
+            "agent.cancel": {"--agent": "@w9"},
+            "repo.test": {"--commit": "0" * 40},
+            "agent.retire": {"--agent": "@lead"},
+            "session.close": {"--if-done": "yes"},
+            "session.cancel": {},
+        }
+        page, errors = await opened(browser, web.link("control"))
+        offered = await page.evaluate("X.caps.forms.map(form => form.op)")
+        answers = {}
+        for op, values in runs.items():
+            title = op.replace(".", " ")
+            await form(page, title)
+            await fill(page, values)
+            await page.locator("#pane [data-x-run]").click()
+            if op in CONFIRMED:
+                await expect(page.locator(".x-ask .ph")).to_have_text(re.compile(r"\? It cannot be taken back\.$"))
+                await page.locator(".x-ask [data-x-yes]").click()
+            said = page.locator("#pane .x-said")
+            await expect(said).to_have_text(re.compile(rf"^{re.escape(title)}: "), timeout=SECONDS)
+            answers[op] = await said.text_content()
+        keyed = [event.outcome async for event in session.events() if event.outcome is not None]
+        await page.context.close()
+
+    assert sorted(offered) == sorted(runs)
+    assert sorted({outcome.op for outcome in keyed if (outcome.key or "").startswith("web/")}) == sorted(runs)
+    refused = {op for op, answer in answers.items() if not answer.startswith(f"{op.replace('.', ' ')}: done.")}
+    assert refused <= {"task.fail", "task.release", "approval.resolve", "effect.settle", "repo.test", "agent.interrupt"}
+    assert answers["task.fail"] == "task fail: stale_fence: you hold no live lease on jobs"
+    assert answers["board.post"] == 'board post: done. {"ref":"board/notes/spec@1","version":1}'
+    assert errors == []
+
+
+async def test_an_op_that_ends_an_agent_or_erases_a_body_is_asked_about_once_in_the_page(browser: Browser, root: Path):
+    """Run asks once, beside it, before an op the terminal asks about, saying the op and what was given it. Kept, it
+    sends nothing and the form keeps what was typed; taken, the op runs once. An op the terminal does not ask about
+    runs at once."""
+    async with Session.start(acting(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "lead", "idle")
+        erased = (await session.put_body(b"something to erase")).removeprefix("sha256:")
+        page, errors = await opened(browser, web.link("control"))
+        run, asked, said = page.locator("#pane [data-x-run]"), page.locator(".x-ask .ph"), page.locator("#pane .x-said")
+
+        await form(page, "body tombstone")
+        await fill(page, {"--sha256": erased})
+        await run.click()
+        await expect(asked).to_have_text(f"body tombstone {erased}? It cannot be taken back.")
+        await page.locator(".x-ask [data-x-no]").click()
+        await expect(asked).to_have_count(0)
+        await expect(run).to_be_focused()
+        await expect(field(page, "--sha256")).to_have_value(erased)
+        kept = await of_type(session, "body.tombstoned")
+        await run.click()
+        await page.locator(".x-ask [data-x-yes]").click()
+        await expect(said).to_have_text("body tombstone: done.", timeout=SECONDS)
+        await form(page, "agent retire")
+        await fill(page, {"--agent": "@lead"})
+        await run.click()
+        await expect(asked).to_have_text("agent retire @lead? It cannot be taken back.")
+        await page.locator(".x-ask [data-x-yes]").click()
+        await expect(said).to_have_text("agent retire: done.", timeout=SECONDS)
+        await form(page, "message send")
+        await fill(page, {"--to": "#jobs", "--gist": "not asked"})
+        await run.click()
+        await expect(said).to_have_text(re.compile(r"^message send: "), timeout=SECONDS)
+        tombstoned = await of_type(session, "body.tombstoned")
+        ended = await of_type(session, "agent.ended")
+        await page.context.close()
+
+    assert kept == [] and [event.data["sha256"] for event in tombstoned] == [erased]
+    assert [(event.agent, event.data["status"]) for event in ended] == [("lead", "retired")]
+    assert errors == []
+
+
+async def test_a_json_field_takes_only_json_and_shows_it_as_text(browser: Browser, root: Path):
+    """A JSON field takes JSON alone: anything else is refused before it is sent, saying why, with focus on the field.
+    What it holds and what the op answered are shown as text, markup and all, and what was sent is the JSON's value."""
+    hostile = '{"owner": "<img src=x onerror=window.__pwned=1>"}'
+    async with Session.start(acting(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await in_state(session, "lead", "idle")
+        page, errors = await opened(browser, web.link("control"))
+        said, fields = page.locator("#pane .x-said"), field(page, "--fields")
+        await form(page, "board post")
+        await fill(page, {"--board": "notes", "--name": "spec", "--gist": "the spec", "--fields": "{owner: you}"})
+        head = await session.head()
+
+        await page.locator("#pane [data-x-run]").click()
+        await expect(said).to_have_text(re.compile(r"^--fields takes JSON: \S"))
+        await expect(fields).to_be_focused()
+        assert await session.head() == head
+        await fields.fill(hostile)
+        await page.locator("#pane [data-x-run]").click()
+        await expect(said).to_have_text('board post: done. {"ref":"board/notes/spec@1","version":1}', timeout=SECONDS)
+        await expect(fields).to_have_value(hostile)
+        posted = await of_type(session, "board.posted")
+        pwned = await page.evaluate("window.__pwned")
+        images = await page.locator("#pane img").count()
+        await page.context.close()
+
+    assert [event.data["fields"] for event in posted] == [{"owner": "<img src=x onerror=window.__pwned=1>"}]
+    assert pwned is None and images == 0
+    assert errors == []

@@ -139,10 +139,13 @@ moves drops focus from a control in it.
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
 | A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
+| Any op you hold that writes | Commands, in the top bar, lists one for each op the session's `ops.list` says you hold, an extension's among them, but a query, which a pane draws, and `wait` and the ops on a wait, as the terminal's palette lists them. Typing finds one, as Search does, and choosing it opens its form in the pane, which the address names, so Back and a reload keep it, and Esc or × closes it | The op, worded as its command's help, with a field per flag in that flag's words: text, yes or no, a choice, a whole number, a number, several separated by commas, JSON, which takes JSON alone and says why before anything is sent, or a body, whose text is stored first. A field left empty is left out, so the op's own default, shown in it, stands. `via` is said as `browser`. What came of it is said under Run: done, with what the op answered as text, or the refusal |
 
-**Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run:
-these are the ops the terminal asks about too, one set both read, and nothing takes them back. Testing a commit is in that set, and
-the page has no list of commits to test from: the terminal's `/review` is where one is tested.
+**Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run,
+and so does Run on the form of any op the terminal asks about, beside Run, saying the op and what was given it: these are
+the ops that end an agent or the session, erase a body, or run a commit's code as you, one set both read, and nothing takes
+them back. An extension's op is never asked about. The page has no list of commits to test from, so `repo test` takes a
+commit's SHA in its form, and the terminal's `/review` lists them.
 
 **Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
 answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new control
@@ -183,10 +186,8 @@ Each is drawn disabled where its control is, saying why: the tasks and board vie
 whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
 chat, which holds what it announced; and Tool activity and Review changes on an agent's page, which names the terminal's `/review`
 for what changed. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
-words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page has no palette, so of the terminal's acts
-only those under Acting are here: spawning an agent, erasing a body, budgets, channels and every other op a person may
-run are the terminal's and the command line's for now. The page is laid out for a wide window, and at a phone's width it
-is not usable yet. [STATUS.md](../STATUS.md) says what each is.
+words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. A form starts
+empty wherever it was opened from. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 
 ## Security
 

@@ -544,7 +544,7 @@ One definition reaches every surface.
 | MCP | `tools/list` is the `tool=True` ops granted to the token's role; `additionalProperties: false`; `readOnlyHint` set honestly, never enforced: true only for a `query`, since an agent's read moves its cursor |
 | `ph` | One stdlib file on the agent's `PATH` only: `ph task.claim --queue tasks`. It builds argv and help from `tools/list`, which is `ops.list` for its token, and refuses nothing itself |
 | CLI | `platoon-harness task claim SESSION --queue tasks`: a command per op of the SDK's own that is neither runtime-only nor agent-only, but `wait` and the ops on a wait, as a wait parks a turn and a person has none. Its name is split at the dot, a flag per argument comes from its schema, a read runs on a view credential, and its help is the op's description, each op named as the command that runs it and each argument as its flag. An extension's op has no command yet |
-| Web | `POST /x/command {op, args, key, expected_version}`: `expected_version` is the op's argument of that name, `via` is `browser`, the key is the page's, under `web/`, kept until the act is answered from whichever link, and a message's text too long for a gist is cut as the terminal cuts one. Every pane of ours reads through `POST /v1/x_read {pane, ...}`, from queries alone, in the CLI's words, which a view link reaches |
+| Web | Commands lists the forms `view_info` gives, the TUI's, each opened in the pane with a field per flag. `POST /x/command {op, args, key, expected_version}`: `expected_version` is the op's argument of that name, `via` is `browser`, the key is the page's, under `web/`, kept until the act is answered from whichever link, and a message's text too long for a gist is cut as the terminal cuts one. Every pane of ours reads through `POST /v1/x_read {pane, ...}`, from queries alone, in the CLI's words, which a view link reaches |
 | TUI | Palette entries for each write op `ops.list` says the person holds, by the one rule the CLI states for both clients, `forms`: no query, which the views draw, and not `wait` or an op on a wait. Each is worded as its command's help, with one form made from its schema, a field per flag but `via`, which the client says. The dock's actions come from `actions[]`, on the row the person chose; an interrupt the runtime refused shows disabled with its reason until its agent's row moves |
 
 **The tool-plane idempotency key** is a hash of `(anchor, op, canonical args)`, where the anchor is the client's id when it sends
@@ -1633,7 +1633,8 @@ op references, each with whatever keeps a stale button from deciding anything, s
   "Delivered to", from delivery evidence alone, a goal's being the turn that began on it, and browsing writes nothing and moves no
   cursor or mark. A view link and a control link are two credentials of fixed class, one-time and exchanged for session tokens that
   expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one writer. A
-  person acts there through `/x/command`: each act keeps its key until it is answered, across a lost connection, a reload or a new
+  person acts there through `/x/command`, on every op they hold that writes, through the form the terminal's palette uses: each act
+  keeps its key until it is answered, across a lost connection, a reload or a new
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
   `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, which runs
   queries alone and answers in the terminal's words: what needs the person, and the provenance a message's actions open, where the

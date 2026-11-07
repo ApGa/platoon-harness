@@ -13,6 +13,15 @@ named here is closed.
 
 ### New features
 
+- **Every op you hold that writes, from the page.** Commands, in the page's top bar, lists a form for each op the session's
+  `ops.list` says you hold, an extension's among them, but a query and `wait` and the ops on a wait, by the rule the terminal's
+  palette keeps. Choosing one opens its form in the pane: what the op does, as its command's help says it, and a field per
+  flag in that flag's words, each taking what its kind takes, JSON alone for a JSON field, which says why before anything is
+  sent, and a body's text stored first. Run asks once first for an op the terminal asks about, and says under it what came of
+  the act, the op's answer as text, or its refusal. Each act keeps its key until it is answered, as every act of the page's
+  does. On a view link and on history every field and Run are disabled, saying why. Spawning an agent, erasing a body,
+  budgets, channels, tasks, boards and episodes were the terminal's and the command line's alone. See
+  [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
 - **The browser tests in Firefox and WebKit too.** `PLATOON_HARNESS_BROWSERS` names the browsers the browser tests run
   in, comma-separated, each test once in each with its id naming the browser, and Chromium's headless shell where it
   names none. CI's `e2e` job is written to run them once in each of Chromium, Firefox and WebKit, which is inferred from

@@ -5,6 +5,7 @@ the page's policy."""
 import asyncio
 import contextlib
 import json
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -97,6 +98,53 @@ async def test_a_view_link_cannot_command_upload_or_mint_and_its_controls_say_wh
 
     assert statuses == [403, 403, 403]
     assert errors == []
+
+
+async def every_form_is_disabled(page: Page, why: str | re.Pattern[str]) -> list[str]:
+    """Hold each form Commands lists to its fields and its Run each disabled, saying `why`, and a press of Run to
+    showing why and doing nothing else; and say which forms there are."""
+    ops = await page.evaluate("X.caps.forms.map(form => form.op)")
+    await page.locator("[data-x-commands]").click()
+    await expect(page.locator(".palette .it")).to_have_count(len(ops))
+    await page.keyboard.press("Escape")
+    base = page.url.partition("#")[0]
+    for op in ops:
+        await page.goto(f"{base}#act={op}")
+        await expect(page.locator("#pane h2")).to_have_text(op.replace(".", " "), timeout=SECONDS)
+        for control in await page.locator("#pane [data-x-field], #pane [data-x-run]").all():
+            await expect(control).to_be_disabled()
+            await expect(control).to_have_accessible_description(why)
+    await page.locator("#pane [data-x-run]").focus()
+    await page.keyboard.press("Enter")
+    await expect(page.locator("#tip")).to_have_text(why)
+    await expect(page.locator("#pane .x-said")).to_have_text("")
+    return ops
+
+
+async def test_on_a_view_link_or_on_history_every_form_is_disabled_saying_why(browser: Browser, root: Path):
+    """Commands lists a form for each op the person holds that writes, on a view link and on history alike, and every
+    field and Run are disabled there, saying why: a view link acts on nothing, and history names the command that
+    resumes the session. A press sends nothing."""
+    async with Session.start(asking(), name="s", root=root, cwd=root) as session:
+        await in_state(session, "bob", "idle")
+        async with serving("s", root) as web:
+            head = await session.head()
+            page, errors = await opened(browser, web.link("view"))
+            viewed = await every_form_is_disabled(
+                page, "This is a view link: it shows the session and acts on nothing."
+            )
+            assert await session.head() == head
+            await page.context.close()
+    async with serving("s", root) as web:
+        page, history_errors = await opened(browser, web.link("control"))
+        resume = re.compile(
+            r"^No runtime holds this session, so this is its history: `platoon-harness session resume s`"
+        )
+        ended = await every_form_is_disabled(page, resume)
+        await page.context.close()
+
+    assert {"agent.spawn", "message.send", "session.close"} <= set(viewed) and ended == viewed
+    assert errors == [] and history_errors == []
 
 
 async def test_a_spent_link_is_refused(browser: Browser, root: Path):

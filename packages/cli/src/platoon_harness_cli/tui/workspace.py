@@ -1018,7 +1018,7 @@ class Workspace(Screen[None]):
         acts = (*keys("everywhere"), *keys("workspace"))
         found: list[tuple[str, str, Any]] = [(key.typed, key.said, partial(self.run_action, key.runs)) for key in acts]
         for form in self.forms:
-            found.append((form.title, f"{form.said.partition('. ')[0].rstrip('.')}.", partial(self._run_op, form)))
+            found.append((form.title, form.summary, partial(self._run_op, form)))
         return found
 
     @work(group="act")
@@ -1068,17 +1068,17 @@ def _value(field: Flag, text: str) -> Any:
         case "yes-no":
             said = text.lower()
             if said not in ("y", "yes", "true", "1", "n", "no", "false", "0"):
-                raise ValueError(f"{field.name} is yes or no")
+                raise ValueError(f"{field.flag} is yes or no")
             return said in ("y", "yes", "true", "1")
         case "integer":
             if not re.fullmatch(r"-?\d+", text):
-                raise ValueError(f"{field.name} is a whole number")
+                raise ValueError(f"{field.flag} is a whole number")
             return int(text)
         case "number":
             try:
                 return float(text)
             except ValueError:
-                raise ValueError(f"{field.name} is a number") from None
+                raise ValueError(f"{field.flag} is a number") from None
         case "list":
             return [part.strip() for part in text.split(",") if part.strip()]
     return text

@@ -7,9 +7,9 @@
 // keyboard and a screen reader reach as the mouse does. Every pane of ours reads through x_read, in Python's words.
 
 // What this page may do, read from view_info before the page starts: `credential`, view or control, `live`, whether a
-// runtime holds the session, `person`, who acts here, `may`, the ops their grants hold, `confirmed`, the ops asked
-// about before they run, `body_limit`, the most bytes a body may be, and `cannot`, why this page may do nothing, when
-// it may not. The feed keeps `live` current.
+// runtime holds the session, `person`, who acts here, `may`, the ops their grants hold, `forms`, a form for each op the
+// person holds that writes, `confirmed`, the ops asked about before they run, `body_limit`, the most bytes a body may
+// be, and `cannot`, why this page may do nothing, when it may not. The feed keeps `live` current.
 const X = {caps: null};
 
 // What is not built over a session yet, and why: what the brief asks the page to show.
@@ -145,8 +145,18 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .msg:hover .actions, .msg:focus-within .actions { opacity: 1; pointer-events: auto; }
 .x-provenance .x-kind { color: var(--faint); }
 .x-provenance .x-warn { color: var(--warn); }
+.x-form { display: grid; gap: 12px; padding: 12px 14px; }
+.x-form .x-about { margin: 0; color: var(--muted); font-size: 12.5px; }
+.x-form .x-field { display: grid; gap: 4px; }
+.x-form .x-help { margin: 0; color: var(--faint); font-size: 12px; overflow-wrap: anywhere; }
+.x-form input, .x-form textarea, .x-form select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
+.x-form textarea { resize: vertical; }
+.x-form .x-acts { margin-top: 2px; }
+.x-form .x-said { margin: 0; overflow-wrap: anywhere; }
 [aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 </style>`);
+
+$('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button>`.s);
 
 $('#login p').textContent = 'This page opens from a link that platoon-harness web says, or one a page acting for you ' +
   'made. Each link opens once, so ask for a new one.';
@@ -186,12 +196,13 @@ setLive = state => {
 
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
-// a thread or what had reached an agent takes it from provenance.
-KEYS.push('provenance');
+// a thread or what had reached an agent takes it from provenance or an op's form, and provenance from a form.
+KEYS.push('provenance', 'act');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
-  if (r.thread || r.knew) delete r.provenance;
+  if (r.thread || r.knew) { delete r.provenance; delete r.act; }
+  if (r.provenance) delete r.act;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
     if (r.sort) toast(X.UNVOTED);
@@ -200,29 +211,34 @@ readRoute = () => {
   return r;
 };
 
-// The pane shows an event's provenance while the address names one. SwarmChat's own route takes the pane for a thread,
-// for what had reached an agent and for the map, and otherwise leaves it to this one.
+// The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, or an op's form,
+// `act=`. SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and
+// otherwise leaves it to this one. A form drawn again for the same op keeps what was typed in it, and says again what
+// it may do now.
+X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form;
 const baseRoute = route;
 route = async function () {
-  if (S.pane instanceof X.Provenance) S.paneKey = '';
+  if (X.ours(S.pane)) S.paneKey = '';
   await baseRoute();
   const r = S.route, pane = $('#pane');
   if (r.layout === 'map' || r.thread || r.knew) return;
-  if (!r.provenance) {
-    if (S.pane instanceof X.Provenance) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
+  const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form] : [];
+  if (!key) {
+    if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
   }
-  if (!(S.pane instanceof X.Provenance && S.pane.ref === r.provenance)) {
+  if (!(S.pane instanceof Pane && S.pane.name === r[key])) {
     if (S.pane && S.pane.destroy) S.pane.destroy();
-    S.pane = new X.Provenance(r.provenance);
-  }
-  S.paneKey = `provenance|${r.provenance}`;
+    S.pane = new Pane(r[key]);
+  } else if (S.pane.paint) S.pane.paint();
+  S.paneKey = `${key}|${r[key]}`;
   pane.classList.add('open');
 };
 
-// Esc closes the Provenance pane as it closes SwarmChat's own.
+// Esc closes a pane of ours as it closes SwarmChat's own.
 const baseKey = onKey;
-onKey = e => e.key === 'Escape' && !overlay.on && S.route.provenance ? go({provenance: null}, true) : baseKey(e);
+onKey = e => e.key === 'Escape' && !overlay.on && (S.route.provenance || S.route.act)
+  ? go({provenance: null, act: null}, true) : baseKey(e);
 
 // A popover gives focus back as it closes to what had it as it opened, or to what `X.back` finds in its place once that
 // was drawn again, so the keyboard goes on from where it was.
@@ -492,6 +508,137 @@ X.drawNeeds = box => {
   (same || box).focus();
 };
 
+// ---------------------------------------------------------------------- every op the person holds that writes
+
+// Commands, in the top bar: a form for each op the person holds that writes, as view_info gives them, found by typing
+// as Search finds. Choosing one opens its form in the pane.
+X.openCommands = () => {
+  const box = document.createElement('div');
+  box.className = 'palette';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'Commands');
+  box.innerHTML = html`<input placeholder="Find a command" aria-label="Find a command" spellcheck="false"><div class="res"></div>`.s;
+  overlay.open(box);
+  const input = $('input', box), res = $('.res', box);
+  let found = [], at = 0;
+  const mark = () => $$('.it', res).forEach(it => it.classList.toggle('on', +it.dataset.i === at));
+  const draw = () => {
+    const words = input.value.trim().toLowerCase();
+    found = X.caps.forms.filter(form => `${form.title} ${form.op} ${form.summary}`.toLowerCase().includes(words));
+    at = Math.min(at, Math.max(0, found.length - 1));
+    res.innerHTML = (found.length
+      ? html`${found.map((form, i) => html`<div class="it" data-i="${i}"><span class="t">${form.title}</span><span class="s">${form.summary}</span></div>`)}`
+      : html`<div class="grp">${X.caps.forms.length ? 'No command holds those words.' : 'You hold no op that writes.'}</div>`).s;
+    mark();
+  };
+  const choose = form => { overlay.close(); go({act: form.op, provenance: null, thread: null, knew: null}, true); };
+  input.addEventListener('input', () => { at = 0; draw(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { at = Math.min(found.length - 1, at + 1); mark(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { at = Math.max(0, at - 1); mark(); e.preventDefault(); }
+    else if (e.key === 'Enter' && found[at]) choose(found[at]);
+  });
+  res.addEventListener('click', e => { const it = e.target.closest('[data-i]'); if (it) choose(found[+it.dataset.i]); });
+  draw();
+  input.focus();
+};
+
+// What a form shows of a value: yes or no, several separated by commas, JSON as its text, and nothing for null.
+X.shown = value => value === true ? 'yes' : value === false ? 'no' : value == null ? ''
+  : Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+// One field of a form: its flag, whether it is needed, and its help, which is the field's description until the field
+// is disabled and says why instead. What it holds when left empty, the op's own default, shows in it.
+X.field = (field, i) => {
+  const id = `x-field-${i}`, empty = X.shown(field.default);
+  const about = html` id="${id}" data-x-field="${i}" title="${field.help}"`;
+  const choices = field.kind === 'yes-no' ? [true, false] : field.choices;
+  const input = choices.length
+    ? html`<select${about}><option value="">${empty}</option>${choices.map((choice, j) => html`<option value="${j}">${X.shown(choice)}</option>`)}</select>`
+    : ['json', 'body'].includes(field.kind) ? html`<textarea${about} rows="3" placeholder="${empty}" spellcheck="false"></textarea>`
+      : html`<input${about} placeholder="${empty}" spellcheck="false">`;
+  return html`<div class="x-field"><label for="${id}"><code>${field.flag}</code>${field.required ? ' (needed)' : ''}</label>${input}<p class="x-help" aria-hidden="true">${field.help}</p></div>`;
+};
+
+// An op's form in the pane, made from what view_info gives of it: what the op does, as its command's help says it, a
+// field for each of its command's flags, and Run, which asks once first for an op the terminal asks about. Every field
+// and Run are disabled where the page may not run the op, saying why. What came of the act is said under Run.
+X.Form = class {
+  constructor(op) {
+    this.name = op;
+    this.form = X.caps.forms.find(form => form.op === op);
+    const f = this.form;
+    $('#pane').innerHTML = html`<div class="phead"><h2>${f ? f.title : op}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll">${f
+      ? html`<form class="x-form" data-x-op="${op}"><p class="x-about">${f.said}</p>${f.fields.map(X.field)}<div class="x-acts"><button class="btn primary" data-x-run>Run</button></div><p class="x-said" aria-live="polite"></p></form>`
+      : html`<div class="note">${`No op ${op} that writes is yours to run here: Commands lists each one you hold.`}</div>`}</div>`.s;
+    this.box = $('#pane .x-form');
+    this.paint();
+  }
+  paint() {
+    if (!this.box) return;
+    const why = X.cannot(this.form.op);
+    for (const el of $$('[data-x-field]', this.box)) {
+      if (el.tagName !== 'SELECT') el.readOnly = !!why;
+      X.disable(el, why);
+    }
+    X.disable($('[data-x-run]', this.box), why || (this.sending ? X.WAITING : null));
+  }
+  destroy() { this.dead = true; }
+};
+
+// The args a form's fields make, each taking what its kind takes, or an error saying what a field takes. A field left
+// empty is left out, so the op's own default stands.
+X.args = (form, box) => {
+  const args = {};
+  form.fields.forEach((field, i) => {
+    const el = $(`[data-x-field="${i}"]`, box), text = el.value.trim();
+    if (!text) return;
+    const wrong = said => { el.focus(); throw new Error(`${field.flag} ${said}`); };
+    if (el.tagName === 'SELECT') args[field.name] = (field.kind === 'yes-no' ? [true, false] : field.choices)[+text];
+    else if (field.kind === 'json') {
+      try { args[field.name] = JSON.parse(text); } catch (error) { wrong(`takes JSON: ${error.message}`); }
+    } else if (field.kind === 'integer') args[field.name] = /^-?\d+$/.test(text) ? +text : wrong('is a whole number');
+    else if (field.kind === 'number') args[field.name] = isFinite(+text) ? +text : wrong('is a number');
+    else if (field.kind === 'list') args[field.name] = text.split(',').map(part => part.trim()).filter(Boolean);
+    else args[field.name] = text;
+  });
+  return args;
+};
+
+// Run a form's op: the args its fields make, one question first for an op the terminal asks about, each body stored
+// for the op to cite, then the act, kept until it is answered, and what came of it said under Run: done, with what the
+// op answered as text, or its refusal.
+X.run = async box => {
+  const pane = S.pane, form = pane && pane.form, said = $('.x-said', box), run = $('[data-x-run]', box);
+  if (!(pane instanceof X.Form) || pane.box !== box || pane.sending || X.cannot(form.op)) return;
+  let args;
+  try { args = X.args(form, box); } catch (error) { said.textContent = error.message; return; }
+  const asked = [form.title, ...Object.values(args).map(X.shown)].join(' ');
+  if (X.caps.confirmed.includes(form.op) && !await X.ask(run, `${asked}? It cannot be taken back.`, 'Run')) return;
+  pane.sending = true;
+  pane.paint();
+  said.textContent = X.WAITING;
+  try {
+    for (const field of form.fields) {
+      if (field.kind === 'body' && field.name in args) args[field.name] = await X.upload(new File([args[field.name]], field.flag), () => {});
+    }
+    const r = await X.act(form.op, args);
+    said.textContent = !r ? X.UNANSWERED : r.refusal ? `${form.title}: ${X.refused(r.refusal)}`
+      : `${form.title}: done.${r.result == null ? '' : ` ${JSON.stringify(r.result)}`}`;
+  } catch (error) {
+    said.textContent = `Not sent: ${error.message}.`;
+  }
+  pane.sending = false;
+  pane.paint();
+};
+
+document.addEventListener('submit', e => {
+  const box = e.target.closest('.x-form');
+  if (!box) return;
+  e.preventDefault();
+  X.run(box);
+});
+
 // ---------------------------------------------------------------------- what the page draws
 
 // Agents and people apart: in the count, in rows, and in each picture.
@@ -716,7 +863,7 @@ ThreadPane = class extends ThreadPane {
 // event's, and one a chat shows opens there too.
 X.Provenance = class {
   constructor(ref) {
-    this.ref = ref;
+    this.ref = this.name = ref;
     const pane = $('#pane');
     pane.innerHTML = html`<div class="phead"><h2>Provenance of ${ref}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
     this.box = $('.x-provenance', pane);
@@ -748,7 +895,7 @@ X.followed = null;
 X.provenance = (ref, followed) => {
   X.followed = followed ? ref : null;
   if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
-  go({provenance: ref, thread: null, knew: null}, true);
+  go({provenance: ref, thread: null, knew: null, act: null}, true);
 };
 X.reveal = (at, ref) => {
   const [chat, seq] = at.split(':');
@@ -869,10 +1016,11 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow]');
-  if (!el && S.route.provenance && e.target.closest('[data-close-pane]')) return go({provenance: null}, true);
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands]');
+  if (!el && (S.route.provenance || S.route.act) && e.target.closest('[data-close-pane]')) return go({provenance: null, act: null}, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
+  if ('xCommands' in d) return X.openCommands();
   if (d.xProvenance) return X.provenance(d.xProvenance, false);
   if (d.xFollow) return X.provenance(d.xFollow, true);
   if (d.xReply) return go({thread: d.xReply, knew: null}, true);
