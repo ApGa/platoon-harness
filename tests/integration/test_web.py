@@ -83,17 +83,18 @@ async def test_web_says_its_links_and_ends_cleanly_on_sigterm_or_ctrl_c_leaving_
         assert done.code == 0, done.stderr
         assert f"ssh -N -L {port}:127.0.0.1:{port} {socket.gethostname()}" in done.stderr
         assert status == 200 and b"<form>" in gate
-        assert info["x"] | {"may": []} == {
+        assert info["x"] | {"may": [], "forms": []} == {
             "credential": "control",
             "live": True,
             "person": "you",
             "session": "s",
             "may": [],
-            "forms": info["x"]["forms"],
+            "forms": [],
             "confirmed": info["x"]["confirmed"],
             "body_limit": info["x"]["body_limit"],
             "cannot": None,
         }
+        assert {"message.send", "session.close"} <= {form["op"] for form in info["x"]["forms"]}
     status = await cli.run("session", "status", "s")
     await cli.run("session", "stop", "s")
     await finished(serving)
