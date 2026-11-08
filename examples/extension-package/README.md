@@ -79,7 +79,7 @@ Limits: hops 8. role:reviewer may ballot.cast on agent/{role:author}. Closes whe
 In a session of that team, a vote is cast from each surface, and none of them has code for it:
 
 - **The SDK.** `await session.submit("ballot.cast", agent="@author", choice="yes")` casts yours.
-- **An agent.** The reviewer's harness is shown `ballot_cast` among our MCP tools, and its shell runs
+- **An agent.** The reviewer's harness is shown `ballot_cast` among platoon-harness's MCP tools, and its shell runs
   `ph ballot.cast --agent @author --choice yes`.
 - **The command line.** `uv run platoon-harness ballot cast SESSION --agent @author --choice yes` casts yours from a shell.
   It imports `ballot` and nothing else installed, and is refused on a session whose team does not name it.
@@ -88,8 +88,10 @@ In a session of that team, a vote is cast from each surface, and none of them ha
   from its schema. It never asks first, as what is asked about first is the command line's list of its own ops.
 - **The page.** Commands offers the same form.
 
-Each vote is drawn by its gist, `a vote on @author's work: yes`: in the author's transcript in the terminal, and in its
-event's Provenance pane in the page. `platoon-harness events` reads each one back.
+Each vote is drawn by its gist, `a vote on @author's work: yes`, in the author's transcript in the terminal.
+`platoon-harness events` reads each one back, with the stream and version that make its ref, `agent/author@<version>`. The
+page draws it in no transcript, and the form's result names no ref: it shows the vote in that ref's Provenance pane, which
+opens where the page's address names it, `#provenance=<ref>`.
 
 ## 5. Check it
 
@@ -108,5 +110,5 @@ and it passes `check_extension`. In an environment of the same wheels without th
 
 [`tests/unit/tui/test_sample_extension.py`](../../tests/unit/tui/test_sample_extension.py) and
 [`tests/e2e/test_extension.py`](../../tests/e2e/test_extension.py) cast its vote from the palette and from the page's
-form, and find it drawn: in the transcript, and in the Provenance pane. They load it from its source, as the checkout's
-environment does not install it.
+form, and find it drawn: in the terminal's transcript, and in the page's Provenance pane, opened at its ref's address.
+They load it from its source, as the checkout's environment does not install it.
