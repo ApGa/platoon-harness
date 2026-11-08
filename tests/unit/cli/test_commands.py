@@ -351,6 +351,31 @@ async def test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_i
     assert votes == ["a vote for yes"] and held == []
 
 
+def test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import(
+    site: Site, capsys: pytest.CaptureFixture[str]
+):
+    """`run` and `task` are the command line's own, so an extension of either name gets no group: discovery refuses it
+    from metadata, saying why on stderr, and each word still names the command line's own command."""
+    for name in ("run", "task"):
+        site.module(f"never_{name}", NEVER)
+        site.install(f"{name}-maker", entry_points={EXTENSIONS: {name: f"never_{name}:extension"}})
+
+    listed = " ".join(helped([], extended(build(), [])).split())
+    said = capsys.readouterr().err
+    command, arguments = line(["task", "claim", "fix-auth", "--queue", "tasks"])
+
+    assert said == "".join(
+        f"platoon-harness: extensions.{name}: {name}-maker 1.0.0's extension `{name}` has no commands, as `{name}` is "
+        f"a command of the command line's own: its ops run through the SDK, MCP, `ph` and the clients' palettes\n"
+        for name in ("run", "task")
+    )
+    assert "-maker" not in listed
+    assert "run Start a session, give it a prompt, and own it in the foreground until it settles." in listed
+    assert (command.__doc__ or "").split()[:4] == (OPS["task.claim"].fn.__doc__ or "").split()[:4]
+    assert arguments == {"session": "fix-auth", "queue": "tasks"}
+    assert not {"never_run", "never_task"} & set(sys.modules)
+
+
 def test_help_lists_installed_extensions_from_metadata_without_importing_them(site: Site):
     """Each by its distribution and version, which metadata gives, under Installed extensions, with none imported."""
     site.module("never_ballot", NEVER)

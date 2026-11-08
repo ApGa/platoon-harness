@@ -18,8 +18,10 @@ named here is closed.
   extensions from metadata, imports only the one its first word names, and makes that one's commands as it makes the SDK's,
   each run only on a session whose team names the extension: on any other it is refused, with exit 1, saying which extensions
   that team names, before anything is asked of the session. A name two distributions define loads neither, with exit 78,
-  saying both. `--help` lists every installed extension under Installed extensions, from metadata, importing none. That an
-  installed extension's op gets a command is the default, pending the owner's ruling. See
+  saying both. `--help` lists every installed extension under Installed extensions, from metadata, importing none. An
+  extension named as one of the command line's own commands, such as `run` or `task`, gets none: discovery refuses it before
+  any import, and says why on stderr each time it looks for an extension's group. That an installed extension's op gets a
+  command is the default, pending the owner's ruling. See
   [RFC 0071](docs/rfcs/0071-an-installed-extension-s-op-is-a-command.md), a draft.
 - **`check_extension` names what no check runs.** Its result is `ExtensionChecks`, whose `unchecked` names each part the
   extension declares that no check runs, its daemons, its presets and its isolation, each saying what that leaves

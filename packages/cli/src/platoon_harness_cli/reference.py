@@ -33,7 +33,8 @@ An installed extension's op is a command too, made in the same way under the ext
 `platoon-harness ballot cast SESSION --agent @author --choice yes`. `--help` lists each installed extension under
 Installed extensions, read from metadata with none imported, and a command line imports only the one it names first. Its
 op runs only on a session whose team names that extension, and is refused, with exit 1, on any other, saying so. This
-reference is made from the command line's own commands, so it lists no extension's.
+reference is made from the command line's own commands, so it lists no extension's. An installed extension named as one
+of them has no commands: discovery refuses it from metadata, before any import, and says why on stderr.
 
 ## Exit codes
 

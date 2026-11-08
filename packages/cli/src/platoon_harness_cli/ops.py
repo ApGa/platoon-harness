@@ -139,13 +139,17 @@ def _place(group: App, operation: Op, command: Callable[..., Awaitable[int]]) ->
 
 
 def extension_groups(own: Collection[str], named: str | None) -> list[App]:
-    """A group of commands per installed extension, found from metadata, but for a name among the command line's `own`
-    commands. Only the group `named` is loaded, importing its extension and nothing else installed, and every other
-    says what its metadata says."""
+    """A group of commands per installed extension, found from metadata. One whose name is among the command line's
+    `own` commands is refused, before any import, saying why. Only the group `named` is loaded, importing its extension
+    and nothing else installed, and every other says what its metadata says."""
     found: dict[str, list[Component]] = {}
     for component in discover():
-        if component.group == EXTENSIONS and component.name not in own:
-            found.setdefault(component.name, []).append(component)
+        if component.group != EXTENSIONS:
+            continue
+        if component.name in own:
+            note(str(_refused(component)))
+            continue
+        found.setdefault(component.name, []).append(component)
     listed = []
     for name, components in found.items():
         group = App(name=name, help=_purpose(components))
@@ -153,6 +157,13 @@ def extension_groups(own: Collection[str], named: str | None) -> list[App]:
             _load_commands(group, components)
         listed.append(group)
     return listed
+
+
+def _refused(component: Component) -> Problem:
+    """Why an installed extension named as one of the command line's own commands has none."""
+    name, source = component.name, f"{component.distribution} {component.version}"
+    what = f"{source}'s extension `{name}` has no commands, as `{name}` is a command of the command line's own"
+    return Problem(f"extensions.{name}", f"{what}: its ops run through the SDK, MCP, `ph` and the clients' palettes")
 
 
 def _sources(components: Sequence[Component]) -> str:
