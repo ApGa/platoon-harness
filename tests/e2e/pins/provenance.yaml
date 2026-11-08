@@ -1,0 +1,12 @@
+- /children: deep-equal
+- heading "Provenance of inbox/you@1" [level=2]
+- button "×"
+- textbox "An event's ref, stream@version, whose provenance to show": inbox/you@1
+- button "Open"
+- text: '/^This is what the record holds: a citation is the agent''s claim, being handed something is not using it, and what reached an agent through a file or a shell leaves nothing here\. An estimate is its producer''s, never a fact\. message\.sent inbox\/you@1: I started a worker\. Sources made by @lead in turn t1-[0-9a-f]+ no model call is joined: its command came with no tool call''s id lineage read at head \d+, counting what was handed over below where the journal recorded it, at seq \d+ @lead was handed 2 offers below the bound, 2 said taken there and 0 not, with 0 gaps in its record$/'
+- button "observed wake context/lead@2 showed inbox/lead@1 gist, taken, as its harness's turn_start report says"
+- button "observed launch context/lead@1 showed agent/lead@2 body, taken, as its harness's turn_start report says"
+- text: '/^Uses uses read at head \d+: 0 citing it, 0 following from it, 0 after it, and handed to 0 agents Contributors contributors read at head \d+, walking back along citations, causes and ancestry over 1 event, and weighing and ranking nobody$/'
+- 'button "@lead: made it, 1 event, the first inbox/you@1, 0 hops back; 7 surfaces of its harness unproved"'
+- 'button "observed @you: only handed to @lead, first by context/lead@2"'
+- text: "Credit and rewards what estimators said of it, beside the record: each an estimate by its producer at its version no estimator has said anything of it"

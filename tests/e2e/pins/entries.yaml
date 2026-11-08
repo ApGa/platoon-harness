@@ -1,0 +1,7 @@
+- /children: deep-equal
+- heading "Entries on notes" [level=2]
+- button "×"
+- button "Post an entry"
+- text: plan 1 version
+- button "Revise"
+- text: "v1 @you first {\"step\":1}"

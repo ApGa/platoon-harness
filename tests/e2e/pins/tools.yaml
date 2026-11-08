@@ -1,0 +1,15 @@
+- /children: deep-equal
+- heading "Tool activity of lead" [level=2]
+- button "Read again"
+- button "×"
+- paragraph: "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
+- text: '/^turn t1-[0-9a-f]+: stopped$/'
+- button "completed message_send completed"
+- button "started message_send called"
+- button "completed message_send completed"
+- button "started message_send called"
+- button "completed agent_spawn completed"
+- button "spawned w1 spawned as worker · joins no known call"
+- button "started agent_spawn called"
+- button "completed task_add completed"
+- button "started task_add called"

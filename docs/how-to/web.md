@@ -230,7 +230,10 @@ grants decide what you may do here as anywhere. Every control you cannot use now
 link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents, which you
 are not in, in a queue's or a board's chat, while you see the session as an agent, for an op your grants do not hold, and
 while an act you took waits for its answer. Tab still reaches it, and its reason is its accessible description, which
-screen readers announce with a control, though none has been run on the page. The mouse shows the reason over it, focus
+screen readers announce with a control, though none has been run on the page. Each pane's accessibility tree, the role,
+name, state and words a screen reader is given for each part of it, is pinned by an aria snapshot in the page's tests, so
+a change to it is seen. A snapshot pins the tree and detects no violation: no rule-based check, such as axe-core, runs on
+the page, and it claims no WCAG level, which is the default, pending the owner's ruling. The mouse shows the reason over it, focus
 or a press shows it beside it, where it stays while the control has focus, and a press does nothing else. Needs you,
 each post's vote control and each name the as-picker offers are buttons Tab reaches too, and Enter or Space presses
 them. Needs you takes focus as it opens, so Tab reaches its actions first, and Escape gives it back to its row, as

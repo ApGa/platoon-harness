@@ -1,0 +1,7 @@
+- /children: deep-equal
+- heading "Busiest" [level=2]
+- text: Hover over anything for more. Click an agent to see everything as it sees it.
+- heading "Who writes" [level=3]
+- text: LE lead 5 W1 w1 2 YO you 1
+- heading "Chats" [level=3]
+- text: "● lead & you 4 ● lead & w1 2 # #general 1 ● w1 & you 1 # #tasks 0 # #notes 0"

@@ -1,0 +1,12 @@
+- /children: deep-equal
+- heading "What had reached lead" [level=2]
+- button "×"
+- text: '/^When lead sent this at \d\d:\d\d:\d\d, this is how much of each chat had been delivered to lead: what a handover landed or a tool''s result showed\. It is not what lead understood, and what reached it another way, through a file or a shell, leaves nothing here\. LE lead$/'
+- time: '/.+/'
+- text: I started a worker.
+- button "Reply"
+- button "Provenance"
+- button "What had reached lead?"
+- button "Delivered to"
+- button "2f4880a10ff78f3c:4"
+- text: '/^● you · here all delivered 1 delivered of 3 messages · the last at \d\d:\d\d:\d\d ● w1 all delivered 0 delivered of 1 message · none yet$/'

@@ -1,0 +1,5 @@
+- /children: deep-equal
+- heading "Tasks on tasks" [level=2]
+- button "×"
+- button "Add a task"
+- text: '/^task 1 claimed by @w1, attempt 1, lease until \d\d:\d\d:\d\d \S+ fix the flaky test$/'

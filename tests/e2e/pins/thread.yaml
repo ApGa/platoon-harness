@@ -1,0 +1,16 @@
+- /children: deep-equal
+- heading "Thread in lead & you" [level=2]
+- button "×"
+- text: LE lead
+- time: '/.+/'
+- text: I started a worker.
+- button "Reply"
+- button "Provenance"
+- button "What had reached lead?"
+- button "Delivered to"
+- button "2f4880a10ff78f3c:4"
+- paragraph: Reply to lead, to @lead
+- textbox "Message":
+  - /placeholder: Enter sends, Shift+Enter starts a new line
+- button "Send"
+- button "Attach"

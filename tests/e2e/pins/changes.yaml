@@ -1,0 +1,7 @@
+- /children: deep-equal
+- heading "What changed" [level=2]
+- button "Read again"
+- button "×"
+- text: your checkout
+- button "Uncommitted diff"
+- text: untracked notes.txt +? -?

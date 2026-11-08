@@ -3,7 +3,8 @@ harnesses whose worker waits on an approval. A disabled control: the keyboard re
 and a press does nothing else; and in every place the page draws one, from a view link and from a control link, it takes
 focus and its reason is its accessible description, as Playwright computes it by the accessible name and description
 spec. No screen reader is driven. On a phone's screen, emulated with touch, the page scrolls no wider than the screen
-and every act lies within it, and a resize keeps where a chat is read, focus and the composer's target."""
+and every act lies within it, and a resize keeps where a chat is read, focus and the composer's target. Each pane's
+tree, as Playwright computes it, matches its pin in `pins`."""
 
 import re
 from collections.abc import AsyncIterator
@@ -15,6 +16,7 @@ from playwright.async_api import Browser, Page, expect
 from platoon_harness import Session
 from platoon_harness_cli.web.server import Web
 
+from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.web.support import QUIET, caught_up, team
 from .support import SECONDS, chat, opened, said, serving, watched
@@ -54,16 +56,20 @@ where that is a chat, and a control disabled there from either link."""
 
 @pytest.fixture
 async def web(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[tuple[Session, Web]]:
-    """The scenario's session, its worker's approval left waiting and its lead idle after both its turns, and `web`
-    serving it."""
+    """The scenario's session, in a repository holding a file nobody committed, its worker's approval left waiting, its
+    lead idle after both its turns, and a board `notes` with an entry, and `web` serving it."""
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
-    async with Session.start(team(), name="s", root=tmp_path, cwd=tmp_path) as session:
+    repo = repository(tmp_path / "repo", monkeypatch)
+    (repo / "notes.txt").write_text("unfinished\n")
+    async with Session.start(team(), name="s", root=tmp_path, cwd=repo) as session:
         await in_state(session, "lead", "idle")
         await session.send("@lead", "Fix the flaky test")
         await until(session.approvals, session)
         await until(
             lambda: of_type(session, "turn.ended"), session, lambda found: [e.agent for e in found].count("lead") == 2
         )
+        await session.create_channel("notes", "board", readers=["all"], writers=["all"])
+        await session.board_post("notes", "plan", "first", fields={"step": 1})
         async with serving("s", tmp_path) as served:
             await caught_up(served, session)
             yield session, served
@@ -342,4 +348,46 @@ async def test_a_resize_keeps_scroll_focus_and_the_composer_s_target(browser: Br
 
     assert [foot <= 1 for foot in feet] == [True, True]
     assert above > 80 and read[0][0].startswith("Message 10:") and read == [read[0]] * 3
+    assert errors == []
+
+
+PINS = Path(__file__).parent / "pins"
+"""Each pane's pin: its tree as `aria_snapshot` gives it, matched whole, `deep-equal`, with a pattern for each value
+that moves from run to run, a time, a turn's id, a commit and a journal's head or seq."""
+
+
+async def test_each_pane_matches_its_aria_snapshot(browser: Browser, web: tuple[Session, Web]):
+    """Each pane the page draws, SwarmChat's and ours, from a control link, matches its pin: the role, name, state and
+    words of each part of its tree, in order, and nothing more. A pin detects no violation of any rule: it fails where
+    the tree changed, and a change meant to be made is pinned again."""
+    session, served = web
+    page, errors = await opened(browser, served.link("control"))
+    await chat(page, "lead & you")
+    here = await page.evaluate("S.route.chat")
+    message = await page.locator("#main .msg", has_text="I started a worker.").get_attribute("data-id")
+    sent = next(event for event in await of_type(session, "message.sent") if event.gist == "I started a worker.")
+    ref = f"{sent.stream}@{sent.version}"
+    [approval] = await session.approvals()
+    panes = {
+        "thread": f"chat={here}&thread={message}",
+        "what-had-reached": f"chat={here}&knew={message}",
+        "provenance": f"chat={here}&provenance={ref}",
+        "provenance-from-text": f"chat={here}&provenance={ref}&from=text",
+        "interactions": "interactions=1",
+        "form": "act=task.add",
+        "changes": "review=changes",
+        "diff": "review=shared",
+        "ask": f"ask={approval['id']}",
+        "tasks": "tasks=tasks",
+        "entries": "entries=notes",
+        "tools": "person=lead&tools=lead",
+        "map": "layout=map",
+    }
+    base = page.url.partition("#")[0]
+    for name, route in panes.items():
+        await page.goto(f"{base}#{route}")
+        await expect(page.locator("#pane")).to_match_aria_snapshot((PINS / f"{name}.yaml").read_text(), timeout=SECONDS)
+    await page.context.close()
+
+    assert sorted(path.stem for path in PINS.iterdir()) == sorted(panes)
     assert errors == []

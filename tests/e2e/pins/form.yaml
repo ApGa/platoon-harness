@@ -1,0 +1,19 @@
+- /children: deep-equal
+- heading "task add" [level=2]
+- button "×"
+- paragraph: "Add a task to a queue. `--gist` says what to do; put anything longer in `--body`. Refused `not_permitted` when you may not write this queue, and `not_found` when no such queue exists. Call `platoon-harness channel list` to see yours."
+- code: "--queue"
+- text: (needed)
+- textbox "--queue (needed)":
+  - /placeholder: ""
+- code: "--gist"
+- text: (needed)
+- textbox "--gist (needed)":
+  - /placeholder: ""
+- code: "--body"
+- textbox "--body":
+  - /placeholder: ""
+- code: "--based-on"
+- textbox "--based-on":
+  - /placeholder: ""
+- button "Run"

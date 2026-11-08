@@ -1,0 +1,14 @@
+- /children: deep-equal
+- heading "Who reached whom" [level=2]
+- button "×"
+- text: '/^interactions read at head \d+: 4 pairs of makers, oldest first, each counting the edges that lead from the first''s events to the second''s, each kind apart and never summed: reach in the record, never credit or influence; an offer it counts as unconfirmed went to an agent that had not ended, whose harness can still say it took it events by @you reached events by @lead$/'
+- button "observed 1 offer @lead's harness said it took, handed over and taken, never understood, the first by context/lead@2"
+- text: events by @lead reached events by @w1
+- button "observed 1 offer @w1's harness said it took, handed over and taken, never understood, the first by context/w1@1"
+- button "ancestry 1 edge of ancestry, a next version of an entry or a task, or a commit naming a commit its parent, the first in task/tasks/1@2"
+- button "unconfirmed 2 offers @w1's harness had not said it took, which is unknown, neither observed nor none, the first by context/w1@3"
+- text: events by @lead reached events by the runtime
+- button "cause 1 cause named, as a reply names what it answers, the first in repo/repo@1"
+- text: events by @w1 reached events by @lead
+- button "observed 1 offer @lead's harness said it took, handed over and taken, never understood, the first by context/lead@5"
+- text: '/^Each agent''s unknowns each agent spawned by head \d+, in the order they were, with why what reached it beyond the edges above is unknown, so an agent no pair names is not shown to be reached by nobody; a person''s or a program''s reading is no evidence, so neither is listed @lead: unknown beyond the edges counted: 7 surfaces of its harness no stored conformance result proves observed, prompt, tool_results, shell_reads, files, native_children, compaction, external @w1: unknown beyond the edges counted: 7 surfaces of its harness no stored conformance result proves observed, prompt, tool_results, shell_reads, files, native_children, compaction, external$/'

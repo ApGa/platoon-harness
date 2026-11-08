@@ -1,0 +1,5 @@
+- /children: deep-equal
+- heading "What w1 asks" [level=2]
+- button "×"
+- text: Ship the fix?
+- paragraph: "What it asks beyond its gist is unknown: the record holds no more of it."

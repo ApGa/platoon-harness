@@ -1,0 +1,22 @@
+- /children: deep-equal
+- heading "Your checkout, uncommitted" [level=2]
+- button "What changed"
+- button "×"
+- paragraph: '/^shared uncommitted against [0-9a-f]{12}, 7 lines What it held at \d\d:\d\d:\d\d \S+, read in your checkout\.$/'
+- button "1"
+- text: diff --git a/notes.txt b/notes.txt
+- button "2"
+- text: new file mode 100644
+- button "3"
+- text: index 0000000..6816e90
+- button "4"
+- text: "--- /dev/null"
+- button "5"
+- text: +++ b/notes.txt
+- button "6"
+- text: "@@ -0,0 +1 @@"
+- button "7"
+- text: +unfinished
+- paragraph: A comment goes to whoever made the change, and no agent's workspace made your checkout.
+- textbox "Comment" [disabled]
+- button "Comment" [disabled]
