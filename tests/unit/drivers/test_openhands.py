@@ -111,6 +111,12 @@ def test_it_declares_the_python_its_worker_runs_on():
     assert OpenHandsDriver().describe().installed == PYTHON
 
 
+def test_it_names_no_credential_file_as_openhands_keeps_none_in_its_folder():
+    """Its key reaches the worker's environment alone, which reads it and lets it go, and the SDK keeps it in no file:
+    `tests/integration/test_openhands.py` shows no file of the session's holds it after a run on the real SDK."""
+    assert OpenHandsDriver().describe().credentials == ()
+
+
 async def test_no_module_of_the_workspace_it_runs_in_stands_in_for_one_of_the_worker_s(tmp_path):
     """The worker runs in the agent's workspace, whose files are the user's to name as they like."""
     (tmp_path / "platoon_harness").mkdir()

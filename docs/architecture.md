@@ -138,7 +138,8 @@ Each law is a sentence, and each has a test of the same name.
   commits.bundle      the commits the journal recorded past the session's starting HEAD, written at each stop
   tests/<effect>/     a runtime test of a commit while it runs: its clean checkout, what it printed, its group's record
   agents/<id>/        per-agent state: proc.json, stderr.log, native home, bin/ph, and its git workspace, if it has one;
-                      home/, an isolated harness's HOME
+                      home/, an isolated harness's HOME; tmp/, its harness's TMPDIR, which its end removes with the files
+                      its driver names as where its harness keeps a credential
 ```
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/` and `conformance/`, what
@@ -840,6 +841,10 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
   its turn: `finished` if that turn `stopped`, and `failed` otherwise. An agent that does not stay finishes with a turn that stops on
   its own with nothing more to come for it (Agents that stay, above).
+  An ended agent's stop removes its harness's `TMPDIR` and each file its driver names in `DriverInfo.credentials` (§9), even when a
+  step before fails, and keeps the rest of its folder, its harness's own transcripts and `stderr.log` among it, so the export holds neither
+  (§14); what it could not remove it says in the runtime's log. A rest and the owner's stop remove nothing, as the agent comes
+  back. See [RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
 - **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, even
   when a step before fails, and nothing reaches its parent while that stop is under way: no wake, steer or notice is handed to it,
   and a `wait` it holds open in a call does not answer `released`, so neither its report, the notice of a wait that holds on its end
@@ -1098,7 +1103,7 @@ One driver instance per agent.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, login kind, version, capabilities, installed. Starts nothing
+    def describe(self) -> DriverInfo: ...  # name, login kind, version, capabilities, installed, credentials. Starts nothing
     async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
     async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
@@ -1114,7 +1119,11 @@ again on a resume, and journaled; native project files are never touched) and re
 which is a `Delivery`, the first, under the id of the offer that launched it, sent as the driver sends any input, so its harness says
 it landed as it says any did. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
 such setting refuses an effort. `DriverInfo.installed` is the paths its harness reads to run, as it reaches them, which an isolation
-shows it (§13); a harness in the runtime's own process declares none.
+shows it (§13); a harness in the runtime's own process declares none. `DriverInfo.credentials` is where, beneath the folder its
+spec names, its harness keeps a credential, each path relative and refused if it could leave that folder, which an agent's end
+removes (§7): pi's `auth.json` and `mcp-auth.json` in a sealed launch's agent directory, and each harness's login files in an
+isolated home, `home/`, which `drivers.env.homedir` names. A wire program names its own beneath its frame's folder, which
+`WireDriver` says beneath `wire/`, and OpenHands names none, as its key reaches only the worker's environment.
 
 `Reporter` is a plain async callable a driver awaits. It takes this vocabulary and no other: `ready{native, version,
 effective_model, tools_visible}`, `turn.started{turn}`, `turn.ended{reason}`, `delta{text}` (lossy),
@@ -1986,7 +1995,8 @@ class AgentOutcome(Model):
   nobody. See [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) and
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
-  no key in it, read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
+  no key in it, nor, once its agents have ended, their harnesses' scratch or a file a driver names as where its harness keeps a
+  credential (§7), read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
   trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
   and an admit a stop cut short named ids nobody knows (§4). See
   [RFC 0055](rfcs/0055-the-export-is-the-session-as-it-ended.md).
@@ -2027,7 +2037,8 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
 - **Bodies.** A body's hash is a capability to whoever reads the journal, a person or a program, and a low-entropy body can be
   guessed: bodies are for content, not for secrets. An agent reads a body only by the ref of an event it was handed or made.
 - **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
-  No model-access credential reaches a log, event, artifact, export or resolved config.
+  No model-access credential reaches a log, event, artifact, export or resolved config. An agent's end removes each file its driver
+  names as where its harness keeps a credential in its folder (§7), so a session's folder holds none once its agents have ended.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an
   offline rewrite that produces a new session.
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan

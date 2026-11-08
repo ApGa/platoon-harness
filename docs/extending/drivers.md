@@ -18,7 +18,7 @@ There are three ways in, cheapest first.
 
 ```python
 class Driver(Protocol):
-    def describe(self) -> DriverInfo: ...                        # name, login kind, capabilities, installed. Starts nothing
+    def describe(self) -> DriverInfo: ...  # name, login kind, capabilities, installed, credentials. Starts nothing
     async def start(self, spec: AgentSpec, report: Reporter) -> None: ...  # fresh, or resume from spec.resume
     async def deliver(self, delivery: Delivery) -> None: ...     # delivery.boundary is one the driver declared
     async def interrupt(self) -> None: ...                       # stops the turn, at the boundary it can
@@ -37,7 +37,13 @@ method promises:
   that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its binary, and what that
   resolves into, such as a release folder or the `node_modules` it imports from. An isolation shows it those, read-only, and nothing
   else of your home ([workspaces.md](../how-to/workspaces.md#where-an-isolated-agent-runs)). A harness in the runtime's own process declares
-  none, as nothing can confine it, and an isolated role on it is refused before any cost.
+  none, as nothing can confine it, and an isolated role on it is refused before any cost. `credentials` is where, beneath
+  `spec.folder`, your harness keeps a credential, as relative paths with no `..`, files or folders: when the agent ends, its
+  stop removes them with the harness's `TMPDIR`, and a rest removes nothing, as the harness comes back. Name the files your
+  harness's own code keeps a login or a key in, where your launch puts its state in the agent's folder and in an isolated
+  harness's home, which is `home/` there, as `homedir` in `platoon_harness.drivers.env` says, and no transcript, as that is
+  the record. A wire program names its own beneath the folder its frame names, `wire/` in the agent's, so the isolated home
+  beside it is no place it can name.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits

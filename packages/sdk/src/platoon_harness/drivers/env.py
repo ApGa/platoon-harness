@@ -29,6 +29,7 @@ __all__ = [
     "Held",
     "Redactor",
     "harness_env",
+    "homedir",
     "inherited",
     "on_path",
     "open_beneath",
@@ -70,6 +71,11 @@ def on_path(*programs: str) -> tuple[Path, ...]:
 def tmpdir(folder: Path) -> Path:
     """A harness's own `TMPDIR`, which whatever it starts inherits, and so carries the name of its folder."""
     return folder / "tmp"
+
+
+def homedir(folder: Path) -> Path:
+    """An isolated harness's own `HOME`, in its folder, where it keeps its state as it would in yours."""
+    return folder / "home"
 
 
 def open_beneath(folder: Path, path: Path, flags: int, mode: int = 0o600) -> int:

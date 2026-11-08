@@ -28,6 +28,7 @@ from platoon_harness.drivers import (
     Usage,
 )
 from platoon_harness.drivers.claude import ClaudeDriver
+from platoon_harness.drivers.env import homedir
 from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import read_running, write_conformance
@@ -730,6 +731,26 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
     async with FakeModel(clients.SAID) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await clients.the_tui_sends_from_its_composer_and_draws_the_reply_once(team, tmp_path)
+
+
+async def test_the_files_claude_code_names_are_where_it_keeps_a_login_in_an_isolated_home(tmp_path):
+    """Claude Code keeps its config in `.claude.json`, where a key it signed in with goes when no keychain holds one,
+    and copies of it in `.claude/backups`, both of which it writes in a home of its own as it starts, and its login in
+    `.claude/.credentials.json`, which only a sign-in in a browser writes, so no test here makes one. Its driver names
+    all three, so an agent's end removes them."""
+    async with FakeModel("hello") as model:
+        home = homedir(tmp_path / "ada")
+        home.mkdir(parents=True)
+        keyed = {"ANTHROPIC_BASE_URL": Secret(model.url), "ANTHROPIC_API_KEY": Secret("dummy-key")}
+        spec = on_fake_model(tmp_path, model, goal="go", access=keyed, env={"HOME": str(home)})
+        driver, heard = ClaudeDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        await driver.stop(2.0)
+
+    named = ClaudeDriver().describe().credentials
+    written = sorted(str(path) for path in named if (spec.folder / path).exists())
+    assert written == ["home/.claude.json", "home/.claude/backups"]
 
 
 async def test_claude_resumes_in_its_worktree(tmp_path, monkeypatch):

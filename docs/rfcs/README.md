@@ -70,7 +70,7 @@ amended or extended an RFC.
 | [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted; extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06 |
 | [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted; superseded in part by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted |
+| [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted; extended by [RFC 0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) (a draft) |
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | Accepted |
 | [0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) | An agent cites a commit by the ref the journal gives | Accepted |
 | [0058](0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md) | A merge queue is a queue and a merger, written out | Accepted |
@@ -89,6 +89,7 @@ amended or extended an RFC.
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
 | [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
+| [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

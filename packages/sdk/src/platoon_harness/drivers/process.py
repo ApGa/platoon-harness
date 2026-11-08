@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import weakref
@@ -52,6 +53,7 @@ __all__ = [
     "Process",
     "Reader",
     "Record",
+    "clean",
     "exit_reason",
     "reap",
     "run",
@@ -267,6 +269,41 @@ def _unlink_beneath(folder: Path, path: Path) -> None:
             os.unlink(name, dir_fd=dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def _remove_beneath(folder: Path, path: Path) -> None:
+    """Remove `path`, a file or a whole folder at that place beneath `folder`, following no symlink an agent could
+    plant: one at its name is removed itself, and one on the way leads to nothing of ours. Nothing there is nothing to
+    remove."""
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    try:
+        parent = os.open(folder, flags) if len(path.parts) == 1 else open_beneath(folder, folder / path.parent, flags)
+    except OSError as error:
+        if error.errno in (errno.ENOENT, errno.ENOTDIR, errno.ELOOP):
+            return
+        raise
+    try:
+        found = os.lstat(path.name, dir_fd=parent)
+        if stat.S_ISDIR(found.st_mode):
+            shutil.rmtree(path.name, dir_fd=parent)
+        else:
+            os.unlink(path.name, dir_fd=parent)
+    except FileNotFoundError:
+        return
+    finally:
+        os.close(parent)
+
+
+def clean(folder: Path, credentials: Iterable[Path]) -> tuple[str, ...]:
+    """Remove from an ended agent's `folder` what its harness kept that is no record: its `TMPDIR`, and `credentials`,
+    where beneath the folder its driver says its harness keeps one. Return what could not be removed, in words."""
+    left = []
+    for path in (tmpdir(Path()), *credentials):
+        try:
+            _remove_beneath(folder, path)
+        except OSError as error:
+            left.append(f"{path} could not be removed: {error.strerror or error}")
+    return tuple(left)
 
 
 async def reap(folder: Path, grace: float) -> tuple[str, ...]:

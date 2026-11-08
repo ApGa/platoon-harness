@@ -4,11 +4,13 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 import signal
 import socket
 import stat
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -36,13 +38,14 @@ from platoon_harness.drivers import (
     Usage,
 )
 from platoon_harness.drivers.claude import ClaudeDriver
+from platoon_harness.drivers.env import tmpdir
 from platoon_harness.drivers.levels import Check, Conformance, implementation
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, Refused, hash_token, is_held
 from platoon_harness.primitives import Verdict
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
-from platoon_harness.runtime.paths import write_conformance
+from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
 from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
@@ -1971,3 +1974,155 @@ async def test_a_resting_agent_comes_back_at_its_handover_and_not_at_a_runtime_s
         await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
 
     assert untouched == 1 and [spec.resume for spec in starts.specs] == [None, "scripted-bob"]
+
+
+# What an ended agent's folder keeps.
+
+
+KEPT_CREDENTIAL = "kept-credential-" + "c" * 32
+
+
+class Keeping(ScriptedDriver):
+    """A harness that keeps, in its folder, scratch in its `TMPDIR`, a login and a folder of logins where its driver
+    says, and a transcript of its own beside them, as pi does in its agent directory, and that cannot come back without
+    its login. Each start is said in `starts`, by the native id it resumed, and every instance of a class `keeping`
+    makes goes on through one script."""
+
+    CREDENTIALS = (Path("own/auth.json"), Path("own/logins"))
+    starts: list[str | None]
+    script: Any
+
+    def __init__(self) -> None:
+        super().__init__(self.script)
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"credentials": self.CREDENTIALS})
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        own = spec.folder / "own"
+        self.starts.append(spec.resume)
+        if spec.resume is not None and not (own / "auth.json").exists():
+            raise DriverError("its login is gone, so it cannot come back")
+        (tmpdir(spec.folder) / "cache").mkdir(parents=True, exist_ok=True)
+        (tmpdir(spec.folder) / "cache" / "compiled").write_text("scratch")
+        (own / "logins").mkdir(parents=True, exist_ok=True)
+        (own / "sessions").mkdir(exist_ok=True)
+        (own / "auth.json").write_text(KEPT_CREDENTIAL)
+        (own / "logins" / "server.json").write_text(KEPT_CREDENTIAL)
+        (own / "sessions" / f"{spec.agent}.jsonl").write_text("what it said")
+        await super().start(spec, report)
+
+
+def keeping(*turns: Any) -> type[Keeping]:
+    return type("Kept", (Keeping,), {"starts": [], "script": iter(turns)})
+
+
+def held(folder: Path) -> list[str]:
+    """What of an agent's folder is scratch or a credential."""
+    named = (tmpdir(Path()), *Keeping.CREDENTIALS)
+    return sorted(str(path) for path in named if (folder / path).exists())
+
+
+@pytest.mark.parametrize("ending", ["finish", "retire", "cancel"])
+async def test_an_ended_agent_s_tmp_and_credentials_go_and_its_record_stays(tmp_path, ending):
+    """Its harness's `TMPDIR` and what its driver names as credentials go with its stop, whichever way it ended, and
+    its transcript and its harness's own stay, beside the journal."""
+    finishing = [[Call("agent_finish", {"gist": "done"})]] if ending == "finish" else []
+    async with Session.start(solo_with(keeping(*finishing)), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+        before = held(folder)
+        if ending == "finish":
+            await session.send("@bob", "go")
+        elif ending == "retire":
+            await session.retire("@bob")
+        else:
+            await session.cancel_agent("@bob")
+        await until(lambda: stops(session, "effect.finished"), session)
+        status = (await ended(session, "bob"))["status"]
+
+    assert before == ["own/auth.json", "own/logins", "tmp"]
+    assert held(folder) == []
+    assert status == {"finish": "finished", "retire": "retired", "cancel": "cancelled"}[ending]
+    assert (folder / "own" / "sessions" / "bob.jsonl").read_text() == "what it said"
+
+
+async def test_an_agent_put_to_rest_keeps_what_it_needs_to_resume_and_resumes(tmp_path):
+    """A rest ends its process and nothing of its folder, so its harness comes back on its login, and so does a stop
+    of its session, which ends no agent."""
+    clock, kept = ManualClock(1000.0), keeping([Say("first")], [Say("second")], [Say("third")])
+    async with Session.start(solo_with(kept), name="s", root=tmp_path, clock=clock) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+        await session.send("@bob", "one")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        await asyncio.wait_for(clock.slept_until(1600.0), SECONDS)
+        clock.advance(600)
+        await until(lambda: of_type(session, "effect.finished"), session, rested)
+        rested_holds = held(folder)
+        await session.send("@bob", "two")
+        await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 2)
+    stopped_holds = held(folder)
+    async with Session.resume("s", root=tmp_path, clock=clock) as session:
+        await session.send("@bob", "three")
+        said = await until(lambda: of_type(session, "turn.ended"), session, lambda found: len(found) == 3)
+
+    assert rested_holds == stopped_holds == ["own/auth.json", "own/logins", "tmp"]
+    assert kept.starts == [None, "scripted-bob", "scripted-bob"]
+    assert [event.data["reason"] for event in said] == ["stopped"] * 3
+
+
+async def test_a_session_copied_after_its_agents_ended_holds_no_credential_file(tmp_path):
+    """Nor anything that holds a credential its harnesses kept, and the copy is the record still."""
+    team = Team.model_validate({"roles": {name: {"harness": harness(keeping())} for name in ("alice", "bob")}})
+    async with Session.start(team, name="s", root=tmp_path / "root") as session:
+        await in_state(session, "alice", "idle")
+        await in_state(session, "bob", "idle")
+        await session.cancel_agent("@alice")
+        await session.retire("@bob")
+        await until(lambda: stops(session, "effect.finished"), session, lambda found: len(found) == 2)
+    copy = tmp_path / "copy" / "sessions" / "s"
+    shutil.copytree(session.folder, copy)
+
+    async with Session.attach("s", root=tmp_path / "copy") as history:
+        ends = await of_type(history, "agent.ended")
+    files = [path for path in copy.rglob("*") if path.is_file()]
+    assert [held(agent_folder(copy, name)) for name in ("alice", "bob")] == [[], []]
+    assert [path for path in files if KEPT_CREDENTIAL.encode() in path.read_bytes()] == []
+    assert sorted(event.agent for event in ends) == ["alice", "bob"]
+
+
+async def test_what_an_ended_agent_s_stop_could_not_remove_is_said_in_the_log(tmp_path, caplog):
+    """And its credentials go all the same."""
+    if os.geteuid() == 0:
+        pytest.skip("root removes what a mode forbids")
+    async with Session.start(solo_with(keeping()), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+        locked = tmpdir(folder) / "cache"
+        locked.chmod(0o500)
+        try:
+            await session.retire("@bob")
+            await until(lambda: stops(session, "effect.finished"), session)
+        finally:
+            locked.chmod(0o700)
+
+    assert held(folder) == ["tmp"]
+    assert "bob's stop: tmp could not be removed: Permission denied" in caplog.text
+
+
+async def test_a_driver_that_cannot_say_where_its_credentials_are_leaves_them_and_says_so(tmp_path, caplog):
+    """Its harness's `TMPDIR` goes all the same."""
+    async with Session.start(solo_with(keeping()), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+
+        async def unsaid(role: str) -> DriverInfo:
+            raise DriverError("it would not describe itself")
+
+        session._runtime.host.describe = unsaid
+        await session.retire("@bob")
+        await until(lambda: stops(session, "effect.finished"), session)
+
+    assert held(folder) == ["own/auth.json", "own/logins"]
+    assert "bob's driver did not say where its harness keeps credentials, so they stay" in caplog.text

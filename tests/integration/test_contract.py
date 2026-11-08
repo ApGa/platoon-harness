@@ -25,11 +25,13 @@ import pytest
 from platoon_harness import ConfigError, Refused, Session, Team
 from platoon_harness.config import Secret, forms
 from platoon_harness.credit import PROPAGATE, propagate
+from platoon_harness.drivers.env import tmpdir
 from platoon_harness.drivers.levels import CHECKED, Conformance
 from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.primitives import CallEligibility
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, Gateway, SpawnRequest
+from platoon_harness.runtime.opening import make_driver
 from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
@@ -157,6 +159,23 @@ def holding(folder: Path, secrets: Sequence[str]) -> list[Path]:
     return [path for path in found if any(form in path.read_bytes() for form in held)]
 
 
+SCRATCH_AND_CREDENTIALS = {"pi": ["pi/auth.json", "tmp"], "openhands": ["tmp"]}
+"""What of an agent's folder its harness kept as scratch or as a credential its driver names, when it was idle."""
+
+
+def kept(session: Path, agent: str, team: Team, cwd: Path) -> list[str]:
+    """What of an agent's folder in `session` is its harness's scratch, or is where its driver says it keeps a
+    credential."""
+    folder = agent_folder(session, agent)
+    named = make_driver(team.roles[agent], cwd).describe().credentials
+    return sorted(str(path) for path in (tmpdir(Path()), *named) if (folder / path).exists())
+
+
+async def stopped(session: Session) -> list[Any]:
+    """Each agent's stop that has finished."""
+    return [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "stop"]
+
+
 @pytest.mark.parametrize(
     "made",
     [
@@ -194,10 +213,12 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
                 )
                 await in_state(session, agent[1:], "idle")
             await session.settled()
+            before = {agent: kept(session.folder, agent, team, cwd) for agent in AGENTS}
             first, *rest = recipients
             await session.cancel_agent(first)
             for agent in rest:
                 await session.retire(agent)
+            await until(lambda: stopped(session), session, lambda found: len(found) == len(recipients))
             said = [row["said"] for row in await session.agents() if f"@{row['agent']}" in recipients]
             await session.close_episode(based_on=said)
             if (await session.status())["state"] == "open":  # `settled` closes it at its `until`.
@@ -206,6 +227,8 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
         with pytest.raises(ConfigError) as unproven:
             await Session.start(team, name="again", root=tmp_path / "bare", **start)
 
+    copied = tmp_path / "copy" / "sessions" / "rollout"
+    shutil.copytree(root / "sessions" / "rollout", copied)
     history = await Session.attach("rollout", root=root)
     head = await history.head()
     await history.annotate(
@@ -250,6 +273,8 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     assert {request.bearer for request in model.calls} == set(bearers.values())
     assert {request.bearer for request in model.tool_calls} == set(bearers.values())
     assert holding(root / "sessions", list(bearers.values())) == [] and holding(cwd, list(bearers.values())) == []
+    assert before == {agent: SCRATCH_AND_CREDENTIALS.get(str(harness.named), []) for agent in AGENTS}
+    assert {agent: kept(copied, agent, team, cwd) for agent in AGENTS} == {agent: [] for agent in AGENTS}
     assert viewing.value.refusal.code == "not_permitted"
     making = "doctor --check" if harness.named in CHECKED else "write_conformance"
     assert making in str(unproven.value)

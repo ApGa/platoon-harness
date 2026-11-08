@@ -63,6 +63,12 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   the session folder or in the command line of any of the harness's processes.
 - **Agents' tokens.** Each agent has a token of its own for the tool plane, held in memory and in its harness's environment,
   and only its hash is journaled. An ended agent's token is refused, and so is one session's at another's tool plane.
+- **What a harness keeps.** A harness on your own login keeps its login where it always does, in your home, which nothing
+  here touches. In an agent's folder, a sealed pi keeps an agent directory of its own, with its `auth.json`, and an isolated
+  harness a home of its own, with its login files. Each driver names those files, and when the agent ends, finished, retired,
+  cancelled, failed or lost, its stop removes them, as it removes its harness's `tmp`. An agent put to rest, or in a session
+  that stops, keeps them, as its harness comes back on them. What the stop could not remove it says in the runtime's log
+  ([RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft).
 - **The owner's and the view token.** `owner.token`, a control credential, and `view.token`, which reads and never writes,
   are files in the session folder that only you can read, which each runtime writes fresh when it starts. A session a program
   started has no owner token. A stop or a close removes both. A runtime killed outright leaves its own, dead, as no runtime
@@ -85,14 +91,21 @@ A session's folder, as [§4](architecture.md#4-session-folder-and-process-model)
 - the journal: every event, each with its gist, and bodies, small ones inline and large ones in `blobs/`;
 - `annotations.sqlite`, rewards and credit; `marks.sqlite`, how far you have read; and `swarmchat.sqlite`, the page's
   projection, which holds the text of the messages it shows;
-- `runtime.log`, what a detached runtime said, and in each agent's folder `stderr.log`, what its harness said, and an
-  isolated harness's home, with whatever that harness keeps there;
+- `runtime.log`, what a detached runtime said, and in each agent's folder `stderr.log`, what its harness said, the
+  transcripts its harness keeps there, such as a sealed pi's `sessions/`, and an isolated harness's home, with whatever that
+  harness keeps there;
 - `commits.bundle`, the commits the journal recorded.
+
+An agent's folder keeps its harness's scratch, its `tmp`, and the files where its harness keeps a credential only until
+the agent ends: its stop removes them, and keeps the rest, as Credentials above says. An agent that has not ended keeps them:
+one in a session that stopped, which comes back on a resume, and one idle when its session closed, as a close ends no agent.
+That a close removes none of them is the default, pending the owner's ruling.
 
 Outside it: a harness on your own login keeps its own transcripts where it always does, in your home; an agent's worktree or
 branch may stay in your repository, as [workspaces](how-to/workspaces.md#when-a-workspace-goes) says; and the root keeps what
 `doctor --check` found of each harness. The folder as it ended is the session's export ([RFC
-0055](rfcs/0055-the-export-is-the-session-as-it-ended.md)), so copying it copies all of the above.
+0055](rfcs/0055-the-export-is-the-session-as-it-ended.md)), so copying it copies all of the above, and once its agents have
+ended, none of their harnesses' scratch or credential files.
 
 ### Erasing a body
 

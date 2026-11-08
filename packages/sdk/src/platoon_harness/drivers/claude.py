@@ -43,7 +43,7 @@ from . import (
     refuse_unset_model,
     text_of,
 )
-from .env import harness_env, inherited, on_path, private
+from .env import harness_env, homedir, inherited, on_path, private
 from .process import LOG, Process, status
 
 _CLAUDE = "claude"
@@ -78,6 +78,11 @@ _SIGN_IN = (
 _GATEWAY_URL = "ANTHROPIC_BASE_URL"
 _GATEWAY_CREDENTIALS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 _LOGINS: Mapping[str, Login] = {"claude.ai": "plan", "api_key": "key"}
+_CREDENTIALS = tuple(
+    homedir(Path()) / name for name in (".claude/.credentials.json", ".claude.json", ".claude/backups")
+)
+"""Where Claude Code keeps credentials in an isolated home: its login in `.credentials.json` in its config folder, and a
+key it signed in with where no keychain holds one in `.claude.json`, whose copies it keeps in `backups`."""
 _INSTRUCTIONS = "instructions.md"
 _SYNTHETIC = "<synthetic>"
 _DENIED = "The runtime denied this."
@@ -182,7 +187,11 @@ class ClaudeDriver:
     def describe(self) -> DriverInfo:
         if self._info is None:
             self._info = DriverInfo(
-                name=_CLAUDE, login=_login(), capabilities=_CAPABILITIES, installed=on_path(_CLAUDE)
+                name=_CLAUDE,
+                login=_login(),
+                capabilities=_CAPABILITIES,
+                installed=on_path(_CLAUDE),
+                credentials=_CREDENTIALS,
             )
         return self._info
 

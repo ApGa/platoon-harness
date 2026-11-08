@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import signal
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from platoon_harness.drivers import (
     Usage,
 )
 from platoon_harness.drivers.codex import CodexDriver
+from platoon_harness.drivers.env import homedir, inherited
 from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import write_conformance
@@ -780,6 +782,21 @@ async def test_the_tui_sends_from_its_composer_and_draws_the_reply_once(tmp_path
     async with FakeModel(clients.SAID) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await clients.the_tui_sends_from_its_composer_and_draws_the_reply_once(team, tmp_path)
+
+
+def test_the_credential_file_codex_names_is_the_one_its_login_writes(tmp_path):
+    """`codex login` keeps a key in `auth.json` in its home, offline, which in an isolated home its driver names, so an
+    agent's end removes it. Its MCP servers' logins would go in `.credentials.json` beside it where no keyring holds
+    them, which its driver names too and no server here asks for."""
+    folder = tmp_path / "ada"
+    homedir(folder).mkdir(parents=True)
+    env = {**inherited(), "HOME": str(homedir(folder))}
+    login = ["codex", "login", "--with-api-key"]
+    done = subprocess.run(login, input=b"dummy-key\n", env=env, capture_output=True, timeout=30, check=False)
+
+    named = CodexDriver().describe().credentials
+    assert done.returncode == 0, done.stderr
+    assert sorted(str(path) for path in named if (folder / path).exists()) == ["home/.codex/auth.json"]
 
 
 async def test_codex_resumes_in_its_worktree(tmp_path, monkeypatch):

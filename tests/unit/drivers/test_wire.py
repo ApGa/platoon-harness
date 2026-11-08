@@ -13,6 +13,7 @@ from platoon_harness.drivers import (
     ApprovalRequested,
     Delivery,
     DriverError,
+    DriverInfo,
     Exited,
     GapReport,
     Item,
@@ -160,6 +161,25 @@ async def test_a_program_is_installed_where_path_finds_it_and_where_it_says(tmp_
     )
 
     assert WireDriver(command).describe().installed == (Path(sys.executable), Path("/opt/my-agent"))
+
+
+async def test_a_program_s_credentials_lie_beneath_its_own_folder_in_the_agent_s(tmp_path):
+    command = raw_program(
+        tmp_path,
+        """
+        for frame in frames():
+            reply(frame, {"protocol": 2, "name": "raw", "credentials": ["auth.json", "home/.raw/logins"]})
+    """,
+    )
+
+    assert WireDriver(command).describe().credentials == (Path("wire/auth.json"), Path("wire/home/.raw/logins"))
+
+
+@pytest.mark.parametrize("named", ["/etc/passwd", "../home/.raw/auth.json", "own/../../escape", ""])
+def test_a_credential_s_path_that_could_leave_the_agent_s_folder_is_refused(named):
+    """As an agent's end removes it, so a program that names one describes nothing."""
+    with pytest.raises(ValueError, match="lies beneath the agent's folder"):
+        DriverInfo(name="raw", credentials=(Path(named),))
 
 
 async def test_a_program_runs_inside_what_wraps_it_and_its_frame_names_no_wrap(tmp_path):

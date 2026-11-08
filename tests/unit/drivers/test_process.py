@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 from urllib.parse import quote
 
 import pytest
@@ -28,6 +29,7 @@ from platoon_harness.drivers.process import (
     _gone,
     _Log,
     _started,
+    clean,
     reap,
     run,
 )
@@ -600,6 +602,73 @@ async def test_a_record_that_cannot_be_read_is_named_and_stops_nothing(tmp_path,
 
     assert await reap(tmp_path, 1) == (f"{RECORD} cannot be read",)
     assert not (tmp_path / RECORD).exists()
+
+
+# What an ended agent's folder keeps.
+
+KEPT = (Path("own/auth.json"), Path("own/logins"))
+
+
+def kept_by_a_harness(folder: Path) -> None:
+    """A folder as a harness leaves it: scratch in its `TMPDIR`, a login and a folder of logins, and its transcript."""
+    (tmpdir(folder) / "cache").mkdir(parents=True)
+    (tmpdir(folder) / "cache" / "compiled").write_text("scratch")
+    (folder / "own" / "logins").mkdir(parents=True)
+    (folder / "own" / "auth.json").write_text("a login")
+    (folder / "own" / "logins" / "server.json").write_text("a server's login")
+    (folder / "own" / "sessions").mkdir()
+    (folder / "own" / "sessions" / "one.jsonl").write_text("what it said")
+    (folder / LOG).write_text("what it printed")
+
+
+def files_in(folder: Path) -> list[str]:
+    return sorted(str(path.relative_to(folder)) for path in folder.rglob("*") if not path.is_dir())
+
+
+def test_clean_removes_the_tmpdir_and_the_credentials_named_and_nothing_else(tmp_path):
+    kept_by_a_harness(tmp_path)
+
+    assert clean(tmp_path, KEPT) == ()
+    assert files_in(tmp_path) == ["own/sessions/one.jsonl", LOG]
+    assert clean(tmp_path, KEPT) == ()
+
+
+def test_clean_of_a_folder_that_is_not_there_has_nothing_to_do(tmp_path):
+    assert clean(tmp_path / "never", KEPT) == ()
+
+
+def test_clean_follows_no_symlink_an_agent_planted(tmp_path):
+    """One at a name is removed itself, and one where a folder should be leads to nothing of ours."""
+    folder, yours = tmp_path / "agent", tmp_path / "yours"
+    (yours / "logins").mkdir(parents=True)
+    (yours / "auth.json").write_text("yours")
+    (yours / "logins" / "server.json").write_text("yours")
+    folder.mkdir()
+    (folder / "tmp").symlink_to(yours)
+    (folder / "own").symlink_to(yours)
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "own").mkdir()
+    (tmp_path / "other" / "own" / "auth.json").symlink_to(yours / "auth.json")
+
+    assert clean(folder, KEPT) == ()
+    assert clean(tmp_path / "other", KEPT) == ()
+    assert not (folder / "tmp").is_symlink() and (folder / "own").is_symlink()
+    assert not (tmp_path / "other" / "own" / "auth.json").is_symlink()
+    assert files_in(yours) == ["auth.json", "logins/server.json"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root removes what a mode forbids")
+def test_what_clean_could_not_remove_is_said(tmp_path):
+    kept_by_a_harness(tmp_path)
+    locked = tmpdir(tmp_path) / "cache"
+    locked.chmod(0o500)
+    try:
+        left = clean(tmp_path, KEPT)
+    finally:
+        locked.chmod(0o700)
+
+    assert left == ("tmp could not be removed: Permission denied",)
+    assert files_in(tmp_path) == ["own/sessions/one.jsonl", LOG, "tmp/cache/compiled"]
 
 
 async def test_a_pipe_drains_while_nobody_takes_the_reports(tmp_path):

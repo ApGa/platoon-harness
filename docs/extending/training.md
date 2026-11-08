@@ -243,12 +243,16 @@ on its row less its agent's baseline shared equally by that agent's scored spans
 
 ## The export
 
-The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside its
-journal. It holds no key, as bearers lived only in the harnesses' environments. Read it with `Session.attach` once its runtime has
-stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy. To show what a model call took in,
-read each offer its harness said it took, a `context.offered` its `context.delivered` names, with `Session.shown(offer)`: the
-text each item showed, a gist as it was shown, with any fields beside it, and a body or the lines of one, or None where the
-journal does not prove it by the item's digest. The form a gist is shown in is the SDK's to change, so read it there.
+The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside
+its journal. It holds no key, as bearers lived only in the harnesses' environments, and once its agents have ended, none of their
+harnesses' scratch or a file where a harness kept a credential, which its driver names, as each agent's stop removed them: end
+every agent, by its finish, `retire` or `cancel_agent`, before you copy a session, as an agent that has not ended keeps them ([RFC
+0075](../rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft). Read it with `Session.attach` once
+its runtime has stopped: eligibility, lineage, exposure and annotations all answer on it, alike on a copy. To show what a model
+call took in, read each offer its harness said it took, a `context.offered` its `context.delivered` names, with
+`Session.shown(offer)`: the text each item showed, a gist as it was shown, with any fields beside it, and a body or the lines of
+one, or None where the journal does not prove it by the item's digest. The form a gist is shown in is the SDK's to change, so read
+it there.
 
 ## Test without a training system
 

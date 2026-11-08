@@ -42,9 +42,11 @@ platoon_harness.drivers.Driver
 platoon_harness.drivers.DriverError
 platoon_harness.drivers.DriverInfo
 platoon_harness.drivers.DriverInfo.check
+platoon_harness.drivers.DriverInfo.credentials
 platoon_harness.drivers.DriverInfo.installed
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
+platoon_harness.drivers.env.homedir
 platoon_harness.drivers.env.inherited
 platoon_harness.drivers.env.on_path
 platoon_harness.drivers.env.open_beneath
@@ -85,6 +87,7 @@ platoon_harness.drivers.Native
 platoon_harness.drivers.Offered
 platoon_harness.drivers.openhands.OpenHandsDriver
 platoon_harness.drivers.pi.PiDriver
+platoon_harness.drivers.process.clean
 platoon_harness.drivers.process.exit_reason
 platoon_harness.drivers.process.GroupState
 platoon_harness.drivers.process.LOG

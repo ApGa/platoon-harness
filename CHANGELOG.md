@@ -13,6 +13,14 @@ named here is closed.
 
 ### New features
 
+- **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
+  names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
+  `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and
+  `.credentials.json` and Claude Code its `.credentials.json`, `.claude.json` and `backups` in an isolated home, and OpenHands
+  none, as its key reaches only its worker's environment. A wire program names its own in its `describe`, beneath the folder
+  its frame names, which `WireDriver` says beneath `wire/`. `drivers.env.homedir` names an isolated harness's home in an
+  agent's folder, and `drivers.process.clean` removes what an ended agent's harness kept. See
+  [RFC 0075](docs/rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
 - **An installed extension's op is a command.** `platoon-harness ballot cast SESSION --agent @author --choice yes` casts the
   sample extension package's vote from a shell, as `ph ballot.cast` casts an agent's. The command line finds installed
   extensions from metadata, imports only the one its first word names, and makes that one's commands as it makes the SDK's,
@@ -1246,6 +1254,15 @@ named here is closed.
 
 ### Fixes
 
+- **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
+  harness's `tmp` and the files its harness kept a credential in: in the copies of the GPU runs' sessions, some 45 of an agent
+  folder's 56 files were Node's and pi's caches in `tmp`, and pi's `auth.json` held the run's gateway credential, so every copy
+  of a session, which is its export, carried them, and they filled a file quota. Now an agent's stop, whichever way it ended,
+  removes its harness's `tmp` and the files its driver names as credentials, even when a step before fails, and keeps the rest,
+  its harness's own transcripts and `stderr.log` among it. A rest and the owner's stop remove nothing, as the agent comes back.
+  What could not be removed is said in the runtime's log. A session closed with an agent idle keeps that agent's, as a close
+  ends no agent, which is the default, pending the owner's ruling. See
+  [RFC 0075](docs/rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
 - **A launch or a resume that needs a body a person redacted says so.** Nothing stands in for a body a harness must be
   handed: a spawn's goal, or what an agent was told when its session began, which a harness that reopens its session is
   handed again. Once a person redacted one, the launch failed and the resume lost its agent, each naming only a refusal. Each

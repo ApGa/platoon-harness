@@ -32,6 +32,7 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
+from platoon_harness.drivers.env import homedir
 from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
@@ -1014,6 +1015,29 @@ async def test_pi_sealed_first_request_holds_no_built_in_tool(tmp_path):
     assert set(first.tools) == shown and not set(first.tools) & BUILT_IN
     assert set(ready.tools_visible or ()) == shown
     assert not first.says("vermilion")
+
+
+async def test_the_credential_files_pi_names_are_the_ones_it_writes(tmp_path):
+    """Pi makes `auth.json`, where it keeps its providers' keys and logins, in its agent directory as it starts: a
+    sealed launch's, in the agent's folder, or an isolated home's, and its driver names each, so an agent's end removes
+    it. Its MCP servers' logins would go in `mcp-auth.json` beside it, which its driver names too and no server here
+    asks for."""
+    async with FakeModel("hello", "hello") as model, FakeTools() as tools:
+        (tmp_path / "sealed").mkdir()
+        sealing = sealed(tmp_path / "sealed", model, tools, goal="go")
+        home = homedir(tmp_path / "isolated" / "ada")
+        home.mkdir(parents=True)
+        access = {**chat_access(model), OFFLINE: Secret("yes")}
+        isolating = on_fake_model(tmp_path / "isolated", model, goal="go", access=access, env={"HOME": str(home)})
+        for spec in (sealing, isolating):
+            driver, heard = PiDriver(), Heard()
+            await driver.start(spec, heard)
+            await heard.until(TurnEnded)
+            await driver.stop(2.0)
+
+    named = PiDriver().describe().credentials
+    written = [sorted(str(path) for path in named if (spec.folder / path).exists()) for spec in (sealing, isolating)]
+    assert written == [["pi/auth.json"], ["home/.pi/agent/auth.json"]]
 
 
 async def test_pi_compacts_and_retries_on_a_dialects_overflow_refusal(tmp_path):

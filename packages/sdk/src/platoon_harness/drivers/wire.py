@@ -83,13 +83,14 @@ class WireDriver:
         self._log = LOG
 
     def describe(self) -> DriverInfo:
-        """Ask the program, which stays up only long enough to answer, so no harness starts, and add where `PATH` finds
-        it to the paths it says its harness reads. This blocks, as the method is synchronous, and the answer is
-        kept."""
+        """Ask the program, which stays up only long enough to answer, so no harness starts, add where `PATH` finds it
+        to the paths it says its harness reads, and say where it keeps credentials beneath its own folder, which sits
+        inside the agent's. This blocks, as the method is synchronous, and the answer is kept."""
         if self._info is None:
             said = self._ask_for_description()
             installed = tuple(dict.fromkeys((*on_path(self._command[0]), *said.installed)))
-            self._info = said.model_copy(update={"installed": installed})
+            credentials = tuple(WIRE / path for path in said.credentials)
+            self._info = said.model_copy(update={"installed": installed, "credentials": credentials})
         return self._info
 
     def _ask_for_description(self) -> DriverInfo:

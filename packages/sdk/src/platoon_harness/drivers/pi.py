@@ -54,7 +54,7 @@ from . import (
     text_of,
     unknown_frame,
 )
-from .env import PYTHON, harness_env, inherited, on_path, private
+from .env import PYTHON, harness_env, homedir, inherited, on_path, private
 from .process import LOG, Process, status
 
 _PI = "pi"
@@ -90,6 +90,15 @@ _COMPACTION_STATUS = "platoon_harness.compaction"
 compaction ended."""
 _INSTRUCTIONS = "instructions.md"
 _AGENT_DIR = "PI_CODING_AGENT_DIR"
+_SEALED_DIR = "pi"
+"""Where in an agent's folder a sealed launch keeps pi's agent directory."""
+_CREDENTIALS = tuple(
+    Path(directory, name)
+    for directory in (Path(_SEALED_DIR), homedir(Path()) / ".pi" / "agent")
+    for name in ("auth.json", "mcp-auth.json")
+)
+"""Where pi keeps credentials in an agent directory of the agent's own, a sealed launch's or an isolated home's: its
+providers' keys and logins in `auth.json`, and its MCP servers' logins in `mcp-auth.json`."""
 _SEALED = (
     "--no-skills",
     "--no-prompt-templates",
@@ -284,7 +293,12 @@ class PiDriver:
         if self._info is None:
             version = _version(inherited(*_SIGN_IN))
             self._info = DriverInfo(
-                name=_PI, login=_login(), version=version, capabilities=_CAPABILITIES, installed=_installed()
+                name=_PI,
+                login=_login(),
+                version=version,
+                capabilities=_CAPABILITIES,
+                installed=_installed(),
+                credentials=_CREDENTIALS,
             )
         return self._info
 
@@ -308,7 +322,7 @@ class PiDriver:
         user's, and an agent directory of its own, in the agent's folder, whose settings are a sealed agent's."""
         if not isinstance(spec.access, Gateway):
             return harness_env(spec, *_SIGN_IN)
-        home = spec.folder / "pi"
+        home = spec.folder / _SEALED_DIR
         home.mkdir(mode=0o700, exist_ok=True)
         private(spec.folder, home / "settings.json", json.dumps(_SEALED_SETTINGS))
         return {**harness_env(spec), _AGENT_DIR: str(home)}

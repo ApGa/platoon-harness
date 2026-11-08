@@ -44,7 +44,7 @@ from . import (
     refuse_unset_model,
     text_of,
 )
-from .env import harness_env, inherited, on_path
+from .env import harness_env, homedir, inherited, on_path
 from .process import LOG, Process, status
 
 _CODEX = "codex"
@@ -73,6 +73,9 @@ _KEYED = (
     f'model_providers.{_PROVIDER}={{name="{_PROVIDER}", env_key="{_KEY}", wire_api="responses"}}',
 )
 _LOGINS: Mapping[str, Login] = {"Logged in using ChatGPT": "plan", "API key configured": "key"}
+_CREDENTIALS = tuple(homedir(Path()) / ".codex" / name for name in ("auth.json", ".credentials.json"))
+"""Where Codex keeps credentials in an isolated home: its login in `auth.json`, as `codex login` writes it, and its MCP
+servers' logins in `.credentials.json` where no keyring holds them."""
 _ASKS = "on-request"
 _BESIDE = ("reason", "cwd", "networkApprovalContext", "grantRoot")
 """What a request says beside the command or patch it asks about, which a person allows too: why, the folder a command
@@ -301,7 +304,13 @@ class CodexDriver:
 
     def describe(self) -> DriverInfo:
         if self._info is None:
-            self._info = DriverInfo(name=_CODEX, login=_login(), capabilities=_CAPABILITIES, installed=_installed())
+            self._info = DriverInfo(
+                name=_CODEX,
+                login=_login(),
+                capabilities=_CAPABILITIES,
+                installed=_installed(),
+                credentials=_CREDENTIALS,
+            )
         return self._info
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:

@@ -98,9 +98,10 @@ class DriverInfo(Model):
     """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one, and
     `version` is the harness version it would run, None when it cannot tell without starting one: `ready` says the
     version that runs. `installed` is the paths its harness reads to run, as it reaches them, which an isolation shows
-    it of what it hides: none for a harness in this process, which nothing can confine. `check` names the check that
-    ships with a driver outside the SDK, as `module:function`, imported only to run it: a coroutine function that takes
-    the folder to run in and returns what `check_driver` found of the harness against FakeModel and on no account,
+    it of what it hides: none for a harness in this process, which nothing can confine. `credentials` is where, beneath
+    the folder its spec names, its harness keeps a credential, which goes when the agent ends. `check` names the check
+    that ships with a driver outside the SDK, as `module:function`, imported only to run it: a coroutine function that
+    takes the folder to run in and returns what `check_driver` found of the harness against FakeModel and on no account,
     which `platoon-harness doctor --check` runs and keeps. The SDK's own drivers name none, as `levels.CHECKED` holds
     theirs."""
 
@@ -109,7 +110,16 @@ class DriverInfo(Model):
     version: str | None = None
     capabilities: Capabilities = Capabilities()
     installed: tuple[Path, ...] = ()
+    credentials: tuple[Path, ...] = ()
     check: str | None = None
+
+    @field_validator("credentials")
+    @classmethod
+    def _beneath(cls, credentials: tuple[Path, ...]) -> tuple[Path, ...]:
+        """A path that left the agent's folder would have its end remove something of yours."""
+        if any(path.is_absolute() or ".." in path.parts or not path.parts for path in credentials):
+            raise ValueError("a credential's path lies beneath the agent's folder: relative, with no `..`")
+        return credentials
 
 
 class ToolBinding(Model):
