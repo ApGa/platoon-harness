@@ -83,6 +83,7 @@ amended or extended an RFC.
 | [0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) | A diff is read on request, as a test is run | Draft |
 | [0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) | An approval carries the whole of what it asks | Draft |
 | [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Draft |
+| [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
