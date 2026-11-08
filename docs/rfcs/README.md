@@ -85,6 +85,7 @@ amended or extended an RFC.
 | [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Draft |
 | [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
 | [0068](0068-a-program-is-a-script-that-owns-its-session.md) | A program is a script that owns its session | Accepted |
+| [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
