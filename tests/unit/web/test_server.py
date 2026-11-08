@@ -515,10 +515,14 @@ async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
         assert await session.head() == head, "a read wrote an event"
         assert submitted == [], "a pane submitted an op, which may write"
     assert tools == json.loads(json.dumps(words)) and tools["cursor"] is None
-    assert tools["lines"][0]["text"].startswith("turn t1-") and tools["lines"][1]["text"] == "message_send completed"
+    assert (
+        tools["lines"][0]["text"]
+        == f"@lead's tool calls read at head {head:,}: what ended since reads as it stood then."
+    )
+    assert tools["lines"][1]["text"].startswith("turn t1-") and tools["lines"][2]["kind"] == "unjoined"
     assert any(line["text"] == f"w1 spawned as worker · {calls.UNJOINED}" for line in tools["lines"])
     assert older["lines"] == [
-        {"kind": "", "text": "The journal holds no tool call of @lead's before these.", "ref": None, "warn": False}
+        {"kind": "", "text": "The journal holds no tool item of @lead's before these.", "ref": None, "warn": False}
     ]
     assert nobody.status == 404 and nobody.json()["error"] == "not_found: no agent nobody"
     assert unnamed.status == wrong.status == 400
@@ -527,6 +531,27 @@ async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
     assert saying["text"] == "thinking aloud" and saying["version"] != heard["version"]
     assert unheard.status == 404 and unheard.json()["error"] == "not_found: no agent nobody"
     assert ended == {"version": None, "text": "", "about": "@w1 has ended, so it says nothing more.", "over": True}
+
+
+async def test_activity_on_history_lists_the_calls_the_journal_holds_and_says_nothing_is_being_said(root, clock):
+    """With no runtime, Tool activity lists an agent's calls as the journal holds them, as it does on a live session,
+    and an ask for what the agent is saying is held for at most `HOLD`, then says that what was being said went with
+    the runtime that said it."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as owner:
+        await scenario(owner)
+    async with Session.attach("s", root=root) as history, served(history, root, clock) as web:
+        viewer = await Browser(web).opened("view")
+        tools = await viewer.view("x_read", {"pane": "tools", "agent": "lead"})
+        words = dataclasses.asdict(await calls.page(history, "lead"))
+        asked = asyncio.ensure_future(viewer.view("x_read", {"pane": "saying", "agent": "lead"}))
+        await clock.slept_until(clock.now() + server_module.HOLD)
+        clock.advance(server_module.HOLD)
+        saying = await asked
+
+    assert tools == json.loads(json.dumps(words)) and tools["cursor"] is None
+    assert [line["kind"] for line in tools["lines"]].count("heading") == 1
+    assert any(line["text"] == f"w1 spawned as worker · {calls.UNJOINED}" for line in tools["lines"])
+    assert saying == {"version": None, "text": "", "about": server_module._GONE, "over": False}
 
 
 async def test_live_text_is_held_only_while_its_pane_is_open_and_bounded(web, session, clock):

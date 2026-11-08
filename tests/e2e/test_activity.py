@@ -26,6 +26,7 @@ type Caller = Callable[[str, Mapping[str, Any]], Awaitable[Any]]
 PANE = "#pane .x-tools"
 SAYING = f"{PANE} .x-saying"
 ABOUT = "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
+NO_ID = "no id joins it to its call's other items"
 
 
 @pytest.fixture
@@ -110,8 +111,9 @@ async def test_an_agent_s_page_lists_its_tool_calls_a_page_at_a_time(
             await expect(headings).to_have_count(2, timeout=SECONDS)
             await page.context.close()
 
-    assert first[1:3] == [["completed", "message_send called"]] * 2 and len(first) == 6
-    assert drawn[:6] == first and drawn[6][0].startswith("turn t1-") and len(drawn) == 9
+    assert first[0][1].startswith("@lead's tool calls read at head ") and first[0][0] == ""
+    assert first[2:4] == [["completed", "message_send called"]] * 2 and len(first) == 7
+    assert drawn[:7] == first and drawn[7][0].startswith("turn t1-") and len(drawn) == 10
     assert ref is not None and ref.startswith("turn/lead@")
     assert errors == []
 
@@ -120,8 +122,8 @@ async def test_a_spawn_is_listed_under_the_call_whose_id_its_anchor_holds_or_say
     browser: Browser, root: Path
 ):
     """A child spawned under a call's id stands under that call, and one spawned under no id, as a scripted `Call` step
-    makes one, stands where the journal has it, saying it joins no known call. Following a spawn opens its provenance
-    and the chat that shows its goal."""
+    makes one, stands where the journal has it, saying it joins no known call, as each item of that call stands alone,
+    `unjoined`. Following a spawn opens its provenance and the chat that shows its goal."""
     unanchored = Call("agent_spawn", {"name": "w2", "child_role": "worker", "goal": "be w2"})
     async with Session.start(team([Do(spawning), unanchored]), name="s", root=root, cwd=root) as session:
         await turned(session, 1)
@@ -136,10 +138,10 @@ async def test_a_spawn_is_listed_under_the_call_whose_id_its_anchor_holds_or_say
             await expect(page.locator("#main .mhead")).to_contain_text("w1", timeout=SECONDS)
             await page.context.close()
 
-    assert drawn[1:] == [
-        ["completed", "agent_spawn completed"],
+    assert drawn[2:] == [
+        ["unjoined", f"completed: agent_spawn completed · {NO_ID}"],
         ["spawned", f"w2 spawned as worker · {calls.UNJOINED}"],
-        ["started", "agent_spawn called"],
+        ["unjoined", f"started: agent_spawn called · {NO_ID}"],
         ["completed", "agent_spawn called"],
         ["spawned", "↳ w1 spawned as worker"],
     ]

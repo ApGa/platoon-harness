@@ -133,16 +133,21 @@ history.*
   what it is saying now.
 - **Tool activity.** Tool activity, on an agent's page, opens its tool calls in the pane, which the address names,
   `tools=` and the agent, read through `x_read`, so a view link and history show them too. They come a page at a time,
-  newest first, in whole turns, as many as 100 calls take, so no page splits a call from its end or a spawn from its call.
-  Each turn is a heading, with the id its harness gave it and how it ended, or `not ended`, over its calls. A call is one
-  line: what its first item says it was called with, beside how its last end says it ended, `completed`, `failed`, or an
-  approval's `allow` or `deny`, or `started` where the journal holds no end of it, which is not to say it still runs. A
-  call that came under no id cannot be joined to its end, so each of its items is a line of its own. A child the agent
-  spawned stands under the call whose id the spawn's anchor holds, and one that joins none, as OpenHands' and an `exec`
-  harness's do, whose calls reach us under ids of their own, stands where the journal has it, saying it joins no known
-  call. Each line follows into its event's provenance, and Back comes back. Read again reads the newest calls again, and
-  Read on draws the turns before them, below them. A turn of more than 100 calls is listed in its newest, saying how many
-  it leaves out and the `platoon-harness events` command that prints them. None of it enters a chat.
+  newest first, in whole turns, as many as 100 calls take. That keeps a call with its end, and a spawn with its call,
+  only where the harness reports them within the turn that made the call: the kernel refuses no item outside a turn,
+  and that each harness keeps to it is unverified. The newest page says first the head it was read at: it is read as it
+  opens and on Read again, so a call or a turn that ended since reads as it stood then. Each turn is a heading, with the
+  id its harness gave it and how it ended, or `not ended`, over its calls. A call is one line: what its first item says
+  it was called with, beside how its last end says it ended, `completed`, `failed`, or an approval's `allow` or `deny`,
+  or `started` where the journal holds no end of it, which is not to say it still runs. A call that came under no id
+  cannot be joined to its end, so each of its items is a line of its own, `unjoined`, saying its own phase and that no
+  id joins it to its call's other items. A child the agent spawned stands under the call whose id the spawn's anchor
+  holds, and one that joins none, as OpenHands' and an `exec` harness's do, whose calls reach us under ids of their own,
+  stands where the journal has it, saying it joins no known call. Where the journal holds no tool item of the agent's,
+  the pane says so, and that this is not to say it made no call: an `exec` harness reports none. Each line follows into
+  its event's provenance, and Back comes back. Read again reads the newest calls again, and Read on draws the turns
+  before them, below them. A turn of more than 100 calls is listed in its newest, saying how many it leaves out and the
+  `platoon-harness events` command that prints them. None of it enters a chat.
 
   Above its calls is what the agent is saying now, its live text, under words saying the journal does not hold it yet:
   what it said since the journal last took what it said, its newest 20,000 characters, led by an ellipsis where some

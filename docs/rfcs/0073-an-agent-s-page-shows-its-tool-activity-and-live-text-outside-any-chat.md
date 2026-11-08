@@ -69,24 +69,28 @@ async def page(session: Session, agent: str, *, before: int | None = None) -> Ca
 ```
 
 `calls.page` reads back from `before`, or from the newest, through the agent's turn stream and every agent's own stream, where
-a spawn is recorded, and takes whole turns, as many as `PAGE` calls take and one at least. A harness reports a call, and the
-spawns it made, within the turn that made it, so no page splits a call from its end or a spawn from its call, and its words
-need nothing from any other page. Each turn is a heading, its id as its harness gave it and how it ended, or `not ended` where the journal holds
-no end, over its calls, newest first:
+a spawn is recorded, and takes whole turns, as many as `PAGE` calls take and one at least. Where a harness reports a call, its
+end and the spawns it made within the turn that made it, no page splits a call from its end or a spawn from its call, and its
+words need nothing from any other page; that each harness does is unverified, as the hard parts say. The newest page is led
+by the head it was read at, which says that a call or a turn that ended since reads as it stood then: the pane reads it as
+it opens and on Read again, and does not follow the journal (open question 2). Each turn is a heading, its id as its harness
+gave it and how it ended, or `not ended` where the journal holds no end, over its calls, newest first:
 
 - **A call** is one line, from the first of its items to the last, joined by the id its harness gave it: its words are what its
   first item says it was called with, and its kind how its last end says it ended, `completed`, `failed` or an approval's
   `allow` or `deny`, or `started` where the journal holds no end. One that did not complete, or that its approval denied, is a
   warning. A call that came under no id, as a scripted `Call` step's does, cannot be joined to its end, so each of its items is
-  a line of its own.
+  a line of its own, `unjoined`, saying its own phase and that no id joins it to its call's other items, never `started`, as
+  whether the journal holds the call's end is unknown. Each counts as a call toward `PAGE`.
 - **A spawn** stands under the call whose id its anchor holds, through `calls.Join`, the join the terminal's transcript draws by,
   whichever of the two the journal has first. One that joins no call of its turn, as OpenHands' and an `exec` harness's do, whose
   calls come through the shim and `ph` under ids no item holds, stands where the journal has it, saying it joins no known call.
 
 A turn of more calls than `PAGE` is listed in its newest, saying how many it leaves out and that `platoon-harness events SESSION
---after SEQ` prints them among the session's other events, and the next page is the turn before it. Each line is a button that
-follows into its event's provenance, as a link of the Provenance pane does, and Back comes back. Read again reads the newest page
-again, and Read on draws the page before the last one drawn, below it.
+--after SEQ` prints them among the session's other events, and the next page is the turn before it. A journal that holds no tool
+item of the agent's says so, and that this is not to say it made no call: an `exec` harness, which acts through `ph`, reports
+none. Each line is a button that follows into its event's provenance, as a link of the Provenance pane does, and Back comes
+back. Read again reads the newest page again, and Read on draws the page before the last one drawn, below it.
 
 ### 3. Live text, held only while a pane asks, within a bounded tail
 
@@ -116,10 +120,11 @@ an agent's words still reach its chat with the person once its turn commits them
 ## The hard parts
 
 - **A call that crosses a turn.** Whole turns keep a call with its end and its spawns only where its harness reports all of
-  them within the turn that made the call. Each driver here does, as each harness ends its turn after its calls do, but the
-  kernel refuses no item outside a turn (UNVERIFIED for every path of every harness). An item recorded after its turn ended
-  stands in the next turn's lines, as a line of its own, and a spawn there that joins a call of the turn before says it joins
-  no known call.
+  them within the turn that made the call. The kernel refuses no item outside a turn, and that each harness keeps to it is
+  UNVERIFIED for every path of every harness. A page closes a turn's group at its start, reading back, so an item recorded
+  after its turn ended and before the next began stays with its own turn. One recorded after the next turn began stands in
+  that turn's lines, as a line of its own, and a spawn there that joins a call of the turn before says it joins no known
+  call.
 
 ## Alternatives
 
@@ -155,13 +160,14 @@ an agent's words still reach its chat with the person once its turn commits them
 1. Should a call's line open its input and its output, the bodies its items carry? Today a line opens its event's provenance, and
    the bodies are read with `platoon-harness blob`. A maintainer can decide before this RFC is accepted.
 2. Should the pane follow new calls as they come, as the feed's `x_moved` makes a queue's pane read again? Today Read again reads
-   them. Needed only if a person asks.
+   them, and the newest page says the head it was read at. Needed only if a person asks.
 3. What does a page of calls cost on a busy session's long turn? The scale tests of milestone 4 can measure it beside the other
    reads.
 
 ## Evidence
 
 - `tests/unit/cli/test_calls.py`: `test_an_agent_s_calls_come_a_page_of_whole_turns_at_a_time_newest_first`,
+  `test_the_newest_page_says_the_head_it_was_read_at_and_no_tool_item_is_not_no_call`,
   `test_a_spawn_is_listed_under_the_call_whose_id_its_anchor_holds_or_where_it_stands_joining_none` and
   `test_a_turn_of_more_calls_than_a_page_holds_is_listed_in_its_newest_saying_what_prints_the_rest`, over sessions on a scripted
   harness.

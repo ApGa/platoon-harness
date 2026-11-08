@@ -2,6 +2,7 @@
 harness reports them, and the spawns it makes, each under the anchor its harness gave the call, or under none. And a
 page of an agent's calls, in the words the page's Tool activity draws, over a session a scripted lead calls tools in."""
 
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -141,6 +142,9 @@ async def turned(session: Session, turns: int) -> None:
         await until(lambda: of_type(session, "turn.ended"), session, ended)
 
 
+NO_ID = "no id joins it to its call's other items"
+
+
 def said(lines: list[Line]) -> list[tuple[str, str]]:
     return [(line.kind, line.text) for line in lines]
 
@@ -159,30 +163,56 @@ async def test_an_agent_s_calls_come_a_page_of_whole_turns_at_a_time_newest_firs
     headings = [line.text for line in newest.lines if line.kind == "heading"]
     assert [heading.partition("-")[0] for heading in headings] == ["turn t3", "turn t2"]
     assert all(heading.endswith(": stopped") for heading in headings)
-    assert said(newest.lines)[1:3] == [("completed", "message_send called")] * 2
-    assert all(line.ref and line.ref.startswith("turn/lead@") for line in newest.lines if line.kind != "heading")
-    assert len(newest.lines) == len(oldest.lines) * 2 == 6
+    assert said(newest.lines)[2:4] == [("completed", "message_send called")] * 2
+    assert all(line.ref and line.ref.startswith("turn/lead@") for line in newest.lines[1:] if line.kind != "heading")
+    assert len(newest.lines) - 1 == len(oldest.lines) * 2 == 6
     assert newest.cursor == starts[1] and oldest.cursor is None
     assert oldest.lines[0].text.startswith("turn t1-")
-    assert said(none.lines) == [("", "The journal holds no tool call of @lead's before these.")]
+    assert said(none.lines) == [("", "The journal holds no tool item of @lead's before these.")]
+
+
+async def test_the_newest_page_says_the_head_it_was_read_at_and_no_tool_item_is_not_no_call(root):
+    """What ended after the head a page was read at reads as it stood then, which the page says first; and a journal
+    holding no tool item of an agent's is not said to mean it made no call, as a harness may report none."""
+    async with Session.start(team([Hang()]), name="s", root=root, cwd=root) as session:
+        await session.send("@lead", "turn 1")
+        await until(lambda: of_type(session, "turn.started"), session, lambda found: len(found) == 1)
+        head = await session.head()
+        found = await page(session, "lead", before=head + 1)
+        newest = await page(session, "lead")
+
+    assert newest.lines[0].kind == "" and not newest.lines[0].warn
+    assert re.fullmatch(
+        r"@lead's tool calls read at head [0-9,]+: what ended since reads as it stood then\.", newest.lines[0].text
+    )
+    assert said(newest.lines)[1:] == [
+        (
+            "",
+            "The journal holds no tool item of @lead's, which is not to say it made no call: a harness may report "
+            "none, as `exec`'s does.",
+        )
+    ]
+    assert said(found.lines) == [("", "The journal holds no tool item of @lead's before these.")]
 
 
 async def test_a_spawn_is_listed_under_the_call_whose_id_its_anchor_holds_or_where_it_stands_joining_none(root):
     """A call is one line, from what its first item says it called with to how its last says it ended. A call that
-    came under no id cannot be joined to its end, so each of its items is a call of its own, and what it spawned joins
-    no known call, standing where the journal has it."""
+    came under no id cannot be joined to its end, so each of its items is a line of its own, `unjoined`, saying its own
+    phase and never that its call has no end, and what it spawned joins no known call, standing where the journal has
+    it."""
     async with Session.start(team([Do(spawning), UNANCHORED]), name="s", root=root, cwd=root) as session:
         await turned(session, 1)
         found = await page(session, "lead")
         spawned = {event.data["name"]: event for event in await of_type(session, "agent.spawned")}
 
-    assert said(found.lines)[1:] == [
-        ("completed", "agent_spawn completed"),
+    assert said(found.lines)[2:] == [
+        ("unjoined", f"completed: agent_spawn completed · {NO_ID}"),
         ("spawned", f"w2 spawned as worker · {UNJOINED}"),
-        ("started", "agent_spawn called"),
+        ("unjoined", f"started: agent_spawn called · {NO_ID}"),
         ("completed", "agent_spawn called"),
         ("spawned", "↳ w1 spawned as worker"),
     ]
+    assert not any(line.warn for line in found.lines)
     assert [line.ref for line in found.lines if line.kind == "spawned"] == [
         f"{event.stream}@{event.version}" for event in (spawned["w2"], spawned["w1"])
     ]
@@ -200,11 +230,11 @@ async def test_a_turn_of_more_calls_than_a_page_holds_is_listed_in_its_newest_sa
         before = await page(session, "lead", before=cut.cursor)
         began = [event.seq for event in await of_type(session, "turn.started") if event.agent == "lead"][1]
 
-    assert said(cut.lines)[1:] == [
-        ("completed", "agent_spawn completed"),
+    assert said(cut.lines)[2:] == [
+        ("unjoined", f"completed: agent_spawn completed · {NO_ID}"),
         (
             "",
-            "The rest of this turn, 2 calls before these and what they spawned, is not listed: "
+            "The rest of this turn, 1 call and 1 item under no id before these and what they spawned, is not listed: "
             f"`platoon-harness events s --after {began - 1}` prints it, among the session's other events.",
         ),
     ]

@@ -3,13 +3,13 @@
 - button "Read again"
 - button "×"
 - paragraph: "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
-- text: '/^turn t1-[0-9a-f]+: stopped$/'
-- button "completed message_send completed"
-- button "started message_send called"
-- button "completed message_send completed"
-- button "started message_send called"
-- button "completed agent_spawn completed"
+- text: '/^@lead''s tool calls read at head [0-9,]+: what ended since reads as it stood then\. turn t1-[0-9a-f]+: stopped$/'
+- 'button "unjoined completed: message_send completed · no id joins it to its call''s other items"'
+- 'button "unjoined started: message_send called · no id joins it to its call''s other items"'
+- 'button "unjoined completed: message_send completed · no id joins it to its call''s other items"'
+- 'button "unjoined started: message_send called · no id joins it to its call''s other items"'
+- 'button "unjoined completed: agent_spawn completed · no id joins it to its call''s other items"'
 - button "spawned w1 spawned as worker · joins no known call"
-- button "started agent_spawn called"
-- button "completed task_add completed"
-- button "started task_add called"
+- 'button "unjoined started: agent_spawn called · no id joins it to its call''s other items"'
+- 'button "unjoined completed: task_add completed · no id joins it to its call''s other items"'
+- 'button "unjoined started: task_add called · no id joins it to its call''s other items"'

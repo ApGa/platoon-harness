@@ -17,7 +17,10 @@ from .provenance import Line
 UNJOINED = "joins no known call"
 """What a spawn says that joins no call a client holds: none holds the id its anchor holds, or it came under no id."""
 PAGE = 100
-"""The most calls a page of an agent's calls lists."""
+"""The most calls a page of an agent's calls lists, each item of one that came under no id counted as one."""
+_NO_ID = "no id joins it to its call's other items"
+"""What a tool item that came under no id says beside its own phase: whether the journal holds its call's start or end
+is unknown."""
 _READ = 4096
 """The most events one read of a page asks for: as many as a read that names streams scans."""
 _ENDS = ("turn.ended", "turn.lost")
@@ -91,15 +94,17 @@ class Calls:
 
 
 async def page(session: Session, agent: str, *, before: int | None = None) -> Calls:
-    """`agent`'s tool calls before the seq `before`, or the newest: whole turns, newest first, as many as `PAGE` calls
-    take and one at least, as a harness reports a call, and what it spawned, within the turn that made it. Each turn
-    is a heading over its calls, newest first: each call one line, from the first of its items to the last, with what
-    joins it under it, and a spawn that joins no call where the journal has it, saying so. A turn of more than `PAGE`
-    calls is listed in its newest, saying how many it leaves out and what prints them."""
+    """`agent`'s tool calls before the seq `before`, or the newest, led by the head they were read at: whole turns,
+    newest first, as many as `PAGE` calls take and one at least, which keeps a call with its end and what it spawned
+    where its harness reports them within the turn that made it. Each turn is a heading over its calls, newest first:
+    each call one line, from the first of its items to the last, with what joins it under it, and a spawn that joins no
+    call where the journal has it, saying so. A turn of more than `PAGE` calls is listed in its newest, saying how many
+    it leaves out and what prints them."""
     turns: list[list[Event]] = []
     turn: list[Event] = []
     calls = 0
-    at = await session.head() + 1 if before is None else before
+    head = await session.head()
+    at, read_at = (head + 1, head) if before is None else (before, None)
     while at > 1:
         read = await session.page(before=at, streams=(f"turn/{agent}",), match="agent/*", limit=_READ)
         for event in reversed(read.events):
@@ -109,15 +114,15 @@ async def page(session: Session, agent: str, *, before: int | None = None) -> Ca
             if event.type != "turn.started":
                 continue
             if turns and calls + _count(turn) > PAGE:
-                return Calls(_lines(session.name, agent, turns, before), turns[-1][-1].seq)
+                return Calls(_lines(session.name, agent, turns, read_at), turns[-1][-1].seq)
             turns.append(turn)
             calls, turn = calls + _count(turn), []
             if calls >= PAGE:
-                return Calls(_lines(session.name, agent, turns, before), event.seq)
+                return Calls(_lines(session.name, agent, turns, read_at), event.seq)
         at = read.cursor
     if turn and turns and calls + _count(turn) > PAGE:
-        return Calls(_lines(session.name, agent, turns, before), turns[-1][-1].seq)
-    return Calls(_lines(session.name, agent, [*turns, turn] if turn else turns, before), None)
+        return Calls(_lines(session.name, agent, turns, read_at), turns[-1][-1].seq)
+    return Calls(_lines(session.name, agent, [*turns, turn] if turn else turns, read_at), None)
 
 
 def _taken(event: Event, agent: str) -> bool:
@@ -138,9 +143,16 @@ def _count(events: list[Event]) -> int:
     return len({_id(event) for event in events if event.type == "item.recorded"})
 
 
-def _lines(session: str, agent: str, turns: list[list[Event]], before: int | None) -> list[Line]:
+def _lines(session: str, agent: str, turns: list[list[Event]], head: int | None) -> list[Line]:
+    """A page's lines, the newest page's led by the `head` it was read at, so a call or a turn that ended since is said
+    to read as it stood then. No tool item is not no call: a harness may report none, as an `exec` harness, which acts
+    through `ph`, does."""
     lines = [line for turn in turns for line in _turn(session, turn)]
-    return lines or [Line("", f"The journal holds no tool call of @{agent}'s{' before these' if before else ''}.")]
+    if head is None:
+        return lines or [Line("", f"The journal holds no tool item of @{agent}'s before these.")]
+    held = f"The journal holds no tool item of @{agent}'s, which is not to say it made no call: a harness may report"
+    lines = lines or [Line("", f"{held} none, as `exec`'s does.")]
+    return [Line("", f"@{agent}'s tool calls read at head {head:,}: what ended since reads as it stood then."), *lines]
 
 
 def _turn(session: str, held: list[Event]) -> list[Line]:
@@ -168,12 +180,19 @@ def _turn(session: str, held: list[Event]) -> list[Line]:
     lines = [_heading(events), *(line for _, said in sorted(standing, key=lambda at: -at[0]) for line in said)]
     if left > 0:
         command = f"platoon-harness events {session} --after {events[0].seq - 1}"
+        joined = sum(1 for call in calls[PAGE:] if call[0].data.get("native_id"))
+        counted = [_some(joined, "call")] if joined else []
+        counted += [f"{_some(left - joined, 'item')} under no id"] if left > joined else []
         said = (
-            f"The rest of this turn, {left:,} {'call' if left == 1 else 'calls'} before these and what they spawned, "
-            f"is not listed: `{command}` prints it, among the session's other events."
+            f"The rest of this turn, {' and '.join(counted)} before these and what they spawned, is not listed: "
+            f"`{command}` prints it, among the session's other events."
         )
         lines.append(Line("", said, warn=True))
     return lines
+
+
+def _some(count: int, what: str) -> str:
+    return f"{count:,} {what}{'' if count == 1 else 's'}"
 
 
 def _heading(events: list[Event]) -> Line:
@@ -187,13 +206,18 @@ def _heading(events: list[Event]) -> Line:
 
 def _call(items: list[Event]) -> Line:
     """A call: what it was called with, as its first item says it, and how it ended, as its last end does, or that it
-    has no end in the journal, `started`. One that did not complete, or that its approval denied, is a warning."""
+    has no end in the journal, `started`. An item that came under no id is `unjoined`, saying its own phase, as which
+    of its call's other items the journal holds is unknown. One that did not complete, or that its approval denied, is
+    a warning."""
     first, last = items[0], items[-1]
     ends = [item for item in items if item.data.get("phase") != "started"]
     outcome = (ends[-1].data.get("outcome") or "completed") if ends else "started"
     said = first if first.data.get("phase") == "started" else last
     warn = bool(ends) and outcome not in ("completed", "allow")
-    return Line(outcome, " ".join(said.gist.split()), f"{last.stream}@{last.version}", warn)
+    ref = f"{last.stream}@{last.version}"
+    if not first.data.get("native_id"):
+        return Line("unjoined", f"{outcome}: {' '.join(said.gist.split())} · {_NO_ID}", ref, warn)
+    return Line(outcome, " ".join(said.gist.split()), ref, warn)
 
 
 def _spawned(event: Event, *, joined: bool) -> Line:

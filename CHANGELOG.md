@@ -41,12 +41,15 @@ named here is closed.
   turn committed them. This is step 2 of RFC 0073, a draft.
 - **Tool activity in the page.** Tool activity, on an agent's page, was drawn disabled. It now opens the agent's tool
   calls in a pane, `tools=` and the agent, read through a new `tools` pane of `x_read`, which a view link reaches, in the
-  words of `platoon_harness_cli.calls`: whole turns a page at a time, newest first, as many as 100 calls take, each turn a
-  heading over its calls, each call one line from what it was called with to how it ended, or `started` where the journal
-  holds no end, and each spawn under the call whose id its anchor holds, by the join the terminal draws by, or saying it
-  joins no known call. Each line follows into its event's provenance, Read on draws the turns before, and a turn of more
-  than 100 calls says how many it leaves out and what prints them. None of it enters a chat. This is step 1 of RFC 0073,
-  a draft.
+  words of `platoon_harness_cli.calls`: whole turns a page at a time, newest first, as many as 100 calls take, the newest
+  page led by the head it was read at, each turn a heading over its calls, each call one line from what it was called
+  with to how it ended, or `started` where the journal holds no end, each item of a call that came under no id a line of
+  its own, `unjoined`, and each spawn under the call whose id its anchor holds, by the join the terminal draws by, or
+  saying it joins no known call. Whole turns keep a call with its end and its spawns only where a harness reports them
+  within the turn that made it, which is unverified, as the kernel refuses no item outside a turn. Where the journal
+  holds no tool item of the agent's, it says this is not to say it made no call. Each line follows into its event's
+  provenance, Read on draws the turns before, and a turn of more than 100 calls says how many it leaves out and what
+  prints them. None of it enters a chat. This is step 1 of RFC 0073, a draft.
 - **Who reached whom in the page.** Who reached whom, in the top bar, opens a pane, `interactions=1`, read through a new
   `interactions` pane of `x_read`, which a view link reaches, in the lines the terminal's `/reached` draws: each pair a
   heading over a line for each kind of edge, the unconfirmed offers apart as unknown, and each agent's unknowns. Each line
