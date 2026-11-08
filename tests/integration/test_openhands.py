@@ -64,6 +64,7 @@ from ..unit.drivers.support import Heard
 from ..unit.runtime import support
 from ..unit.runtime.support import in_state, of_type, until
 from . import clients, parallel
+from .parallel import Ran
 from .scripts import TOLD, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
@@ -922,11 +923,21 @@ def arrive(id: str) -> ToolCall:
     return ToolCall("meet_arrive", {}, id=id)
 
 
+async def test_several_agents_call_our_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' calls of a query of ours on the one tool server, each of which ends only once all three are in."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await parallel.agents_call_our_tool_at_once(team, tmp_path, model, arrive)
+
+
 async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
     """Two commands that run a script, two `cat`s and two calls of a query of ours, each two in one response, ran in
-    turn: none of them met the other."""
+    turn: none of them met the other, as the worker keeps the SDK's `tool_concurrency_limit` at 1. It asked one approval
+    for each two commands, as the SDK confirms a step whole."""
     async with FakeModel() as model:
         team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
         measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, terminal, arrive)
 
-    assert measured == parallel.AtOnce(script=False, read=False, query=False)
+    assert measured == parallel.Responses(
+        script=Ran(False, asked=1), read=Ran(False, asked=1), query=Ran(False, asked=0)
+    )

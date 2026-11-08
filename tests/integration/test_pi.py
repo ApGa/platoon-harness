@@ -63,6 +63,7 @@ from ..unit.drivers.support import Heard, running
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
 from . import clients, parallel, worktrees
+from .parallel import Ran
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -1110,13 +1111,20 @@ async def test_several_agents_run_their_shell_tools_at_once(tmp_path, monkeypatc
         await parallel.agents_run_their_shell_tools_at_once(team, tmp_path, model, shell)
 
 
+async def test_several_agents_call_our_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' calls of a query of ours on the one tool server, each of which ends only once all three are in."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await parallel.agents_call_our_tool_at_once(team, tmp_path, model, partial(tool, "meet_arrive"))
+
+
 @pytest.mark.timeout(300)
 async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
     """Two commands that run a script, two `cat`s and two calls of a query of ours, each two in one response, ran at
-    once."""
+    once, though it asked an approval for each command."""
     async with FakeModel() as model:
         team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
         ours = partial(tool, "meet_arrive")
         measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, shell, ours)
 
-    assert measured == parallel.AtOnce(script=True, read=True, query=True)
+    assert measured == parallel.Responses(script=Ran(True, asked=2), read=Ran(True, asked=2), query=Ran(True, asked=0))

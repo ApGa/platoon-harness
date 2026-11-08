@@ -671,22 +671,32 @@ says.
 ### Tool calls at once
 
 What each harness ran at the same time on FakeModel, measured with calls that each end only once the others are running too, or
-once one has waited alone, 15 s for the two calls of one response. Several agents' tools ran at once on every harness: three
-agents' shell calls, one each, ended only once all three were running, on Claude Code 2.1.319, Codex 0.167.0, pi 1.5.0 and
-OpenHands SDK 1.59.0 [L]. The calls of one response are each harness's to schedule, and each row is one run on 2026-11-08 [L]:
+once one has waited alone, 15 s for the two calls of one response. Several agents' tools ran at once on every harness, on Claude
+Code 2.1.319, Codex 0.167.0, pi 1.5.0 and OpenHands SDK 1.59.0 [L]: three agents' shell calls, one each, ended only once all three
+were running, and three agents' calls of a query of ours, one each through its harness's own client of the one tool server they
+share, ended only once all three were in it. The calls of one response are each harness's to schedule, and each row is one run
+on 2026-11-08, with the approvals the harness asked for each two, under a role that allows them all [L]:
 
 | Harness | Two commands that run a script | Two `cat`s of named pipes | Two calls of a query of ours |
 |---|---|---|---|
-| `claude` 2.1.319 | In turn: it asked an approval for each, and began the second once the first had ended | At once, asking none | At once |
-| `codex` 0.167.0 | At once, with the shell unsandboxed, as `workspace-write` refused the script an internet socket | At once | At once |
-| `pi` 1.5.0 | At once | At once | At once |
-| `openhands` SDK 1.59.0 | In turn | In turn | In turn |
+| `claude` 2.1.319 | In turn: it asked an approval for each, and began the second once the first had ended | At once, asking none | At once, asking none |
+| `codex` 0.167.0 | At once, asking none, with the shell unsandboxed, as `workspace-write` refused the script an internet socket | At once, asking none | At once, asking none |
+| `pi` 1.5.0 | At once, asking an approval for each | At once, asking an approval for each | At once, asking none |
+| `openhands` SDK 1.59.0 | In turn, asking one approval for the two | In turn, asking one approval for the two | In turn, asking none |
 
-`test_several_agents_run_their_shell_tools_at_once` and `test_what_one_response_runs_at_once`, in each harness's file under
-`tests/integration/`, hold these. Why Claude Code ran the scripts in turn and the `cat`s at once, the approvals it asked or the
-commands themselves, is not determined. A query of ours is listed with `readOnlyHint: true`. Two calls of ours that write were not
-tried at once: none of them blocks but a held `wait`, and an agent's second `wait` replaces its first. A harness's tools other than
-its shell and ours were not tried.
+`test_several_agents_run_their_shell_tools_at_once`, `test_several_agents_call_our_tools_at_once` and
+`test_what_one_response_runs_at_once`, in each harness's file under `tests/integration/`, hold these. Why Claude Code ran the
+scripts in turn and the `cat`s at once, the approvals it asked or the commands themselves, is not determined; pi asked an approval
+for each of its two and ran them at once all the same. A query of ours is listed with `readOnlyHint: true`.
+
+OpenHands runs one response's calls in turn because our worker keeps the SDK's `tool_concurrency_limit` at its default of 1 [S].
+Raising it is ours to do and is not done, as it changes the order in which the calls of one response run, an environment's
+among them. Above 1, the SDK would still run two terminal calls in turn, as its subprocess terminal is one session, and two calls
+of one MCP tool, which declares no resources [S]; different tools, such as a query of ours beside a terminal command, would run at
+once. Nothing here has run it so.
+
+Two calls of ours that write were not tried at once: none of them blocks but a held `wait`, and an agent's second `wait` replaces
+its first. A harness's tools other than its shell and ours were not tried.
 
 ## 6. Supported platforms
 

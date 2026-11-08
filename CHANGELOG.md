@@ -33,11 +33,13 @@ named here is closed.
   an isolation, a program, a training system and an estimator, how platoon-harness finds your code, by its two
   entry-point groups or `module:attr`, what a driver outside the SDK says of itself in `DriverInfo.check` and
   `DriverInfo.credentials`, and the rules your code keeps.
-- **What runs at once is stated, and held on each real binary.** The architecture says what runs at once across agents and
-  within one, and what is ordered, with the test that shows each. Three agents' shell calls on each of Claude Code, Codex, pi
-  and OpenHands against FakeModel each end only once all three are running, and each harness's test measures and pins
-  whether it runs two calls of one response at once: Codex and pi ran two commands, two `cat`s and two calls of ours at once,
-  OpenHands each two in turn, and Claude Code two commands it asked approvals for in turn and the rest at once, which
+- **What runs at once is stated, and held on Claude Code 2.1.319, Codex 0.167.0, pi 1.5.0 and OpenHands SDK 1.59.0.** The
+  architecture says what runs at once across agents and within one, and what is ordered, with the test that shows each. On
+  each of those against FakeModel, three agents' shell calls each end only once all three are running, and three agents'
+  calls of a query of ours on the one tool server they share each end only once all three are in it. Each harness's test
+  also measures and pins whether it runs two calls of one response at once, and the approvals it asks for them: Codex and pi
+  ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
+  `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its

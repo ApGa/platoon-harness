@@ -203,12 +203,16 @@ can both be watched. Leaving only disconnects.
 
 Agents work at once, and wait for each other only where they share a thing. Across agents:
 
-- **Each harness is a process of its own,** so agents' model calls and their harnesses' own tools, a shell or an edit, run at once.
-  On each real binary against FakeModel, three agents' shell calls each ended only once all three were running:
-  `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
-- **The tool server takes each request on a connection and a task of its own,** up to 1,024 at once (§10), and a held `wait`
-  holds only its own. A query an agent calls runs off the event loop on a thread of the loop's pool, as a person's does, so a slow
-  one holds up no other call while a thread is free: `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
+- **A real harness is a process of its own,** so agents' harnesses run their own tools, a shell or an edit, at once. On Claude
+  Code 2.1.319, Codex 0.167.0, pi 1.5.0 and OpenHands SDK 1.59.0 against FakeModel, three agents' shell calls each ended only once
+  all three were running: `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
+  Each asks its model itself, and no test holds agents' model calls at once. `ScriptedDriver` has no process of its own: its
+  steps run on the runtime's event loop, and hold up everything on it for as long as one runs without waiting.
+- **The tool server takes each request on a connection and a task of its own,** up to 1,024 connections at once, past which it
+  answers 503 (§10), and a held `wait` holds only its own. On the same four binaries, three agents' calls of a query of ours, each
+  through its harness's own client, ended only once all three were in it: `test_several_agents_call_our_tools_at_once`. A query an
+  agent calls runs off the event loop on a thread of the loop's pool, as a person's does, so a slow one holds up no other call
+  while a thread is free: `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
   That pool is Python's default, of four threads more than the CPUs Python counts and 32 at most, and readers share it with the
   kernel's blob writes alone: the host's git and files run on threads of its own, so no round of looks fills it,
   `test_a_held_look_holds_up_no_query`.
@@ -229,10 +233,12 @@ Agents work at once, and wait for each other only where they share a thing. Acro
 Within one agent:
 
 - **Its calls are in flight at once** once its harness makes them: over HTTP each is a request of its own, and the stdio shim
-  relays each line on a thread of its own: `test_one_agent_s_calls_through_the_shim_are_in_flight_at_once`.
-- **Whether a harness makes the calls of one response at once is its own.** Codex and pi ran two commands, two `cat`s and two calls
-  of ours at once, OpenHands each two in turn, and Claude Code two commands it asked approvals for in turn and the rest at once
-  ([compatibility.md](reference/compatibility.md#tool-calls-at-once)).
+  relays each line on a thread of its own: `test_one_agent_s_calls_through_the_shim_are_in_flight_at_once`. At most 32 of its
+  writes are in flight, and 1,024 of the session's, past which a write is refused `busy` with when to retry (§5.7).
+- **Whether a harness makes the calls of one response at once is its own,** or its driver's where the driver sets it. Codex and pi
+  ran two commands, two `cat`s and two calls of ours at once, and Claude Code two commands it asked approvals for in turn and the
+  rest at once. OpenHands ran each two in turn, as our worker keeps its SDK's `tool_concurrency_limit` at 1, whose raising awaits
+  the owner: `test_what_one_response_runs_at_once` ([compatibility.md](reference/compatibility.md#tool-calls-at-once)).
 - **Its effects start in order,** but for an interrupt, a stop and an answer (§5.4), and its harness's reports are heard in order.
 
 See [RFC 0077](rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md).
