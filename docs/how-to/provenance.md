@@ -150,6 +150,11 @@ Each page walks the journal to its head and stores nothing, so it takes longer a
 [RFC 0067](../rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md)'s measurement. A pair counts reach in the
 record and is never credit.
 
+`/reached` in the terminal draws it in the provenance panel, worded once in `platoon_harness_cli.provenance` for both clients:
+each pair a heading, a line under it for each kind of edge it holds, labelled by the kind, saying how that kind is known and
+opening the event that holds the first of them, the unconfirmed offers on a line of their own as unknown, and each agent's
+unknowns below. It shows the first page and names the command that reads on.
+
 ## Follow it in the terminal and the browser
 
 ![The page's Provenance pane of the mixed team's lead's answer: the model call that chose it, and the worker's note, its task and your message it cites, each with how it is known](../assets/web-provenance.png)

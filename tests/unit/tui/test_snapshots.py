@@ -15,7 +15,7 @@ from platoon_harness import Session, Team
 from platoon_harness.annotations import Annotation
 from platoon_harness.drivers import AgentSpec
 from platoon_harness.kernel import Event
-from platoon_harness.primitives import Contributors, Lineage, Uses
+from platoon_harness.primitives import Contributors, Interactions, Lineage, Uses
 from platoon_harness.testing import Do, Say, ScriptedDriver
 from platoon_harness_cli.tui.app import CSS, TerminalUI
 from platoon_harness_cli.tui.dialogs import Form
@@ -24,7 +24,7 @@ from platoon_harness_cli.tui.review import Patch
 from platoon_harness_cli.tui.workspace import Workspace
 
 from ...recorded import RECORDED, finish_of, restored
-from ..cli.test_provenance import opened
+from ..cli.test_provenance import opened, reached
 from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
 from ..runtime.support import in_state, of_type, until
@@ -38,6 +38,7 @@ SCRIPTED_SNAPSHOTS = {
     "tui-review.svg": "test_review_lists_what_changed.raw",
     "tui-patch.svg": "test_the_review_draws_a_patch.raw",
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
+    "tui-who-reached-whom.svg": "test_who_reached_whom_draws_each_kind_apart.raw",
 }
 """Each screenshot the docs show, in docs/assets, by the snapshot below that draws it from a scripted session."""
 RECORDED_SNAPSHOTS = {
@@ -293,6 +294,9 @@ class Answered:
     async def contributors(self, ref: str) -> Contributors:
         return Contributors.model_validate(self._answers["contributors"])
 
+    async def interactions(self, *, after: str | None = None) -> Interactions:
+        return Interactions.model_validate(self._answers["interactions"])
+
     async def annotations(self, target: str) -> list[Annotation]:
         estimate = {"target": target, "kind": "credit", "producer": "even-split", "producer_version": "0"}
         estimate |= {"params_hash": "0" * 64, "scope": "team", "status": "scored", "value": 0.5, "evidence": ()}
@@ -302,7 +306,7 @@ class Answered:
 class Panel(App[None]):
     CSS = CSS
 
-    def __init__(self, session: Answered, ref: str) -> None:
+    def __init__(self, session: Answered, ref: str | None) -> None:
         super().__init__()
         self._session, self._ref = session, ref
 
@@ -325,6 +329,23 @@ def test_the_provenance_panel_draws_each_link_with_how_it_is_known(snap_compare,
         await drawn(pilot, lambda text: "Credit and rewards" in text and "even-split" in text)
 
     assert snap_compare(Panel(Answered(answers), ref), terminal_size=(120, 48), run_before=read)
+
+
+async def _reached(folder: Path) -> dict[str, Any]:
+    kernel = await opened(folder)
+    await reached(kernel)
+    answer = ask(kernel, "interactions")
+    kernel.close()
+    return answer
+
+
+def test_who_reached_whom_draws_each_kind_apart(snap_compare, tmp_path):
+    answers = {"interactions": asyncio.run(_reached(tmp_path / "session"))}
+
+    async def read(pilot) -> None:
+        await drawn(pilot, lambda text: "Each agent's unknowns" in text and "@bob: unknown" in text)
+
+    assert snap_compare(Panel(Answered(answers), None), terminal_size=(120, 40), run_before=read)
 
 
 def test_each_screenshot_the_docs_show_is_its_snapshot_byte_for_byte():

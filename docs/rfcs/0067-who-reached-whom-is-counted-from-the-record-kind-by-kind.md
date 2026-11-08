@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture section 11](../architecture.md#11-provenance), [the brief's section 6](../spec/BRIEF.md#6-provenance-is-a-first-class-protocol-feature), [RFC 0010](0010-provenance.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Count who reached whom from the record, kind by kind, at a head` |
+| Implementation | `feat: Count who reached whom from the record, kind by kind, at a head`; step 2, `feat: Draw who reached whom in the terminal's provenance panel` |
 
 ## Summary
 
@@ -136,6 +136,16 @@ each spawn and end. Nothing is stored and the writer pays nothing. The cost grow
 event here (see Evidence), and the scale tests of milestone 4 measure it on the real stack at 100,000 events and hold it to a
 budget set from that measurement.
 
+### 7. Drawn once for both clients
+
+The words are `platoon_harness_cli.provenance`'s, which both clients draw, as they draw one event's provenance (RFC 0043). They
+show the first page: the head it was read at, and whether it is `open`; each pair a heading, oldest first, over a line for each
+kind of edge it holds, labelled by the kind, saying how that kind is known and opening the event that holds the first edge it
+counts, and a line of its own for its unconfirmed offers, labelled `unconfirmed` and drawn as unknown; each agent's unknowns;
+and where the page was cut, the command that reads on at the same head. Neither client pages in place, as no part of a
+provenance panel does, and neither walks the record (section 12). The terminal opens it in the provenance panel by
+`/reached`, where Enter follows a line and Esc comes back.
+
 ## The hard parts
 
 - **Overstatement.** A pair is reach in the record, and never credit, influence or a claim that one agent used another's work:
@@ -184,14 +194,16 @@ budget set from that measurement.
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 the query | `interactions`, `Session.interactions` and the command `interactions` | `tests/unit/primitives/test_interactions.py` | |
-| M2 drawn in both clients | The terminal's provenance panel and a pane of the page list each pair, each kind apart with how it is known, and each agent's unknowns, on a view link too, worded once for both | The tests of milestone 4's stage S12 | |
+| M2 drawn in both clients | The terminal's provenance panel and a pane of the page list each pair, each kind apart with how it is known, and each agent's unknowns, on a view link too, worded once for both | `test_who_reached_whom_is_worded_pair_by_pair_with_how_each_is_known`, `test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns`, `test_who_reached_whom_draws_each_kind_apart` | `feat: Draw who reached whom in the terminal's provenance panel` |
 
 ## Open questions
 
 1. Should who reached whom be a pane over a new query, or SwarmChat's Map extended, and which edges count? M1 builds the default,
    pending the owner's ruling: a query listed in both clients' provenance and not on the Map, counting declared, observed, cause
    and ancestry edges apart, with each agent's unknowns. A Map drawn from the same query would remove nothing M1 builds, and a
-   different set of edges would change what the walk counts, not the answer's shape. Needed before M2.
+   different set of edges would change what the walk counts, not the answer's shape. M2 draws that default too, pending the
+   ruling: a Map drawn from the same query, or a different set of edges, would remove none of the wording, which draws what
+   the answer holds. Needed before this RFC is accepted.
 2. Is a walk per page cheap enough at scale? The scale tests of milestone 4 measure it at 100,000 events on the real stack and
    set its budget. Past that budget, a fold under an RFC of its own. Needed before the budget is set.
 
@@ -204,6 +216,11 @@ budget set from that measurement.
   `test_interactions_answer_alike_after_a_rebuild_and_on_a_closed_copy`,
   `test_each_agent_s_unknowns_come_a_page_at_a_time_beside_the_pairs` and
   `test_an_answer_is_open_while_an_offer_it_counts_unconfirmed_can_still_be_taken`.
+- Drawn, M2: `tests/unit/cli/test_provenance.py`, `test_who_reached_whom_is_worded_pair_by_pair_with_how_each_is_known`,
+  `test_each_agent_s_unknowns_are_said_so_no_pair_reads_as_unknown_never_as_no_reach` and
+  `test_what_a_page_of_who_reached_whom_left_out_is_said_with_the_command_that_reads_on`;
+  `tests/unit/tui/test_provenance.py`, `test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns`; and
+  `tests/unit/tui/test_snapshots.py`, `test_who_reached_whom_draws_each_kind_apart`.
 - The cost of the walk, measured with a script kept outside this repository on journals written through the kernel's ops: a ring
   of agents in which each turn hands an agent what waits for it and its harness confirms it, reports a model call and a tool
   item, and sends the next agent a message citing the last one it got, and every fifth round every tenth agent posts or revises

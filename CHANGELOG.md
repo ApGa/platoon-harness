@@ -13,6 +13,13 @@ named here is closed.
 
 ### New features
 
+- **Who reached whom in the terminal's provenance panel.** `/reached` opens the panel on the first page of `interactions`:
+  each pair of makers a heading, oldest first, over a line for each kind of edge it holds, `declared`, `observed`, `cause`
+  and `ancestry`, labelled by the kind, saying how that kind is known and never summed, and one for its offers no harness
+  said it took, `unconfirmed`, in yellow, as unknown; each opens the event that holds the first edge it counts. Each
+  agent's unknowns follow, so an agent no pair names is not shown to be reached by nobody, and a page cut says the command
+  that reads on. The wording is in `platoon_harness_cli.provenance`, for both clients. The panel's kind column is one
+  character wider, for `unconfirmed`. Before, only `platoon-harness interactions` answered it, as JSON.
 - **A Python API reference.** [docs/reference/python.md](docs/reference/python.md) shows every name
   `tests/public_api.txt` lists, by the module whose `__all__` holds it, as a stub declares it in its source's own words,
   with its docstring, and a class's attributes and each method of its own whose names have no leading underscore, and

@@ -1,5 +1,6 @@
 """Provenance, as a panel a person reads: one event at a time, what it rests on, what came of it and whose work it
-reaches, in the words both clients say, with each link labelled by how it is known."""
+reaches, or who reached whom in the session, in the words both clients say, with each link labelled by how it is
+known."""
 
 from textual import events, work
 from textual.app import ComposeResult
@@ -10,13 +11,13 @@ from textual.widgets import Static
 
 from platoon_harness import Refused, Session
 
-from ..provenance import Line, no_provenance, read
+from ..provenance import Line, no_interactions, no_provenance, read, who_reached_whom
 from .keymap import bindings
 from .rows import Row, Rows
 from .safe import SafeText
 
-KIND = 11
-"""How wide the column is that names how a link is known, `declared` or `ancestry`."""
+KIND = 12
+"""How wide the column is that names how a link is known, `declared` or `unconfirmed`."""
 FOLLOW = "Enter: follow the chosen link    Esc: back one hop, and from the first, leave"
 
 
@@ -41,17 +42,18 @@ def rows_of(lines: list[Line], width: int, keyed: str) -> tuple[list[Row], dict[
 
 
 class Provenance(ModalScreen[None]):
-    """The provenance of the event `ref`, opened `from_text` where a text named it, then of each event a link of it is
-    followed into: Enter on a link follows it, and Esc goes back one hop, and from the first leaves. Each hop is read
-    again when it is shown, at the head then, and `lines` is what it says."""
+    """The provenance of the event `ref`, opened `from_text` where a text named it, or with no ref who reached whom in
+    the session, then of each event a link of it is followed into: Enter on a link follows it, and Esc goes back one
+    hop, and from the first leaves. Each hop is read again when it is shown, at the head then, and `lines` is what it
+    says."""
 
     BINDINGS = bindings("provenance")
 
-    def __init__(self, session: Session, ref: str, *, from_text: bool = False) -> None:
+    def __init__(self, session: Session, ref: str | None, *, from_text: bool = False) -> None:
         super().__init__()
         self._session = session
         self._from_text = from_text
-        self._trail: list[tuple[str, str | None]] = [(ref, None)]
+        self._trail: list[tuple[str | None, str | None]] = [(ref, None)]
         self.lines: list[Line] = []
         self._refs: dict[str, str] = {}
         self._reads = 0
@@ -70,12 +72,17 @@ class Provenance(ModalScreen[None]):
         ref = self._trail[-1][0]
         hops = len(self._trail) - 1
         back = f", {hops} hop{'' if hops == 1 else 's'} from where you began" if hops else ""
-        self.query_one("#asked", Static).update(SafeText(f"Provenance of {ref}{back}", "bold"))
+        asked = "Who reached whom" if ref is None else f"Provenance of {ref}"
+        self.query_one("#asked", Static).update(SafeText(f"{asked}{back}", "bold"))
         from_text = self._from_text and not hops
         try:
-            self.lines = (await read(self._session, ref, from_text=from_text)).lines
+            if ref is None:
+                self.lines = await who_reached_whom(self._session)
+            else:
+                self.lines = (await read(self._session, ref, from_text=from_text)).lines
         except Refused as refused:
-            self.lines = [Line("", no_provenance(ref, refused, from_text=from_text), warn=True)]
+            said = no_interactions(refused) if ref is None else no_provenance(ref, refused, from_text=from_text)
+            self.lines = [Line("", said, warn=True)]
         self._reads += 1
         self._draw()
         listing = self.query_one(Rows)

@@ -176,6 +176,14 @@ KEYMAP: tuple[Key, ...] = (
         "workspace",
     ),
     Key(
+        "",
+        "who_reached_whom",
+        "reached",
+        "Show who reached whom in the session: each pair of makers, each kind of edge apart with how it is known, and "
+        "each agent's unknowns, each link opening its event's provenance",
+        "workspace",
+    ),
+    Key(
         "alt+m",
         "model",
         "model",

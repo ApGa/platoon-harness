@@ -1076,6 +1076,11 @@ class Workspace(Screen[None]):
             return
         self.app.push_screen(Provenance(live.session, answer["ref"]))
 
+    def action_who_reached_whom(self) -> None:
+        """Show who reached whom in the session, in the provenance panel, each link following into its event's."""
+        if (live := self.live) is not None:
+            self.app.push_screen(Provenance(live.session, None))
+
     def on_transcript_named(self, named: Transcript.Named) -> None:
         """Show the provenance of a ref a line's text names, saying it was opened from text, which records no link."""
         if (live := self.live) is not None:

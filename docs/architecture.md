@@ -1411,8 +1411,8 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
 - **Agent interaction graph.** The quotient by maker. It may have cycles, and `interactions` counts it from the record, kind by
-  kind, at a head (below). The clients show one event's hop at a time, and drawing it is planned (see
-  [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)).
+  kind, at a head (below). The terminal's provenance panel lists it pair by pair, each kind of edge apart, as section 12 says,
+  and otherwise the clients show one event's hop at a time.
 - **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
   said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
   **upper bound** on what an action could have known, `delivered` edges are a **lower bound**, and what lies between them is
@@ -1764,7 +1764,10 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   where nothing is typed, so a chord is a shortcut and never the only way, and no chord decides, stops or spends anything, since
   a terminal sends Alt and a letter as Esc then that letter. `p` with the transcript in focus opens the chosen line's
   provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord, and `/provenance` its
-  form, filled in with that line's ref, which takes any other, as the page's pane takes a ref in its field. `/tasks`, on a
+  form, filled in with that line's ref, which takes any other, as the page's pane takes a ref in its field. `/reached` opens
+  the panel on who reached whom, the first page of `interactions` in the words both clients share: each pair a heading over a
+  line for each kind of edge it holds and one for its unconfirmed offers, each opening the event that holds the first of
+  them, and each agent's unknowns. `/tasks`, on a
   queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
   `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
   end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form

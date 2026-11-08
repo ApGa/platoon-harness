@@ -10,11 +10,21 @@ import pytest
 
 from platoon_harness import Refused
 from platoon_harness.kernel import Kernel, ManualClock
-from platoon_harness.primitives import PRIMITIVES, Contributors, Lineage, Spans, Uses
-from platoon_harness_cli.provenance import FROM_TEXT, REF_IN_TEXT, Line, lines_of, no_provenance, read
+from platoon_harness.primitives import PRIMITIVES, Contributors, Interactions, Lineage, Spans, Uses
+from platoon_harness_cli.provenance import (
+    FROM_TEXT,
+    REF_IN_TEXT,
+    Line,
+    interaction_lines,
+    lines_of,
+    no_provenance,
+    read,
+    who_reached_whom,
+)
 
 from ..kernel.support import grant, result_of
 from ..primitives.support import ROLES, channel, confirm, end_turn, of_type, report, send, spawn, start_turn
+from ..primitives.test_interactions import handed
 from ..primitives.test_provenance import (
     CHILD,
     CITED,
@@ -99,6 +109,9 @@ class Asked:
     async def spans(self, agent: str, *, after: str | None = None) -> Spans:
         self.read_from.append(after)
         return Spans.model_validate(self._ask("spans", agent=agent, after=after))
+
+    async def interactions(self, *, after: str | None = None) -> Interactions:
+        return Interactions.model_validate(self._ask("interactions", after=after))
 
 
 def turn_of(kernel: Kernel, call: str) -> list[dict[str, Any]]:
@@ -589,4 +602,143 @@ async def test_a_ref_in_text_that_names_no_event_says_so(kernel):
     )
     assert no_provenance("board/notes/nothing@9", missing.value) == (
         "board/notes/nothing@9 has no provenance to show: not_found: nothing is board/notes/nothing@9"
+    )
+
+
+UNPROVED = "7 surfaces of its harness no stored conformance result proves observed, " + ", ".join(
+    ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
+)
+"""Why what reached an agent is unknown today: no stored result proves any surface of a harness."""
+
+
+async def reached(kernel: Kernel) -> dict[str, str]:
+    """Alice posts an entry and asks Bob, whose harness takes it; Bob revises her entry citing her question, and replies
+    citing it and two ranges of her entry, which is handed to her and not said taken. Each kind of edge leads from
+    Alice to Bob, and one unconfirmed offer from Bob to Alice. The refs of the offer taken, the revision, the reply and
+    the offer not said taken."""
+    alice, bob = await spawn(kernel, "alice"), await spawn(kernel, "bob")
+    await channel(kernel, "notes", kind="board", delivery="pull")
+    body = f"sha256:{await kernel.put_body(b'line one\nline two\n')}"
+    post = {"board": "notes", "name": "spec", "gist": "v1", "body": body}
+    posted = result_of(await kernel.submit(alice, "board.post", post))["ref"]
+    asked = (await send(kernel, alice, "@bob", "the plan"))["ref"]
+    taken = await handed(kernel, "bob", taken=True)
+    revise = {"board": "notes", "name": "spec", "gist": "v2", "expected_version": 1, "based_on": [asked]}
+    revised = result_of(await kernel.submit(bob, "board.revise", revise))["ref"]
+    cited = [asked, f"{posted}#L1-1", f"{posted}#L2-2"]
+    replied = (await send(kernel, bob, "@alice", "agreed", reply_to=asked, based_on=cited))["ref"]
+    offered = await handed(kernel, "alice", taken=False)
+    return {"taken": taken, "revised": revised, "replied": replied, "offered": offered}
+
+
+async def test_who_reached_whom_is_worded_pair_by_pair_with_how_each_is_known(kernel):
+    """Each pair says whose events reached whose, then a line for each kind of edge between them, labelled by its kind,
+    saying how that kind is known and opening the event that holds the first of them, and apart from them the offers no
+    harness said it took, as unknown. Nothing sums the kinds, and an answer a later report can still change says so."""
+    refs = await reached(kernel)
+    taken, revised, replied, offered = refs["taken"], refs["revised"], refs["replied"], refs["offered"]
+
+    found = await who_reached_whom(Asked(kernel))  # type: ignore[arg-type]
+
+    head = ask(kernel, "interactions")["head"]
+    assert found[:1] == [
+        Line(
+            "",
+            f"interactions read at head {head:,}: 2 pairs of makers, oldest first, each counting the edges that lead "
+            "from the first's events to the second's, each kind apart and never summed: reach in the record, never "
+            "credit or influence; an offer it counts as unconfirmed went to an agent that had not ended, whose harness "
+            "can still say it took it",
+            warn=True,
+        ),
+    ]
+    assert found[1 : found.index(Line("heading", "Each agent's unknowns"))] == [
+        Line("heading", "events by @alice reached events by @bob"),
+        Line("declared", f"3 citations, each its citer's claim, the first in {revised}", revised),
+        Line(
+            "observed",
+            f"1 offer @bob's harness said it took, handed over and taken, never understood, the first by {taken}",
+            taken,
+        ),
+        Line("cause", f"1 cause named, as a reply names what it answers, the first in {replied}", replied),
+        Line(
+            "ancestry",
+            "1 edge of ancestry, a next version of an entry or a task, or a commit naming a commit its parent, the "
+            f"first in {revised}",
+            revised,
+        ),
+        Line("heading", "events by @bob reached events by @alice"),
+        Line(
+            "unconfirmed",
+            "1 offer @alice's harness had not said it took, which is unknown, neither observed nor none, the first by "
+            f"{offered}",
+            offered,
+            warn=True,
+        ),
+    ]
+
+
+async def test_each_agent_s_unknowns_are_said_so_no_pair_reads_as_unknown_never_as_no_reach(kernel, tmp_path):
+    """Each agent comes with why what reached it beyond the edges counted is unknown, the gaps content could come
+    through among them, so an agent no pair names reads as unknown; a record with no pair says that this does not say
+    nobody reached anybody, and an agent nothing leaves unknown would say so."""
+    await spawn(kernel, "alice")
+    await spawn(kernel, "bob")
+    await report(kernel, "bob", "gap", what="stream_lost")
+    empty = await opened(tmp_path / "empty")
+
+    found = await who_reached_whom(Asked(kernel))  # type: ignore[arg-type]
+    none = await who_reached_whom(Asked(empty))  # type: ignore[arg-type]
+    answer = ask(kernel, "interactions")
+    proved = {**answer, "unknowns": [{"agent": "carol", "unproved": [], "incidents": {}, "older_offers": 0}]}
+    empty.close()
+
+    reasons = Line(
+        "",
+        f"each agent spawned by head {answer['head']:,}, in the order they were, with why what reached it beyond the "
+        "edges above is unknown, so an agent no pair names is not shown to be reached by nobody; a person's or a "
+        "program's reading is no evidence, so neither is listed",
+    )
+    assert found[1] == Line(
+        "",
+        "no edge leads from one maker's events to another's here, which does not say nobody reached anybody: each "
+        "agent's unknowns are below",
+    )
+    assert part(found, "Each agent's unknowns") == [
+        reasons,
+        Line("", f"@alice: unknown beyond the edges counted: {UNPROVED}", warn=True),
+        Line(
+            "",
+            f"@bob: unknown beyond the edges counted: {UNPROVED}; 1 gap content could have come through, stream_lost 1",
+            warn=True,
+        ),
+    ]
+    assert part(none, "Each agent's unknowns")[1:] == [Line("", "no agent was spawned by then")]
+    assert part(interaction_lines("s", proved), "Each agent's unknowns")[1:] == [
+        Line(
+            "",
+            "@carol: every surface of its harness is proved observed, and its record holds no gap content could come "
+            "through",
+        )
+    ]
+
+
+async def test_what_a_page_of_who_reached_whom_left_out_is_said_with_the_command_that_reads_on(kernel):
+    """Seven agents each cite each other's message, 42 pairs: the panel shows the first page, and says how much of it
+    that is and the command that reads on from it, at the same head."""
+    agents = [await spawn(kernel, f"a{n}") for n in range(7)]
+    said = [(await send(kernel, agent, f"@{agent.name}", "mine"))["ref"] for agent in agents]
+    for citer in agents:
+        for maker, ref in zip(agents, said, strict=True):
+            if maker != citer:
+                await send(kernel, citer, f"@{citer.name}", "citing", based_on=[ref])
+
+    found = await who_reached_whom(Asked(kernel))  # type: ignore[arg-type]
+
+    cursor = ask(kernel, "interactions")["cursor"]
+    assert len([line for line in found if line.kind == "heading" and line.text.startswith("events by ")]) == 32
+    assert found[-1] == Line(
+        "",
+        "32 of 42 pairs and the unknowns of 7 agents shown; the rest come a page at a time, read at the same head: "
+        f"`platoon-harness interactions s --after {cursor}` reads on",
+        warn=True,
     )

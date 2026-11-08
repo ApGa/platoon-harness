@@ -1,8 +1,9 @@
 """How provenance reads, which the terminal and the browser say alike: one event's sources, its uses and the
 contributors to it, each link labelled by how it is known, from the four queries, and what estimators said of
-it, each by its producer and version, beside the span a model call lies in, from `spans`. Every answer says the head it
-was read at, where it stops counting, whether its turn was still open, and what its page left out. A ref a text names is
-found by one pattern, which both clients follow to that ref's own provenance."""
+it, each by its producer and version, beside the span a model call lies in, from `spans`; and who reached whom in a
+session, pair by pair, each kind of edge apart, with each agent's unknowns, from `interactions`. Every answer says the
+head it was read at, where it stops counting, whether it was still open, and what its page left out. A ref a text names
+is found by one pattern, which both clients follow to that ref's own provenance."""
 
 import re
 from collections.abc import Mapping, Sequence
@@ -36,9 +37,10 @@ script, which may never have shown it to the model."""
 @dataclass(frozen=True)
 class Line:
     """One line of a provenance panel: a part's `heading`; a fact of an answer, which has no kind; a link of the kind
-    it is known by, `declared`, `observed`, `cause`, `ancestry` or `gap`, or an `unresolved` citation; or what an
-    estimator said, a `credit` or a `reward`. Its words; the ref following it opens, or None, where its words say why;
-    and whether it says something is unknown, missing or cut, which a client draws as a warning."""
+    it is known by, `declared`, `observed`, `cause`, `ancestry` or `gap`, an `unresolved` citation, or `unconfirmed`
+    offers, which their harness had not said it took; or what an estimator said, a `credit` or a `reward`. Its words;
+    the ref following it opens, or None, where its words say why; and whether it says something is unknown, missing or
+    cut, which a client draws as a warning."""
 
     kind: str
     text: str
@@ -82,6 +84,17 @@ def no_provenance(ref: str, refused: Refused, *, from_text: bool = False) -> str
     if from_text and refused.refusal.code == "not_found":
         return f"{ref} names no event of this session: text can name what nothing is, as only a citation is checked"
     return f"{ref} has no provenance to show: {refused}"
+
+
+async def who_reached_whom(session: Session) -> list[Line]:
+    """Who reached whom in `session`, asked now: the first page of `interactions`, its pairs and its agents read at one
+    head. A refusal is the query's, which `no_interactions` words."""
+    return interaction_lines(session.name, (await session.interactions()).model_dump(mode="json"))
+
+
+def no_interactions(refused: Refused) -> str:
+    """Why who reached whom has nothing to show, as the query refused it."""
+    return f"who reached whom has nothing to show: {refused}"
 
 
 async def _spans_of(session: Session, made: Answer) -> list[Answer]:
@@ -466,3 +479,87 @@ def _estimates(estimates: Sequence[Answer], span: list[Line]) -> list[Line]:
     if not estimates:
         lines.append(Line("", "no estimator has said anything of it"))
     return lines
+
+
+def interaction_lines(session: str, interactions: Answer) -> list[Line]:
+    """The lines of who reached whom: the head it was read at and what a pair counts, then each pair, oldest first, as
+    the heading of a line for each kind of edge it holds, saying how that kind is known, and of one for the offers
+    between them no harness said it took, each opening the event that holds the first of them; then each agent's
+    unknowns, and what the page left out, with the command that reads on."""
+    head, pairs, unknowns = interactions["head"], interactions["pairs"], interactions["unknowns"]
+    counting = (
+        f"interactions read at head {head:,}: {_some(interactions['total'], 'pair')} of makers, oldest first, each "
+        "counting the edges that lead from the first's events to the second's, each kind apart and never summed: reach "
+        "in the record, never credit or influence"
+    )
+    if interactions["open"]:
+        later = "went to an agent that had not ended, whose harness can still say it took it"
+        lines = [Line("", f"{counting}; an offer it counts as unconfirmed {later}", warn=True)]
+    else:
+        lines = [Line("", counting)]
+    if not pairs:
+        said = "no edge leads from one maker's events to another's here, which does not say nobody reached anybody"
+        lines.append(Line("", f"{said}: each agent's unknowns are below"))
+    for pair in pairs:
+        lines += _pair(pair)
+    reasons = (
+        f"each agent spawned by head {head:,}, in the order they were, with why what reached it beyond the edges above "
+        "is unknown, so an agent no pair names is not shown to be reached by nobody; a person's or a program's reading "
+        "is no evidence, so neither is listed"
+    )
+    lines += [Line("heading", "Each agent's unknowns"), Line("", reasons), *map(_unknowns, unknowns)]
+    if not unknowns:
+        lines.append(Line("", "no agent was spawned by then"))
+    if (cursor := interactions["cursor"]) is not None:
+        agents = _some(len(unknowns), "agent")
+        shown = f"{len(pairs):,} of {_some(interactions['total'], 'pair')} and the unknowns of {agents}"
+        command = f"`platoon-harness interactions {session} --after {cursor}`"
+        said = f"{shown} shown; the rest come a page at a time, read at the same head: {command} reads on"
+        lines.append(Line("", said, warn=True))
+    return lines
+
+
+def _pair(pair: Answer) -> list[Line]:
+    """One pair: whose events reached whose, as a heading, then a line for each kind of edge between them, saying how
+    it is known, and for the offers no harness said it took, each opening the event that holds the first: for an
+    offer, the offer."""
+    whom, first = _who(pair["whom"]), pair["first"]
+    said = {
+        "declared": f"{_some(pair['declared'], 'citation')}, each its citer's claim, the first in",
+        "observed": (
+            f"{_some(pair['observed'], 'offer')} {whom}'s harness said it took, handed over and taken, never "
+            "understood, the first by"
+        ),
+        "cause": f"{_some(pair['cause'], 'cause')} named, as a reply names what it answers, the first in",
+        "ancestry": (
+            f"{_some(pair['ancestry'], 'edge')} of ancestry, a next version of an entry or a task, or a commit "
+            "naming a commit its parent, the first in"
+        ),
+        "unconfirmed": (
+            f"{_some(pair['unconfirmed'], 'offer')} {whom}'s harness had not said it took, which is unknown, neither "
+            "observed nor none, the first by"
+        ),
+    }
+    lines = [Line("heading", f"events by {_who(pair['who'])} reached events by {whom}")]
+    for kind, words in said.items():
+        if pair[kind]:
+            lines.append(Line(kind, f"{words} {first[kind]}", first[kind], kind == "unconfirmed"))
+    return lines
+
+
+def _unknowns(row: Answer) -> Line:
+    """Why what reached an agent beyond the edges counted is unknown, or that nothing the record holds leaves it so."""
+    reasons = []
+    if unproved := row["unproved"]:
+        said = f"{_some(len(unproved), 'surface')} of its harness no stored conformance result proves observed"
+        reasons.append(f"{said}, {', '.join(unproved)}")
+    if incidents := row["incidents"]:
+        gaps = ", ".join(f"{what} {count:,}" for what, count in sorted(incidents.items()))
+        reasons.append(f"{_some(sum(incidents.values()), 'gap')} content could have come through, {gaps}")
+    if older := row["older_offers"]:
+        reasons.append(f"{_some(older, 'offer')} from before offer payload 3, which no event can be tied to")
+    who = _who(f"agent:{row['agent']}")
+    if not reasons:
+        said = "every surface of its harness is proved observed, and its record holds no gap content could come through"
+        return Line("", f"{who}: {said}")
+    return Line("", f"{who}: unknown beyond the edges counted: " + "; ".join(reasons), warn=True)

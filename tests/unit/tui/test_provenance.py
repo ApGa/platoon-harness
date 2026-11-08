@@ -296,3 +296,39 @@ async def test_a_ref_in_a_line_s_text_opens_its_own_provenance_saying_it_records
     assert missing == (
         "nothing/here@9 names no event of this session: text can name what nothing is, as only a citation is checked"
     )
+
+
+async def test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns(root):
+    """`/reached` opens the panel on the session's pairs, each kind of edge on a line of its own, labelled by
+    it, and each agent with why what reached it is unknown. A link follows into the provenance of the event holding
+    the first edge of its kind, and Esc comes back to the pairs, then leaves."""
+    async with answered(root, [Call("message_send", ANSWER)]) as (_, app, pilot):
+        await pilot.press("slash", *"reached", "enter")
+        await drawn(pilot, lambda text: "Who reached whom" in text and "Each agent's unknowns" in text)
+        listed = said(app)
+        links = [(line.kind, line.ref) for line in panel(app).lines if line.ref is not None]
+        await pick(pilot, app, "declared 1 citation")
+        await pilot.press("enter")
+        await drawn(pilot, lambda text: f"Provenance of {ANSWERED}, 1 hop" in text and "Credit" in text)
+        followed = said(app)
+        await pilot.press("escape")
+        await drawn(pilot, lambda text: "Who reached whom" in text and "Each agent's unknowns" in text)
+        again = chosen(app)
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: not isinstance(app.screen, Provenance))
+
+    surfaces = "prompt, tool_results, shell_reads, files, native_children, compaction, external"
+    assert listed.startswith("interactions read at head ")
+    assert "\nheading events by @you reached events by @lead\ndeclared 1 citation, each its citer's claim" in listed
+    for words in (
+        f"declared 1 citation, each its citer's claim, the first in {ANSWERED}",
+        "observed 1 offer @lead's harness said it took, handed over and taken, never understood, the first by context/",
+        f"cause 1 cause named, as a reply names what it answers, the first in {ANSWERED}",
+        "heading Each agent's unknowns\neach agent spawned by head",
+        "@lead: unknown beyond the edges counted: 7 surfaces of its harness no stored conformance result proves "
+        f"observed, {surfaces}",
+    ):
+        assert words in listed, words
+    assert [kind for kind, _ in links] == ["declared", "observed", "cause"]
+    assert followed.startswith(f"message.sent {ANSWERED}: the tests pass")
+    assert "declared 1 citation" in again

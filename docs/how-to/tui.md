@@ -252,6 +252,23 @@ ended says a later report can still confirm an offer or join a call. Yellow mark
 answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
 until the journal holds it. [Its snapshot](../assets/tui-provenance.svg) shows the panel of the mixed team's lead's answer, on the recorded session.
 
+`/reached` shows who reached whom in the session in the same panel, read from `interactions` when it opens, in the words the
+browser's pane uses. Each pair of makers is a heading, `events by @alice reached events by @bob`, oldest first, and under it a
+line for each kind of edge that leads from the first's events to the second's, labelled by the kind and saying how that kind is
+known: `declared` citations, each its citer's claim; `observed` offers the second's harness said it took, handed over and taken,
+never understood; `cause`, causes named; and `ancestry`, next versions and commits on a commit. Each is counted apart and never
+summed. The offers between them the harness had not said it took are a line of their own, `unconfirmed`, in yellow, as unknown,
+neither observed nor none. Enter on a line shows the provenance of the event that holds the first edge it counts, an offer for
+`observed` and `unconfirmed`, and Esc comes back. The first line says the head it was read at, and, in yellow, when an offer it
+counts as unconfirmed went to an agent that has not ended, whose harness can still say it took it. Each agent's unknowns follow,
+in the order the agents were spawned: the surfaces of its harness no stored result proves observed, which today is every one,
+and the gaps content could have come through, so an agent no pair names is not shown to be reached by nobody. A person and a
+program are named only where a pair names them, as their reading is no evidence. The panel shows the first page, 32 pairs and 32
+agents at most, and says how much that is and the command that reads on at the same head. It walks the journal each time it is
+read, so it takes longer as the session grows. [Its snapshot](../assets/tui-who-reached-whom.svg) shows it on a record its test
+scripted. That it is listed in provenance, and not on the page's Map, counting these kinds, is the default pending the owner's
+ruling.
+
 ### Size
 
 | Size | Layout |
@@ -344,6 +361,7 @@ before the session's. `^` is Ctrl.
 | `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show an event's provenance, by the ref you give, the chosen line's unless you give another: what it rests on, what came of it and whose work it reaches |
+|  | `/reached` | Show who reached whom in the session: each pair of makers, each kind of edge apart with how it is known, and each agent's unknowns, each link opening its event's provenance |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |
@@ -436,5 +454,5 @@ before the session's. `^` is Ctrl.
 Disabled where a control for it would be, or absent from the palette: search in a transcript,
 threads, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
-the transcript, themes and notifications, and in provenance the interaction graph and credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+the transcript, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.
