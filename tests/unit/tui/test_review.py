@@ -519,6 +519,7 @@ async def test_a_comment_on_chosen_lines_is_a_message_to_the_commit_s_maker_citi
         await drawn(pilot, lambda text: "Comment to @lead" in text)
         await pilot.press("space", *"these?", "enter")
         [lines] = await until(lambda: comments(owner), owner)
+        await drawn(pilot, lambda text: "Comment to @lead" not in text)
         await pilot.press("c")
         await drawn(pilot, lambda text: "Comment to @lead on the commit" in text)
         await pilot.press(*"and", "space", *"this?", "enter")
