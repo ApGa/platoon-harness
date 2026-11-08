@@ -131,6 +131,21 @@ async def test_tombstoned_content_does_not_come_back(kernel, folder, body):
     assert not blob_path(folder, sha256).exists()
 
 
+@pytest.mark.parametrize("body", [SMALL, LARGE], ids=["inline", "blob"])
+async def test_an_event_cites_a_redacted_body_by_its_hash_once_its_bytes_are_gone(kernel, body):
+    """The hash outlives the bytes, so what cites it, as an agent's end cites its last message, is not refused."""
+    sha256 = await kernel.put_body(body)
+    result_of(await kernel.submit(kernel.runtime, "body.tombstone", {"sha256": sha256}))
+    await kernel.erase_body(sha256)
+
+    result_of(await kernel.submit(kernel.runtime, "note.add", {"refs": [f"sha256:{sha256}"], "text": sha256}))
+
+    assert result_of(kernel.query(kernel.runtime, "note.list", {}))[-1] == sha256
+    with pytest.raises(Refused) as error:
+        kernel.get_body(sha256)
+    assert refused_code(error) == "not_found"
+
+
 async def test_a_busy_writer_leaves_a_stored_blob_alone(kernel, monkeypatch):
     sha256 = await kernel.put_body(LARGE)
 

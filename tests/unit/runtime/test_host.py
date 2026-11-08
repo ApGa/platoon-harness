@@ -38,7 +38,7 @@ from platoon_harness.drivers import (
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.levels import Check, Conformance, implementation
 from platoon_harness.drivers.process import RECORD, Record
-from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, hash_token, is_held
+from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, Refused, hash_token, is_held
 from platoon_harness.primitives import Verdict
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
@@ -57,9 +57,14 @@ async def ended(session: Session, agent: str) -> dict[str, Any]:
     return next(row for row in (await session.ending()).agents if row["agent"] == agent)
 
 
-async def stops(session: Session, kind: str) -> list[Any]:
-    """The events of `kind` of each agent's stop."""
-    return [event for event in await of_type(session, kind) if event.data["kind"] == "stop"]
+async def stops(session: Session, *kinds: str) -> list[Any]:
+    """The events of `kinds` of each agent's stop."""
+    return [event for event in await of_type(session, *kinds) if event.data["kind"] == "stop"]
+
+
+async def erased(session: Session) -> bool:
+    """Whether the bytes of a body a person redacted are gone."""
+    return any(event.data["kind"] == "erase" for event in await of_type(session, "effect.finished"))
 
 
 async def test_a_commit_that_failed_and_landed_all_the_same_does_not_run_twice(tmp_path):
@@ -1146,6 +1151,56 @@ async def test_an_ask_a_person_redacted_and_asked_again_is_denied_and_its_harnes
 
     assert answers == [("a2", "deny")] and [event.data["id"] for event in asked] == ["a1"]
     assert (refused[-1].data["op"], refused[-1].data["code"], state) == ("agent.report", "invalid", "idle")
+
+
+async def test_an_item_a_person_redacted_and_said_again_is_recorded_redacted_and_its_harness_lives_on(tmp_path):
+    """Redacted content does not come back, so the item is recorded by the hash its body had, which reads as redacted
+    once its bytes are gone too, and nothing stands in for it, with its harness at work still."""
+    leaked = "the key is leaked-key"
+
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        host = session._runtime.host
+        link = host.link("bob")
+        await host._heard(link, Item(kind="message", gist="said", body=leaked))
+        [first] = await of_type(session, "item.recorded")
+        redacted = first.data["body"]
+        await session.tombstone(redacted)
+        await until(lambda: erased(session), session)
+
+        await host._heard(link, Item(kind="message", gist="said again", body=leaked))
+        said = [event.data["body"] for event in await of_type(session, "item.recorded")]
+        state = (await session.status("bob"))["state"]
+        with pytest.raises(Refused) as read:
+            await session.get_body(redacted)
+        gaps = (await session.ending()).gaps
+
+    assert (said, state, gaps, read.value.refusal.code) == ([redacted, redacted], "idle", (), "not_found")
+
+
+async def test_an_agent_whose_last_words_a_person_redacted_ends_and_its_authority_hears_the_rest(tmp_path):
+    """Its end cites them by their hash once their bytes are gone too, and its authority hears what the end keeps."""
+    heard: asyncio.Future[AgentOutcome] = asyncio.get_running_loop().create_future()
+
+    class Listening(LocalAuthority):
+        async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+            heard.set_result(outcome)
+
+    team = solo()
+    async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        host = session._runtime.host
+        await host._heard(host.link("bob"), Item(kind="message", gist="said", body="the key is leaked-key"))
+        [said] = await of_type(session, "item.recorded")
+        await session.tombstone(said.data["body"])
+        await until(lambda: erased(session), session)
+
+        await session.retire("bob")
+        [stop] = await until(lambda: stops(session, "effect.finished", "effect.failed"), session)
+        [end] = await of_type(session, "agent.ended")
+
+    assert (stop.type, end.data["body"]) == ("effect.finished", said.data["body"])
+    assert heard.result() == AgentOutcome(status="retired", report="bob retired: retired by human:you")
 
 
 async def test_a_restarted_daemon_loses_no_harness(tmp_path, monkeypatch):

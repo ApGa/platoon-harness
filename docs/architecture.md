@@ -327,7 +327,8 @@ such as the monitor; it can name nobody else. The kernel takes the rest from che
 
 `refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
 refuses. A ref is `stream@version`, with an optional `#range`. Data names a body by `sha256:<hash>`, which `refs` may hold too, and
-`based_on` holds event refs alone. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
+`based_on` holds event refs alone. A body's hash resolves once the journal holds the body, and still does once a person redacts
+it, as its hash outlives its bytes. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
 `correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
 
 An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A commit's maker is the agent whose
@@ -1124,7 +1125,9 @@ names the native child and the tool call that started it, and how well a call is
 plane is its own. What changed in a
 workspace is the runtime's own look, so no driver reports it (§13). Unknown frames become `native` plus a gap, never a log line. A
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
-and `summary` go the same way, since either can pass what an event holds. An approval's `body` is its whole ask, which the host
+and `summary` go the same way, since either can pass what an event holds. Redacted content does not come back, so a body a person
+redacted is journaled by the hash it had, which reads as redacted, nothing standing in for it, and its agent lives on: an item is
+recorded so, and an ask is refused and denied, as below. An approval's `body` is its whole ask, which the host
 masks and then cuts to 64 KiB, adding the bytes it left out to `cut`, so a driver sends it whole. `forgotten` holds native ids, and
 with `None` the runtime records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
 agent's surface, with each entry's ref and sender, whether it has a body, which `blob.get` reads by that ref, and the input id. So a
@@ -1890,7 +1893,7 @@ class Gateway(Model):
 
 class AgentOutcome(Model):
     status: Status                              # finished, cancelled, retired, lost or failed
-    report: str | None                          # the words its end keeps, the gist and then the body
+    report: str | None                          # the words its end keeps, the gist and then the body unless redacted
 ```
 
 - **Admission.** `admit` runs for a spawn, with the parent and the goal its `agent.spawned` records, and again with `resumed` for a

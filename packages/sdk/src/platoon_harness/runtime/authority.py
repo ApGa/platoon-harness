@@ -58,7 +58,7 @@ class Admission(Model):
 class AgentOutcome(Model):
     """How an agent ended: its `status`, and its `report`, the words its end keeps, or None when it said nothing: the
     gist, which is the agent's own for a finish and the session's for any other end, and then the body, its last
-    words."""
+    words, unless a person redacted them."""
 
     status: Status
     report: str | None = None

@@ -876,14 +876,20 @@ class Host:
 
     def _report_of(self, ended: int | None) -> str | None:
         """The words an agent's end keeps, the gist and then the body, by the seq of its `agent.ended`, or None when it
-        said nothing. A stop from before it named its cause has none to read."""
+        said nothing. A body a person redacted is no longer among them. A stop from before it named its cause has none
+        to read."""
         if ended is None:
             return None
         event: Event = self._kernel.read(self._kernel.runtime, after=ended - 1, limit=1).events[0]
         report, body = event.data["report"], event.data["body"]
         if body is not None:
-            said = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT).decode(errors="replace")
-            report = "\n\n".join(filter(None, (report, said)))
+            try:
+                said = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT)
+            except Refused as refused:
+                if refused.refusal.code != "not_found":
+                    raise
+                said = b""
+            report = "\n\n".join(filter(None, (report, said.decode(errors="replace"))))
         return report or None
 
     async def bundle(self) -> dict[str, Any] | None:
@@ -968,7 +974,7 @@ class Host:
                 report = report.model_copy(update={"body": await self._stored(body)})
             case ApprovalRequested(body=str(body), cut=cut):  # Masked, so a cut splits no secret.
                 kept, left = bounded(body)
-                report = report.model_copy(update={"body": await self._asked(kept), "cut": cut + left})
+                report = report.model_copy(update={"body": await self._stored(kept), "cut": cut + left})
             case Compacted(forgotten=forgotten, summary=summary):
                 listed = None if forgotten is None else json.dumps(forgotten)
                 stored = {"forgotten": await self._stored(listed), "summary": await self._stored(summary)}
@@ -982,19 +988,19 @@ class Host:
         for frame in unknown_frame(kind, why):
             await self.insist("agent.report", {"agent": link.agent, "report": frame})
 
-    async def _stored(self, text: str | None) -> str | None:
-        """Text from a report as the ref of a stored body, since a journal event holds 16 KiB."""
-        return None if text is None else f"sha256:{await self._kernel.put_body(text.encode(errors='replace'))}"
-
-    async def _asked(self, ask: bytes) -> str:
-        """An approval's ask as the ref of a stored body. Redacted content does not come back, so one a person redacted
-        is the ref of nothing the journal holds, which the journal refuses, and the approval is answered `deny`."""
+    async def _stored(self, body: str | bytes | None) -> str | None:
+        """A body from a report as the ref of a stored body, since a journal event holds 16 KiB. Redacted content does
+        not come back, so a body a person redacted is the ref it had, which reads as redacted: an ask the journal
+        refuses, and the approval is answered `deny`, and anything else is recorded with its body redacted."""
+        if body is None:
+            return None
+        data = body if isinstance(body, bytes) else body.encode(errors="replace")
         try:
-            return f"sha256:{await self._kernel.put_body(ask)}"
+            return f"sha256:{await self._kernel.put_body(data)}"
         except Refused as refused:
             if refused.refusal.code != "conflict":
                 raise
-            return f"sha256:{hashlib.sha256(ask).hexdigest()}"
+            return f"sha256:{hashlib.sha256(data).hexdigest()}"
 
     async def _taken(self, link: DriverLink, report: Report, outcome: Outcome) -> None:
         """What comes of a report the journal refused: it is dropped. But an approval is answered `deny`, as a harness

@@ -286,9 +286,14 @@ class Txn:
         return version if name == stream else stream_version(self._db, name)
 
     def _check_ref(self, ref: str) -> None:
+        """A ref points backward to an event, or to a body the journal holds or a person redacted, whose hash outlives
+        its bytes."""
         db = self._db
         if body := _BODY_REF.fullmatch(ref):
-            found = db.execute("SELECT 1 FROM bodies WHERE sha256 = ?", (body["sha256"],)).fetchone()
+            found = db.execute(
+                "SELECT 1 FROM bodies WHERE sha256 = ?1 UNION ALL SELECT 1 FROM v_tombstones WHERE sha256 = ?1",
+                (body["sha256"],),
+            ).fetchone()
         elif event := _REF.fullmatch(ref):
             found = db.execute(
                 "SELECT 1 FROM events WHERE stream = ? AND version = ?", (event["stream"], int(event["version"]))

@@ -1173,6 +1173,12 @@ named here is closed.
 
 ### Fixes
 
+- **An item said again after a person redacted it keeps its agent.** A harness that said again what a person had redacted,
+  in a message, a thought or a tool's output, had its agent end lost, as the journal keeps no redacted body again and the host
+  stopped there. The item is now recorded by the hash its body had, which reads as redacted, as an ask is refused and denied,
+  and its agent lives on. An event may cite a redacted body's hash once its bytes are gone too, so an agent whose last words a
+  person redacted ends as any other, where its end was refused once the eraser had run, and its stop tells its authority the
+  gist, where it failed reading the body.
 - **A conflict sends you to its agent or your own checkout.** A conflict an agent's merge stopped on said to resolve it in the
   agent's own workspace, where any commit you make is recorded as that agent's, as its HEAD reflog says that workspace made it.
   Its gist now says to tell the agent, or to resolve it in your own checkout, never in its workspace, and your checkout's says
