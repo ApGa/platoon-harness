@@ -326,6 +326,10 @@ and reports every failure at once; a skip is never a pass. A driver the SDK ship
 - what is known of it in [compatibility](docs/reference/compatibility.md);
 - its rows under Drivers in [STATUS](docs/STATUS.md).
 
+A driver the project ships outside the SDK is a first-party extension, a folder of `extensions/` such as `extensions/acp`, which
+needs the same, but that its `describe` names its check in `DriverInfo.check`, which `doctor --check` runs, rather than `CHECKED`
+naming it, and that it reaches the SDK by public names alone, as a test holds the ACP extension to.
+
 ## Add an extension
 
 An extension adds ops, views, daemons, presets or an isolation with no core edit. It is an `Extension` from

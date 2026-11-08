@@ -1,11 +1,13 @@
 """The three levels of an agent, computed from what was verified. No driver can claim one."""
 
+import functools
 import socket
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Literal
 
 from pydantic import Field
 
+from platoon_harness.extensions import DRIVERS, discover
 from platoon_harness.primitives import Capabilities
 from platoon_harness.schema import Model
 from platoon_harness.version import __version__
@@ -203,9 +205,26 @@ def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
 
 def implementation(driver: object) -> str:
     """The class that implements a driver, by module and name, which a result is pinned to, as a name is the driver's
-    own to give."""
+    own to give, and for a class an installed distribution's driver entry point names, which releases apart from the
+    SDK, that distribution and its version too, so that an upgrade of it reads as one."""
     made = type(driver)
-    return f"{made.__module__}:{made.__qualname__}"
+    named = f"{made.__module__}:{made.__qualname__}"
+    release = _release(made.__module__.partition(".")[0])
+    return named if release is None else f"{named}, {release}"
+
+
+@functools.cache
+def _release(package: str) -> str | None:
+    """The distribution and version whose driver entry points name the import package `package`, from metadata alone,
+    or None for the SDK's own and for a package no driver entry point names."""
+    if package == "platoon_harness":
+        return None
+    held = {
+        f"{component.distribution} {component.version}"
+        for component in discover()
+        if component.group == DRIVERS and component.value.partition(":")[0].partition(".")[0] == package
+    }
+    return held.pop() if len(held) == 1 else None
 
 
 def speaks_for(profile: Profile, conformance: Conformance | None) -> bool:

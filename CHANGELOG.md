@@ -66,6 +66,15 @@ named here is closed.
   never under 50 ms for a time. The runtime's memory grows with the journal, and no run has shown where it stops, so the
   test holds it to a budget and does not call it bounded. The changes snapshot, which the run never fills, is not measured.
   No CI job runs it, as its budgets fit that hardware.
+- **An installed driver names the check `doctor` runs for it.** `DriverInfo.check` names, as `module:function`, a coroutine
+  function of a folder that returns what `check_driver` found of the harness against FakeModel and on no account, imported only
+  to run it. `platoon-harness doctor --check` runs it, through `check_harness`, for each harness it finds whose driver names one,
+  and keeps what it found as it keeps a result of the SDK's own checks, refusing one of another class than the driver's, as it
+  would speak for a driver it did not check. A result is pinned too to the distribution and version that hold a driver class
+  outside the SDK, so an upgrade of an extension reads `unverified` until it is checked again, and a result kept of such a
+  driver before this reads `unverified` once. `doctor --json` says of each harness it finds whether a check of it ships, as
+  `checkable`. See
+  [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **ACP agents run as a team's harness.** `platoon-harness-acp`, the first first-party extension, a distribution of its own
   under `extensions/acp` that requires the SDK alone, gives `AcpDriver(command)`, which drives an agent that speaks the Agent
   Client Protocol on stdio, at protocol 1 alone, over the SDK's own `Peer`, and `harness = "opencode"`, that driver on

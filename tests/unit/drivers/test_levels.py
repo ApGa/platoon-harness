@@ -1,6 +1,7 @@
 """Levels: computed from what was verified, each with reasons, and claimed by nobody."""
 
 import socket
+from importlib import metadata
 
 import pytest
 
@@ -20,6 +21,7 @@ from platoon_harness.drivers.levels import (
 )
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.testing import harnesses
+from platoon_harness_acp import OpenCodeDriver
 
 PI = "platoon_harness.drivers.pi:PiDriver"
 PROFILE = Profile(driver="pi", implementation=PI, version="1.4.0", login="gateway", tools="visible")
@@ -294,3 +296,20 @@ def test_a_check_ships_for_exactly_the_harnesses_checked_names_by_the_class_that
 
 def test_a_driver_s_implementation_is_its_class_by_module_and_name():
     assert implementation(PiDriver()) == PI
+
+
+def test_a_result_is_pinned_to_the_release_of_a_driver_outside_the_sdk():
+    """An extension releases apart from the SDK, so a result made of its driver at one version of it says nothing of
+    another, as one made under another SDK says nothing of the SDK's drivers."""
+    release = metadata.version("platoon-harness-acp")
+    made = implementation(OpenCodeDriver())
+    earlier = made.replace(f"platoon-harness-acp {release}", "platoon-harness-acp 0.0.1")
+    profile = Profile(driver="opencode", implementation=made, version="2.2.6")
+    checks = (Check(name="turn_end_reported", state="passed"),)
+
+    assert made == f"platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp {release}"
+    for pinned, speaks in ((made, True), (earlier, False)):
+        result = Conformance(
+            driver="opencode", implementation=pinned, version="2.2.6", sdk=__version__, host=HOST, checks=checks
+        )
+        assert speaks_for(profile, result) is speaks

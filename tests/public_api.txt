@@ -41,6 +41,7 @@ platoon_harness.drivers.Delta
 platoon_harness.drivers.Driver
 platoon_harness.drivers.DriverError
 platoon_harness.drivers.DriverInfo
+platoon_harness.drivers.DriverInfo.check
 platoon_harness.drivers.DriverInfo.installed
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held

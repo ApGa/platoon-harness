@@ -614,14 +614,20 @@ elsewhere says nothing of this agent, and nor does one of a version nobody said:
 from any result.
 
 The runtime earns an agent's levels from a result kept under the root, one for each driver: `write_conformance(root, result)`, from
-`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness the SDK ships a
-check of that it finds, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. The
-host reads it at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body, beside the levels it gave,
-where it speaks for that harness. A level with no result that speaks for the harness that runs says so, and names what makes one:
-`doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for any other. A wire program
+`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness it finds that a
+check ships for, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. A check
+ships for each harness `levels.CHECKED` names, which the SDK drives, and for an installed driver whose `describe` names one in
+`DriverInfo.check`, as `module:function`: a coroutine function of the folder to run in that returns what `check_driver` found,
+imported only to run it, and refused if what it found is of another class than the driver's. The `opencode` driver names its own
+this way. The host reads a kept result at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body,
+beside the levels it gave, where it speaks for that harness. A level with no result that speaks for the harness that runs says so,
+and names what makes one: `doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for
+any other, which `doctor --check` also runs where the driver names a check. A wire program
 is checked as above, and its result kept the same way, by the name its `describe` gives. A name is a driver's own to give, so a
 result is pinned to the class that implements the driver too, and a program calling itself `claude` earns nothing from what was kept
-of the claude driver's checks.
+of the claude driver's checks. A class that an installed distribution's driver entry point names, outside the SDK, is pinned with
+that distribution and its version, as `platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp 0.1.0`, so an upgrade of it
+reads `unverified` until it is checked again, as an upgrade of the SDK does.
 
 ```python
 from platoon_harness.drivers.levels import Profile, implementation, levels

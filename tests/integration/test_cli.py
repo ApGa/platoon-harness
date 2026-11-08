@@ -843,6 +843,7 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
         "found": True,
         "version": "9.9.9 (fake)",
         "login": None,
+        "checkable": True,
         "checked": None,
     }
     assert found["pi"] == {"name": "pi", "found": False, "reason": "not on PATH"}
@@ -864,6 +865,7 @@ async def test_openhands_is_found_by_its_extra_and_init_passes_it_over_as_it_wri
         "found": True,
         "version": "1.59.0",
         "login": None,
+        "checkable": True,
         "checked": None,
     }
     assert init.code == 78 and "openhands" not in init.stderr

@@ -98,13 +98,18 @@ class DriverInfo(Model):
     """What a driver says of itself before anything starts. `login` is None when it cannot tell without reading one, and
     `version` is the harness version it would run, None when it cannot tell without starting one: `ready` says the
     version that runs. `installed` is the paths its harness reads to run, as it reaches them, which an isolation shows
-    it of what it hides: none for a harness in this process, which nothing can confine."""
+    it of what it hides: none for a harness in this process, which nothing can confine. `check` names the check that
+    ships with a driver outside the SDK, as `module:function`, imported only to run it: a coroutine function that takes
+    the folder to run in and returns what `check_driver` found of the harness against FakeModel and on no account,
+    which `platoon-harness doctor --check` runs and keeps. The SDK's own drivers name none, as `levels.CHECKED` holds
+    theirs."""
 
     name: str
     login: Login | None = None
     version: str | None = None
     capabilities: Capabilities = Capabilities()
     installed: tuple[Path, ...] = ()
+    check: str | None = None
 
 
 class ToolBinding(Model):

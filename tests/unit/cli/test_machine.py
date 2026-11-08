@@ -13,6 +13,7 @@ from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import CHECKED, Check, Conformance
 from platoon_harness.extensions import EXTENSIONS
+from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.runtime.paths import read_conformance, write_conformance
 from platoon_harness_cli import machine
 from platoon_harness_cli.exits import CONFIGURATION
@@ -159,3 +160,73 @@ def test_extension_list_and_doctor_say_why_an_installed_extension_has_no_command
     assert listed == 0 and said[-2:] == [held, own]
     assert usable == CONFIGURATION and doctored[-2:] == [held, "not usable"]
     assert not {"never_lease", "never_web"} & set(sys.modules)
+
+
+NAMED = """
+import socket
+
+from platoon_harness import __version__
+from platoon_harness.drivers import DriverInfo
+from platoon_harness.drivers.levels import Check, Conformance, implementation
+from platoon_harness.testing import ScriptedDriver
+
+
+class Named(ScriptedDriver):
+    def describe(self):
+        return DriverInfo(name="named", check="doctor_named:check")
+
+
+class Liar(ScriptedDriver):
+    def describe(self):
+        return DriverInfo(name="liar", check="doctor_named:lie")
+
+
+def found(made, driver):
+    checks = (Check(name="turn_end_reported", state="passed"),)
+    pinned = {"implementation": made, "sdk": __version__, "host": socket.gethostname()}
+    return Conformance(driver=driver, version="1.0", checks=checks, **pinned)
+
+
+async def check(folder):
+    (folder / "ran").write_text("here")
+    return found(implementation(Named()), "named")
+
+
+async def lie(folder):
+    return found(implementation(Named()), "liar")
+"""
+"""An installed distribution's two drivers, each naming a check: one of itself, and one of the other's class."""
+
+
+def test_doctor_checks_an_installed_driver_that_names_its_check(home, tmp_path, monkeypatch, capsys):
+    """`--check` runs the check an installed driver names, in the folder it keeps results beside, and keeps what it
+    found, pinned to the driver's class and the release that holds it, as it does a check of the SDK's own. A check
+    whose result is of another class than its driver's speaks for a driver it did not check, so it keeps nothing."""
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "doctor_named.py").write_text(NAMED)
+    info = site / "doctor_named-2.0.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: doctor-named\nVersion: 2.0.0\n")
+    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\nnamed = doctor_named:Named\nliar = doctor_named:Liar\n")
+    monkeypatch.syspath_prepend(site)
+    for name in ("named", "liar"):
+        (tmp_path / "bin" / name).write_text('#!/bin/sh\necho "1.0"\n')
+        (tmp_path / "bin" / name).chmod(0o755)
+    monkeypatch.setattr(machine, "harnesses", lambda: [(name, load(DRIVERS, name)()) for name in ("named", "liar")])
+
+    machine.doctor()
+    before = lines(capsys.readouterr().out)
+    code = machine.doctor(check=True)
+    said = lines(capsys.readouterr().out)
+
+    kept = read_conformance(home, "named")
+    assert before["named"] == "1.0, login unknown, not checked: --check checks it"
+    assert code == 0 and (home / "conformance" / "named" / "ran").read_text() == "here"
+    assert kept is not None and kept.implementation == "doctor_named:Named, doctor-named 2.0.0"
+    assert said["named"] == "1.0, login unknown, checked on 1.0: 1 passed, 0 skipped, none failed"
+    assert read_conformance(home, "liar") is None
+    assert said["liar+"] == (
+        "--check kept nothing: its check could not run: its check doctor_named:lie checked doctor_named:Named, "
+        "doctor-named 2.0.0, and liar is doctor_named:Liar, doctor-named 2.0.0"
+    )

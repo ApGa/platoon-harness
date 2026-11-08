@@ -1,14 +1,17 @@
-"""`check_harness`: `check_driver` on a harness the SDK drives, as installed here, against FakeModel and on no account.
+"""`check_harness`: `check_driver` on a harness as installed here, against FakeModel and on no account, by the SDK's own
+check of a harness it drives, or by the check an installed driver names.
 
-Each harness reaches the model through a home of the check's own, so no login of the person running it takes part,
-and is given what makes it run its shell, ask an approval, call our tool by the name its model knows, start a native
-child where it has them, and write a frame no parser knows. `doctor --check` runs this, and so do the slow suites.
+Each harness the SDK drives reaches the model through a home of the check's own, so no login of the person running it
+takes part, and is given what makes it run its shell, ask an approval, call our tool by the name its model knows, start
+a native child where it has them, and write a frame no parser knows. `doctor --check` runs this, and so do the slow
+suites.
 """
 
 import json
 import os
 import sys
 from collections.abc import Callable
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +19,11 @@ from platoon_harness.config import Secret
 from platoon_harness.drivers import DriverError
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
-from platoon_harness.drivers.levels import CHECKED, Conformance
+from platoon_harness.drivers.levels import CHECKED, Conformance, implementation
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
+from platoon_harness.extensions import DRIVERS, load
 
 from .conformance import Access, Factory, Garble, chat_access, check_driver
 from .model import FakeModel, ToolCall
@@ -157,11 +161,24 @@ _HARNESSES: dict[str, tuple[Factory, Callable[[Path], dict[str, Any]]]] = {
 
 async def check_harness(name: str, folder: Path) -> Conformance:
     """Run every check on the harness `name` as it is installed here, against FakeModel, in `folder`, and say what it
-    found, pinned to the driver, the harness version that answered, this SDK and this host. A harness no check ships
-    for, which is any `CHECKED` does not name, is refused."""
-    if name not in CHECKED:
-        raise DriverError(f"no check of {name} ships with the SDK: run `check_driver` on its driver")
-    factory, given = _HARNESSES[name]
-    options: dict[str, Any] = given(folder)
-    access: Access = options.pop("access")
-    return await check_driver(factory, folder=folder, access=access, **options)
+    found, pinned to the driver, the harness version that answered, this SDK and this host: the SDK's own check of a
+    harness `CHECKED` names, or else the check the installed driver of that name names in its `DriverInfo.check`, which
+    is refused if what it found is of another class than that driver's, as it would speak for a driver it did not check.
+    A harness no check ships for is refused."""
+    if name in CHECKED:
+        factory, given = _HARNESSES[name]
+        options: dict[str, Any] = given(folder)
+        access: Access = options.pop("access")
+        return await check_driver(factory, folder=folder, access=access, **options)
+    driver = load(DRIVERS, name)()
+    named = driver.describe().check
+    if named is None:
+        raise DriverError(f"no check of {name} ships with its driver: run `check_driver` on it")
+    try:
+        check = metadata.EntryPoint(name, named, DRIVERS).load()
+    except (ImportError, AttributeError) as error:
+        raise DriverError(f"its check {named} cannot be loaded: {error}") from error
+    found: Conformance = await check(folder)
+    if found.implementation != (made := implementation(driver)):
+        raise DriverError(f"its check {named} checked {found.implementation}, and {name} is {made}")
+    return found
