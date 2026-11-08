@@ -1411,8 +1411,8 @@ The graph is not stored. Nodes are events, and edges are the references they alr
 
 - **Time-expanded dependency graph.** Acyclic by law 7. A's post, B's response and A's next action are three nodes.
 - **Agent interaction graph.** The quotient by maker. It may have cycles, and `interactions` counts it from the record, kind by
-  kind, at a head (below). The terminal's provenance panel lists it pair by pair, each kind of edge apart, as section 12 says,
-  and otherwise the clients show one event's hop at a time.
+  kind, at a head (below). The terminal's provenance panel and a pane of the page list it pair by pair, each kind of edge
+  apart, as section 12 says, and otherwise the clients show one event's hop at a time.
 - **Context version.** Each agent has a stream `context/<agent>`, which holds what the runtime offered it, what its harness
   said it took and its compactions, and every event the agent makes carries that stream's version. So `context_version` is an
   **upper bound** on what an action could have known, `delivered` edges are a **lower bound**, and what lies between them is
@@ -1788,7 +1788,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
   `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, but for a
   diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op that
-  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, and the provenance a message's actions open, where the
+  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, who reached whom, in the lines `/reached` draws, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
   actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every

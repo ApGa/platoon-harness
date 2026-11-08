@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture section 11](../architecture.md#11-provenance), [the brief's section 6](../spec/BRIEF.md#6-provenance-is-a-first-class-protocol-feature), [RFC 0010](0010-provenance.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Count who reached whom from the record, kind by kind, at a head`; step 2, `feat: Draw who reached whom in the terminal's provenance panel` |
+| Implementation | `feat: Count who reached whom from the record, kind by kind, at a head`; step 2, `feat: Draw who reached whom in the terminal's provenance panel` and `feat: Draw who reached whom in the page's pane` |
 
 ## Summary
 
@@ -144,7 +144,8 @@ kind of edge it holds, labelled by the kind, saying how that kind is known and o
 counts, and a line of its own for its unconfirmed offers, labelled `unconfirmed` and drawn as unknown; each agent's unknowns;
 and where the page was cut, the command that reads on at the same head. Neither client pages in place, as no part of a
 provenance panel does, and neither walks the record (section 12). The terminal opens it in the provenance panel by
-`/reached`, where Enter follows a line and Esc comes back.
+`/reached`, where Enter follows a line and Esc comes back, and the page in a pane of its own, through a pane of `x_read` a view
+link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), where a line is a button.
 
 ## The hard parts
 
@@ -194,7 +195,7 @@ provenance panel does, and neither walks the record (section 12). The terminal o
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 the query | `interactions`, `Session.interactions` and the command `interactions` | `tests/unit/primitives/test_interactions.py` | |
-| M2 drawn in both clients | The terminal's provenance panel and a pane of the page list each pair, each kind apart with how it is known, and each agent's unknowns, on a view link too, worded once for both | `test_who_reached_whom_is_worded_pair_by_pair_with_how_each_is_known`, `test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns`, `test_who_reached_whom_draws_each_kind_apart` | `feat: Draw who reached whom in the terminal's provenance panel` |
+| M2 drawn in both clients | The terminal's provenance panel and a pane of the page list each pair, each kind apart with how it is known, and each agent's unknowns, on a view link too, worded once for both | `test_who_reached_whom_is_worded_pair_by_pair_with_how_each_is_known`, `test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns`, `test_who_reached_whom_draws_each_kind_apart`, `test_the_pane_lists_who_reached_whom_on_a_view_link_too` | `feat: Draw who reached whom in the terminal's provenance panel`; `feat: Draw who reached whom in the page's pane` |
 
 ## Open questions
 
@@ -220,7 +221,9 @@ provenance panel does, and neither walks the record (section 12). The terminal o
   `test_each_agent_s_unknowns_are_said_so_no_pair_reads_as_unknown_never_as_no_reach` and
   `test_what_a_page_of_who_reached_whom_left_out_is_said_with_the_command_that_reads_on`;
   `tests/unit/tui/test_provenance.py`, `test_the_panel_lists_who_reached_whom_and_each_agent_s_unknowns`; and
-  `tests/unit/tui/test_snapshots.py`, `test_who_reached_whom_draws_each_kind_apart`.
+  `tests/unit/tui/test_snapshots.py`, `test_who_reached_whom_draws_each_kind_apart`; `tests/e2e/test_provenance.py`,
+  `test_the_pane_lists_who_reached_whom_on_a_view_link_too`, in Chromium and Firefox; and `tests/unit/web/test_server.py`,
+  `test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command`.
 - The cost of the walk, measured with a script kept outside this repository on journals written through the kernel's ops: a ring
   of agents in which each turn hands an agent what waits for it and its harness confirms it, reports a model call and a tool
   item, and sends the next agent a message citing the last one it got, and every fifth round every tenth agent posts or revises

@@ -139,7 +139,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .pop .it.x-need { display: grid; gap: 6px; cursor: default; }
 .pop.x-ask { max-width: 380px; }
 .x-provenance .x-part { padding: 12px 14px 4px; font-weight: 700; }
-.x-provenance .x-line { display: grid; grid-template-columns: 76px 1fr; gap: 8px; width: 100%; padding: 5px 14px; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; line-height: 1.45; text-align: left; overflow-wrap: anywhere; }
+.x-provenance .x-line { display: grid; grid-template-columns: 84px 1fr; gap: 8px; width: 100%; padding: 5px 14px; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; line-height: 1.45; text-align: left; overflow-wrap: anywhere; }
 .x-provenance .x-line[data-x-follow] { cursor: pointer; }
 .x-provenance .x-line[data-x-follow]:hover, .x-provenance .x-line[data-x-follow]:focus-visible { background: var(--hover); }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; }
@@ -182,7 +182,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 [aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
-$('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button><button class="find" data-x-review="changes" title="What changed: each commit with its test and patch, and each workspace's uncommitted diff">Review changes</button>`.s);
+$('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button><button class="find" data-x-review="changes" title="What changed: each commit with its test and patch, and each workspace's uncommitted diff">Review changes</button><button class="find" data-x-interactions title="Each pair of makers, with the edges of each kind that lead from the first's events to the second's, and each agent's unknowns">Who reached whom</button>`.s);
 
 $('#login p').textContent = 'This page opens from a link that platoon-harness web says, or one a page acting for you ' +
   'made. Each link opens once, so ask for a new one.';
@@ -225,8 +225,8 @@ setLive = state => {
 // a thread or what had reached an agent takes it from every pane of ours, and of ours, the first `X.PANES` names that
 // the address names takes it from the rest. A form's `args` go with it, and with provenance `from`, `text` where a
 // ref in text opened it.
-X.PANES = ['provenance', 'act', 'review', 'ask', 'tasks', 'entries'];
-KEYS.push('provenance', 'from', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
+X.PANES = ['provenance', 'interactions', 'act', 'review', 'ask', 'tasks', 'entries'];
+KEYS.push('provenance', 'from', 'interactions', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
@@ -242,25 +242,27 @@ readRoute = () => {
   return r;
 };
 
-// The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
-// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, what changed or
-// a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a board's entries, `entries=`. A
-// pane's `args` is what else the address gives it: a form's `args`, or provenance's `from`.
+// The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, who reached whom,
+// `interactions=1`, an op's form, `act=`, filled in with `args=` where an action of a place in Needs you opened it with
+// what it fixes, what changed or a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a
+// board's entries, `entries=`. A pane's `args` is what else the address gives it: a form's `args`, or provenance's
+// `from`.
 // SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise
 // leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may
 // do now.
-X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review
-  || pane instanceof X.Ask || pane instanceof X.Channel;
+X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Interactions || pane instanceof X.Form
+  || pane instanceof X.Review || pane instanceof X.Ask || pane instanceof X.Channel;
 // An address with none of ours, for a go that opens something else in the pane.
-X.none = {provenance: null, from: null, act: null, args: null, review: null, ask: null, tasks: null, entries: null};
+X.none = {provenance: null, from: null, interactions: null, act: null, args: null, review: null, ask: null, tasks: null,
+  entries: null};
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
   await baseRoute();
   const r = S.route, pane = $('#pane');
   if (r.layout === 'map' || r.thread || r.knew) return;
-  const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form]
-    : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : r.tasks ? ['tasks', X.Tasks]
+  const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.interactions ? ['interactions', X.Interactions]
+    : r.act ? ['act', X.Form] : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : r.tasks ? ['tasks', X.Tasks]
       : r.entries ? ['entries', X.Entries] : [];
   if (!key) {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
@@ -1175,6 +1177,40 @@ X.reveal = (at, ref) => {
   go({layout: 'chat', chat, m: seq, provenance: ref});
 };
 
+// Who reached whom in the session, in the pane the address names, `interactions=1`, in the lines the terminal's
+// /reached draws, read through x_read as it opens and again when Who reached whom is pressed again: the head it was read
+// at, each pair a heading over a line for each kind of edge it holds, saying how that kind is known, and each agent's
+// unknowns. A line that opens an event follows into its provenance, as a link of the Provenance pane does, and Back
+// comes back. Only the newest read is drawn, as each walks the journal and can take a while.
+X.Interactions = class {
+  constructor(name) {
+    this.name = name;
+    $('#pane').innerHTML = html`<div class="phead"><h2>Who reached whom</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
+    this.box = $('#pane .x-provenance');
+    this.reads = 0;
+    this.load();
+  }
+  async load() {
+    const n = ++this.reads;
+    let r;
+    try { r = await api('x_read', {pane: 'interactions'}); } catch (e) {
+      if (!this.dead && n === this.reads) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
+      return;
+    }
+    if (this.dead || n !== this.reads) return;
+    this.box.innerHTML = html`${r.lines.map(X.line)}`.s;
+  }
+  destroy() { this.dead = true; }
+};
+
+// Show who reached whom in the pane, read again when it is the one shown. The Map shows no pane of ours, so from it
+// the chats show beside the pane.
+X.interactions = () => {
+  if (S.pane instanceof X.Interactions) return S.pane.load();
+  const layout = S.route.layout === 'map' ? 'chat' : S.route.layout;
+  go({...X.none, interactions: 1, thread: null, knew: null, layout}, true);
+};
+
 // A ref typed in the pane's field shows that event's provenance, by hand. The browser sends no field that holds no ref.
 document.addEventListener('submit', e => {
   const f = e.target.closest('.x-ref-form');
@@ -1350,11 +1386,12 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-named], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-named], [data-x-interactions], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
   if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
   if ('xCommands' in d) return X.openCommands();
+  if ('xInteractions' in d) return X.interactions();
   if (d.xReview || d.xDiff) return go({...X.none, review: d.xReview || d.xDiff, thread: null, knew: null}, true);
   if (d.xAsk) return go({...X.none, ask: d.xAsk, thread: null, knew: null}, true);
   if (d.xChannel) return go({...X.none, [d.xChannel === 'queue' ? 'tasks' : 'entries']: d.xName, thread: null, knew: null}, true);

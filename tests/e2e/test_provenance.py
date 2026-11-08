@@ -275,3 +275,49 @@ async def test_a_ref_typed_in_the_pane_opens_it_or_is_refused_saying_why(browser
         f"one: ask by {ASKED}",
     ]
     assert errors == []
+
+
+async def test_the_pane_lists_who_reached_whom_on_a_view_link_too(browser: Browser, root: Path):
+    """Who reached whom, in the top bar, opens a pane in the terminal's words: each pair a heading over a line for each
+    kind of edge, labelled by it, and each agent's unknowns. A view link reads it, a reload keeps it, a line follows
+    into the provenance of the event that holds the first edge it counts, and Back comes back to it."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await answered(session)
+        page, errors = await opened(browser, web.link("view"))
+
+        await page.locator("[data-x-interactions]").click()
+
+        heading, pane = page.locator("#pane h2"), page.locator(PANE)
+        await expect(heading).to_have_text("Who reached whom", timeout=SECONDS)
+        await expect(pane.locator(".x-part")).to_have_text(
+            ["events by @you reached events by @bob", "Each agent's unknowns"], timeout=SECONDS
+        )
+        await expect(pane.locator(".x-line .x-kind")).to_have_text(["", "declared", "observed", "cause", "", ""])
+        await expect(
+            line(page, "declared", f"1 citation, each its citer's claim, the first in {ANSWERED}")
+        ).to_have_count(1)
+        await expect(
+            line(page, "observed", "1 offer @bob's harness said it took, handed over and taken")
+        ).to_have_count(1)
+        await expect(
+            line(page, "cause", f"1 cause named, as a reply names what it answers, the first in {ANSWERED}")
+        ).to_have_count(1)
+        await expect(pane).to_contain_text("@bob: unknown beyond the edges counted: 7 surfaces of its harness")
+        listed = page.url
+        await page.reload()
+        await expect(page.locator(PANE).locator(".x-part")).to_have_text(
+            ["events by @you reached events by @bob", "Each agent's unknowns"], timeout=SECONDS
+        )
+        await line(page, "declared", ANSWERED).click()
+        await expect(heading).to_have_text(f"Provenance of {ANSWERED}", timeout=SECONDS)
+        await expect(message_of(page, "the tests pass")).to_have_class(re.compile(r"\bflash\b"), timeout=SECONDS)
+        await page.go_back()
+        await page.go_back()
+        await expect(heading).to_have_text("Who reached whom", timeout=SECONDS)
+        await expect(page.locator(PANE).locator(".x-part")).to_have_text(
+            ["events by @you reached events by @bob", "Each agent's unknowns"], timeout=SECONDS
+        )
+        await page.context.close()
+
+    assert "interactions=1" in listed
+    assert errors == []

@@ -432,10 +432,11 @@ async def test_a_ref_opened_from_text_says_it_records_no_link_or_that_it_names_n
 async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command(
     root, clock, monkeypatch
 ):
-    """Provenance and where the person must act are each a pane of `x_read`, read by a view link as it reads `view_*`,
-    through the session's queries alone, which the kernel refuses for an op that writes, so no pane submits an op or
-    writes anything, and a mention is a message to read in its chat. A pane it does not name is none, and the route that
-    was provenance's alone is gone. The view link is refused at `/x/command`, the one route that writes."""
+    """Provenance, who reached whom and where the person must act are each a pane of `x_read`, read by a view link as it
+    reads `view_*`, through the session's queries alone, which the kernel refuses for an op that writes, so no pane
+    submits an op or writes anything, and a mention is a message to read in its chat. A pane it does not name is none,
+    and the route that was provenance's alone is gone. The view link is refused at `/x/command`, the one route that
+    writes."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
         await in_state(session, "lead", "idle")
         await session.send("@lead", "Fix the flaky test")
@@ -456,6 +457,7 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
             patched.setattr(session, "submit", recorded)
             attention = await browser.view("x_read", {"pane": "attention"})
             provenance = await browser.view("x_read", {"pane": "provenance", "ref": "agent/w1@1"})
+            reached = await browser.view("x_read", {"pane": "interactions"})
         unnamed = await browser.request("POST", "/v1/x_read", {"pane": "spans"})
         gone = await browser.request("POST", "/v1/x_provenance", {"ref": "agent/w1@1"})
         command = {"op": "message.send", "args": {"to": "#general", "gist": "x"}, "key": key(1)}
@@ -470,9 +472,11 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert [action["op"] for action in places[0]["actions"]] == ["approval.resolve"] * 2
     assert places[0]["actions"][0]["args"]["id"] == approvals[0]["id"]
     assert provenance["ref"] == "agent/w1@1" and "heading" in {line["kind"] for line in provenance["lines"]}
+    assert reached["lines"][0]["text"].startswith(f"interactions read at head {head:,}: ")
+    assert {"kind": "heading", "text": "Each agent's unknowns", "ref": None, "warn": False} in reached["lines"]
     assert (
         unnamed.status == 404
-        and "provenance, attention, changes, diff, ask, tasks and entries" in unnamed.json()["error"]
+        and "provenance, interactions, attention, changes, diff, ask, tasks and entries" in unnamed.json()["error"]
     )
     assert gone.status == 404
     assert refused.status == 403 and "acts on nothing" in refused.json()["error"]

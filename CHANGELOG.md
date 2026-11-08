@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **Who reached whom in the page.** Who reached whom, in the top bar, opens a pane, `interactions=1`, read through a new
+  `interactions` pane of `x_read`, which a view link reaches, in the lines the terminal's `/reached` draws: each pair a
+  heading over a line for each kind of edge, the unconfirmed offers apart as unknown, and each agent's unknowns. Each line
+  that opens an event is a button, which follows into the provenance of the event that holds the first edge it counts, and
+  Back comes back. The provenance pane's kind column is wider, for `unconfirmed`.
 - **Who reached whom in the terminal's provenance panel.** `/reached` opens the panel on the first page of `interactions`:
   each pair of makers a heading, oldest first, over a line for each kind of edge it holds, `declared`, `observed`, `cause`
   and `ancestry`, labelled by the kind, saying how that kind is known and never summed, and one for its offers no harness

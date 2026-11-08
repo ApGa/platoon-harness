@@ -164,6 +164,15 @@ history.*
   that event's pane, as the terminal's `/provenance` form does, or the pane says why it opens none, in the terminal's words; the
   browser does not send a field that holds no ref, and says what it takes. Opening a ref by hand, rather than searching by ref, is
   the default pending the owner's ruling.
+- **Who reached whom.** Who reached whom, in the top bar, opens a pane, `interactions=1` in the address, in the words the
+  terminal's `/reached` uses ([tui.md](tui.md) has them): the head it was read at, each pair of makers a heading, oldest first,
+  over a line for each kind of edge it holds, `declared`, `observed`, `cause` and `ancestry`, saying how that kind is known and
+  never summed, and one for its offers no harness said it took, `unconfirmed`, as unknown; then each agent's unknowns, so an
+  agent no pair names is not shown to be reached by nobody; and, past the first page, the command that reads on. Each line that
+  opens an event is a button, which follows into the provenance of the event that holds the first edge it counts, and into its
+  chat where one shows it, and Back comes back. It is read when it opens and when Who reached whom is pressed again, and each
+  read walks the journal, so it takes longer as a session grows. It is a read, so a view link has it, and from the Map it shows
+  the chats beside it. That it is listed beside provenance, and not on the Map, is the default pending the owner's ruling.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.
@@ -252,7 +261,8 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
 as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
 and for a diff and an ask the journal and the body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
-by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
+by its ref, and the message it is in its chat, if one shows it. Its `interactions` pane is who reached whom, the first page
+of `interactions`, in the lines the terminal's `/reached` draws. Its `attention` pane is every place you must act, but a mention.
 Its `tasks` pane is a queue's tasks, by `queue`, and its `entries` pane a board's entries, by `board`, in the words the
 terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its

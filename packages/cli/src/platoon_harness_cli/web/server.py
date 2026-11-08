@@ -22,7 +22,7 @@ from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__, approvals, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
-from ..provenance import REF_IN_TEXT, no_provenance, read
+from ..provenance import REF_IN_TEXT, no_interactions, no_provenance, read, who_reached_whom
 from ..review import changes_of, snapshots_of
 from ..roster import status_of
 from . import replies
@@ -290,6 +290,8 @@ class Web(Server[Request]):
         match params.get("pane"):
             case "provenance":
                 return await self._provenance(params)
+            case "interactions":
+                return await self._interactions()
             case "attention":
                 return await self._attention()
             case "changes":
@@ -308,7 +310,8 @@ class Web(Server[Request]):
                 return await self._channel("board", params)
         raise replies.Error(
             404,
-            "there is no such pane: the page's panes are provenance, attention, changes, diff, ask, tasks and entries",
+            "there is no such pane: the page's panes are provenance, interactions, attention, changes, diff, ask, "
+            "tasks and entries",
         )
 
     async def _channel(self, kind: Literal["queue", "board"], params: Mapping[str, Any]) -> dict[str, Any]:
@@ -412,6 +415,13 @@ class Web(Server[Request]):
             "at": replies.at(self.projection, event["ref"], event["seq"]),
             "lines": [asdict(line) for line in panel.lines],
         }
+
+    async def _interactions(self) -> dict[str, Any]:
+        """Who reached whom, the first page of `interactions`, in the lines the terminal's `/reached` draws."""
+        try:
+            return {"lines": [asdict(line) for line in await who_reached_whom(self.session)]}
+        except Refused as refused:
+            raise replies.Error(400, no_interactions(refused)) from None
 
     # The page's acts.
 
