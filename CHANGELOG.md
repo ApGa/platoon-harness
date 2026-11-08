@@ -87,7 +87,8 @@ named here is closed.
   once, never `always`, and `cancelled` where there is none, which runs nothing, so an allow then fails, saying so, and at an
   interrupt or the turn's end. An update nothing maps, and a change of mode or of a config option, the model among them, once
   the session is ready, keeps its raw frame with a gap, a compaction is `compacted` with what it forgot unknown, and as ACP
-  names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate.
+  names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate. Stable ACP neither
+  shows an agent's own agents nor turns them off, so a role on it must allow them, as a change below says.
   On a scripted ACP agent, `ScriptedDriver` behind ACP on FakeModel, `check_driver` passes every check it does not skip, and the
   driver earns `operational` and `observable`. `opencode` refuses a start that names no model, as OpenCode then sends prompts
   to a hosted model nobody chose, and it has not run, nor has its check, which skips where `opencode` is not on `PATH`: STATUS
@@ -832,6 +833,14 @@ named here is closed.
   wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
   waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded
   as it opens.
+- **A role on a harness whose own agents its driver cannot turn off must allow them.** `Capabilities` gains
+  `native_children_off`, which `claude`, `codex` and the OpenHands worker declare, as each turns its harness's own agents off
+  for a launch whose role does not allow them. A driver that declares agents of its own and not that, as the ACP driver does,
+  since stable ACP neither shows nor turns them off, leaves `team check` refusing a role on it that does not say
+  `allow_native_children = true`, so no role says they are off while they run, and `check_driver` skips
+  `native_children_off_by_default` for it. A third party's driver that declares agents of its own meets that refusal until it
+  declares `native_children_off`. See
+  [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **A Codex patch names each file it changes.** A `fileChange` item's body held each file's change alone, an added file's text
   or an update's diff, which Codex gives with no path, so nobody could tell which file a change was of. Its body now names each
   file by its kind and path, `add a.py`, before that file's change, as the approval asking about it does. See

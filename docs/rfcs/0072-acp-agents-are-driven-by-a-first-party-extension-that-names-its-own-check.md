@@ -5,7 +5,7 @@
 | Status | Draft |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
-| Builds on | [`rpc.py`](../../packages/sdk/src/platoon_harness/rpc.py), [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/levels.py`](../../packages/sdk/src/platoon_harness/drivers/levels.py), [`testing/harnesses.py`](../../packages/sdk/src/platoon_harness/testing/harnesses.py), the command line's [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [architecture section 9](../architecture.md#9-drivers) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) |
+| Builds on | [`rpc.py`](../../packages/sdk/src/platoon_harness/rpc.py), [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/levels.py`](../../packages/sdk/src/platoon_harness/drivers/levels.py), [`testing/harnesses.py`](../../packages/sdk/src/platoon_harness/testing/harnesses.py), the command line's [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [architecture section 9](../architecture.md#9-drivers) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0024](0024-a-harness-s-own-agents-are-off.md), [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's questions on where first-party extensions live and what ACP is spoken over, which are open |
 | Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it` and `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` |
 
@@ -81,7 +81,7 @@ session, the version `agentInfo` says, and the model that option holds.
 ACP gives no id of a model call and no spend per call: `usage_update` is the context's size and a running cost, and a prompt's
 `usage` is unstable. So the driver reports no `model.call` and no `usage`, declares `call_ids` none and no `measures`, and the
 runtime charges each turn its estimate, labelled so. It declares the agent's own agents `opaque`, as stable ACP neither shows nor
-turns them off.
+turns them off, and so declares no `native_children_off`, below.
 
 ### 4. A permission request is an approval whose whole ask is its tool call
 
@@ -111,7 +111,25 @@ the runtime offers it again, and a delivery for any other boundary is refused, s
 The driver declares no sealed launch, refuses a gateway, and has no id per model call, so `levels` leaves `trainable` unmet for
 every agent on it, whatever a check found. `operational` and `observable` are earned as any driver's are.
 
-### 7. A driver names its own check
+### 7. A role on ACP allows its agent's own agents
+
+Every driver turns its harness's own agents off for a launch whose role does not allow them
+([RFC 0024](0024-a-harness-s-own-agents-are-off.md)), and stable ACP has no way to. So `Capabilities` gains a declaration of it:
+
+```python
+class Capabilities(Model):
+    ...
+    native_children_off: bool = False  # it turns the harness's own agents off for a launch whose role does not allow them
+```
+
+`claude`, `codex` and the OpenHands worker declare it, as each does so and `native_children_off_by_default` proves it on each real
+binary. The ACP driver does not. A role on a harness with agents of its own that its driver cannot turn off must say
+`allow_native_children = true`, and `team check` refuses it otherwise, as a role left at the default would say they are off while
+they run. The role then says what runs, the record holds it, `team check` warns of what that gives up as it does any opt-in, and
+`levels` counts its opaque agents against `trainable`. `check_driver` skips `native_children_off_by_default` for such a driver,
+as a role on it never asks for them off.
+
+### 8. A driver names its own check
 
 ```python
 class DriverInfo(Model):
@@ -160,6 +178,9 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 | `harness = { command = [...], mode = "acp" }` in the team file | A change of the team file's schema with one agent to serve. A driver named for its command is the naming law's way, so a second agent gets a driver of its own until a team needs the generic one |
 | Name a check by an entry point of its own group | A second registry for one fact about a driver, which `describe` already answers |
 | Move the SDK's own checks onto `DriverInfo.check` | `levels`, a pure function, reads `CHECKED` to say what makes a result, so moving them is a change of its own |
+| A role on ACP left at `allow_native_children = false`, with that labelled in the docs alone | The role and the record would say the agent's own agents are off while they run, which only a reader of the docs would know |
+| The ACP driver refuses a start that leaves them off | `check_driver` starts every check at the default, so every check would fail, and the role still could not say what runs |
+| A gap at start | No gap of the closed set says this: `native_child_unattributed` is of a child seen, and a child that may never start is none |
 | `session/load` for a resume | It replays the whole session as updates the record already holds; `session/resume` replays nothing, and OpenCode offers it |
 | A delivery during a turn sent as it comes | Undefined in version 1, and OpenCode refuses it |
 
@@ -171,7 +192,8 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 - A result kept for any driver outside the SDK made before this pinned no distribution, so it reads `unverified` until checked
   again.
 - No agent on ACP is trainable, and none reports what a model call cost, so every turn is charged its estimate.
-- An agent's own agents run unseen, and a role's `allow_native_children = false` is not carried out on ACP.
+- An agent's own agents run unseen, and a role on an ACP harness must allow them, or `team check` refuses it. A third party's
+  driver that declares agents of its own and not `native_children_off` meets the same refusal, until it declares it.
 - The workspace gains a member, which reverses the commit that dropped the empty `extensions/*` member.
 
 ## Rollout plan
@@ -179,7 +201,7 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 the distribution | `extensions/acp` in the workspace, the release workflow | `uv build --all-packages`, and the boundary tests `test_the_sdk_never_imports_a_first_party_extension` and `test_the_acp_extension_uses_only_public_names` | |
-| M2 the driver | `AcpDriver`, `opencode` | `tests/unit/drivers/test_acp.py`: `test_protocol_1_is_negotiated_and_anything_else_disconnects`, `test_an_unknown_update_keeps_its_raw_frame_and_a_gap`, `test_permission_requests_go_through_the_runtime_s_approvals_with_their_tool_call_as_the_ask`, `test_steering_is_refused_until_a_fixture_passes` and `test_acp_levels_never_reach_trainable` | |
+| M2 the driver | `AcpDriver`, `opencode` | `tests/unit/drivers/test_acp.py`: `test_protocol_1_is_negotiated_and_anything_else_disconnects`, `test_an_unknown_update_keeps_its_raw_frame_and_a_gap`, `test_permission_requests_go_through_the_runtime_s_approvals_with_their_tool_call_as_the_ask`, `test_steering_is_refused_until_a_fixture_passes` and `test_acp_levels_never_reach_trainable`; `tests/unit/topology/test_check.py::test_a_role_on_a_harness_whose_own_agents_cannot_be_turned_off_must_allow_them` and `tests/unit/drivers/test_check_driver.py::test_a_harness_whose_own_children_cannot_be_turned_off_skips_that_check` | |
 | M3 a named check | `DriverInfo.check`, `check_harness`, `doctor --check`, the pin to a distribution | `tests/unit/cli/test_machine.py::test_doctor_checks_an_installed_driver_that_names_its_check` | |
 | M4 conformance | `check_driver` on a scripted ACP agent, and on OpenCode against `FakeModel` | `tests/conformance/test_conformance.py::test_the_acp_driver_passes_check_driver_on_a_scripted_acp_agent`, and the slow `tests/integration/test_acp.py::test_opencode_through_acp_passes_check_driver_against_fake_model` where `opencode` is on `PATH` | |
 

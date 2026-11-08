@@ -103,6 +103,7 @@ _CAPABILITIES = Capabilities(
     interrupt=True,
     approvals="native",
     native_children="observed",
+    native_children_off=True,
     call_ids="call",
     dialects={"messages"},
     coverage={"prompt": "partial", "tool_results": "observed", "native_children": "partial", "compaction": "partial"},

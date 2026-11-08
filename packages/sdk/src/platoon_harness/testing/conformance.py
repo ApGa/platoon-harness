@@ -623,7 +623,13 @@ def _parenting(capabilities: Capabilities) -> str | None:
     return "it declares no native children" if capabilities.native_children == "none" else None
 
 
-@_check(_parenting)
+def _turning_off(capabilities: Capabilities) -> str | None:
+    if capabilities.native_children != "none" and not capabilities.native_children_off:
+        return "it cannot turn its native children off, so a role on it allows them"
+    return _parenting(capabilities)
+
+
+@_check(_turning_off)
 async def native_children_off_by_default(rig: _Rig) -> None:
     """A harness's own agents are off unless a role allows them, as `spec.allow_native_children` says."""
     if rig.options.child is None:

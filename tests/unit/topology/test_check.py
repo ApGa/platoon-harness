@@ -181,6 +181,24 @@ def test_a_role_that_allows_its_harness_s_own_agents_is_told_what_is_lost():
     ]
 
 
+def test_a_role_on_a_harness_whose_own_agents_cannot_be_turned_off_must_allow_them():
+    """Its driver cannot carry out the default, so the role says what runs, and is then told what that gives up."""
+    team = Team(roles={"lead": Role(harness="opencode")})
+    capabilities = {"opencode": Capabilities(persistent=True, native_children="opaque")}
+
+    assert errors(team, capabilities=capabilities) == [
+        "roles.lead.allow_native_children: `opencode` cannot turn its own agents off, so a role on it allows them: set "
+        "it `true`"
+    ]
+    allowing = Team(roles={"lead": Role(harness="opencode", allow_native_children=True)})
+    assert errors(allowing, capabilities=capabilities) == []
+    assert [problem.split(":")[0] for problem in warnings(allowing, capabilities=capabilities)] == [
+        "roles.lead.allow_native_children"
+    ]
+    turned_off = {"opencode": Capabilities(persistent=True, native_children="opaque", native_children_off=True)}
+    assert errors(team, capabilities=turned_off) == warnings(team, capabilities=turned_off) == []
+
+
 def test_a_role_that_allows_agents_its_harness_never_starts_is_told_so():
     team = Team(roles={"lead": Role(harness="pi", allow_native_children=True)})
 

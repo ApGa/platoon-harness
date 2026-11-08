@@ -83,6 +83,7 @@ _CAPABILITIES = Capabilities(
     interrupt=True,
     approvals="native",
     native_children="opaque",
+    native_children_off=True,
     call_ids="call",
     dialects={"chat"},
     coverage={"prompt": "partial", "tool_results": "observed", "compaction": "observed"},

@@ -608,8 +608,10 @@ async def test_a_harness_that_starts_with_access_and_no_model_fails(tmp_path):
 class Parent(ScriptedDriver):
     """A harness that has a native child, or says so."""
 
-    def __init__(self, seen: bool, children: str = "observed") -> None:
-        capabilities = Capabilities(persistent=True, native_children=children, boundaries={"turn"})
+    def __init__(self, seen: bool, children: str = "observed", off: bool = True) -> None:
+        capabilities = Capabilities(
+            persistent=True, native_children=children, native_children_off=off, boundaries={"turn"}
+        )
         super().__init__(every_turn_asks_the_model(), capabilities=capabilities)
         self._seen = seen
 
@@ -667,6 +669,15 @@ async def test_whether_a_harness_s_own_children_are_off_is_a_skip_with_nothing_t
     result = await check(lambda: Spawning(always=True), tmp_path)
 
     assert result.get("native_children_off_by_default").state == "skipped"
+
+
+async def test_a_harness_whose_own_children_cannot_be_turned_off_skips_that_check(tmp_path):
+    """A role on it must allow them, so there is no launch with them off to check."""
+    result = await check(lambda: Parent(seen=True, off=False), tmp_path, child=ToolCall("spawn"))
+
+    assert result.get("native_children_off_by_default").reason == (
+        "it cannot turn its native children off, so a role on it allows them"
+    )
 
 
 async def test_an_opaque_child_is_no_child_seen_and_whether_children_are_off_is_still_checked(tmp_path):

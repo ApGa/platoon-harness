@@ -114,8 +114,8 @@ class Role(Model):
     does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
     of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
     otherwise, and `adopt` gives it to the session. `allow_native_children` lets its harness start agents of its own,
-    beside ours. `preamble` is the template of what its agents are told before `instructions`, its own words, in place
-    of the team's.
+    beside ours, which a role on a harness whose driver cannot turn them off, as on ACP, must say. `preamble` is the
+    template of what its agents are told before `instructions`, its own words, in place of the team's.
     """
 
     harness: str | Command
@@ -460,6 +460,9 @@ def team_check(
                 problems.append(Problem(f"roles.{name}.stays", what))
             if role.allow_native_children:
                 problems.append(Problem(f"roles.{name}.allow_native_children", _native(role, known), "warning"))
+            elif known.native_children != "none" and not known.native_children_off:
+                what = f"`{role.driver}` cannot turn its own agents off, so a role on it allows them: set it `true`"
+                problems.append(Problem(f"roles.{name}.allow_native_children", what))
             problems += _unmeasured(team.budget, "budget", role, known)
             problems += _unmeasured(role.budget, f"roles.{name}.budget", role, known)
         problems += _unestimated(role.budget, f"roles.{name}.budget", team.budget)

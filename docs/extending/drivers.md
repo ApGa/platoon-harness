@@ -51,8 +51,9 @@ method promises:
   so one may name a variable of that access and never hold its value. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
-  its own for starting agents: turn that off by a setting for this launch alone, and say in your docs what that cannot reach, such as
-  an extension's tool. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
+  its own for starting agents: turn that off by a setting for this launch alone, declare `native_children_off`, and say in your docs
+  what that cannot reach, such as an extension's tool. A driver that cannot turn them off declares agents of its own and not that, and
+  `team check` then refuses a role on it that does not allow them. `spec.instructions` holds the preamble and then the role's words, fixed at launch: hand
   them over once, as they are, through the harness's supported path, and never per turn. A resume gives the same text again, as
   Claude Code and Codex keep what a session began with whatever a resume passes. The runtime journals them as what the agent was told.
   A `HOME` in `spec.env` is the harness's home, as the runtime gives an isolated harness one in its folder: `harness_env` then passes
@@ -150,6 +151,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `interrupt` | Whether a turn can be stopped |
 | `approvals` | `none`, `gated`, `native` |
 | `native_children` | `none`, `observed`, `opaque` |
+| `native_children_off` | Whether it turns them off for a launch whose role does not allow them. A role on a harness with them that cannot must allow them |
 | `call_ids` | `none`, `agent`, `call` |
 | `dialects` | `chat`, `responses`, `messages` |
 | `coverage` | For each of `prompt`, `tool_results`, `shell_reads`, `files`, `native_children`, `compaction`, `external`: `observed`, `partial` or `none` |
@@ -510,8 +512,9 @@ Each rule it keeps, in a sentence ([RFC 0072](../rfcs/0072-acp-agents-are-driven
   update, method or line is `native` with its raw frame and the gap `unknown_update`, and a prompt answered with no stop
   reason ends its turn saying so.
 - **Never trainable:** ACP names no model call and says no spend of one, so it reports no `model.call` and no `usage`, declares
-  no `call_ids` and no `measures`, and has no sealed launch. An agent's own agents are `opaque`, as stable ACP neither shows
-  them nor turns them off, so a role's `allow_native_children = false` is not carried out.
+  no `call_ids` and no `measures`, and has no sealed launch.
+- **An agent's own agents** are `opaque`, and it declares no `native_children_off`, as stable ACP neither shows them nor turns
+  them off, so a role on it must say `allow_native_children = true`, and `team check` refuses it otherwise.
 
 ## A Python package
 
@@ -592,7 +595,7 @@ async def test_my_driver_conforms(tmp_path):
 | `call_ids_reported` | `model.call` carries the id the model gave, an item names it, and so does usage of one call. Needs `call_ids = "call"` |
 | `preamble_once_per_request` | `spec.instructions` appears once in every model request, across a tool call and a next turn. Needs an MCP path |
 | `tool_item_carries_its_anchor` | A tool item's `native_id` equals the anchor its harness sent on the MCP call. Skipped for a harness that sends none |
-| `native_children_off_by_default` | The first request offers no tool for a native child, and with `spec.allow_native_children` it does. Needs `native_children`. Pass `child`, or it is skipped |
+| `native_children_off_by_default` | The first request offers no tool for a native child, and with `spec.allow_native_children` it does. Needs `native_children` and `native_children_off`. Pass `child`, or it is skipped |
 | `native_child_seen` | A native child is reported. Needs `native_children` that are `observed`. Pass `child`, or it is skipped |
 | `dialects_spoken` | Every model call was in a declared dialect |
 | `one_shot_exits` | A harness that is not persistent exits after its turn |

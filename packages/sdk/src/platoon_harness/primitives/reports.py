@@ -76,8 +76,9 @@ def _unproven(txn: Txn, agent: str) -> int | None:
 
 class Capabilities(Model):
     """What a driver declares of a harness. Absence means unsupported, and `levels` believes only what was verified.
-    `sealed` says it launches on a gateway's access with nothing of the user's, which is the one launch a gateway
-    admission gets."""
+    `native_children_off` says it turns the harness's own agents off for a launch whose role does not allow them, so a
+    role on a harness with agents of its own that its driver cannot turn off must allow them. `sealed` says it launches
+    on a gateway's access with nothing of the user's, which is the one launch a gateway admission gets."""
 
     persistent: bool = False
     resume: bool = False
@@ -88,6 +89,7 @@ class Capabilities(Model):
     interrupt: bool = False
     approvals: Literal["none", "gated", "native"] = "none"
     native_children: Literal["none", "observed", "opaque"] = "none"
+    native_children_off: bool = False
     call_ids: Literal["none", "agent", "call"] = "none"
     dialects: frozenset[Literal["chat", "responses", "messages"]] = frozenset()
     coverage: Mapping[Surface, Literal["observed", "partial", "none"]] = {}

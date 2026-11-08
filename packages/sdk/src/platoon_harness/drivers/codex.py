@@ -135,6 +135,7 @@ _CAPABILITIES = Capabilities(
     interrupt=True,
     approvals="native",
     native_children="observed",
+    native_children_off=True,
     call_ids="agent",
     dialects={"responses"},
     coverage={"prompt": "partial", "tool_results": "observed", "native_children": "partial", "compaction": "partial"},

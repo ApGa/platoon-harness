@@ -62,8 +62,8 @@ does with a turn that leaves nothing more to come for it: left out, one the sess
 does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
 of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
 otherwise, and `adopt` gives it to the session. `allow_native_children` lets its harness start agents of its own,
-beside ours. `preamble` is the template of what its agents are told before `instructions`, its own words, in place
-of the team's.
+beside ours, which a role on a harness whose driver cannot turn them off, as on ACP, must say. `preamble` is the
+template of what its agents are told before `instructions`, its own words, in place of the team's.
 
 | Key | Type | Default |
 |---|---|---|
