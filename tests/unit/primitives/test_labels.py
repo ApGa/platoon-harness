@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from platoon_harness import ConfigError, Team
-from platoon_harness.kernel import Kernel
+from platoon_harness.kernel import Kernel, Principal
 from platoon_harness.tools import list_tools
 
-from .support import agent, channel, of_type, refusal, result_of, spawn
+from .support import agent, channel, enroll, grant, of_type, refusal, result_of, spawn
 
 VOCABULARY = {"difficulty": ["easy", "medium", "hard"], "kind": ["design", "execution", "search", "verification"]}
 
@@ -99,6 +99,22 @@ async def test_a_label_outside_the_team_s_is_refused_saying_what_may_be_given(ke
     assert not of_type(kernel, "task.added") and [event.data["name"] for event in of_type(kernel, "agent.spawned")] == [
         "lead"
     ]
+
+
+async def test_a_person_s_a_program_s_and_the_runtime_s_labels_meet_the_same_check(kernel, ada):
+    program = Principal(id="program:trainer")
+    await enroll(kernel, program)
+    await grant(kernel, "program")
+    await channel(kernel, "tasks", kind="queue")
+
+    for by in (ada, program, kernel.runtime):
+        refused = refusal(
+            await kernel.submit(by, "task.add", {"queue": "tasks", "gist": "x", "labels": {"size": "big"}})
+        )
+        given = {"queue": "tasks", "gist": "find it", "labels": {"kind": "search"}}
+        assert refused.code == "invalid" and result_of(await kernel.submit(by, "task.add", given))
+
+    assert [event.actor for event in of_type(kernel, "task.added")] == ["human:ada", "program:trainer", "runtime"]
 
 
 @pytest.mark.parametrize("labels", [{}])
