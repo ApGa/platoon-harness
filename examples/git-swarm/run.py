@@ -7,7 +7,7 @@ import argparse
 import asyncio
 from pathlib import Path
 
-from platoon_harness import Session, load_team
+from platoon_harness import Refused, Session, load_team
 from platoon_harness.patterns import population
 
 TEAM = Path(__file__).with_name("team.toml")
@@ -27,7 +27,9 @@ async def main(sets: list[str], plan_login: bool) -> None:
     async with Session.start(team, principal="program:swarm", plan_login=plan_login) as session:
         outcomes = await population(session, "worker", GOAL, attempts=ATTEMPTS)
         entries = [await session.board_get("outcomes", name) for name in outcomes]
-        await session.close()
+        closed = await session.submit("session.close", key="close")
+        if closed.refusal is not None:
+            raise Refused.of(closed.refusal)
         ending = await session.settled()
     print(f"session {session.name}: {ending.reason}")
     print(*(f"{name}: {entry['gist']}" for name, entry in zip(outcomes, entries, strict=True)), sep="\n")
