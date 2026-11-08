@@ -293,7 +293,7 @@ class Event(BaseModel, frozen=True):
     stream: str
     version: int                     # gapless per stream
     type: str                        # "task.claimed"; unknown types survive export and replay
-    actor: str                       # authenticated: "agent:worker-1", "human:ada", "runtime", "program:map_reduce"
+    actor: str                       # authenticated: "agent:worker-1", "human:ada", "runtime", "program:swarm"
     agent: str | None                # the agent this is about; defaults to the acting agent
     turn: str | None
     context_version: int | None      # the agent's context version at commit; every agent event has one

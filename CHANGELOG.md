@@ -129,7 +129,7 @@ named here is closed.
   shows them, in a repository of its own. It has not run on real models. That it ships, and that choosing among the
   nominations is yours, are the defaults, pending the owner's rulings.
 - **A population, git-swarm's program.** `platoon_harness.patterns.population(session, role, goal, attempts=...)`, called by a
-  script that owns its session as `program:<name>`, starts workers of `role` with `goal`, `worker-1`, `worker-2` and on, as many at
+  script that owns its session as `program:<name>`, starts workers of `role` with `goal`, `<role>-1`, `<role>-2` and on, as many at
   once as `max_live` allows, until it has started `attempts`, and gives each one outcome once it has ended and its stop has looked
   at what it left: `contribute`, `nominate`, `abstain`, `invalid` or `failed`, each worker told beside its goal how its outcome is
   read. The program records each as the worker's entry on board `outcomes`, citing what it rests on, and the board takes no
