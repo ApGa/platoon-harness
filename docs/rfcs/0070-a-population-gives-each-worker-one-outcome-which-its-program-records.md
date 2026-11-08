@@ -151,6 +151,10 @@ What changes for users:
   worker, and a worker whose only commit it was abstained, as far as the record says.
 - **A look that never finished.** A worker whose stop failed or was cancelled may have committed work its look never recorded, so
   its outcome is `failed`, saying so, never `abstain`.
+- **What a worker is told names our ops as the kernel does.** The body beside its goal says `repo.commit` and `#nominations`, and
+  a spawn's body reaches its harness as it was written, while its preamble names each tool as that harness shows it
+  ([RFC 0029](0029-a-harness-names-our-tools-as-it-shows-them.md)), such as `mcp__ph__repo_commit`. Whether a real model finds
+  the tool by the kernel's name is unknown, as no real harness has run a population.
 
 ## Alternatives
 
@@ -197,7 +201,8 @@ What changes for users:
 1. Should a population read out a winner: a plurality of the valid nominations, ties going to the least full SHA, and the
    repository's root when there is none? This builds the default, pending the owner's ruling: no readout, each worker's outcome
    is the result, and choosing among the nominations is the person's. A readout would read the board this builds, so a ruling
-   for one adds a function and removes nothing. The owner decides, before the GitSwarm example ships.
+   for one adds a function and removes nothing. The GitSwarm example ships on the default, pending the ruling, so a readout
+   would add a line to what it prints.
 
 ## Evidence
 
