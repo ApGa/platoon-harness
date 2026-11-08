@@ -150,10 +150,13 @@ async def journaled(following: asyncio.subprocess.Process, wanted: Callable[[dic
 async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_test_is_its_evidence(repo: Cli):
     """Its page's commands as it shows them, on the stand-ins of its own `stand_ins.py`: the team checks and says what
     it allows, and the run goes on while the verifier waits for you, as `session show` says. Your test of the commit
-    the verifier names, and your answer citing the test's record, let it finish: its verdict cites the commit, which
-    it read through `repo.commit`, as the reviewer's review does, and your answer, so the record ties the verdict to
-    your test. The stand-ins show the flow, and nothing of what Codex's read-only sandbox or the approvals denied stop:
-    only a run on the real harnesses shows that the verifier cannot write."""
+    the verifier names, which the changes view says passed, and your answer citing the test's record, let it finish:
+    its verdict cites the commit, which it read through `repo.commit`, as the reviewer's review does, having read it
+    so too, and your answer, so the record ties the verdict to your test. The stand-ins show the flow, and nothing of
+    what Codex's read-only sandbox or the approvals denied stop: only a run on the real harnesses shows that the
+    verifier cannot write. A commit is recorded at the look after the author's turn, which the reviewer's turn can
+    begin before, and no wait wakes an agent once a commit is recorded, so the reviewer's stand-in may wait a second
+    on the clock and ask again, a bounded retry on real time that its instructions ask of a real model too."""
     check, show = shown(REVIEW, where="team check")[1:]
     [run] = shown(REVIEW, where="--prompt-file")
     asking, testing, watching, answering = shown(REVIEW, where="repo test")
@@ -175,7 +178,8 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
 
     assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(REVIEW, "to-reviewer")), checked
     assert f"needs you: mention inbox/you@1, {asked['gist']}" in showed.stdout
-    assert (tested.code, record["data"]["outcome"], commit_row["tested"]) == (0, "passed", ref(record)), tested.stderr
+    assert (tested.code, record["data"]["outcome"]) == (0, "passed"), tested.stderr
+    assert (commit_row["tests"], commit_row["tested"]) == ("passed", ref(record))
     assert answered.code == 0 and ran.code == 0, answered.stderr
     assert ran.stdout.endswith(expected(REVIEW, "settled")), ran.stdout[-600:]
     events = await journal(repo, "review")
@@ -183,12 +187,15 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
     [answer] = [event for event in events if event["stream"] == "inbox/verifier" and event["actor"] == "human:you"]
     done = {event["stream"]: event for event in events if event["type"] == "task.completed"}
     ends = {event["agent"]: event for event in events if event["type"] == "agent.finished"}
-    offered = [event["data"] for event in events if (event["type"], event["agent"]) == ("context.offered", "verifier")]
-    read = [item["ref"] for data in offered if data["how"] == "read" for item in data["items"]]
+    offered = [event for event in events if event["type"] == "context.offered" and event["data"]["how"] == "read"]
+    read = {
+        agent: [item["ref"] for event in offered if event["agent"] == agent for item in event["data"]["items"]]
+        for agent in ("reviewer", "verifier")
+    }
     assert record["data"]["sha"] == commit["data"]["sha"] and commit["data"]["sha"].startswith(sha)
     assert commit["data"]["made_in"] == "@author"
-    assert asked["based_on"] == [ref(commit)] and ref(commit) in read
-    assert done["task/to-reviewer/1"]["based_on"] == [ref(commit)]
+    assert asked["based_on"] == [ref(commit)] and ref(commit) in read["verifier"]
+    assert done["task/to-reviewer/1"]["based_on"] == [ref(commit)] and ref(commit) in read["reviewer"]
     assert answer["based_on"] == [ref(record)] and answer["data"]["reply_to"] == "inbox/you@1"
     verdict = [ref(commit), "task/to-verifier/1@1", ref(answer)]
     assert done["task/to-verifier/1"]["based_on"] == ends["verifier"]["based_on"] == verdict
