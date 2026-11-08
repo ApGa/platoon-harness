@@ -217,9 +217,20 @@ def _header(source: str, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Clas
     return _uncommented("\n".join([*lines[first - 1 : body.lineno - 1], before]))
 
 
+def _attribute(node: ast.stmt) -> bool:
+    """Whether a statement in a class's body gives it an attribute, annotated or assigned, whose name has no leading
+    underscore."""
+    match node:
+        case ast.AnnAssign(target=ast.Name(id=name)):
+            return not name.startswith("_")
+        case ast.Assign(targets=targets):
+            return all(isinstance(target, ast.Name) and not target.id.startswith("_") for target in targets)
+    return False
+
+
 def _stub(source: str, node: ast.stmt) -> str:
-    """A statement as a stub declares it, in its source's own words: a function with no body, a class with its fields
-    and its `__init__`, and anything else whole."""
+    """A statement as a stub declares it, in its source's own words: a function with no body, a class with its
+    attributes and its `__init__`, and anything else whole."""
     match node:
         case ast.FunctionDef() | ast.AsyncFunctionDef():
             return f"{_header(source, node)} ..."
@@ -227,7 +238,7 @@ def _stub(source: str, node: ast.stmt) -> str:
             kept = [
                 _stub(source, item) if isinstance(item, ast.FunctionDef) else _segment(source, item)
                 for item in node.body
-                if isinstance(item, ast.AnnAssign) or (isinstance(item, ast.FunctionDef) and item.name == "__init__")
+                if _attribute(item) or (isinstance(item, ast.FunctionDef) and item.name == "__init__")
             ]
             members = textwrap.indent("\n".join(kept), "    ")
             return f"{_header(source, node)}\n{members}" if kept else f"{_header(source, node)} ..."
@@ -321,8 +332,9 @@ whatever its spelling. Below 1.0, as [CHANGELOG](../../CHANGELOG.md) says, a min
 patch release only fixes bugs.
 
 Each name is shown as a stub declares it, in its source's own words without comments, then its docstring: a function by
-its signature, a class by its fields and its `__init__`, then each method of its own whose name has no leading
-underscore, and anything else by its assignment. A name that a module imports from another that lists it links there.
+its signature, a class by its attributes whose names have no leading underscore and its `__init__`, then each method of
+its own whose name has no leading underscore, and anything else by its assignment. A name that a module imports from
+another that lists it links there.
 
 A module or name marked **Experimental** is one that [STATUS](../STATUS.md) calls experimental: it works, but rests on
 an unstable upstream surface or lacks coverage. The mark quotes the start of the row that says so.

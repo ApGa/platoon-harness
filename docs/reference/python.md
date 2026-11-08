@@ -10,8 +10,9 @@ whatever its spelling. Below 1.0, as [CHANGELOG](../../CHANGELOG.md) says, a min
 patch release only fixes bugs.
 
 Each name is shown as a stub declares it, in its source's own words without comments, then its docstring: a function by
-its signature, a class by its fields and its `__init__`, then each method of its own whose name has no leading
-underscore, and anything else by its assignment. A name that a module imports from another that lists it links there.
+its signature, a class by its attributes whose names have no leading underscore and its `__init__`, then each method of
+its own whose name has no leading underscore, and anything else by its assignment. A name that a module imports from
+another that lists it links there.
 
 A module or name marked **Experimental** is one that [STATUS](../STATUS.md) calls experimental: it works, but rests on
 an unstable upstream surface or lacks coverage. The mark quotes the start of the row that says so.
@@ -1987,7 +1988,8 @@ It knows nothing of messages, boards, tasks or harnesses; those are extensions o
 ### `platoon_harness.kernel.Args`
 
 ```python
-class Args(BaseModel): ...
+class Args(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 ```
 
 An op's arguments. Undeclared fields are refused, and no type is coerced.
@@ -2059,7 +2061,22 @@ One row of the outbox.
 ### `platoon_harness.kernel.Effects`
 
 ```python
-class Effects(View): ...
+class Effects(View):
+    schema = """
+    CREATE TABLE v_effects(
+        id INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL,
+        state TEXT NOT NULL,
+        on_uncertain TEXT NOT NULL CHECK (on_uncertain IN ('retry', 'reconcile', 'surface')),
+        timeout REAL,
+        priority INTEGER NOT NULL,
+        agent TEXT,
+        attempts INTEGER NOT NULL,
+        after INTEGER,
+        data TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX v_effects_state ON v_effects(state, priority);
+    """
 ```
 
 The outbox and the input to recovery.
@@ -2257,7 +2274,16 @@ Who may run which ops on what. Absence means deny.
 ### `platoon_harness.kernel.Grants`
 
 ```python
-class Grants(View): ...
+class Grants(View):
+    schema = """
+    CREATE TABLE v_grants(
+        who TEXT NOT NULL,
+        ops TEXT NOT NULL,
+        "on" TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        PRIMARY KEY (who, ops, "on")
+    ) WITHOUT ROWID, STRICT;
+    """
 ```
 
 The compiled topology: `(who, ops, on)`, the only authorization input.
@@ -2332,6 +2358,7 @@ recovers the session, and a retry under its key answers from the journal if it l
 
 ```python
 class Kernel:
+    runtime = Principal(id="runtime")
     def __init__(
         self,
         folder: Path,
@@ -2764,7 +2791,23 @@ def name(self) -> str: ...
 ### `platoon_harness.kernel.Principals`
 
 ```python
-class Principals(View): ...
+class Principals(View):
+    version = 2
+    schema = """
+    CREATE TABLE v_principals(
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        role TEXT,
+        parent TEXT,
+        path TEXT NOT NULL,
+        state TEXT NOT NULL,
+        token_hash TEXT,
+        scopes TEXT NOT NULL,
+        revoked INTEGER
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_principals_parent ON v_principals(parent);
+    CREATE UNIQUE INDEX v_principals_token ON v_principals(token_hash);
+    """
 ```
 
 The graph of principals: `authorize` reads it inside the transaction, and `path` makes `descendants` a prefix
@@ -2911,7 +2954,8 @@ Every op a kernel holding `extensions` has, its own among them, by name: what ev
 ### `platoon_harness.kernel.Stamps`
 
 ```python
-class Stamps(View): ...
+class Stamps(View):
+    schema = "CREATE TABLE v_stamps(scope TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID, STRICT;"
 ```
 
 What `emit` stamps: the open turn of each agent, the open episode, and the version of any stream.
@@ -3035,7 +3079,17 @@ The data of a `timer.set` event: run `op` at `due`. `key` names one firing and i
 ### `platoon_harness.kernel.Timers`
 
 ```python
-class Timers(View): ...
+class Timers(View):
+    schema = """
+    CREATE TABLE v_timers(
+        key TEXT PRIMARY KEY,
+        due REAL NOT NULL,
+        op TEXT NOT NULL,
+        args TEXT NOT NULL,
+        seq INTEGER NOT NULL
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_timers_due ON v_timers(due, seq);
+    """
 ```
 
 Timers set and not yet cleared.
@@ -3073,7 +3127,8 @@ Whether a timer is set for anything but `ops`, however many of those come first.
 ### `platoon_harness.kernel.Tombstones`
 
 ```python
-class Tombstones(View): ...
+class Tombstones(View):
+    schema = "CREATE TABLE v_tombstones(sha256 TEXT PRIMARY KEY, seq INTEGER NOT NULL) WITHOUT ROWID, STRICT;"
 ```
 
 Bodies redacted for good. The event and its hash survive; the bytes do not.
@@ -3196,7 +3251,6 @@ class View:
     name: ClassVar[str]
     version: ClassVar[int] = 1
     schema: ClassVar[str] = ""
-    _folds: ClassVar[dict[str, list[str]]]
     def __init__(self, db: sqlite3.Connection) -> None: ...
 ```
 
@@ -3346,7 +3400,58 @@ Whether a turn is on its way to this agent.
 ### `platoon_harness.primitives.Agents`
 
 ```python
-class Agents(View): ...
+class Agents(View):
+    version = 14
+    schema = """
+    CREATE TABLE v_agents(
+        name TEXT PRIMARY KEY,
+        role TEXT NOT NULL,
+        parent TEXT,
+        depth INTEGER NOT NULL,
+        stays INTEGER NOT NULL,
+        asked INTEGER NOT NULL,
+        state TEXT NOT NULL,
+        status TEXT,
+        reason TEXT,
+        harness TEXT NOT NULL,
+        model TEXT,
+        on_parent_exit TEXT NOT NULL,
+        persistent INTEGER,
+        resume INTEGER,
+        native TEXT,
+        tool_timeout_s REAL,
+        boundaries TEXT NOT NULL,
+        held_by TEXT,
+        goal TEXT NOT NULL,
+        goal_body TEXT,
+        unbegun INTEGER NOT NULL,
+        activity TEXT,
+        final_gist TEXT,
+        final_body TEXT,
+        final_ref TEXT,
+        finishing INTEGER NOT NULL DEFAULT 0,
+        finish_gist TEXT,
+        finish_body TEXT,
+        finish_ref TEXT,
+        stopped TEXT,
+        failure TEXT,
+        failures INTEGER NOT NULL DEFAULT 0,
+        retry_at REAL NOT NULL DEFAULT 0,
+        quieted INTEGER NOT NULL DEFAULT 0,
+        levels TEXT NOT NULL DEFAULT '{}',
+        idle_since REAL,
+        resting INTEGER NOT NULL DEFAULT 0,
+        exits INTEGER NOT NULL DEFAULT 0,
+        login TEXT,
+        instructions TEXT,
+        workspace TEXT,
+        removed INTEGER NOT NULL DEFAULT 0,
+        kept TEXT,
+        backend TEXT NOT NULL DEFAULT '{}'
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_agents_parent ON v_agents(parent);
+    CREATE INDEX v_agents_state ON v_agents(state);
+    """
 ```
 
 Everyone ever spawned, live or not.
@@ -3612,7 +3717,23 @@ whole ask that `body` leaves out: a driver sends the ask whole, and the host, ma
 ### `platoon_harness.primitives.Approvals`
 
 ```python
-class Approvals(View): ...
+class Approvals(View):
+    schema = """
+    CREATE TABLE v_approvals(
+        id TEXT PRIMARY KEY,
+        agent TEXT NOT NULL,
+        gist TEXT NOT NULL,
+        state TEXT NOT NULL,
+        verdict TEXT,
+        resolved_by TEXT,
+        via TEXT,
+        effect INTEGER,
+        answered INTEGER NOT NULL,
+        outcome TEXT
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_approvals_agent ON v_approvals(agent, state);
+    CREATE INDEX v_approvals_effect ON v_approvals(effect);
+    """
 ```
 
 Every approval, whichever fact it has reached.
@@ -3677,7 +3798,25 @@ def pending_for(self, agent: str) -> list[Approval]: ...
 ### `platoon_harness.primitives.Attention`
 
 ```python
-class Attention(View): ...
+class Attention(View):
+    version = 6
+    schema = """
+    CREATE TABLE v_attention(
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        agent TEXT,
+        gist TEXT NOT NULL,
+        since_seq INTEGER NOT NULL,
+        version INTEGER NOT NULL,
+        actions TEXT NOT NULL,
+        open INTEGER NOT NULL,
+        seq INTEGER NOT NULL
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_attention_open ON v_attention(open, since_seq);
+    CREATE INDEX v_attention_seq ON v_attention(seq);
+    CREATE TABLE v_attention_conflicts(workspace TEXT PRIMARY KEY, gist TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_attention_budgets(scope TEXT PRIMARY KEY, set_to TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    """
 ```
 
 Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
@@ -3898,7 +4037,22 @@ below it, which exposure then never answers `not_seen`; and `purpose`, a purpose
 ### `platoon_harness.primitives.Boards`
 
 ```python
-class Boards(View): ...
+class Boards(View):
+    schema = """
+    CREATE TABLE v_boards(
+        seq INTEGER PRIMARY KEY,
+        board TEXT NOT NULL,
+        name TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        actor TEXT NOT NULL,
+        gist TEXT NOT NULL,
+        body TEXT,
+        fields TEXT NOT NULL,
+        latest INTEGER NOT NULL
+    ) STRICT;
+    CREATE UNIQUE INDEX v_boards_version ON v_boards(board, name, version);
+    CREATE INDEX v_boards_latest ON v_boards(board, latest, seq);
+    """ + ("CREATE VIRTUAL TABLE v_boards_text USING fts5(name, gist, fields);" if FTS5 else "")
 ```
 
 One row per version. Text search covers names, gists and fields, never a body: a fold cannot read one, and a
@@ -3961,7 +4115,39 @@ Boundary = Literal["turn", "tool", "model_call"]
 ### `platoon_harness.primitives.Budgets`
 
 ```python
-class Budgets(View): ...
+class Budgets(View):
+    version = 3
+    schema = """
+    CREATE TABLE v_budgets(
+        scope TEXT PRIMARY KEY,
+        limits TEXT NOT NULL,
+        estimate TEXT NOT NULL,
+        since REAL NOT NULL
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_budgets_spent(
+        scope TEXT NOT NULL,
+        unit TEXT NOT NULL,
+        amount REAL NOT NULL,
+        label TEXT NOT NULL,
+        unmeasured INTEGER NOT NULL,
+        PRIMARY KEY (scope, unit)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_budgets_reserved(
+        agent TEXT NOT NULL,
+        unit TEXT NOT NULL,
+        role TEXT NOT NULL,
+        amount REAL NOT NULL,
+        waking INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (agent, unit)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_budgets_turn(
+        agent TEXT NOT NULL,
+        unit TEXT NOT NULL,
+        amount REAL NOT NULL,
+        label TEXT NOT NULL,
+        PRIMARY KEY (agent, unit)
+    ) WITHOUT ROWID, STRICT;
+    """
 ```
 
 Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster.
@@ -4123,7 +4309,18 @@ gave. Its attribution is its agent's, and it is eligible when its agent is and i
 ### `platoon_harness.primitives.Calls`
 
 ```python
-class Calls(View): ...
+class Calls(View):
+    schema = """
+    CREATE TABLE v_calls(
+        agent TEXT NOT NULL, call_id TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (agent, call_id)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_calls_items(
+        agent TEXT NOT NULL, native_id TEXT NOT NULL, seq INTEGER NOT NULL, call_id TEXT, PRIMARY KEY (agent, native_id)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_calls_turns(
+        agent TEXT NOT NULL, seq INTEGER NOT NULL, by TEXT, PRIMARY KEY (agent, seq)
+    ) WITHOUT ROWID, STRICT;
+    """
 ```
 
 What each agent's harness reported of its model calls, by the id it gave each, of its tool items, by theirs,
@@ -4202,7 +4399,20 @@ on a gateway's access with nothing of the user's, which is the one launch a gate
 ### `platoon_harness.primitives.Changes`
 
 ```python
-class Changes(View): ...
+class Changes(View):
+    version = 3
+    schema = """
+    CREATE TABLE v_changes(
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        workspace TEXT,
+        row TEXT NOT NULL,
+        open INTEGER NOT NULL,
+        seq INTEGER NOT NULL
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_changes_seq ON v_changes(seq);
+    CREATE INDEX v_changes_workspace ON v_changes(workspace, kind);
+    """
 ```
 
 What changed, as looks found it, a row for each recorded commit, with the seq that `recorded` it, its `tests`,
@@ -4269,7 +4479,8 @@ whoever adds to a queue may wait on its tasks.
 ### `platoon_harness.primitives.Channels`
 
 ```python
-class Channels(View): ...
+class Channels(View):
+    schema = "CREATE TABLE v_channels(stream TEXT PRIMARY KEY, settings TEXT NOT NULL) WITHOUT ROWID, STRICT;"
 ```
 
 Every channel. An agent's inbox is one, made at spawn from its role.
@@ -4380,7 +4591,11 @@ credit: nobody is weighed or ranked.
 ### `platoon_harness.primitives.Counters`
 
 ```python
-class Counters(View): ...
+class Counters(View):
+    schema = """
+    CREATE TABLE v_counters(type TEXT PRIMARY KEY, events INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_counters_refused(code TEXT PRIMARY KEY, events INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    """
 ```
 
 How many events of each type the journal holds, and of the refusals among them how many of each code, counted as
@@ -4438,7 +4653,58 @@ The reasons only the runtime can give a turn, each with what cut that turn off, 
 ### `platoon_harness.primitives.Deliveries`
 
 ```python
-class Deliveries(View): ...
+class Deliveries(View):
+    version = 12
+    schema = """
+    CREATE TABLE v_deliveries(
+        seq INTEGER PRIMARY KEY,
+        stream TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        ref TEXT NOT NULL,
+        delivery TEXT NOT NULL,
+        due REAL NOT NULL,
+        entry TEXT NOT NULL,
+        answers INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX v_deliveries_stream ON v_deliveries(stream, seq);
+    CREATE INDEX v_deliveries_ref ON v_deliveries(ref, seq);
+    CREATE TABLE v_deliveries_audience(
+        reader TEXT NOT NULL,
+        stream TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        PRIMARY KEY (reader, stream, seq)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_cursors(
+        reader TEXT NOT NULL,
+        stream TEXT NOT NULL,
+        offered INTEGER NOT NULL DEFAULT 0,
+        delivered INTEGER NOT NULL DEFAULT 0,
+        acked INTEGER NOT NULL DEFAULT 0,
+        closed INTEGER NOT NULL DEFAULT 0,
+        shown INTEGER NOT NULL DEFAULT 0,
+        offer INTEGER,
+        PRIMARY KEY (reader, stream)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_offers(
+        input INTEGER PRIMARY KEY,
+        reader TEXT NOT NULL,
+        how TEXT NOT NULL,
+        anchor TEXT,
+        positions TEXT NOT NULL,
+        before TEXT NOT NULL,
+        effect INTEGER,
+        delivered INTEGER NOT NULL,
+        taken INTEGER NOT NULL DEFAULT 0,
+        hops INTEGER NOT NULL,
+        asked INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX v_deliveries_offers_effect ON v_deliveries_offers(effect);
+    CREATE INDEX v_deliveries_offers_anchor ON v_deliveries_offers(reader, anchor) WHERE delivered = 0;
+    CREATE TABLE v_deliveries_heard(agent TEXT PRIMARY KEY, hops INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_blocked(agent TEXT PRIMARY KEY, why TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_quiet(agent TEXT PRIMARY KEY, upto INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_deliveries_launch(agent TEXT PRIMARY KEY, input INTEGER NOT NULL) WITHOUT ROWID, STRICT;
+    """
 ```
 
 Entries, the audience each one recorded, and a cursor per `(reader, stream)`, held here and not by readers. A
@@ -4817,7 +5083,56 @@ What `exposure` answers: never a boolean.
 ### `platoon_harness.primitives.Exposures`
 
 ```python
-class Exposures(View): ...
+class Exposures(View):
+    schema = """
+    CREATE TABLE v_exposures(
+        offer INTEGER NOT NULL,
+        item INTEGER NOT NULL,
+        agent TEXT NOT NULL,
+        stream TEXT,
+        version INTEGER,
+        ref TEXT NOT NULL,
+        form TEXT NOT NULL,
+        PRIMARY KEY (offer, item)
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_exposures_event ON v_exposures(stream, version, agent, offer);
+    CREATE TABLE v_exposures_offers(
+        offer INTEGER PRIMARY KEY,
+        ref TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        how TEXT NOT NULL,
+        key TEXT,
+        anchor TEXT,
+        v INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX v_exposures_offers_agent ON v_exposures_offers(agent, offer);
+    CREATE TABLE v_exposures_confirmed(
+        offer INTEGER PRIMARY KEY,
+        ref TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        turn TEXT,
+        boundary TEXT,
+        evidence TEXT,
+        native_id TEXT
+    ) STRICT;
+    CREATE INDEX v_exposures_confirmed_agent ON v_exposures_confirmed(agent, seq);
+    CREATE TABLE v_exposures_compactions(
+        seq INTEGER PRIMARY KEY,
+        ref TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        forgotten TEXT
+    ) STRICT;
+    CREATE INDEX v_exposures_compactions_agent ON v_exposures_compactions(agent, seq);
+    CREATE TABLE v_exposures_starts(
+        seq INTEGER PRIMARY KEY,
+        agent TEXT NOT NULL,
+        coverage TEXT NOT NULL,
+        levels TEXT NOT NULL,
+        assurance TEXT
+    ) STRICT;
+    CREATE INDEX v_exposures_starts_agent ON v_exposures_starts(agent, seq);
+    """
 ```
 
 What the runtime offered each agent, item by item, what its harness said it took, its compactions and its starts.
@@ -4995,7 +5310,18 @@ A gap a driver saw. Its plane is the gap's own.
 ### `platoon_harness.primitives.Gaps`
 
 ```python
-class Gaps(View): ...
+class Gaps(View):
+    version = 2
+    schema = """
+    CREATE TABLE v_gaps(
+        seq INTEGER PRIMARY KEY,
+        agent TEXT NOT NULL,
+        what TEXT NOT NULL,
+        plane TEXT NOT NULL,
+        began INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX v_gaps_began ON v_gaps(agent, began, seq);
+    """
 ```
 
 Every incident gap by its agent and where it `began`: where it stands, or the `since` that a gap recorded after
@@ -5057,7 +5383,10 @@ How many gaps but those of the kinds `besides` the record held of each agent at 
 ### `platoon_harness.primitives.Groups`
 
 ```python
-class Groups(View): ...
+class Groups(View):
+    schema = """
+    CREATE TABLE v_groups(name TEXT PRIMARY KEY, rule TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    """
 ```
 
 Named membership rules. A group's generation is the version of its stream.
@@ -5232,7 +5561,16 @@ in is refused with how many there are.
 ### `platoon_harness.primitives.Looks`
 
 ```python
-class Looks(View): ...
+class Looks(View):
+    version = 4
+    schema = """
+    CREATE TABLE v_looks(workspace TEXT PRIMARY KEY, reading TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_commits(
+        sha TEXT PRIMARY KEY, ref TEXT NOT NULL, isolated TEXT, found_in TEXT
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_isolated(workspace TEXT PRIMARY KEY) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_looks_diffs(sha TEXT PRIMARY KEY, effect INTEGER NOT NULL, ref TEXT) WITHOUT ROWID, STRICT;
+    """
 ```
 
 Each workspace's last look, which the next one starts from, every isolated workspace, the ref of each commit the
@@ -5566,7 +5904,20 @@ A harness is up. `tools_visible` is a list only when it comes from an observed s
 ### `platoon_harness.primitives.References`
 
 ```python
-class References(View): ...
+class References(View):
+    schema = """
+    CREATE TABLE v_references_cited(stream TEXT NOT NULL, version INTEGER NOT NULL, seq INTEGER NOT NULL) STRICT;
+    CREATE INDEX v_references_cited_event ON v_references_cited(stream, version, seq);
+    CREATE TABLE v_references_caused(
+        cause INTEGER NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (cause, seq)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_references_parents(
+        sha TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (sha, seq)
+    ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_references_anchors(
+        agent TEXT NOT NULL, anchor TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (agent, anchor, seq)
+    ) WITHOUT ROWID, STRICT;
+    """
 ```
 
 The references events hold, by what they point at: what cites an event, what follows from one, which commits
@@ -5687,7 +6038,12 @@ its harness, or under a Codex `callId` to the Code Mode script that made the cal
 ### `platoon_harness.primitives.SessionRecord`
 
 ```python
-class SessionRecord(View): ...
+class SessionRecord(View):
+    name = "session"
+    version = 2
+    schema = """
+    CREATE TABLE v_session(id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL, settings TEXT NOT NULL) STRICT;
+    """
 ```
 
 One row, once the session is open. A session that was closing is `closed` once its owner has stopped, as nothing
@@ -5863,7 +6219,28 @@ Whether its lease holds by this clock. Time passing is enough: no event need hav
 ### `platoon_harness.primitives.Tasks`
 
 ```python
-class Tasks(View): ...
+class Tasks(View):
+    schema = """
+    CREATE TABLE v_tasks(
+        queue TEXT NOT NULL,
+        id TEXT NOT NULL,
+        state TEXT NOT NULL,
+        gist TEXT NOT NULL,
+        body TEXT,
+        owner TEXT,
+        fence INTEGER,
+        lease_until REAL,
+        claimed_at REAL,
+        attempts INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        result TEXT,
+        result_body TEXT,
+        result_ref TEXT,
+        PRIMARY KEY (queue, id)
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_tasks_state ON v_tasks(queue, state, seq);
+    CREATE INDEX v_tasks_owner ON v_tasks(owner, state);
+    """
 ```
 
 Tasks by queue, oldest first.
@@ -6069,7 +6446,31 @@ Verdict = Literal["allow", "deny"]
 ### `platoon_harness.primitives.Waits`
 
 ```python
-class Waits(View): ...
+class Waits(View):
+    version = 2
+    schema = """
+    CREATE TABLE v_waits(
+        id INTEGER PRIMARY KEY,
+        waiter TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        left INTEGER NOT NULL,
+        after INTEGER,
+        deadline REAL,
+        hops INTEGER NOT NULL,
+        closed TEXT
+    ) STRICT;
+    CREATE INDEX v_waits_waiter ON v_waits(waiter);
+    CREATE INDEX v_waits_holding ON v_waits(left) WHERE closed IS NULL;
+    CREATE INDEX v_waits_due ON v_waits(deadline) WHERE closed IS NULL;
+    CREATE TABLE v_waits_conditions(
+        wait INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        stream TEXT NOT NULL,
+        progress TEXT NOT NULL,
+        PRIMARY KEY (wait, position)
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_waits_conditions_stream ON v_waits_conditions(stream);
+    """
 ```
 
 Waits, how each closed, and the folded progress of those still open.
@@ -7886,7 +8287,8 @@ A duration such as `30m`, held in its largest exact unit, so `60m` and `1h` are 
 ### `platoon_harness.schema.Model`
 
 ```python
-class Model(BaseModel): ...
+class Model(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 ```
 
 A configuration object: immutable, and refusing keys it does not declare. Input stays out of an error, even a
@@ -9978,6 +10380,7 @@ The ACP driver of platoon-harness, a first-party extension that uses the SDK's p
 
 ```python
 class AcpDriver:
+    name = "acp"
     inherits: tuple[str, ...] = ()
     def __init__(self, command: Sequence[str]) -> None: ...
 ```
@@ -10063,6 +10466,18 @@ measures, and stable ACP neither shows an agent's own agents nor turns them off.
 
 ```python
 class OpenCodeDriver(AcpDriver):
+    name = "opencode"
+    inherits = (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+    )
     def __init__(self) -> None: ...
 ```
 

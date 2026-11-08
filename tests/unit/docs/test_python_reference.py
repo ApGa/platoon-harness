@@ -53,6 +53,16 @@ def test_the_python_reference_is_made_again_from_the_public_names():
     assert sorted(name for name, owned in owners.items() if not owned & headings) == []
 
 
+def test_a_class_is_shown_with_each_attribute_whose_name_has_no_leading_underscore():
+    """`Kernel.runtime`, assigned with no annotation, which a scenario submits as, is shown, and no attribute whose name
+    has a leading underscore is, such as `View._folds`."""
+    stubs = re.findall(r"^```python\n(class .*?)^```$", PAGE.read_text(), re.MULTILINE | re.DOTALL)
+    kernel = next(stub for stub in stubs if stub.startswith("class Kernel:"))
+
+    assert '    runtime = Principal(id="runtime")\n' in kernel
+    assert [line for stub in stubs for line in stub.splitlines() if line.startswith("    _")] == []
+
+
 def test_each_link_within_the_page_lands_on_the_heading_it_names():
     """GitHub numbers a repeated anchor by the headings before it, so `platoon_harness.Session`, whose heading comes
     before its module's, `platoon_harness.session`, takes the anchor without a number, and a link to the module takes
