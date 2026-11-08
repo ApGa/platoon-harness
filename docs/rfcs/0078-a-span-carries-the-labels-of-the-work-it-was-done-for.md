@@ -16,8 +16,9 @@ A team file declares `labels`, each a name with the values it may take, fixed fo
 `agent.spawned` payload 4; each tool that takes them shows each label's values in its schema, and none where the team declares
 none. Each span carries the labels of the work it was done for: of the task its agent held while its calls were made, from the
 call after the one that claimed it through the one that completed, failed or released it; else those its agent was spawned with;
-else none; and None, unknown, where its calls were made under claims of different labels or the record cannot place a claim or
-its end. `spans` answers them beside the claims each span held, which is the training contract a keyed baseline reads.
+else none; and None, unknown, where the labels of the tasks it held or may have held differ. `spans` answers them beside the
+claims each span held, None where the record cannot place a claim or its end to say, which is the training contract a keyed
+baseline reads.
 `propagate@4` shares what a claim and its result keep equally among the spans that held the claim, so work done before a
 progress message cut a span is credited through its task. It takes `propagate@3`'s place, as each version before took its
 predecessor's, and an earlier version is reached by pinning an earlier SDK.

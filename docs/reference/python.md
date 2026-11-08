@@ -9220,7 +9220,7 @@ async def spans(self, agent: str, *, after: str | None = None) -> Spans: ...
 Each span of an agent, oldest first: each turn of it cut after each model call that chose a write of
 content, as the record joins them, each span named by its last call's `model.called`, with its first call, its
 turn, its writes, the claims its agent held while its calls were made and the labels of the work it was done
-for, None where unknown. Pass `cursor` as `after` for the next page.
+for, each None where unknown. Pass `cursor` as `after` for the next page.
 
 **`interactions`**
 
