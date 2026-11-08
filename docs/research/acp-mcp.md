@@ -1,12 +1,13 @@
 # ACP and MCP: protocol research for platoon-harness
 
-> Background research, dated 2026-11-02 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
+> Background research, dated 2026-11-02 to 2026-11-08 and not maintained: [reference/compatibility.md](../reference/compatibility.md) is current.
 
 ## Inspected
 
 | Project | Commit or version | Date | License |
 |---|---|---|---|
 | ACP spec (`agentclientprotocol/agent-client-protocol`) | `212f0cace08a`; crate 1.15.0; schema v1 1.29.0; schema v2 2.0.0-alpha.12 | 2026-11-01 | Apache-2.0 |
+| ACP schema v1 (`schema/v1/schema.json`) | default branch at crate 1.15.1 (section 6) | 2026-11-08 | Apache-2.0 |
 | ACP Python SDK (`agent-client-protocol`) | clone `9853d8b514d6`; wheels 0.12.1 (2026-08-16) and 1.0.0rc3 (2026-10-12) | 2026-10-29 | Apache-2.0 (LICENSE file; no metadata field) |
 | MCP spec | `d0e246ea3c69`; current revision 2026-07-28 | 2026-10-31 | Apache-2.0 for new work, MIT transition, docs CC-BY-4.0 |
 | MCP Python SDK (`mcp`) | clone `d7845c073a2b`; wheel 2.3.0 (2026-10-02) with `mcp-types` 2.3.0 | 2026-10-27 | MIT |
@@ -15,6 +16,7 @@
 | `@agentclientprotocol/claude-agent-acp` | 0.99.1 (npm, probed `initialize`) | 2026-11-02 | Apache-2.0 (npm, LICENSE); registry says `proprietary` |
 | `@agentclientprotocol/codex-acp` | 2.5.0 (npm, probed `initialize`) | 2026-11-02 | Apache-2.0 |
 | OpenCode (`@opencode/cli`) | clone `ff90ed91607c`; CLI 2.2.5 probed | 2026-11-02 | MIT |
+| OpenCode (`@opencode/cli`, `@opencode/core`) | 2.2.6, installed and read, never run (section 6) | 2026-11-08 | MIT |
 | OpenHands CLI / SDK | CLI `283c6ac3610f` (1.16.0); SDK clone `988494576218`; `openhands-sdk` 1.59.0 on PyPI | 2026-11-01 | MIT |
 | pi | `c9f4c7b9fcd0` (`@earendil-works/pi-mcp` 1.4.0) | 2026-11-01 | MIT |
 | ACP registry | CDN `registry/v1/latest/registry.json`, version 1.0.0, 43 agents | retrieved 2026-11-02 | per entry |
@@ -262,6 +264,43 @@ Resolver probes with `uv pip compile --python-version 3.12`:
 | `mcp==2.3.0` + acp rc3 + `claude-agent-sdk` | OK (`claude-agent-sdk` allows `mcp>=1.23,<3`) |
 
 So an OpenHands driver cannot share an environment with our MCP service, and unpinned extras can silently pick a very old OpenHands. The OpenHands path needs its own process and environment, or a separate lock. Make the extras declared `conflicts` in uv and add a floor on `openhands-sdk`.
+
+## 6. OpenCode past `initialize`, 2026-11-08
+
+Milestone 4 asked for a recorded probe before the ACP driver is checked on OpenCode: does OpenCode 2.2.x, on an
+OpenAI-compatible provider setting, reach `FakeModel` past `initialize`?
+
+**Not run, so unknown.** OpenCode 2.2.6, the newest 2.2 release of `@opencode/cli` (MIT), was installed with npm into a
+tools folder outside the repository, never globally, with its `postinstall` script not run and the platform binary
+(`@opencode/cli-linux-x64`, 2.2.6) linked by hand. The build's permission system refused to run code fetched from the
+network: first the install script, then the binary itself. So OpenCode never ran here, not even `--version`, and
+whether it reaches `FakeModel` past `initialize` is not known. Nothing below was run against `FakeModel`.
+
+**What earlier probes ran.** On 2026-11-02, OpenCode 2.2.5 ran through `opencode acp` against a scripted fake
+OpenAI-compatible server, which is not `FakeModel`, on a provider given in `OPENCODE_CONFIG_CONTENT`
+([adapter-others.md](adapter-others.md#acp-behaviour-live), [the transcript](fixtures/opencode-sample.jsonl)): a prompt
+ended `end_turn`, a shell call asked through `session/request_permission` under an `ask` rule and ran once allowed,
+`session/cancel` ended a prompt `cancelled`, and a second prompt during a turn failed with -32603. An MCP server given in
+`session/new` reached the model behind Code Mode, not as a tool of its own, even with `codemode: false` set for a server
+of the same name in its config.
+
+**What its 2.2.6 files say, read without running them.** `OPENCODE_CONFIG_CONTENT` is one more source the configuration
+is loaded from, beside the files, not a replacement for them
+(`@opencode/core@2.2.6:dist/chunks/persistent-pty-5y7gvv62.js:229`). A server in the configuration takes `codemode`,
+"Expose this server's tools through Code Mode. Defaults to true."
+(`@opencode/core@2.2.6:dist/chunks/persistent-pty-9zwexsxs.js:61`). Neither says what OpenCode does with a server that
+`session/new` gives.
+
+**The v1 schema, read again.** The ACP schema at crate 1.15.1 (`schema/v1/schema.json` on the default branch, retrieved
+2026-11-08) keeps protocol version 1 and adds to what section 1 lists: `systemPrompt` on `session/new`,
+`session/load` and `session/resume`, sent only when the agent advertises `sessionCapabilities.systemPrompt`, whose
+`append` mode every such agent takes; `compaction_update` and `compaction_summary_chunk`, sent only to a client that
+advertises `session.compaction`; and `notice`, only to one that advertises `session.notices`. A permission request's
+`toolCall` is a `ToolCallUpdate`, whose fields left out are those of the tool call it names as last updated.
+
+**What follows.** The ACP driver is checked on a scripted ACP agent the tests own, which is `ScriptedDriver` behind ACP on
+`FakeModel`. The check of OpenCode against `FakeModel` is written, and skips where `opencode` is not on `PATH`, so it has
+not run, and STATUS says so.
 
 ## Implications for platoon-harness
 
