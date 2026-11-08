@@ -487,7 +487,7 @@ class Transcript(ScrollView, can_focus=True):
         self._chosen: Block | None = None
         self._tail_text = ""
         self._tail_lines: list[Strip] = []
-        self._lines: LRUCache[tuple[int, int], Strip] = LRUCache(_CACHE)
+        self._lines: LRUCache[tuple[int, int, int], Strip] = LRUCache(_CACHE)
         self._bodies: LRUCache[tuple[int, int], list[Strip]] = LRUCache(_CACHE // 16)
         self._blank: LRUCache[str, bool] = LRUCache(_CACHE)
         self.reading_bodies: dict[str, list[Block]] = {}
@@ -891,7 +891,8 @@ class Transcript(ScrollView, can_focus=True):
         return found
 
     def _forget(self, block: Block) -> None:
-        self._lines.discard((block.first, self._width))
+        self._lines.discard((block.first, self._width, 0))
+        self._lines.discard((block.first, self._width, HEAD))
         self._bodies.discard((block.first, self._width))
 
     def toggle(self, block: Block | None = None) -> None:
@@ -1126,14 +1127,15 @@ class Transcript(ScrollView, can_focus=True):
         style = self.rich_style
         if line == SPACE:
             return Strip.blank(width, style)
-        if line == HEAD:
-            assert block.said.who is not None
-            return strip_of(block.said.who, width, style)
         if line > 0:
             return self._body(block)[line - 1].crop_extend(0, width, style).apply_style(style)
-        strip = self._lines.get((block.first, width))
+        strip = self._lines.get((block.first, width, line))
         if strip is None:
-            strip = self._lines[(block.first, width)] = strip_of(self._as_drawn(block, width), width, style)
+            shown = block.said.who if line == HEAD else self._as_drawn(block, width)
+            assert shown is not None
+            strip = self._lines[(block.first, width, line)] = strip_of(shown, width, style)
+        if line == HEAD:
+            return strip
         if block is self._chosen and self.has_focus:
             strip = Strip(
                 Segment.apply_style(strip, post_style=self.get_component_rich_style("transcript--chosen")), width

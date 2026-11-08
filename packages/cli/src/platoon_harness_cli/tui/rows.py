@@ -8,6 +8,7 @@ from rich.cells import cell_len
 from rich.segment import Segment
 from rich.style import Style
 from textual import events
+from textual.cache import LRUCache
 from textual.content import Content
 from textual.geometry import Region, Size
 from textual.message import Message
@@ -94,12 +95,22 @@ class Rows(ScrollView, can_focus=True):
         self.cursor: str | None = None
         self._frame = 0
         self._spinning: Timer | None = None
+        self._drawn: LRUCache[tuple[int, int, bool, Style], Strip] = LRUCache(1024)
+
+    def on_mount(self) -> None:
+        self.app.theme_changed_signal.subscribe(self, self._themed)
+
+    def _themed(self, _: object) -> None:
+        """Draw every row again in the theme's colours, which a strip drawn holds."""
+        self._drawn.clear()
+        self.refresh()
 
     def show(self, rows: list[Row]) -> None:
         """Draw these rows, keeping the cursor on its key while that key is shown. The same rows draw nothing."""
         if rows == self.rows:
             return
         self.rows = rows
+        self._drawn.clear()
         keys = self.keys
         if self.cursor not in keys:
             self.cursor = keys[0] if keys else None
@@ -116,8 +127,11 @@ class Rows(ScrollView, can_focus=True):
             self._spinning = None
 
     def _turn(self) -> None:
+        """Turn each spinning row's glyph a frame, drawing those rows alone."""
         self._frame += 1
-        self.refresh()
+        for index, row in enumerate(self.rows):
+            if row.spins:
+                self.refresh_lines(index)
 
     @property
     def keys(self) -> list[str]:
@@ -187,15 +201,23 @@ class Rows(ScrollView, can_focus=True):
         if index >= len(self.rows):
             return Strip.blank(width, self.rich_style)
         row = self.rows[index]
-        line = row.line
-        if row.spins and self._spinning is not None:
-            at = row.lead - 2
-            line = (
-                line[:at] + Content(SPINNER[self._frame % len(SPINNER)], list(line[at : at + 1].spans)) + line[at + 1 :]
-            )
-        strip = strip_of(line, width, self.rich_style)
-        if row.key is not None and row.key == self.cursor:
-            strip = Strip(Segment.apply_style(strip, post_style=self.get_component_rich_style("rows--chosen")), width)
+        chosen = row.key is not None and row.key == self.cursor
+        spinning = row.spins and self._spinning is not None
+        key = (index, width, chosen, self.rich_style)
+        strip = None if spinning else self._drawn.get(key)
+        if strip is None:
+            line = row.line
+            if spinning:
+                at = row.lead - 2
+                frame = Content(SPINNER[self._frame % len(SPINNER)], list(line[at : at + 1].spans))
+                line = line[:at] + frame + line[at + 1 :]
+            strip = strip_of(line, width, self.rich_style)
+            if chosen:
+                strip = Strip(
+                    Segment.apply_style(strip, post_style=self.get_component_rich_style("rows--chosen")), width
+                )
+            if not spinning:
+                self._drawn[key] = strip
         if (selection := self.text_selection) is not None:
             strip = highlighted(
                 strip, selection.get_span(index), self.screen.get_component_rich_style("screen--selection")
