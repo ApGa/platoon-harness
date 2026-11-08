@@ -61,7 +61,7 @@ it. [Drivers](../extending/drivers.md#openhands-a-wire-worker) says why, and how
 its own. A wheel carries no such exclusion, so the extra installed from the SDK's wheel, as a published install would
 be, brings `lmnr-claude-code-proxy` unless you exclude it: with uv, by `exclude-dependencies` in your own project's
 `[tool.uv]`, as the checkout's `pyproject.toml` does, or by `uv pip install --excludes` with a file that names it.
-OpenHands keeps no login, so its role needs an auth profile that names its key.
+Either way, platoon-harness itself stays under the MIT license. OpenHands keeps no login, so its role needs an auth profile that names its key.
 
 ## Check the installation
 

@@ -51,7 +51,7 @@ ALLOWED = {
 }
 """Each license a runtime dependency may state, as `stated` reads it: an SPDX identifier, a trove classifier, or the
 words of a `License` field that name one. Each is permissive, but MPL-2.0, whose copyleft reaches only changes to its
-own files."""
+own files: admitting it is the default, pending the owner's confirmation."""
 UNSETTLED = {
     "agent-client-protocol": (),
     "func-timeout": ("License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)",),
@@ -60,7 +60,11 @@ UNSETTLED = {
     "openhands-tools": (),
 }
 """What each distribution the `openhands` extra brings whose license is not on the allowlist states: no license, the
-LGPL, or words that name none. Whether a published extra may bring them is the owner's to rule on."""
+LGPL, or words that name none. Whether a published extra may bring them is the owner's to rule on: the owner's ruling
+that it may bring `lmnr-claude-code-proxy` names that alone."""
+KEPT = "Either way, platoon-harness itself stays under the MIT license."
+"""What the install guide and the SDK's description, its README, say of the extra that brings Laminar's proxy."""
+SDK_README = ROOT / "packages" / "sdk" / "README.md"
 IDENTIFIER = re.compile(r"[^\s()]+")
 
 
@@ -191,7 +195,9 @@ def test_every_runtime_dependency_s_license_is_on_the_allowlist():
 
 def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a_published_install_brings_it():
     """OpenHands' SDK requires `lmnr`, which requires Laminar's proxy. The workspace's lock leaves it out, so no
-    checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it."""
+    checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it, which the
+    owner has ruled a published install may. The guide and the SDK's description say that platoon-harness stays MIT
+    either way."""
     excluded = tool(ROOT)["uv"]["exclude-dependencies"]
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
     guide = " ".join((ROOT / "docs" / "getting-started" / "install.md").read_text().split())
@@ -204,3 +210,4 @@ def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a
     assert "`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`" in guide
     assert "The checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it" in guide
     assert "the extra installed from the SDK's wheel, as a published install would be, brings" in guide
+    assert KEPT in guide and KEPT in " ".join(SDK_README.read_text().split())

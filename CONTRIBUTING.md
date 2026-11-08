@@ -409,7 +409,9 @@ built and checked, ready for the owner to tag and publish.
      [the headless quickstart](docs/how-to/headless.md).
 
    For the first release, also say how to install from PyPI where the package READMEs, the install guide and
-   CHANGELOG's opening say that nothing is published or released yet.
+   CHANGELOG's opening say that nothing is published or released yet, and keep it to Linux: its notes, like the install
+   guide and each package's classifiers, name Linux alone, as nothing has run on macOS, whose CI the owner has put on
+   hold.
 
 3. Check the pull request as the release workflow does, with the commands below, and run the slow tests, which need the
    harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says.

@@ -11,4 +11,4 @@ rest.
 Its `openhands` extra pins OpenHands' SDK and tools. `openhands-sdk` requires `lmnr`, which requires
 `lmnr-claude-code-proxy`, a binary under Laminar's own terms. A checkout's lock leaves it out, but installed from this
 package's wheel, the extra brings `lmnr-claude-code-proxy` unless you exclude it, as uv's `exclude-dependencies` setting
-or `uv pip install --excludes` does.
+or `uv pip install --excludes` does. Either way, platoon-harness itself stays under the MIT license.

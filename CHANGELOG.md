@@ -102,7 +102,9 @@ named here is closed.
   and MPL-2.0. A plain install brings nothing else. The extra brings five distributions that state no license on the
   list, which the test names with what each states: OpenHands' SDK and tools and `agent-client-protocol` state none,
   `func-timeout` the LGPL and `lupa` "MIT style", besides `lmnr-claude-code-proxy`, under Laminar's own terms, which no
-  checkout installs. Whether a published extra may bring them is the owner's to rule on.
+  checkout installs. The owner has ruled that a published extra may bring the proxy, and platoon-harness stays MIT;
+  whether it may bring the five others is the owner's to rule on, and admitting MPL-2.0 is the default until the owner
+  confirms it.
 - **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
   author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
   `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the
