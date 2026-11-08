@@ -5,7 +5,6 @@ from platoon_harness.topology import (
     blackboard,
     git_swarm,
     manager_worker,
-    map_reduce,
     mesh,
     pipeline,
     ring,
@@ -89,10 +88,6 @@ PRESET_TEAMS = {
     "ring": Team(
         roles={"a": Role(harness="codex"), "b": Role(harness="claude"), "c": Role(harness="pi")},
         topology=ring(["a", "b", "c"], laps=2),
-    ),
-    "map-reduce": Team(
-        roles={"mapper": Role(harness="codex", count=16), "reducer": Role(harness="claude")},
-        topology=map_reduce("mapper", "reducer", parallel=16),
     ),
     "git-swarm": Team(
         roles={"worker": Role(harness="codex", workspace="worktree", count=8)},

@@ -604,8 +604,7 @@ check decides what it shows.
 ### Library tier
 
 `platoon_harness.patterns` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) uses the public API only: `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
-`lock`, `request`, `vote`, `supervisor`, `population`, `map_reduce`, `verifier_generator`. These are compositions, never
-scheduler modes.
+`lock`, `request`, `vote`, `supervisor`, `population`, `verifier_generator`. These are compositions, never scheduler modes.
 
 An episode **program** is an async function holding a `program` principal, so control flow never enters config. None runs yet, so
 `team check` refuses a team that names one, which a session would leave waiting for what nothing does (§8). See
@@ -1006,7 +1005,7 @@ max_hops = 8
 
 | Key | Meaning |
 |---|---|
-| `<preset>` | A macro: `manager-worker` `tree` `mesh` `star` `blackboard` `pipeline` `ring` `map-reduce` `git-swarm`, or an extension's. A table named after it, or `[[...]]` to use one twice. Several form a union |
+| `<preset>` | A macro: `manager-worker` `tree` `mesh` `star` `blackboard` `pipeline` `ring` `git-swarm`, or an extension's. A table named after it, or `[[...]]` to use one twice. Several form a union |
 | `edges` | Who may send to whose inbox, as `role: [relation...]`, or a lone relation |
 | `channels` | Each with `kind`, `writers`, `readers`, `delivery`, and kind-specific fields |
 | `groups` | Named membership rules: `roles`, `members` (principal ids), or `order`, which `next` and `prev` walk. Each change bumps the group's stream version, which is its generation |

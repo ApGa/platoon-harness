@@ -614,14 +614,14 @@ async def test_team_check_says_every_problem_at_once_and_exits_78(cli: Cli):
 
 async def test_team_check_and_run_refuse_a_program_none_can_run_with_78(cli: Cli):
     """A team left to a program would never get what it waits for while no program runs, so it costs nothing."""
-    mapped = cli.write("mapped.toml", f'{solo("saying")}[topology.map-reduce]\nmap = "bob"\nreduce = "bob"\n')
+    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\nlive = 1\nepisodes = 1\n')
 
-    checked = await cli.run("team", "check", mapped, "--trust")
-    ran = await cli.run("run", "go", "--team", mapped, "--trust")
+    checked = await cli.run("team", "check", swarm, "--trust")
+    ran = await cli.run("run", "go", "--team", swarm, "--trust")
 
-    refused = "error: topology.program: `map_reduce` cannot run, as no program runs yet: use a topology that names"
+    refused = "error: topology.program: `population` cannot run, as no program runs yet: use a topology that names"
     assert checked.code == 78 and refused in checked.stdout
-    assert ran.code == 78 and "`map_reduce` cannot run" in ran.stderr
+    assert ran.code == 78 and "`population` cannot run" in ran.stderr
     assert not (cli.folder / "home" / "sessions").exists()
 
 

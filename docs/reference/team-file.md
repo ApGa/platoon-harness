@@ -340,19 +340,6 @@ A pipeline whose last stage feeds the first, for at most `laps` times round.
 | `stages` | list of strings | required |
 | `laps` | integer | required |
 
-### map-reduce
-
-At `[topology.map-reduce]`.
-
-A program shards work to mappers and folds their results through reducers. Mappers cannot read each other.
-
-| Key | Type | Default |
-|---|---|---|
-| `map` | string | required |
-| `reduce` | string | required |
-| `parallel` | integer | none |
-| `lease` | string | `"1h"` |
-
 ### git-swarm
 
 At `[topology.git-swarm]`.

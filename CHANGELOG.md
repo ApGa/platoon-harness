@@ -1477,6 +1477,10 @@ named here is closed.
 
 ### Removed
 
+- **The `map-reduce` preset, with `platoon_harness.topology.map_reduce`, which no program runs.** It named a program, `map_reduce`,
+  that nothing runs, so `team check` refused every team that used it, and no user of it beyond itself is in sight. A team that
+  uses it is refused as an unknown preset is: write its queues and board out, and add to them from a script that starts the
+  session as `program:<name>`. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **`runtime.workspaces.NOT_YET`, as `isolated` is given where an extension gives an isolation.** See [RFC 0034](docs/rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md).
 - **`Session.start(human=)`, `prepare(human=)` and `Manifest.human`, which `principal` replaces.** See [RFC 0050](docs/rfcs/0050-a-script-is-a-person-or-a-program.md).
 - **`Authority.budget_owner`, which no authority used: every limit a team states is the session's own.** `open_session` takes no

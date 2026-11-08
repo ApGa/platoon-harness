@@ -18,7 +18,6 @@ from platoon_harness.topology import (
     Topology,
     compile,
     manager_worker,
-    map_reduce,
     mesh,
     pipeline,
     scopes,
@@ -306,11 +305,15 @@ async def test_humans_and_programs_are_bound_by_no_topology(kernel):
 
 
 async def test_writers_program_means_no_agent_writes(kernel):
-    team = Team(roles=roles("mapper", "reducer"), topology=map_reduce("mapper", "reducer"))
+    channels = {
+        "map": Queue(writers="program", readers="role:mapper"),
+        "results": Board(writers=["role:mapper", "role:reducer"], readers=["role:reducer", "program"]),
+    }
+    team = Team(roles=roles("mapper", "reducer"), topology=Topology(channels=channels))
     await install(kernel, team)
     mapper = await enroll(kernel, "agent:m", "mapper")
     reducer = await enroll(kernel, "agent:r", "reducer")
-    program = await enroll(kernel, "program:map_reduce")
+    program = await enroll(kernel, "program:run")
 
     assert await may(kernel, program, "task.add", "queue/map")
     assert not await may(kernel, mapper, "task.add", "queue/map")

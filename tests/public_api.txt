@@ -531,7 +531,6 @@ platoon_harness.topology.git_swarm
 platoon_harness.topology.Group
 platoon_harness.topology.Limits
 platoon_harness.topology.manager_worker
-platoon_harness.topology.map_reduce
 platoon_harness.topology.mesh
 platoon_harness.topology.pipeline
 platoon_harness.topology.preset_name

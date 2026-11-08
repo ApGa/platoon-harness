@@ -10,8 +10,8 @@ own, checked before it spends anything.
 The TOML forms go in a team file, whose every key [the team file reference](../reference/team-file.md) lists.
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
-checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but the two that
-need a program, map-reduce and git-swarm, which it refuses until programs run: see [STATUS.md](../STATUS.md).
+checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but git-swarm,
+which needs a program and which it refuses until programs run: see [STATUS.md](../STATUS.md).
 
 ```python
 from platoon_harness.team import Role, Team
@@ -22,7 +22,6 @@ from platoon_harness.topology import (
     blackboard,
     git_swarm,
     manager_worker,
-    map_reduce,
     mesh,
     pipeline,
     ring,
@@ -249,37 +248,6 @@ critic (codex) may message no one. writer (claude) may message no one.
 writer adds to queue `to-critic`; critic claims from it. Each entry wakes its readers. critic adds to queue `to-writer`; writer claims from it. Each entry wakes its readers. Limits: hops 6. Closes when the session settles.
 ```
 
-### map-reduce
-
-A program holds all the control flow: it shards work to mappers and folds their results through reducers. Mappers cannot read each
-other's results, and the program, not an agent, closes the session. No program runs yet, so `team check` refuses this team, naming it.
-
-```toml
-[roles.mapper]
-harness = "codex"
-count = 16
-
-[roles.reducer]
-harness = "claude"
-
-[topology.map-reduce]
-map = "mapper"
-reduce = "reducer"
-parallel = 16
-```
-
-```python
-team = Team(
-    roles={"mapper": Role(harness="codex", count=16), "reducer": Role(harness="claude")},
-    topology=map_reduce("mapper", "reducer", parallel=16),
-)
-```
-
-```text
-Mappers (codex) may message no one. reducer (claude) may message no one.
-The program adds to queue `map`; mappers claim from it. The program adds to queue `reduce`; reducer claims from it. Mappers and reducer write board `results`; the program and reducer read it. Program `map_reduce` runs it. Closes when the program finishes.
-```
-
 ### git-swarm
 
 A population with no messages and no roles to speak of: commits go to a shared repository, and a program tallies nominations at the end.
@@ -368,7 +336,7 @@ Three rules keep this safe:
   that names both. Defining it alike is fine.
 
 To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls, and give each a different channel name.
-Presets with fixed names (`pipeline`, `ring`, `map-reduce`, `git-swarm`) cannot be used twice over the same stage: write the second out.
+Presets with fixed names (`pipeline`, `ring`, `git-swarm`) cannot be used twice over the same stage: write the second out.
 
 ## Merge worktrees through a queue
 

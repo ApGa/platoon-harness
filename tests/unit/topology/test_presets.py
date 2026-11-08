@@ -17,7 +17,6 @@ from platoon_harness.topology import (
     compile,
     git_swarm,
     manager_worker,
-    map_reduce,
     mesh,
     pipeline,
     ring,
@@ -44,7 +43,6 @@ def test_every_preset_has_a_team_here():
             "blackboard",
             "pipeline",
             "ring",
-            "map-reduce",
             "git-swarm",
         }
     )
@@ -209,18 +207,6 @@ def test_stages_must_link_two_roles():
         pipeline(["solo"])
     with pytest.raises(ConfigError, match="at least two"):
         Team.loads('[roles.a]\nharness = "pi"\n[topology.pipeline]\nstages = []')
-
-
-def test_map_reduce_with_an_llm_reducer():
-    topology = map_reduce("mapper", "reducer", parallel=16)
-    assert topology.channels == {
-        "map": Queue(writers="program", readers="role:mapper", lease="1h", max_attempts=2),
-        "reduce": Queue(writers="program", readers="role:reducer", lease="1h"),
-        "results": Board(writers=["role:mapper", "role:reducer"], readers=["role:reducer", "program"]),
-    }
-    assert topology.program == Program(name="map_reduce", params={"parallel": 16})
-    assert topology.until == "program"
-    assert map_reduce("mapper", "reducer").program == "map_reduce"
 
 
 def test_git_swarm_coordinates_through_artifacts_alone():

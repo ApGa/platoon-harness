@@ -114,19 +114,6 @@ def ring(stages: Sequence[str], *, laps: int) -> Topology:
     return Topology(channels=_stage_queues(links), limits=Limits(max_hops=laps * len(stages)))
 
 
-def map_reduce(map: str, reduce: str, *, parallel: int | None = None, lease: str = "1h") -> Topology:
-    """A program shards work to mappers and folds their results through reducers. Mappers cannot read each other."""
-    return Topology(
-        until="program",
-        program=Program(name="map_reduce", params={"parallel": parallel}) if parallel else "map_reduce",
-        channels={
-            "map": Queue(writers="program", readers=f"role:{map}", lease=lease, max_attempts=2),
-            "reduce": Queue(writers="program", readers=f"role:{reduce}", lease=lease),
-            "results": Board(writers=[f"role:{map}", f"role:{reduce}"], readers=[f"role:{reduce}", "program"]),
-        },
-    )
-
-
 def git_swarm(role: str, *, live: int, episodes: int) -> Topology:
     """A population coordinating through a shared repository alone: no messages, only commits and nominations."""
     return Topology(
@@ -154,8 +141,7 @@ def preset_name(preset: Preset) -> str:
 
 
 PRESETS: dict[str, Preset] = {
-    preset_name(preset): preset
-    for preset in (manager_worker, tree, mesh, star, blackboard, pipeline, ring, map_reduce, git_swarm)
+    preset_name(preset): preset for preset in (manager_worker, tree, mesh, star, blackboard, pipeline, ring, git_swarm)
 }
 
 

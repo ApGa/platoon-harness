@@ -6,7 +6,7 @@ import pytest
 
 from platoon_harness.schema import ConfigError
 from platoon_harness.team import Command, Role, Team
-from platoon_harness.topology import PRESETS, Group, Limits, Topic, Topology, pipeline, tree
+from platoon_harness.topology import PRESETS, Board, Group, Limits, Queue, Topic, Topology, pipeline, tree
 
 from .support import MANAGER_WORKER, PRESET_TEAMS, SECTION_8_RESOLVED
 
@@ -81,13 +81,20 @@ def test_show_describes_a_pipeline():
     )
 
 
-def test_show_describes_map_reduce():
-    assert PRESET_TEAMS["map-reduce"].show() == (
+def test_show_describes_what_a_program_writes_and_reads():
+    channels = {
+        "map": Queue(writers="program", readers="role:mapper"),
+        "results": Board(writers=["role:mapper", "role:reducer"], readers=["role:reducer", "program"]),
+    }
+    team = Team(
+        roles={"mapper": Role(harness="codex", count=16), "reducer": Role(harness="claude")},
+        topology=Topology(channels=channels),
+    )
+    assert team.show() == (
         "Mappers (codex) may message no one. reducer (claude) may message no one.\n"
         "The program adds to queue `map`; mappers claim from it. "
-        "The program adds to queue `reduce`; reducer claims from it. "
         "Mappers and reducer write board `results`; the program and reducer read it. "
-        "Program `map_reduce` runs it. Closes when the program finishes."
+        "Closes when the session settles."
     )
 
 
