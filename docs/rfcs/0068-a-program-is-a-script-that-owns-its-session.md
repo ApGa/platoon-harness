@@ -19,7 +19,8 @@ program: its `program` key and the `Program` model go, and a team or a manifest 
 `until = "program"` stays, and leaves the session to the program that owns it, so a person's start of such a team, by `run`, by the
 terminal UI or by `Session.start` under `human:<name>`, is refused before any cost, naming the script way, and so is a person's
 resume of such a session, by `session resume`. The `map-reduce` preset,
-which only a program could run, goes, and `git-swarm` keeps its channels and its `until`, its program's arguments going with the key.
+which only a program could run, goes, and `git-swarm` keeps its channels and its `until`, its program's arguments going with the key,
+until [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) gives it `live` again, as its `max_live`.
 
 ## Motivation
 
@@ -46,7 +47,7 @@ A program is any Python script that starts a session as `program:<name>` and dri
 async with Session.start(team, name="reviews", principal="program:reviews") as session:
     added = await session.submit("task.add", key="review src/cart.py", queue="reviews", gist="review src/cart.py")
     ...
-    await session.close()
+    await session.submit("session.close", key="close")
 ```
 
 It holds every op, as a person does, since compilation grants `program` every op (section 8). Its message goes as its reader's
@@ -107,13 +108,16 @@ it is in sight. Its channels, two queues the program adds to and a board, are a 
 
 `git-swarm` keeps its `role`, its `nominations` topic, its `inflight` board and `until = "program"`. Its `live` and `episodes` were
 arguments of its `population` program, which only the key carried, so they go with it, rather than be taken and carried out by
-nothing. The git-swarm rework, later in milestone 4, says what a population program takes, and where.
+nothing. The git-swarm rework, later in milestone 4, says what a population program takes, and where: [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) gives `git-swarm` its
+`live` again, required, as the topology's `max_live`, which the kernel holds, and makes `attempts` an argument of
+`platoon_harness.patterns.population`. `episodes` stays gone.
 
 What changes for users:
 
-- **The team file:** `[topology]` takes no `program`, and `git-swarm` no `live` or `episodes`. `map-reduce` is an unknown preset.
+- **The team file:** `[topology]` takes no `program`, and `git-swarm` no `live` or `episodes`, until [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) gives it `live` again.
+  `map-reduce` is an unknown preset.
 - **Python:** `platoon_harness.topology.Program` and `platoon_harness.topology.map_reduce` are gone, and `git_swarm` takes `role`
-  alone.
+  alone, until RFC 0070 makes it `git_swarm(role, *, live)`.
 - **The command line and the terminal UI:** `run` refuses a team under `until = "program"` with exit 78, and the terminal UI's start
   refuses it, each naming the script way. `session resume` refuses a session under it with exit 78, naming its program and the
   script way.
@@ -127,7 +131,7 @@ What changes for users:
 | Keep the key, refused, as RFC 0048 left it | A key that is always refused is still a key the reference documents and a reader takes for a feature |
 | Read an old manifest's `program` and drop it | AGENTS.md forbids a compatibility shim, the project is unreleased, and only a session from before 13926da can hold one |
 | Keep `map-reduce` with a `platoon_harness.patterns.map_reduce` to run it | No user beyond the preset itself is in sight, and the brief's examples do not name it. A pattern built to keep a preset alive is an abstraction with one user |
-| Keep `git-swarm`'s `live` and `episodes`, or carry `live` as `limits.max_live` | The first is a setting nothing carries out (RFC 0048). The second decides, ahead of the git-swarm rework, what a population's `live` means |
+| Keep `git-swarm`'s `live` and `episodes`, or carry `live` as `limits.max_live` | The first is a setting nothing carries out (RFC 0048). The second decides, ahead of the git-swarm rework, what a population's `live` means, which RFC 0070 then decided so |
 | Have `team check` refuse `until = "program"` | A team is checked before anyone starts it, and a script's team is sound. The refusal belongs where the principal is known |
 | Save a program's state for it, as a checkpoint | A second record beside the journal, which a crash can leave disagreeing with it. The journal already holds what the program did |
 | A `key` on each of Session's methods | Every method would grow a parameter that `Session.submit` already takes |
@@ -149,13 +153,14 @@ What changes for users:
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone; `until = "program"` refused under a person's principal, and to a person's resume; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78`, `::test_a_person_s_resume_of_a_session_left_to_its_program_is_refused_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/integration/test_tui.py::test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way`, `tests/unit/topology/test_check.py::test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is` and `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
+| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone, until RFC 0070 gives it `live`; `until = "program"` refused under a person's principal, and to a person's resume; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78`, `::test_a_person_s_resume_of_a_session_left_to_its_program_is_refused_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/integration/test_tui.py::test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way`, `tests/unit/topology/test_check.py::test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is` and `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
 | M2 the script way, shown | The topologies guide's program, run again after a crash by a test | `tests/unit/runtime/test_programs.py::test_a_program_run_again_after_a_crash_adds_nothing_twice` | |
 
 ## Open questions
 
 1. Where does a population program take its `live` and its `attempts`? The git-swarm rework's own RFC decides, later in milestone
-   4, before `git-swarm` takes either again.
+   4, before `git-swarm` takes either again. [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) answers it: `live` is `git-swarm`'s, as its `max_live`, and `attempts` is
+   `population`'s.
 
 ## Evidence
 
