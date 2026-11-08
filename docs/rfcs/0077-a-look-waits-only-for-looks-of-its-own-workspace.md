@@ -111,6 +111,11 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
 1. Whether a look should read only the reflogs of the workspaces that could have made what it found, where it reads every
    workspace's, one git process each, whenever it finds a commit. Nothing here measures what that would save, and it changes how
    whose a commit is gets read ([RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)), so it is the owner's to ask for.
+2. Whether the OpenHands worker should raise its SDK's `tool_concurrency_limit`, which it keeps at the SDK's default of 1, so
+   OpenHands runs the calls of one response in turn. Raised, the SDK would run different tools of one response at once, as a
+   query of ours beside a terminal command, and still two terminal calls, or two calls of one MCP tool, in turn; and the calls of
+   one response would no longer run in the order the model gave them, an environment's among them. The default, pending the
+   owner's ruling, keeps it at 1.
 
 ## Evidence
 

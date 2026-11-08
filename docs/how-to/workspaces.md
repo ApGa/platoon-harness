@@ -222,9 +222,11 @@ show them. A fetch with a branch to land on, as here, is what makes a snapshot's
 
 ## What a look sees
 
-At the end of each agent's turn, and when a resumed agent comes back, the runtime looks at what it left, one look at a time: first
-your checkout's new commits, then the agent's own workspace. A stopping agent's stop looks once more before it ends the workspace. A
-look changes no ref, index or file, and records on `repo/<name>`, `<name>` being your repository's folder name:
+At the end of each agent's turn, and when a resumed agent comes back, the runtime looks at what it left: first your checkout's new
+commits, then the agent's own workspace. Looks of different agents' workspaces run at once, and looks of one workspace, your
+checkout's among them, run one at a time ([RFC 0077](../rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md), a draft).
+A stopping agent's stop looks once more before it ends the workspace. A look changes no ref, index or file, and records on
+`repo/<name>`, `<name>` being your repository's folder name:
 
 - each new commit its workspace's HEAD reaches, and each commit those cite in an `Informed-By` trailer, parents first, once each;
 - whose each commit is: the agent's whose workspace's HEAD reflog records making it, at the commit's own committer time, so a worker
