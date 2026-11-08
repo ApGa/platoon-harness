@@ -6,6 +6,7 @@ import asyncio
 import json
 import stat
 import threading
+from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from platoon_harness.testing import Hang
 
 from .gitting import Working, commit, git, repository, working
 from .support import SECONDS, harness, in_state, of_type, scripted, until
+from .test_host import Stuck
 from .test_workspaces import made
 
 pytestmark = pytest.mark.timeout(60)
@@ -579,8 +581,8 @@ async def test_a_look_that_fails_records_the_gap_and_its_agent_works_on(repo, tm
 
 
 def after_the_shared_one(entered: list[str]) -> bool:
-    """Whether each look of an agent's own workspace came after a look of the shared one of its own probe's, as no
-    earlier look of an agent's took that one."""
+    """Whether the nth look of an agent's own workspace, counting from one, came after at least n looks of the shared
+    one."""
     own = [index for index, where in enumerate(entered) if where != "shared"]
     return all(entered[:index].count("shared") > count for count, index in enumerate(own))
 
@@ -672,6 +674,93 @@ async def test_a_held_look_holds_up_no_query(repo, tmp_path, monkeypatch):
         await looked(session)
 
     assert answered["agent"] == "ada"
+
+
+async def test_looks_whose_pages_interleave_record_each_commit_after_its_parents(repo, tmp_path, monkeypatch):
+    """ada makes more commits than a page holds and bob merges her branch, so both their own looks find her commits, in
+    two pages each, and neither records its last page until both have recorded their first: every commit is still
+    recorded after its parents."""
+    made = threading.Event()
+    firsts = asyncio.Barrier(2)
+    report = host.Host._report
+
+    def work(cwd: Path) -> None:
+        if cwd.parent.name == "ada":
+            for number in range(looks.PAGE + 6):
+                commit(cwd, f"ada-{number}.txt")
+            made.set()
+        else:
+            assert made.wait(SECONDS)
+            git("merge", "-q", "--no-ff", "-m", "merge ada's work", "platoon-harness/s/ada", cwd=cwd)
+
+    async def interleaved(self: host.Host, page: Mapping[str, Any]) -> bool:
+        recorded = await report(self, page)
+        if page["workspace"] != "shared" and "reading" not in page:
+            await asyncio.wait_for(firsts.wait(), SECONDS)
+        return recorded
+
+    monkeypatch.setattr(host.Host, "_report", interleaved)
+    async with Session.start(team_of(harness=working(work)), name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "work")
+        await session.spawn("bob", "worker", "work")
+        await looked(session, 2)
+        found = await committed(session)
+
+    order = {event.data["sha"]: place for place, event in enumerate(found)}
+    assert [event.data["made_in"] for event in found] == ["@ada"] * (looks.PAGE + 6) + ["@bob"]
+    assert all(
+        order[parent] < place
+        for place, event in enumerate(found)
+        for parent in event.data["parents"]
+        if parent in order
+    )
+
+
+async def test_one_agent_s_hung_delivery_holds_up_no_other_agent_s_delivery_look_or_stop(repo, tmp_path):
+    """bob's handover never comes back, and meanwhile ada is handed a message, her turn's end is looked at, which
+    records her commit, and her stop is done: the host gives each effect a task of its own."""
+    roles = {
+        "bob": {"harness": harness(Stuck)},
+        "worker": {
+            "harness": working(lambda cwd: commit(cwd, "work")),
+            "count": 0,
+            "workspace": "worktree",
+            "stays": True,
+        },
+    }
+    async with Session.start(Team.model_validate({"roles": roles}), name="s", root=tmp_path, cwd=repo) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "this will hang")
+        await until(lambda: started(session, "bob", "deliver"), session)
+        await session.spawn("ada", "worker")
+        await session.send("@ada", "work")
+        await looked(session)
+        await session.cancel_agent("@ada")
+        await until(lambda: finished(session, "ada", "stop"), session)
+        [found] = await committed(session)
+        done = {event.data["kind"] for event in await of_type(session, "effect.finished") if event.agent == "ada"}
+        hung = await finished(session, "bob", "deliver")
+
+    assert {"deliver", "probe", "stop"} <= done and found.data["made_in"] == "@ada"
+    assert hung == []
+
+
+async def started(session: Session, agent: str, kind: str) -> list[Any]:
+    """The effects of `kind` of `agent` that have started."""
+    return [
+        event
+        for event in await of_type(session, "effect.started")
+        if (event.agent, event.data["kind"]) == (agent, kind)
+    ]
+
+
+async def finished(session: Session, agent: str, kind: str) -> list[Any]:
+    """The effects of `kind` of `agent` that have finished."""
+    return [
+        event
+        for event in await of_type(session, "effect.finished")
+        if (event.agent, event.data["kind"]) == (agent, kind)
+    ]
 
 
 async def stops(session: Session) -> list[Any]:

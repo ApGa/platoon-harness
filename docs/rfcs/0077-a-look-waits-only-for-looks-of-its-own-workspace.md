@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`tools/mcp.py`](../../packages/sdk/src/platoon_harness/tools/mcp.py), [architecture sections 4](../architecture.md#what-runs-at-once), [10](../architecture.md#10-tool-plane) and [13](../architecture.md#13-workspaces), [RFC 0005](0005-daemons-and-effects.md), [RFC 0009](0009-tools-only-mcp-server.md) and [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md) |
 | Discussion | The owner's request of 2026-11-08, that tool calls and their execution run in parallel across agents that share one tool server, as faster wall clock is one of the benefits of several agents. The request accepts no design: this one waits for the owner's acceptance |
-| Implementation | `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`, `test: Show agents' shell tools run at once on each real binary, and measure one response's calls`, `feat: Look at different workspaces at once, each after the shared one` and `fix: Run the host's git and files on threads of its own, so no round of looks holds up a query` |
+| Implementation | `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`, `test: Show agents' shell tools run at once on each real binary, and measure one response's calls`, `feat: Look at different workspaces at once, each after the shared one`, `fix: Run the host's git and files on threads of its own, so no round of looks holds up a query` and `test: Hold that interleaved looks record parents first, and that a hung delivery holds up no other agent's` |
 
 ## Summary
 
@@ -57,7 +57,8 @@ disk, under its own lock, so it starts from where the last look of that workspac
 - **Parents still come first.** Looks of different workspaces interleave their pages, and `repo.report` passes over a commit the
   journal holds. Each look lists its commits parents first, and leaves out only what the session started with, its workspace's
   base, which the shared look before it recorded, and its own last look's head, which that look recorded, so a commit's parents
-  the journal will hold are recorded before it, whichever look records them.
+  the journal will hold are recorded before it, whichever look records them. A test holds two looks' pages interleaved, where
+  one agent merged the other's branch of more commits than a page holds.
 - **Whose a commit is does not change.** It is read from the HEAD reflogs, which git writes when the commit is made, so it never
   depended on which look ran first. Which look records a commit first, and so its `found_in`, now depends on which finishes first,
   as it depended on which probe started first. `found_in` says where its diff is read, which any repository that holds the commit
@@ -125,7 +126,9 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
   `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`, whose looks of two agents' own workspaces each wait until
   both are in, which fails under one lock in a session, and which finds a commit made in your checkout before both workspaces
   recorded before either agent's, `test_looks_of_one_workspace_run_one_at_a_time`, and `test_a_held_look_holds_up_no_query`,
-  whose person's query answers while a look is held with the loop's pool cut to one thread;
+  whose person's query answers while a look is held with the loop's pool cut to one thread,
+  `test_looks_whose_pages_interleave_record_each_commit_after_its_parents`, whose two looks each record their first page before
+  either records its last, and `test_one_agent_s_hung_delivery_holds_up_no_other_agent_s_delivery_look_or_stop`;
   [tests/unit/tools/test_mcp.py](../../tests/unit/tools/test_mcp.py),
   `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`, whose queries each answer only once all are in,
   which a query on the loop never lets happen; and [tests/unit/tools/test_shim.py](../../tests/unit/tools/test_shim.py),

@@ -217,11 +217,14 @@ Agents work at once, and wait for each other only where they share a thing. Acro
   24 to 29 ms at the median ([scale.md](reference/scale.md)), and `test_a_batch_is_one_transaction_of_at_most_64_commands`. An op
   holds the writer while it runs and touches no world (law 3), so an extension does what is slow in an effect its own daemon
   performs, with the slow part in a thread or a process of its own, and reports back through an op (§5.4).
-- **The host gives each effect a task of its own,** so one agent's delivery, look or stop waits for no other agent's (§5.4), as two
-  agents' probes below look at once.
+- **The host gives each effect a task of its own,** so one agent's delivery or stop waits for no other agent's (§5.4), and its look
+  waits only for another look of the same workspace, below: while one agent's delivery hangs, another's delivery, look and stop
+  finish, `test_one_agent_s_hung_delivery_holds_up_no_other_agent_s_delivery_look_or_stop`.
 - **A look waits only for another look of its own workspace** (§13). Every probe looks at the shared workspace first, so those
   looks queue, and a round of looks of a team in worktrees still grows with the team, as
   [scale.md](reference/scale.md#a-git-teams-looks) measures: `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`.
+  Two looks' pages can interleave, and each commit is still recorded after its parents:
+  `test_looks_whose_pages_interleave_record_each_commit_after_its_parents`.
 
 Within one agent:
 
