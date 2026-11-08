@@ -136,7 +136,7 @@ class _Rig:
             "role": "worker",
             "cwd": cwd,
             "folder": self.folder / "agent",
-            "model": _MODEL,
+            "model": self.options.model,
             "tools": self.tools.binding(bin),
             "access": self.access(self.model),
         }
@@ -196,6 +196,7 @@ class _Rig:
 
 @dataclass(frozen=True)
 class _Options:
+    model: str
     garble: Garble | None
     gated: Gated
     shell: Shell | None
@@ -256,11 +257,12 @@ async def ready_with_pinned_model(rig: _Rig) -> None:
     ready = await rig.until(Ready)
     if ready.effective_model is None:
         raise _Skipped("the harness does not say which model it runs")
-    _expect(ready.effective_model == _MODEL, f"it runs {ready.effective_model}, and {_MODEL} was asked for")
+    asked = rig.options.model
+    _expect(ready.effective_model == asked, f"it runs {ready.effective_model}, and {asked} was asked for")
 
     call = await rig.call(0)
 
-    _expect(call.model == _MODEL, f"it asked the model for {call.model}, and {_MODEL} was asked for")
+    _expect(call.model == _MODEL, f"it asked the model for {call.model}, and FakeModel answers as {_MODEL}")
 
 
 def _speaking(capabilities: Capabilities) -> str | None:
@@ -775,6 +777,7 @@ async def check_driver(
     tool: Tool = _tool,
     child: ToolCall | None = None,
     kept: Sequence[str] = (),
+    model: str = _MODEL,
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
     """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver, the
@@ -785,12 +788,13 @@ async def check_driver(
     harness asks approval for, and `shell` into one that runs it, with none of which the check of a stop during a
     running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
     `child` is a tool call that starts a native child, and with none that check is skipped. `kept` names each tool of
-    the harness's own that a sealed launch keeps, which acts on nothing. `timeout` bounds each check, so one wedged
-    harness costs only its own checks.
+    the harness's own that a sealed launch keeps, which acts on nothing. `model` is what a role names FakeModel by on
+    this harness, which asks FakeModel for it by its own name. `timeout` bounds each check, so one wedged harness costs
+    only its own checks.
     """
     made = factory()
     name = made.describe().name
-    options = _Options(garble, gated, shell, tool, child, tuple(kept), timeout)
+    options = _Options(model, garble, gated, shell, tool, child, tuple(kept), timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)

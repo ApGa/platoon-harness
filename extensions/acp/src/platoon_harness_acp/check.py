@@ -21,10 +21,11 @@ from platoon_harness.testing import NAMESPACE, TOOL, FakeModel, ToolCall, check_
 
 from .opencode import OpenCodeDriver
 
-MODEL = "fake-model"
-"""The model every check asks for, which FakeModel answers as."""
-
 _PROVIDER = "fake"
+_NAME = "fake-model"
+MODEL = f"{_PROVIDER}/{_NAME}"
+"""What a role names FakeModel by on OpenCode, which names a model by its provider: OpenCode asks FakeModel for
+`fake-model`."""
 _SHELL = "shell"
 _QUIET = {"OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1"}
 """What keeps OpenCode off the network but for FakeModel: no update and no catalogue of models fetched."""
@@ -35,11 +36,16 @@ __all__ = ["MODEL", "opencode"]
 def _config(model: FakeModel) -> str:
     """OpenCode's configuration, given whole in `OPENCODE_CONFIG_CONTENT`: a provider of its own that reaches `model` on
     a dummy key, and a rule that has every shell command ask first, as with no rule OpenCode asks nothing."""
-    listed = {MODEL: {"capabilities": {"tools": True}, "limit": {"context": 100_000, "output": 1_000}}}
+    listed = {
+        _NAME: {
+            "capabilities": {"tools": True},
+            "limit": {"context": 100_000, "output": 1_000},
+        }
+    }
     settings = {"baseURL": f"{model.url}/v1", "apiKey": "dummy-key"}
     provider = {"package": "@ai-sdk/openai-compatible", "settings": settings, "models": listed}
     ask = [{"action": _SHELL, "resource": "*", "effect": "ask"}]
-    return json.dumps({"model": f"{_PROVIDER}/{MODEL}", "providers": {_PROVIDER: provider}, "permissions": ask})
+    return json.dumps({"model": MODEL, "providers": {_PROVIDER: provider}, "permissions": ask})
 
 
 def _garbling(folder: Path) -> Callable[[Any], Awaitable[None]] | None:
@@ -81,5 +87,6 @@ async def opencode(folder: Path) -> Conformance:
         gated=lambda command: _shell(command, "call_gated"),
         shell=_shell,
         tool=lambda note: ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note}),
+        model=MODEL,
         timeout=60.0,
     )

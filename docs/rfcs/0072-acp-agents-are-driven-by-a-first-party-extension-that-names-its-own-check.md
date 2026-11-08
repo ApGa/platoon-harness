@@ -158,8 +158,7 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 
 ## The hard parts
 
-- **OpenCode has not run.** The recorded probe of OpenCode on `FakeModel` did not run, as OpenCode has not run on any machine
-  that ran these tests ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is
+- **OpenCode runs, and fails 7 of its checks.** On OpenCode 2.2.6 against FakeModel, run by hand on 2026-11-08, its check passed 11 checks and failed 7: it reaches FakeModel past `initialize`, starts on its pinned model, which a role names as OpenCode does, `fake/fake-model`, takes delivered text, ends, resumes and stops its turns, and reports a malformed frame as a gap; it failed our tool in the first request, the shell checks, approvals and the interrupt, because OpenCode's first request is a title of the session that it asks of the model on the side, with no tools, and because it shows an MCP server that `session/new` gives it only through its `execute` tool, Code Mode, not as a tool of its own ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is
   written from the 2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
@@ -191,7 +190,7 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 ## Consequences
 
 - An ACP agent can run as a team's harness, with a level earned only by a check on its machine, and an agent of any other ACP
-  harness needs only a subclass naming its command. `opencode`, the one so named, has not run.
+  harness needs only a subclass naming its command. `opencode`, the one so named, passes 11 of its checks on OpenCode 2.2.6 and fails 7.
 - `doctor` lists `opencode` where the extension is installed, and `--check` checks it there, as it does the SDK's harnesses.
 - A result kept for any driver outside the SDK made before this pinned no distribution, so it reads `unverified` until checked
   again.

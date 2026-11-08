@@ -270,9 +270,10 @@ So an OpenHands driver cannot share an environment with our MCP service, and unp
 Milestone 4 asked for a recorded probe before the ACP driver is checked on OpenCode: does OpenCode 2.2.x, on an
 OpenAI-compatible provider setting, reach `FakeModel` past `initialize`?
 
-**Not run, so unknown.** OpenCode 2.2.6, the newest 2.2 release of `@opencode/cli` (MIT), and its platform binary,
-`@opencode/cli-linux-x64` 2.2.6, were installed on the build host and not run there, not even `--version`. So whether
-OpenCode reaches `FakeModel` past `initialize` is not known. Nothing below was run against `FakeModel`.
+**It does, on 2026-11-08.** OpenCode 2.2.6, the newest 2.2 release of `@opencode/cli` (MIT), and its platform binary,
+`@opencode/cli-linux-x64` 2.2.6, ran its check against `FakeModel` by hand. On OpenCode 2.2.6 against FakeModel, run by hand on 2026-11-08, its check passed 11 checks and failed 7: it reaches FakeModel past `initialize`, starts on its pinned model, which a role names as OpenCode does, `fake/fake-model`, takes delivered text, ends, resumes and stops its turns, and reports a malformed frame as a gap; it failed our tool in the first request, the shell checks, approvals and the interrupt, because OpenCode's first request is a title of the session that it asks of the model on the side, with no tools, and because it shows an MCP server that `session/new` gives it only through its `execute` tool, Code Mode, not as a tool of its own. Its model option's values are
+`provider/model`. The tools of its turn's request are `edit`, `execute`, `glob`, `grep`, `question`, `read`, `shell`,
+`skill`, `subagent`, `webfetch`, `websearch` and `write`.
 
 **What earlier probes ran.** On 2026-11-02, OpenCode 2.2.5 ran through `opencode acp` against a scripted fake
 OpenAI-compatible server, which is not `FakeModel`, on a provider given in `OPENCODE_CONFIG_CONTENT`
@@ -297,8 +298,8 @@ advertises `session.compaction`; and `notice`, only to one that advertises `sess
 `toolCall` is a `ToolCallUpdate`, whose fields left out are those of the tool call it names as last updated.
 
 **What follows.** The ACP driver is checked on a scripted ACP agent the tests own, which is `ScriptedDriver` behind ACP on
-`FakeModel`. The check of OpenCode against `FakeModel` is written, and skips where `opencode` is not on `PATH`, so it has
-not run, and STATUS says so.
+`FakeModel`. The check of OpenCode against `FakeModel` is written, skips where `opencode` is not on `PATH`, and fails 7 of
+its checks on 2.2.6 for the reasons above, and STATUS says so.
 
 ## Implications for platoon-harness
 

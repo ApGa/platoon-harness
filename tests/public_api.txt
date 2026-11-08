@@ -471,7 +471,7 @@ platoon_harness.testing.AskModel
 platoon_harness.testing.Call
 platoon_harness.testing.chat_access
 platoon_harness.testing.check_driver
-platoon_harness.testing.check_driver(factory,*,folder,access,garble,gated,shell,tool,child,kept,timeout)
+platoon_harness.testing.check_driver(factory,*,folder,access,garble,gated,shell,tool,child,kept,model,timeout)
 platoon_harness.testing.check_extension
 platoon_harness.testing.check_harness
 platoon_harness.testing.Compact

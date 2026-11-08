@@ -91,8 +91,9 @@ named here is closed.
   shows an agent's own agents nor turns them off, so a role on it must allow them, as a change below says.
   On a scripted ACP agent, `ScriptedDriver` behind ACP on FakeModel, `check_driver` passes every check it does not skip, and the
   driver earns `operational` and `observable`. No real ACP agent has run on it. `opencode` refuses a start that names no model,
-  as OpenCode then sends prompts to a hosted model nobody chose, and OpenCode has not run on it, nor has its check, which
-  skips where `opencode` is not on `PATH`, so STATUS calls it implemented and no more. See
+  as OpenCode then sends prompts to a hosted model nobody chose. On OpenCode 2.2.6 against FakeModel its check passes 11
+  checks and fails 7, because OpenCode asks a session's title on the side and shows an MCP server that ACP gives it only
+  through Code Mode, so STATUS calls it implemented and no more. See
   [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
