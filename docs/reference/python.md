@@ -383,12 +383,10 @@ ended session, and writes only through `Session.annotate`: an estimate by a name
 
 ### `platoon_harness.credit.propagate`
 
-**Experimental.** [STATUS](../STATUS.md): `platoon_harness.credit.propagate`, `propagate@4`, experimental and heuristic, in the one producer signature, at version 4 in place of 1 and 2, with version 3 kept for a run recorded on it.
+**Experimental.** [STATUS](../STATUS.md): `platoon_harness.credit.propagate`, `propagate@4`, experimental and heuristic, in the one producer signature, at version 4 in place of 1, 2 and 3.
 
 ```python
-async def propagate(
-    session: Session, episode: str, *, judge: Gateway | None, retained: float, version: int = 4
-) -> None: ...
+async def propagate(session: Session, episode: str, *, judge: Gateway | None, retained: float) -> None: ...
 ```
 
 `propagate@4`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
@@ -414,11 +412,8 @@ every row is `invalid`. A team reward that is not scored passes its status to ea
 never reaches gets no row, so is unscored. What nobody's events kept, and an agent's that never started, is the
 reward less the agents' rows, and is no row. Citing or taking gives away all but `retained` of what reaches the
 event, and work nobody cites or takes earns nothing from it, unless it was done under a claim whose events are
-reached.
-
-`version` 3 writes `propagate@3`'s rows, which keep a claimant's event of a claim in its own span too, for a run
-recorded on it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1], a `version` other than 3 or
-4, or a reward on an episode that closed on no ref, and `conflict` for several team rewards.
+reached. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a reward on an episode that
+closed on no ref, and `conflict` for several team rewards.
 
 ### `platoon_harness.credit.PROPAGATE`
 

@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`primitives/sessions.py`](../../packages/sdk/src/platoon_harness/primitives/sessions.py), [`primitives/tasks.py`](../../packages/sdk/src/platoon_harness/primitives/tasks.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [`tools/surface.py`](../../packages/sdk/src/platoon_harness/tools/surface.py), [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [architecture sections 7, 10, 11 and 14](../architecture.md#7-primitive-semantics), [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) |
 | Discussion | The owner's request of 2026-11-09, and the owner's rulings that the vocabulary is fixed per team and declared in configuration, that the creating agent decides a task's difficulty as it creates it, and that crafting-style work an agent does for a task earns credit through the task. The request accepts no design: this one waits for the owner's acceptance |
-| Implementation | `feat: Label tasks and spawns from a vocabulary the team declares`; `feat: Give each span the claims its agent held and the labels of its work`; `feat: Share what a claim and its result keep among the spans that held the claim` |
+| Implementation | `feat: Label tasks and spawns from a vocabulary the team declares`; `feat: Give each span the claims its agent held and the labels of its work`; `feat: Share what a claim and its result keep among the spans that held the claim`; and the fixes the review asked for |
 
 ## Summary
 
@@ -19,7 +19,8 @@ call after the one that claimed it through the one that completed, failed or rel
 else none; and None, unknown, where its calls were made under claims of different labels or the record cannot place a claim or
 its end. `spans` answers them beside the claims each span held, which is the training contract a keyed baseline reads.
 `propagate@4` shares what a claim and its result keep equally among the spans that held the claim, so work done before a
-progress message cut a span is credited through its task. `propagate@3` stays runnable, by `version=3`.
+progress message cut a span is credited through its task. It takes `propagate@3`'s place, as each version before took its
+predecessor's, and an earlier version is reached by pinning an earlier SDK.
 
 ## Motivation
 
@@ -135,11 +136,10 @@ On the owner's case, scripted, a lead's last words take the worker's result and 
 and its claim a sixteenth; the worker's crafting span and its completing span share both, 3/32 each, where version 3 gave the
 completing span the eighth and the crafting span the sixteenth.
 
-`propagate(session, episode, *, judge, retained, version=4)`: `version=3` writes version 3's rows, under `producer_version` 3,
-for a run recorded on it, as DAO's run notes and configs name `propagate@3`; any other version is refused `invalid`. RFC 0061
-reached an earlier version by pinning an earlier SDK; a training system pins one SDK for every producer it runs, so a recorded
-run could not be run again beside a new one, and a version argument is the one way to say which. The parameter is no switch
-between rules: it names a version, and its rows say it.
+Version 4 takes version 3's place under the same name and function, `propagate(session, episode, *, judge, retained)`, and its
+rows say `producer_version` 4, as RFC 0061 has each version do: a run recorded on `propagate@3`, as DAO's run notes and configs
+name it, runs again on the SDK it was recorded on. That version 4 is the producer the SDK ships is the default, pending the
+owner's ruling on open question 3.
 
 ### 5. The contract for a training system
 
@@ -188,7 +188,7 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 | Spreading the claim's and the result's takes too | Two changes in one version, so its agent rows would no longer be version 3's |
 | Sharing a completion alone | A failure is the same work's other result, and its claim is reached through it; one rule for a hold's events |
 | A second producer for tasks | Two ways to do one thing |
-| Pinning an earlier SDK for version 3 | A training system runs one SDK, so a recorded run could not run again beside a new one |
+| A `version` argument, to run version 3 beside 4 | A shim nobody asked for; an earlier SDK runs version 3, as RFC 0061 says, and a ruling that a run needs version 3's rows beside labels adds the argument then |
 
 ## Consequences
 
@@ -196,7 +196,7 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 - A keyed baseline can read each span's labels and its row from the record alone, on every harness that reports calls; on OpenHands
   and Codex a turn is one span, so a turn that worked several tasks of different labels is unknown.
 - A crafting span cut off by a progress message is credited through its task. An agent's row does not change from version 3 to 4.
-- A run recorded on `propagate@3` runs again under `version=3`, with rows that say version 3.
+- A run recorded on `propagate@3` runs again on the SDK it was recorded on, which has no labels.
 - Old sessions read as unlabelled. The `Tasks` view gains a table and refolds once on each session's next open.
 - `spans` reads each claim of the agent's and the event that ended it, a lookup each; its cost on long agents is not measured
   beyond scripted sizes.
@@ -207,8 +207,8 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 Vocabulary | `Team.labels`, `Settings.labels`, `labels` on `task.add` and `agent.spawn`, the schema a model is shown | [`test_labels.py`](../../tests/unit/primitives/test_labels.py) and `test_a_team_s_labels_reach_the_session_with_their_values_in_its_order` | `feat: Label tasks and spawns from a vocabulary the team declares` |
-| M2 Span labels | `Tasks` indexes claims; `Span.claims` and `Span.labels` | The label tests of [`test_spans.py`](../../tests/unit/primitives/test_spans.py) | `feat: Give each span the claims its agent held and the labels of its work` |
-| M3 `propagate@4` | The shared booking, and `version` | The claim tests of [`test_credit.py`](../../tests/unit/runtime/test_credit.py) and `test_a_worker_s_spans_from_claim_to_completion_carry_its_task_s_labels_and_share_its_credit` | `feat: Share what a claim and its result keep among the spans that held the claim` |
+| M2 Span labels | `Tasks` indexes claims; `Span.claims` and `Span.labels` | The label tests of [`test_spans.py`](../../tests/unit/primitives/test_spans.py) | `feat: Give each span the claims its agent held and the labels of its work`; `fix: Say a span's claims are unknown where the record cannot place one` |
+| M3 `propagate@4` | The shared booking, in version 3's place | The claim tests of [`test_credit.py`](../../tests/unit/runtime/test_credit.py) and `test_a_worker_s_spans_from_claim_to_completion_carry_its_task_s_labels_and_share_its_credit` | `feat: Share what a claim and its result keep among the spans that held the claim`; `fix: Drop propagate's version argument, as an earlier SDK runs version 3` |
 
 ## Open questions
 
@@ -216,7 +216,9 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
    ruling, and showing them is a field added to two results, which tears out nothing.
 2. Should a failure and a release be shared as a completion is? The default, built, shares every claimant's event of a hold,
    pending the owner's ruling; a ruling for completions alone narrows one set.
-3. Should DAO's next run train on `propagate@4`, or pin `version=3` until a smoke run of it? The owner decides, before any GPU run.
+3. Should DAO's next run train on `propagate@4`, or pin the SDK before it, which writes `propagate@3` and has no labels, until a
+   smoke run of version 4? The owner decides, before any GPU run. The default, built, ships version 4 in version 3's place,
+   pending that ruling; a ruling for both in one SDK adds a version argument, and tears out nothing.
 4. Should a span that claimed a task carry the task's labels for its calls before the claim? The default, built, does: a span
    that surely held a claim takes its claims' labels alone, pending the owner's ruling. A ruling for the spawn's work makes such
    a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
@@ -228,7 +230,18 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 - [tests/unit/primitives/test_spans.py](../../tests/unit/primitives/test_spans.py): a test for each rule of section 3, among them a
   claim made in the call that completed the task before, two claims of different labels and of alike ones held at once, a claim
   tied to no call in a turn of one span, in a cut one and in a lost one, and a lapse between turns and within one.
-- [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py): the rule of section 4, version 3 run again on the
-  same journals, a property over generated journals that version 4 writes version 3's rows where no claim's events are reached,
-  and the owner's case on ScriptedDriver against FakeModel acting as each agent's gateway, whose numbers section 4 gives.
+- [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py): the rule of section 4, and two properties over
+  generated journals in which agents claim, complete, fail, release and let lapse tasks of a queue, by calls joined or not, each
+  also played on seven journals that hold a claim two spans held, a lapse, a claim tied to no call, two claims at once and a
+  completion the program cites. `test_propagate_4_writes_propagate_2s_rows_where_no_span_took_another_principals_event_but_for_a_claim_s`,
+  in the place of `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event` and of version 3's own
+  property, holds the agent rows to RFC 0054's rule read off the journal, as version 3's were, and each span's to what its events
+  kept there, a claimant's event of a claim shared by the spans that held it; and
+  `test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_span` holds that an event lies in several spans only
+  as such an event of a claim each held, and that an agent's row is its spans' and what it kept in no span. These hold where no
+  span took another principal's event; that version 4's agent rows are version 3's where one did rests on the walk being version
+  3's, edge for edge, and on the scripted cases, which state version 3's numbers beside their own. The owner's case runs on
+  ScriptedDriver against FakeModel acting as each agent's gateway, whose numbers section 4 gives. On the commit that still took a
+  version, versions 3 and 4 were run on 207 generated journals, 113 of them reaching a claim's events, and gave the same agent rows
+  on each, by a throwaway check outside the repository.
 - No live model, no real binary and no GPU run has produced a labelled span.

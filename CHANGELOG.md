@@ -1132,15 +1132,15 @@ named here is closed.
 - **Guides that say what you will do and need.** The how-to guides and the training guide open with their goal and
   prerequisites, and a section that is a task is headed by what you do there, the headless guide's as numbered steps. Their
   sentences are unchanged.
-- **`propagate` is `propagate@4`, and version 3 runs again by `version=3`.** What a claimant's event of a claim keeps, the
+- **`propagate` is `propagate@4`, in place, under the same name and function.** What a claimant's event of a claim keeps, the
   claim, and the completion, failure or release that ended it, is shared equally by the spans that held the claim, as `spans`
   names them, and kept by the event's own span only where none did, so a worker that crafted in one span, said how far it had
   come, which cut its turn, and completed the task in the next is credited in both once its result is reached. The walk is
   version 3's, edge for edge, so its agent rows are version 3's on every journal, and where no claimant's event of a claim is
-  reached so are its span rows. `propagate` takes `version`, 4 unless a run recorded on version 3 passes 3, whose rows say
-  version 3; any other is refused `invalid`, and an earlier one is still reached by pinning an earlier SDK. Before, a task's result
-  kept its share on the span whose call wrote it, and its claim on the span whose call claimed it, which could be the task
-  before's. This is step 3 of RFC 0078, a draft.
+  reached so are its span rows. Its rows say version 4, and an earlier version is reached by pinning an earlier SDK. Before, a
+  task's result kept its share on the span whose call wrote it, and its claim on the span whose call claimed it, which could be
+  the task before's. That version 4 ships in version 3's place is the default, pending the owner's ruling. This is step 3 of RFC
+  0078, a draft.
 - **`propagate` is `propagate@3`, in place, under the same name and function.** Version 2 kept `propagate@1`'s walk, unchanged, and
   booked what each event keeps to the span it lies in too: the span holding the model call that made it, for an entry that
   carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is one

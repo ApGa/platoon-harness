@@ -242,12 +242,7 @@ no agent, or of one that never started, as one whose launch failed, which has no
 the agents' rows, and what an agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its
 spans' rows, and no span's row holds it. Its agent rows are those `propagate@3` wrote, and where no claimant's event of a claim is
 reached, so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose agent rows were
-`propagate@1`'s. A run recorded on version 3 runs it again with `version=3`, a parameter as `retained` is, and its rows say
-version 3; pin an earlier SDK to run an earlier version:
-
-```python
-await propagate(ended, "task", judge=None, retained=0.5, version=3)
-```
+`propagate@1`'s. Pin an earlier SDK to run an earlier version, as a run recorded on `propagate@3` does.
 
 What credit reaches depends on what you close on, so close each topology on what its team came to:
 

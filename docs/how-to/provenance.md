@@ -266,10 +266,9 @@ which stays unscored, nor for one that never started, as one whose launch failed
 agent's row is its spans' rows and what it kept in no span, such as an end out of a turn that nothing joins to a call: one joined
 to its call lies in that call's span, as any write does. Its agent rows are those `propagate@3` wrote, and where no claimant's
 event of a claim is reached so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose
-agent rows were `propagate@1`'s, and `version=3` writes version 3's rows for a run recorded on it. Citing or taking gives away all
-but `retained` of what reaches the event, and work nobody cites or takes earns nothing from it, unless it was done under a claim
-whose events are reached, so training on it pulls against the default template's request to cite.
-[training.md](../extending/training.md) shows it run, and
+agent rows were `propagate@1`'s. Citing or taking gives away all but `retained` of what reaches the event, and work nobody cites
+or takes earns nothing from it, unless it was done under a claim whose events are reached, so training on it pulls against the
+default template's request to cite. [training.md](../extending/training.md) shows it run, and
 [RFC 0061](../rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
 [RFC 0078](../rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) say why.
 

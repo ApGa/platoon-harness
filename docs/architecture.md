@@ -2100,9 +2100,8 @@ class AgentOutcome(Model):
   started kept, as one whose launch failed has no start for a row to target. An agent's row is its spans' rows and what it kept in no
   span, which no span's row holds. Its walk is version 3's, so its agent rows are version 3's on every journal, and where no
   claimant's event of a claim is reached its rows are version 3's too; where no span took another principal's event those are
-  `propagate@2`'s, whose agent rows were `propagate@1`'s. One name and one function: `version=3` writes version 3's rows, for a
-  run recorded on it, and an earlier version is reached by pinning an earlier SDK. Citing, and taking, give away all but
-  `retained` of what reaches the event; being cited or taken by a credited span earns credit, broadcasting draws takes, reading in a
+  `propagate@2`'s, whose agent rows were `propagate@1`'s: one name, one function and a version for each, an earlier one reached
+  by pinning an earlier SDK. Citing, and taking, give away all but `retained` of what reaches the event; being cited or taken by a credited span earns credit, broadcasting draws takes, reading in a
   last turn costs, and a program's task statement taken in a span earns its share for nobody. See
   [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md),
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and

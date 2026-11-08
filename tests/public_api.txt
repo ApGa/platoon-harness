@@ -24,7 +24,7 @@ platoon_harness.config.TEAM_SCHEMA
 platoon_harness.config.WIRE_PROTOCOL
 platoon_harness.credit.propagate
 platoon_harness.credit.PROPAGATE
-platoon_harness.credit.propagate(session,episode,*,judge,retained,version)
+platoon_harness.credit.propagate(session,episode,*,judge,retained)
 platoon_harness.drivers.Access
 platoon_harness.drivers.AgentSpec
 platoon_harness.drivers.AgentSpec.wrap

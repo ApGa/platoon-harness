@@ -25,9 +25,7 @@ _HOLDING = ("task.claimed", "task.completed", "task.failed", "task.released")
 """The events of a claim its claimant makes: the claim, and the completion, failure or release that ends it."""
 
 
-async def propagate(
-    session: Session, episode: str, *, judge: Gateway | None, retained: float, version: int = 4
-) -> None:
+async def propagate(session: Session, episode: str, *, judge: Gateway | None, retained: float) -> None:
     """`propagate@4`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
     spans took, and write each agent it reaches a local credit row on its first `agent.started`, and each span it
     reaches one on its name.
@@ -51,15 +49,10 @@ async def propagate(
     never reaches gets no row, so is unscored. What nobody's events kept, and an agent's that never started, is the
     reward less the agents' rows, and is no row. Citing or taking gives away all but `retained` of what reaches the
     event, and work nobody cites or takes earns nothing from it, unless it was done under a claim whose events are
-    reached.
-
-    `version` 3 writes `propagate@3`'s rows, which keep a claimant's event of a claim in its own span too, for a run
-    recorded on it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1], a `version` other than 3 or
-    4, or a reward on an episode that closed on no ref, and `conflict` for several team rewards."""
+    reached. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a reward on an episode that
+    closed on no ref, and `conflict` for several team rewards."""
     if not 0 <= retained <= 1:
         raise Refused("invalid", f"`retained` is a share, from 0 to 1, and {retained} is not")
-    if version not in (3, 4):
-        raise Refused("invalid", f"propagate writes version 4, or 3 for a run recorded on it, and not {version}")
     closed = await _closed(session, episode)
     rewards = [row for row in await session.annotations(closed) if (row.kind, row.scope) == ("reward", "team")]
     if len(rewards) > 1:
@@ -67,14 +60,14 @@ async def propagate(
     if not rewards:
         return
     reward = rewards[0]
-    kept, evidence, invalid, head = await _walk(session, closed, reward.value or 0.0, retained, shared=version == 4)
+    kept, evidence, invalid, head = await _walk(session, closed, reward.value or 0.0, retained)
     status = "invalid" if invalid else reward.status
     for target, share in kept.items():
         await session.annotate(
             target,
             kind="credit",
             producer=PROPAGATE,
-            producer_version=str(version),
+            producer_version="4",
             scope="local",
             status=status,
             value=share if status == "scored" else None,
@@ -164,11 +157,11 @@ async def _carried(session: Session, found: Lineage) -> str | None:
 
 
 async def _walk(
-    session: Session, closed: str, reward: float, retained: float, *, shared: bool
+    session: Session, closed: str, reward: float, retained: float
 ) -> tuple[Mapping[str, float], Mapping[str, list[str]], bool, int]:
     """What each agent's events kept of `reward`, and each span's, by the event its row targets, the refs of those
     events, whether the walk stopped at its limit or at an edge to an event no older than its own, and the head it read
-    at. With `shared`, what a claimant's event of a claim keeps is shared by the spans that held the claim."""
+    at."""
     traced: dict[str, Lineage] = {}
     agents: dict[str, _Agent | None] = {}
     tasks: dict[str, list[Event]] = {}
@@ -242,7 +235,7 @@ async def _walk(
                 targets.append((agent.started, 1.0))
                 carried = await _carried(session, found)
                 span = await span_of(agent, found, carried)
-                held = await holding(agent, found) if shared else []
+                held = await holding(agent, found)
                 targets += [(each.ref, 1 / len(held)) for each in held] or ([(span.ref, 1.0)] if span else [])
                 if span is not None and carried is None:
                     edges += await takes(agent, span, found)
