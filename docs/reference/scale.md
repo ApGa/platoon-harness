@@ -2,9 +2,9 @@
 
 What the brief's Scale case costs on the real stack: 100 agents driving 100,000 events through the real kernel and
 runtime, measured on the hardware below, and the budget a slow test holds each measurement to. Everything in the tables
-was measured on 2026-11-08, in four runs one after another on one node, on the code this page is published with but for
-the budgets, which were set from what the runs measured, and for docstrings and an xdist option that change nothing a
-run without `-n` does.
+but [A git team's looks](#a-git-teams-looks) was measured on 2026-11-08, in four runs one after another on one node, on
+the code this page is published with but for the budgets, which were set from what the runs measured, and for docstrings
+and an xdist option that change nothing a run without `-n` does.
 
 `tests/integration/test_scale.py` makes the run and measures it, and
 `tests/integration/test_tui_budgets.py`, `test_the_tui_attaches_to_a_100000_event_journal_within_its_budget`, attaches
@@ -142,13 +142,38 @@ workspace path, so the roster's bytes grow with where the checkout and the sessi
 agents, some 1,220 bytes each here, and attention with what is open in it, some 290 bytes a mention. At those sizes,
 which is arithmetic and was not measured, one line would hold some 13,700 agents or some 58,000 open mentions.
 
+## A git team's looks
+
+What a round of looks costs a team in worktrees whose agents each commit each turn, as each turn's end requests a look
+([architecture §13](../architecture.md#13-workspaces)), before and after a look waited only for looks of its own
+workspace ([RFC 0077](../rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md)). A probe made by hand on
+2026-11-08, which is not a test in this repository: N agents, each a scripted harness in the runtime's process, in
+worktrees of a repository of 200 files, each committing a file of its own at each turn. A round is the person's message
+to every agent, from the first send until every agent's look after that turn has finished, timed four times after a
+first round that made the workspaces, in each of two runs of each, on 32 of the threads of a node of the kind above, one
+node for 10 and 30 agents, whose load was 69 to 70, and another for 100, whose load was 12 to 16, with Git 2.47.3 and
+the repository on xfs. A range is the least and the most of the eight rounds.
+
+| Agents | One look at a time in a session | One look at a time in a workspace |
+|---|---|---|
+| 10 | 0.74 to 0.77 s | 0.36 to 0.42 s |
+| 30 | 3.5 to 3.6 s | 1.3 to 1.5 s |
+| 100 | 27.1 to 30.3 s | 8.6 to 10.3 s |
+
+A round still grows faster than the team: a look that finds a commit reads every workspace's HEAD reflog, one git
+process each, to say whose it is, and every probe's look at the shared workspace waits for the one before. No budget
+holds these, and no run measured real harnesses, a larger repository, snapshots or isolated agents here. The
+architecture says [what runs at once](../architecture.md#what-runs-at-once) across agents and within one, with the tests
+that show each.
+
 ## What is not measured
 
 - **Bounded memory.** The runtime's memory grows with the journal, as [Memory](#memory) says.
 - **Real harnesses.** Each is a process of its own, whose memory nothing here measures, and asks a model, which no run
   here does.
-- **A git team, and the changes snapshot.** No look, commit or diff ran, so neither did what a look costs at each turn's
-  end, and the changes snapshot, which no run here fills, is not measured at 100 agents.
+- **A git team in the Scale case, and the changes snapshot.** The Scale case runs no look, commit or diff, so what a
+  look costs at each turn's end is only what [A git team's looks](#a-git-teams-looks) measured by hand, and the changes
+  snapshot, which no run here fills, is not measured at 100 agents.
 - **The writer's capacity.** The events committed a second are what the members' pace drove, not the most the writer
   could commit.
 - **Many sessions in one process, 100 isolated agents**, and any system but Linux.

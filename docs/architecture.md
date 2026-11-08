@@ -199,6 +199,39 @@ can both be watched. Leaving only disconnects.
   that stops committing holds this up by at most `grace` and a second, a driver that breaks in `stop` holds up nothing, and the process
   trees end whether or not anything commits.
 
+### What runs at once
+
+Agents work at once, and wait for each other only where they share a thing. Across agents:
+
+- **Each harness is a process of its own,** so agents' model calls and their harnesses' own tools, a shell or an edit, run at once.
+  On each real binary against FakeModel, three agents' shell calls each ended only once all three were running:
+  `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
+- **The tool server takes each request on a connection and a task of its own,** up to 1,024 at once (§10), and a held `wait`
+  holds only its own. A query an agent calls runs on a reader thread off the event loop, in Python's default pool, four threads
+  more than the machine has CPUs and 32 at most, so a slow one holds up only its own call:
+  `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
+- **Every write goes through the one writer,** in transactions of up to 64 commands with one fsync each (§5.1), so writes are
+  ordered and never run at once, and the writer's queue is the one thing every call that writes shares: at 100 agents its ack took
+  24 to 29 ms at the median ([scale.md](reference/scale.md)), and `test_a_batch_is_one_transaction_of_at_most_64_commands`. An op
+  holds the writer while it runs and touches no world (law 3), so an extension does what is slow in an effect its own daemon
+  performs, with the slow part in a thread or a process of its own, and reports back through an op (§5.4).
+- **The host gives each effect a task of its own,** so one agent's delivery, look or stop waits for no other agent's (§5.4), as two
+  agents' probes below look at once.
+- **A look waits only for another look of its own workspace** (§13). Every probe looks at the shared workspace first, so those
+  looks queue, and a round of looks of a team in worktrees still grows with the team, as
+  [scale.md](reference/scale.md#a-git-teams-looks) measures: `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`.
+
+Within one agent:
+
+- **Its calls are in flight at once** once its harness makes them: over HTTP each is a request of its own, and the stdio shim
+  relays each line on a thread of its own: `test_one_agent_s_calls_through_the_shim_are_in_flight_at_once`.
+- **Whether a harness makes the calls of one response at once is its own.** Codex and pi ran two commands, two `cat`s and two calls
+  of ours at once, OpenHands each two in turn, and Claude Code two commands it asked approvals for in turn and the rest at once
+  ([compatibility.md](reference/compatibility.md#tool-calls-at-once)).
+- **Its effects start in order,** but for an interrupt, a stop and an answer (§5.4), and its harness's reports are heard in order.
+
+See [RFC 0077](rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md).
+
 ## 5. Kernel
 
 ```python
@@ -1292,7 +1325,8 @@ against the official client and against each real harness.
   HTTP clients that have met it, connect through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
   only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.
 - One request per connection, answered with `Connection: close`, so an idle client holds no task, socket or state here. A client
-  that goes during a call drops the call, not what it asked for: a wait stays registered.
+  that goes during a call drops the call, not what it asked for: a wait stays registered. A query runs on a reader thread off the
+  event loop, as a person's does, so a slow one holds up no other call (§4).
 - A request is bounded before it is believed: a head of 16 KiB, then `Host`, and `Origin`, which must be the origin of that `Host`, and
   the bearer, and only then a body of at most 1 MiB, with a length and no chunking. Its head has 10 s on the kernel's clock to arrive, and
   each part of its body, and of its answer as it leaves, 10 s from the part before, so a slow link that keeps going is served and a
@@ -1807,10 +1841,12 @@ isolation. A trainable team works in `shared` or `isolated` (§14). See
   session ends no agent, so it keeps the workspaces of agents that never ended, with no `release`. Each step of a stop is safe to
   repeat, so a stop a crash cut finishes when it is retried.
 - **The look.** Each turn's end and each resume request a `probe` of that agent's (§7), and its stop looks once more before it ends the
-  workspace. Looks run one at a time and change no ref, index or file. Each takes the shared workspace's commits and then the agent's
-  own workspace, reads HEAD once and uses that commit throughout, and records a status that names another HEAD as the gap
-  `workspace_unobserved`, never a mixed state, as it does a look that fails. A session whose cwd is in no git repository observes no
-  change and says so: `session.status` names the repository as `repo`, None then.
+  workspace. A look waits only for another look of its own workspace, so looks of different workspaces run at once, and changes no
+  ref, index or file. Each takes the shared workspace's commits and then the agent's own workspace, so a worker whose base holds the
+  shared workspace's new commits finds them recorded before its own, reads HEAD once and uses that commit throughout, and records a
+  status that names another HEAD as the gap `workspace_unobserved`, never a mixed state, as it does a look that fails. A session
+  whose cwd is in no git repository observes no change and says so: `session.status` names the repository as `repo`, None then. See
+  [RFC 0077](rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md).
 - **What a look records,** on `repo/<name>`, with no agent in the envelope, so it claims no turn or context, and its data naming the
   workspace, `@ada` or `shared`. A reading and a gap name as their `cause` the event that prompted the look, and a commit or a rewrite
   names none, as it was someone's act in git that the prompt did not cause: a worker's turn end whose look finds a commit in the

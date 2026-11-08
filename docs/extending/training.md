@@ -159,7 +159,9 @@ one fails, naming why.
   session's own tools. Each reaches the model named by that server, never bare, so a tool of yours named `finish` cannot collide
   with a harness's own: pi and ScriptedDriver show it as `mcp__environment__finish`, and OpenHands as `environment_finish`, as its
   SDK's client of two servers names a server's tools. A policy calls your tools by those names, and your server is called by the
-  names it lists.
+  names it lists. Agents run at once, and so do their calls ([what runs at once](../architecture.md#what-runs-at-once)), so a
+  team's wall clock rests on how your server takes calls that come together: one that runs an environment's tools one at a time
+  across the agents sharing it makes them take turns on those tools.
 - **Compaction stays on, and each compaction call carries your `compaction_headers`,** so your gateway tells it apart as it arrives
   and can keep it out of a step budget. The harness reports each such call as `model.call` of purpose `compaction`, with the id
   your model gave it: ScriptedDriver's `Compact` step, OpenHands' condenser, a wire program from its launch spec, and pi through

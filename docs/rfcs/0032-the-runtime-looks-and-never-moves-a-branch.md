@@ -2,11 +2,14 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), and extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
+| Status | Accepted, 2026-11-04; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) (a draft) |
 
 **Superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md)**: a commit's and a
 rewrite's record name no `cause`, as the turn end that prompted a look did not cause what git holds. Extended by
 [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md): an `Informed-By` value can cite an event of the session.
+
+**Its looks one at a time in a session are amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md)**, a
+draft, 2026-11-08: a look waits only for looks of its own workspace, and each probe still looks at the shared workspace first.
 
 ## Summary
 

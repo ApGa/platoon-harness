@@ -47,7 +47,7 @@ amended or extended an RFC.
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
 | [0031](0031-a-workspace-is-a-place-git-already-knows.md) | A workspace is a place git already knows | Accepted |
-| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), and extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
+| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) (a draft) |
 | [0033](0033-a-harness-s-own-worktrees-are-off.md) | A harness's own worktrees are off | Accepted |
 | [0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) | Isolation is an extension's, and the runtime's own git runs inside it | Accepted |
 | [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Accepted |
@@ -91,6 +91,7 @@ amended or extended an RFC.
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
 | [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |
 | [0076](0076-holding-an-agent-is-agent-hold.md) | Holding an agent is `agent hold`, and a takeover drives its terminal | Accepted |
+| [0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) | A look waits only for looks of its own workspace | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

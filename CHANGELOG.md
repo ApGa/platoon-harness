@@ -33,6 +33,12 @@ named here is closed.
   an isolation, a program, a training system and an estimator, how platoon-harness finds your code, by its two
   entry-point groups or `module:attr`, what a driver outside the SDK says of itself in `DriverInfo.check` and
   `DriverInfo.credentials`, and the rules your code keeps.
+- **What runs at once is stated, and held on each real binary.** The architecture says what runs at once across agents and
+  within one, and what is ordered, with the test that shows each. Three agents' shell calls on each of Claude Code, Codex, pi
+  and OpenHands against FakeModel each end only once all three are running, and each harness's test measures and pins
+  whether it runs two calls of one response at once: Codex and pi ran two commands, two `cat`s and two calls of ours at once,
+  OpenHands each two in turn, and Claude Code two commands it asked approvals for in turn and the rest at once, which
+  [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
   `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and
@@ -868,6 +874,12 @@ named here is closed.
   key the journal answered, which is answered again, as any retry is, and `agent takeover` is an unknown command, exit 64. The
   terminal's Alt+T and `/takeover` stay the planned driving of an agent's own terminal, and say that `agent hold` holds
   deliveries and no more. See [RFC 0076](docs/rfcs/0076-holding-an-agent-is-agent-hold.md).
+- **Looks at different workspaces run at once.** A look waited for every other look of the session, so a team of agents in
+  worktrees queued its looks at each turn's end: a round of 100 agents, each committing each turn, took 27 to 30 s until
+  every look had finished. A look now waits only for another look of its own workspace, and each probe still looks at the
+  shared workspace first, so a worker whose base holds its new commits finds them recorded before its own; the same round
+  took 8.6 to 10.3 s, as [the scale page](docs/reference/scale.md#a-git-teams-looks) says. See
+  [RFC 0077](docs/rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md), a draft.
 - **The courier reads only the waits it closes.** Each pass asked for the waits that hold or have run out by reading every
   wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
   waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded
@@ -1291,6 +1303,9 @@ named here is closed.
   and `schemas`, `descriptions` and `public_api_only`, which need no kernel, run and report. A folder no kernel can open,
   one another runtime holds or on a network filesystem, is refused as `Kernel.open` refuses it, where it read as
   `names` and `naming_law` passed and nothing else.
+- **A slow query an agent calls holds up no other call.** The tool server ran a query an agent called on the runtime's event
+  loop, so a slow one, such as an extension's, held up every other agent's calls, every harness's reports and every daemon
+  until it returned. It now runs on a reader thread of its own, as a person's query already did.
 - **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
   harness's `tmp` and the files its harness kept a credential in, so every copy of a session, which is its export, carried
   them. In the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and pi's caches in `tmp`,
