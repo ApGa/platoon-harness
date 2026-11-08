@@ -83,8 +83,8 @@ amended or extended an RFC.
 | [0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) | A diff is read on request, as a test is run | Draft |
 | [0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) | An approval carries the whole of what it asks | Draft |
 | [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Draft |
-| [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
 | [0068](0068-a-program-is-a-script-that-owns-its-session.md) | A program is a script that owns its session | Accepted |
+| [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
 | [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
