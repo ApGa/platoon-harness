@@ -44,6 +44,8 @@ Each example has a README that says what it does and how to run it.
 
 ## Extending
 
+- [Extending platoon-harness](extending/index.md): every way to extend it, how it finds your code, and the rules your
+  code keeps.
 - [Drivers](extending/drivers.md): how a harness is driven, and how to write a driver, in Python or any other language,
   and prove it works.
 - [Training on sessions](extending/training.md): the one contract a training system builds on, what the SDK owns and

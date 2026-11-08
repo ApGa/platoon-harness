@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **Every way to extend platoon-harness, on one page.** [docs/extending/index.md](docs/extending/index.md) names
+  each way in, a driver by `exec`, the wire, a Python package or ACP, an extension and each of its parts, a preset,
+  an isolation, a program, a training system and an estimator, how platoon-harness finds your code, by its two
+  entry-point groups or `module:attr`, what a driver outside the SDK says of itself in `DriverInfo.check` and
+  `DriverInfo.credentials`, and the rules your code keeps.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
   `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and
