@@ -31,7 +31,7 @@ from ..conftest import end_runtimes
 from .scale import EVENTS, Round, drive, hardware, nth, team
 from .scripts import MEMBERS
 
-pytestmark = [pytest.mark.slow, pytest.mark.timeout(1800)]
+pytestmark = [pytest.mark.scale, pytest.mark.timeout(1800)]
 
 KiB, MiB = 2**10, 2**20
 WALKED = 8

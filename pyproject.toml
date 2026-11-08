@@ -50,9 +50,10 @@ extend-immutable-calls = ["platoon_harness_cli.teams.Source"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers -m 'not slow and not e2e and not live'"
+addopts = "-ra --strict-markers -m 'not slow and not e2e and not live and not scale'"
 markers = [
-    "slow: longer tests such as scale and crash loops",
+    "slow: longer tests such as crash loops and the real harnesses",
+    "scale: the Scale case, run alone by hand before each release, as its budgets fit one quiet machine",
     "e2e: browser or full-process end-to-end tests",
     "live: uses a real provider and needs PLATOON_HARNESS_LIVE=1",
 ]

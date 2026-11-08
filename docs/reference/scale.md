@@ -17,8 +17,7 @@ it printed in the pull request. Run it without `-n`: under it, each worker that 
 anew, at the same time as the others.
 
 ```bash
-uv run pytest -q -s -m slow tests/integration/test_scale.py \
-  tests/integration/test_tui_budgets.py::test_the_tui_attaches_to_a_100000_event_journal_within_its_budget
+uv run pytest -q -s -m scale
 ```
 
 The hardware of record, what counts as an agent here, budgets at twice the measured values, and that no CI job holds

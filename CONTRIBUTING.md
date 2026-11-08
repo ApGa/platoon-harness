@@ -421,9 +421,10 @@ built and checked, ready for the owner to tag and publish.
    hold.
 
 3. Check the pull request as the release workflow does, with the commands below, and run the slow tests, which need the
-   harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says. They hold the
-   Scale case to budgets that fit the hardware [Scale](docs/reference/scale.md) describes: on other hardware, say in the
-   pull request how what it printed compares.
+   harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says. Then run the
+   Scale case alone, `uv run pytest -q -s -m scale`, which no other run includes: it holds the Scale case to budgets that
+   fit the hardware [Scale](docs/reference/scale.md) describes, so on other hardware, say in the pull request how what it
+   printed compares.
 
 4. Merge it once CI and the release workflow pass on it. The release workflow runs again on the commit on `main`.
 

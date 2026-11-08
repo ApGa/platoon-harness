@@ -21,7 +21,7 @@ from ..unit.tui.support import drawn, workspace
 from . import scale
 from .scripts import MEMBERS, inside
 
-pytestmark = [pytest.mark.slow, pytest.mark.timeout(180)]
+pytestmark = pytest.mark.timeout(180)
 
 LAG = 0.050
 APPEND = 0.060
@@ -48,6 +48,7 @@ def p99(values: list[float]) -> float:
     return statistics.quantiles(values, n=100)[98]
 
 
+@pytest.mark.slow
 async def test_the_event_loop_keeps_up_at_100_agents_with_one_live_stream(tmp_path):
     team = Team.model_validate(
         {
@@ -111,6 +112,7 @@ def note(seq: int) -> Event:
     )  # fmt: skip
 
 
+@pytest.mark.slow
 async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bounded():
     app = One()
     async with app.run_test(size=(120, 40)) as pilot:
@@ -143,6 +145,7 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
     assert held - at_window < (at_window - before) / 2, "memory grew past the window"
 
 
+@pytest.mark.scale
 @pytest.mark.timeout(1800)
 async def test_the_tui_attaches_to_a_100000_event_journal_within_its_budget(tmp_path):
     """The Scale case's run, then the terminal UI attached to it, until it draws every member idle and the first one's
