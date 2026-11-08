@@ -1,19 +1,19 @@
 # The browser
 
 This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
-[SwarmChat](https://swarmchat.io)'s page over one session's journal. It is a client like any other: it reads what the journal
-holds, decides nothing, and computes no status, and what a person does there is an op, through the same path as the
-terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
+[SwarmChat](https://swarmchat.io)'s page over one session's journal, and `platoon-harness web` alone a page of your sessions,
+which opens each. It is a client like any other: it reads what the journal holds, decides nothing, and computes no status, and
+what a person does there is an op, through the same path as the terminal's. [tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
 
-**Goal:** open a session in a browser, read its chats as yourself or as one of its agents, answer what needs you and act on
-the session as you, and give someone else a link that only reads.
+**Goal:** open your sessions from one page, open a session in a browser, read its chats as yourself or as one of its
+agents, answer what needs you and act on the session as you, and give someone else a link that only reads.
 
 **Prerequisites:**
 
 - `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
   environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
-- a session: one a runtime holds, to act on, as `web` starts and resumes nothing, or one no runtime holds, to read its
-  history;
+- a session: one a runtime holds, to act on, as `web SESSION` starts and resumes nothing, or one no runtime holds, to read
+  its history; [Your sessions](#your-sessions) lists every one;
 - a browser on this machine, or on another that can forward a port to it. The page's tests pass in Chromium, Firefox
   and WebKit, Safari's engine, headless, WebKit on GitHub's Linux runners alone
   ([compatibility](../reference/compatibility.md#6-supported-platforms)).
@@ -34,7 +34,7 @@ this one, as an editor's port forwarding does, run that command on the machine i
 address alone sends a browser there too.
 
 Open a link in a browser. `web` is a guest of the session's runtime, on your own control credential, as the terminal is.
-It starts and resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its history,
+`web SESSION` starts and resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its history,
 says so at the top right, and names `platoon-harness session resume`. When a runtime takes the session up again, from any
 shell, the page follows it. Ctrl+C or `SIGTERM` stops `web`, which ends every browser's session and leaves the session
 itself as it was. It serves one session on one port, as the page keeps one session in the browser per address, and one
@@ -42,6 +42,31 @@ itself as it was. It serves one session on one port, as the page keeps one sessi
 page makes new links on your own page there. While it runs, `web` is a client holding your control credential, so a run
 whose agent asks for an approval waits for you to answer it, from the page or anywhere, instead of ending `needs_human`
 at once: stop `web` for a run that should end that way.
+
+## Your sessions
+
+```console
+$ platoon-harness web
+platoon-harness: web: your sessions under <home>/.local/state/platoon-harness, on 127.0.0.1:43117. Its link opens once, within ten minutes
+platoon-harness: web: sessions link, which lists and opens your sessions, as you: http://127.0.0.1:43117/#link=5e41…
+platoon-harness: web: from another machine, forward this port under the same number, which the page's requests must name: ssh -N -L 43117:127.0.0.1:43117 devbox
+```
+
+With no session, `web` serves a page of every session under the root, as `platoon-harness` alone opens the terminal's sessions
+screen: each with whether a runtime holds it and its state, which is unknown, saying why, for one whose journal cannot be read.
+Look again reads them again, as does coming back to the page.
+
+Open serves that session's page here, on a port of its own, as `web SESSION` would, and goes to a control link of it in the
+same tab, and `web` says on stderr where it serves it. A session no runtime holds opens as its history. Opened again, it makes
+another control link of the same page. A session another `web` serves is refused, saying where that one serves, as one `web`
+serves a session at a time. The sessions page's address, without its link, opens the page again in that tab, which keeps its
+token.
+
+Its link is yours alone: only the terminal that ran `web` says one, the page makes none, no link of a session's page opens
+it, and its own opens no session's page. It serves loopback alone, as its link acts as you on every session here: `--host`
+naming any other address exits 64. From another machine, forward its port as that last line says, and each session's port as
+`web` says it when it opens one. Ctrl+C or `SIGTERM` stops `web`, which ends every browser's session on every page it serves,
+and leaves every session as it was.
 
 ## Choose a link
 
@@ -207,7 +232,9 @@ empty wherever it was opened from. The page is laid out for a wide window, and a
 What the whole of platoon-harness protects, and what it does not, is in [security.md](../security.md). The page's part:
 
 - **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
-  is refused without them. A wildcard such as `0.0.0.0` or `::`, or a name that resolves to one, as `0` does, is
+  is refused without them. Your sessions, `web` with no session, are served on loopback alone, and each session opened from
+  that page on the same host, on a port of its own: any other address exits 64, as its link acts as you on every session
+  here. A wildcard such as `0.0.0.0` or `::`, or a name that resolves to one, as `0` does, is
   refused, since a browser's requests must name the host served.
   A session on a plan login is served on loopback alone, and another address exits 78, saying why: one started with
   `--plan-login`, one of whose agents' harnesses came up last on a plan login, or one with a role that names no auth

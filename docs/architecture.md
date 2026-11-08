@@ -1710,10 +1710,14 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
-  actions show while focus is in it, so the keyboard reaches both. [web.md](how-to/web.md) is its guide, and
+  actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every
+  session under the root and how it stands, as the TUI's sessions screen lists them, on loopback alone, from one link the
+  command says, whose server keeps its own credentials, so no link of a session's page opens it and it makes none. Open
+  serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it.
+  [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
-  [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md) and [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
-  its decisions.
+  [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
+  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
 
 ## 13. Workspaces
 
@@ -2007,7 +2011,7 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
 |---|---|---|
 | Model arguments | Hallucination, prompt injection through tool arguments | Closed by construction: laws 6 and 7, server-side authorization, strict decoding |
 | Untrusted content | Board contents, repository files, tool output, rendered Markdown | `SafeText` in the terminal; escaping and hash-only CSP in the browser. Content is data, never instructions |
-| Network | Browser and remote clients | Loopback by default, and any other address needs `--host` and TLS, with a wildcard refused. View and control credentials are separate classes, fixed when minted. Links are one-time, in the fragment, and exchanged for session tokens that expire, of which `web` keeps hashes in memory. `Host` must name the authority served and a POST's `Origin` the page's own |
+| Network | Browser and remote clients | Loopback by default, and any other address needs `--host` and TLS, with a wildcard refused. View and control credentials are separate classes, fixed when minted. Links are one-time, in the fragment, and exchanged for session tokens that expire, of which `web` keeps hashes in memory. `Host` must name the authority served and a POST's `Origin` the page's own. The sessions page, `web` with no session, is served on loopback alone, as its link acts as you on every session there, and its server keeps credentials of its own, so only the link the command says opens it |
 | Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only a launch inside an extension's isolation earns `isolated`, which hides the session root, the runtime directory and your home, and leaves the network, loopback and every socket outside those reachable (§13) |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 

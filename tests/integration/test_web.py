@@ -297,3 +297,44 @@ async def test_a_session_on_a_plan_login_is_refused_any_address_but_loopback_wit
     assert would_start.code == 78 and "runs on a plan login, as helper would start on one" in would_start.stderr
     assert "forward its port" in came_up.stderr and "view link" not in refused
     assert found["control"].startswith("http://127.0.0.1:") and done.code == 0, done.stderr
+
+
+async def sessions_link(process: asyncio.subprocess.Process) -> str:
+    """The one link `web` with no session says on stderr."""
+    assert process.stderr is not None
+    async with asyncio.timeout(SECONDS):
+        while line := (await process.stderr.readline()).decode():
+            if "sessions link" in line:
+                return line.rpartition(" ")[2].strip()
+    raise AssertionError("web said no sessions link")
+
+
+async def test_web_with_no_session_says_one_link_and_serves_loopback_alone(cli: Cli):
+    """Its link lists the sessions under the root and opens one on a port of its own, whose forward it says, and
+    `SIGTERM` ends it with 0 and leaves every session running. Any address past loopback exits 64 before anything
+    listens, as its link acts as you on every session here."""
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+
+    past = await cli.run("web", "--host", "192.0.2.7")
+    web = await cli.start("web")
+    link = await sessions_link(web)
+    token = await asyncio.to_thread(opened, link)
+    _, listed = await asyncio.to_thread(call, link, "POST", "/x/sessions", {}, token)
+    _, served = await asyncio.to_thread(call, link, "POST", "/x/open", {"name": "s"}, token)
+    status, _ = await asyncio.to_thread(call, served["link"], "GET", "/view")
+    web.send_signal(signal.SIGTERM)
+    done = await finished(web)
+    after = await cli.run("session", "status", "s")
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+    port = urlsplit(served["link"]).port
+
+    assert past.code == 64 and "web with no session serves loopback alone" in past.stderr
+    assert listed["rows"] == [{"name": "s", "live": True, "state": "open"}] and listed["here"] == str(cli.folder)
+    assert port != urlsplit(link).port and status == 200
+    assert done.code == 0, done.stderr
+    assert f"web: session s on 127.0.0.1:{port}, opened from your sessions page" in done.stderr
+    assert f"ssh -N -L {port}:127.0.0.1:{port} {socket.gethostname()}" in done.stderr
+    assert json.loads(after.stdout)["state"] == "open"

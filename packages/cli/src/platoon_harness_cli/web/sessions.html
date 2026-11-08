@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sessions · platoon-harness</title>
+<link rel="icon" href="data:,">
+<style>
+:root { color-scheme: light dark; --line: light-dark(#e5e7eb, #222a38); --line2: light-dark(#d5d9e0, #2e3748);
+  --muted: light-dark(#616670, #8f98ab); --good: light-dark(#16a34a, #22c55e); --bad: light-dark(#dc2626, #f87171);
+  --panel: light-dark(#f7f7f9, #181b21); }
+body { margin: 0; background: light-dark(#ffffff, #0f1115); color: light-dark(#1d1c1d, #e6e6e6);
+  font: 15px/1.5 system-ui, -apple-system, sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 16px; margin: 32px 0 4px; }
+.about { color: var(--muted); font-size: 13px; margin: 4px 0 0; overflow-wrap: anywhere; }
+#said { min-height: 1.5em; margin: 12px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+#said.bad { color: var(--bad); }
+table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+td { overflow-wrap: anywhere; }
+td.name { font-weight: 600; }
+td.live { color: var(--good); }
+button, input { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel);
+  color: inherit; }
+button { cursor: pointer; }
+button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.why { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }
+.why:empty { display: none; }
+#look { margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sessions</h1>
+  <p class="about" id="root"></p>
+  <p id="said" role="status" aria-live="polite"></p>
+  <table id="sessions" hidden>
+    <thead><tr><th scope="col">Session</th><th scope="col">Runtime</th><th scope="col">State</th><th scope="col">Acts</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p id="none" hidden>No sessions yet.</p>
+  <button id="look" type="button">Look again</button>
+</main>
+<!--JS-->
+</body>
+</html>

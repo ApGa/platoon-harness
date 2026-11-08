@@ -191,7 +191,7 @@ For example:
 * [`serve`](#platoon-harness-serve): Start a session and keep its runtime in the foreground, with no client attached, for a supervisor.
 * [`session`](#platoon-harness-session): Sessions, from their folders, and what can be done to one as a whole.
 * [`team`](#platoon-harness-team): What a team allows and what its agents are told, before any cost.
-* [`web`](#platoon-harness-web): Open a session in the browser: SwarmChat's page, served over the session's journal.
+* [`web`](#platoon-harness-web): Open a session in the browser, SwarmChat's page served over its journal, or with no session, your sessions.
 
 **Ops on a session**:
 
@@ -243,10 +243,10 @@ For example:
 ### platoon-harness web
 
 ```console
-platoon-harness web [OPTIONS] SESSION
+platoon-harness web [OPTIONS] [ARGS]
 ```
 
-Open a session in the browser: SwarmChat's page, served over the session's journal.
+Open a session in the browser, SwarmChat's page served over its journal, or with no session, your sessions.
 
 It says two links on stderr, each of which opens once, within ten minutes, for a session in the browser that lasts
 twelve hours: a view link, which shows the session and acts on nothing, and a control link, which acts as you,
@@ -254,6 +254,11 @@ through the same ops as the terminal. A page that acts can make more links of ei
 every browser's session, and leaving it changes nothing in the session, which runs on. It starts and resumes
 nothing: on a session no runtime holds, the page shows its history and names `session resume`, which can spend
 money. Ctrl+C or SIGTERM stops it.
+
+With no session it serves a page of every session under the root, on loopback alone, and says one link, the sessions
+link, which only it gives: the page makes none, and no link of a session's page opens it. Open there serves that
+session's page here, on a port of its own, and goes to a control link of it. Stopping `web` stops serving every
+page it serves, and leaves every session as it was.
 
 It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
 loopback it also says how to reach it from another machine: forward its port under the same number. A session on a
@@ -264,13 +269,14 @@ it serves.
 
 For example:
 
+    platoon-harness web
     platoon-harness web fix-auth
     platoon-harness web fix-auth --port 8484
     platoon-harness web fix-auth --host 192.0.2.7 --certificate cert.pem --key key.pem
 
 **Arguments**:
 
-* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. Left out, every session, on loopback alone.
 
 **Parameters**:
 

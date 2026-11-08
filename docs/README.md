@@ -33,7 +33,8 @@ Each example has a README that says what it does and how to run it.
 ## How-to guides
 
 - [The terminal UI](how-to/tui.md): what `platoon-harness` opens on a terminal, its screens and its keys.
-- [The browser](how-to/web.md): `platoon-harness web SESSION`, SwarmChat's page over one session's journal.
+- [The browser](how-to/web.md): `platoon-harness web`, a page of your sessions, and `web SESSION`, SwarmChat's page over one
+  session's journal.
 - [Headless quickstart](how-to/headless.md): from a terminal or CI, with harnesses you already use and their own logins.
 - [Topologies](how-to/topologies.md): teams and topologies, with a worked example per preset.
 - [Workspaces](how-to/workspaces.md): where each agent works, a worktree of its own among them, and what becomes of it.

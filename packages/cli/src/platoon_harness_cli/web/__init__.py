@@ -1,10 +1,11 @@
-"""The browser client: SwarmChat's page over one session's journal, which `platoon-harness web SESSION` serves. The
-command line imports it only then, as it does the terminal UI.
+"""The browser client: SwarmChat's page over one session's journal, which `platoon-harness web SESSION` serves, and a
+page of your sessions, which `web` with no session serves (`sessions`). The command line imports it only then, as it
+does the terminal UI.
 
-`web` is a guest of the session's runtime, on the owner's control credential, as every client of this user's is. It
-starts and resumes nothing, so on history the page does nothing and names the command that resumes it, and leaving it
-changes nothing in the session. One `web` serves a session at a time, as its projection has one writer. A session on a
-plan login it serves on loopback alone, as a control link acts as you, on your login.
+`web SESSION` is a guest of the session's runtime, on the owner's control credential, as every client of this user's
+is. It starts and resumes nothing, so on history the page does nothing and names the command that resumes it, and
+leaving it changes nothing in the session. One `web` serves a session at a time, as its projection has one writer. A
+session on a plan login it serves on loopback alone, as a control link acts as you, on your login.
 """
 
 import asyncio
@@ -140,6 +141,15 @@ async def follow(
             await clock.sleep(LOOK)
 
 
+def forward(host: str, port: int) -> None:
+    """Say how another machine reaches a page served on loopback without TLS: through a forward of its port."""
+    target = f"[{host}]" if ":" in host else host
+    note(
+        "web: from another machine, forward this port under the same number, which the page's requests must name: "
+        f"ssh -N -L {port}:{target}:{port} {socket.gethostname()}"
+    )
+
+
 def hold(folder: Path, name: str) -> int:
     """Be the one `web` serving the session in `folder` until the lock this gives is closed, or refuse, saying where the
     one that is serves it."""
@@ -158,11 +168,19 @@ def hold(folder: Path, name: str) -> int:
 
 
 async def serve(
-    name: str, stop: asyncio.Event, *, host: str, port: int, tls: ssl.SSLContext | None, clock: Clock | None = None
+    name: str,
+    stop: asyncio.Event,
+    *,
+    host: str,
+    port: int,
+    tls: ssl.SSLContext | None,
+    clock: Clock | None = None,
+    opened: asyncio.Future[Web] | None = None,
 ) -> None:
     """Serve a session's page on `host` and `port` until `stop` is set, and say one view link and one control link on
-    stderr. A page file that is not the one pinned, or a session on a plan login past loopback, refuses this before
-    anything is served."""
+    stderr, or with `opened`, which the sessions page passes, give it the server once it listens, to make the links. A
+    page file that is not the one pinned, or a session on a plan login past loopback, refuses this before anything is
+    served."""
     page, clock = load(), clock or SystemClock()
     async with Session.attach(name) as session:
         lock = hold(session.folder, name)
@@ -179,15 +197,15 @@ async def serve(
             try:
                 await web.listen(host, port, tls=tls)
                 os.write(lock, f", at {web.authorities[0]} in process {os.getpid()}".encode())
-                note(f"web: session {name} on {web.authorities[0]}. Each link opens once, within ten minutes")
-                note(f"web: view link, which shows the session and acts on nothing: {web.link('view')}")
-                note(f"web: control link, which acts as you: {web.link('control')}")
+                if opened is None:
+                    note(f"web: session {name} on {web.authorities[0]}. Each link opens once, within ten minutes")
+                    note(f"web: view link, which shows the session and acts on nothing: {web.link('view')}")
+                    note(f"web: control link, which acts as you: {web.link('control')}")
+                else:
+                    note(f"web: session {name} on {web.authorities[0]}, opened from your sessions page")
+                    opened.set_result(web)
                 if tls is None:  # So it serves loopback, which another machine reaches only through a forward.
-                    target = f"[{host}]" if ":" in host else host
-                    note(
-                        f"web: from another machine, forward this port under the same number, which the page's "
-                        f"requests must name: ssh -N -L {web.port}:{target}:{web.port} {socket.gethostname()}"
-                    )
+                    forward(host, web.port)
                 await first(follow(session, projection, web.moved, clock, on_loopback=loopback(host)), stop.wait())
             finally:
                 await web.stop()

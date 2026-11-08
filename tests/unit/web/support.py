@@ -16,6 +16,7 @@ from platoon_harness_cli.web import bodies, follow
 from platoon_harness_cli.web.page import load
 from platoon_harness_cli.web.projection import Projection
 from platoon_harness_cli.web.server import Web
+from platoon_harness_cli.web.sessions import Sessions
 
 from ..runtime.support import harness, in_state, until
 
@@ -101,9 +102,9 @@ class Reply(NamedTuple):
 
 
 class Browser:
-    """A browser's side of the page's server: what it would send, on a real socket."""
+    """A browser's side of a page's server, a session's or the sessions page's: what it would send, on a real socket."""
 
-    def __init__(self, web: Web) -> None:
+    def __init__(self, web: Web | Sessions) -> None:
         self.web = web
         self.token = ""
 
@@ -159,9 +160,10 @@ class Browser:
         secret = link.partition("#link=")[2]
         return await self.request("POST", "/x/exchange", {}, token=secret)
 
-    async def opened(self, kind: str) -> "Browser":
-        """This browser, holding a session token of `kind`, spent from a link of its own."""
-        reply = await self.exchange(self.web.link(kind))
+    async def opened(self, kind: str = "control") -> "Browser":
+        """This browser, holding a session token of `kind`, spent from a link of its own: of either kind for a session's
+        page, and for the sessions page the one it mints."""
+        reply = await self.exchange(self.web.link() if isinstance(self.web, Sessions) else self.web.link(kind))
         assert reply.status == 200, reply.body
         self.token = reply.json()["token"]
         return self

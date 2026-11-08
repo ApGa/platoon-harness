@@ -13,7 +13,7 @@ Section 15 keeps each threat in a tier of its own:
 |---|---|---|
 | Model arguments: hallucination, and prompt injection through a tool's arguments | An agent is who its token says, never what its arguments claim: no tool schema has a field for the caller's identity, an undeclared argument is refused and journaled, and every op is authorized by the server, at call time | [§15](architecture.md#15-security), [laws 6 and 7](architecture.md#3-laws), [the tool plane](architecture.md#10-tool-plane) |
 | Untrusted content: board entries, repository files, tool output, Markdown | Content is data, never instructions: the terminal draws it through `SafeText`, and the page escapes it and runs scripts by hash alone | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
-| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS, a wildcard is refused, and a session on a plan login is served on loopback alone, which `web` checks as it starts and again as each agent comes up. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
+| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS, a wildcard is refused, and a session on a plan login is served on loopback alone, which `web` checks as it starts and again as each agent comes up. Your sessions, `web` with no session, are served on loopback alone, from one link only the command says. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
 | An agent that can run commands, as you | Nothing in this tier: see below | [§15](architecture.md#15-security), [workspaces](how-to/workspaces.md#where-an-isolated-agent-runs) |
 | Extensions and drivers | They are trusted code: installing one is trusting it, and a team or project file can select one but never install one | [§15](architecture.md#15-security), [extensions](architecture.md#17-extensions-and-configuration) |
 
@@ -62,7 +62,10 @@ did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) say
   you copy its folder.
 - **The browser.** A link opens once, within ten minutes, its secret after `#`, for a session in that browser that lasts
   twelve hours. `web` keeps only hashes, in its own memory, so stopping it ends every browser's session. Your own credential
-  never reaches a browser.
+  never reaches a browser. The sessions page's link is the command's alone: the page makes none, its server keeps
+  credentials of its own, so no link of a session's page opens it and its own opens no session's page, and it is served on
+  loopback alone, as it acts as you on every session there
+  ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md)).
 
 ## Retention
 

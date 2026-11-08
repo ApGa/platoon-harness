@@ -40,6 +40,13 @@ named here is closed.
   imported, and the sample's vote is cast through the SDK, MCP and `ph`. Loaded from its source, it is cast from the
   terminal's palette and the page's form too, and drawn by its gist in the terminal's transcript, and in the page's Provenance
   pane of its ref, opened by its address, as the page draws an extension's event in no transcript.
+- **Your sessions in the browser.** `platoon-harness web` with no session serves a page of every session under the root,
+  whether a runtime holds it and its state, as the terminal's sessions screen lists them, and Open serves a session's page in
+  the same process, on a port of its own, as `web SESSION` does, and goes to a control link of it. It listens on loopback
+  alone, and any other address exits 64, as its link acts as you on every session here. Its one link is said on the terminal
+  that ran it: the page makes none, and its server keeps credentials of its own, so no link of a session's page opens it.
+  `web` says each session's port as it opens one, for a forward from another machine. A person in a browser needed a `web`
+  of its own for each session. See [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md).
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a

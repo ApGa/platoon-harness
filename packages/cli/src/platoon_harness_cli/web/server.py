@@ -38,7 +38,9 @@ HOLDING = 64
 TEXT_LIMIT = 5_000_000
 """The most of a text file the viewer is given, as SwarmChat's own server gives it."""
 _KEY = re.compile(r"[0-9a-f]{32}")
-_PAGE = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
+HEADERS = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer")
+"""What every answer of a page's server says: that no cache keeps it, that its type is the one it names, and that it
+names no referrer."""
 _JSON = "Content-Type: application/json"
 _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
 _READS = ("/v1/x_read",)
@@ -81,12 +83,7 @@ class Web(Server[Request]):
 
     @property
     def authorities(self) -> tuple[str, ...]:
-        """What `Host` may say: the address served, and `localhost` beside a loopback one, with the port, unless it is
-        the scheme's own, which a browser leaves out."""
-        host = f"[{self._host}]" if ":" in self._host else self._host
-        loopback = ("localhost",) if self._host in ("127.0.0.1", "::1") else ()
-        port = "" if self.port == {"http": 80, "https": 443}[self._scheme] else f":{self.port}"
-        return tuple(f"{name}{port}" for name in (host, *loopback))
+        return authorities_of(self._host, self.port, self._scheme)
 
     def link(self, kind: Class, authority: str | None = None) -> str:
         """A one-time link of `kind` to the page."""
@@ -122,35 +119,35 @@ class Web(Server[Request]):
         return Request(route, head.headers["host"], held, link, body)
 
     def refuse(self, rejected: Rejected) -> bytes:
-        return response(rejected.status, json.dumps({"error": rejected.why}).encode(), _JSON, *_PAGE, *rejected.headers)
+        return refusal_answer(rejected)
 
     async def answer(self, request: Request) -> bytes:
         route = request.route
         if route == "/":  # SwarmChat's own server sends a browser on to its page, and a link's fragment goes with it.
-            return response(302, b"", "Location: /view", *_PAGE)
+            return response(302, b"", "Location: /view", *HEADERS)
         if route == "/view":
             html = ("Content-Type: text/html; charset=utf-8", f"Content-Security-Policy: {self.page.policy}")
-            return response(200, self.page.gate, *html, *_PAGE)
+            return response(200, self.page.gate, *html, *HEADERS)
         if route == "/v1/health":
             limits = {"max_text": SHOWN, "max_attachment": BODY_LIMIT, "max_attachments": 1}
-            return _json({"ok": True, "name": "platoon-harness", "version": __version__, "limits": limits})
+            return json_answer({"ok": True, "name": "platoon-harness", "version": __version__, "limits": limits})
         if route == "/x/exchange":  # A link is spent only here, in the answer that carries its token.
             if request.link is None or (spent := self.credentials.exchange(request.link)) is None:
                 raise Rejected(401, why=_SPENT)
             token, held = spent
-            return _json({"token": token, "class": held.kind, "expires": held.expires})
+            return json_answer({"token": token, "class": held.kind, "expires": held.expires})
         held = request.held
         assert held is not None
         if route == "/x/body":
-            return _json(await self._stored(request.body))
-        params = _params(request.body)
+            return json_answer(await self._stored(request.body))
+        params = params_of(request.body)
         if route == "/x/command":
-            return _json(await self._command(params))
+            return json_answer(await self._command(params))
         if route == "/x/link":
             kind = params.get("class")
             if kind not in ("view", "control"):
                 raise Rejected(400, why="a link's class is view or control")
-            return _json({"link": self.link(kind, request.authority), "class": kind})
+            return json_answer({"link": self.link(kind, request.authority), "class": kind})
         return await self._view(route.removeprefix("/v1/"), params, held)
 
     # The page's reads.
@@ -160,36 +157,36 @@ class Web(Server[Request]):
         try:
             match name:
                 case "view_page":
-                    return _json({"html": self.page.html, "js": self.page.js})
+                    return json_answer({"html": self.page.html, "js": self.page.js})
                 case "view_info":
-                    return _json(await self._info(held))
+                    return json_answer(await self._info(held))
                 case "view_snapshot":
                     statuses = await self._roster()
-                    return _json(replies.snapshot(projection, self._server_info(), statuses, self.clock.now()))
+                    return json_answer(replies.snapshot(projection, self._server_info(), statuses, self.clock.now()))
                 case "view_feed":
-                    return _json(await self._feed(params))
+                    return json_answer(await self._feed(params))
                 case "view_messages":
-                    return _json(replies.messages(projection, params))
+                    return json_answer(replies.messages(projection, params))
                 case "view_thread":
-                    return _json(replies.thread(projection, params))
+                    return json_answer(replies.thread(projection, params))
                 case "view_receipts":
-                    return _json(replies.receipts(projection, params))
+                    return json_answer(replies.receipts(projection, params))
                 case "view_posts":
-                    return _json(replies.posts(projection, params))
+                    return json_answer(replies.posts(projection, params))
                 case "view_search":
-                    return _json(replies.search(projection, params))
+                    return json_answer(replies.search(projection, params))
                 case "view_activity":
-                    return _json(replies.activity(projection, params))
+                    return json_answer(replies.activity(projection, params))
                 case "view_as":
-                    return _json(replies.seen_as(projection, params, await self._roster()))
+                    return json_answer(replies.seen_as(projection, params, await self._roster()))
                 case "view_knew":
-                    return _json(replies.knew(projection, params))
+                    return json_answer(replies.knew(projection, params))
                 case "view_text":
-                    return _json(await self._text(params))
+                    return json_answer(await self._text(params))
                 case "view_download":
                     return await self._download(params)
                 case "x_read":
-                    return _json(await self._read(params, held))
+                    return json_answer(await self._read(params, held))
             raise replies.Error(404, f"There is no request named '{name}'.")
         except replies.Error as error:
             raise Rejected(error.status, why=str(error)) from None
@@ -281,7 +278,7 @@ class Web(Server[Request]):
     async def _download(self, params: Mapping[str, Any]) -> bytes:
         found, data = await self._body(params)
         headers = (f"Content-Type: {found['type']}", f"X-Attachment: {json.dumps(found)}")
-        return response(200, data, *headers, *_PAGE)
+        return response(200, data, *headers, *HEADERS)
 
     async def _read(self, params: Mapping[str, Any], held: Held) -> dict[str, Any]:
         """One pane of the page, which `pane` names, in the words of the command line's package, read through the
@@ -465,11 +462,26 @@ def _page_form(form: Form) -> dict[str, Any]:
     return {"op": form.op, "title": form.title, "summary": form.summary, "said": form.said, "fields": fields}
 
 
-def _json(value: Any) -> bytes:
-    return response(200, json.dumps(value, ensure_ascii=False).encode(), _JSON, *_PAGE)
+def authorities_of(host: str, port: int, scheme: str) -> tuple[str, ...]:
+    """What `Host` may say to a server of `host` on `port`: the address served, and `localhost` beside a loopback one,
+    with the port, unless it is the scheme's own, which a browser leaves out."""
+    named = f"[{host}]" if ":" in host else host
+    loopback = ("localhost",) if host in ("127.0.0.1", "::1") else ()
+    shown = "" if port == {"http": 80, "https": 443}[scheme] else f":{port}"
+    return tuple(f"{name}{shown}" for name in (named, *loopback))
 
 
-def _params(body: bytes) -> dict[str, Any]:
+def refusal_answer(rejected: Rejected) -> bytes:
+    """A request refused at the HTTP layer, as a page's answer: its status, and why as JSON."""
+    return response(rejected.status, json.dumps({"error": rejected.why}).encode(), _JSON, *HEADERS, *rejected.headers)
+
+
+def json_answer(value: Any) -> bytes:
+    """`value` as a page's answer: JSON, which no cache keeps."""
+    return response(200, json.dumps(value, ensure_ascii=False).encode(), _JSON, *HEADERS)
+
+
+def params_of(body: bytes) -> dict[str, Any]:
     """A request's JSON object, Unicode throughout: JSON can escape half of a character, which no text holds."""
     try:
         params = json.loads(body or b"{}")
