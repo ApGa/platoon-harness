@@ -109,6 +109,10 @@ async with Session.start(
   `ask`, which nobody answers, by the session's own `approvals` where it states one and else by each role's; a harness's own agents
   allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`; and an `until` only a person
   reaches.
+- **Under `until = "program"`, wait on your own condition.** Such a session is done only when its program closes it, so
+  `settled()` would wait until the budget ran out, or for ever with none: wait instead on what your program does, such as
+  `session.wait` on the tasks it added, as [Run a program from Python](../how-to/topologies.md#run-a-program-from-python) does,
+  then end every agent.
 - **End every agent, deepest first,** by `depth` and `state` from `session.agents()`: retire one at rest, and cancel one at work,
   as a `retire` of it is refused `conflict`. An agent with no end is `no_end`, so none of its calls can train, and `finish` hears of
   an agent only once it has ended: leaving a session stops it, and an agent still live then keeps no end. One that does not stay
