@@ -6,6 +6,8 @@ hand before each release and no CI job runs it. Each test prints what it measure
 import asyncio
 import contextlib
 import json
+import os
+import signal
 import statistics
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,11 +21,12 @@ from platoon_harness import Session
 from platoon_harness.kernel import Kernel, SystemClock, registry
 from platoon_harness.primitives import PRIMITIVES, Counters
 from platoon_harness.rpc import LINE_LIMIT
+from platoon_harness.runtime.paths import read_running
 from platoon_harness_cli.web import follow
 from platoon_harness_cli.web.projection import Projection
 
 from ..conftest import end_runtimes
-from .scale import EVENTS, Round, drive, hardware, team
+from .scale import EVENTS, Round, drive, hardware, nth, team
 from .scripts import MEMBERS
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(1800)]
@@ -68,18 +71,21 @@ METRICS_READ = 0.100
 COUNTING = 0.028
 """The most that counting an event again from the journal may cost, as a share of the CPU the runtime spent on each:
 a bound on what the fold costs the writer, as it decodes each event too."""
+RESUMED = (7.5, 7.5)
+"""The seconds from a resume after a SIGKILL until the runtime answers, and until every member is back."""
 
 
 @dataclass(frozen=True)
 class Measured:
-    """What one run measured: the machine, each round, each query's pages, the snapshots, the page's projection, and
-    counting the journal again."""
+    """What one run measured: the machine, each round, each query's pages, the snapshots, the page's projection, a
+    resume after a kill, and counting the journal again."""
 
     hardware: Mapping[str, str]
     rounds: list[Round]
     pages: dict[str, list[float]]
     snapshots: dict[str, tuple[float, int, int]]
     projection: float
+    resumed: tuple[float, float]
     counting: tuple[float, int]
 
 
@@ -175,6 +181,26 @@ async def projected(guest: Session) -> float:
     return seconds
 
 
+async def killed_and_resumed(guest: Session, root: Path) -> tuple[float, float]:
+    """A round cut by a SIGKILL of the runtime once half the members have begun it, then the seconds until a runtime
+    resumed in its place answers, and until every member is back."""
+    head = await guest.head()
+    await guest.send("#rounds", "a round the kill cuts")
+    await nth(guest, head, "turn/*", "turn.started", MEMBERS // 2)
+    running = read_running(guest.folder)
+    assert running is not None
+    os.kill(running.pid, signal.SIGKILL)
+    killed = await guest.head()  # Read from history, which answers once the lock has gone with the runtime.
+    began = perf_counter()
+    resumed = await Session.resume(guest.name, root=root, detach=True)
+    try:
+        answered = perf_counter() - began
+        await nth(resumed, killed, "agent/*", "agent.resumed", MEMBERS)
+        return answered, perf_counter() - began
+    finally:
+        await resumed.leave()
+
+
 async def counted_again(folder: Path) -> tuple[float, int]:
     """The seconds a writer took to count every event of the journal again, once no runtime holds it, and how many."""
     kernel = Kernel.open(folder, extensions=PRIMITIVES)
@@ -187,8 +213,8 @@ async def counted_again(folder: Path) -> tuple[float, int]:
 
 
 async def run(root: Path) -> Measured:
-    """The rounds to 100,000 events, then each read the person makes of what they left, and last the journal counted
-    again, once no runtime holds it."""
+    """The rounds to 100,000 events, then each read the person makes of what they left, then a kill and a resume, and
+    last the journal counted again, once no runtime holds it."""
     cwd = root / "cwd"
     cwd.mkdir()
     measured: dict[str, Any] = {"hardware": hardware(root)}
@@ -199,6 +225,7 @@ async def run(root: Path) -> Measured:
         measured["pages"] = await asked(guest)
         measured["snapshots"] = await snapshots(guest)
         measured["projection"] = await projected(guest)
+        measured["resumed"] = await killed_and_resumed(guest, root)
     finally:
         await guest.leave()
         await asyncio.to_thread(end_runtimes, root)
@@ -306,3 +333,11 @@ def test_metrics_cost_the_writer_no_more_than_their_budget(measured: Measured):
     )
     assert share <= COUNTING
     assert max(reads) <= METRICS_READ
+
+
+def test_a_runtime_killed_at_scale_resumes_within_its_budget(measured: Measured):
+    """A round cut by a SIGKILL of the runtime once half the members have begun it, then `Session.resume`: the seconds
+    until the runtime it starts answers, and until every member's harness is back."""
+    answered, back = measured.resumed
+    print(f"resumed after a SIGKILL: answering in {answered:.1f} s, every member back in {back:.1f} s")
+    assert answered <= RESUMED[0] and back <= RESUMED[1]
