@@ -26,7 +26,7 @@ VIEWS = {
     "channels": (1, "385abe8c30d1"),
     "groups": (1, "8989bb29c3c8"),
     "deliveries": (12, "7619c2dfbf0c"),
-    "waits": (1, "745fdf295b54"),
+    "waits": (2, "13f9a8fa9801"),
     "boards": (1, "0d20dc5d4414"),
     "tasks": (1, "0f9ee7057d2b"),
     "approvals": (1, "62d28b8408f1"),

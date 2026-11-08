@@ -178,6 +178,7 @@ class WaitRecord(BaseModel, frozen=True):
 class Waits(View):
     """Waits, how each closed, and the folded progress of those still open."""
 
+    version = 2
     schema = """
     CREATE TABLE v_waits(
         id INTEGER PRIMARY KEY,
@@ -190,6 +191,8 @@ class Waits(View):
         closed TEXT
     ) STRICT;
     CREATE INDEX v_waits_waiter ON v_waits(waiter);
+    CREATE INDEX v_waits_holding ON v_waits(left) WHERE closed IS NULL;
+    CREATE INDEX v_waits_due ON v_waits(deadline) WHERE closed IS NULL;
     CREATE TABLE v_waits_conditions(
         wait INTEGER NOT NULL,
         position INTEGER NOT NULL,
@@ -262,12 +265,19 @@ class Waits(View):
         return [self._load(row) for row in rows]
 
     def closing(self, now: float) -> tuple[list[WaitRecord], float | None]:
-        """Waits whose condition holds or whose deadline has passed, and when the next deadline falls."""
+        """Waits whose condition holds or whose deadline has passed, and when the next deadline falls. Each is found
+        through an index of the open waits, so a pass reads none that closed before it."""
         due = self.db.execute(
             "SELECT min(deadline) AS due FROM v_waits WHERE closed IS NULL AND deadline > ?", (now,)
         ).fetchone()
         rows = self.db.execute(
-            "SELECT * FROM v_waits WHERE closed IS NULL AND (left <= 0 OR deadline <= ?) ORDER BY id", (now,)
+            """
+            SELECT * FROM v_waits WHERE id IN (
+                SELECT id FROM v_waits WHERE closed IS NULL AND left <= 0
+                UNION ALL SELECT id FROM v_waits WHERE closed IS NULL AND deadline <= ?
+            ) ORDER BY id
+            """,
+            (now,),
         ).fetchall()
         return [self._load(row) for row in rows], due["due"]
 

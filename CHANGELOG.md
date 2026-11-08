@@ -790,6 +790,10 @@ named here is closed.
 
 ### Changes
 
+- **The courier reads only the waits it closes.** Each pass asked for the waits that hold or have run out by reading every
+  wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
+  waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded
+  as it opens.
 - **A Codex patch names each file it changes.** A `fileChange` item's body held each file's change alone, an added file's text
   or an update's diff, which Codex gives with no path, so nobody could tell which file a change was of. Its body now names each
   file by its kind and path, `add a.py`, before that file's change, as the approval asking about it does. See

@@ -9,6 +9,7 @@ from hypothesis import strategies as st
 
 from platoon_harness.kernel import Kernel, ManualClock, Principal, Refused
 from platoon_harness.primitives import PRIMITIVES, hold_open, on
+from platoon_harness.primitives.waits import Waits
 from platoon_harness.primitives.waits import wait_for as PRIMITIVE_WAIT
 
 from ..kernel.support import supervised, until
@@ -571,6 +572,31 @@ async def test_the_courier_sleeps_until_the_next_deadline(kernel, clock):
         await clock.slept_until(1030.0)
         clock.advance(30)
         await until(kernel, "wait.expired", after=head)
+
+
+async def test_closing_reads_only_the_waits_due_through_an_index(kernel, clock):
+    """A courier's pass asks for the waits that hold or have run out, and when the next deadline falls. Each statement
+    it runs finds them through an index of the open waits, so what a long session has closed costs a pass nothing."""
+    alice, bob, carol, dave = [await spawn(kernel, name) for name in ("alice", "bob", "carol", "dave")]
+    for n in range(1, 9):  # Each replaces the one before, which closes, its deadline passed or not.
+        await wait(kernel, dave, condition("inbox/dave", n=n), timeout=float(n * 10))
+    later = await wait(kernel, dave, condition("inbox/dave"), timeout=300.0)
+    await start_turn(kernel, "bob")
+    holding = await wait(kernel, bob, condition("inbox/bob"))
+    await send(kernel, alice, "@bob", "it holds while bob's turn runs")
+    ran_out = await wait(kernel, carol, condition("inbox/carol"), timeout=30.0)
+    clock.advance(60)
+
+    with kernel._reading() as db:
+        statements: list[str] = []
+        db.set_trace_callback(statements.append)
+        closing, deadline = Waits(db).closing(clock.now())
+        db.set_trace_callback(None)
+        plans = [row["detail"] for statement in statements for row in db.execute(f"EXPLAIN QUERY PLAN {statement}")]
+
+    assert [wait.id for wait in closing] == [holding["id"], ran_out["id"]]
+    assert deadline == 1300.0 and later["state"] == "parked"
+    assert [plan for plan in plans if plan.startswith("SCAN")] == [], plans
 
 
 async def test_a_cut_off_wait_confirms_nothing(kernel, clock):
