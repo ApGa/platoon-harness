@@ -363,12 +363,6 @@ def test_an_unknown_role_in_until_is_refused():
     )
 
 
-def test_until_program_needs_a_program():
-    assert "needs a `program`" in text(
-        errors(Team(roles={"a": Role(harness="pi")}, topology=Topology(until="program")))
-    )
-
-
 def test_an_unknown_auth_profile_gets_a_did_you_mean():
     team = Team(roles={"a": Role(harness="pi", auth="wrok")}, auth={"work": {"env": ["WORK_KEY"]}})
     assert "unknown profile. Did you mean `work`?" in text(errors(team))
@@ -389,13 +383,18 @@ def test_a_relation_that_no_may_spawn_makes_true_is_warned():
     assert any("`parent` reaches nobody" in line for line in found)
 
 
-def test_team_check_refuses_a_program_it_cannot_run():
-    """No program runs yet, so a team left to one would never get what it waits for: refused, naming it."""
-    team = Team(roles={"a": Role(harness="pi")}, topology=Topology(program="nope", until="program"))
-    assert errors(team) == [
-        "topology.program: `nope` cannot run, as no program runs yet: use a topology that names none, such as "
-        "`manager-worker`, or drive the session from Python"
-    ]
+@pytest.mark.parametrize(
+    ("written", "said"),
+    [
+        ('program = "map_reduce"', "`program` is not a key of [topology], and a preset is a table."),
+        ('[topology.program]\nname = "population"\nparams = { live = 8 }', "unknown preset `program`."),
+    ],
+)
+def test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is(written, said):
+    """A program is a script that starts its session, so a topology names none, in either form it once took."""
+    with pytest.raises(ConfigError) as refused:
+        Team.loads(f'[roles.a]\nharness = "pi"\n[topology]\nuntil = "program"\n{written}\n')
+    assert [str(problem) for problem in refused.value.problems] == [f"topology.program: {said}"]
 
 
 def test_recursion_through_a_written_grant_is_seen():
@@ -439,7 +438,7 @@ TRAINABLE = {"harness": "no-driver-has-this-name", "approvals": "allow"}
         ({"approvals": "ask"}, {}, "roles.a.approvals", "nobody answers in a rollout"),
         ({"allow_native_children": True}, {}, "roles.a.allow_native_children", "their parent's key"),
         ({"workspace": "worktree"}, {}, "roles.a.workspace", "`shared` or `isolated`, not `worktree`"),
-        ({}, {"until": "program"}, "topology.until", "only someone closing the session ends it"),
+        ({}, {"until": "program"}, None, None),
         ({}, {"until": "role:a"}, "topology.until", "stay until told to finish"),
         ({"count": 0}, {"until": "role:a"}, "topology.until", "nothing starts `a`"),
         ({"stays": False}, {"until": "role:a"}, None, None),

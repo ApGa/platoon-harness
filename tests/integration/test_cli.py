@@ -612,17 +612,42 @@ async def test_team_check_says_every_problem_at_once_and_exits_78(cli: Cli):
     assert "recursive may_spawn with no limit" in done.stdout
 
 
-async def test_team_check_and_run_refuse_a_program_none_can_run_with_78(cli: Cli):
-    """A team left to a program would never get what it waits for while no program runs, so it costs nothing."""
-    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\nlive = 1\nepisodes = 1\n')
+async def test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78(cli: Cli):
+    """A session under `until = "program"` waits for its program to close it, and `run` starts one as a person, so it
+    costs nothing. The team is sound, so `team check` says nothing of it."""
+    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\n')
 
     checked = await cli.run("team", "check", swarm, "--trust")
     ran = await cli.run("run", "go", "--team", swarm, "--trust")
 
-    refused = "error: topology.program: `population` cannot run, as no program runs yet: use a topology that names"
-    assert checked.code == 78 and refused in checked.stdout
-    assert ran.code == 78 and "`population` cannot run" in ran.stderr
+    assert checked.code == 0, checked.stdout
+    assert ran.code == 78
+    assert (
+        "topology.until: `program` leaves the session to the program that owns it, and `human:you` is a person: start "
+        'it from a script, with `Session.start(team, principal="program:<name>")`'
+    ) in ran.stderr
     assert not (cli.folder / "home" / "sessions").exists()
+
+
+async def test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key(cli: Cli):
+    """Before 13926da `team check` only warned of a program, so a session could start on a team that named one. A
+    topology names none now, so its manifest no longer loads, with no shim, and its journal still reads."""
+    team = cli.write("solo.toml", solo("saying"))
+    await cli.run("run", "go", "--team", team, "--trust", "--name", "s")
+    path = cli.folder / "home" / "sessions" / "s" / "manifest.json"
+    manifest = json.loads(path.read_text())
+    assert "[topology" not in manifest["team"]
+    manifest["team"] += '\n[topology]\nuntil = "program"\nprogram = "map_reduce"\n'
+    path.write_text(json.dumps(manifest))
+    before = journal(cli, "s").read_bytes()
+
+    resumed = await cli.run("session", "resume", "s")
+    read = await cli.run("events", "s", "--json")
+
+    assert resumed.code == 78
+    assert "topology.program: `program` is not a key of [topology], and a preset is a table." in resumed.stderr
+    assert journal(cli, "s").read_bytes() == before
+    assert read.code == 0 and read.lines()[-1]["type"] == "session.stopped"
 
 
 async def test_team_show_resolved_loads_back_to_the_same_team(cli: Cli):

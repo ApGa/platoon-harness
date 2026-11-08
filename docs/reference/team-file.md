@@ -21,7 +21,6 @@ default, `required` where it has none. A table refuses a key its model does not 
 - [`Budget`](#budget)
 - [`AuthProfile`](#authprofile)
 - [`Topology`](#topology)
-- [`Program`](#program)
 - [`Group`](#group)
 - [`Topic`](#topic)
 - [`Queue`](#queue)
@@ -133,23 +132,11 @@ What may happen: a set of fragments merged by union. Presets make fragments; `a 
 | Key | Type | Default |
 |---|---|---|
 | `until` | `settled`, `program` or `role:<name>` | none |
-| `program` | name or [Program](#program) | none |
 | `edges` | lists of strings, by name | `{}` |
 | `groups` | [Group](#group) tables, by name | `{}` |
 | `channels` | [Topic](#topic), [Queue](#queue) or [Board](#board) tables, by name | `{}` |
 | `limits` | [Limits](#limits) | `{}` |
 | `grants` | list of [Grant](#grant) tables | `[]` |
-
-## Program
-
-At `[topology.program]`.
-
-A named episode program with arguments. One with no arguments is just its name.
-
-| Key | Type | Default |
-|---|---|---|
-| `name` | name | required |
-| `params` | any values, by key, at least 1 | required |
 
 ## Group
 
@@ -344,10 +331,9 @@ A pipeline whose last stage feeds the first, for at most `laps` times round.
 
 At `[topology.git-swarm]`.
 
-A population coordinating through a shared repository alone: no messages, only commits and nominations.
+A population coordinating through a shared repository alone: no messages, only commits and nominations. Its
+program, a script, owns the session and closes it.
 
 | Key | Type | Default |
 |---|---|---|
 | `role` | string | required |
-| `live` | integer | required |
-| `episodes` | integer | required |

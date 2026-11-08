@@ -129,13 +129,6 @@ class Limits(Model):
     max_hops: Positive | None = None
 
 
-class Program(Model):
-    """A named episode program with arguments. One with no arguments is just its name."""
-
-    name: Name
-    params: Annotated[Mapping[str, JsonValue], Field(min_length=1)]
-
-
 class Unexpanded(Model):
     """A preset table no known definition could expand yet, because an extension must supply one."""
 
@@ -147,7 +140,6 @@ class Topology(Model):
     """What may happen: a set of fragments merged by union. Presets make fragments; `a | b` mixes them."""
 
     until: Until | None = None
-    program: Name | Program | None = None
     edges: Annotated[
         Mapping[Name, Annotated[tuple[Selector, ...], BeforeValidator(_as_list)]], AfterValidator(_normal_edges)
     ] = {}
@@ -197,7 +189,6 @@ def union(parts: Iterable[tuple[str, Topology]]) -> Topology:
         for name, value in part.limits:
             define("limits", name, value, source)
         define("", "until", part.until, source)
-        define("", "program", part.program, source)
     if problems:
         raise ConfigError(problems)
     return Topology(

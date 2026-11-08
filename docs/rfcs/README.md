@@ -63,7 +63,7 @@ amended or extended an RFC.
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Accepted |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Accepted |
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | Accepted |
-| [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | Accepted |
+| [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | Accepted; superseded in part by [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) |
 | [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Accepted |
 | [0050](0050-a-script-is-a-person-or-a-program.md) | A script is a person or a program | Accepted |
 | [0051](0051-one-rule-for-whom-a-prompt-goes-to.md) | One rule for whom a session's prompt goes to | Accepted |

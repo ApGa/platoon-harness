@@ -2,7 +2,12 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05 |
+| Status | Accepted, 2026-11-05; superseded in part by [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) |
+
+**Superseded in part by [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md)**: a program is a script that starts its
+session as `program:<name>`, so the topology's `program` key, which `team check` refused here while no program ran, is gone with
+`Program`, and a team or a manifest that sets it is refused as any unknown key is. The `map-reduce` preset went with it, and
+`git-swarm` lost the arguments its program took. The settings nothing enforced stay gone as decided here.
 
 ## Summary
 

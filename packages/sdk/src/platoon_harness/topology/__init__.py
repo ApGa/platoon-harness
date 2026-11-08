@@ -14,7 +14,7 @@ from .presets import (
     star,
     tree,
 )
-from .spec import Board, Channel, Group, Limits, Program, Queue, Topic, Topology, Unexpanded, union
+from .spec import Board, Channel, Group, Limits, Queue, Topic, Topology, Unexpanded, union
 
 __all__ = [
     "PRESETS",
@@ -22,7 +22,6 @@ __all__ = [
     "Channel",
     "Group",
     "Limits",
-    "Program",
     "Queue",
     "Topic",
     "Topology",

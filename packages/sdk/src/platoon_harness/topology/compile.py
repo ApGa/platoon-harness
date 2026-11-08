@@ -223,6 +223,4 @@ def structure(team: Team) -> list[Problem]:
                 problems.append(Problem("topology.grants", what))
     if topology.until and topology.until.startswith("role:"):
         role_exists("topology.until", topology.until.partition(":")[2])
-    if topology.until == "program" and topology.program is None:
-        problems.append(Problem("topology.until", "`program` needs a `program` to wait for"))
     return problems

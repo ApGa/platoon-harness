@@ -81,20 +81,20 @@ def test_show_describes_a_pipeline():
     )
 
 
-def test_show_describes_what_a_program_writes_and_reads():
+def test_show_describes_what_a_program_writes_reads_and_closes():
     channels = {
         "map": Queue(writers="program", readers="role:mapper"),
         "results": Board(writers=["role:mapper", "role:reducer"], readers=["role:reducer", "program"]),
     }
     team = Team(
         roles={"mapper": Role(harness="codex", count=16), "reducer": Role(harness="claude")},
-        topology=Topology(channels=channels),
+        topology=Topology(channels=channels, until="program"),
     )
     assert team.show() == (
         "Mappers (codex) may message no one. reducer (claude) may message no one.\n"
         "The program adds to queue `map`; mappers claim from it. "
         "Mappers and reducer write board `results`; the program and reducer read it. "
-        "Closes when the session settles."
+        "Closes when the program closes it."
     )
 
 
@@ -133,11 +133,6 @@ def test_show_refuses_an_unresolved_team():
 def test_defaults_stay_out_of_the_resolved_form():
     resolved = tomllib.loads(Team(roles={"a": Role(harness="pi")}).show(resolved=True))
     assert resolved == {"roles": {"a": {"harness": "pi"}}}
-
-
-def test_the_resolved_form_prints_program_arguments():
-    resolved = tomllib.loads(PRESET_TEAMS["git-swarm"].show(resolved=True))
-    assert resolved["topology"]["program"]["params"]["uncharged"] == ["abstained"]
 
 
 def test_several_writers_print_as_a_list_and_one_as_a_string():

@@ -11,7 +11,6 @@ from platoon_harness.topology import (
     Board,
     Group,
     Limits,
-    Program,
     Queue,
     Topic,
     compile,
@@ -65,11 +64,8 @@ def test_a_preset_behaves_as_its_expansion(name):
 
 
 @pytest.mark.parametrize("name", PRESETS)
-def test_every_preset_passes_team_check_but_for_a_program_none_runs_yet(name):
-    team = PRESET_TEAMS[name]
-    assert [problem.where for problem in errors(team)] == (
-        [] if team.topology.program is None else ["topology.program"]
-    )
+def test_every_preset_passes_team_check(name):
+    assert errors(PRESET_TEAMS[name]) == []
 
 
 def test_toml_and_python_build_the_same_object():
@@ -210,7 +206,7 @@ def test_stages_must_link_two_roles():
 
 
 def test_git_swarm_coordinates_through_artifacts_alone():
-    topology = git_swarm("worker", live=8, episodes=64)
+    topology = git_swarm("worker")
     assert topology.edges == {}
     nominations = topology.channels["nominations"]
     assert isinstance(nominations, Topic)
@@ -218,10 +214,6 @@ def test_git_swarm_coordinates_through_artifacts_alone():
     assert (nominations.delivery, nominations.history) == ("pull", "full")
     assert topology.channels.keys() == {"inflight", "nominations"}
     assert topology.channels["inflight"] == Board(writers="all", readers="all")
-    assert topology.program == Program(
-        name="population",
-        params={"role": "worker", "live": 8, "episodes": 64, "uncharged": ["abstained"], "readout": "plurality"},
-    )
     assert topology.until == "program"
 
 

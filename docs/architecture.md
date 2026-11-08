@@ -606,9 +606,11 @@ check decides what it shows.
 `platoon_harness.patterns` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) uses the public API only: `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
 `lock`, `request`, `vote`, `supervisor`, `population`, `verifier_generator`. These are compositions, never scheduler modes.
 
-An episode **program** is an async function holding a `program` principal, so control flow never enters config. None runs yet, so
-`team check` refuses a team that names one, which a session would leave waiting for what nothing does (§8). See
-[RFC 0048](rfcs/0048-a-setting-nothing-carries-out-is-refused.md).
+An episode **program** is a Python script that starts its session as `program:<name>` and drives it through the session's ops, so
+control flow never enters config. It keeps nothing that must survive a restart: run again on the session after a crash, it reads what
+the record holds, and a command it sends again under the key it chose the first time answers from the journal, so it acts once
+(§5.1). A topology names no program, and `until = "program"` leaves a session to the program that owns it (§7, Completion). See
+[RFC 0068](rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 
 ## 7. Primitive semantics
 
@@ -890,8 +892,9 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
 due timer. A wait the runtime could close counts as a deliverable delivery, and so does a wake not yet due. A human message can
 un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so a message
 that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would reach
-anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion. A
-team with no root uses `"settled"`. A session's prompt goes to the agent it names, or else to every agent the session starts, as
+anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
+`"program"` leaves it to the program that owns the session, which closes it, so a person's start of such a team is refused before any
+cost, naming the script way. A team with no root uses `"settled"`. A session's prompt goes to the agent it names, or else to every agent the session starts, as
 `Team.recipients` says. A close ends no agent: one left idle keeps no end in the journal, which is unknown and not `cancelled`, so a
 training system retires or cancels each of its agents before a rollout returns (§14).
 
@@ -1011,7 +1014,6 @@ max_hops = 8
 | `groups` | Named membership rules: `roles`, `members` (principal ids), or `order`, which `next` and `prev` walk. Each change bumps the group's stream version, which is its generation |
 | `limits` | `max_depth` `max_children` `max_live` `max_hops` |
 | `grants` | Written-out `(who, ops, on)` rows, which is how an extension's op reaches a role |
-| `program` | Optional control flow, in Python |
 | `until` | §7, Completion |
 
 **Selectors** are the same everywhere: `self parent children siblings ancestors descendants next prev human program all
@@ -1022,7 +1024,7 @@ to be relative to, so its `writers` and `readers` take only `human program all r
 **Rules.** Default deny. Presets and keys form a union, `a | b` in Python, so order never matters and the hash cannot tell how a
 topology was mixed. Edges and grants add up. There is no `deny`, because mixing would stop being monotonic: adding a fragment could
 take authority away. Two sources defining
-one channel, group, limit, `program` or `until` differently is a load error that names both. Anything a preset can do, you can write
+one channel, group, limit or `until` differently is a load error that names both. Anything a preset can do, you can write
 out. A preset that behaves differently from its expansion is a bug.
 
 **Compilation.** Topology compiles to one `(who, ops, on)` table, with relations in `on` (`inbox/{children}`). Grants name
@@ -1059,9 +1061,8 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   moment, since a rule would go on to cover agents past its reach, and one that covers nobody is refused. `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives))
   comes from a human or program, and every event carries `topology_rev`.
 - **`team check`** runs before any cost and reports everything at once. It refuses recursive spawning without `max_depth`, whether
-  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, a
-  `program`, since none runs yet and a team left to one would get nothing it waits for, and an unknown preset, harness, extension,
-  role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
+  by `may_spawn` or a written grant of `agent.spawn`, a cycle without `max_hops`, a `tokens` or `usd` limit with no estimate, and an
+  unknown preset, harness, extension, role, group or auth profile. A team that names no extension has nothing to wait for, so an unknown
   preset is refused at load. A cycle is a loop of wakes between roles. A reply up a tree is not one, so `parent`, `children`,
   `ancestors` and `descendants` edges never count, and neither does a channel or inbox that does not wake. A parent and a child that can
   stay are the exception: a message from the parent wakes the child, and its answer wakes the parent, so `team check` warns of a cycle

@@ -13,7 +13,7 @@ from pydantic import ConfigDict, ValidationError, validate_call
 
 from platoon_harness.schema import ConfigError, Problem, nearest, problems_in
 
-from .spec import Board, Group, Limits, Program, Queue, Topic, Topology, Unexpanded, union
+from .spec import Board, Group, Limits, Queue, Topic, Topology, Unexpanded, union
 
 type Preset = Callable[..., Topology]
 type Roles = str | Sequence[str]
@@ -114,20 +114,11 @@ def ring(stages: Sequence[str], *, laps: int) -> Topology:
     return Topology(channels=_stage_queues(links), limits=Limits(max_hops=laps * len(stages)))
 
 
-def git_swarm(role: str, *, live: int, episodes: int) -> Topology:
-    """A population coordinating through a shared repository alone: no messages, only commits and nominations."""
+def git_swarm(role: str) -> Topology:
+    """A population coordinating through a shared repository alone: no messages, only commits and nominations. Its
+    program, a script, owns the session and closes it."""
     return Topology(
         until="program",
-        program=Program(
-            name="population",
-            params={
-                "role": role,
-                "live": live,
-                "episodes": episodes,
-                "uncharged": ["abstained"],
-                "readout": "plurality",
-            },
-        ),
         channels={
             "inflight": Board(writers="all", readers="all"),
             "nominations": Topic(writers=f"role:{role}", readers="all", delivery="pull", history="full"),

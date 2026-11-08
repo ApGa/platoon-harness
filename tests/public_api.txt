@@ -535,7 +535,6 @@ platoon_harness.topology.mesh
 platoon_harness.topology.pipeline
 platoon_harness.topology.preset_name
 platoon_harness.topology.PRESETS
-platoon_harness.topology.Program
 platoon_harness.topology.Queue
 platoon_harness.topology.ring
 platoon_harness.topology.scopes

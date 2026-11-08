@@ -140,7 +140,8 @@ def prepare(
     trainable: bool = False,
 ) -> Path:
     """Check a team and write down how it starts, before any cost, and who starts it, `principal`, a person or a
-    program. `trainable` checks it as a training system starts it. The folder is all a runtime then needs.
+    program. A session left to its program, under `until = "program"`, is a program's to start. `trainable` checks it as
+    a training system starts it. The folder is all a runtime then needs.
 
     This blocks, because a driver may describe itself by running something.
     """
@@ -151,12 +152,19 @@ def prepare(
     problems = check(
         team, plan_login=plan_login, trainable=trainable, approvals=approvals, cwd=cwd, root=root, name=name
     )
+    resolved = team.resolved(Installed())
+    if resolved.topology.until == "program" and principal.startswith("human:"):
+        what = (
+            f"`program` leaves the session to the program that owns it, and `{principal}` is a person: start it from a "
+            'script, with `Session.start(team, principal="program:<name>")`'
+        )
+        problems += (Problem("topology.until", what),)
     if errors := [problem for problem in problems if problem.level == "error"]:
         raise ConfigError(errors)
     for warning in problems:
         log.warning("%s", warning)
     manifest = Manifest.of(
-        team.resolved(Installed()),
+        resolved,
         principal=principal,
         approvals=approvals,
         cwd=str(cwd),

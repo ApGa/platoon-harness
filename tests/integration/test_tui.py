@@ -320,6 +320,25 @@ async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answe
     assert manifest.plan_login is True
 
 
+async def test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way(tmp_path):
+    """The terminal UI starts a session as a person, and `until = "program"` leaves one to a program."""
+    (tmp_path / PROJECT_FILE).write_text(
+        f'[roles.lead]\nharness = "{inside("saying")}"\n[topology]\nuntil = "program"\n'
+    )
+    script_way = 'start it from a script, with `Session.start(team, principal="program:<name>")`'
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press("tab", *"crew", "tab", *"yes", "enter")
+        await drawn(pilot, lambda _: any(script_way in str(notice.message) for notice in app._notifications))
+        assert isinstance(app.screen, Sessions)
+        await pilot.press("ctrl+q")
+
+    assert not (tmp_path / "sessions" / "crew").exists()
+
+
 async def test_stopping_a_session_takes_one_confirmation_and_resuming_says_it_can_spend_money(tmp_path):
     guest = await Session.start(saying(), name="s", root=tmp_path, detach=True)
     await in_state(guest, "lead", "idle")

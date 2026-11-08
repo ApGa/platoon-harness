@@ -241,6 +241,23 @@ def test_a_principal_is_a_person_or_a_program_by_a_name(tmp_path, principal):
         prepare(team_of(), root=tmp_path, principal=principal)
 
 
+def test_a_session_left_to_its_program_needs_a_program_to_own_it(tmp_path):
+    """`until = "program"` waits for a close only the program that owns the session makes, so a person's start is
+    refused before any cost, naming the script way, and a program's goes ahead."""
+    team = team_of(topology={"until": "program"})
+
+    with pytest.raises(ConfigError) as refused:
+        prepare(team, root=tmp_path, principal="human:ada")
+    folder = prepare(team, name="s", root=tmp_path, principal="program:reviews")
+
+    assert [str(problem) for problem in refused.value.problems] == [
+        "topology.until: `program` leaves the session to the program that owns it, and `human:ada` is a person: start "
+        'it from a script, with `Session.start(team, principal="program:<name>")`'
+    ]
+    assert [path.name for path in (tmp_path / "sessions").iterdir()] == ["s"]
+    assert Manifest.model_validate_json((folder / MANIFEST).read_text()).principal == "program:reviews"
+
+
 def test_the_manifest_says_how_the_session_was_started(tmp_path):
     folder = prepare(team_of(), name="s", root=tmp_path, principal="human:ada", approvals="deny", cwd=tmp_path)
 

@@ -91,6 +91,6 @@ PRESET_TEAMS = {
     ),
     "git-swarm": Team(
         roles={"worker": Role(harness="codex", workspace="worktree", count=8)},
-        topology=git_swarm("worker", live=8, episodes=64),
+        topology=git_swarm("worker"),
     ),
 }

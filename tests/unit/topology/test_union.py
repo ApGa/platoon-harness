@@ -141,7 +141,6 @@ def test_two_sources_defining_one_channel_alike_is_no_conflict():
         (Topology(groups={"g": Group(roles=("a",))}), Topology(groups={"g": Group(roles=("b",))}), "topology.groups.g"),
         (Topology(limits=Limits(max_hops=4)), Topology(limits=Limits(max_hops=8)), "topology.limits.max_hops"),
         (Topology(until="program"), Topology(until="settled"), "topology.until"),
-        (Topology(program="a"), Topology(program="b"), "topology.program"),
     ],
 )
 def test_anything_else_defined_twice_must_also_agree(left, right, where):

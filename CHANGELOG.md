@@ -739,6 +739,12 @@ named here is closed.
   do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
   harness, no module of the tests. Its stand-ins and the review example's run each role's code as a `Do` step, and a
   test holds every example to the SDK's public names.
+- **A team left to its program is a program's to start.** `until = "program"` leaves a session to the program that owns it, which
+  closes it, so a person's start of such a team, by `run`, the terminal UI or `Session.start` under `human:<name>`, is refused before
+  any cost, `run` with exit 78, naming the script way: `Session.start(team, principal="program:<name>")`. `team check` says nothing
+  of it, as a script's team is sound, and `trainable_problems` no longer counts `program` among the `until`s only a person reaches,
+  as a training system's program owns each rollout's session. `team show` says such a session closes when the program closes it.
+  See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,
   which it reads and never writes, so nothing is written through it, and a view link reaches it as it reaches SwarmChat's
@@ -1477,6 +1483,13 @@ named here is closed.
 
 ### Removed
 
+- **A topology's `program` key, with `platoon_harness.topology.Program`, as a program is a script.** A program starts its session
+  as `program:<name>` and drives it from Python, so a team names none. A team that sets `program` is refused as any unknown key is,
+  and so is a session from before 13926da whose team named one, on resume, as its manifest no longer loads; its journal still
+  reads. `team check`'s refusal of a program goes with the key, and so does its refusal of `until = "program"` with no program to
+  wait for. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
+- **The `git-swarm` preset's `live` and `episodes`, which only its program's arguments carried.** `git_swarm` takes `role` alone,
+  and a team that sets either is refused as a preset's unknown argument is. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **The `map-reduce` preset, with `platoon_harness.topology.map_reduce`, which no program runs.** It named a program, `map_reduce`,
   that nothing runs, so `team check` refused every team that used it, and no user of it beyond itself is in sight. A team that
   uses it is refused as an unknown preset is: write its queues and board out, and add to them from a script that starts the

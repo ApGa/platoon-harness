@@ -464,10 +464,6 @@ def team_check(
                 "parent wakes its child, and each answer wakes the parent: set `max_hops` to bound them"
             )
             problems.append(Problem("topology.limits.max_hops", what, "warning"))
-    if (program := topology.program) is not None:
-        name = program if isinstance(program, str) else program.name
-        instead = "use a topology that names none, such as `manager-worker`, or drive the session from Python"
-        problems.append(Problem("topology.program", f"`{name}` cannot run, as no program runs yet: {instead}"))
 
     problems += _unestimated(team.budget, "budget")
     problems += _warnings(team)
@@ -478,13 +474,12 @@ def team_check(
 
 
 def _reached_alone(team: Team) -> str | None:
-    """Why only a person brings a session of this team to its `until`, or None when something else does: no program
-    runs, a role's agents that stay end only when told to finish, and a role nothing starts a person must start."""
+    """Why only a person brings a session of this team to its `until`, or None when something else does: a role's
+    agents that stay end only when told to finish, and a role nothing starts a person must start. `program` is reached
+    by the program that owns the session, as a training system's program owns each rollout's."""
     until = team.topology.until or "settled"
-    if until == "program":
-        return "`program` is left to a program, and none runs, so only someone closing the session ends it"
     role = until.removeprefix("role:")
-    if until == "settled" or role not in team.roles:
+    if until in ("settled", "program") or role not in team.roles:
         return None
     stays = team.roles[role].stays
     if stays or (stays is None and team.starts(role)):

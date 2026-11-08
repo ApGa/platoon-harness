@@ -10,8 +10,8 @@ own, checked before it spends anything.
 The TOML forms go in a team file, whose every key [the team file reference](../reference/team-file.md) lists.
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
-checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each but git-swarm,
-which needs a program and which it refuses until programs run: see [STATUS.md](../STATUS.md).
+checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each, and `run` runs
+each but git-swarm, whose session is its program's, a script that starts it.
 
 ```python
 from platoon_harness.team import Role, Team
@@ -250,8 +250,9 @@ writer adds to queue `to-critic`; critic claims from it. Each entry wakes its re
 
 ### git-swarm
 
-A population with no messages and no roles to speak of: commits go to a shared repository, and a program tallies nominations at the end.
-No program runs yet, so `team check` refuses this team, naming it.
+A population with no messages and no roles to speak of: commits go to a shared repository, and nominations to a topic everyone reads.
+Its program, a Python script that starts the session as `program:<name>`, owns the session and closes it, so `run` and the terminal
+UI refuse this team, naming the script way.
 
 ```toml
 [roles.worker]
@@ -261,20 +262,18 @@ count = 8
 
 [topology.git-swarm]
 role = "worker"
-live = 8
-episodes = 64
 ```
 
 ```python
 team = Team(
     roles={"worker": Role(harness="codex", workspace="worktree", count=8)},
-    topology=git_swarm("worker", live=8, episodes=64),
+    topology=git_swarm("worker"),
 )
 ```
 
 ```text
 Workers (codex, own worktrees) may message no one.
-Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Program `population` runs it. Closes when the program finishes.
+Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Closes when the program closes it.
 ```
 
 ## Mix presets
@@ -332,8 +331,8 @@ Three rules keep this safe:
 
 - **Order never matters.** Any arrangement of the same parts gives the same hash.
 - **There is no `deny`.** Grants only add up, and anything not granted is refused.
-- **Two sources may not disagree.** Defining one channel, group, limit, `program` or `until` differently in two places is a load error
-  that names both. Defining it alike is fine.
+- **Two sources may not disagree.** Defining one channel, group, limit or `until` differently in two places is a load error that
+  names both. Defining it alike is fine.
 
 To use one preset twice, write an array of tables, `[[topology.pipeline]]`, or `|` two calls, and give each a different channel name.
 Presets with fixed names (`pipeline`, `ring`, `git-swarm`) cannot be used twice over the same stage: write the second out.
@@ -405,8 +404,7 @@ valid input. That form is what the manifest stores and hashes.
 | `groups` | `roles`, `members` (principal ids) or `order`, which `next` and `prev` walk. A group is addressed as `+name` |
 | `limits` | `max_depth`, `max_children`, `max_live`, `max_hops` |
 | `grants` | Plain `(who, ops, on)` rows, for an extension's ops |
-| `program` | Optional control flow, in Python, by name |
-| `until` | `settled`, `program` or `role:x` |
+| `until` | `settled`, `role:x`, or `program`, which leaves the session to the program that owns it |
 
 **Selectors** are the same everywhere: `self parent children siblings ancestors descendants next prev human program all role:x group:x`.
 A channel in a team has no agent to be relative to, so its `writers` and `readers` use only `human`, `program`, `all`, `role:x` and
@@ -463,12 +461,13 @@ problems = team_check(team, capabilities=known)
 ```
 
 It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
-harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, a
-program, since none runs yet, and any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role
-that can never start, a role with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a
-wake cycle that runs through a child that can stay, a role that lets its harness start agents of its own, saying what that gives up, a
-preamble that leaves out `{tools}` or `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a
-harness that reaches none of our tools is never told.
+harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, and
+any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never start, a role with no
+path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a wake cycle that runs through a child
+that can stay, a role that lets its harness start agents of its own, saying what that gives up, a preamble that leaves out `{tools}` or
+`{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a harness that reaches none of our tools
+is never told. It says nothing of `until = "program"`, as a team is checked before anyone starts it: a person's start of such a team
+is refused there.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the

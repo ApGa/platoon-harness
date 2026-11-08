@@ -89,7 +89,7 @@ class _Prose:
 
     def closing(self, until: str) -> str:
         if until == "program":
-            return "Closes when the program finishes."
+            return "Closes when the program closes it."
         if until == "settled":
             return "Closes when the session settles."
         role = until.partition(":")[2]
@@ -140,8 +140,5 @@ def describe(team: Team) -> str:
     if limits:
         shared.append(f"Limits: {', '.join(limits)}.")
     shared += [f"{grant.who} may {grant.ops} on {grant.on}." for grant in topology.grants]
-    if topology.program is not None:
-        program = topology.program if isinstance(topology.program, str) else topology.program.name
-        shared.append(f"Program `{program}` runs it.")
     shared.append(prose.closing(topology.until or "settled"))
     return f"{' '.join(map(prose.role, team.roles))}\n{' '.join(shared)}"
