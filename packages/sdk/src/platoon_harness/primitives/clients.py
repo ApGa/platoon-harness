@@ -124,9 +124,15 @@ class Attention(View):
     @fold("agent.ended")
     def agent_gone(self, event: Event) -> None:
         """What only that agent could have settled is moot, a conflict among it, which the Ending names with the
-        workspace kept for it. A final report nobody received waits for a human."""
+        workspace kept for it, and its messages to the person are still theirs to read but take no reply. A final
+        report nobody received waits for a human."""
         marks = ", ".join("?" * len(_MOOT_WITH_ITS_AGENT))
         self._lower(event, f"agent = ? AND kind IN ({marks})", event.agent, *_MOOT_WITH_ITS_AGENT)
+        self.db.execute(
+            "UPDATE v_attention SET actions = '[]', seq = ? "
+            "WHERE open = 1 AND kind = 'mention' AND agent = ? AND actions != '[]'",
+            (event.seq, event.agent),
+        )
         self.db.execute("DELETE FROM v_attention_conflicts WHERE workspace = ?", (f"@{event.agent}",))
         if event.data["status"] == "finished" and not event.data["heard"]:
             self._raise(event.stream, "mention", event)

@@ -567,6 +567,21 @@ async def test_an_action_names_only_the_arguments_it_knows(kernel):
     ]
 
 
+async def test_a_mention_offers_no_reply_once_its_sender_has_ended(kernel, ada):
+    """A message to an agent that has ended is refused, so its message to the person stays theirs to read, and its
+    Reply goes, which a watcher hears."""
+    frank = await spawn(kernel, "frank")
+    asked = await send(kernel, frank, "@ada", "got a minute?")
+    offered = {row["id"]: row["actions"] for row in attention(kernel)}
+    cursor = result_of(kernel.query(ada, "view.watch", {"name": "attention"}))["cursor"]
+    result_of(await kernel.submit(frank, "agent.finish", {"gist": "done"}))
+
+    rows = {row["id"]: row for row in attention(kernel)}
+    heard = result_of(kernel.query(ada, "view.watch", {"name": "attention", "after": cursor}))["rows"]
+    assert [action["label"] for action in offered[asked["ref"]]] == ["Reply"]
+    assert rows[asked["ref"]]["actions"] == [] and asked["ref"] in {row["id"] for row in heard}
+
+
 async def in_flight(kernel, name: str, kind: str) -> dict:
     """Start the one effect of `kind` that waits, as a daemon would, and give its id and attempt."""
     effect = next(row for row in result_of(kernel.query(kernel.runtime, "effect.ready", {})) if row["kind"] == kind)

@@ -1648,7 +1648,7 @@ with what it fixes, as a budget's place offers `budget.set` with its scope, fill
 set to, which `budget.set` replaces whole, and leaves the change to the person. Every kind of
 place carries such an action or says in its gist what settles it. A lost turn, a wake past `max_hops`, and an agent's failure or
 conflict, which its next turn settles, offer to write to it, as a person's message is no hop; a mention is read, and offers a reply
-where its sender takes one; a dead task offers to add it again, citing it, which closes it; your checkout's conflict and a daemon
+while its sender takes one, until it ends; a dead task offers to add it again, citing it, which closes it; your checkout's conflict and a daemon
 that keeps failing say in their gist what settles them; and a failure of no agent's says that nothing tries it again, and stands
 ([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft).
 

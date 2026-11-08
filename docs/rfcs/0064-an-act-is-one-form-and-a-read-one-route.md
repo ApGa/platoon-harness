@@ -149,7 +149,7 @@ gist, and `budget set` as filled in would set again what stands, restarting its 
 | `approval` | An approval left to `ask` | Allow and Deny, `approval.resolve` with `id`, `verdict` and `expected_version` | Its answer, or its turn's end |
 | `uncertain` | An effect recovery could not settle | It happened and It did not, `effect.settle` with `id` and `happened` | Its settling |
 | `uncertain` | A turn a crash cut off | Write to it, `message.send` with `to`, its agent, in a form | Its agent's next turn, which a message starts |
-| `mention` | A message to the person | Reply, `message.send` with `to`, its sender, and `reply_to`, in a form | A reply, and reading it, which the person's marks say |
+| `mention` | A message to the person | Reply, `message.send` with `to`, its sender, and `reply_to`, in a form, until its sender ends, which takes it away, as a message to an agent that has ended is refused | A reply, and reading it, which the person's marks say |
 | `mention` | The runtime's report of an agent's end to the person who started it, or a final report nobody heard | None: it is the person's to read, and its agent, which has ended, takes no reply | Reading it, which the person's marks say |
 | `conflict` | An agent's look | Write to it, `message.send` with `to`, in a form, and its gist: `tell @ada, or resolve it in your own checkout, never in its workspace, where any commit is recorded as @ada's` | Its agent's next turn, or a look that finds none |
 | `conflict` | Your checkout's look | Its gist: `resolve it in your checkout, <path>` | A look that finds none |

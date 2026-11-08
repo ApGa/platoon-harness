@@ -55,7 +55,7 @@ named here is closed.
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **Every place that needs you carries its act, or says what settles it.** A lost turn, a wake past `max_hops`, and an agent's
   failure or conflict, which its next turn settles, offer Write to it, a message to it in `message send`'s form, as a person's
-  message is no hop. A mention offers Reply where its sender takes one. A dead task offers Add it again, `task add` on its
+  message is no hop. A mention offers Reply while its sender takes one, until it ends. A dead task offers Add it again, `task add` on its
   queue citing it, and a task added that cites it closes its place, where it stood until the session ended. A failure of no
   agent's says that nothing tries it again. Each of these had no action and said nothing of what settles it. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
