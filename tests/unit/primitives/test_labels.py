@@ -102,19 +102,25 @@ async def test_a_label_outside_the_team_s_is_refused_saying_what_may_be_given(ke
 
 
 async def test_a_person_s_a_program_s_and_the_runtime_s_labels_meet_the_same_check(kernel, ada):
+    """Each adds a task and spawns an agent: with a label the team does not declare, each is refused, and with one it
+    does, each is recorded."""
     program = Principal(id="program:trainer")
     await enroll(kernel, program)
     await grant(kernel, "program")
-    await channel(kernel, "tasks", kind="queue")
 
-    for by in (ada, program, kernel.runtime):
-        refused = refusal(
-            await kernel.submit(by, "task.add", {"queue": "tasks", "gist": "x", "labels": {"size": "big"}})
-        )
-        given = {"queue": "tasks", "gist": "find it", "labels": {"kind": "search"}}
-        assert refused.code == "invalid" and result_of(await kernel.submit(by, "task.add", given))
+    unknown, why = await adding(kernel, {"size": "big"}), "this team has no label size: its labels are difficulty, kind"
 
-    assert [event.actor for event in of_type(kernel, "task.added")] == ["human:ada", "program:trainer", "runtime"]
+    for number, by in enumerate((ada, program, kernel.runtime)):
+        for op, args in unknown:
+            args = {**args, "name": f"w{number}"} if op == "agent.spawn" else args
+            found = refusal(await kernel.submit(by, op, args))
+            assert (found.code, found.detail) == ("invalid", why)
+            result_of(await kernel.submit(by, op, {**args, "labels": {"kind": "search"}}))
+
+    actors = ["human:ada", "program:trainer", "runtime"]
+    assert [event.actor for event in of_type(kernel, "task.added")] == actors
+    spawned = [(event.actor, event.data["labels"]) for event in of_type(kernel, "agent.spawned")]
+    assert spawned == [(actor, {"kind": "search"}) for actor in actors]
 
 
 @pytest.mark.parametrize("labels", [{}])
