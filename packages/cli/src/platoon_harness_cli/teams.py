@@ -8,7 +8,7 @@ from pathlib import Path
 from cyclopts import App, Parameter
 
 from platoon_harness import ConfigError, Team, load_team, told
-from platoon_harness.config import PROJECT_FILE, sanitized
+from platoon_harness.config import PROJECT_FILE, load_trusted, sanitized
 from platoon_harness.extensions import Installed
 from platoon_harness.runtime.opening import check as problems_of
 from platoon_harness.schema import Problem
@@ -35,6 +35,15 @@ class Source:
 
     def load(self, path: Path | None) -> Team:
         """The team: the project file, the team file at `path` over it, then these."""
+        return load_team(path, sets=self._lines(path), trust_project=self.trust)
+
+    def trusted(self, path: Path | None) -> tuple[Team, tuple[Problem, ...]]:
+        """The team loaded trusted, and each value of its files that trust took, as the problem an untrusted load meets,
+        from one read."""
+        return load_trusted(path, sets=self._lines(path))
+
+    def _lines(self, path: Path | None) -> list[str]:
+        """What layers over the files, or a refusal where there is no team to load."""
         lines = list(self.set)
         if self.harness is not None:
             name = json.dumps(self.harness)
@@ -44,7 +53,7 @@ class Source:
                 f"no team here: name a team file, write {PROJECT_FILE} with `platoon-harness init`, or give --harness"
             )
             raise ConfigError([Problem("team", what)])
-        return load_team(path, sets=lines, trust_project=self.trust)
+        return lines
 
 
 group = App(

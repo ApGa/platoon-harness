@@ -32,6 +32,7 @@ __all__ = [
     "credentials",
     "forms",
     "load_team",
+    "load_trusted",
     "merge",
     "sanitized",
 ]
@@ -155,6 +156,32 @@ def load_team(
     run code or pass a credential is refused from a project or team file without `trust_project`. Every problem is
     reported at once.
     """
+    team, problems, needing = _layered(path, cwd=cwd, environ=environ, sets=sets)
+    if problems := [*problems, *([] if trust_project else needing)]:
+        raise ConfigError(problems)
+    return team
+
+
+def load_trusted(
+    path: Path | None = None,
+    *,
+    cwd: Path | None = None,
+    environ: Mapping[str, str] = os.environ,
+    sets: Sequence[str] = (),
+) -> tuple[Team, tuple[Problem, ...]]:
+    """The team `load_team` loads with `trust_project`, and what that trust took: each value of a project or team file
+    an untrusted load refuses, as the problem it would be. Both come from one read of the files, so what a person is
+    asked to trust is what the team runs."""
+    team, problems, needing = _layered(path, cwd=cwd, environ=environ, sets=sets)
+    if problems:
+        raise ConfigError(problems)
+    return team, tuple(needing)
+
+
+def _layered(
+    path: Path | None, *, cwd: Path | None, environ: Mapping[str, str], sets: Sequence[str]
+) -> tuple[Team, list[Problem], list[Problem]]:
+    """A team from one read of its layers, the problems the read met, and what of it only trust may take."""
     problems: list[Problem] = []
     config_home = Path(environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
     user = _file(config_home / "platoon-harness" / "config.toml", problems)
@@ -172,11 +199,7 @@ def load_team(
         team = Team.model_validate(merged)
     except ValidationError as error:
         raise ConfigError([*problems, *problems_in(error, Team)]) from None
-    if not trust_project:
-        problems.extend(_needing_trust(team, merged, (project, team_file)))
-    if problems:
-        raise ConfigError(problems)
-    return team
+    return team, problems, list(_needing_trust(team, merged, (project, team_file)))
 
 
 def credentials(team: Team, role: str, environ: Mapping[str, str] = os.environ) -> dict[str, Secret]:

@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Session, Team, config
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import ManualClock, is_held
 from platoon_harness.runtime.paths import read_running
@@ -149,8 +149,8 @@ async def test_opening_a_session_another_web_serves_is_refused_saying_where(page
 
 
 def asked(names: str) -> str:
-    """What a start asks of a team whose files name `names`, each a value that needs trust, as written."""
-    return f"{TRUST}\n{names}\nTrust it, as written here, and start?"
+    """What a start asks of a team whose files name `names`, each a value that needs trust, as the team holds it."""
+    return f"{TRUST}\n{names}\nTrust it, as shown here, and start?"
 
 
 async def test_a_team_that_names_what_runs_as_you_is_asked_about_once_naming_it_before_anything_runs(page, tmp_path):
@@ -197,6 +197,31 @@ async def test_trust_covers_what_was_shown_and_a_team_changed_since_is_asked_abo
 
     assert again["ask"]["question"] == asked('roles.bob.harness = "tests.integration.scripts:listening"')
     assert again["ask"]["answer"] != shown["answer"] and not (tmp_path / "sessions" / "s").exists()
+
+
+async def test_what_a_start_asks_to_trust_and_the_team_it_would_run_come_from_one_read_of_its_files(
+    page, tmp_path, monkeypatch
+):
+    """A file rewritten as it is read cannot leave out of the question what the team would run: what needs trust is
+    found in the very read that gives the team, so a team that names code to run is asked about even when the file
+    names none by the time it is read again, and nothing starts."""
+    team = tmp_path / "solo.toml"
+    team.write_text(solo("saying"))
+    read = config._file
+
+    def rewritten(path: Path, problems: list, *, required: bool = False) -> dict:
+        found = read(path, problems, required=required)
+        if path == Path("solo.toml"):
+            path.write_text('[roles.bob]\nharness = "claude"\n')
+        return found
+
+    monkeypatch.setattr(config, "_file", rewritten)
+    ours = await Browser(page).opened()
+
+    answer = (await ours.request("POST", "/x/start", {"team": "solo.toml", "name": "s"})).json()
+
+    assert answer["ask"]["question"] == asked('roles.bob.harness = "tests.integration.scripts:saying"')
+    assert 'harness = "claude"' in team.read_text() and not (tmp_path / "sessions" / "s").exists()
 
 
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(page, tmp_path):

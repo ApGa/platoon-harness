@@ -17,9 +17,9 @@ loopback alone, and says one link, on the terminal that ran it, which opens once
 link of a session's page opens it, and it makes no link. Open serves the session on a port of its own, in the same process, as
 `web SESSION` serves one, and the page goes to a control link of it. Start reads a team file from where `web` runs and says before
 the press that its harnesses can spend money. Before anything runs, it asks once for each thing only you can allow: trusting what
-the team's files name to run as you, shown as written, and several agents on one plan login. Resume asks once, saying it can spend
-money, and Stop asks once, saying what it does. `web SESSION` stays as [RFC 0027](0027-the-browser-on-our-backend.md) has it, and
-starts and resumes nothing.
+the team's files name to run as you, shown as the team holds it, and several agents on one plan login. Resume asks once, saying it
+can spend money, and Stop asks once, saying what it does. `web SESSION` stays as [RFC 0027](0027-the-browser-on-our-backend.md)
+has it, and starts and resumes nothing.
 
 ## Motivation
 
@@ -126,11 +126,13 @@ which Start opens, is where you write to it.
 The server then asks once for each thing only you can allow, before anything runs, by answering `ask`. The page shows its question,
 and on yes sends the start again with the ask's `answer`. Nothing is kept: the next start asks again.
 
-1. **Trust.** The team is loaded trusted, and a team that cannot load even then is refused with its problems. Loaded untrusted, the
-   values its files give that would run code as you or pass on a credential are each refused needing trust; when that is what
-   stands in the way, the question names each, by its place and as it is written, `roles.lead.harness = "tools.lead:Lead"`. The
-   answer is the digest of those lines, which the start carries as `trust`, and the server starts only a team whose lines have that
-   digest, loaded again: what you trust is what you were shown, and a file changed since is asked about again.
+1. **Trust.** One read of the team's files gives both the team that would run and each value its files give that would run code
+   as you or pass on a credential, which an untrusted load refuses needing trust: the SDK's `load_trusted`, which reads the layers
+   as `load_team` does. A team that cannot load even trusted is refused with its problems. When a value needs trust, the question
+   names each, by its place and as the team holds it, defaults filled in, `roles.lead.harness = "tools.lead:Lead"`. The answer is
+   the digest of those lines, which the start carries as `trust`, and the server starts only a team whose lines have that digest,
+   read again: what you trust is what you were shown, and a file changed since is asked about again. As the question and the team
+   come from one read, a file rewritten while it is read cannot run a value the question left out.
 2. **A plan login.** Several agents headless on one plan login, which `Session.start` refuses before any harness launches, are asked
    about with the terminal's words, `... Is this your own work?`, and the answer is `plan_login`, which the manifest keeps.
 
@@ -171,8 +173,9 @@ as the session's page does, so nothing under the pointer moves.
 ## The hard parts
 
 - **Trust that goes stale.** Between the question and the yes, an agent with a shell, at the same user, can write the team file.
-  Trust carries the digest of what was shown, so a changed file is asked about again, though such an agent could already run anything
-  as you (architecture section 15).
+  Trust carries the digest of what was shown, so a changed file is asked about again, and the question and the team that would run
+  come from one read, so a file rewritten as it is read leaves nothing that runs out of the question, though such an agent could
+  already run anything as you (architecture section 15).
 - **A start cut short.** A start runs until its runtime is up, and a page that leaves before then cuts it, as every answer of the
   SDK's HTTP is cut when its client goes. A team cut while it prepares leaves no session, and one whose runtime had started runs on,
   which the list shows. No act is sent twice: a page that hears no answer says so and reads the list again.
@@ -204,6 +207,8 @@ as the session's page does, so nothing under the pointer moves.
 - A session started or resumed from the page runs on a runtime of its own, which outlives `web`. Stopping `web` ends every browser's
   session on every page it serves, and stops no session.
 - A team file's trust is asked for each start and shown first, where the terminal's form and `--trust` take it unseen.
+- The SDK gains `load_trusted`, a team loaded trusted with what its trust took, from one read, for a client that shows what it
+  trusts before it runs it.
 - The terminal's start form keeps its trust field: asking the page's way there too waits for the owner (open question 2).
 - From another machine each session opened needs its own forward, which `web` says.
 - Nothing here has run on macOS, in WebKit, or on a real model.
@@ -213,7 +218,7 @@ as the session's page does, so nothing under the pointer moves.
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 List and open | `web` with no session, loopback alone, its one link and its own credentials, the list, Open on a port of its own, and the page | `tests/unit/web/test_sessions.py`, `test_only_the_sessions_link_opens_the_sessions_page_and_no_link_of_a_session_s_page_does`, `test_the_sessions_page_is_served_under_a_policy_that_lets_only_its_own_script_run`, `test_the_sessions_page_lists_every_session_whether_a_runtime_holds_it_and_its_state`, `test_opening_a_session_serves_it_on_a_port_of_its_own_and_answers_a_control_link_of_it`, `test_opening_a_session_another_web_serves_is_refused_saying_where`; `tests/integration/test_web.py`, `test_web_with_no_session_says_one_link_and_serves_loopback_alone`; `tests/e2e/test_sessions.py`, `test_the_sessions_page_lists_your_sessions_and_opens_one_on_its_own_control_link` | `feat: List and open your sessions from the browser with web and no session` |
-| M2 Start, resume and stop | Start with trust and a plan login asked once, Resume after saying it can spend money, Stop after one question | `test_a_team_that_names_what_runs_as_you_is_asked_about_once_naming_it_before_anything_runs`, `test_trust_covers_what_was_shown_and_a_team_changed_since_is_asked_about_again`, `test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login`, `test_resuming_a_session_a_runtime_holds_is_refused_naming_open`, `test_a_stop_answers_once_the_runtime_has_let_go`; `tests/integration/test_web.py`, `test_web_with_no_session_serves_tls_on_loopback_and_each_session_it_opens_with_it`; `tests/e2e/test_sessions.py`, `test_the_sessions_page_starts_a_session_asking_trust_once_and_opens_it`, `test_the_sessions_page_resumes_after_saying_it_can_spend_money_and_stops_after_one_question`, `test_what_the_sessions_page_is_told_stays_text_under_its_policy` | `feat: Start, resume and stop a session from the browser's sessions page` |
+| M2 Start, resume and stop | Start with trust and a plan login asked once, Resume after saying it can spend money, Stop after one question | `test_a_team_that_names_what_runs_as_you_is_asked_about_once_naming_it_before_anything_runs`, `test_trust_covers_what_was_shown_and_a_team_changed_since_is_asked_about_again`, `test_what_a_start_asks_to_trust_and_the_team_it_would_run_come_from_one_read_of_its_files`, `test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login`, `test_resuming_a_session_a_runtime_holds_is_refused_naming_open`, `test_a_stop_answers_once_the_runtime_has_let_go`; `tests/integration/test_web.py`, `test_web_with_no_session_serves_tls_on_loopback_and_each_session_it_opens_with_it`; `tests/e2e/test_sessions.py`, `test_the_sessions_page_starts_a_session_asking_trust_once_and_opens_it`, `test_the_sessions_page_resumes_after_saying_it_can_spend_money_and_stops_after_one_question`, `test_what_the_sessions_page_is_told_stays_text_under_its_policy` | `feat: Start, resume and stop a session from the browser's sessions page` |
 
 ## Open questions
 
@@ -232,6 +237,9 @@ as the session's page does, so nothing under the pointer moves.
   acts and words the page keeps.
 - `load_team` ([`config.py`](../../packages/sdk/src/platoon_harness/config.py)) refuses each value that needs trust only once the
   team validates, so a team that loads trusted and not untrusted fails on trust alone, and each refusal names that value's place.
+  `load_trusted` gives the team and those refusals from one read of the layers, which
+  `test_what_a_start_asks_to_trust_and_the_team_it_would_run_come_from_one_read_of_its_files` holds, with a file rewritten as it
+  is read.
 - `Session.start` refuses several agents on a plan login in `prepare`, before any harness launches
   ([architecture section 15](../architecture.md#15-security)).
 - `Credentials` ([`web/credentials.py`](../../packages/cli/src/platoon_harness_cli/web/credentials.py)) are a server's own, in its

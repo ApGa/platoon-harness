@@ -24,6 +24,7 @@ from platoon_harness.config import PROJECT_FILE
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
 from platoon_harness.kernel import Clock, SystemClock, is_held
 from platoon_harness.runtime.paths import find_root, listing, session_folder
+from platoon_harness.schema import Problem
 
 from ..exits import Usage
 from ..output import note, refused
@@ -192,13 +193,11 @@ class Sessions(Server[Request]):
             raise Rejected(400, why="plan_login says yes or no")
         path = Path(team) if team else None
         try:
-            loaded = await asyncio.to_thread(Source(trust=True).load, path)
+            loaded, needing = await asyncio.to_thread(Source().trusted, path)
         except ConfigError as error:
             return {"refused": _problems(error)}
-        try:
-            await asyncio.to_thread(Source().load, path)
-        except ConfigError as error:
-            question = _trusting(error, loaded)
+        if needing:
+            question = _trusting(needing, loaded)
             if trust != (shown := hashlib.sha256(question.encode()).hexdigest()):
                 return {"ask": {"question": question, "yes": "Trust and start", "answer": {"trust": shown}}}
         try:
@@ -272,18 +271,19 @@ def _problems(error: ConfigError) -> str:
     return "\n".join(map(str, error.problems))
 
 
-def _trusting(error: ConfigError, team: Team) -> str:
+def _trusting(needing: tuple[Problem, ...], team: Team) -> str:
     """What trusting a team asks: each value its files give that would run code as the person or pass on a credential,
-    which loading it untrusted refused, by its place and as it is written, in JSON that escapes all but ASCII."""
+    `needing`, by its place and as the team that runs holds it, defaults filled in, in JSON that escapes all but
+    ASCII."""
     data = team.model_dump(mode="json")
     lines = []
-    for problem in error.problems:
+    for problem in needing:
         value: Any = data
         for key in problem.where.split("."):
             value = value.get(key) if isinstance(value, dict) else None
         lines.append(f"{problem.where} = {json.dumps(value)}" if value is not None else str(problem))
     named = "\n".join(lines)
-    return f"{TRUST}\n{named}\nTrust it, as written here, and start?"
+    return f"{TRUST}\n{named}\nTrust it, as shown here, and start?"
 
 
 def _why(task: asyncio.Task[None]) -> str:

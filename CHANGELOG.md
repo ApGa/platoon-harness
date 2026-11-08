@@ -49,8 +49,9 @@ named here is closed.
   of its own for each session. See [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md).
 - **Start, resume and stop a session from the browser.** The sessions page's Start takes a team file, read from where `web`
   runs, or the project's own, and a name, and says above it that it can spend money. Before anything runs it asks once for
-  trust, naming each value the team's files give that would run as you or pass on a credential, as written, and a yes
-  covers what was shown alone, and once for several agents on one plan login. The session runs on a runtime of its own and
+  trust, naming each value the team's files give that would run as you or pass on a credential, as the team holds it, and a
+  yes covers what was shown alone, as the question and the team come from one read of its files, which the SDK's new
+  `load_trusted` gives, and once for several agents on one plan login. The session runs on a runtime of its own and
   opens on its own control link. Resume asks once, saying it can spend money, and Stop asks once, then answers once the
   runtime has let go, as `session stop` does. Starting, resuming and stopping needed a shell. See
   [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md).

@@ -1716,7 +1716,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it,
   and Start, Resume and Stop do what the sessions screen does, each asking first, once, what only the person may allow: the
   page asks before a resume, which can spend money, and a stop, and the server, which alone can tell, before a start whose
-  team needs trust, naming each value as written, with trust carrying the digest of what was shown, or would run several
+  team needs trust, naming each value as the team holds it, with trust carrying the digest of what was shown, or would run several
   agents on one plan login. [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
@@ -2043,9 +2043,10 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
   project or team file: `--trust` on the command line, `trust_project` to `load_team`, and on the sessions page a question naming
-  each such value as written, whose yes covers what was shown and nothing changed since. The trust step covers a test's command and not
-  the commit it runs, which its maker wrote, so a runtime test is a person's or a program's act and never an agent's, says on its act
-  that it runs that commit's maker's code as you, unconfined, and is refused for a commit whose code runs only in an isolation (§13).
+  each such value as the team holds it, from the read that gives the team, `load_trusted`, whose yes covers what was shown and
+  nothing changed since. The trust step covers a test's command and not the commit it runs, which its maker wrote, so a runtime
+  test is a person's or a program's act and never an agent's, says on its act that it runs that commit's maker's code as you,
+  unconfined, and is refused for a commit whose code runs only in an isolation (§13).
   The check reads where each value came from, since mappings merge
   across layers.
 - **Harness env.** An allowlist, per process. `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code; Codex ran on the same

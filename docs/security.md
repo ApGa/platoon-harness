@@ -29,7 +29,7 @@ after asking you once whether it is your own work, as the terminal does.
 
 A team or project file is untrusted too. What it names that would run code as you, a command, a `module:attr` or a test
 command, or a credential it would pass on, an auth profile, runs only once you trust it: `--trust` on the command line, and
-on the sessions page a question naming each such value by its place and as written, whose yes covers what you were shown
+on the sessions page a question naming each such value by its place and as the team holds it, whose yes covers what you were shown
 and nothing the file says since ([§15](architecture.md#15-security)).
 
 ## What it does not protect

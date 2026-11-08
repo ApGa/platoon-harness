@@ -22,6 +22,7 @@ from platoon_harness.config import (
     Secret,
     credentials,
     load_team,
+    load_trusted,
     merge,
     sanitized,
 )
@@ -155,6 +156,26 @@ def test_a_command_in_a_project_file_needs_trust(layers):
     with pytest.raises(ConfigError, match=r"roles\.a\.harness: a command in a project file needs explicit trust"):
         layers.load()
     assert layers.load(trust_project=True).roles["a"].harness == Command(command=("my-agent", "{goal}"))
+
+
+def test_a_trusted_load_says_what_its_trust_took_from_the_same_read(layers):
+    """Each value of a project or team file that an untrusted load refuses, as the problem it would be, beside the team
+    loaded trusted, so what a person is shown is what the team runs. What the user's own config gives needs no trust,
+    and a problem trust cannot take is raised as `load_team` raises it."""
+    layers.user_file.write_text('test = { command = ["make", "check"], timeout = "10m" }\n')
+    layers.project_file.write_text('[roles.a]\nharness = "tools.a:A"\n')
+    layers.team_file.write_text('[roles.b]\nharness = { command = ["my-agent"] }\n')
+    with pytest.raises(ConfigError) as untrusted:
+        layers.load()
+
+    team, took = load_trusted(layers.team_file, cwd=layers.cwd, environ=layers.environ)
+
+    assert team == layers.load(trust_project=True)
+    assert took == untrusted.value.problems
+    assert [problem.where for problem in took] == ["roles.a.harness", "roles.b.harness"]
+    layers.team_file.write_text("[roles.b\n")
+    with pytest.raises(ConfigError, match="not TOML"):
+        load_trusted(layers.team_file, cwd=layers.cwd, environ=layers.environ)
 
 
 def test_a_command_in_a_team_file_needs_trust_too(layers):
