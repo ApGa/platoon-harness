@@ -97,6 +97,29 @@ platoon-harness: roles.lead.harnes: `harnes` is not a key here. Did you mean `ha
 It exits 78, naming every problem at once, each at its dotted place in the team.
 [The team file reference](../reference/team-file.md) lists every key of every table.
 
+## A team names a program, or a preset that is gone
+
+```text
+platoon-harness: topology.program: `program` is not a key of [topology], and a preset is a table.
+```
+
+It exits 78, as any unknown key does. A topology names no program: control flow runs from a Python script that starts the
+session as `program:<name>`, as [Run a program from Python](topologies.md#run-a-program-from-python) shows, and
+`until = "program"` leaves the session to it. A `[topology.program]` table is refused as an unknown preset, and so is
+`[topology.map-reduce]`, which is gone: write its queues and board out, and add to them from such a script. `git-swarm`'s
+`episodes` is gone too: its program, `population`, takes `attempts`.
+
+## A run or a resume names the script way
+
+```text
+platoon-harness: topology.until: `program` leaves the session to the program that owns it, and `human:you` is a person: start it from a script, with `Session.start(team, principal="program:<name>")`
+```
+
+It exits 78, before any cost. A session under `until = "program"` is done only when its program closes it, so `run`,
+`serve` and the terminal UI refuse to start such a team as a person, and `session resume` refuses to resume such a
+session. Start it, and run it again after a crash, from its script, as
+[Run a program from Python](topologies.md#run-a-program-from-python) shows.
+
 ## attach says there is no terminal
 
 ```text
