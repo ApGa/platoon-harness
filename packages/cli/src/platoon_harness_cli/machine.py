@@ -282,18 +282,25 @@ def _said_checked(name: str, checked: dict[str, Any] | None) -> str:
     return f"checked on {checked['version']}: {counted}, and {', '.join(checked['failed'])} failed{unmet}"
 
 
+def _runs_as_written(driver: Driver) -> bool:
+    """Whether a team `init` writes runs on a harness: one the SDK drives, but `openhands`, which signs in only with a
+    key from an auth profile. A driver an extension installs may need a setting `init` does not write, as `opencode`
+    needs a model."""
+    return type(driver).__module__.partition(".")[0] == "platoon_harness" and not isinstance(driver, OpenHandsDriver)
+
+
 @dataclass(frozen=True)
 class Starter:
     """The team `init` writes from the harnesses on PATH: a lead on the first, which starts workers on the second, or on
-    the first again where it is alone. It writes no auth profile, so it passes over `openhands`, which signs in only
-    with a key from one."""
+    the first again where it is alone. It writes no auth profile and no model, so it takes only the harnesses the SDK
+    drives, but `openhands`, which signs in only with a key from one."""
 
     lead: str
     worker: str
 
     @classmethod
     def on_path(cls) -> Self:
-        candidates = [name for name, driver in harnesses() if not isinstance(driver, OpenHandsDriver)]
+        candidates = [name for name, driver in harnesses() if _runs_as_written(driver)]
         found = [name for name in candidates if shutil.which(name)]
         if not found:
             raise ConfigError([Problem("harness", f"none is on PATH: install one of {', '.join(candidates)}")])
@@ -320,8 +327,9 @@ class Starter:
 def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
-    A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile, so it
-    passes over `openhands`, which signs in only with a key from one.
+    A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile and no
+    model, so it takes only the harnesses the SDK drives, but `openhands`, which signs in only with a key from one: an
+    installed driver may need a model, as `opencode` does.
 
     For example:
 

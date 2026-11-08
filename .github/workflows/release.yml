@@ -49,8 +49,8 @@ jobs:
         run: uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
 
       # A first-party extension is a distribution of its own (RFC 0072), which installs beside the SDK alone.
-      - name: Import the ACP extension from its wheel and the SDK's, in an environment of their own
-        run: uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "import platoon_harness_acp"
+      - name: Load the ACP extension's driver from its wheel and the SDK's, in an environment of their own
+        run: uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "from platoon_harness.extensions import DRIVERS, load; load(DRIVERS, 'opencode')"
 
       - name: Install dependencies
         run: uv sync --locked

@@ -46,9 +46,9 @@ role also needs an auth profile that names its key.
 platoon-harness: harness: none is on PATH: install one of claude, codex, pi
 ```
 
-It exits 78. `init` writes a team of the first harnesses it finds on PATH among these three. It writes no auth profile,
-so it passes over OpenHands, which signs in only with a key from one: that is why `doctor` can say `usable` while `init`
-finds nothing. Install one of the three and sign it in, or write the team file yourself, as
+It exits 78. `init` writes a team of the first harnesses it finds on PATH among these three. It writes no auth profile
+and no model, so it passes over OpenHands, which signs in only with a key from one, and over a harness an extension
+drives, such as OpenCode, which needs a model: that is why `doctor` can say `usable` while `init` finds nothing. Install one of the three and sign it in, or write the team file yourself, as
 [the team file reference](../reference/team-file.md) lists its keys.
 
 ## init says the file exists

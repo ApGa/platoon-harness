@@ -710,8 +710,9 @@ platoon-harness init
 
 Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
-A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile, so it
-passes over `openhands`, which signs in only with a key from one.
+A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile and no
+model, so it takes only the harnesses the SDK drives, but `openhands`, which signs in only with a key from one: an
+installed driver may need a model, as `opencode` does.
 
 For example:
 

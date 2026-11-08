@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import platoon_harness_acp
 from platoon_harness import drivers, primitives, rpc, testing
 from platoon_harness.drivers import claude, codex, env, exec, levels, openhands, pi, process, wire
 
@@ -40,3 +41,9 @@ def test_public_names_match_the_list(name):
 @pytest.mark.parametrize("name", MODULES)
 def test_every_public_name_exists(name):
     assert all(hasattr(MODULES[name], public) for public in MODULES[name].__all__)
+
+
+def test_the_acp_extension_s_public_names_match_the_list():
+    listed = {line.removeprefix("platoon_harness_acp.") for line in RECORDED if line.startswith("platoon_harness_acp.")}
+
+    assert listed == set(platoon_harness_acp.__all__)

@@ -552,3 +552,9 @@ platoon_harness.topology.Topology
 platoon_harness.topology.tree
 platoon_harness.topology.Unexpanded
 platoon_harness.topology.union
+platoon_harness_acp.AcpDriver
+platoon_harness_acp.AcpDriver(command)
+platoon_harness_acp.CAPABILITIES
+platoon_harness_acp.OpenCodeDriver
+platoon_harness_acp.OpenCodeDriver()
+platoon_harness_acp.PROTOCOL

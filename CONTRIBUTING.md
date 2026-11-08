@@ -443,7 +443,7 @@ each push to `main`, as CI's other jobs run. Its `build` job runs:
 uv build --all-packages --no-sources
 uvx twine@7.0.0 check --strict dist/*
 uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
-uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "import platoon_harness_acp"
+uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "from platoon_harness.extensions import DRIVERS, load; load(DRIVERS, 'opencode')"
 uv sync --locked
 uv run pytest -q -m slow tests/integration/test_installed.py
 ```
@@ -452,9 +452,9 @@ uv run pytest -q -m slow tests/integration/test_installed.py
 file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
 `twine check --strict`, at the release the workflow pins, checks each distribution's metadata, and that its README renders as its PyPI description, failing
 on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
-their metadata requires, so a requirement only the workspace gave fails there, and `uv run --isolated` imports each
-first-party extension from its wheel and the SDK's alone, the same way. The workflow runs every step on Python
-3.12, the oldest the packages name, with `UV_PYTHON=3.12`.
+their metadata requires, so a requirement only the workspace gave fails there, and `uv run --isolated` loads the ACP
+extension's driver by its entry point from its wheel and the SDK's alone, the same way. The workflow runs every step on
+Python 3.12, the oldest the packages name, with `UV_PYTHON=3.12`.
 
 `tests/integration/test_installed.py`, slow tests, build the wheels again and install them in an environment of their
 own: the command line runs and says its version, a headless run of [examples/sdk-script](examples/sdk-script/README.md)

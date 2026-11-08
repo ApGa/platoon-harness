@@ -2,7 +2,8 @@
 
 A driver presents one harness session to the runtime through seven methods. One instance serves one agent. Drivers for
 `claude`, `codex`, `pi` and `openhands` ship with the SDK, the last a wire worker whose OpenHands comes with the SDK's
-`openhands` extra, [below](#openhands-a-wire-worker).
+`openhands` extra, [below](#openhands-a-wire-worker). The driver of agents that speak ACP, `opencode` among them, ships
+as a first-party extension, `platoon-harness-acp`, [below](#acp-agents-a-first-party-extension).
 This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
 
 There are three ways in, cheapest first.
@@ -454,6 +455,57 @@ agents start keeps its socket in the directory every tmux of the user's shares. 
 - **`stop`** ends the turn and closes the conversation, which ends its terminal and the shim, and then the group ends as any wire
   program's does. The driver gives the worker a short directory of its own for tmux's sockets, as OpenHands falls back to the one
   every tmux of the user's shares past a socket's length, and takes it back at `stop`, which a worker killed outright cannot.
+
+## ACP agents: a first-party extension
+
+`platoon-harness-acp`, under `extensions/acp`, is a distribution of its own that requires the SDK alone, and installing it
+activates nothing until a team names its driver. `AcpDriver(command)` drives an agent that speaks the Agent Client Protocol
+on stdio, at protocol 1 alone, over the SDK's `Peer`, adding no dependency. `harness = "opencode"` is that driver on
+`opencode acp`, and a driver for another agent of ACP is a subclass that names its command, as `OpenCodeDriver` does:
+
+```python
+from platoon_harness_acp import AcpDriver
+
+
+class MyAgentDriver(AcpDriver):
+    name = "my-agent"
+
+    def __init__(self) -> None:
+        super().__init__(("my-agent", "--acp"))
+```
+
+Each rule it keeps, in a sentence ([RFC 0072](../rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md)):
+
+- **Protocol 1 alone:** it asks for 1, and stops an agent that answers anything else before it opens a session, as ACP has
+  a client disconnect from a version it does not speak. It offers no file system and no terminal, so the agent keeps its own
+  tools, and takes compaction updates.
+- **The session** opens with the agent's workspace as `cwd` and our tools as one MCP server over HTTP under the agent's bearer,
+  so an agent that reaches no server over HTTP is refused. A resume takes it up again by `session/resume`, which an agent that
+  offers none refuses.
+- **Instructions** go as `systemPrompt`, appended, where the agent offers one, sent again on a resume, and otherwise before
+  the session's first prompt, once.
+- **The model** is set through the session's config option of category `model`, and `ready` names what that option then
+  holds. An agent that offers none refuses a start that names a model, and `opencode` refuses one that names none, as
+  OpenCode then sends prompts to a hosted model nobody chose.
+- **A turn** is one `session/prompt`, from its request to its answer, and the turn is the one boundary declared. A delivery
+  during a turn waits for its end and goes as the next prompt, an interrupt drops what waits, and one for any other boundary is
+  refused until a recorded fixture shows an agent taking a prompt during a turn.
+- **A delivery lands** at the first update after its prompt that is not of the session's state, or at the prompt's answer.
+- **Text** comes as live deltas, and a message or a thought is one item once another kind of update, another message or the
+  turn's end follows.
+- **A tool call** is an item from its `tool_call` to the update that ends it, `completed` or `failed`, which names the approval
+  that let it through.
+- **A permission request** is an approval whose whole ask is the tool call it names, as the agent last updated it, as JSON but
+  for its id and status, so a request that names its call by id alone asks what the agent said of it before. A call that gives
+  no input and no content carries no ask, and its gist says so. The verdict goes back as the option of its kind for this once;
+  where the request offers none, the answer is `cancelled`, as an `always` option would decide more than was asked. An
+  interrupt answers each request still waiting `cancelled`, as ACP asks.
+- **A compaction** that completed is `compacted`, with its summary and what it forgot unknown.
+- **What says nothing** of the agent's work, its commands, modes, config, title, context size and notices, is not reported.
+  Any other update, method or line is `native` with its raw frame and the gap `unknown_update`.
+- **Never trainable:** ACP names no model call and says no spend of one, so it reports no `model.call` and no `usage`, declares
+  no `call_ids` and no `measures`, and has no sealed launch. An agent's own agents are `opaque`, as stable ACP neither shows
+  them nor turns them off, so a role's `allow_native_children = false` is not carried out.
 
 ## A Python package
 

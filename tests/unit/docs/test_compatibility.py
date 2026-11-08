@@ -17,7 +17,8 @@ DRIVERS = {
     "`codex`": "The `codex` driver",
     "`pi`": "The `pi` driver",
     "`openhands`": "OpenHands as a wire worker",
-    "ACP, covering `opencode`": "The ACP driver",
+    "ACP": "The ACP driver",
+    "`opencode`": "The `opencode` driver",
     "`prime`": "The `prime` driver",
     "`exec`": "The `exec` driver",
 }

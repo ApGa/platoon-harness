@@ -66,6 +66,18 @@ named here is closed.
   never under 50 ms for a time. The runtime's memory grows with the journal, and no run has shown where it stops, so the
   test holds it to a budget and does not call it bounded. The changes snapshot, which the run never fills, is not measured.
   No CI job runs it, as its budgets fit that hardware.
+- **ACP agents run as a team's harness.** `platoon-harness-acp`, the first first-party extension, a distribution of its own
+  under `extensions/acp` that requires the SDK alone, gives `AcpDriver(command)`, which drives an agent that speaks the Agent
+  Client Protocol on stdio, at protocol 1 alone, over the SDK's own `Peer`, and `harness = "opencode"`, that driver on
+  `opencode acp`. An agent that answers another protocol is stopped before a session opens. A turn is one `session/prompt`,
+  the one boundary declared: a delivery during a turn goes as the next prompt, and one for any other boundary is refused until
+  a fixture shows an agent taking one. A permission request is an approval whose whole ask is the tool call it names, as the
+  agent last updated it, answered by the option for this once, never `always`, and `cancelled` where there is none and at an
+  interrupt. An update nothing maps keeps its raw frame with a gap, a compaction is `compacted` with what it forgot unknown,
+  and as ACP names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate.
+  `opencode` refuses a start that names no model, as OpenCode then sends prompts to a hosted model nobody chose, and it has not
+  run: STATUS says why. See
+  [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a

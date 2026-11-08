@@ -29,6 +29,10 @@ Documentation = "https://github.com/ApGa/platoon-harness/tree/main/docs/extendin
 Source = "https://github.com/ApGa/platoon-harness/tree/main/extensions/acp"
 Issues = "https://github.com/ApGa/platoon-harness/issues"
 
+# A team names a driver by its harness's command, and installing one activates nothing until a team does.
+[project.entry-points."platoon_harness.drivers"]
+opencode = "platoon_harness_acp:OpenCodeDriver"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/platoon_harness_acp"]
 
