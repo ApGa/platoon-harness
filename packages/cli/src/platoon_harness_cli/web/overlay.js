@@ -154,6 +154,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-review .x-heading { padding-top: 12px; }
 .x-review .x-path, .x-review .x-more, .x-channel .x-version { padding-left: 28px; }
 .x-channel .x-task, .x-channel .x-entry { padding-top: 8px; }
+.x-channel > .x-acts { padding: 8px 14px 0; }
 .x-review > .x-about, .x-review .x-end, .x-review .x-comment { padding: 8px 14px; margin: 0; font-size: 12.5px; }
 .x-tone-strong { font-weight: 700; }
 .x-tone-faint { color: var(--faint); }
@@ -235,8 +236,9 @@ readRoute = () => {
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
 // `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, what changed or
 // a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a board's entries, `entries=`.
-// SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise leaves
-// it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may do now.
+// SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise
+// leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may
+// do now.
 X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review
   || pane instanceof X.Ask || pane instanceof X.Channel;
 // An address with none of ours, for a go that opens something else in the pane.
@@ -282,8 +284,8 @@ overlay.close = function () {
 };
 
 // A request's card drawn again while focus is in it keeps focus: on the same control, or on what the card now says came
-// of it, which a screen reader then reads. What the feed says moved a queue's or a board's view, `x_moved`, is ours, and
-// reads that view again where the pane shows it; the rest is SwarmChat's.
+// of it, which a screen reader then reads. What the feed says moved a queue's or a board's view, `x_moved`, is ours,
+// and reads that view again where the pane shows it; the rest is SwarmChat's.
 const baseApply = apply;
 apply = events => {
   const theirs = events.filter(e => e.kind !== 'x_moved');
@@ -1152,10 +1154,12 @@ X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.de
   ? html`<button class="btn" data-x-channel="${c.description}" data-x-name="${c.name}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
   : html``;
 
-// A queue's tasks or a board's entries, in the pane the address names, `tasks=` or `entries=` and its name, in the words
-// the terminal's /tasks says, read through x_read as it opens and again whenever the feed says what it reads moved, so
-// no timer of the page's decides anything: each task's state, who claimed it, which attempt that is and until when its
-// lease holds, its gist and its result, or each entry with every version. Only the newest read is drawn.
+// A queue's tasks or a board's entries, in the pane the address names, `tasks=` or `entries=` and its name, in the
+// words the terminal's /tasks says, read through x_read as it opens and again whenever the feed says what it reads
+// moved, so no timer of the page's decides anything: each task's state, who claimed it, which attempt that is and until
+// when its lease holds, its gist and its result, or each entry with every version. Only the newest read is drawn. Each
+// act, on the view and on its lines, opens its op's form, filled in with what its line knows, and is disabled where the
+// page may not run that op, saying why.
 X.Channel = class {
   constructor(pane, kind, name) {
     this.pane = pane;
@@ -1181,15 +1185,22 @@ X.Channel = class {
     if (this.dead || n !== this.reads) return;
     this.view = r;
     $('#pane h2').textContent = r.title;
-    this.box.innerHTML = html`${r.lines.map(X.listed)}`.s;
+    this.box.innerHTML = html`<div class="x-acts">${r.acts.map(X.opener)}</div>${r.lines.map(X.listed)}`.s;
+  }
+  paint() {
+    for (const el of $$('[data-x-open]', this.box)) X.disable(el, X.cannot(el.dataset.xOpen));
   }
   destroy() { this.dead = true; }
 };
 X.Tasks = class extends X.Channel { constructor(name) { super('tasks', 'queue', name); } };
 X.Entries = class extends X.Channel { constructor(name) { super('entries', 'board', name); } };
 
-// One line of a queue's or a board's view: its words, each part drawn by its tone.
-X.listed = l => html`<div class="x-change x-${l.kind}"><span>${l.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span></div>`;
+// One line of a queue's or a board's view: its words, each part drawn by its tone, and its acts.
+X.listed = l => html`<div class="x-change x-${l.kind}"><span>${l.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span>${l.acts.length ? html`<span class="x-acts">${l.acts.map(X.opener)}</span>` : ''}</div>`;
+
+// An act of a queue's or a board's view, which opens its op's form in the pane filled in with what it knows, `args=`,
+// as an action of a place in Needs you opens one, or is disabled where the page may not run that op, saying why.
+X.opener = act => html`<button class="btn" data-x-open="${act.op}" data-x-args="${JSON.stringify(act.args)}"${X.disabled(X.cannot(act.op))}>${act.label}</button>`;
 
 // Posts, with the sorts that rank by votes disabled, saying why, and a queue's or a board's own view beside them.
 BoardView = class extends BoardView {
@@ -1305,7 +1316,7 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
   if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
@@ -1313,6 +1324,7 @@ onClick = e => {
   if (d.xReview || d.xDiff) return go({...X.none, review: d.xReview || d.xDiff, thread: null, knew: null}, true);
   if (d.xAsk) return go({...X.none, ask: d.xAsk, thread: null, knew: null}, true);
   if (d.xChannel) return go({...X.none, [d.xChannel === 'queue' ? 'tasks' : 'entries']: d.xName, thread: null, knew: null}, true);
+  if (d.xOpen) return go({...X.none, act: d.xOpen, args: d.xArgs, thread: null, knew: null}, true);
   if (d.xTest) return X.test(el);
   if ('xMore' in d) return S.pane.more();
   if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);

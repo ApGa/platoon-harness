@@ -206,7 +206,13 @@ The list is read again whenever the journal holds an event on one of its tasks' 
 end, which gives back each task the agent held, and at no other time: no timer of the terminal's decides anything. A claim
 stands until the runtime records that its lease expired, which its own timer fires on the session's clock, so a deadline
 already past on your clock still reads claimed until then. It reads 256 tasks or versions at most, a page at a time, and past
-them says how many more there are and the `task list` or `board query` command that reads on. Esc leaves.
+them says how many more there are and the `task list` or `board query` command that reads on.
+
+What you may do is a row under what it acts on, and Enter on it opens its op's form, the palette's, filled in with what the
+line knows: Add a task, or Post an entry, at the top; Claim on an open or a failed task; Complete, Fail, Release and Renew on
+one you hold, with its fence; Add it again on a dead one, citing it, as the dock's does; and Revise on an entry, with the
+version it revises and that version's fields, as a revision replaces them whole, so you change only what you mean to.
+What came of it is said as the palette says it, and the list moves with it. Esc leaves.
 
 ### Follow a line's provenance
 
@@ -320,7 +326,7 @@ before the session's. `^` is Ctrl.
 | `^End` | `/follow` | Go to the newest line and follow what comes |
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
-| `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view |
+| `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |

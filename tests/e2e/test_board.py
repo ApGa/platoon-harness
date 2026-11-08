@@ -1,7 +1,7 @@
 """SwarmChat's Board and Map in a real browser, over a session on scripted harnesses: a channel's posts and one opened
 with its replies, the sorts by votes disabled, saying why, and no vote counted, a queue's tasks and a board's entries in
-the pane, read again as they move, and the map of everyone with its timeline, from a control link and from a view
-link."""
+the pane, read again as they move, each act opening its op's form filled in, or disabled on a view link, saying why, and
+the map of everyone with its timeline, from a control link and from a view link."""
 
 import re
 from collections.abc import AsyncIterator
@@ -20,6 +20,7 @@ from .support import SECONDS, chat, opened, serving
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 UNVOTED = "A session's messages take no reactions, so there are no votes to count or to rank by."
+VIEW = "This is a view link: it shows the session and acts on nothing."
 SEEN_AS_W1 = """() => S.as && S.as.user === 'w1'
     && S.view.act.counts.reduce((a, b) => a + b, 0)
         === [...S.as.chats.keys()].reduce((n, id) => n + S.chats.get(id).messages, 0)
@@ -99,8 +100,9 @@ def pane(page: Page, text: str):
 
 async def test_tasks_and_entries_show_in_a_queue_s_and_a_board_s_chat(browser: Browser, worked: tuple[Session, Web]):
     """Tasks, in a queue's chat as a chat and as a board, opens its tasks in the pane, each with its state, which a
-    claim the chat never hears of moves, as the feed says the queue's view moved; and Entries, in a board's chat, its
-    entries, each with every version."""
+    claim the chat never hears of moves, as the feed says the queue's view moved, and Complete on the task the person
+    then holds opens `task complete`'s form with its queue, task and fence; and Entries, in a board's chat, its
+    entries, each with every version, and Revise opens `board revise`'s with the version it revises and its fields."""
     session, web = worked
     page, errors = await opened(browser, web.link("control"))
 
@@ -112,17 +114,59 @@ async def test_tasks_and_entries_show_in_a_queue_s_and_a_board_s_chat(browser: B
     await expect(page.locator("#pane h2")).to_have_text("Tasks on tasks", timeout=SECONDS)
     await expect(pane(page, "task 1")).to_contain_text("open, 1 attempt  fix the flaky test", timeout=SECONDS)
     assert "tasks=tasks" in page.url
-    await session.task_claim("tasks", task="1")
+    await expect(pane(page, "task 1").locator("[data-x-open]")).to_have_text(["Claim"])
+    claim = await session.task_claim("tasks", task="1")
     await expect(pane(page, "task 1")).to_contain_text("claimed by @you, attempt 2, lease until ", timeout=SECONDS)
+    await expect(pane(page, "task 1").locator("[data-x-open]")).to_have_text(["Complete", "Fail", "Release", "Renew"])
+    await pane(page, "task 1").locator("[data-x-open]", has_text="Complete").click()
+    await expect(page.locator("#pane h2")).to_have_text("task complete", timeout=SECONDS)
+    for flag, value in (("--queue", "tasks"), ("--task", "1"), ("--fence", str(claim["fence"])), ("--gist", "")):
+        await expect(page.locator("#pane .x-field", has_text=flag).locator("input")).to_have_value(value)
+    await page.go_back()
+    await expect(page.locator("#pane h2")).to_have_text("Tasks on tasks", timeout=SECONDS)
 
     await chat(page, "notes")
     await page.locator("#main [data-x-channel=board]").click()
     await expect(page.locator("#pane h2")).to_have_text("Entries on notes", timeout=SECONDS)
-    await expect(pane(page, "plan")).to_have_text("plan  2 versions", timeout=SECONDS)
+    await expect(pane(page, "plan").locator(":scope > span").first).to_have_text("plan  2 versions", timeout=SECONDS)
     await expect(pane(page, "v1")).to_have_text('v1  @you  first  {"step":1}')
     await expect(pane(page, "v2")).to_have_text('v2  @you  second  {"step":2}')
+    await pane(page, "plan").locator("[data-x-open]", has_text="Revise").click()
+    await expect(page.locator("#pane h2")).to_have_text("board revise", timeout=SECONDS)
+    for flag, value in (("--board", "notes"), ("--name", "plan"), ("--expected-version", "2")):
+        await expect(page.locator("#pane .x-field", has_text=flag).locator("input")).to_have_value(value)
+    await expect(page.locator("#pane .x-field", has_text="--fields").locator("textarea")).to_have_value('{"step":2}')
+    await page.go_back()
+    await expect(page.locator("#pane h2")).to_have_text("Entries on notes", timeout=SECONDS)
     await page.keyboard.press("Escape")
     await expect(page.locator("#pane .x-channel")).to_have_count(0, timeout=SECONDS)
+    assert errors == []
+
+
+async def test_on_a_view_link_tasks_show_and_every_act_is_disabled_saying_why(
+    browser: Browser, worked: tuple[Session, Web]
+):
+    """A view link reads a queue's tasks and a board's entries as a control link does, and every act it draws takes
+    focus and says, as its accessible description, that a view link acts on nothing, and a press opens no form."""
+    _, web = worked
+    page, errors = await opened(browser, web.link("view"))
+
+    for name, kind, line, acts in (
+        ("tasks", "queue", "task 1", ["Add a task", "Claim"]),
+        ("notes", "board", "plan", ["Post an entry", "Revise"]),
+    ):
+        await chat(page, name)
+        await page.locator(f"#main [data-x-channel={kind}]").click()
+        await expect(pane(page, line)).to_be_visible(timeout=SECONDS)
+        opens = page.locator("#pane [data-x-open]")
+        await expect(opens).to_have_text(acts)
+        for act in await opens.all():
+            await expect(act).to_be_disabled()
+            await expect(act).to_have_accessible_description(VIEW)
+        await opens.last.focus()
+        await expect(page.locator("#tip")).to_have_text(VIEW, timeout=SECONDS)
+        await opens.last.press("Enter")
+        assert "act=" not in page.url
     assert errors == []
 
 

@@ -23,6 +23,7 @@ from platoon_harness.kernel import Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
 
 from .. import ops
+from ..channels import Act
 from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
 from ..review import snapshots_of
@@ -992,7 +993,8 @@ class Workspace(Screen[None]):
         self.app.push_screen(Review(live.session, live.changes, mark, read, self._test, snapshots_of(live.roster)))
 
     def action_tasks(self) -> None:
-        """Show the tasks of the queue in view, or the entries of the board in view, read again as it moves."""
+        """Show the tasks of the queue in view, or the entries of the board in view, read again as it moves, each act
+        opening its op's form filled in."""
         live, focus = self.live, self.focus_on
         if live is None:
             return
@@ -1005,7 +1007,15 @@ class Workspace(Screen[None]):
             note(self, said, severity="warning")
             return
         person = self.human.partition(":")[2]
-        self.app.push_screen(Tasks(live.session, f"{row['kind']}/{row['name']}", person))
+        self.app.push_screen(Tasks(live.session, f"{row['kind']}/{row['name']}", person, self._open))
+
+    def _open(self, act: Act) -> None:
+        """Open an act's op's form, filled in with what its line knows, or say that the person's grants hold none."""
+        form = next((form for form in self.forms if form.op == act.op), None)
+        if form is None:
+            note(self, f"{act.label}: your grants hold no {act.op}.", severity="warning")
+        else:
+            self._run_op(form, act.args)
 
     @work(group="act")
     async def _test(self, action: dict[str, Any]) -> None:

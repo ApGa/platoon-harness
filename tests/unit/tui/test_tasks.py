@@ -1,6 +1,6 @@
 """A queue's tasks and a board's entries in the terminal, `/tasks` or Ctrl+T on a queue's or a board's focus, over a
-session the test owns: each task's state, claimant and lease deadline, and each entry's versions, read again whenever
-the channel moves and at no other time."""
+session the test owns: each task's state, claimant and lease deadline, each entry's versions, read again whenever the
+channel moves and at no other time, and each act opening its op's form, filled in."""
 
 import asyncio
 import contextlib
@@ -10,11 +10,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from textual.widgets import Input
 
 from platoon_harness import Session, Team
 from platoon_harness.kernel import Clock, ManualClock
 from platoon_harness.testing import Call, Say, ScriptedDriver
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.tasks import Tasks
 from platoon_harness_cli.tui.transcript import Focus, Transcript
@@ -87,6 +89,7 @@ async def test_a_queue_s_tasks_show_each_state_claimant_and_lease_deadline(root)
     assert f"task 1  claimed by @lead, attempt 1, lease until {lease(1000.0 + 1800)}  fix the flaky test" in text
     assert "task 2  done  write the docs  → written" in text
     assert "task 3  open  tidy up" in text
+    assert text.count("↳ Claim") == 1 and "Add a task" in text
 
 
 async def test_the_view_is_read_again_when_its_channel_moves_and_no_timer_decides(root, monkeypatch):
@@ -122,7 +125,7 @@ async def test_the_view_is_read_again_when_its_channel_moves_and_no_timer_decide
     assert first == 1
     assert f"claimed by @lead, attempt 1, lease until {lease(2800.0)}" in unmoved, "a reader's clock judged the lease"
     assert quiet == first, "an event on no task's stream read the view again"
-    assert len(reads) == quiet + 1 and "fix the flaky test" in expired
+    assert len(reads) == quiet + 1 and "↳ Claim" in expired
 
 
 async def test_a_board_s_entries_show_each_version(root):
@@ -135,10 +138,36 @@ async def test_a_board_s_entries_show_each_version(root):
         await owner.board_revise("notes", "plan", "third", 2)
         again = await drawn(pilot, lambda text: "plan  3 versions" in text)
 
-    assert "Entries on notes" in text
+    assert "Entries on notes" in text and "Post an entry" in text
     for said in ("plan  2 versions", 'v1  @you  first  {"step":1}', 'v2  @you  second  {"step":2}', "risks  1 version"):
         assert said in text
+    assert text.count("↳ Revise") == 2
     assert "v3  @you  third" in again
+
+
+async def test_a_task_act_opens_its_op_s_form_prefilled(root):
+    """Claim opens `task claim`'s form with its queue and task, and once the claim is the person's, the view moves and
+    Complete opens `task complete`'s with its fence too."""
+    async with attached(team(), root) as (owner, app, pilot):
+        await owner.task_add("tasks", "fix the flaky test")
+        await opened(app, pilot, "tasks", "queue")
+        await drawn(pilot, lambda text: "↳ Claim" in text)
+        rows = app.screen.query_one(Rows)
+        rows.move_to(next(key for key in rows.keys if key.endswith("#0") and key != "#0"))
+        await pilot.press("enter")
+        await drawn(pilot, lambda _: isinstance(app.screen, Form))
+        claim = {name: app.screen.query_one(f"#field-{name}", Input).value for name in ("queue", "task")}
+        await pilot.press("enter", "enter")
+        await drawn(pilot, lambda text: "↳ Complete" in text)
+        fence = (await owner.task_list("tasks"))["tasks"][0]["fence"]
+        await pilot.press("enter")
+        await drawn(pilot, lambda _: isinstance(app.screen, Form))
+        complete = {name: app.screen.query_one(f"#field-{name}", Input).value for name in ("queue", "task", "fence")}
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: isinstance(app.screen, Tasks))
+
+    assert claim == {"queue": "tasks", "task": "1"}
+    assert complete == {"queue": "tasks", "task": "1", "fence": str(fence)}
 
 
 async def test_a_board_object_reaches_no_renderer_unescaped(root):

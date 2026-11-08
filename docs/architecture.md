@@ -1759,8 +1759,8 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   chosen line's provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord. `/tasks`, on a
   queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
   `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
-  end, which gives back each task it held, so no timer of the client's decides anything. [tui.md](how-to/tui.md) is its
-  guide.
+  end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form
+  filled in with what its line knows. [tui.md](how-to/tui.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
@@ -1777,7 +1777,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
   `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, but for a
   diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op that
-  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, and the provenance a message's actions open, where the
+  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
   actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every

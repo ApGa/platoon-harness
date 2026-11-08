@@ -157,7 +157,7 @@ KEYMAP: tuple[Key, ...] = (
         "ctrl+t",
         "tasks",
         "tasks",
-        "Show the tasks of the queue in view, or the entries of the board in view",
+        "Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form",
         "workspace",
     ),
     Key(
