@@ -80,9 +80,10 @@ named here is closed.
   claim stands until the runtime records its expiry. Before, Ctrl+T and `/tasks` said they were not built.
 - **A child drawn under the call that spawned it.** In an agent's transcript in the terminal UI, a child's spawn is drawn
   under the line of the tool call whose id its anchor holds, the spawner's own tool item, even when its harness reported
-  that call after the spawn. A spawn whose call no line holds is drawn where the journal has it, saying it joins no known
-  call, as OpenHands' and an `exec` harness's are: their calls come through the shim and `ph`, each under an id of its
-  own, which none of their items holds. Before, every spawn was drawn where the journal had it.
+  that call after the spawn. A spawn whose call no line holds is drawn where the journal has it, as a line of its own
+  under none, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim
+  and `ph`, each under an id of its own, which none of their items holds. Before, every spawn was drawn where the journal
+  had it.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
   `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and

@@ -150,7 +150,7 @@ async def test_a_page_read_while_a_child_is_spawned_is_put_in():
         await pilot.pause()
 
         assert lines(transcript)[:5] == [f"@lead  said {n}" for n in range(1, 6)]
-        assert lines(transcript)[5].strip() == "↳ w spawned as worker · joins no known call"
+        assert lines(transcript)[5].strip() == "· w spawned as worker · joins no known call"
 
 
 async def test_a_page_read_for_an_earlier_show_is_not_put_in_and_the_later_one_reads_its_own():
@@ -206,7 +206,7 @@ async def test_a_lead_draws_its_own_children_and_no_one_else_s():
         await transcript.show(Focus.of_agent("lead", ["before"]), journal, 5)  # type: ignore[arg-type]
 
         assert [line.strip() for line in lines(transcript)] == [
-            "↳ mine spawned · joins no known call",
+            "· mine spawned · joins no known call",
             "✓ mine finished",
             "✓ before finished",
         ]
@@ -350,7 +350,7 @@ async def test_a_spawn_drawn_before_its_call_moves_under_it_once_the_call_is_dra
         before = [line.strip() for line in drawn(transcript)]
         transcript.take([said(3, "meanwhile"), tool(4, "started", "spawn w", id="call_7")])
 
-        assert before == ["@lead  on it", "↳ w spawned as worker · joins no known call"]
+        assert before == ["@lead  on it", "· w spawned as worker · joins no known call"]
         assert [line.strip() for line in drawn(transcript)] == [
             "@lead  on it",
             "@lead  meanwhile",
@@ -361,7 +361,8 @@ async def test_a_spawn_drawn_before_its_call_moves_under_it_once_the_call_is_dra
 
 async def test_a_spawn_that_joins_no_call_is_drawn_where_the_journal_has_it_saying_so():
     """OpenHands' calls come through the shim under an id of its own, which no item holds, and a call can come with no
-    id at all, as a scripted `Call` step's does."""
+    id at all, as a scripted `Call` step's does. Such a spawn is led as any event's line is, not indented under the line
+    above it as one drawn under its call is."""
     journal = Journal(
         [
             tool(1, "started", "spawn", id="oh-tool-1"),
@@ -377,10 +378,10 @@ async def test_a_spawn_that_joins_no_call_is_drawn_where_the_journal_has_it_sayi
 
         await transcript.show(Focus.of_agent("lead"), journal, 5)  # type: ignore[arg-type]
 
-        assert [line.strip() for line in drawn(transcript)] == [
+        assert drawn(transcript) == [
             "✓ spawned",
-            "↳ oh spawned as worker · joins no known call",
-            "↳ nameless spawned as worker · joins no known call",
+            "· oh spawned as worker · joins no known call",
+            "· nameless spawned as worker · joins no known call",
             "@lead  both started",
         ]
 

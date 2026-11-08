@@ -193,9 +193,12 @@ def _cut(span: str) -> Content:
 
 
 def _spawned(event: Event, joined: bool) -> Content:
-    """A child's spawn: under the call that made it, or where the journal has it, saying it joins no known call."""
-    line = Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
-    return line if joined else Content.assemble(line, (f" · {UNJOINED}", "dim"))
+    """A child's spawn: under the call that made it, or where the journal has it, led as any event's line is, so it
+    stands under no line, saying it joins no known call."""
+    gist = SafeText(" ".join(event.gist.split()))
+    if joined:
+        return Content.assemble(("  ↳ ", "dim"), gist)
+    return Content.assemble(("· ", "dim"), gist, (f" · {UNJOINED}", "dim"))
 
 
 def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content:

@@ -99,24 +99,23 @@ read or written loses only badges, which is said once.
 Each event is one line, and a line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click: its
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
-was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
-child it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made
-it, even when its harness reported that call after the spawn. A spawn whose call no line holds is drawn where the journal
-has it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim and
-`ph`, each under an id of its own, which none of their items holds. A turn that `spans` cuts is drawn cut, a line
-`── span … ends ──` where each span but its last ends, under what its calls made and above the first call of the next,
-naming the span by its last call, which the line shows: `p` on it says that a credit row on that call is the whole
-span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
-ends, so a cut made while a turn is under way is drawn when that turn ends, or when the agent is shown again. Each ref a line's words name, standing apart from the words
-around it and in no link's address, is underlined, and a click on it shows that ref's own provenance, which says first that
-it was opened from a ref in text, which records no link; one that names no event says so. A ref in an opened line's body
-is no link. The transcript also shows each approval the agent
-asked for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and
-through what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
-which no event records, so no answer is drawn under it, and the dock no longer lists it. Below the lines is what the
-agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
-stops following, and the line under the transcript counts what came since; `/follow` follows again. A page the journal
-would not give is named as lines missed.
+was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each child
+it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made it, even when
+its harness reported that call after the spawn. A spawn whose call no line holds is drawn where the journal has it, as a line
+of its own, not under the one above it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls
+come through the shim and `ph`, each under an id of its own, which none of their items holds. A turn that `spans` cuts is
+drawn cut, a line `── span … ends ──` where each span but its last ends, under what its calls made and above the first call of
+the next, naming the span by its last call, which the line shows: `p` on it says that a credit row on that call is the whole
+span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns ends, so
+a cut made while a turn is under way is drawn when that turn ends, or when the agent is shown again. Each ref a line's words
+name, standing apart from the words around it and in no link's address, is underlined, and a click on it shows that ref's own
+provenance, which says first that it was opened from a ref in text, which records no link; one that names no event says so. A
+ref in an opened line's body is no link. The transcript also shows each approval the agent asked for, which opens on the whole
+of what it asks, as `/ask` does, then who answered it: you or another person, and through what, `tui` or `browser`, or the
+role's policy. One nobody answered before its turn ended went moot with the turn, which no event records, so no answer is
+drawn under it, and the dock no longer lists it. Below the lines is what the agent in view is saying now, live, until the
+journal holds it as an item, and it goes with a runtime that goes. Reading up stops following, and the line under the
+transcript counts what came since; `/follow` follows again. A page the journal would not give is named as lines missed.
 
 ### The composer
 
