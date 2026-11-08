@@ -144,7 +144,9 @@ attention row's `since_seq` or the card's line, as the first event of its stream
 - **The terminal.** `/ask` on the approval the dock is at, or `a` on one chosen in the dock, opens it in a dialog that
   answers nothing, each line through `SafeText` and never as Markdown, which would eat a command's asterisks and
   underscores. An agent's transcript draws each approval it asked for, which opens the same way, and who answered it: a
-  person through what they said, or the role's policy. An approval's stream is named by its harness's id, so an agent's
+  person through what they said, or the role's policy. One nobody answered before its turn ended went moot with the
+  turn, which no event records, so no answer is drawn under it, as the transcript draws events, and the dock no longer
+  lists it, where the page's card says it went moot. An approval's stream is named by its harness's id, so an agent's
   focus reads every `approval/*` beside every `agent/*` and draws its own. A read takes one glob, so a focus with two is
   read a glob at a time, and a page keeps only what every read covered.
 - **The page.** Read it whole, on a card that waits on the person, opens the pane the address names, `ask=`, read through

@@ -220,7 +220,8 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
     """An agent's approvals are on streams of their own, `approval/<id>`, as the id is its harness's, so its focus
     reads every approval's and draws its own: what it asked, which opens on the whole ask, drawn as it was asked, and
     who answered, a person through what they said or the role's policy. One recorded before a request carried its ask
-    opens on its gist, saying what more it asks is unknown."""
+    opens on its gist, saying what more it asks is unknown. One nobody answered before its turn ended went moot, which
+    no event records, so no answer is drawn under it."""
     command = "rm -rf *_old_* # and __this__"
     journal = Journal(
         [
@@ -231,6 +232,8 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
             answered(5, "b1", "deny", "human:you", "web", agent="other"),
             asked(6, "a2", "Go on?"),
             answered(7, "a2", "deny", "policy", "policy"),
+            asked(8, "a3", "Delete it?"),
+            event(9, "turn/lead", "turn.ended", "turn ended", {"reason": "interrupted"}),
         ],
         bodies={"sha256:ask": f"Bash\n{command}".encode()},
     )
@@ -238,7 +241,7 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
     async with app.run_test(size=(100, 30)) as pilot:
         transcript = app.query_one(Transcript)
 
-        await transcript.show(Focus.of_agent("lead"), journal, 7)  # type: ignore[arg-type]
+        await transcript.show(Focus.of_agent("lead"), journal, 9)  # type: ignore[arg-type]
 
         assert lines(transcript) == [
             "@lead  on it",
@@ -246,6 +249,8 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
             "✓ allowed by @you via tui",
             "@lead asks for approval  Go on?",
             "✗ denied by policy",
+            "@lead asks for approval  Delete it?",
+            "■ turn interrupted",
         ]
         transcript.toggle(transcript.blocks[1])
         transcript.toggle(transcript.blocks[3])

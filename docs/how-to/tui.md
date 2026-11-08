@@ -102,7 +102,8 @@ transcript holds a window of at most 10,000 lines, read from the journal a page 
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
 child it spawned began and ended, where the journal has it, inside the turn that spawned it, and each approval it asked
 for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and through
-what, `tui` or `browser`, or the role's policy. Below the lines is what the
+what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
+which no event records, so no answer is drawn under it, and the dock no longer lists it. Below the lines is what the
 agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
 stops following, and the line under the transcript counts what came since; `/follow` follows again. A page the journal
 would not give is named as lines missed.
