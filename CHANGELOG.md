@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **Words found in the terminal.** `/find`, or Ctrl+F, opens a form for words, filled in with the last ones found, and
+  sent, it chooses the line before the chosen one whose words hold them, whatever their case and spacing, reading back
+  from the journal a page at a time as scrolling up does, or says that none does and goes back to where it began. Ctrl+F
+  is a shortcut that decides nothing, and a ref is still opened through `/provenance`. Before, a transcript could be
+  read only by scrolling.
 - **The page on a phone.** In a window narrower than 760 px the page is one column, the top bar, the list, what the
   address shows and the pane, each at most as tall as the screen, and it goes to what you open: the pane, or else what
   the address shows, a chat with its composer at the screen's foot. A press on a message gives it focus, which shows its

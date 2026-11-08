@@ -1242,3 +1242,60 @@ async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
     missing = "nothing/here@1 has no provenance to show: not_found: nothing is nothing/here@1"
     assert opened["nothing/here@1"] == Line("", missing, warn=True)
     assert isinstance(left, Workspace), "a form sent with no ref opens nothing"
+
+
+async def test_find_goes_back_a_page_at_a_time_to_the_next_line_whose_words_match(root, monkeypatch):
+    """`/find`, or Ctrl+F, opens a form for the words, filled in with the last ones found. Sent, the transcript takes
+    focus and chooses the line before the chosen one whose words hold them, whatever their case and spacing, read back
+    from the journal a page at a time and keeping its window, or says none does and goes back to the line it began
+    from."""
+    monkeypatch.setattr(transcript_module, "WINDOW", 600)
+    paging, reads = transcript_module.page_of, []
+
+    async def page_of(session, focus, *, after=0, before=None):
+        reads.append(before)
+        return await paging(session, focus, after=after, before=before)
+
+    monkeypatch.setattr(transcript_module, "page_of", page_of)
+    async with Session.start(with_notes(team()), name="s", root=root, cwd=root) as owner:
+        await post(owner, 40)
+        await owner.send("#notes", "a Needle in the hay")
+        await post(owner, 1400, start=40)
+        await owner.send("#notes", "the needle again")
+        await post(owner, 60, start=1440)
+        await in_state(owner, "lead", "idle")
+        head = await owner.head()
+        app = TerminalUI("s")
+        async with app.run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "@lead" in text)
+            transcript = await show_notes(pilot)
+            await drawn(pilot, lambda text: "note 1499" in text)
+
+            async def find(*typed: str, holds) -> str:
+                await pilot.press("ctrl+f")
+                await drawn(pilot, lambda _: isinstance(app.screen, Form))
+                filled = app.screen.query_one(Input).value
+                await pilot.press(*typed, "enter")
+                await drawn(pilot, lambda text: isinstance(app.screen, Workspace) and holds(text))
+                return filled
+
+            def chosen() -> str:
+                assert transcript.chosen is not None
+                return transcript.chosen.event.gist
+
+            assert await find(*"needle", holds=lambda _: chosen() == "the needle again") == ""
+            assert app.focused is transcript and not transcript.following
+
+            reads.clear()
+            filled = await find("home", "ctrl+k", *"NEEDLE   in", holds=lambda _: chosen() == "a Needle in the hay")
+            await drawn(pilot, lambda text: "a Needle in the hay" in text)
+            assert filled == "needle"
+            assert len(reads) >= 1400 // transcript_module.PAGE and None not in reads, "it read back a page at a time"
+            assert len(transcript.blocks) <= 600
+
+            said = "No line before the chosen one holds “NEEDLE   in”, back to the first line of #notes."
+            await find(holds=lambda _: any(notice.message == said for notice in app._notifications))
+            assert chosen() == "a Needle in the hay"
+
+        moved = [event.type async for event in owner.events(head) if event.actor == "human:you"]
+        assert moved == [], "finding did something"

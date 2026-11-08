@@ -79,8 +79,10 @@ class Journal:
         self.bodies = bodies or {}
         self.cut: list[Span] = []
         self.asked = asyncio.Event()
+        self.before: int | None = None
 
     async def page(self, *, after=0, before=None, streams=None, match=None, limit=256) -> Page:
+        self.before = before
         if self.reading is not None:
             self.reading()
         self.asked.set()
@@ -529,3 +531,31 @@ async def test_a_ref_in_a_line_s_text_opens_its_provenance():
 
     assert app.named == ["board/notes/spec@3", "inbox/you@1"]
     assert transcript.blocks[0].open, "a click on words that name no ref opens the line"
+
+
+async def test_find_waits_out_a_read_under_way_and_reads_back_each_page_once():
+    """A page read as the person scrolls is put in before find reads on, so each page is read once, each line looked at
+    once, and the line found is the newest before the chosen one whose words hold the words, whatever their case."""
+    history = [said(1, "the old needle"), said(2, "a needle"), *(said(n, f"said {n}") for n in range(3, 701))]
+    befores: list[int | None] = []
+    journal = Journal(history)
+    app = Alone()
+    async with app.run_test(size=(80, 10)) as pilot:
+        transcript = app.query_one(Transcript)
+        journal.reading = lambda: befores.append(journal.before)
+        await transcript.show(Focus.of_agent("lead"), journal, 700)  # type: ignore[arg-type]
+        journal.held = held = asyncio.Event()
+        journal.asked.clear()
+        scrolled = asyncio.ensure_future(transcript.page_back())
+        await journal.asked.wait()
+
+        finding = transcript.find("A NEEDLE")
+        await pilot.pause()
+        held.set()
+        await scrolled
+        await finding.wait()
+
+        assert transcript.chosen is not None and transcript.chosen.event.gist == "a needle"
+        assert not transcript.following
+        assert befores == [701, 701, 445, 445, 189, 189], "a page is a read for each of the focus's globs"
+        assert [block.first for block in transcript.blocks] == list(range(1, 701))

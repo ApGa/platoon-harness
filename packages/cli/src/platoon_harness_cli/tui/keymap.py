@@ -151,6 +151,13 @@ KEYMAP: tuple[Key, ...] = (
     Key("pagedown", "page_down", "page-down", "Scroll the transcript down", "workspace"),
     Key("ctrl+home", "oldest", "oldest", "Go to the start of the transcript, read back from the journal", "workspace"),
     Key("ctrl+end", "follow", "follow", "Go to the newest line and follow what comes", "workspace"),
+    Key(
+        "ctrl+f",
+        "find",
+        "find",
+        "Find the line before the chosen one whose words hold those you give, reading back a page at a time",
+        "workspace",
+    ),
     Key("alt+f", "attach_file", "file", "Attach a file to the message, as its body", "workspace"),
     Key("", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
     Key(

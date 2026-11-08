@@ -185,6 +185,41 @@ async def test_ctrl_t_and_its_typed_command_open_the_tasks_view(tmp_path, monkey
     assert isinstance(typed, Tasks) and typed.channel == "queue/tasks"
 
 
+async def test_find_has_a_typed_command_and_a_shortcut_that_decides_nothing(tmp_path, monkeypatch):
+    """Ctrl+F opens `/find`'s form and does nothing more, from the composer, keeping its draft, and from another part.
+    The form decides nothing until it is sent: Esc leaves it, and nothing is written."""
+    find = command("/find")
+    assert find is not None and find.keys == "ctrl+f"
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    lead = Team.model_validate({"roles": {"lead": {"harness": harness(lambda: ScriptedDriver([]))}}})
+    async with Session.start(lead, name="s", root=tmp_path, cwd=tmp_path) as owner:
+        await in_state(owner, "lead", "idle")
+        head = await owner.head()
+        app = TerminalUI("s")
+        async with app.run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "@lead" in text)
+            composer = app.screen.query_one(Composer)
+            opened = []
+            for typed in (("ctrl+f",), ("tab", "ctrl+f"), ("escape", *"/find", "enter")):
+                await pilot.press(*typed)
+                await drawn(pilot, lambda _: isinstance(app.screen, Form))
+                opened.append(app.screen._title.plain)
+                await pilot.press(*"yes", "escape")
+                await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
+                if typed == ("ctrl+f",):
+                    assert app.focused is composer and composer.text == ""
+                    await pilot.press(*"a draft", "ctrl+f")
+                    await drawn(pilot, lambda _: isinstance(app.screen, Form))
+                    await pilot.press("escape")
+                    await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
+                    assert app.focused is composer and composer.text == "a draft"
+                    await pilot.press(*["backspace"] * 7)
+
+        moved = [(event.type, event.gist) async for event in owner.events(head) if event.actor == "human:you"]
+        assert opened == ["Find"] * 3
+        assert moved == [], "a find did something"
+
+
 async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_one_is_not_built_at_80_columns(
     tmp_path, monkeypatch
 ):

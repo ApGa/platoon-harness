@@ -1767,7 +1767,9 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   form, filled in with that line's ref, which takes any other, as the page's pane takes a ref in its field. `/reached` opens
   the panel on who reached whom, the first page of `interactions` in the words both clients share: each pair a heading over a
   line for each kind of edge it holds and one for its unconfirmed offers, each opening the event that holds the first of
-  them, and each agent's unknowns. `/tasks`, on a
+  them, and each agent's unknowns. `/find`, or Ctrl+F, a shortcut that decides nothing, takes words through a form and chooses
+  the line before the chosen one whose words hold them, reading back a page at a time within the window, as scrolling up does.
+  `/tasks`, on a
   queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
   `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
   end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form

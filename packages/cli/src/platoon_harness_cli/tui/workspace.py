@@ -159,6 +159,7 @@ class Workspace(Screen[None]):
         self._inspected: dict[str, Any] | None = None
         self._unmarked = False
         self.forms: list[ops.Form] = []
+        self.words = ""
 
     def compose(self) -> ComposeResult:
         yield Static(id="header")
@@ -940,6 +941,22 @@ class Workspace(Screen[None]):
 
     async def action_follow(self) -> None:
         await self.query_one(Transcript).action_follow()
+
+    @work(group="act")
+    async def action_find(self) -> None:
+        """Find a line by the words its form takes, filled in with the last ones found, which decides nothing until it
+        is sent. Sent, the transcript takes focus, so the line found shows as chosen there."""
+        about = SafeText("words: what the line you look for shows, whatever its case, found back from the chosen one.")
+        answer = await self.app.push_screen_wait(Form(SafeText("Find", "bold"), [("words", about, self.words)]))
+        if answer is None:
+            return
+        if "words" not in answer:
+            note(self, "No words were given, so no line is found.", severity="warning")
+            return
+        self.words = answer["words"]
+        transcript = self.query_one(Transcript)
+        transcript.focus()
+        transcript.find(self.words)
 
     @work(group="act")
     async def action_attach_file(self) -> None:

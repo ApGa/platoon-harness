@@ -117,6 +117,16 @@ drawn under it, and the dock no longer lists it. Below the lines is what the age
 journal holds it as an item, and it goes with a runtime that goes. Reading up stops following, and the line under the
 transcript counts what came since; `/follow` follows again. A page the journal would not give is named as lines missed.
 
+### Find a line
+
+`/find`, or Ctrl+F, opens a form for words, filled in with the last ones found, and only sending it finds: Ctrl+F is a
+shortcut that decides nothing. The transcript then takes focus and chooses the line before the chosen one whose words hold
+yours, whatever their case and the spaces between them, reading back from the journal a page at a time, as scrolling up
+does, within its window. A line's words are what it shows, not a body it opens on, nor what an agent is saying now. Ctrl+F
+then Enter finds the next one back. Where no line holds them, back to the first line of the focus, it says so, and goes back
+to following, or to the line it began from. A ref is opened through `/provenance`'s form, not found. That `/find` finds
+words alone, with Ctrl+F its shortcut, is the default pending the owner's ruling.
+
 ### The composer
 
 Enter sends to the target shown above it, and a person's message steers: it lands at the earliest boundary the harness
@@ -356,6 +366,7 @@ before the session's. `^` is Ctrl.
 | `PgDn` | `/page-down` | Scroll the transcript down |
 | `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |
 | `^End` | `/follow` | Go to the newest line and follow what comes |
+| `^F` | `/find` | Find the line before the chosen one whose words hold those you give, reading back a page at a time |
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
@@ -451,7 +462,7 @@ before the session's. `^` is Ctrl.
 
 ## Not built yet
 
-Disabled where a control for it would be, or absent from the palette: search in a transcript,
+Disabled where a control for it would be, or absent from the palette:
 threads, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
 the transcript, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,

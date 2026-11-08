@@ -1,6 +1,7 @@
 """The transcript: one agent's or one channel's journal, a line per event and a line opens on demand, read from the
 journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
 
+import asyncio
 import bisect
 import time
 from collections.abc import Iterable
@@ -131,6 +132,11 @@ def _address(stream: str) -> str:
 def _who(said: str) -> Content:
     """A sender as a person reads it: `@lead`, `@you`, or the runtime."""
     return SafeText(said if said.startswith("@") or said == "runtime" else f"@{said.partition(':')[2] or said}", "bold")
+
+
+def _words(text: str) -> str:
+    """Text as `/find` compares it: its words, whatever their case and the spaces between them."""
+    return " ".join(text.split()).casefold()
 
 
 def _linked(text: Content) -> Content:
@@ -313,7 +319,7 @@ class Transcript(ScrollView, can_focus=True):
         self._spans_from: tuple[str | None, Span | None] = (None, None)
         self._before = 0
         self._after: int | None = None
-        self._paging = False
+        self._reading = asyncio.Lock()
         self._placing = False
         self._chosen: Block | None = None
         self._tail_text = ""
@@ -572,13 +578,11 @@ class Transcript(ScrollView, can_focus=True):
 
     async def page_back(self) -> None:
         """Read the page before the oldest line held, and put it above without moving what is on screen."""
-        if self._paging or self._before == 0 or self._session is None or self.focus_on is None:
+        if self._reading.locked() or self._before == 0 or self._session is None or self.focus_on is None:
             return
-        self._paging, shown = True, self._shown
-        try:
+        shown = self._shown
+        async with self._reading:
             page = await self._page(before=self._before)
-        finally:
-            self._paging = False
         if shown != self._shown:
             self._read_again()
             return
@@ -610,13 +614,11 @@ class Transcript(ScrollView, can_focus=True):
 
     async def page_forward(self) -> None:
         """Read the page after the newest line held, when newer ones were let go, until it reaches the follower."""
-        if self._paging or self._after is None or self._session is None or self.focus_on is None:
+        if self._reading.locked() or self._after is None or self._session is None or self.focus_on is None:
             return
-        self._paging, shown, after = True, self._shown, self._after
-        try:
+        shown, after = self._shown, self._after
+        async with self._reading:
             page = await self._page(after=after)
-        finally:
-            self._paging = False
         if shown != self._shown:
             self._read_again()
             return
@@ -790,17 +792,66 @@ class Transcript(ScrollView, can_focus=True):
 
     def _choose(self, by: int) -> None:
         """Choose the line `by` lines on, as they are drawn."""
-        lines = [block for block, line in self._rows if line == 0]
+        lines = self._drawn()
         if not lines:
             return
         at = lines.index(self._chosen) if self._chosen in lines else len(lines) - 1
-        self._chosen = lines[min(max(at + by, 0), len(lines) - 1)]
-        row = self._rows.index((self._chosen, 0))
-        if by < 0 and self.following:
-            self.following = False
-            self.post_message(self.Moved())
+        if by < 0:
+            self._stop_following()
+        self._go_to(lines[min(max(at + by, 0), len(lines) - 1)])
+
+    def _drawn(self) -> list[Block]:
+        """The lines held, as they are drawn."""
+        return [block for block, line in self._rows if line == 0]
+
+    def _go_to(self, block: Block) -> None:
+        """Choose a line, and scroll it into view."""
+        self._chosen = block
+        row = self._rows.index((block, 0))
         self.scroll_to_region(Region(0, row, 1, 1), animate=False, immediate=True, force=True)
         self.refresh()
+
+    def _stop_following(self) -> None:
+        if self.following:
+            self.following = False
+            self.post_message(self.Moved())
+
+    @work(group="find", exclusive=True)
+    async def find(self, words: str) -> None:
+        """Choose the line drawn before the chosen one whose words hold `words`, whatever their case and spacing,
+        reading back from the journal a page at a time, as scrolling up does, until one does. A line's words are what it
+        shows, and not a body it opens on. Each line is looked at once, and a read under way puts its page in first.
+        Where none does back to the focus's first line it says so, and goes back to following, or else to the line it
+        began from. Reading the focus anew stops it, saying nothing, and a page the journal would not give, which is
+        said as lines missed."""
+        said, start, last = _words(words), self._chosen, None
+        followed, shown = self.following, self._shown
+        while True:
+            lines = self._drawn()
+            at = next((lines.index(block) for block in (last, start) if block in lines), len(lines))
+            for block in reversed(lines[:at]):
+                last = block
+                if said in _words(block.line.plain):
+                    self._stop_following()
+                    self._go_to(block)
+                    return
+            if not self._before:
+                break
+            self._stop_following()
+            self._place(0)
+            async with self._reading:  # A read under way puts its page in before this one reads on.
+                pass
+            before = self._before
+            await self.page_back()
+            if shown != self._shown or self._before == before:  # Read anew, or a page missed, which is said.
+                return
+        focus = self.focus_on.title if self.focus_on else "the focus"
+        note(self, f"No line before the chosen one holds “{words}”, back to the first line of {focus}.")
+        lines = self._drawn()
+        if followed and not self.following:
+            await self.action_follow()
+        elif lines:
+            self._go_to(start if start in lines else lines[0])
 
     def on_click(self, event: events.Click) -> None:
         """Open or close the line clicked, or on a ref its text names, open that ref's provenance."""
