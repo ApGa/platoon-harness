@@ -51,8 +51,8 @@ def update(said: str, **fields: Any) -> dict[str, Any]:
     }
 
 
-def ask(call: dict[str, Any], options: list[dict[str, Any]] = OPTIONS) -> dict[str, Any]:
-    return {"ask": {"sessionId": "$session", "toolCall": call, "options": options}}
+def ask(call: dict[str, Any], options: list[dict[str, Any]] = OPTIONS, *, step: str = "ask") -> dict[str, Any]:
+    return {step: {"sessionId": "$session", "toolCall": call, "options": options}}
 
 
 class Agent:
@@ -126,9 +126,11 @@ async def test_an_unknown_update_keeps_its_raw_frame_and_a_gap(tmp_path):
 
 async def test_permission_requests_go_through_the_runtime_s_approvals_with_their_tool_call_as_the_ask(tmp_path):
     """A request that names its tool call by id alone asks what the agent last said of that call, which is its whole
-    ask; the verdict goes back as the option of its kind for this once, never `always`; one that says nothing of what it
-    would do carries no ask and says so; where no option is of the verdict's kind, and for one an interrupt cuts short,
-    the answer is `cancelled`; and the tool's end names the approval that let it through."""
+    ask, as a person reads it: its title and kind, each place it names, its input as JSON, and its content as it is, a
+    diff as its path and new text. One that says nothing of what it would do carries no ask, and says so. The verdict
+    goes back as the option of its kind for this once, never `always`; where none is of that kind the answer is
+    `cancelled`, which runs nothing, so a denial holds and an allow fails, saying so; an interrupt answers `cancelled`
+    whatever is offered; and the tool's end names the approval that let it through."""
     command = "touch é 日本 " + " ".join(f"part{n:04d}" for n in range(600))
     first = [
         update("tool_call", toolCallId="call_1", title="shell", kind="execute", status="pending", rawInput={}),
@@ -141,13 +143,28 @@ async def test_permission_requests_go_through_the_runtime_s_approvals_with_their
             content=[{"type": "content", "content": {"type": "text", "text": "done"}}],
         ),
     ]
+    written = 'print("hi")\nprint("bye")\n'
+    run = 'echo "hi"\nrm -f "a b"'
+    edit = {
+        "toolCallId": "call_2",
+        "title": "edit",
+        "locations": [{"path": "/w/a.py", "line": 3}],
+        "content": [
+            {"type": "diff", "path": "/w/a.py", "oldText": "x", "newText": written},
+            {"type": "content", "content": {"type": "text", "text": run}},
+        ],
+    }
     second = [
-        ask({"toolCallId": "call_2", "title": "mystery"}),
+        ask(edit),
+        ask({"toolCallId": "call_3", "title": "rm -rf /w/old", "locations": [{"path": "/w/old"}]}),
+        ask({"toolCallId": "call_4"}),
         ask(
-            {"toolCallId": "call_3", "rawInput": {}}, [option for option in OPTIONS if option["kind"] == "allow_always"]
+            {"toolCallId": "call_5", "rawInput": {}},
+            [option for option in OPTIONS if option["kind"] == "allow_always"],
         ),
     ]
-    third = [ask({"toolCallId": "call_4", "rawInput": {"command": "sleep 1"}}), {"wait": True}]
+    odd = [{"optionId": "odd", "name": "Odd"}, *OPTIONS]
+    third = [ask({"toolCallId": "call_6", "rawInput": {"command": "sleep 1"}}, odd), {"wait": True}]
     agent, heard = Agent(tmp_path, turns=[first, second, third]), Heard()
     driver = agent.driver()
     await driver.start(make_spec(tmp_path), heard)
@@ -156,25 +173,31 @@ async def test_permission_requests_go_through_the_runtime_s_approvals_with_their
     await driver.answer(asked.id, "allow")
     done = await heard.until(Item, lambda item: item.phase == "completed")
 
-    assert asked.body is not None and json.loads(asked.body) == {
-        "title": command[:20],
-        "kind": "execute",
-        "rawInput": {"command": command},
-    }
+    said = json.dumps({"command": command}, ensure_ascii=False)
+    assert asked.body == f"title: {command[:20]}\nkind: execute\n{said}"
     assert (done.native_id, done.approval, done.outcome, done.body) == ("call_1", asked.id, "completed", "done")
 
     await driver.deliver(Delivery(input="2", boundary="turn", text="again", items=()))
-    silent = await heard.until(ApprovalRequested, lambda report: report.id != asked.id)
-    await driver.answer(silent.id, "deny")
-    always = await heard.until(ApprovalRequested, lambda report: report.id not in (asked.id, silent.id))
-    await driver.answer(always.id, "allow")
+    answered = {asked.id}
+    second_asks = []
+    for verdict in ("deny", "allow", "deny"):
+        report = await heard.until(ApprovalRequested, lambda report: report.id not in answered)
+        answered.add(report.id)
+        second_asks.append(report)
+        await driver.answer(report.id, verdict)
+    always = await heard.until(ApprovalRequested, lambda report: report.id not in answered)
+    answered.add(always.id)
+    with pytest.raises(DriverError, match="no option to allow this once"):
+        await driver.answer(always.id, "allow")
     await heard.until(TurnEnded, lambda ended: len(heard.of(TurnEnded)) == 2)
 
-    assert silent.body is None and silent.gist == "mystery, which says nothing more of what it would do"
-    assert always.body is not None
+    [edited, titled, silent] = second_asks
+    assert edited.body == f"title: edit\nlocation: /w/a.py:3\n/w/a.py\n{written}\n{run}"
+    assert titled.body == "title: rm -rf /w/old\nlocation: /w/old"
+    assert silent.body is None and silent.gist == "a tool call, which says nothing of what it would do"
 
     await driver.deliver(Delivery(input="3", boundary="turn", text="once more", items=()))
-    cut = await heard.until(ApprovalRequested, lambda report: report.id not in (asked.id, silent.id, always.id))
+    cut = await heard.until(ApprovalRequested, lambda report: report.id not in answered)
     await driver.interrupt()
     await heard.until(TurnEnded, lambda ended: len(heard.of(TurnEnded)) == 3)
     await driver.stop(GRACE)
@@ -183,9 +206,65 @@ async def test_permission_requests_go_through_the_runtime_s_approvals_with_their
     assert agent.answers() == [
         {"outcome": "selected", "optionId": "once"},
         {"outcome": "selected", "optionId": "reject"},
+        {"outcome": "selected", "optionId": "once"},
+        {"outcome": "selected", "optionId": "reject"},
         {"outcome": "cancelled"},
         {"outcome": "cancelled"},
     ]
+
+
+async def test_a_request_still_waiting_when_its_turn_ends_is_answered_cancelled(tmp_path):
+    """The agent asks nothing of a prompt it has answered, so a request it left waiting is moot, and is answered
+    `cancelled`, which runs nothing, as ACP has a client answer one it will not decide."""
+    agent, heard = Agent(tmp_path, turns=[[ask({"toolCallId": "call_1", "rawInput": {}}, step="leave")]]), Heard()
+    driver = agent.driver()
+    await driver.start(make_spec(tmp_path), heard)
+    asked = await heard.until(ApprovalRequested)
+
+    await heard.until(TurnEnded)
+    await driver.stop(GRACE)
+
+    assert agent.answers() == [{"outcome": "cancelled"}]
+    with pytest.raises(DriverError, match="is waiting"):
+        await driver.answer(asked.id, "allow")
+
+
+async def test_a_prompt_answered_with_no_stop_reason_ends_its_turn_saying_so(tmp_path):
+    agent, heard = Agent(tmp_path, turns=[[{"end": {}}]]), Heard()
+    driver = agent.driver()
+    await driver.start(make_spec(tmp_path), heard)
+
+    ended = await heard.until(TurnEnded)
+    await driver.stop(GRACE)
+
+    assert ended.reason == "it answered the prompt with no stop reason"
+
+
+async def test_a_change_of_what_governs_the_session_keeps_its_raw_frame_and_a_gap(tmp_path):
+    """`ready` names the model, and the record holds it, so an update that changes the session's model, or any option
+    or its mode, once it is ready, is kept raw with a gap; one that says what was said already is its state."""
+    model = {"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "m-1"}
+    turn = [
+        update("config_option_update", configOptions=[model]),
+        update("config_option_update", configOptions=[{**model, "currentValue": "m-2"}]),
+        update("current_mode_update", currentModeId="yolo"),
+        update("agent_message_chunk", content={"type": "text", "text": "done"}, messageId="m-1"),
+    ]
+    agent, heard = Agent(tmp_path, turns=[turn], options=[model]), Heard()
+    driver = agent.driver()
+    await driver.start(make_spec(tmp_path), heard)
+
+    await heard.until(TurnEnded)
+    await driver.stop(GRACE)
+
+    assert heard.of(Ready)[0].effective_model == "m-1"
+    assert [native.kind for native in heard.of(Native)] == [
+        "session/update config_option_update",
+        "session/update current_mode_update",
+    ]
+    assert '"currentValue": "m-2"' in heard.of(Native)[0].raw
+    assert [gap.what for gap in heard.of(GapReport)] == ["unknown_update", "unknown_update"]
+    assert [item.body for item in heard.of(Item)] == ["done"]
 
 
 async def test_steering_is_refused_until_a_fixture_passes(tmp_path):

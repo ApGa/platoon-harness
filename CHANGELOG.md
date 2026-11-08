@@ -81,9 +81,11 @@ named here is closed.
   `opencode acp`. An agent that answers another protocol is stopped before a session opens. A turn is one `session/prompt`,
   the one boundary declared: a delivery during a turn goes as the next prompt, and one for any other boundary is refused until
   a fixture shows an agent taking one. A permission request is an approval whose whole ask is the tool call it names, as the
-  agent last updated it, answered by the option for this once, never `always`, and `cancelled` where there is none and at an
-  interrupt. An update nothing maps keeps its raw frame with a gap, a compaction is `compacted` with what it forgot unknown,
-  and as ACP names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate.
+  agent last updated it, its title and places, its input as JSON and its content as it is, answered by the option for this
+  once, never `always`, and `cancelled` where there is none, which runs nothing, so an allow then fails, saying so, and at an
+  interrupt or the turn's end. An update nothing maps, and a change of mode or of a config option, the model among them, once
+  the session is ready, keeps its raw frame with a gap, a compaction is `compacted` with what it forgot unknown, and as ACP
+  names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate.
   On a scripted ACP agent, `ScriptedDriver` behind ACP on FakeModel, `check_driver` passes every check it does not skip, and the
   driver earns `operational` and `observable`. `opencode` refuses a start that names no model, as OpenCode then sends prompts
   to a hosted model nobody chose, and it has not run, nor has its check, which skips where `opencode` is not on `PATH`: STATUS

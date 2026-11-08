@@ -73,9 +73,10 @@ session, the version `agentInfo` says, and the model that option holds.
 | `tool_call`, `tool_call_update` | `item` tool `started`, then `completed` with the status it ended at and the approval that let it through |
 | `plan` | `item` thought |
 | `compaction_update` completed | `compacted` with what its summary says and `forgotten` unknown |
-| `user_message_chunk`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice` | Nothing: they say nothing of what the agent did |
+| `user_message_chunk`, `available_commands_update`, `session_info_update`, `usage_update`, `notice` | Nothing: they say nothing of what the agent did |
+| `current_mode_update`, `config_option_update` | Nothing before the session is ready, or where it says the mode and options already said; otherwise `native` with its raw frame and the gap `unknown_update`, as `ready` named the model the record holds |
 | Any other update, method or line | `native` with its raw frame and the gap `unknown_update`, as the peer took the line |
-| The prompt's answer | `turn.ended`: `stopped` for `end_turn`, `interrupted` for `cancelled` after an interrupt, and the stop reason otherwise |
+| The prompt's answer | `turn.ended`: `stopped` for `end_turn`, `interrupted` for `cancelled` after an interrupt, the stop reason otherwise, and where it gives none, that it gave none |
 
 ACP gives no id of a model call and no spend per call: `usage_update` is the context's size and a running cost, and a prompt's
 `usage` is unstable. So the driver reports no `model.call` and no `usage`, declares `call_ids` none and no `measures`, and the
@@ -85,13 +86,18 @@ turns them off.
 ### 4. A permission request is an approval whose whole ask is its tool call
 
 `session/request_permission` names a tool call as a `ToolCallUpdate`, whose fields left out are those its last `tool_call` or
-`tool_call_update` gave. The driver keeps each tool call as last updated, and the approval's body is that call as the agent gave it,
-as JSON, but for its id and status, which are not part of the ask: its title, kind, raw input, content, a diff's path and text
-among it, and locations. Its gist is the title and the start of the raw input. A call that gives neither raw input nor content says
-nothing of what it would do, so its body is None, unknown, and its gist says so. The verdict is answered with the request's
-`allow_once` or `reject_once` option, and where it offers none of that kind, with `cancelled`, as an `always` option would decide
-more than a person was asked. An interrupt answers each request still waiting `cancelled`, as ACP requires, and a turn's end makes
-them moot.
+`tool_call_update` gave. The driver keeps each tool call as last updated, and the approval's body is that call as a person reads
+it: a line for each of its title, its tool's name and its kind, and for each place it names, as `path:line`, then its raw input as
+JSON, as a tool's input is in Claude Code's ask, then each entry of its content as it is, a diff as its path and new text, so a
+command's quotes and a file's lines read as they will run. Its id and status are not part of the ask. Its gist is the title and the
+start of the raw input. A call that gives none of these says nothing of what it would do, so its body is None, unknown, and its gist
+says so.
+
+The verdict is answered with the request's `allow_once` or `reject_once` option, as an `always` option would decide more than a
+person was asked. Where the request offers none of the verdict's kind, the answer is `cancelled`, which runs nothing: a denial is
+carried out so, and an allow is not, so `answer` fails, saying so, and the record holds that failure on the answer's effect. An
+interrupt answers each request still waiting `cancelled`, as ACP requires, whatever options it offers, and so does a turn's end,
+which makes them moot, as the agent asks nothing of a prompt it has answered.
 
 ### 5. Steering is refused until a fixture passes
 

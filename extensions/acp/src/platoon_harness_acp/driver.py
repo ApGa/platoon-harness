@@ -59,33 +59,29 @@ measures, and stable ACP neither shows an agent's own agents nor turns them off.
 _GRACE = 2.0
 _CLIENT = {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False, "session": {"compaction": {}}}
 """What the client offers: no file system and no terminal, so the agent keeps its own tools, and compaction updates."""
-_AMBIENT = frozenset(
-    {
-        "available_commands_update",
-        "current_mode_update",
-        "config_option_update",
-        "session_info_update",
-        "usage_update",
-        "notice",
-    }
-)
+_AMBIENT = frozenset({"available_commands_update", "session_info_update", "usage_update", "notice"})
 """Updates of the session's state, which come at any time and say nothing of what the agent did. `usage_update` is the
 context's size and a running cost, neither of which is the spend of a model call."""
+_GOVERNING = frozenset({"current_mode_update", "config_option_update"})
+"""Updates of what governs the session, its mode and its config options, its model among them, which `ready` named."""
 _CHUNKS = frozenset({"agent_message_chunk", "agent_thought_chunk"})
 _ENDED = frozenset({"completed", "failed"})
-_NOT_ASKED = frozenset({"toolCallId", "status", "_meta"})
-"""What a tool call holds that is no part of what it asks: its id, how far it has got, and what is the agent's own."""
+_BESIDE = ("title", "name", "kind")
+"""What a tool call says of itself beside what it would act on: its title, its tool's name and its kind."""
 _ONCE: Mapping[Verdict, str] = {"allow": "allow_once", "deny": "reject_once"}
+_CANCELLED = {"outcome": "cancelled"}
 
 __all__ = ["CAPABILITIES", "PROTOCOL", "AcpDriver"]
 
 
 @dataclass
 class _Asked:
-    """A permission request the agent waits on: the tool call it names, and the verdict, None for one cut short."""
+    """A permission request the agent waits on: the tool call it names, its option for each verdict this once, None
+    where it offers none, and the outcome it is answered with."""
 
     call: str
-    verdict: asyncio.Future[Verdict | None]
+    once: Mapping[Verdict, str | None]
+    outcome: asyncio.Future[dict[str, Any]]
 
 
 @dataclass
@@ -129,13 +125,26 @@ def _called(call: Mapping[str, Any]) -> str:
 
 
 def _ask(call: Mapping[str, Any]) -> str | None:
-    """The whole of what a tool call asks to do: the call as the agent gave it, as JSON, but for what asks nothing. A
-    call that gives no input and no content says nothing of what it would do, which is unknown."""
-    if "rawInput" not in call and not call.get("content"):
-        return None
-    return json.dumps(
-        {key: value for key, value in call.items() if key not in _NOT_ASKED}, ensure_ascii=False, indent=2
-    )
+    """The whole of what a tool call asks to do, as a person reads it: a line for each of `_BESIDE` it gives and each
+    place it names, then its input as JSON, and each entry of its content, a diff as its path and new text. A call that
+    gives none of these says nothing of what it would do, which is unknown."""
+    lines = [f"{name}: {call[name]}" for name in _BESIDE if call.get(name)]
+    lines += [f"location: {_place(location)}" for location in call.get("locations") or ()]
+    if "rawInput" in call:
+        lines.append(_json(call["rawInput"]))
+    lines += [_shown(entry) for entry in call.get("content") or ()]
+    return "\n".join(lines) or None
+
+
+def _place(location: Mapping[str, Any]) -> str:
+    """A place a tool call names, as `path:line`, or its path where it names no line."""
+    match location:
+        case {"path": str(path), "line": int(line)}:
+            return f"{path}:{line}"
+        case {"path": str(path)}:
+            return path
+        case _:
+            return _json(location)
 
 
 def _shown(entry: Mapping[str, Any]) -> str:
@@ -157,12 +166,21 @@ def _output(call: Mapping[str, Any]) -> str | None:
     return "\n".join(said) or None
 
 
-def _outcome(options: Sequence[Mapping[str, Any]], verdict: Verdict | None) -> dict[str, Any]:
-    """A verdict as the request's option of its kind for this once. An `always` option would decide more than a person
-    was asked, so where none is of that kind, and for a request an interrupt cut short, the answer is `cancelled`."""
-    kind = None if verdict is None else _ONCE[verdict]
-    chosen = next((option["optionId"] for option in options if option.get("kind") == kind), None)
-    return {"outcome": "cancelled"} if chosen is None else {"outcome": "selected", "optionId": chosen}
+def _once(options: Sequence[Mapping[str, Any]]) -> dict[Verdict, str | None]:
+    """A request's option for each verdict this once, or None where it offers none, as an `always` option would decide
+    more than a person was asked."""
+    return {
+        verdict: next((option["optionId"] for option in options if option.get("kind") == kind), None)
+        for verdict, kind in _ONCE.items()
+    }
+
+
+def _governing(said: Mapping[str, Any]) -> dict[str, Any]:
+    """What governs a session, as an answer or an update says it: each config option's value, by its id, and the
+    mode."""
+    held = {f"option {option['id']}": option.get("currentValue") for option in said.get("configOptions") or ()}
+    mode = said.get("currentModeId") or (said.get("modes") or {}).get("currentModeId")
+    return held if mode is None else {**held, "mode": mode}
 
 
 def _kind(line: bytes) -> str:
@@ -206,6 +224,8 @@ class AcpDriver:
         self._prompted = False
         self._landed: set[str] = set()
         self._interrupted = False
+        self._governed: dict[str, Any] = {}
+        self._ready = False
         self._calls: dict[str, dict[str, Any]] = {}
         self._asking: dict[str, _Asked] = {}
         self._deciding: dict[str, str] = {}
@@ -261,9 +281,11 @@ class AcpDriver:
         else:
             self._session = spec.resume
             opened = await self._call("session/resume", {"sessionId": spec.resume, **setup})
+        self._governed = _governing(opened or {})
         model = await self._model(spec, (opened or {}).get("configOptions") or ())
         agent_version = (said.get("agentInfo") or {}).get("version")
         self._process.put(Ready(native=self._session, version=agent_version, effective_model=model))
+        self._ready = True
 
     async def _model(self, spec: AgentSpec, options: Sequence[Mapping[str, Any]]) -> str | None:
         """The model the session's config option of category `model` holds, once set to the role's. An agent that offers
@@ -275,7 +297,9 @@ class AcpDriver:
             return None
         if spec.model is not None and option.get("currentValue") != spec.model:
             params = {"sessionId": self._session, "configId": option["id"], "value": spec.model}
-            options = (await self._call("session/set_config_option", params) or {}).get("configOptions") or ()
+            changed = await self._call("session/set_config_option", params) or {}
+            self._governed |= _governing(changed)
+            options = changed.get("configOptions") or ()
             option = next((each for each in options if each.get("id") == option["id"]), {})
         return option.get("currentValue")
 
@@ -324,23 +348,31 @@ class AcpDriver:
         except DriverError as error:
             reason = self._process.reason(f"failed: {error}")
         self._said()
-        for asked in self._asking.values():
-            asked.verdict.cancel()  # Moot with the turn that asked: the agent asks nothing of a prompt it has answered.
-        self._asking.clear()
+        self._cut_short()  # Moot with the turn that asked, as the agent asks nothing of a prompt it has answered.
         self._process.put(TurnEnded(reason=reason))
         self._landing, self._prompted, self._interrupted = None, False, False
         self._next()
 
     def _reason(self, stop: Any) -> str:
         """`end_turn` is a turn that stopped on its own, and `cancelled` one an interrupt stopped, or that the agent cut
-        short itself where nobody interrupted it. Any other stop reason is what went wrong."""
+        short itself where nobody interrupted it. Any other stop reason is what went wrong, and an answer with none does
+        not say how the turn ended."""
         match stop:
             case "end_turn":
                 return "stopped"
             case "cancelled":
                 return "interrupted" if self._interrupted else "aborted"
+            case None:
+                return "it answered the prompt with no stop reason"
             case _:
                 return self._process.reason(str(stop))
+
+    def _cut_short(self) -> None:
+        """Answer each permission request still waiting `cancelled`, which runs nothing."""
+        for asked in self._asking.values():
+            if not asked.outcome.done():
+                asked.outcome.set_result(_CANCELLED)
+        self._asking.clear()
 
     async def interrupt(self) -> None:
         """Cancel the prompt under way, and answer each permission request it waits on `cancelled`, as ACP asks of a
@@ -353,10 +385,7 @@ class AcpDriver:
             self._turn = None
             return
         self._interrupted = True
-        for asked in self._asking.values():
-            if not asked.verdict.done():
-                asked.verdict.set_result(None)
-        self._asking.clear()
+        self._cut_short()
         assert self._peer is not None
         try:
             await self._peer.notify("session/cancel", {"sessionId": self._session})
@@ -365,13 +394,21 @@ class AcpDriver:
             raise self._lost() from error
 
     async def answer(self, approval: str, verdict: Verdict) -> None:
+        """Answer with the request's option of the verdict's kind for this once. Where it offers none, the answer is
+        `cancelled`, which runs nothing: a denial holds, and an allow fails, saying it was not carried out."""
         asked = self._asking.pop(approval, None)
         if asked is None:
             raise DriverError(f"no approval {approval} is waiting")
-        if asked.verdict.done():
+        if asked.outcome.done():
             raise self._lost()
         self._deciding[asked.call] = approval
-        asked.verdict.set_result(verdict)
+        chosen = asked.once[verdict]
+        asked.outcome.set_result(_CANCELLED if chosen is None else {"outcome": "selected", "optionId": chosen})
+        if chosen is None and verdict == "allow":
+            raise DriverError(
+                "it offers no option to allow this once, and one to allow it always would decide more than was asked, "
+                "so it was answered `cancelled`, and nothing runs"
+            )
 
     async def reconcile(self, input_id: str) -> Reconciled:
         """ACP keeps no id of a prompt, so what is known is what this driver saw land, or holds still."""
@@ -434,8 +471,16 @@ class AcpDriver:
 
     def _updated(self, kind: str, update: Mapping[str, Any]) -> None:
         """One update. Any but one of the session's state shows the prompt landed, and a run of text ends at one of
-        another kind. One nothing here maps keeps its raw frame, with a gap."""
+        another kind. One nothing here maps keeps its raw frame, with a gap, and so does a change of what governs the
+        session once it is ready, as the record holds what `ready` named."""
         if kind in _AMBIENT:
+            return
+        if kind in _GOVERNING:
+            said = _governing(update)
+            changed = any(self._governed.get(key) != value for key, value in said.items())
+            self._governed |= said
+            if changed and self._ready:
+                raise RpcError(METHOD_NOT_FOUND, f"nothing here takes a change of what governs the session, {kind}")
             return
         self._land("session/update")
         if kind in _CHUNKS:
@@ -514,15 +559,16 @@ class AcpDriver:
     async def _permission(self, call: Mapping[str, Any], options: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         """A permission request, waiting in its own task for the runtime's word: an approval whose whole ask is the tool
         call it names, as the agent last updated it, as the request's fields left out are."""
+        once = _once(options)
         self._land("session/request_permission")
         self._said()
         id = call["toolCallId"]
         known = self._calls.setdefault(id, {})
         known.update({key: value for key, value in call.items() if value is not None})
         approval = uuid4().hex
-        asked = _Asked(id, asyncio.get_running_loop().create_future())
+        asked = _Asked(id, once, asyncio.get_running_loop().create_future())
         self._asking[approval] = asked
         whole = _ask(known)
-        said = _called(known) if whole is not None else f"{_called(known)}, which says nothing more of what it would do"
+        said = _called(known) if whole is not None else f"{_called(known)}, which says nothing of what it would do"
         self._process.put(ApprovalRequested(id=approval, gist=self._process.gist(said), body=whole))
-        return {"outcome": _outcome(options, await asked.verdict)}
+        return {"outcome": await asked.outcome}

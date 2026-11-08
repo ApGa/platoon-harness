@@ -1,7 +1,8 @@
 """A stand-in for an ACP agent: it says what a script tells it, in real frames, and writes down what it heard.
 
 A turn is a list of steps, one turn a prompt: `say` a frame or a line, `ask` a permission request and wait for its
-answer, or `wait` until the prompt is cancelled. `$session` in a frame is the session's id.
+answer, `leave` one with no wait, `wait` until the prompt is cancelled, or `end` the prompt with the answer given.
+`$session` in a frame is the session's id.
 """
 
 import json
@@ -37,12 +38,12 @@ def hear() -> dict:
     return frame
 
 
-def ask(params: dict) -> None:
+def ask(params: dict, *, wait: bool = True) -> None:
     global asked
     asked += 1
     id = f"ask-{asked}"
     say({"jsonrpc": "2.0", "id": id, "method": "session/request_permission", "params": params})
-    while True:
+    while wait:
         frame = hear()
         if frame.get("id") == id and "method" not in frame:
             return
@@ -50,15 +51,21 @@ def ask(params: dict) -> None:
 
 def play(id: object) -> None:
     global cancelled
+    answer = None
     for step in next(turns, ()):
         if "say" in step:
             say(step["say"])
         elif "ask" in step:
             ask(step["ask"])
+        elif "leave" in step:
+            ask(step["leave"], wait=False)
         elif "wait" in step:
             while not cancelled:
                 hear()
-    say({"jsonrpc": "2.0", "id": id, "result": {"stopReason": "cancelled" if cancelled else "end_turn"}})
+        elif "end" in step:
+            answer = step["end"]
+    stop = {"stopReason": "cancelled" if cancelled else "end_turn"}
+    say({"jsonrpc": "2.0", "id": id, "result": stop if answer is None else answer})
     cancelled = False
 
 

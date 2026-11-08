@@ -495,14 +495,20 @@ Each rule it keeps, in a sentence ([RFC 0072](../rfcs/0072-acp-agents-are-driven
   turn's end follows.
 - **A tool call** is an item from its `tool_call` to the update that ends it, `completed` or `failed`, which names the approval
   that let it through.
-- **A permission request** is an approval whose whole ask is the tool call it names, as the agent last updated it, as JSON but
-  for its id and status, so a request that names its call by id alone asks what the agent said of it before. A call that gives
-  no input and no content carries no ask, and its gist says so. The verdict goes back as the option of its kind for this once;
-  where the request offers none, the answer is `cancelled`, as an `always` option would decide more than was asked. An
-  interrupt answers each request still waiting `cancelled`, as ACP asks.
+- **A permission request** is an approval whose whole ask is the tool call it names, as the agent last updated it, so a
+  request that names its call by id alone asks what the agent said of it before: a line for each of its title, tool name and
+  kind and each place it names, then its input as JSON, then its content as it is, a diff as its path and new text. A call that
+  says none of these carries no ask, and its gist says so. The verdict goes back as the option of its kind for this once, as
+  an `always` option would decide more than was asked. Where the request offers none, the answer is `cancelled`, which runs
+  nothing, so a denial holds and an allow fails, saying it was not carried out. An interrupt and a turn's end answer each
+  request still waiting `cancelled`, as ACP asks.
 - **A compaction** that completed is `compacted`, with its summary and what it forgot unknown.
-- **What says nothing** of the agent's work, its commands, modes, config, title, context size and notices, is not reported.
-  Any other update, method or line is `native` with its raw frame and the gap `unknown_update`.
+- **A change of mode or of a config option**, the model among them, once the session is ready, is `native` with its raw frame
+  and the gap `unknown_update`, as `ready` named the model the record holds. One that says what was said already is not
+  reported.
+- **What says nothing** of the agent's work, its commands, title, context size and notices, is not reported. Any other
+  update, method or line is `native` with its raw frame and the gap `unknown_update`, and a prompt answered with no stop
+  reason ends its turn saying so.
 - **Never trainable:** ACP names no model call and says no spend of one, so it reports no `model.call` and no `usage`, declares
   no `call_ids` and no `measures`, and has no sealed launch. An agent's own agents are `opaque`, as stable ACP neither shows
   them nor turns them off, so a role's `allow_native_children = false` is not carried out.
