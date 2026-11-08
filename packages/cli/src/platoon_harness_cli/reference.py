@@ -93,8 +93,8 @@ STATUS = Path("docs", "STATUS.md")
 EXPERIMENTAL = {
     "platoon_harness.bwrap": "`bwrap`, the SDK's own extension, under the `platoon_harness.extensions` group",
     "platoon_harness.credit.propagate": (
-        "`platoon_harness.credit.propagate`, `propagate@3`, experimental and heuristic, in the one producer signature, "
-        "at version 3 in place of 1 and 2"
+        "`platoon_harness.credit.propagate`, `propagate@4`, experimental and heuristic, in the one producer signature, "
+        "at version 4 in place of 1 and 2, with version 3 kept for a run recorded on it"
     ),
     "platoon_harness.drivers.claude": "The `claude` driver",
     "platoon_harness.drivers.codex": "The `codex` driver",

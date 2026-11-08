@@ -208,7 +208,7 @@ reports let the runtime confirm and join.
 `contributors` follows citations, causes and ancestry back from an outcome, at most 4,096 events, and names each maker in the order
 it reached them, with the kinds of edge that reached each. A maker whose work was only handed to one of them is listed apart, as
 being handed something is not using it, and the walk does not go through them. Nobody is weighed or ranked: that is an estimate, and
-an estimate is an annotation. `propagate@3`, an estimate, also follows what a span's harness confirmed taking, so a maker listed
+an estimate is an annotation. `propagate@4`, an estimate, also follows what a span's harness confirmed taking, so a maker listed
 apart here can still earn credit there.
 
 ## Write credit
@@ -247,7 +247,7 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
-The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@3`, and it is a heuristic, run only when someone runs it.
+The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@4`, and it is a heuristic, run only when someone runs it.
 It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
 `retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
 its citations, an agent's only where its exposure says `seen`, and what its span took: the events, but its own agent's, that offers
@@ -255,15 +255,21 @@ its harness confirmed taking showed before that span's calls, below the event's 
 that carries an event, as a child's report does, takes nothing of its own: it reaches that event, and what it took, as its cause.
 What an agent's event keeps is also its span's when the event lies in one: the span holding the model call that made it, for an
 entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is
-one span. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on that agent's
-first `agent.started`, holding all its events kept, and none for a span or an agent it never reached, which stays unscored, nor
-for one that never started, as one whose launch failed, whose events keep their share for no row. An
+one span. But what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it, is shared
+equally by the spans that held the claim, as `spans` names them, and kept by the event's own span only where none did: a worker
+that crafted in one span, said how far it had come, which cut its turn, and completed the task in the next, is credited in both
+when its result is reached. It writes one local `credit` row per span it reached, on the span's name, and one per agent it
+reached, on that agent's first `agent.started`, holding all its events kept, and none for a span or an agent it never reached,
+which stays unscored, nor for one that never started, as one whose launch failed, whose events keep their share for no row. An
 agent's row is its spans' rows and what it kept in no span, such as an end out of a turn that nothing joins to a call: one joined
-to its call lies in that call's span, as any write does. Where no span took another principal's
-event its rows are those `propagate@2` wrote, whose agent rows were `propagate@1`'s. Citing or taking gives away all but `retained`
-of what reaches the event, and work nobody cites or takes earns nothing from it, so training on it pulls against the default
-template's request to cite. [training.md](../extending/training.md) shows it run, and
-[RFC 0061](../rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) says why.
+to its call lies in that call's span, as any write does. Its agent rows are those `propagate@3` wrote, and where no claimant's
+event of a claim is reached so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose
+agent rows were `propagate@1`'s, and `version=3` writes version 3's rows for a run recorded on it. Citing or taking gives away all
+but `retained` of what reaches the event, and work nobody cites or takes earns nothing from it, unless it was done under a claim
+whose events are reached, so training on it pulls against the default template's request to cite.
+[training.md](../extending/training.md) shows it run, and
+[RFC 0061](../rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
+[RFC 0078](../rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) say why.
 
 ## What can train
 

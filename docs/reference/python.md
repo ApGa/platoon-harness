@@ -383,13 +383,15 @@ ended session, and writes only through `Session.annotate`: an estimate by a name
 
 ### `platoon_harness.credit.propagate`
 
-**Experimental.** [STATUS](../STATUS.md): `platoon_harness.credit.propagate`, `propagate@3`, experimental and heuristic, in the one producer signature, at version 3 in place of 1 and 2.
+**Experimental.** [STATUS](../STATUS.md): `platoon_harness.credit.propagate`, `propagate@4`, experimental and heuristic, in the one producer signature, at version 4 in place of 1 and 2, with version 3 kept for a run recorded on it.
 
 ```python
-async def propagate(session: Session, episode: str, *, judge: Gateway | None, retained: float) -> None: ...
+async def propagate(
+    session: Session, episode: str, *, judge: Gateway | None, retained: float, version: int = 4
+) -> None: ...
 ```
 
-`propagate@3`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
+`propagate@4`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
 spans took, and write each agent it reaches a local credit row on its first `agent.started`, and each span it
 reaches one on its name.
 
@@ -399,18 +401,24 @@ its edges, one share for each: its causes, its previous version or a commit's pa
 only where its exposure says Seen, and its takes. An event with no edge keeps it all. What an agent's event keeps is
 that agent's, and also its span's when the event lies in one: the span holding the model call that made it, for an
 entry that carries an event that event's, and for an event tied to no call its turn's when that turn is one span.
-So an agent's row is its spans' rows and what it kept in no span. An agent that never started, as one whose launch
-failed, has no start for a row to target, so what its events keep is in no row. An event's takes are the events,
-but its own agent's, shown by each offer that agent's harness confirmed taking before a call of its span, after the
-call before and the agent's latest start or resume, and below the event's bound; an event in no span has none, nor
-has an entry that carries an event, whose words it repeats and which, with what it took, it reaches as its cause;
-and an offer its harness never confirmed is no edge. The walk takes events newest first, so a path that reconverges
-adds once. It stops at 4,096 events, or at an edge to an event no older than its own, when every row is `invalid`.
-A team reward that is not scored passes its status to each row, and an agent or a span it never reaches gets no
-row, so is unscored. What nobody's events kept, and an agent's that never started, is the reward less the agents'
-rows, and is no row. Citing or taking gives away all but `retained` of what reaches the event, and work nobody
-cites or takes earns nothing from it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a
-reward on an episode that closed on no ref, and `conflict` for several team rewards.
+But what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it, is
+shared equally by the spans that held the claim, as `Span.claims` names them, and kept by the event's own span only
+where none did. So an agent's row is its spans' rows and what it kept in no span. An agent that never started, as
+one whose launch failed, has no start for a row to target, so what its events keep is in no row. An event's takes
+are the events, but its own agent's, shown by each offer that agent's harness confirmed taking before a call of its
+span, after the call before and the agent's latest start or resume, and below the event's bound; an event in no
+span has none, nor has an entry that carries an event, whose words it repeats and which, with what it took, it
+reaches as its cause; and an offer its harness never confirmed is no edge. The walk takes events newest first, so a
+path that reconverges adds once. It stops at 4,096 events, or at an edge to an event no older than its own, when
+every row is `invalid`. A team reward that is not scored passes its status to each row, and an agent or a span it
+never reaches gets no row, so is unscored. What nobody's events kept, and an agent's that never started, is the
+reward less the agents' rows, and is no row. Citing or taking gives away all but `retained` of what reaches the
+event, and work nobody cites or takes earns nothing from it, unless it was done under a claim whose events are
+reached.
+
+`version` 3 writes `propagate@3`'s rows, which keep a claimant's event of a claim in its own span too, for a run
+recorded on it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1], a `version` other than 3 or
+4, or a reward on an episode that closed on no ref, and `conflict` for several team rewards.
 
 ### `platoon_harness.credit.PROPAGATE`
 

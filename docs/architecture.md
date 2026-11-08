@@ -1582,7 +1582,7 @@ closed one, and `Session.annotations` reads them: the one way in and out. The fi
 a writer up, and finds statements by target through an index. Its first writer makes it aside and links it into place, since SQLite
 refuses at once one of two writers that switch a new file to WAL together. The same statement again is answered with the first, and another under the same key is refused
 `conflict`, so a new estimator or a new version writes beside the old. Nothing an agent can reach opens the file, and nothing in the
-runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@3`, a heuristic run
+runtime estimates: credit is an annotation by a named producer, never a fact, the one the SDK ships, `propagate@4`, a heuristic run
 only when someone runs it (§14), and a client shows a value only with its producer and version, beside any other estimate of the
 same target, never summed. See
 [RFC 0038](rfcs/0038-provenance-is-answered-from-the-record.md), [RFC 0039](rfcs/0039-estimators-write-beside-the-journal-at-m2.md)
@@ -2081,25 +2081,30 @@ class AgentOutcome(Model):
 - **Rewards and credit are annotations,** of five statuses on the targets §11 names, written after the session has ended, so no
   context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named by
   `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,
-  `platoon_harness.credit.propagate`, `propagate@3`, a heuristic: it splits an episode's one team reward over the refs the episode
+  `platoon_harness.credit.propagate`, `propagate@4`, a heuristic: it splits an episode's one team reward over the refs the episode
   closed on, refusing an episode closed on none, and each event it reaches keeps `retained` of what reached it for its maker and
   passes the rest equally along its edges, one share each, newest first and at most 4,096 events. An event's edges are its causes,
   its previous version or a commit's parents, its citations, an agent's only where exposure says Seen, and its takes: the events,
   but its own agent's, shown by each offer its agent's harness confirmed taking before a call of its span, after the call before
   and the agent's latest start or resume, and below the event's bound. An event in no span takes nothing, nor does an entry that
   carries an event, which reaches that event, and what it took, as its cause, and an offer never confirmed is no edge. What an
-  agent's event keeps is that agent's, and also its span's when the event lies in one (§11). It
-  writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on its first
+  agent's event keeps is that agent's, and also its span's when the event lies in one (§11), but what a claimant's event of a
+  claim keeps, the claim and the completion, failure or release that ended it, is shared equally by the spans that held the claim,
+  and kept by the event's own span only where none did, so work done for a task before a write cut its span is credited through
+  the task. It writes one local `credit` row per span it reached, on the span's name, and one per agent it reached, on its first
   `agent.started`, holding all that agent's events kept. A span or an agent it never reached has no row, a team reward not scored
   passes its status on, and a walk cut short, or one that meets an edge to an event no older than its own, makes every row
   `invalid`. The reward is the agents' rows and what no row holds: what nobody's events kept, and what those of an agent that never
   started kept, as one whose launch failed has no start for a row to target. An agent's row is its spans' rows and what it kept in no
-  span, which no span's row holds. Where no span took another principal's event its rows are `propagate@2`'s, whose agent rows
-  were `propagate@1`'s: one name, one function and a version for each, an earlier one reached by pinning an earlier SDK. Citing,
-  and taking, give away all but `retained` of what reaches the event; being cited or taken by a credited span earns credit,
-  broadcasting draws takes, reading in a last turn costs, and a program's task statement taken in a span earns its share for
-  nobody. See [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) and
-  [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
+  span, which no span's row holds. Its walk is version 3's, so its agent rows are version 3's on every journal, and where no
+  claimant's event of a claim is reached its rows are version 3's too; where no span took another principal's event those are
+  `propagate@2`'s, whose agent rows were `propagate@1`'s. One name and one function: `version=3` writes version 3's rows, for a
+  run recorded on it, and an earlier version is reached by pinning an earlier SDK. Citing, and taking, give away all but
+  `retained` of what reaches the event; being cited or taken by a credited span earns credit, broadcasting draws takes, reading in a
+  last turn costs, and a program's task statement taken in a span earns its share for nobody. See
+  [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md),
+  [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
+  [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
   no key in it, nor, once each ended agent's stop has run, which its authority hears of last, its harness's scratch or a file its
   driver names as where its harness keeps a credential (§7), read by producers and the training system through `Session.attach`

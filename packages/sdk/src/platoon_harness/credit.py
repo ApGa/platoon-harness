@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from platoon_harness.drivers import Gateway
-from platoon_harness.kernel import Refused
+from platoon_harness.kernel import Event, Refused
 from platoon_harness.primitives import WALK_LIMIT, Lineage, Span
 from platoon_harness.session import Session
 
@@ -21,9 +21,14 @@ __all__ = ["PROPAGATE", "propagate"]
 PROPAGATE = "platoon_harness.credit:propagate"
 """The producer `propagate` writes as, the name an entry runs it by."""
 
+_HOLDING = ("task.claimed", "task.completed", "task.failed", "task.released")
+"""The events of a claim its claimant makes: the claim, and the completion, failure or release that ends it."""
 
-async def propagate(session: Session, episode: str, *, judge: Gateway | None, retained: float) -> None:
-    """`propagate@3`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
+
+async def propagate(
+    session: Session, episode: str, *, judge: Gateway | None, retained: float, version: int = 4
+) -> None:
+    """`propagate@4`, a heuristic: split an episode's one team reward back along the record's own edges, and what its
     spans took, and write each agent it reaches a local credit row on its first `agent.started`, and each span it
     reaches one on its name.
 
@@ -33,20 +38,28 @@ async def propagate(session: Session, episode: str, *, judge: Gateway | None, re
     only where its exposure says Seen, and its takes. An event with no edge keeps it all. What an agent's event keeps is
     that agent's, and also its span's when the event lies in one: the span holding the model call that made it, for an
     entry that carries an event that event's, and for an event tied to no call its turn's when that turn is one span.
-    So an agent's row is its spans' rows and what it kept in no span. An agent that never started, as one whose launch
-    failed, has no start for a row to target, so what its events keep is in no row. An event's takes are the events,
-    but its own agent's, shown by each offer that agent's harness confirmed taking before a call of its span, after the
-    call before and the agent's latest start or resume, and below the event's bound; an event in no span has none, nor
-    has an entry that carries an event, whose words it repeats and which, with what it took, it reaches as its cause;
-    and an offer its harness never confirmed is no edge. The walk takes events newest first, so a path that reconverges
-    adds once. It stops at 4,096 events, or at an edge to an event no older than its own, when every row is `invalid`.
-    A team reward that is not scored passes its status to each row, and an agent or a span it never reaches gets no
-    row, so is unscored. What nobody's events kept, and an agent's that never started, is the reward less the agents'
-    rows, and is no row. Citing or taking gives away all but `retained` of what reaches the event, and work nobody
-    cites or takes earns nothing from it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1] or a
-    reward on an episode that closed on no ref, and `conflict` for several team rewards."""
+    But what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it, is
+    shared equally by the spans that held the claim, as `Span.claims` names them, and kept by the event's own span only
+    where none did. So an agent's row is its spans' rows and what it kept in no span. An agent that never started, as
+    one whose launch failed, has no start for a row to target, so what its events keep is in no row. An event's takes
+    are the events, but its own agent's, shown by each offer that agent's harness confirmed taking before a call of its
+    span, after the call before and the agent's latest start or resume, and below the event's bound; an event in no
+    span has none, nor has an entry that carries an event, whose words it repeats and which, with what it took, it
+    reaches as its cause; and an offer its harness never confirmed is no edge. The walk takes events newest first, so a
+    path that reconverges adds once. It stops at 4,096 events, or at an edge to an event no older than its own, when
+    every row is `invalid`. A team reward that is not scored passes its status to each row, and an agent or a span it
+    never reaches gets no row, so is unscored. What nobody's events kept, and an agent's that never started, is the
+    reward less the agents' rows, and is no row. Citing or taking gives away all but `retained` of what reaches the
+    event, and work nobody cites or takes earns nothing from it, unless it was done under a claim whose events are
+    reached.
+
+    `version` 3 writes `propagate@3`'s rows, which keep a claimant's event of a claim in its own span too, for a run
+    recorded on it. `judge` is not read. Refused `invalid` for a `retained` outside [0, 1], a `version` other than 3 or
+    4, or a reward on an episode that closed on no ref, and `conflict` for several team rewards."""
     if not 0 <= retained <= 1:
         raise Refused("invalid", f"`retained` is a share, from 0 to 1, and {retained} is not")
+    if version not in (3, 4):
+        raise Refused("invalid", f"propagate writes version 4, or 3 for a run recorded on it, and not {version}")
     closed = await _closed(session, episode)
     rewards = [row for row in await session.annotations(closed) if (row.kind, row.scope) == ("reward", "team")]
     if len(rewards) > 1:
@@ -54,14 +67,14 @@ async def propagate(session: Session, episode: str, *, judge: Gateway | None, re
     if not rewards:
         return
     reward = rewards[0]
-    kept, evidence, invalid, head = await _walk(session, closed, reward.value or 0.0, retained)
+    kept, evidence, invalid, head = await _walk(session, closed, reward.value or 0.0, retained, shared=version == 4)
     status = "invalid" if invalid else reward.status
     for target, share in kept.items():
         await session.annotate(
             target,
             kind="credit",
             producer=PROPAGATE,
-            producer_version="3",
+            producer_version=str(version),
             scope="local",
             status=status,
             value=share if status == "scored" else None,
@@ -151,13 +164,14 @@ async def _carried(session: Session, found: Lineage) -> str | None:
 
 
 async def _walk(
-    session: Session, closed: str, reward: float, retained: float
+    session: Session, closed: str, reward: float, retained: float, *, shared: bool
 ) -> tuple[Mapping[str, float], Mapping[str, list[str]], bool, int]:
     """What each agent's events kept of `reward`, and each span's, by the event its row targets, the refs of those
     events, whether the walk stopped at its limit or at an edge to an event no older than its own, and the head it read
-    at."""
+    at. With `shared`, what a claimant's event of a claim keeps is shared by the spans that held the claim."""
     traced: dict[str, Lineage] = {}
     agents: dict[str, _Agent | None] = {}
+    tasks: dict[str, list[Event]] = {}
 
     async def trace(ref: str) -> Lineage:
         if ref not in traced:
@@ -174,6 +188,20 @@ async def _walk(
             return await span_of(agent, carrying, None) if carrying.made.maker == f"agent:{agent.name}" else None
         whole = [span for span in agent.spans if found.made.turn is not None and span.turn == found.made.turn]
         return whole[0] if len(whole) == 1 else None
+
+    async def holding(agent: _Agent, found: Lineage) -> list[Span]:
+        """The spans that held a claim, for an agent's event of it: the claim itself, or the completion, failure or
+        release that ended it, whose claim is the latest on its task's stream below it, and the agent's own."""
+        stream, _, version = found.event.ref.rpartition("@")
+        if found.event.type not in _HOLDING or not stream.startswith("task/"):
+            return []
+        if stream not in tasks:
+            tasks[stream] = [event async for event in session.events(streams=[stream])]
+        claims = [event for event in tasks[stream] if event.type == "task.claimed" and event.version <= int(version)]
+        if not claims or claims[-1].actor != f"agent:{agent.name}":
+            return []
+        claim = f"{stream}@{claims[-1].version}"
+        return [span for span in agent.spans if claim in span.claims]
 
     async def takes(agent: _Agent, span: Span, found: Lineage) -> list[str]:
         """Each event its span took below the event's bound, once, but the agent's own."""
@@ -205,20 +233,22 @@ async def _walk(
         share, found = reaching[ref], await trace(ref)
         edges = [step.ref for step in (*found.cause, *found.ancestry) if step.ref is not None]
         edges += [d.ref.partition("#")[0] for d in found.declared if d.exposure is None or d.exposure.answer == "seen"]
-        targets: list[str] = []
+        targets: list[tuple[str, float]] = []
         if (maker := found.made.maker or "").startswith("agent:"):
             name = maker.removeprefix("agent:")
             if name not in agents:
                 agents[name] = await _agent(session, name)
             if (agent := agents[name]) is not None:
-                targets.append(agent.started)
+                targets.append((agent.started, 1.0))
                 carried = await _carried(session, found)
-                if (span := await span_of(agent, found, carried)) is not None:
-                    targets.append(span.ref)
-                    edges += [] if carried is not None else await takes(agent, span, found)
+                span = await span_of(agent, found, carried)
+                held = await holding(agent, found) if shared else []
+                targets += [(each.ref, 1 / len(held)) for each in held] or ([(span.ref, 1.0)] if span else [])
+                if span is not None and carried is None:
+                    edges += await takes(agent, span, found)
         keeping = share * retained if edges else share
-        for target in targets:
-            kept[target] = kept.get(target, 0.0) + keeping
+        for target, part in targets:
+            kept[target] = kept.get(target, 0.0) + keeping * part
             evidence[target].append(ref)
         newer = [edge for edge in edges if (await trace(edge)).event.seq >= found.event.seq]
         if newer:

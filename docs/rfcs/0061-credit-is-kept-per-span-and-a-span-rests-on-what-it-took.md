@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-07 |
+| Status | Accepted, 2026-11-07; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) (a draft) |
 | Created | 2026-11-07 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture sections 11 and 14](../architecture.md#11-provenance), [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md), [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |

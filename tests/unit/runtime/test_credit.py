@@ -1,5 +1,6 @@
-"""`propagate@3`: an episode's team reward split back along the record's own edges and what each span took, and kept per
-agent and per span, on an ended session, by a named producer at a version, and never a fact."""
+"""`propagate@4`: an episode's team reward split back along the record's own edges and what each span took, and kept per
+agent and per span, a task's claim and result shared by the spans that held it, on an ended session, by a named producer
+at a version, and never a fact; and `propagate@3`, for a run recorded on it."""
 
 import asyncio
 import contextlib
@@ -19,7 +20,7 @@ from platoon_harness.credit import PROPAGATE, propagate
 from platoon_harness.kernel import Kernel, ManualClock, Principal
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.runtime.paths import MANIFEST
-from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
+from platoon_harness.testing import ENVIRONMENT_TOOL, AskModel, Call, FakeModel, Say, ToolCall
 
 from ..primitives import support as driven
 from .support import SECONDS, Gateways, in_state, of_type, scripted, until
@@ -68,21 +69,23 @@ async def rewarded(session: Session, *statuses: tuple[Status, float | None]) -> 
         )
 
 
-async def credited(session: Session) -> dict[str, Annotation]:
-    """Each agent's row `propagate` wrote, by the agent whose first start it targets."""
+async def credited(session: Session, version: str = "4") -> dict[str, Annotation]:
+    """Each agent's row `propagate` wrote at `version`, by the agent whose first start it targets."""
     rows = {}
     for row in await session.annotations():
         target = (await session.lineage(row.target)).event
-        if row.producer == PROPAGATE and target.type == "agent.started":
+        if (row.producer, row.producer_version, target.type) == (PROPAGATE, version, "agent.started"):
             rows[target.agent or ""] = row
     return rows
 
 
-async def spanned(session: Session) -> dict[str, Annotation]:
-    """Each span's row `propagate` wrote, by the span's name, the `model.called` of its last call, which it targets."""
+async def spanned(session: Session, version: str = "4") -> dict[str, Annotation]:
+    """Each span's row `propagate` wrote at `version`, by the span's name, the `model.called` of its last call, which it
+    targets."""
     rows = {}
     for row in await session.annotations():
-        if row.producer == PROPAGATE and (await session.lineage(row.target)).event.type == "model.called":
+        target = (await session.lineage(row.target)).event
+        if (row.producer, row.producer_version, target.type) == (PROPAGATE, version, "model.called"):
             rows[row.target] = row
     return rows
 
@@ -108,7 +111,7 @@ async def test_propagate_conserves_the_reward_over_agents_and_nobody(tmp_path):
     unassigned = 1.0 - sum(row.value or 0.0 for row in rows.values())
     assert unassigned == 0.25 and (await session.lineage("inbox/alice@1")).made.maker == PROGRAM
     assert {row.status for row in rows.values()} == {"scored"}
-    assert {(row.kind, row.scope, row.producer_version) for row in rows.values()} == {("credit", "local", "3")}
+    assert {(row.kind, row.scope, row.producer_version) for row in rows.values()} == {("credit", "local", "4")}
 
 
 async def test_propagation_sums_reconverging_paths_once(tmp_path):
@@ -278,15 +281,15 @@ async def journal(tmp_path: Path) -> Kernel:
 
 
 async def propagated(
-    kernel: Kernel, tmp_path: Path, closing: Sequence[str], *statuses: tuple[Status, float | None]
+    kernel: Kernel, tmp_path: Path, closing: Sequence[str], *statuses: tuple[Status, float | None], version: int = 4
 ) -> Session:
     """Close the episode on `closing` and leave the journal, then reward it, `scored` 1.0 unless `statuses` say, and
-    propagate, as a training system does once a session has ended."""
+    propagate at `version`, as a training system does once a session has ended."""
     driven.result_of(await kernel.submit(kernel.runtime, "episode.close", {"based_on": list(closing)}))
     kernel.close()
     session = await Session.attach("s", root=tmp_path / "root")
     await rewarded(session, *(statuses or [("scored", 1.0)]))
-    await propagate(session, "e", judge=None, retained=0.5)
+    await propagate(session, "e", judge=None, retained=0.5, version=version)
     return session
 
 
@@ -360,7 +363,7 @@ async def test_propagate_keeps_each_events_share_for_the_span_holding_the_call_t
         refs["c1"]: (0.125, (refs["first"],)),
         refs["c3"]: (0.5, (refs["last"],)),
     }
-    assert {(row.kind, row.scope, row.producer_version) for row in spans.values()} == {("credit", "local", "3")}
+    assert {(row.kind, row.scope, row.producer_version) for row in spans.values()} == {("credit", "local", "4")}
 
 
 async def test_a_span_propagate_never_reaches_gets_no_row(tmp_path):
@@ -668,25 +671,27 @@ async def walked_by_propagate_1(session: Session) -> tuple[dict[str, float], dic
 
 
 async def propagated_play(
-    tmp_path: Path, script: list[tuple[Any, ...]]
+    tmp_path: Path, script: list[tuple[Any, ...]], version: int = 4
 ) -> tuple[Session, dict[str, float], dict[str, str | None]]:
-    """The journal `script` plays, closed on its last two writes and propagated, and what each event `propagate@1`
-    reached kept, and who made it."""
+    """The journal `script` plays, closed on its last two writes and propagated at `version`, and what each event
+    `propagate@1` reached kept, and who made it."""
     kernel = await journal(tmp_path)
     written = await played(kernel, script)
-    session = await propagated(kernel, tmp_path, written[-2:])
+    session = await propagated(kernel, tmp_path, written[-2:], version=version)
     return session, *(await walked_by_propagate_1(session))
 
 
-async def held_to_propagate_2(session: Session, kept: dict[str, float], makers: dict[str, str | None]) -> None:
-    """The rows are `propagate@2`'s: an agent's row is what its events kept on `propagate@1`'s walk, and a span's what
-    its own events kept there."""
+async def held_to_propagate_2(
+    session: Session, kept: dict[str, float], makers: dict[str, str | None], version: str = "3"
+) -> None:
+    """The rows written at `version` are `propagate@2`'s: an agent's row is what its events kept on `propagate@1`'s
+    walk, and a span's what its own events kept there."""
     rows: dict[str, float] = defaultdict(float)
     for ref, share in kept.items():
         if (makers[ref] or "").startswith("agent:"):
             rows[(makers[ref] or "").removeprefix("agent:")] += share
-    assert values(await credited(session)) == rows
-    for span in (await spanned(session)).values():
+    assert values(await credited(session, version)) == rows
+    for span in (await spanned(session, version)).values():
         assert span.value == sum(kept[ref] for ref in span.evidence)
 
 
@@ -697,8 +702,27 @@ def test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_princip
     agent rows are `propagate@1`'s."""
 
     async def body() -> None:
-        session, kept, makers = await propagated_play(tmp_path_factory.mktemp("credit"), script)
+        session, kept, makers = await propagated_play(tmp_path_factory.mktemp("credit"), script, version=3)
         await held_to_propagate_2(session, kept, makers)
+        await session.leave()
+
+    asyncio.run(body())
+
+
+@settings(max_examples=25, deadline=None)
+@given(script=moves)
+def test_propagate_4_writes_propagate_3s_rows_where_no_claim_s_events_are_reached(tmp_path_factory, script):
+    """Version 4 walks as version 3 does, edge for edge, and books differently only what a claimant's events of a
+    claim keep, so where the walk reaches none, whatever its writers saw, its rows are version 3's."""
+
+    async def body() -> None:
+        session, *_ = await propagated_play(tmp_path_factory.mktemp("credit"), script)
+        await propagate(session, "e", judge=None, retained=0.5, version=3)
+        for rows in (credited, spanned):
+            now, before = await rows(session), await rows(session, "3")
+            assert {key: (row.value, row.evidence) for key, row in now.items()} == {
+                key: (row.value, row.evidence) for key, row in before.items()
+            }
         await session.leave()
 
     asyncio.run(body())
@@ -712,12 +736,12 @@ async def test_propagate_3_writes_propagate_1s_rows_along_a_citation_seen_by_a_r
     script = [("send", "b", True, True, 0), ("look", "a", False, False, 0), ("turn", "a", False, False, 0)]
     script.append(("send", "a", True, True, 0))
 
-    session, kept, makers = await propagated_play(tmp_path, script)
+    session, kept, makers = await propagated_play(tmp_path, script, version=3)
 
-    [cited] = (await session.lineage((await credited(session))["a"].evidence[0])).declared
+    [cited] = (await session.lineage((await credited(session, "3"))["a"].evidence[0])).declared
     assert (cited.maker, cited.exposure and cited.exposure.answer) == ("agent:b", "seen")
     await held_to_propagate_2(session, kept, makers)
-    assert values(await credited(session)) == {"a": 0.25, "b": 0.75}
+    assert values(await credited(session, "3")) == {"a": 0.25, "b": 0.75}
 
 
 @settings(max_examples=25, deadline=None)
@@ -744,6 +768,94 @@ def test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_sp
     asyncio.run(body())
 
 
+# A task's claim and result, shared by the spans that held its claim.
+
+
+async def crafted(kernel: Kernel, *, claimed_alone: bool = True) -> dict[str, str]:
+    """`w` claims the program's task by a call of its own, or with `claimed_alone` false by the call that completes it;
+    crafts and tells `peer` how far it has come by its next, which cuts its turn there; and completes the task by its
+    third, whose span runs on to the turn's end. Each span is named by its last call: `crafting` and `last`."""
+    await driven.channel(kernel, "tasks", kind="queue")
+    await driven.spawn(kernel, "peer")
+    await driven.spawn(kernel, "w")
+    added = {"queue": "tasks", "gist": "craft a torch"}
+    driven.result_of(await kernel.submit(Principal(id=PROGRAM), "task.add", added))
+    await driven.start_turn(kernel, "w")
+    await called(kernel, "w", "c1")
+    if claimed_alone:
+        await ran(kernel, "w", "c1", "task.claim", {"queue": "tasks"})
+    crafting = await called(kernel, "w", "c2")
+    progress = await sent(kernel, "w", "c2", "@peer")
+    await called(kernel, "w", "c3")
+    if not claimed_alone:
+        await ran(kernel, "w", "c3", "task.claim", {"queue": "tasks"})
+    done = (await ran(kernel, "w", "c3", "task.complete", {"queue": "tasks", "gist": "the torch"}))["ref"]
+    last = await called(kernel, "w", "c4")
+    await driven.end_turn(kernel, "w")
+    return {"crafting": crafting, "progress": progress, "done": done, "last": last}
+
+
+NAMED = ("crafting", "last")
+
+
+async def test_what_a_claim_and_its_result_keep_is_shared_by_the_spans_that_held_the_claim(tmp_path):
+    """The result keeps half of the reward and its claim a quarter, both `w`'s, and the two spans that held the claim,
+    the one that crafted and the one that completed, share each equally: 3/8 apiece, where version 3 gave the
+    completing span the result's half alone."""
+    kernel = await journal(tmp_path)
+    refs = await crafted(kernel)
+
+    session = await propagated(kernel, tmp_path, [refs["done"]])
+    await propagate(session, "e", judge=None, retained=0.5, version=3)
+
+    found = (await session.spans("@w")).spans
+    assert [(span.ref, span.claims) for span in found] == [(refs[name], ("task/tasks/1@2",)) for name in NAMED]
+    spans = {target: (row.value, row.evidence) for target, row in (await spanned(session)).items()}
+    assert spans == {refs[name]: (0.375, (refs["done"], "task/tasks/1@2")) for name in NAMED}
+    before = {target: row.value for target, row in (await spanned(session, "3")).items()}
+    assert before == {refs["crafting"]: 0.25, refs["last"]: 0.5}
+    assert values(await credited(session)) == values(await credited(session, "3")) == {"w": 0.75}
+
+
+async def test_propagate_3_keeps_a_claim_and_its_result_each_in_the_span_of_the_call_that_made_it(tmp_path):
+    """A run recorded on version 3 runs it again: the claim's quarter stays on the crafting span, whose call made it,
+    and the result's half on the completing span, and its rows say version 3."""
+    kernel = await journal(tmp_path)
+    refs = await crafted(kernel)
+
+    session = await propagated(kernel, tmp_path, [refs["done"]], version=3)
+
+    rows = await spanned(session, "3")
+    assert {target: (row.value, row.evidence) for target, row in rows.items()} == {
+        refs["crafting"]: (0.25, ("task/tasks/1@2",)),
+        refs["last"]: (0.5, (refs["done"],)),
+    }
+    assert not await spanned(session) and {row.producer_version for row in rows.values()} == {"3"}
+
+
+async def test_a_claim_no_span_held_keeps_its_share_and_its_result_s_in_their_own_span(tmp_path):
+    """One call claims and completes the task, so no call was made while it was held: no span holds the claim, and its
+    events keep what reaches them in the span of the call that made them, as version 3 does."""
+    kernel = await journal(tmp_path)
+    refs = await crafted(kernel, claimed_alone=False)
+
+    session = await propagated(kernel, tmp_path, [refs["done"]])
+
+    assert not [span for span in (await session.spans("@w")).spans if span.claims]
+    assert {target: row.value for target, row in (await spanned(session)).items()} == {refs["last"]: 0.75}
+
+
+async def test_propagate_refuses_a_version_it_does_not_write(tmp_path):
+    kernel = await journal(tmp_path)
+    refs = await crafted(kernel)
+    session = await propagated(kernel, tmp_path, [refs["done"]])
+
+    for version in (2, 5):
+        with pytest.raises(Refused) as refused:
+            await propagate(session, "e", judge=None, retained=0.5, version=version)
+        assert refused.value.refusal.code == "invalid"
+
+
 QUEUE = {"kind": "queue", "writers": "all", "readers": "all", "delivery": "pull", "max_inflight": 2}
 
 
@@ -756,10 +868,10 @@ def complete(number: int) -> ToolCall:
     return ToolCall("task_complete", args, id=f"done-{number}")
 
 
-async def worker(tmp_path: Path, *turns: Sequence[Any]) -> tuple[Session, list[str]]:
+async def worker(tmp_path: Path, *turns: Sequence[Any], version: int = 4) -> tuple[Session, list[str]]:
     """A persistent worker on ScriptedDriver, asking FakeModel as its gateway, does the three tasks the program added,
-    a turn for each of `turns`, which are the model's replies in it, and the episode closes on the three results: the
-    session as it ended, and each model call its harness reported."""
+    a turn for each of `turns`, which are the model's replies in it, and the episode closes on the three results,
+    propagated at `version`: the session as it ended, and each model call its harness reported."""
     roles = {"w": {"harness": scripted(*[[AskModel()]] * len(turns))}}
     team = Team.model_validate({"roles": roles, "topology": {"channels": {"tasks": QUEUE}}})
     model = FakeModel()
@@ -780,7 +892,7 @@ async def worker(tmp_path: Path, *turns: Sequence[Any]) -> tuple[Session, list[s
         await session.close()
     attached = await Session.attach("queue", root=tmp_path)
     await rewarded(attached, ("scored", 1.0))
-    await propagate(attached, "e", judge=None, retained=0.5)
+    await propagate(attached, "e", judge=None, retained=0.5, version=version)
     return attached, calls
 
 
@@ -813,34 +925,159 @@ async def test_a_persistent_worker_credits_each_task_to_the_span_whose_call_comp
     assert values(await credited(session)) == {"w": pytest.approx(sum(shares))}
 
 
-async def test_a_claim_made_in_the_call_that_completed_the_previous_task_gives_that_span_its_share(tmp_path):
-    """One call completes the first task and claims the second: the second's claim lies in the first's span, which
-    keeps the claim's share of the second's credit beside its own, 1/18 of 19/72."""
-    replies = [claim(1), [complete(1), claim(2)], [complete(2), claim(3)], complete(3), "all three are done"]
+CLAIMED_IN_THE_COMPLETING_CALL = [
+    claim(1),
+    [complete(1), claim(2)],
+    [complete(2), claim(3)],
+    complete(3),
+    "all three are done",
+]
+"""Each call but the first completes one task and claims the next: a span ends at each completion."""
 
-    session, calls = await worker(tmp_path, replies)
 
-    spans = await spanned(session)
+async def test_propagate_3_gives_a_claim_made_in_the_call_that_completed_the_task_before_to_that_span(tmp_path):
+    """Under version 3, the second task's claim lies in the first's span, which keeps the claim's share of the
+    second's credit beside its own, 1/18 of 19/72, and the third's span holds its result alone."""
+    session, calls = await worker(tmp_path, CLAIMED_IN_THE_COMPLETING_CALL, version=3)
+
+    spans = await spanned(session, "3")
     assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
         calls[1]: (pytest.approx(19 / 72), task(1) | {"task/tasks/2@2"}),
         calls[2]: (pytest.approx(2 / 9), {"task/tasks/2@3", "task/tasks/3@2"}),
         calls[4]: (pytest.approx(1 / 6), {"task/tasks/3@3"}),
     }
+    assert {row.producer_version for row in spans.values()} == {"3"}
 
 
-async def test_two_claims_open_at_once_give_the_span_that_made_them_their_share(tmp_path):
-    """One call claims two tasks, so the span holding it keeps both claims' share, 17/60 in all, and the second task's
-    result its own sixth."""
-    replies = [[claim(1), claim(2)], complete(1), complete(2), claim(3), complete(3), "all three are done"]
-
-    session, calls = await worker(tmp_path, replies)
+async def test_a_claim_made_in_the_call_that_completed_the_task_before_is_credited_to_the_span_that_held_it(tmp_path):
+    """No call of the first task's span was made while the second was held, so the second's claim keeps its share for
+    the span that held it, as the second's result does: each span holds its own task's claim and result, as where each
+    claim had a call of its own."""
+    session, calls = await worker(tmp_path, CLAIMED_IN_THE_COMPLETING_CALL)
 
     spans = await spanned(session)
+    assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
+        calls[1]: (pytest.approx(5 / 24), task(1)),
+        calls[2]: (pytest.approx(2 / 9), task(2)),
+        calls[4]: (pytest.approx(2 / 9), task(3)),
+    }
+
+
+TWO_CLAIMS_AT_ONCE = [[claim(1), claim(2)], complete(1), complete(2), claim(3), complete(3), "all three are done"]
+"""One call claims two tasks, and the next completes the first."""
+
+
+async def test_propagate_3_gives_two_claims_open_at_once_to_the_span_that_made_them(tmp_path):
+    """Under version 3, the span holding the call that claimed two tasks keeps both claims' share, 17/60 in all, and
+    the second task's result its own sixth."""
+    session, calls = await worker(tmp_path, TWO_CLAIMS_AT_ONCE, version=3)
+
+    spans = await spanned(session, "3")
     assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
         calls[1]: (pytest.approx(17 / 60), task(1) | {"task/tasks/2@2"}),
         calls[2]: (pytest.approx(1 / 6), {"task/tasks/2@3"}),
         calls[5]: (pytest.approx(2 / 9), task(3)),
     }
+
+
+async def test_two_claims_open_at_once_are_credited_to_each_span_that_held_them(tmp_path):
+    """The first task was held while the second call was made and the second while the second and third were: the
+    second's claim keeps 1/12 and its result 1/6, which the two spans that held it share, 1/8 each, and the first span
+    holds the first's 1/30 and 1/6 besides, 13/40. The two spans hold together what version 3 gave them, and the agent's
+    row is version 3's."""
+    session, calls = await worker(tmp_path, TWO_CLAIMS_AT_ONCE)
+    before, _ = await worker(tmp_path / "before", TWO_CLAIMS_AT_ONCE, version=3)
+
+    spans = await spanned(session)
+    assert {target: (pytest.approx(row.value), set(row.evidence)) for target, row in spans.items()} == {
+        calls[1]: (pytest.approx(13 / 40), task(1) | task(2)),
+        calls[2]: (pytest.approx(1 / 8), task(2)),
+        calls[5]: (pytest.approx(2 / 9), task(3)),
+    }
+    assert values(await credited(session)) == values(await credited(before, "3"))
+
+
+CRAFT = {"difficulty": "hard", "kind": "craft"}
+SEARCH = {"difficulty": "easy", "kind": "search"}
+
+
+async def test_a_worker_s_spans_from_claim_to_completion_carry_its_task_s_labels_and_share_its_credit(tmp_path):
+    """The owner's case, on ScriptedDriver against FakeModel acting as each agent's gateway: a lead adds two tasks,
+    labelled from its team's vocabulary, which its tool's schema showed it, tells the worker, and waits for the first;
+    the worker claims it, crafts with the environment's tool, says on a topic how far it has come, which cuts its turn
+    there, and completes it; and the lead, woken as it settles, reads the queue, which shows it the result, and says
+    so, which the episode closes on. Both of the worker's spans held the claim, so both carry the task's labels. The
+    lead's last words keep half the reward and pass a quarter to what woke it, the runtime's, and a quarter to the
+    result they took, which keeps an eighth and its claim a sixteenth: the two spans share both, 3/32 each, where
+    version 3 kept the result's eighth on the completing span and the claim's sixteenth on the crafting one. The
+    worker's own row is version 3's."""
+    adds = [
+        ToolCall("task_add", {"queue": "tasks", "gist": "craft a torch", "labels": CRAFT}, id="add-1"),
+        ToolCall("task_add", {"queue": "tasks", "gist": "find some wood", "labels": SEARCH}, id="add-2"),
+        ToolCall("message_send", {"to": "@worker", "gist": "two tasks are up: take the torch"}, id="tell"),
+    ]
+    waiting = ToolCall("wait", {"tasks": ["tasks/1"]}, id="wait")
+    listing = ToolCall("task_list", {"queue": "tasks"}, id="list")
+    lead = FakeModel(adds, waiting, "waiting for the torch", listing, "the torch is crafted")
+    worker = FakeModel(
+        ToolCall("task_claim", {"queue": "tasks", "task": "1"}, id="claim"),
+        ToolCall(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "craft the torch"}, id="craft"),
+        ToolCall("message_send", {"to": "#log", "gist": "half the torch is crafted"}, id="progress"),
+        ToolCall("task_complete", {"queue": "tasks", "task": "1", "gist": "the torch is crafted"}, id="done"),
+        "the torch is done",
+    )
+    queue = {"kind": "queue", "writers": "role:lead", "readers": ["role:lead", "role:worker"]}
+    log = {"kind": "topic", "writers": "role:worker", "readers": "role:lead", "delivery": "pull"}
+    team = Team.model_validate(
+        {
+            "roles": {
+                "lead": {"harness": scripted([AskModel()], [AskModel()])},
+                "worker": {"harness": scripted([AskModel()])},
+            },
+            "topology": {"edges": {"lead": ["role:worker"]}, "channels": {"tasks": queue, "log": log}},
+            "labels": {"difficulty": ["easy", "hard"], "kind": ["craft", "search"]},
+        }
+    )
+    authority = Gateways({"lead": lead, "worker": worker})
+    async with (
+        lead,
+        worker,
+        Session.start(team, name="crafts", root=tmp_path, principal=PROGRAM, authority=authority) as session,
+    ):
+        for name in ("lead", "worker"):
+            await in_state(session, name, "idle")
+        await session.open_episode("e")
+        await session.send("@lead", "craft a torch, and say when it is done")
+
+        async def leading() -> list[Any]:
+            return [event for event in await of_type(session, "turn.ended") if event.agent == "lead"]
+
+        await until(leading, session, lambda found: len(found) == 2)
+        for name in ("lead", "worker"):
+            await in_state(session, name, "idle")
+        said = {row["agent"]: row["said"] for row in await session.agents()}
+        await session.close_episode(based_on=[said["lead"]])
+        await session.close()
+    attached = await Session.attach("crafts", root=tmp_path)
+    await rewarded(attached, ("scored", 1.0))
+    await propagate(attached, "e", judge=None, retained=0.5)
+    await propagate(attached, "e", judge=None, retained=0.5, version=3)
+
+    [schema] = [
+        tool["function"]["parameters"] for tool in lead.calls[0].json["tools"] if tool["function"]["name"] == "task_add"
+    ]
+    assert {name: shown["enum"] for name, shown in schema["properties"]["labels"]["properties"].items()} == {
+        "difficulty": ["easy", "hard"],
+        "kind": ["craft", "search"],
+    }
+    assert [event.data["labels"] for event in await of_type(attached, "task.added")] == [CRAFT, SEARCH]
+    assert len(worker.tool_calls) == 1
+    spans = (await attached.spans("@worker")).spans
+    assert [(span.claims, span.labels) for span in spans] == [(("task/tasks/1@2",), CRAFT)] * 2
+    now, before = await spanned(attached), await spanned(attached, "3")
+    assert [(now[span.ref].value, set(now[span.ref].evidence)) for span in spans] == [(3 / 32, task(1))] * 2
+    assert [before[span.ref].value for span in spans] == [1 / 16, 1 / 8]
+    assert values(await credited(attached))["worker"] == values(await credited(attached, "3"))["worker"]
 
 
 # Takes.

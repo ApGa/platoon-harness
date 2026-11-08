@@ -76,7 +76,7 @@ amended or extended an RFC.
 | [0058](0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md) | A merge queue is a queue and a merger, written out | Accepted |
 | [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Accepted |
 | [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted |
+| [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) (a draft) |
 | [0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) | A child ends cancelled with its parent only for a turn under way | Accepted |
 | [0063](0063-what-an-offer-showed-is-answered-by-its-ref.md) | What an offer showed is answered by its ref | Accepted |
 | [0064](0064-an-act-is-one-form-and-a-read-one-route.md) | A person's act is an op completed by one form, and a pane's read is one route | Draft |

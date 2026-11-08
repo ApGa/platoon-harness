@@ -212,7 +212,7 @@ async def produce(session: Session, episode: str, *, judge: Gateway | None, **pa
 ```
 
 `judge` is model access for a producer that asks a model, or None. The SDK ships one, `platoon_harness.credit:propagate`,
-`propagate@3`, a heuristic:
+`propagate@4`, a heuristic:
 
 ```python
 from platoon_harness.credit import propagate
@@ -230,14 +230,22 @@ span takes nothing, nor does an entry that carries an event, as a child's report
 as its cause; and an offer the harness never said it took is no edge. It walks newest first, at most 4,096 events. What an
 agent's event keeps is that agent's, and also its span's when the event lies in one: the span holding the model call that made it,
 for an entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that
-turn is one span. It writes, under the producer `platoon_harness.credit:propagate`, one local `credit` row per span it reached, on
-the span's name, and one per agent it reached, on that agent's first `agent.started`, holding all that agent's events kept. A span
+turn is one span; but what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it,
+is shared equally by the spans that held the claim, and kept by the event's own span only where none did. It writes, under the
+producer `platoon_harness.credit:propagate`, one local `credit` row per span it reached, on the span's name, and one per agent it
+reached, on that agent's first `agent.started`, holding all that agent's events kept. A span
 or an agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a
 walk cut short, or one that meets an edge to an event no older than its own, makes every row `invalid`. What reached the events of
 no agent, or of one that never started, as one whose launch failed, which has no start for a row to target, is the reward less
 the agents' rows, and what an agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its
-spans' rows, and no span's row holds it. Where no span took another principal's event, its rows are those `propagate@2` wrote,
-whose agent rows were `propagate@1`'s; pin an earlier SDK to run an earlier version.
+spans' rows, and no span's row holds it. Its agent rows are those `propagate@3` wrote, and where no claimant's event of a claim is
+reached, so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose agent rows were
+`propagate@1`'s. A run recorded on version 3 runs it again with `version=3`, a parameter as `retained` is, and its rows say
+version 3; pin an earlier SDK to run an earlier version:
+
+```python
+await propagate(ended, "task", judge=None, retained=0.5, version=3)
+```
 
 What credit reaches depends on what you close on, so close each topology on what its team came to:
 
@@ -248,15 +256,19 @@ What credit reaches depends on what you close on, so close each topology on what
   crafting span reached reads its post back and cites it.
 - **A mesh whose peers never finish:** each starting peer's `said`, the last message of its last turn, which cites nothing. It
   keeps `retained` and passes the rest along what its span took: other peers' messages, board entries, children's reports.
-- **A queue:** each task's result, which a program closes on. A result keeps a share for the span whose call completed it and
-  passes the rest to its claim, as its cause and its previous version, and to what its span took. A queue closed on its worker's
-  last words credits only the worker's last span.
+- **A queue:** each task's result, which a program closes on. A result keeps a share for the spans that held its claim and
+  passes the rest to its claim, as its cause and its previous version, and to what its span took; the claim keeps a share for
+  the same spans. A queue closed on its worker's last words credits only the worker's last span, but a lead whose last words took
+  its workers' results, as `task.list` shows them, reaches every span that held their claims.
 
 A worker that claims and completes three tasks in one turn, a model call for each step, closed on the three results, has three
 spans, each holding its own task's result and claim. Under `propagate@2` each held a quarter, and the rest reached the task you
 added, which is nobody's; under `propagate@3` the task statement each claim showed, and the message that began the turn, take a
 share each, for nobody, and the spans hold 5/24, 2/9 and 2/9. A call that completes one task and claims the next puts the next
-one's claim in the first one's span, which keeps that claim's share.
+one's claim in the first one's span, which never held it: under `propagate@3` the first span kept that claim's share, and under
+`propagate@4` the span that held the claim does, so the spans hold 5/24, 2/9 and 2/9 again. A worker that crafts with the
+environment's tools in one span, says how far it has come, which cuts its turn, and completes the task in the next, is credited
+in both: both held its claim.
 
 Its incentives: citing, and taking, give away all but `retained` of what reaches the event, being cited or taken by a credited
 span earns credit, broadcasting draws more takes, reading in a last turn costs, and work nobody cites or takes earns nothing from
