@@ -6164,11 +6164,17 @@ class Span(Model):
     first: str
     turn: str
     writes: tuple[str, ...]
+    claims: tuple[str, ...]
+    labels: dict[str, str] | None
 ```
 
 A stretch of one turn of an agent, named by `ref`, the `model.called` of its last call, which a credit row about
 it targets: its calls are those its harness reported on its turn stream from `first` to `ref`, in the turn named
-`turn`, and `writes` are the writes of content the record ties to them, which one of them chose.
+`turn`, and `writes` are the writes of content the record ties to them, which one of them chose. `claims` are the
+claims its agent held while one of its calls was made, by the ref of each `task.claimed`, and `labels` the labels of
+the work it was done for: its tasks', else those its agent was spawned with, else none, and None where they are
+unknown, as where its calls were made under claims of different labels or the record cannot place a claim or its
+end among them.
 
 ### `platoon_harness.primitives.Spans`
 
@@ -6255,6 +6261,7 @@ Whether its lease holds by this clock. Time passing is enough: no event need hav
 
 ```python
 class Tasks(View):
+    version = 2
     schema = """
     CREATE TABLE v_tasks(
         queue TEXT NOT NULL,
@@ -6275,10 +6282,20 @@ class Tasks(View):
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_tasks_state ON v_tasks(queue, state, seq);
     CREATE INDEX v_tasks_owner ON v_tasks(owner, state);
+    CREATE TABLE v_tasks_claims(
+        owner TEXT NOT NULL,
+        queue TEXT NOT NULL,
+        id TEXT NOT NULL,
+        claimed INTEGER NOT NULL,
+        ended INTEGER,
+        PRIMARY KEY (owner, claimed)
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_tasks_claims_open ON v_tasks_claims(queue, id, ended);
     """
 ```
 
-Tasks by queue, oldest first.
+Tasks by queue, oldest first, and each claim by its claimant, with the event that ended it: its completion,
+failure, release or lapse, or its claimant's end.
 
 **`added`**
 
@@ -6367,6 +6384,15 @@ def held_by(self, queue: str, owner: str) -> list[Task]: ...
 ```python
 def owned(self, owner: str) -> list[Task]: ...
 ```
+
+**`claims`**
+
+```python
+def claims(self, owner: str) -> list[tuple[str, str, int, int | None]]: ...
+```
+
+Each claim `owner` made, oldest first: its queue, its task, the seq of its claim and of the event that ended
+it, or None while it holds.
 
 **`any_claimed`**
 
@@ -9182,7 +9208,8 @@ async def spans(self, agent: str, *, after: str | None = None) -> Spans: ...
 
 Each span of an agent, oldest first: each turn of it cut after each model call that chose a write of
 content, as the record joins them, each span named by its last call's `model.called`, with its first call, its
-turn and its writes. Pass `cursor` as `after` for the next page.
+turn, its writes, the claims its agent held while its calls were made and the labels of the work it was done
+for, None where unknown. Pass `cursor` as `after` for the next page.
 
 **`interactions`**
 

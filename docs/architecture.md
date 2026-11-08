@@ -796,7 +796,7 @@ on `task.added` payload 2 and `agent.spawned` payload 4, by name, where an older
 - **Shown as the values allowed.** A tool that takes `labels` shows each label with its values as an `enum`, and no other key, and
   says them in its description, which `ph` shows; where the team declares none, the argument is left out (§10).
 - **No reader is shown them.** `task.claim` and `task.list` show a task as they did: labels are for the record and the training
-  system that reads it.
+  system that reads them on each span (§11).
 
 See [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 
@@ -1614,9 +1614,18 @@ lies in no span. So an end out of a turn lies in the span of the call joined to 
 joins it to a call, as it was made in no turn. Which span an event lies in is the record's to say, and that a span's calls made
 what lies in it is an estimator's to claim. `spans(agent)` is a query op that is no agent's tool, a `Session` method and a command,
 as `eligibility` is: each span of an agent, oldest first, a page beside its true count, with its first call, its turn and the
-writes the record ties to its calls, which one of them chose, and `open` while its latest turn has not ended, as a tool item
-reported late can still join a write and cut that turn again. It is worked out from the views as it is asked, so it answers alike
-after a rebuild and on a closed copy, and it refuses a person or a program `invalid`. Where a harness's turns are cut follows from
+writes the record ties to its calls, which one of them chose, the claims its agent held while one of its calls was made, the labels
+of the work it was done for, and `open` while its latest turn has not ended, as a tool item reported late can still join a write,
+or a claim or its end, to a call and change that turn's spans. It is worked out from the views as it is asked, so it answers alike
+after a rebuild and on a closed copy, and it refuses a person or a program `invalid`. A claim is held from its claimant's claim to
+the first of its completion, failure or release, its lease's lapse and its claimant's end, and its calls are those made after the
+call that chose the claim, through the call that chose its end, each placed as the record allows: an event tied to one of the
+claimant's calls after that call, one of the claimant's own tied to none, in a turn that is one span, at that span's start for a
+claim and its end for an end, and any other, as a lapse, by commit order among the claimant's turns, exactly between two, as no call
+is made between turns, and anywhere within one; a hold its claimant's end ended, or that holds still, runs past its last call. A
+span's labels are those of the task of each claim it held or may have held, and those its agent was spawned with unless it surely
+held one, so a span that held no task carries its spawn's labels, or none; where these differ they are None, unknown, never merged
+and never one of them guessed (§7). Where a harness's turns are cut follows from
 what it reports: pi, Claude Code and ScriptedDriver join a tool call to the model call that chose it, so theirs are cut at writes;
 OpenHands reports its calls and joins no tool call to one, so each of its turns is one span; Codex gives no id per model call, so
 no tool call joins one, each of its turns is one span, and its calls carry no id to train by; and `exec` reports no call, so it has
@@ -2065,6 +2074,10 @@ class AgentOutcome(Model):
 - **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11): a call is
   eligible for its turn's purpose, which a call reported with none has, or for `compaction`, and for no other. What trains is the
   training system's to decide.
+- **A span's labels are read from the record.** `spans(agent)` gives each span the labels of the work it was done for, from its
+  team's vocabulary, and the claims it held (§11), so a training system keys a baseline by a span's labels beside its credit row.
+  A span whose labels are None has no key, which is the training system's to treat, and nothing here computes a baseline or an
+  advantage.
 - **Rewards and credit are annotations,** of five statuses on the targets §11 names, written after the session has ended, so no
   context a policy could see held one. Every producer is `async def produce(session, episode, *, judge, **params) -> None`, named by
   `module:attr`, writing only through `Session.annotate`, with `judge` model access for one that asks a model. The SDK ships one,

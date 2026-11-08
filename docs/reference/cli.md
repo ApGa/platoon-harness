@@ -1753,7 +1753,7 @@ platoon-harness spans --agent STR [OPTIONS] SESSION
 
 Show each span of an agent, oldest first: a turn is cut after each model call that chose a write of content, as the tool call id its op came under and the tool item holding that id join them, and a trailing piece with no write joins the span before it, so each call its harness reported in a turn lies in one span.
 
-Each is named by its last call's `model.called`, with its first call, its turn and the writes the record ties to its calls. Pass `cursor` as `--after` for the next page. Refused `invalid` for a person or a program, whose turns no harness reports, and `not_found` for no such agent.
+Each is named by its last call's `model.called`, with its first call, its turn, the writes the record ties to its calls, the claims its agent held while they were made, and the labels of the work it was done for. Pass `cursor` as `--after` for the next page. Refused `invalid` for a person or a program, whose turns no harness reports, and `not_found` for no such agent.
 
 For example:
 

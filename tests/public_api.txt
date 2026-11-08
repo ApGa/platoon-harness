@@ -279,7 +279,7 @@ platoon_harness.primitives.Settings.labels
 platoon_harness.primitives.Settings.test
 platoon_harness.primitives.SHORT_LIMIT
 platoon_harness.primitives.Span
-platoon_harness.primitives.Span(*,ref,first,turn,writes)
+platoon_harness.primitives.Span(*,ref,first,turn,writes,claims,labels)
 platoon_harness.primitives.Spans
 platoon_harness.primitives.Spans(*,agent,spans,total,cursor,head,open)
 platoon_harness.primitives.stream_of

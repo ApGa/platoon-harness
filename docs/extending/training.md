@@ -144,6 +144,29 @@ conformance store gone:
 
 [provenance.md](../how-to/provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
 
+**Labels.** Give your team a vocabulary for its work, each label with the values it may take, and its agents label the tasks they
+add and the agents they spawn, from it alone, as their tools' schemas show them:
+
+```toml
+[labels]
+difficulty = ["easy", "medium", "hard"]
+kind = ["design", "execution", "search", "verification"]
+```
+
+`session.spans(agent)` gives each span the labels of the work it was done for, and the claims it held, so a baseline can be kept
+per label and a span trained against the one its labels name:
+
+```python
+async with Session.attach(rollout_id) as ended:
+    for span in (await ended.spans("@worker")).spans:
+        key = None if span.labels is None else tuple(sorted(span.labels.items()))
+```
+
+A span's labels are those of the task its agent held while its calls were made, else those it was spawned with, else none, `{}`;
+`None` is unknown, as where it held tasks of different labels at once, and has no key: what trains on it is yours to decide. The
+creator decides a task's labels, and its claimant trains against them, so a policy that learns to call its work hard lowers the
+baseline its claimants are measured by: watch what each label's work comes to.
+
 ## What a sealed launch is
 
 A gateway goes only to a driver that declares `sealed`, and that driver launches its harness on the gateway's model with nothing of

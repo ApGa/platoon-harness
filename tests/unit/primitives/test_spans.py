@@ -5,6 +5,7 @@ import asyncio
 import shutil
 from typing import Any, Literal
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -25,9 +26,12 @@ from .support import (
     refusal,
     report,
     result_of,
+    settle_effects,
     spawn,
+    start,
     start_turn,
 )
+from .test_lifecycle import written_at_v1
 
 Write = Literal["joined", "unanchored", "unnamed"]
 """How a write's tool call reaches the model call that chose it: `joined` by its op's id and a tool item that holds it
@@ -392,3 +396,244 @@ async def test_a_worker_that_does_three_tasks_in_one_turn_has_a_span_for_each(tm
         (calls[2], calls[3], (completed[1],)),
         (calls[4], calls[6], (completed[2],)),
     ]
+
+
+# The labels of the work a span was done for.
+
+CRAFT = {"difficulty": "hard", "kind": "craft"}
+SEARCH = {"difficulty": "easy", "kind": "search"}
+
+
+@pytest.fixture
+def labels() -> dict[str, list[str]]:
+    return {"difficulty": ["easy", "hard"], "kind": ["craft", "design", "search"]}
+
+
+async def tasks(kernel: Kernel, *each: dict[str, str], max_inflight: int = 1) -> None:
+    """A queue, `tasks`, holding a task for each of `each`, given those labels, numbered from 1."""
+    await channel(kernel, "tasks", kind="queue", max_inflight=max_inflight, lease=60.0)
+    for number, labels in enumerate(each, 1):
+        args = {"queue": "tasks", "gist": f"task {number}", "labels": labels}
+        result_of(await kernel.submit(kernel.runtime, "task.add", args))
+
+
+MADE = {"task.claim": "task.claimed", "task.complete": "task.completed", "task.fail": "task.failed"}
+
+
+async def did(kernel: Kernel, call_id: str | None, op: str, number: int, how: Write = "joined") -> str:
+    """`w` claims, completes, fails or releases task `number` by a tool call of the model call `call_id`: the ref of
+    the event it made."""
+    await ran(kernel, call_id, f"{op}-{number}", op, {"queue": "tasks", "task": str(number)}, how)
+    return ref_of(of_type(kernel, MADE.get(op, "task.released"))[-1])
+
+
+def labelled(found: Spans) -> list[tuple[str, tuple[str, ...], dict[str, str] | None]]:
+    return [(span.first, span.claims, span.labels) for span in found.spans]
+
+
+async def test_a_span_carries_the_labels_of_the_task_its_agent_held_from_its_claim_to_its_completion(kernel):
+    """`w` claims a task, crafts, says how far it has come, which cuts its turn, and completes it: both spans were made
+    while it held the task, from the call after the one that claimed it through the one that completed it."""
+    await team(kernel)
+    await tasks(kernel, CRAFT)
+    await start_turn(kernel, "w")
+    c1 = await called(kernel, "c1")
+    claim = await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await wrote(kernel, "c2", "half crafted")
+    c3 = await called(kernel, "c3")
+    await did(kernel, "c3", "task.complete", 1)
+    await called(kernel, "c4")
+    await end_turn(kernel, "w")
+
+    assert labelled(spans(kernel)) == [(c1, (claim,), CRAFT), (c3, (claim,), CRAFT)]
+
+
+async def test_a_claim_made_by_the_call_that_completed_the_task_before_is_held_from_the_span_after(kernel):
+    """The call that completes the first task and claims the second ends the first's span, which held only the first,
+    as no call of it was made while the second was held."""
+    await team(kernel)
+    await tasks(kernel, CRAFT, SEARCH)
+    await start_turn(kernel, "w")
+    c1 = await called(kernel, "c1")
+    first = await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await did(kernel, "c2", "task.complete", 1)
+    second = await did(kernel, "c2", "task.claim", 2)
+    c3 = await called(kernel, "c3")
+    await did(kernel, "c3", "task.complete", 2)
+    await called(kernel, "c4")
+    await end_turn(kernel, "w")
+
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c3, (second,), SEARCH)]
+
+
+async def test_a_span_that_held_no_task_carries_the_labels_its_agent_was_spawned_with_else_none(kernel):
+    await spawn(kernel, "peer")
+    args = {"name": "w", "child_role": "worker", "goal": "design it", "labels": {"kind": "design"}}
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", args))
+    await settle_effects(kernel, "w")
+    await start(kernel, "w")
+    found = {}
+    for name in ("w", "peer"):
+        await start_turn(kernel, name)
+        await report(kernel, name, "model.call", call_id=f"{name}-1")
+        await end_turn(kernel, name)
+        found[name] = [(span.claims, span.labels) for span in spans(kernel, name).spans]
+
+    assert found == {"w": [((), {"kind": "design"})], "peer": [((), {})]}
+
+
+async def test_a_task_given_no_labels_or_work_recorded_before_labels_carries_none(kernel, folder, clock):
+    """A task with no labels is work with none, so a span that held it carries none, not its agent's; and a journal
+    from before labels were recorded reads as one whose work had none."""
+    args = {"name": "w", "child_role": "worker", "goal": "design it", "labels": {"kind": "design"}}
+    result_of(await kernel.submit(kernel.runtime, "agent.spawn", args))
+    await settle_effects(kernel, "w")
+    await start(kernel, "w")
+    await tasks(kernel, {}, CRAFT)
+    await start_turn(kernel, "w", "t1")
+    await called(kernel, "c1")
+    await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await did(kernel, "c2", "task.complete", 1)
+    await did(kernel, "c2", "task.claim", 2)
+    await called(kernel, "c3")
+    await did(kernel, "c3", "task.complete", 2)
+    await called(kernel, "c4")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    await called(kernel, "c5")
+    await end_turn(kernel, "w")
+    now = [span.labels for span in spans(kernel).spans]
+    kernel.close()
+    unlabelled = "json_remove(data, '$.labels')"
+    written_at_v1(folder, {"task.added": unlabelled, "agent.spawned": unlabelled})
+    reopened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    before = [span.labels for span in spans(reopened).spans]
+    reopened.close()
+
+    assert (now, before) == ([{}, CRAFT, {"kind": "design"}], [{}, {}, {}])
+
+
+async def test_a_span_made_under_claims_of_different_labels_has_unknown_labels_and_of_alike_ones_carries_them(kernel):
+    """Two claims held at once: of a crafting task and a search, the span's labels are unknown, never merged or one
+    of them; of two crafting tasks, it carries theirs."""
+    await team(kernel)
+    await tasks(kernel, CRAFT, SEARCH, CRAFT, CRAFT, max_inflight=2)
+    await start_turn(kernel, "w")
+    c1 = await called(kernel, "c1")
+    one, two = await did(kernel, "c1", "task.claim", 1), await did(kernel, "c1", "task.claim", 2)
+    await called(kernel, "c2")
+    await did(kernel, "c2", "task.complete", 1)
+    c3 = await called(kernel, "c3")
+    await did(kernel, "c3", "task.complete", 2)
+    c4 = await called(kernel, "c4")
+    three, four = await did(kernel, "c4", "task.claim", 3), await did(kernel, "c4", "task.claim", 4)
+    await called(kernel, "c5")
+    await did(kernel, "c5", "task.complete", 3)
+    c6 = await called(kernel, "c6")
+    await did(kernel, "c6", "task.complete", 4)
+    await called(kernel, "c7")
+    await end_turn(kernel, "w")
+
+    assert labelled(spans(kernel)) == [
+        (c1, (one, two), None),
+        (c3, (two,), SEARCH),
+        (c4, (three, four), CRAFT),
+        (c6, (four,), CRAFT),
+    ]
+
+
+async def test_a_release_or_a_failure_ends_a_hold_as_a_completion_does(kernel):
+    await team(kernel)
+    await tasks(kernel, CRAFT, SEARCH)
+    await start_turn(kernel, "w", "t1")
+    c1 = await called(kernel, "c1")
+    first = await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await did(kernel, "c2", "task.release", 1)
+    await wrote(kernel, "c2", "gave the first back")
+    c3 = await called(kernel, "c3")
+    second = await did(kernel, "c3", "task.claim", 2)
+    await called(kernel, "c4")
+    await did(kernel, "c4", "task.fail", 2)
+    await called(kernel, "c5")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    c6 = await called(kernel, "c6")
+    await end_turn(kernel, "w")
+
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c3, (second,), SEARCH), (c6, (), {})]
+
+
+async def test_a_claim_held_still_or_as_its_agent_ended_is_held_through_its_last_call(kernel):
+    await team(kernel)
+    await tasks(kernel, CRAFT)
+    await start_turn(kernel, "w", "t1")
+    await called(kernel, "c1")
+    claim = await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    await called(kernel, "c3")
+    await end_turn(kernel, "w")
+    holding = labelled(spans(kernel))
+    result_of(await kernel.submit(kernel.runtime, "agent.cancel", {"agent": "w"}))
+
+    assert [held[1:] for held in holding] == [((claim,), CRAFT)] * 2
+    assert labelled(spans(kernel)) == holding
+
+
+async def test_a_claim_tied_to_no_call_lies_at_its_turn_s_start_where_that_turn_is_one_span_and_else_anywhere_in_it(
+    kernel,
+):
+    """As OpenHands and Codex join no tool call to a model call, a turn that is one span holds the task claimed in it;
+    in a turn that is cut, a claim tied to no call may have been made by any of its calls, so each span it may lie in
+    has unknown labels."""
+    await team(kernel)
+    await tasks(kernel, CRAFT, SEARCH)
+    await start_turn(kernel, "w", "t1")
+    c1 = await called(kernel, "c1")
+    first = await did(kernel, None, "task.claim", 1, how="unanchored")
+    await called(kernel, "c2")
+    await did(kernel, None, "task.complete", 1, how="unanchored")
+    await called(kernel, "c3")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    c4 = await called(kernel, "c4")
+    await wrote(kernel, "c4", "on to the next")
+    await did(kernel, None, "task.claim", 2, how="unanchored")
+    c5 = await called(kernel, "c5")
+    await did(kernel, "c5", "task.complete", 2)
+    await called(kernel, "c6")
+    await end_turn(kernel, "w")
+
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c4, (), None), (c5, (), None)]
+
+
+async def test_a_lapse_between_turns_ends_a_hold_there_and_one_within_a_turn_leaves_its_spans_unknown(kernel, clock):
+    """A lapse is the runtime's, made by no call of the claimant's, so commit order places it among the claimant's
+    turns: between two exactly, as no call is made between turns, and within one anywhere in it."""
+    await team(kernel)
+    await tasks(kernel, CRAFT, SEARCH)
+    await start_turn(kernel, "w", "t1")
+    c1 = await called(kernel, "c1")
+    first = await did(kernel, "c1", "task.claim", 1)
+    await called(kernel, "c2")
+    await end_turn(kernel, "w")
+    clock.advance(61.0)
+    fence = of_type(kernel, "task.claimed")[-1].seq
+    result_of(await kernel.submit(kernel.runtime, "lease.expire", {"queue": "tasks", "task": "1", "fence": fence}))
+    await start_turn(kernel, "w", "t2")
+    c3 = await called(kernel, "c3")
+    await did(kernel, "c3", "task.claim", 2)
+    await called(kernel, "c4")
+    clock.advance(61.0)
+    fence = of_type(kernel, "task.claimed")[-1].seq
+    result_of(await kernel.submit(kernel.runtime, "lease.expire", {"queue": "tasks", "task": "2", "fence": fence}))
+    await called(kernel, "c5")
+    await end_turn(kernel, "w")
+
+    assert [event.type for event in of_type(kernel, "lease.expired")] == ["lease.expired"] * 2
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c3, (), None)]

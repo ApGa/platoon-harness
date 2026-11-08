@@ -13,6 +13,13 @@ named here is closed.
 
 ### New features
 
+- **The labels of the work a span was done for.** `spans` gives each span the claims its agent held while its calls were made,
+  each claim held from the call after the one that chose it through the one that completed, failed or released it, or to its
+  lease's lapse or its agent's end, and the labels of the work it was done for: those of the task it held, else those its agent
+  was spawned with, else none, and `None`, unknown, where its calls were made under claims of different labels or the record
+  cannot place a claim or its end among them. `primitives.Span` gains `claims` and `labels`, which a training system reads
+  beside each span's credit row. The `Tasks` view indexes each claim by its claimant, and refolds once. This is step 2 of RFC
+  0078, a draft.
 - **Labels for a team's work.** A team file's `[labels]` declares each label with the values it may take, such as a
   `difficulty` and a `kind` of work, fixed for the team. `task.add` and `agent.spawn` take `labels`, at most one value for
   each, and so do `Session.task_add`, `Session.spawn` and their commands; one outside the vocabulary is refused `invalid`,

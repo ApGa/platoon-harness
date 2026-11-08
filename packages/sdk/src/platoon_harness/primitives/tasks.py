@@ -69,8 +69,10 @@ class Task(BaseModel, frozen=True):
 
 
 class Tasks(View):
-    """Tasks by queue, oldest first."""
+    """Tasks by queue, oldest first, and each claim by its claimant, with the event that ended it: its completion,
+    failure, release or lapse, or its claimant's end."""
 
+    version = 2
     schema = """
     CREATE TABLE v_tasks(
         queue TEXT NOT NULL,
@@ -91,6 +93,15 @@ class Tasks(View):
     ) WITHOUT ROWID, STRICT;
     CREATE INDEX v_tasks_state ON v_tasks(queue, state, seq);
     CREATE INDEX v_tasks_owner ON v_tasks(owner, state);
+    CREATE TABLE v_tasks_claims(
+        owner TEXT NOT NULL,
+        queue TEXT NOT NULL,
+        id TEXT NOT NULL,
+        claimed INTEGER NOT NULL,
+        ended INTEGER,
+        PRIMARY KEY (owner, claimed)
+    ) WITHOUT ROWID, STRICT;
+    CREATE INDEX v_tasks_claims_open ON v_tasks_claims(queue, id, ended);
     """
 
     @fold("task.added")
@@ -112,6 +123,8 @@ class Tasks(View):
             """,
             (event.actor, event.seq, data["lease_until"], event.wall_time, data["queue"], data["task"]),
         )
+        claim = (event.actor, data["queue"], data["task"], event.seq)
+        self.db.execute("INSERT INTO v_tasks_claims VALUES (?, ?, ?, ?, NULL)", claim)
 
     @fold("task.renewed")
     def renewed(self, event: Event) -> None:
@@ -128,18 +141,29 @@ class Tasks(View):
             f"UPDATE v_tasks SET {changes} WHERE queue = ? AND id = ?", (state, data["queue"], data["task"])
         )
 
+    def _end_claim(self, event: Event) -> None:
+        """A task's one live claim ends with this event."""
+        data = event.data
+        self.db.execute(
+            "UPDATE v_tasks_claims SET ended = ? WHERE queue = ? AND id = ? AND ended IS NULL",
+            (event.seq, data["queue"], data["task"]),
+        )
+
     @fold("task.released")
     def released(self, event: Event) -> None:
         self._settle(event, "open", "attempts = attempts - 1")
+        self._end_claim(event)
 
     @fold("lease.expired")
     def expired(self, event: Event) -> None:
         self._settle(event, "open")
+        self._end_claim(event)
 
     @fold("task.completed", "task.failed")
     def reported(self, event: Event) -> None:
         data = event.data
         self._settle(event, "done" if event.type == "task.completed" else "failed")
+        self._end_claim(event)
         self.db.execute(
             "UPDATE v_tasks SET result = ?, result_body = ?, result_ref = ? WHERE queue = ? AND id = ?",
             (event.gist, data["body"], f"{event.stream}@{event.version}", data["queue"], data["task"]),
@@ -154,6 +178,9 @@ class Tasks(View):
         self.db.execute(
             "UPDATE v_tasks SET state = 'open', owner = NULL WHERE owner = ? AND state = 'claimed'",
             (f"agent:{event.agent}",),
+        )
+        self.db.execute(
+            "UPDATE v_tasks_claims SET ended = ? WHERE owner = ? AND ended IS NULL", (event.seq, f"agent:{event.agent}")
         )
 
     def get(self, queue: str, id: str) -> Task | None:
@@ -181,6 +208,12 @@ class Tasks(View):
 
     def owned(self, owner: str) -> list[Task]:
         return self._where("owner = ? AND state = 'claimed' ORDER BY seq", owner)
+
+    def claims(self, owner: str) -> list[tuple[str, str, int, int | None]]:
+        """Each claim `owner` made, oldest first: its queue, its task, the seq of its claim and of the event that ended
+        it, or None while it holds."""
+        rows = self.db.execute("SELECT * FROM v_tasks_claims WHERE owner = ? ORDER BY claimed", (owner,))
+        return [(row["queue"], row["id"], row["claimed"], row["ended"]) for row in rows]
 
     def any_claimed(self) -> bool:
         return self.db.execute("SELECT 1 FROM v_tasks WHERE state = 'claimed' LIMIT 1").fetchone() is not None

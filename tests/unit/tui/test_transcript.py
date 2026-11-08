@@ -435,7 +435,7 @@ def called(seq: int) -> Event:
 
 def span(first: int, last: int, *writes: str) -> Span:
     """A span of `lead`'s turn `t1`, by the seqs of its first call and its last, which are their versions here."""
-    return Span(ref=f"turn/lead@{last}", first=f"turn/lead@{first}", turn="t1", writes=writes)
+    return Span(ref=f"turn/lead@{last}", first=f"turn/lead@{first}", turn="t1", writes=writes, claims=(), labels={})
 
 
 async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):

@@ -106,6 +106,20 @@ the agent's latest turn has not ended, as a tool item reported late can still jo
 claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
 last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
 
+Each span also names the claims its agent held while its calls were made, and carries the labels of the work it was done for, from
+the team's vocabulary: those of the task it held, else those its agent was spawned with, else none. A claim is held from the call
+after the one that chose it through the one that chose its completion, failure or release, or to its lease's lapse or its agent's
+end, so a call that completes one task and claims the next ends the first one's span, which held the first alone. Where a span's
+calls were made under claims of different labels, or the record cannot place a claim or its end among them, as a claim tied to no
+call in a turn that was cut, or a lapse in the middle of a turn, its labels are `None`, unknown, and never one of them:
+
+```python
+async def labelled_spans(session, agent):
+    """Each span of an agent's, by its name, with the claims it held and the labels of its work, None where unknown."""
+    found = await session.spans(agent)
+    return {span.ref: (span.claims, span.labels) for span in found.spans}
+```
+
 The terminal's and the browser's provenance say it on a model call, under Credit and rewards: on the call that names a span, that a
 credit row on it is the whole span's, the calls of its turn from its first to this one, with each write the record ties to them,
 and on any other call, which span it lies in. An ended turn of one span says why nothing cut it: one call alone chose the

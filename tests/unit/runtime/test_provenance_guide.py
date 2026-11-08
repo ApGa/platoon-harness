@@ -36,10 +36,12 @@ async def test_the_guide_s_code_runs_on_a_session(tmp_path):
         estimates = await namespace["even_split"](session, answer)
         trains = await namespace["what_can_train"](session, "@bob", "e")
         reached = await namespace["who_reached_whom"](session)
+        labelled = await namespace["labelled_spans"](session, "@bob")
 
     assert cited == [("inbox/bob@1", "human:you", "seen")]
     assert [(found.target, found.producer, found.value) for found in estimates] == [(answer, "even-split", 1.0)]
     assert trains == (None, "ineligible", ["not_trainable", "no_end"])
+    assert labelled == {}, "a scripted call is no model call, so bob has no span"
     assert reached == (
         [("human:you", "agent:bob", {"declared": 1, "observed": 1, "cause": 0, "ancestry": 0, "unconfirmed": 0})],
         ["bob"],

@@ -28,7 +28,7 @@ VIEWS = {
     "deliveries": (12, "7619c2dfbf0c"),
     "waits": (2, "13f9a8fa9801"),
     "boards": (1, "0d20dc5d4414"),
-    "tasks": (1, "0f9ee7057d2b"),
+    "tasks": (2, "15965716a56b"),
     "approvals": (1, "62d28b8408f1"),
     "looks": (4, "4e3feea01245"),
     "attention": (6, "f49f59bcb946"),
