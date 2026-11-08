@@ -2044,7 +2044,8 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   TUI does.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
-  project or team file: `--trust` on the command line, `trust_project` to `load_team`, and on the sessions page a question naming
+  project or team file: `--trust` on the command line, `trust_project` to `load_team`, the trust field of the terminal's start
+  form, and on the sessions page a question naming
   each such value as the team holds it, from the read that gives the team, `load_trusted`, whose yes covers what was shown and
   nothing changed since. The trust step covers a test's command and not the commit it runs, which its maker wrote, so a runtime
   test is a person's or a program's act and never an agent's, says on its act that it runs that commit's maker's code as you,

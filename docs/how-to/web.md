@@ -2,9 +2,11 @@
 
 This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
 [SwarmChat](https://swarmchat.io)'s page over one session's journal, and `platoon-harness web` alone a page of your sessions,
-which opens, starts, resumes and stops each. It is a client like any other: it reads what the journal holds, decides
-nothing, and computes no status, and what a person does there is an op, through the same path as the terminal's.
-[tui.md](tui.md) is the terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
+which opens, starts, resumes and stops each. A session's page is a client like any other: it reads what the journal holds,
+decides nothing, and computes no status, and what a person does there is an op, through the same path as the terminal's.
+The sessions page's acts are not ops of a session, and they are the terminal's sessions screen's: Start starts a session
+with no prompt on a runtime of its own, Resume is `session resume` and Stop is `session stop`. [tui.md](tui.md) is the
+terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
 
 **Goal:** start, open, resume and stop your sessions from one page, read a session's chats as yourself or as one of its
 agents, answer what needs you and act on the session as you, and give someone else a link that only reads.
