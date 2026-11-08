@@ -331,9 +331,11 @@ A pipeline whose last stage feeds the first, for at most `laps` times round.
 
 At `[topology.git-swarm]`.
 
-A population coordinating through a shared repository alone: no messages, only commits and nominations. Its
-program, a script, owns the session and closes it.
+A population coordinating through a shared repository alone: no messages, only commits and nominations, with at
+most `live` agents at once. Its program, a script, owns the session, writes each worker's outcome on `outcomes` and
+closes it.
 
 | Key | Type | Default |
 |---|---|---|
 | `role` | string | required |
+| `live` | integer | required |

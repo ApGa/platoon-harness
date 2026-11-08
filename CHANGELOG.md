@@ -744,6 +744,10 @@ named here is closed.
   do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
   harness, no module of the tests. Its stand-ins and the review example's run each role's code as a `Do` step, and a
   test holds every example to the SDK's public names.
+- **`git-swarm` takes `live`, which is its `max_live`, and makes board `outcomes`.** `[topology.git-swarm]` needs `live`, how many
+  agents may be live at once, which the kernel holds against every spawner, and `git_swarm(role, *, live)` takes it. A team that
+  leaves it out is refused at load, naming it. Board `outcomes` is where its program writes each worker's outcome, and everyone
+  reads it. See [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
 - **A team left to its program is a program's to start.** `until = "program"` leaves a session to the program that owns it, which
   closes it, so a person's start of such a team, by `run`, the terminal UI or `Session.start` under `human:<name>`, is refused before
   any cost, `run` with exit 78, naming the script way: `Session.start(team, principal="program:<name>")`. `team check` says nothing
@@ -1104,6 +1108,9 @@ named here is closed.
   Its gist now says to tell the agent, or to resolve it in your own checkout, never in its workspace, and your checkout's says
   to resolve it there. The files it names are cut where long, saying so, so those words always fit in the gist. That the
   conflict says this is the default, pending the owner's ruling.
+- **`team show` speaks of a role nothing starts in the plural.** A role with `count = 0`, which a person or a program starts as
+  many of as it likes, read as one agent, `reviewer claims from it`, and as one worker in `git-swarm`. It now reads as a role
+  another role spawns does: `reviewers claim from it`.
 - **The runtime's git reaches no remote.** A look, a stop or a diff in a repository whose config names a partial clone's
   promisor remote fetched an object its store had dropped from there, which ran the transport program or `ssh` command that
   config names, as you for a snapshot or a worktree. The one runner now allows no transport and fetches no missing object, so
@@ -1493,8 +1500,8 @@ named here is closed.
   and so is a session from before 13926da whose team named one, on resume, as its manifest no longer loads; its journal still
   reads. `team check`'s refusal of a program goes with the key, and so does its refusal of `until = "program"` with no program to
   wait for. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
-- **The `git-swarm` preset's `live` and `episodes`, which only its program's arguments carried.** `git_swarm` takes `role` alone,
-  and a team that sets either is refused as a preset's unknown argument is. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
+- **The `git-swarm` preset's `episodes`, which only its program's arguments carried.** A team that sets it is refused as a
+  preset's unknown argument is. Its `live` is now its `max_live`, under Changes. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **The `map-reduce` preset, with `platoon_harness.topology.map_reduce`, which no program runs.** It named a program, `map_reduce`,
   that nothing runs, so `team check` refused every team that used it, and no user of it beyond itself is in sight. A team that
   uses it is refused as an unknown preset is: write its queues and board out, and add to them from a script that starts the

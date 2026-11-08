@@ -615,7 +615,7 @@ async def test_team_check_says_every_problem_at_once_and_exits_78(cli: Cli):
 async def test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78(cli: Cli):
     """A session under `until = "program"` waits for its program to close it, and `run` starts one as a person, so it
     costs nothing. The team is sound, so `team check` says nothing of it."""
-    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\n')
+    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\nlive = 1\n')
 
     checked = await cli.run("team", "check", swarm, "--trust")
     ran = await cli.run("run", "go", "--team", swarm, "--trust")

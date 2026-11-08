@@ -65,6 +65,17 @@ def test_a_role_reads_as_a_plural_only_when_it_is_a_word(role, shown):
     assert team.show().startswith(f"{shown} (pi)")
 
 
+def test_a_role_nothing_starts_reads_as_many_as_a_person_or_a_program_starts():
+    team = Team(
+        roles={"reviewer": Role(harness="claude", count=0)},
+        topology=Topology(until="program", channels={"reviews": Queue(writers="program", readers="role:reviewer")}),
+    )
+    assert team.show() == (
+        "Reviewers (claude) may message no one.\n"
+        "The program adds to queue `reviews`; reviewers claim from it. Closes when the program closes it."
+    )
+
+
 def test_a_close_on_a_role_of_many_says_every():
     team = Team(roles={"a": Role(harness="pi", count=2)}, topology=Topology(until="role:a"))
     assert team.show().endswith("Closes when every a has finished.")

@@ -251,30 +251,33 @@ writer adds to queue `to-critic`; critic claims from it. Each entry wakes its re
 
 ### git-swarm
 
-A population with no messages and no roles to speak of: commits go to a shared repository, and nominations to a topic everyone reads.
-Its program, a Python script that starts the session as `program:<name>`, owns the session and closes it, so `run` and the terminal
-UI refuse this team, naming [the script way](#run-a-program-from-python).
+A population with no messages and no roles to speak of: commits go to a shared repository, and nominations to a topic everyone reads,
+with at most `live` agents at once, which is the topology's `max_live`. Its program, a Python script that starts the session as
+`program:<name>`, starts the workers, writes each one's outcome on board `outcomes` and closes the session, so `run` and the terminal
+UI refuse this team, naming [the script way](#run-a-program-from-python). The program starts every worker, so the role starts with
+none: `count = 0`.
 
 ```toml
 [roles.worker]
 harness = "codex"
 workspace = "worktree"
-count = 8
+count = 0
 
 [topology.git-swarm]
 role = "worker"
+live = 8
 ```
 
 ```python
 team = Team(
-    roles={"worker": Role(harness="codex", workspace="worktree", count=8)},
-    topology=git_swarm("worker"),
+    roles={"worker": Role(harness="codex", workspace="worktree", count=0)},
+    topology=git_swarm("worker", live=8),
 )
 ```
 
 ```text
 Workers (codex, own worktrees) may message no one.
-Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. Closes when the program closes it.
+Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. The program writes board `outcomes`; everyone reads it. Limits: live 8. Closes when the program closes it.
 ```
 
 ## Mix presets
@@ -506,8 +509,8 @@ async def main(paths: list[str]) -> None:
 ```
 
 ```text
-reviewer (claude) may message no one.
-The program adds to queue `reviews`; reviewer claims from it. Closes when the program closes it.
+Reviewers (claude) may message no one.
+The program adds to queue `reviews`; reviewers claim from it. Closes when the program closes it.
 ```
 
 A program keeps nothing that must survive a restart. If its script dies, run it again on the session, with

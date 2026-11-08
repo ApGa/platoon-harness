@@ -52,8 +52,11 @@ class _Prose:
         self.team = team
 
     def many(self, role: str) -> bool:
-        """Whether a role can have several agents, so that its name reads as a plural."""
-        return role in self.team.roles and (bool(self.team.spawners(role)) or len(self.team.starts(role)) > 1)
+        """Whether a role can have several agents, so that its name reads as a plural: another role spawns it, several
+        start with the session, or none does, which leaves as many as a person or a program starts."""
+        if role not in self.team.roles:
+            return False
+        return bool(self.team.spawners(role)) or len(self.team.starts(role)) != 1
 
     def noun(self, selector: str, subject: str = "") -> str:
         kind, _, name = selector.partition(":")

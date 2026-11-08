@@ -90,7 +90,7 @@ PRESET_TEAMS = {
         topology=ring(["a", "b", "c"], laps=2),
     ),
     "git-swarm": Team(
-        roles={"worker": Role(harness="codex", workspace="worktree", count=8)},
-        topology=git_swarm("worker"),
+        roles={"worker": Role(harness="codex", workspace="worktree", count=0)},
+        topology=git_swarm("worker", live=8),
     ),
 }

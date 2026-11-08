@@ -206,14 +206,16 @@ def test_stages_must_link_two_roles():
 
 
 def test_git_swarm_coordinates_through_artifacts_alone():
-    topology = git_swarm("worker")
+    topology = git_swarm("worker", live=4)
     assert topology.edges == {}
     nominations = topology.channels["nominations"]
     assert isinstance(nominations, Topic)
     assert (nominations.writers, nominations.readers) == (("role:worker",), ("all",))
     assert (nominations.delivery, nominations.history) == ("pull", "full")
-    assert topology.channels.keys() == {"inflight", "nominations"}
+    assert topology.channels.keys() == {"inflight", "nominations", "outcomes"}
     assert topology.channels["inflight"] == Board(writers="all", readers="all")
+    assert topology.channels["outcomes"] == Board(writers="program", readers="all")
+    assert topology.limits == Limits(max_live=4)
     assert topology.until == "program"
 
 

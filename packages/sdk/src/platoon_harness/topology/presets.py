@@ -114,15 +114,18 @@ def ring(stages: Sequence[str], *, laps: int) -> Topology:
     return Topology(channels=_stage_queues(links), limits=Limits(max_hops=laps * len(stages)))
 
 
-def git_swarm(role: str) -> Topology:
-    """A population coordinating through a shared repository alone: no messages, only commits and nominations. Its
-    program, a script, owns the session and closes it."""
+def git_swarm(role: str, *, live: int) -> Topology:
+    """A population coordinating through a shared repository alone: no messages, only commits and nominations, with at
+    most `live` agents at once. Its program, a script, owns the session, writes each worker's outcome on `outcomes` and
+    closes it."""
     return Topology(
         until="program",
         channels={
             "inflight": Board(writers="all", readers="all"),
             "nominations": Topic(writers=f"role:{role}", readers="all", delivery="pull", history="full"),
+            "outcomes": Board(writers="program", readers="all"),
         },
+        limits=Limits(max_live=live),
     )
 
 
