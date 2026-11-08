@@ -23,7 +23,8 @@ from platoon_harness.kernel import GIST_LIMIT, Event, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.session import Reason
 from platoon_harness.tools.surface import body_fields
-from platoon_harness_cli.exits import CONFIGURATION, ENDINGS, REFUSED, SHARED
+from platoon_harness_cli import machine
+from platoon_harness_cli.exits import CONFIGURATION, ENDINGS, REFUSED, SHARED, USAGE
 from platoon_harness_cli.main import build, extended, main
 from platoon_harness_cli.ops import _PURPOSES, command_line, cut, person_ops
 from platoon_harness_cli.output import event_line, safe
@@ -283,7 +284,13 @@ def installed(site: Site, module: str, *never: str) -> None:
     `never`, from a distribution of its own, whose module is never to be imported."""
     site.module(module, BALLOT)
     site.install("voting", "2.0.0", entry_points={EXTENSIONS: {"ballot": f"{module}:extension"}})
-    for name in never:
+    makers(site, *never)
+
+
+def makers(site: Site, *names: str) -> None:
+    """An extension of each of `names`, from a distribution of its own, `<name>-maker`, whose module is never to be
+    imported."""
+    for name in names:
         site.module(f"never_{name}", NEVER)
         site.install(f"{name}-maker", entry_points={EXTENSIONS: {name: f"never_{name}:extension"}})
 
@@ -367,26 +374,49 @@ async def test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_i
 def test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import(
     site: Site, capsys: pytest.CaptureFixture[str]
 ):
-    """`run` and `task` are the command line's own, so an extension of either name gets no group: discovery refuses it
+    """`run` and `doctor` are the command line's own, so an extension of either name gets no group: discovery refuses it
     from metadata, saying why on stderr, and each word still names the command line's own command."""
-    for name in ("run", "task"):
-        site.module(f"never_{name}", NEVER)
-        site.install(f"{name}-maker", entry_points={EXTENSIONS: {name: f"never_{name}:extension"}})
+    makers(site, "run", "doctor")
+
+    listed = " ".join(helped([], extended(build(), [])).split())
+    said = capsys.readouterr().err
+    command, arguments = line(["doctor", "--json"])
+
+    assert said == "".join(
+        f"platoon-harness: extensions.{name}: {name}-maker 1.0.0's extension `{name}` has no commands, as `{name}` is "
+        "a command of the command line's own: its ops run through the SDK, MCP, `ph` and the clients' palettes, on a "
+        "session whose team names it\n"
+        for name in ("doctor", "run")
+    )
+    assert "-maker" not in listed
+    assert "run Start a session, give it a prompt, and own it in the foreground until it settles." in listed
+    assert command is machine.doctor and arguments == {"json": True}
+    assert not {"never_run", "never_doctor"} & set(sys.modules)
+
+
+def test_an_extension_named_as_one_every_session_holds_is_refused_at_discovery_as_no_session_can_load_it(
+    site: Site, capsys: pytest.CaptureFixture[str]
+):
+    """`task`, a group of the command line's own too, and `lease`, which is not, are extensions of the SDK's own, which
+    every session holds, so the kernel refuses an installed one of either name in any session. Neither gets a group:
+    discovery says so on stderr, before any import, and `task` still names the command line's own group."""
+    makers(site, "task", "lease")
 
     listed = " ".join(helped([], extended(build(), [])).split())
     said = capsys.readouterr().err
     command, arguments = line(["task", "claim", "fix-auth", "--queue", "tasks"])
+    unknown = main(["lease", "take", "fix-auth"])
 
     assert said == "".join(
-        f"platoon-harness: extensions.{name}: {name}-maker 1.0.0's extension `{name}` has no commands, as `{name}` is "
-        f"a command of the command line's own: its ops run through the SDK, MCP, `ph` and the clients' palettes\n"
-        for name in ("run", "task")
+        f"platoon-harness: extensions.{name}: {name}-maker 1.0.0's extension `{name}` has no commands, and no session "
+        f"can load it, as every session holds the SDK's own extension `{name}`\n"
+        for name in ("lease", "task")
     )
     assert "-maker" not in listed
-    assert "run Start a session, give it a prompt, and own it in the foreground until it settles." in listed
     assert (command.__doc__ or "").split()[:4] == (OPS["task.claim"].fn.__doc__ or "").split()[:4]
     assert arguments == {"session": "fix-auth", "queue": "tasks"}
-    assert not {"never_run", "never_task"} & set(sys.modules)
+    assert unknown == USAGE
+    assert not {"never_task", "never_lease"} & set(sys.modules)
 
 
 def test_help_lists_installed_extensions_from_metadata_without_importing_them(site: Site):

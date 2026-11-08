@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`main.py`](../../packages/cli/src/platoon_harness_cli/main.py), [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`extensions.py`](../../packages/sdk/src/platoon_harness/extensions.py), [architecture section 6](../architecture.md#6-operations) and [section 17](../architecture.md#17-extensions-and-configuration), [the brief's section 11](../spec/BRIEF.md#11-extension-and-configuration-model), [RFC 0004](0004-one-operation-table.md), [RFC 0017](0017-config-and-entry-points.md), [RFC 0026](0026-every-act-from-any-terminal.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Give an installed extension's op a command, loading only that extension`, `feat: Refuse an extension named as a built-in command group` |
+| Implementation | `feat: Give an installed extension's op a command, loading only that extension`, `feat: Refuse an extension named as a built-in command group`, and the fixes `fix: Leave an extension's command to the runtime where a team names extensions by module:attr` and `fix: Give no command to an installed extension named as one every session holds` |
 
 ## Summary
 
@@ -18,10 +18,10 @@ makes that extension's commands as it makes the SDK's, a command per op a person
 op's description as its help. Before anything is asked of the session, the command reads the session's manifest, and a
 session whose team, as the manifest records it, does not name the extension is refused, saying so, as it holds none of its
 ops; where a team names an extension by `module:attr`, the manifest cannot say which it is, and the session's runtime
-answers. An extension whose name is one of the command line's own commands gets no group: discovery refuses it from
-metadata, before any import, and says why on stderr. `--help` lists each installed extension under Installed extensions,
-from metadata, importing none. That an installed extension's op gets a command at all is the plan's default for an owner
-question the owner has not ruled on.
+answers. An extension whose name is one of the command line's own commands, or that of an extension every session holds,
+gets no group: discovery refuses it from metadata, before any import, and says why on stderr. `--help` lists each installed
+extension under Installed extensions, from metadata, importing none. That an installed extension's op gets a command at all
+is the plan's default for an owner question the owner has not ruled on.
 
 ## Motivation
 
@@ -100,26 +100,32 @@ op where the reference is the extension, and where not refuses it `not_found`, `
 any body it takes. A session whose team names it runs the op as any command runs one, on its runtime, which checks the
 arguments against the op it loaded.
 
-### 4. Refused at discovery if its name is a built-in group
+### 4. Refused at discovery if its name is held
 
-The command line's own commands hold their names. As of this RFC they are `annotate`, `annotations`, `attach`, `doctor`,
-`events`, `extension`, `init`, `run`, `serve`, `session`, `team` and `web`, and the groups of the SDK's ops, `agent`,
-`approval`, `attention`, `blob`, `board`, `body`, `budget`, `channel`, `context`, `contributors`, `effect`, `eligibility`,
-`episode`, `exposure`, `interactions`, `lineage`, `message`, `ops`, `peers`, `repo`, `spans`, `task`, `uses` and `view`,
-with the flags `--help`, `-h` and `--version`. The list is read from the command line as it is built, so a command added
-later holds its name with no second list to keep.
+Two kinds of name are held. The command line's own commands hold theirs: as of this RFC `annotate`, `annotations`,
+`attach`, `doctor`, `events`, `extension`, `init`, `run`, `serve`, `session`, `team` and `web`, the groups of the SDK's
+ops, `agent`, `approval`, `attention`, `blob`, `board`, `body`, `budget`, `channel`, `context`, `contributors`, `effect`,
+`eligibility`, `episode`, `exposure`, `interactions`, `lineage`, `message`, `ops`, `peers`, `repo`, `spans`, `task`, `uses`
+and `view`, and the flags `--help`, `-h` and `--version`. The list is read from the command line as it is built, so a
+command added later holds its name with no second list to keep. And every session holds the SDK's own extensions, the
+kernel's and the primitives', so the kernel refuses an installed extension of one of their names in any session: as of
+this RFC each group of the SDK's ops above, and `daemon`, `delivery`, `grant`, `group`, `lease`, `op`, `principal`,
+`runtime`, `timer` and `wait`. The command line asks the kernel, which answers as it does on loading one, so that list is
+kept nowhere else either.
 
-An installed extension with one of these names gets no group. Discovery refuses it from metadata, before any import, and
-says so on stderr each time it looks for an extension's group, with the distribution that defines it:
+An installed extension with a held name gets no group. Discovery refuses it from metadata, before any import, and says so
+on stderr each time it looks for an extension's group, with the distribution that defines it, in one of two ways:
 
 ```text
+platoon-harness: extensions.lease: shadow 2.0.0's extension `lease` has no commands, and no session can load it, as every
+session holds the SDK's own extension `lease`
 platoon-harness: extensions.run: runner 1.0.0's extension `run` has no commands, as `run` is a command of the command line's
-own: its ops run through the SDK, MCP, `ph` and the clients' palettes
+own: its ops run through the SDK, MCP, `ph` and the clients' palettes, on a session whose team names it
 ```
 
-The refusal is the command line's alone. A team may still name such an extension, and its ops work everywhere else. An
-extension named as one of the SDK's own namespaces, such as `wait` or `grant`, is refused already, by the kernel, wherever it
-is loaded.
+The first is the kernel's refusal said before any session meets it: no team can name the extension, so no surface reaches
+its ops, and a name a group of the SDK's ops holds, such as `task`, is refused this way. The second is the command line's
+alone: a team may still name such an extension, and its ops work everywhere else.
 
 ### 5. Help lists installed extensions from metadata
 
@@ -159,9 +165,12 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
   no core edit.
 - A command line whose first word is none of the command line's own reads metadata first, about 30 ms here, and one that
   names an extension imports it. One that cannot be loaded exits 78, saying why, as a team that named it would be refused.
-- An extension named as a command of the command line's own has no command, and the command line says so whenever it looks
-  for an extension's group, `--help` among those times. `doctor` and `extension list` read what the SDK finds, and do not
-  say it.
+- An extension named as a command of the command line's own, or as an extension every session holds, has no command, and
+  the command line says so whenever it looks for an extension's group, `--help` among those times. `doctor` and `extension
+  list` read what the SDK finds, and do not say it.
+- A runtime adds an extension of its own, `host`, which no kernel holds until a runtime loads it, so the kernel's answer
+  leaves that name free: an installed extension called `host` gets a group, and a team that names it is refused when its
+  runtime starts.
 - A command the command line adds later takes its name from any installed extension that has it, whose commands then go,
   with the refusal said: a change to the command line, which the changelog names as it names any.
 - The reference documents the command line's own commands only, and says how an extension's are made.
@@ -170,8 +179,8 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 the command | A group per installed extension from metadata, loaded by name alone, refused on a session whose team does not name it, and listed by `--help` | `tests/unit/cli/test_commands.py`, `test_an_installed_extension_s_group_loads_only_that_extension`, `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why` and `test_help_lists_installed_extensions_from_metadata_without_importing_them`; `tests/integration/test_installed_extensions.py`, `test_the_sample_s_op_is_a_command_from_its_wheel` | `feat: Give an installed extension's op a command, loading only that extension` |
-| M2 the reserved names | An extension named as a command of the command line's own refused at discovery, saying why | `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import` | `feat: Refuse an extension named as a built-in command group` |
+| M1 the command | A group per installed extension from metadata, loaded by name alone, refused on a session whose team does not name it, and listed by `--help` | `tests/unit/cli/test_commands.py`, `test_an_installed_extension_s_group_loads_only_that_extension`, `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why` and `test_help_lists_installed_extensions_from_metadata_without_importing_them`; `tests/integration/test_installed_extensions.py`, `test_the_sample_s_op_is_a_command_from_its_wheel` | `feat: Give an installed extension's op a command, loading only that extension`, `fix: Leave an extension's command to the runtime where a team names extensions by module:attr` |
+| M2 the reserved names | An extension named as a command of the command line's own, or as an extension every session holds, refused at discovery, saying why | `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import` and `test_an_extension_named_as_one_every_session_holds_is_refused_at_discovery_as_no_session_can_load_it` | `feat: Refuse an extension named as a built-in command group`, `fix: Give no command to an installed extension named as one every session holds` |
 
 ## Open questions
 
@@ -187,7 +196,8 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
   `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why`, on four live sessions with
   the command run as `main` in a thread of its own, one whose team names the extension by `module:attr` running it and one
   whose team names another by `module:attr` refused by its runtime,
-  `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import` and
+  `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import`,
+  `test_an_extension_named_as_one_every_session_holds_is_refused_at_discovery_as_no_session_can_load_it` and
   `test_help_lists_installed_extensions_from_metadata_without_importing_them`.
 - `tests/integration/test_installed_extensions.py`, slow, `test_the_sample_s_op_is_a_command_from_its_wheel`: the sample's
   wheel, beside its rival, loads neither, and the rival is never imported; alone, `--help` lists it, and the installed

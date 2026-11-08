@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from platoon_harness import ConfigError, Refused, Session
 from platoon_harness.config import Manifest
 from platoon_harness.extensions import EXTENSIONS, Component, discover, load
-from platoon_harness.kernel import GIST_LIMIT, Op, Outcome, registry
+from platoon_harness.kernel import GIST_LIMIT, Extension, Op, Outcome, registry
 from platoon_harness.primitives import BODY_REF, PRIMITIVES
 from platoon_harness.runtime.paths import MANIFEST, find_root, session_folder
 from platoon_harness.schema import Problem
@@ -139,15 +139,15 @@ def _place(group: App, operation: Op, command: Callable[..., Awaitable[int]]) ->
 
 
 def extension_groups(own: Collection[str], named: str | None) -> list[App]:
-    """A group of commands per installed extension, found from metadata. One whose name is among the command line's
-    `own` commands is refused, before any import, saying why. Only the group `named` is loaded, importing its extension
-    and nothing else installed, and every other says what its metadata says."""
+    """A group of commands per installed extension, found from metadata. One named as an extension every session holds,
+    or as one of the command line's `own` commands, is refused, before any import, saying why. Only the group `named`
+    is loaded, importing its extension and nothing else installed, and every other says what its metadata says."""
     found: dict[str, list[Component]] = {}
     for component in discover():
         if component.group != EXTENSIONS:
             continue
-        if component.name in own:
-            note(str(_refused(component)))
+        if (refusal := _refused(component, own)) is not None:
+            note(str(refusal))
             continue
         found.setdefault(component.name, []).append(component)
     listed = []
@@ -159,11 +159,29 @@ def extension_groups(own: Collection[str], named: str | None) -> list[App]:
     return listed
 
 
-def _refused(component: Component) -> Problem:
-    """Why an installed extension named as one of the command line's own commands has none."""
+def _refused(component: Component, own: Collection[str]) -> Problem | None:
+    """Why an installed extension has no commands, from its name alone, or None where its name leaves it some: no
+    session can load one named as an extension every session holds, and one named as one of the command line's `own`
+    commands loses its commands alone."""
     name, source = component.name, f"{component.distribution} {component.version}"
-    what = f"{source}'s extension `{name}` has no commands, as `{name}` is a command of the command line's own"
-    return Problem(f"extensions.{name}", f"{what}: its ops run through the SDK, MCP, `ph` and the clients' palettes")
+    what = f"{source}'s extension `{name}` has no commands"
+    if _held(name):
+        what = f"{what}, and no session can load it, as every session holds the SDK's own extension `{name}`"
+        return Problem(f"extensions.{name}", what)
+    if name in own:
+        what = f"{what}, as `{name}` is a command of the command line's own: its ops run through the SDK, MCP, `ph` and"
+        return Problem(f"extensions.{name}", f"{what} the clients' palettes, on a session whose team names it")
+    return None
+
+
+def _held(name: str) -> bool:
+    """Whether every session holds an extension called `name`, the kernel's own or one of the SDK's primitives, and so
+    refuses an installed one of that name: the kernel answers, as it loads them."""
+    try:
+        registry((*PRIMITIVES, Extension(name)))
+    except Refused:
+        return True
+    return False
 
 
 def _sources(components: Sequence[Component]) -> str:

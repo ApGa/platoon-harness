@@ -16,8 +16,9 @@ Installed extensions, read from metadata with none imported, and a command line 
 op runs only on a session whose team names that extension, and is refused, with exit 1, on any other: before anything is
 asked of it, saying so, where the session's manifest shows its team does not name it, and by its runtime where its team
 names an extension by `module:attr`, which the manifest cannot resolve. This reference is made from the command line's
-own commands, so it lists no extension's. An installed extension named as one of them has no commands: discovery refuses
-it from metadata, before any import, and says why on stderr.
+own commands, so it lists no extension's. An installed extension named as one of them has no commands, and nor has one
+named as an extension every session holds, such as `lease`, which the kernel refuses in any session: discovery refuses
+either from metadata, before any import, and says why on stderr.
 
 ## Exit codes
 
