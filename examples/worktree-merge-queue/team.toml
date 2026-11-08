@@ -1,23 +1,31 @@
-# A Claude Code lead, Codex workers each in a worktree of its own, and a Claude Code merger in a worktree of its own.
-# Workers add their branches to the queue `merges`, and the merger merges each into its own branch with git: the runtime
-# never merges. Each role's instructions say its part. The workers commit and the merger merges, and each git command
-# that writes asks for an approval, which nobody is there to answer in a headless run, so those two roles allow theirs:
-# they run git as you. README.md runs it with no keys, each harness swapped with `--set` for a stand-in of
-# stand_ins.py.
+# A pi lead, OpenHands workers each in a worktree of its own, and a pi merger in a worktree of its own, on a model you
+# name at an endpoint that speaks OpenAI's Chat Completions. Workers add their branches to the queue `merges`, and the
+# merger, whom each task wakes, merges each into its own branch with git: the runtime never merges. Each role's
+# instructions say its part. The workers commit and the merger merges, with nobody there to answer an approval in a
+# headless run, so those two roles allow theirs: they run git as you. The lead only reads, so its approvals deny.
+# README.md says how to name the model.
+
+[auth.provider]
+env = ["OPENAI_BASE_URL", "OPENAI_API_KEY"]
 
 [roles.lead]
-harness = "claude"
+harness = "pi"
+auth = "provider"
 may_spawn = ["worker"]
+approvals = "deny"
 
 [roles.worker]
-harness = "codex"
+harness = "openhands"
+auth = "provider"
 workspace = "worktree"
 approvals = "allow"
-instructions = """Commit your work on your branch, then add a task to the queue `merges` whose gist is `merge` and your \
-branch's name. Wait on that task, and when it settles, finish with its result."""
+instructions = """Fix the issue your goal names, with a test, and run `python3 -m unittest`. Add a line for your fix at \
+the top of the list under `## Unreleased` in CHANGELOG.md. Commit on your branch, then add a task to the queue `merges` \
+whose gist is `merge` and your branch's name. Wait on that task, and when it settles, finish with its result."""
 
 [roles.merger]
-harness = "claude"
+harness = "pi"
+auth = "provider"
 workspace = "worktree"
 approvals = "allow"
 instructions = """Claim each task on the queue `merges` and merge the branch it names into your own with `git merge \
@@ -32,7 +40,8 @@ workers = "worker"
 kind = "queue"
 writers = "role:worker"
 readers = "role:merger"
+delivery = "wake"
 
 [budget]
-turns = 20
-wall = "15m"
+turns = 24
+wall = "25m"

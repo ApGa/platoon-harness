@@ -89,6 +89,25 @@ named here is closed.
   under none, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim
   and `ph`, each under an id of its own, which none of their items holds. Before, every spawn was drawn where the journal
   had it.
+- **The examples run on a model you name, on pi and OpenHands.** Each example that runs a team does so on a real model at
+  any endpoint that speaks OpenAI's Chat Completions, OpenRouter's or any provider's OpenAI-compatible URL: its team file's
+  auth profile, `provider`, hands each harness `OPENAI_BASE_URL` and `OPENAI_API_KEY`, and a `--set` line for each role names
+  the model, as each README says, with `--trust` for the team file that names the profile. Each works on a copy of the sample
+  project, which its README makes, on an issue that names real work. [The mixed team](examples/mixed-team/README.md) is a pi
+  lead and an OpenHands worker fixing a bug; [the SDK script](examples/sdk-script/README.md) builds a team in Python of two
+  OpenHands agents, each fixing an issue in a worktree of its own; [the worktree team](examples/worktree-merge-queue/README.md)
+  has OpenHands workers hand their fixes to a pi merger, whom each task wakes, the second stopping on a conflict in the
+  changelog; [the review team](examples/review-verification/README.md) has an OpenHands author, a pi reviewer reading the
+  commit with git in a snapshot of its own, and a pi verifier whose every command is refused; and
+  [the GitSwarm population](examples/git-swarm/README.md) runs pi workers on a feature. A slow test runs each README's commands
+  as shown on the real `pi` and OpenHands against FakeModel, which plays each agent, so the harnesses, their tools, git and
+  the team files are real and only the model is scripted, and a live test, `tests/live/test_examples.py`, runs each on the
+  model `PLATOON_HARNESS_LIVE_MODEL` names within the budget its README states, in model calls and wall time. No live run has
+  been made yet. That the examples run so is the owner's ruling of 2026-11-08.
+- **A sample project for the examples.** [examples/sample-project](examples/sample-project/README.md) is `tally`, a small
+  Python package written for the examples, MIT, that splits shared expenses, with its own tests and an `ISSUES.md` of two
+  defects and two feature requests, each example's job naming one. It runs on Python 3.9 or later, as an agent's `python3`
+  may be older than the SDK's.
 - **FakeModel answers each agent from what it is shown.** `FakeModel.answer(saying, reply)` has a function reply to each model
   call whose request says a text, such as the `You are @lead.` an agent's preamble opens with, in place of the script, so
   each agent of a team on one endpoint is played by a script of its own, which can rest on what a tool answered.
@@ -933,6 +952,13 @@ named here is closed.
   shared workspace first, so a worker whose base holds its new commits finds them recorded before its own; the same round
   took 8.6 to 10.3 s, as [the scale page](docs/reference/scale.md#a-git-teams-looks) says. See
   [RFC 0077](docs/rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md), a draft.
+- **Your first session and the README's quickstart run the mixed team on your model.** They copy the sample project, name
+  the endpoint and key, and run the team as its README does, then read the closed session back, where they ran it with no
+  keys on scripted stand-ins. Each is run as shown by a slow test on FakeModel.
+- **The GitSwarm script takes no `--plan-login`, and trusts its own team file.** Its workers reach their model through an
+  auth profile, which is on no plan login, and the script loads the team file beside it with `trust_project`, as `--trust`
+  trusts one, since that file's auth profile hands your key to each worker. See
+  [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
 - **The courier reads only the waits it closes.** Each pass asked for the waits that hold or have run out by reading every
   wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
   waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded
@@ -1783,6 +1809,10 @@ named here is closed.
 
 ### Removed
 
+- **The examples' scripted stand-ins, and the runs with no keys they gave.** `stand_ins.py` of the mixed team, the worktree
+  team, the review team and the GitSwarm population are gone, with each README's run of them, and the SDK script no longer
+  runs a command on the `exec` driver: an example holds only what a person runs, on a real model, as the owner ruled on
+  2026-11-08. The installed wheels' test runs a script of its own on the `exec` driver, `tests/integration/counting.py`.
 - **A topology's `program` key, with `platoon_harness.topology.Program`, as a program is a script.** A program starts its session
   as `program:<name>` and drives it from Python, so a team names none. A team that sets `program` is refused as any unknown key is,
   and so is a session from before 13926da whose team named one, on resume, as its manifest no longer loads; its journal still

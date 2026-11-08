@@ -1,95 +1,108 @@
 # A mixed team
 
-**Goal:** run a Claude Code lead and a Codex worker in one session, watch and steer it while it runs, and read back
-whose work reached the lead's answer, or run the same team with no keys, on scripted stand-ins.
+**Goal:** run a pi lead and an OpenHands worker in one session on a model you name, have them fix a bug in a copy of the
+sample project, watch and steer them while they work, and read back whose work reached the lead's answer.
 
-A Claude Code lead and a Codex worker in one session. The lead puts a task on the queue `tasks` and starts a worker; the
-worker claims it, writes a note on the board `notes` and reports back by message; the lead reads the note and finishes.
-Every write may cite what it rests on, which the default template asks each agent to do, and afterwards the record says
-whose work reached the lead's answer.
+A pi lead and an OpenHands worker in one session, in your copy of [the sample project](../sample-project/README.md),
+`tally`. The lead puts a task for issue 1 of its `ISSUES.md` on the queue `tasks` and starts a worker, `fixer`; the
+worker claims the task, fixes the bug with a test, runs the tests, writes a note on the board `notes` and reports back by
+message; the lead reads the note and the code, and finishes. Every write may cite what it rests on, which the default
+template asks each agent to do, and afterwards the record says whose work reached the lead's answer.
 
 **Prerequisites:**
 
-- a checkout of this repository with its packages installed, as [the README](../../README.md#install) says;
-- for a run on real models, `claude` and `codex` on your PATH and signed in as you usually are. The run with no keys
-  needs neither.
+- a checkout of this repository with its packages installed by `uv sync`, as [the README](../../README.md#install) says,
+  which brings the SDK's `openhands` extra, and its environment active, as
+  [your first session](../../docs/getting-started/first-session.md#1-run-a-team-on-your-model) has it;
+- `pi` on your PATH, which needs no login here;
+- a model at an endpoint that speaks OpenAI's Chat Completions, and a key for it: OpenRouter's, or any provider's
+  OpenAI-compatible URL;
+- git, and `python3` 3.9 or later on your PATH, which the worker runs the sample project's tests on.
 
-The example has three files:
+The example has two files:
 
 | File | What it is |
 |---|---|
-| [`team.toml`](team.toml) | The team: two roles, the `manager-worker` preset, which gives the queue and the board, and a budget of 12 turns and 15 minutes, so a runaway stops itself. Both agents work in the session's own checkout, the `shared` workspace |
+| [`team.toml`](team.toml) | The team: two roles, the `manager-worker` preset, which gives the queue and the board, an auth profile, `provider`, that hands both harnesses your endpoint and key, and a budget of 16 turns and 20 minutes, so a runaway stops itself. Both agents work in your copy, the session's `shared` workspace. The lead only reads, so its approvals deny, and the worker edits and runs the tests, so its approvals allow |
 | [`job.md`](job.md) | What you ask of the lead |
-| [`stand_ins.py`](stand_ins.py) | Scripted stand-ins for both harnesses, for the run with no keys |
 
-## 1. Run it
+## 1. Check it
 
-With `claude` and `codex` on your PATH and signed in as you usually are, from a checkout of this repository:
-
-```console
-$ uv run platoon-harness team check examples/mixed-team/team.toml --plan-login
-$ uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file examples/mixed-team/job.md \
-    --plan-login --name dns
-```
-
-`--plan-login` says you mean to run two agents on plan logins at once, which a headless run refuses otherwise, with exit
-78. The run says the session's name on stderr at once, owns the session in the foreground until the lead finishes, and
-exits 0 once it has settled. Live, this cost 11 model calls on `claude-haiku-5-5` and `gpt-6-luna` at low effort. Both
-agents work where you run it, the checkout itself here: nothing the job asks writes a file, but each agent has a shell.
-
-### With no keys
-
-Scripted stand-ins, in [stand_ins.py](stand_ins.py), do what the job asks, each citing what it rests on, with no model
-at all:
+Make a copy of the sample project, as a repository of its own, and work there:
 
 ```console
-$ PYTHONPATH=examples/mixed-team uv run platoon-harness run --team examples/mixed-team/team.toml \
-    --prompt-file examples/mixed-team/job.md --set 'roles.lead.harness = "stand_ins:lead"' \
-    --set 'roles.worker.harness = "stand_ins:worker"' --name dns
+$ cp -r path/to/platoon-harness/examples/sample-project tally
+$ cd tally
+$ git init -q && git add -A && git commit -qm "Start from the sample project"
 ```
 
-It prints a line per event as the session journals it, and ends with how the session ended and each agent's last words:
+Name your endpoint and key in the two variables the team's auth profile names, such as
+`export OPENAI_BASE_URL=https://openrouter.ai/api/v1` and `export OPENAI_API_KEY=...` with your key, and check the team
+with a `--set` line for each role that names your model:
+
+```console
+$ platoon-harness team check path/to/platoon-harness/examples/mixed-team/team.toml --trust \
+    --set 'roles.lead.model = "MODEL"' --set 'roles.worker.model = "MODEL"'
+$ platoon-harness team show path/to/platoon-harness/examples/mixed-team/team.toml --trust
+```
+
+MODEL is the model as your endpoint names it, such as `vendor/model` on OpenRouter. `--trust` says you trust the team
+file's auth profile, which hands your key to each harness: without it, each command that reads the file refuses it, with
+exit 78. `team check` says `no problems`, before any cost, and `team show` says in sentences what the team allows:
 
 ```text
-settled, exit 0
-  @lead            finished  Three risks of caching DNS answers are on the board.
-  @w               finished  The risks are on the board as risks.
+lead (pi) may message its workers and you. Workers (openhands) may message lead.
+lead adds to queue `tasks`; workers claim from it. Everyone shares board `notes`. Limits: hops 8. Closes when lead finishes.
 ```
 
-The test suite runs this file that way, from the command line in `tests/integration/test_examples.py` and from the page
-with the terminal UI attached in `tests/e2e/test_examples.py`, and on the real `claude`, `codex`, `pi` and OpenHands
-against FakeModel, a loopback model that replies from a script: a Claude Code lead beside each of the other three in
-turn, since those three read one variable for where their model is. [docs/STATUS.md](../../docs/STATUS.md) says what ran
-live.
+## 2. Run it
 
-Either run names its session `dns`, and a name is taken once: a second run named `dns` is refused, with exit 64, so give
+```console
+$ platoon-harness run --team path/to/platoon-harness/examples/mixed-team/team.toml \
+    --prompt-file path/to/platoon-harness/examples/mixed-team/job.md --trust --name tally \
+    --set 'roles.lead.model = "MODEL"' --set 'roles.worker.model = "MODEL"'
+```
+
+The run says the session's name on stderr at once, prints a line per event as the session journals it, owns the session
+in the foreground until the lead finishes, and exits 0 once it has settled. It ends with `settled, exit 0` and a line for
+each agent, `@lead` and `@fixer`, with how it ended and its last words, which are the model's own. The worker's change
+stays in your copy, uncommitted: `git diff` shows it, and `python3 -m unittest` runs its test.
+
+A real model chooses its own steps, so a run can go otherwise: it may name its worker differently, read more files
+before it acts, or take more turns. A live run of this example is held to 40 model calls and 15 minutes, by
+`tests/live/test_examples.py`, which has not run yet: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
+`tests/integration/test_examples.py` runs the commands on this page as shown, on the real `pi` and OpenHands against
+FakeModel, a loopback model that replies from a script, so the harnesses, the tools and the team file are real and only
+the model is scripted.
+
+The run names its session `tally`, and a name is taken once: a second run named `tally` is refused, with exit 64, so give
 it another `--name`, and use that name in the steps below.
 
-## 2. Watch and steer it
+## 3. Watch and steer it
 
 To watch and steer it while it runs, from another shell:
 
 ```console
-$ uv run platoon-harness attach dns    # the terminal UI, as a guest of the running session
-$ uv run platoon-harness web dns       # SwarmChat's page; open the control link it prints
+$ platoon-harness attach tally    # the terminal UI, as a guest of the running session
+$ platoon-harness web tally       # SwarmChat's page; open the control link it prints
 ```
 
 ![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../../docs/assets/tui-wide.svg)
 
 *The terminal UI on another session, of scripted harnesses, as its snapshot test draws it.*
 
-A message from either goes to whoever you address, `@lead` or the worker, and a person's message steers. Or start the
-whole thing from the terminal UI: `uv run platoon-harness`, then start a session from `examples/mixed-team/team.toml` on
-its sessions screen, type the job in the composer, and `platoon-harness web` the session it made.
+A message from either goes to whoever you address, `@lead` or `@fixer`, and a person's message steers. Or start the
+whole thing from the terminal UI: `platoon-harness`, then start a session from the team file on its sessions screen, type
+the job in the composer, and `platoon-harness web` the session it made.
 
-## 3. What to look at
+## 4. Read it back
 
 The queue, the board and the messages are ordinary commands on the session, live or closed:
 
 ```console
-$ uv run platoon-harness task list dns --queue tasks
-$ uv run platoon-harness board get dns --board notes --name risks
-$ uv run platoon-harness message read dns --channel @lead
+$ platoon-harness task list tally --queue tasks
+$ platoon-harness board get tally --board notes --name fix-1
+$ platoon-harness message read tally --channel @lead
 ```
 
 Provenance: in the terminal UI, choose the line of the lead's answer and press `p`, or type `/provenance` and send its form
@@ -97,32 +110,23 @@ as the chosen line fills it in; in the page, Provenance is among a message's act
 is known. From the command line:
 
 ```console
-$ uv run platoon-harness uses dns --ref board/notes/risks@1           # what cites the note, and whom it was handed to
-$ finish=$(uv run platoon-harness uses dns --ref board/notes/risks@1 \
-    | jq -r '.rows[] | select(.type == "agent.finished" and .maker == "agent:lead") | .ref')
-$ uv run platoon-harness contributors dns --ref "$finish"             # whose work the record ties to the lead's finish
+$ platoon-harness uses tally --ref board/notes/fix-1@1
+$ platoon-harness contributors tally --ref REF
 ```
 
-`uses` names the lead's finish, its `agent.finished`, among what cites the note, with its ref, which is what to ask
-`contributors` about; the ref differs from run to run, so the second line picks it from `uses`. `contributors` is
-reachability in the record and never credit: it weighs and ranks nobody, and a citation is its agent's claim.
-[docs/how-to/provenance.md](../../docs/how-to/provenance.md) says how to read each answer.
+`uses` says what cites the worker's note, the lead's finish among it, an `agent.finished` whose `maker` is `agent:lead`,
+when the lead cited the note as the job asks. Put that row's `ref` for REF, and `contributors` says whose work the record
+ties to the lead's answer, in the order reached. It is reachability in the record and never credit: it weighs and ranks
+nobody, and a citation is its agent's claim. [docs/how-to/provenance.md](../../docs/how-to/provenance.md) says how to read
+each answer.
 
-## 4. Other harnesses
+## 5. Other harnesses
 
-A role's harness is one setting, so swap it with `--set`. Pi signs in as it does in your shell:
-
-```console
-$ uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file examples/mixed-team/job.md \
-    --plan-login --set 'roles.worker.harness = "pi"'
-```
-
-OpenHands keeps no login, so its role needs a model and a key, named by an auth profile, and the SDK's `openhands`
-extra, which `platoon-harness doctor` says how to install
-([docs/extending/drivers.md](../../docs/extending/drivers.md#openhands-a-wire-worker)). Name the model your key reaches:
+A role's harness is one setting, so swap it with `--set`. Codex takes the same two variables and speaks OpenAI's
+Responses API, which your endpoint must serve for it:
 
 ```console
-$ uv run platoon-harness run --team examples/mixed-team/team.toml --prompt-file examples/mixed-team/job.md \
-    --plan-login --set 'roles.worker.harness = "openhands"' --set 'roles.worker.model = "MODEL"' \
-    --set 'auth.openai.env = ["OPENAI_API_KEY"]' --set 'roles.worker.auth = "openai"'
+$ platoon-harness run --team path/to/platoon-harness/examples/mixed-team/team.toml \
+    --prompt-file path/to/platoon-harness/examples/mixed-team/job.md --trust --name tally-codex \
+    --set 'roles.lead.model = "MODEL"' --set 'roles.worker.model = "MODEL"' --set 'roles.worker.harness = "codex"'
 ```

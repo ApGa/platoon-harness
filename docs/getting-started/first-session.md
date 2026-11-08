@@ -1,81 +1,90 @@
 # Your first session
 
-**Goal:** run a team with no keys, read back what it did and whose work reached its answer, open it in the terminal UI
-and the browser, then set up a team of the harnesses you use.
+**Goal:** run a team on a model you name, have it fix a bug in a copy of the sample project, read back what it did and
+whose work reached its answer, open it in the terminal UI and the browser, then set up a team of the harnesses you use.
 
 **Prerequisites:**
 
-- a checkout installed as [Install](install.md) says;
+- a checkout installed as [Install](install.md) says, by `uv sync`, which brings the SDK's `openhands` extra;
+- for steps 1 to 4, `pi` on your PATH, which needs no login here, git, `python3` 3.9 or later, and a model at an endpoint
+  that speaks OpenAI's Chat Completions, with a key for it: OpenRouter's, or any provider's OpenAI-compatible URL;
 - for step 5, the harnesses you use on your PATH, signed in as you usually are; its output here is from a machine with
-  `claude` and `codex`. Steps 1 to 4 need no harness and no key.
+  `claude` and `codex`.
 
-Run steps 1 to 4 from the root of the checkout. [Concepts](concepts.md) explains each word.
+Agents work where you start a session, so each step runs in a folder of yours, with the checkout's environment active.
+[Concepts](concepts.md) explains each word.
 
-## 1. Run a team with no keys
+## 1. Run a team on your model
 
-[The mixed team](../../examples/mixed-team/README.md) is a [team](concepts.md#one-session-traced) of a lead and a
-worker, and its scripted stand-ins do what its job asks with no model at all:
+[The mixed team](../../examples/mixed-team/README.md) is a [team](concepts.md#one-session-traced) of a pi lead and an
+OpenHands worker. Its job is issue 1 of [the sample project](../../examples/sample-project/README.md), a small Python
+package written for the examples, so make a copy of it, as a repository of its own:
 
 ```console
-$ PYTHONPATH=examples/mixed-team uv run platoon-harness run --team examples/mixed-team/team.toml \
-    --prompt-file examples/mixed-team/job.md --set 'roles.lead.harness = "stand_ins:lead"' \
-    --set 'roles.worker.harness = "stand_ins:worker"' --name first
+$ source path/to/platoon-harness/.venv/bin/activate
+$ cp -r path/to/platoon-harness/examples/sample-project tally
+$ cd tally
+$ git init -q && git add -A && git commit -qm "Start from the sample project"
 ```
 
-`PYTHONPATH` lets the runtime import the stand-ins, and each `--set` puts a role on one of them in place of its harness.
-`run` says the session's name on stderr at once, prints a line per event as the session journals it, and exits 0 once
-the session has settled. It ends with how the session ended and each agent's last words:
+Name your endpoint and key in the two variables the team's auth profile names, such as
+`export OPENAI_BASE_URL=https://openrouter.ai/api/v1` and `export OPENAI_API_KEY=...` with your key, and run the team
+with a `--set` line for each role that names your model, MODEL as your endpoint names it, such as `vendor/model` on
+OpenRouter:
 
-```text
-settled, exit 0
-  @lead            finished  Three risks of caching DNS answers are on the board.
-  @w               finished  The risks are on the board as risks.
+```console
+$ platoon-harness run --team path/to/platoon-harness/examples/mixed-team/team.toml \
+    --prompt-file path/to/platoon-harness/examples/mixed-team/job.md --trust --name first \
+    --set 'roles.lead.model = "MODEL"' --set 'roles.worker.model = "MODEL"'
 ```
+
+`--trust` says you trust the team file's auth profile, which hands your key to each harness. `run` says the session's
+name on stderr at once, prints a line per event as the session journals it, and exits 0 once the session has settled.
+The lead puts a task on a queue and starts a worker, `fixer`, which fixes the bug in your copy with a test, writes a
+note on a board and reports back, and the lead reads the note and finishes. The run ends with `settled, exit 0` and a
+line for each agent, `@fixer` and `@lead`, with how it ended and its last words, which are the model's own. It spends
+model calls on your key: a live run of this team is held to 40 model calls and 15 minutes, and a real model may take
+other steps than these, as [the mixed team](../../examples/mixed-team/README.md#2-run-it) says.
 
 ## 2. Read it back
 
 The session is closed, and its journal stays. Each of these reads it:
 
 ```console
-$ uv run platoon-harness session list
-$ uv run platoon-harness session show first
-$ uv run platoon-harness task list first --queue tasks
-$ uv run platoon-harness board get first --board notes --name risks
+$ platoon-harness session list
+$ platoon-harness session show first
+$ platoon-harness task list first --queue tasks
+$ platoon-harness board get first --board notes --name fix-1
 ```
 
-`session list` names every session under the root, `first` among them, closed. `session show` says how it stands:
-
-```text
-first  no runtime, closed, until role:lead
-  @lead            lead       stand_ins:lead ended    agent_finish completed
-  @w               worker     stand_ins:worker ended    agent_finish completed
-  needs you: mention agent/lead, lead finished: Three risks of caching DNS answers are on the board.
-```
-
-`task list` shows the task on the queue `tasks`, done, with its result, and `board get` the worker's note on the board
-`notes`, as JSON. `platoon-harness events first` prints every event, as [Concepts](concepts.md#one-session-traced)
-traces them.
+`session list` names every session under the root, `first` among them, closed. `session show` says how it stands: its
+name, then `no runtime, closed, until role:lead`, then a line for each agent with its role, its harness and how it
+ended, and what needs you, the lead's answer among it. `task list` shows the task on the queue `tasks`, done, with its
+result, and `board get` the worker's note on the board `notes`, as JSON. `platoon-harness events first` prints every
+event, as [Concepts](concepts.md#one-session-traced) traces them, and `git diff` shows the worker's fix, which it left
+uncommitted in your copy.
 
 ## 3. Ask what the record says
 
-Every write may cite what it rests on, and the stand-ins cite as the default template asks each agent to:
+Every write may cite what it rests on, and the default template asks each agent to:
 
 ```console
-$ uv run platoon-harness uses first --ref board/notes/risks@1
-$ uv run platoon-harness contributors first --ref REF
+$ platoon-harness uses first --ref board/notes/fix-1@1
+$ platoon-harness contributors first --ref REF
 ```
 
-`uses` says what cites the worker's note, `board/notes/risks@1`, which is a ref: the task's result, the worker's finish
-and the lead's finish, an `agent.finished` whose `maker` is `agent:lead`, among the rest. Put that row's `ref` for REF,
-and `contributors` says whose work the record ties to the lead's answer: the lead, the worker and you, each once, in the
-order reached. `contributors` is reachability in the record and never credit: it weighs and ranks nobody, and a citation
-is its agent's claim. [Provenance](../how-to/provenance.md) says how to read each answer.
+`uses` says what cites the worker's note, `board/notes/fix-1@1`, which is a ref: the task's result, the worker's finish
+and the lead's finish, an `agent.finished` whose `maker` is `agent:lead`, among the rest, as far as each agent cited the
+note as the job asks. Put that row's `ref` for REF, and `contributors` says whose work the record ties to the lead's
+answer, each once, in the order reached: the lead, the worker and you, when each cited as asked. `contributors` is
+reachability in the record and never credit: it weighs and ranks nobody, and a citation is its agent's claim.
+[Provenance](../how-to/provenance.md) says how to read each answer.
 
 ## 4. Open it in the terminal UI and the browser
 
 ```console
-$ uv run platoon-harness attach first
-$ uv run platoon-harness web first
+$ platoon-harness attach first
+$ platoon-harness web first
 ```
 
 `attach` opens the terminal UI on one session: as a guest of its runtime while it runs, or as read-only history when no

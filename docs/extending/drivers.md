@@ -705,9 +705,7 @@ The module is imported by that name, so keep a script behind `if __name__ == "__
 A step that goes on from what a call answered is a `Do`: code of the harness's own, run as `act(spec, call)`, where `spec` is the
 agent's `AgentSpec` and `call(tool, arguments)` calls a tool as a `Call` step does and returns its MCP result. Each of its calls goes
 under an id of its own, as a harness's own calls do, so two identical calls in one turn are two calls, and its ops join no model
-call, as no model chose them. `ScriptedDriver(itertools.repeat([Do(act)]))` runs `act` every turn, as the stand-ins of
-[the review example](../../examples/review-verification/stand_ins.py) and
-[the worktree team](../../examples/worktree-merge-queue/stand_ins.py) do.
+call, as no model chose them. `ScriptedDriver(itertools.repeat([Do(act)]))` runs `act` every turn.
 
 The steps are `Say`, `Think`, `Call`, `Do`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
 until the model only talks. A tool call the model chose goes under the id the model gave it, as `scripted/toolCallId` in MCP's

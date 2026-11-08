@@ -13,7 +13,8 @@
 - **Optionally, [bubblewrap](https://github.com/containers/bubblewrap)**, whose `bwrap` the experimental `isolated`
   workspace confines an agent with ([workspaces](../how-to/workspaces.md#where-an-isolated-agent-runs)).
 
-No model key is needed to try it: [your first session](first-session.md) starts with a team of scripted stand-ins.
+To try it, [your first session](first-session.md) runs a team of pi and OpenHands on a model you name, at any endpoint
+that speaks OpenAI's Chat Completions, with your key for it.
 
 ## Install from a checkout
 
@@ -110,5 +111,5 @@ The root is `$PLATOON_HARNESS_HOME` if you set it, else `$XDG_STATE_HOME/platoon
 ## Next steps
 
 - [Concepts](concepts.md): the nine words, and what happens in a session.
-- [Your first session](first-session.md): a team with no keys, read back, then your own harnesses.
+- [Your first session](first-session.md): a team on your model, read back, then your own harnesses.
 - [The headless quickstart](../how-to/headless.md): running teams from a terminal or CI.

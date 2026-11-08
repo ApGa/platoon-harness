@@ -106,8 +106,8 @@ To run them on 3.13, set `UV_PYTHON=3.13` for both `uv sync` and `uv run`, as CI
 |---|---|---|---|
 | Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
 | Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so. Those of the installed wheels need uv's cache to hold what they install, as [Releases](#releases) says | Only those of the installed wheels, in the release workflow |
-| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and skips without it | Yes, once in each of the three |
-| Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are. Each file's docstring states the model calls its tests may spend | Never |
+| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and one `pi`, and each skips without it, as on CI's runners | Yes, once in each of the three |
+| Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are; the examples' need `pi`, and `PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and `OPENAI_API_KEY` naming a model, its endpoint and your key. Each file's docstring states the model calls its tests may spend | Never |
 
 ```bash
 uv run pytest -q -m slow
@@ -384,12 +384,15 @@ primitive, needs:
 ## Add an example
 
 An example is a folder of `examples/`: a `README.md` that states the goal, what it needs, the steps and what to expect,
-with the files it runs. Each has a CPU test that runs it as its README does, on scripted stand-ins or `FakeModel`, so it
-cannot break unseen: `tests/integration/test_examples.py` runs each of them. Its stand-ins live in its folder, import
-nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists alone, which tests there hold, and its
-README says what a run on them cannot show. A stand-in whose next step rests on what a tool answered runs its code as a
-`Do` step of `ScriptedDriver`, as [the review example's](examples/review-verification/stand_ins.py) do. A cost the
-README quotes comes from a run that was made, as the mixed team's does.
+with the files a person runs and nothing else, no stand-in of a harness or a model among them. One that runs a team runs
+it on a real model the person names, at an endpoint that speaks OpenAI's Chat Completions, which a role's auth profile
+hands its harness as `OPENAI_BASE_URL` and `OPENAI_API_KEY`, and works on a copy of
+[the sample project](examples/sample-project/README.md), whose issues list names each job. Each has a slow test in `tests/integration/test_examples.py` that runs its README's
+commands as shown on its real pi or OpenHands against `FakeModel`, which plays each agent from
+`tests/integration/plays.py`, so the harness, the tools and the team file are real and only the model is scripted, and a
+live test in `tests/live/test_examples.py` that runs it on a real model within the budget its README states, in model
+calls and wall time. Its files import nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists
+alone, which tests there hold. A cost a README quotes comes from a run that was made.
 
 ## When a change needs an RFC
 

@@ -53,8 +53,8 @@ no problems
 agent of each role would be told. `--harness codex` adds a role on Codex over the project file, so where there is none it is a team
 of one that needs no file.
 
-[examples/mixed-team](../../examples/mixed-team/README.md) is such a team with a job to give it, which runs as below, and with no keys
-on scripted stand-ins.
+[examples/mixed-team](../../examples/mixed-team/README.md) is such a team with a job to give it, on pi and OpenHands and a model you
+name, which runs as below.
 
 ## 3. Run it
 

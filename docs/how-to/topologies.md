@@ -323,8 +323,8 @@ builder's turn records its commit with the peer's as its parent. The runtime mov
 population runs only in worktrees, and refuses any other workspace before it starts anyone, saying why: in `shared` every worker
 works in one checkout, and a `snapshot` or an `isolated` workspace is a repository of its own, which holds no peer's commits.
 
-[examples/git-swarm](../../examples/git-swarm/README.md) runs a population from a script, with no keys on stand-ins of its own, in
-which one worker builds on another's commit and a third nominates the result.
+[examples/git-swarm](../../examples/git-swarm/README.md) runs a population from a script, on pi and a model you name, on a feature the
+sample project asks for.
 
 ## Mix presets
 

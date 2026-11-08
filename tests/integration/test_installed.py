@@ -1,6 +1,6 @@
 """The packages as a person installs them, from wheels built from this checkout, in an environment of their own: the
-command line runs, a headless run settles on the `exec` driver and the command line reads it back, each wheel holds the
-files its package tracks, and the SDK's `openhands` extra requires what the install guide says."""
+command line runs, a headless script's run settles on the `exec` driver and the command line reads it back, each wheel
+holds the files its package tracks, and the SDK's `openhands` extra requires what the install guide says."""
 
 import json
 import re
@@ -17,7 +17,7 @@ from .installing import PACKAGES, ROOT, Installed, install
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 GUIDE = ROOT / "docs" / "getting-started" / "install.md"
-SCRIPT = ROOT / "examples" / "sdk-script" / "run.py"
+SCRIPT = Path(__file__).with_name("counting.py")
 BRINGS = "brings `lmnr-claude-code-proxy` unless you exclude it"
 """What the install guide and the SDK's description each say of the `openhands` extra installed from a wheel."""
 WHERE = "import platoon_harness, platoon_harness_cli; print(platoon_harness.__file__, platoon_harness_cli.__file__)"
@@ -49,8 +49,8 @@ def test_the_installed_command_line_runs_from_wheels_in_a_fresh_environment(inst
 
 
 def test_a_headless_run_from_the_installed_wheels_settles_on_the_exec_driver(installed: Installed, tmp_path: Path):
-    """examples/sdk-script, on the environment's Python: its two agents run on the `exec` driver, the session settles,
-    and the installed command line reads back what each said."""
+    """A script on the SDK alone, on the environment's Python: its two agents run on the `exec` driver, the session
+    settles, and the installed command line reads back what each said."""
     home = tmp_path / "home"
 
     done = installed.run("python", str(SCRIPT), home=home, cwd=tmp_path)

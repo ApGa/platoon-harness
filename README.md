@@ -64,23 +64,31 @@ otherwise. [Install](docs/getting-started/install.md) has the rest: OpenHands, a
 
 [Your first session](docs/getting-started/first-session.md) takes these steps one at a time, with what to expect.
 
-**1. See a team work, with no keys.** In [the mixed team](examples/mixed-team/README.md), a lead puts a task on a queue
-and starts a worker, which writes a note on a board and reports back. Scripted stand-ins play both, with no model at
-all:
+**1. See a team fix a bug, on your model.** In [the mixed team](examples/mixed-team/README.md), a pi lead puts a task on
+a queue and starts an OpenHands worker, which fixes a bug in a copy of [the sample project](examples/sample-project/README.md)
+with a test, writes a note on a board and reports back. Name a model at an endpoint that speaks OpenAI's Chat
+Completions, OpenRouter's or any provider's OpenAI-compatible URL, in the variables the team's auth profile names, such as
+`export OPENAI_BASE_URL=https://openrouter.ai/api/v1` and `export OPENAI_API_KEY=...` with your key. Then, with `pi` on
+your PATH, in a folder of yours, with MODEL the model as your endpoint names it:
 
 ```console
-$ PYTHONPATH=examples/mixed-team uv run platoon-harness run --team examples/mixed-team/team.toml \
-    --prompt-file examples/mixed-team/job.md --set 'roles.lead.harness = "stand_ins:lead"' \
-    --set 'roles.worker.harness = "stand_ins:worker"' --name dns
-$ uv run platoon-harness session list
-$ uv run platoon-harness task list dns --queue tasks
-$ uv run platoon-harness board get dns --board notes --name risks
-$ uv run platoon-harness uses dns --ref board/notes/risks@1
+$ source path/to/platoon-harness/.venv/bin/activate
+$ cp -r path/to/platoon-harness/examples/sample-project tally
+$ cd tally
+$ git init -q && git add -A && git commit -qm "Start from the sample project"
+$ platoon-harness run --team path/to/platoon-harness/examples/mixed-team/team.toml \
+    --prompt-file path/to/platoon-harness/examples/mixed-team/job.md --trust --name tally \
+    --set 'roles.lead.model = "MODEL"' --set 'roles.worker.model = "MODEL"'
+$ platoon-harness session list
+$ platoon-harness task list tally --queue tasks
+$ platoon-harness board get tally --board notes --name fix-1
+$ platoon-harness uses tally --ref board/notes/fix-1@1
 ```
 
-`run` prints a line per event as the session journals it, and exits 0 once the session has settled. The commands after
-it read the closed session: the sessions there are, the task on the queue, the note on the board, and what cites the
-note.
+`--trust` says you trust the team file's auth profile, which hands your key to each harness. `run` prints a line per
+event as the session journals it, and exits 0 once the session has settled, and the worker's fix stays in your copy, for
+`git diff` to show. The commands after it read the closed session: the sessions there are, the task on the queue, the
+note on the board, and what cites the note.
 
 **2. Run your own harnesses.** Agents work where you start a session, so do this in a repository of yours, with the
 checkout's environment active:
@@ -96,15 +104,15 @@ $ platoon-harness            # the terminal UI
 PATH, as the group installs the SDK's `openhands` extra and OpenHands runs on the runtime's own interpreter. Without the
 group and with no harness on PATH, it says `not usable`.
 
-**3. Watch and steer.** While a session runs, from another shell in the checkout:
+**3. Watch and steer.** While a session runs, from another shell with the environment active:
 
 ```console
-$ uv run platoon-harness attach dns    # the terminal UI, as a guest of the running session
-$ uv run platoon-harness web dns       # SwarmChat's page; open the control link it prints
+$ platoon-harness attach tally    # the terminal UI, as a guest of the running session
+$ platoon-harness web tally       # SwarmChat's page; open the control link it prints
 ```
 
-A message from either goes to whoever you address, and a person's message steers. On step 1's `dns`, which has closed,
-both show its history read-only, as neither starts or resumes a session, which can spend money.
+A message from either goes to whoever you address, and a person's message steers. On step 1's `tally`, which has
+closed, both show its history read-only, as neither starts or resumes a session, which can spend money.
 [The terminal UI](docs/how-to/tui.md) and [the browser](docs/how-to/web.md) say what each shows and how to act.
 
 ![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](docs/assets/tui-wide.svg)
@@ -112,29 +120,32 @@ both show its history read-only, as neither starts or resumes a session, which c
 *The terminal UI on scripted harnesses, as its snapshot test draws it: a lead that spawned a worker, read back as history.*
 
 **4. Read it back.** `uses` says what cites an event, and `contributors` whose work the record ties to one, on a live
-session or a closed one. The mixed team's [What to look at](examples/mixed-team/README.md#3-what-to-look-at) walks from
+session or a closed one. The mixed team's [Read it back](examples/mixed-team/README.md#4-read-it-back) walks from
 the worker's note to the lead's answer, and [provenance](docs/how-to/provenance.md) says how to read each answer.
 
 ## Python SDK
 
 The command line and both clients are built on the SDK, `platoon_harness`, and a script can use it alone. This one runs
-a team of one-shot command-line agents with no key:
+a team of two OpenHands agents on a model you name, each fixing an issue of the sample project in a worktree of its own:
 
 ```python
 # examples/sdk-script/run.py (abridged)
 from platoon_harness import Role, Session, Team
-from platoon_harness.team import Command
+from platoon_harness.team import AuthProfile, Budget
 
-COUNT = Command(command=[sys.executable, "-c", "import sys; print(len(sys.argv[1].split()), 'words')", "{goal}"])
-TEAM = Team(roles={"counter": Role(harness=COUNT, count=0)})
+PROVIDER = AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY"))
 
 
-async def main() -> None:
-    async with Session.start(TEAM) as session:
-        for number, goal in enumerate(GOALS, 1):
-            await session.spawn(f"counter-{number}", "counter", goal)
-        ending = await session.settled(timeout="30s")
-        said = [f"{event.agent}: {event.gist}" async for event in session.events() if event.type == "item.recorded"]
+def team(model: str) -> Team:
+    fixer = Role(harness="openhands", model=model, auth="provider", workspace="worktree", approvals="allow", count=0)
+    return Team(roles={"fixer": fixer}, auth={"provider": PROVIDER}, budget=Budget(turns=8, wall="15m"))
+
+
+async def main(model: str) -> None:
+    async with Session.start(team(model)) as session:
+        for name, goal in GOALS.items():
+            await session.spawn(name, "fixer", goal)
+        ending = await session.settled(timeout="15m")
 ```
 
 [examples/sdk-script](examples/sdk-script/README.md) runs it and reads it back.
@@ -153,7 +164,8 @@ Nothing is published to PyPI yet.
 
 - [docs/README.md](docs/README.md): the table of contents, every page of the docs by kind: getting started, tutorials,
   how-to guides, extending, the reference, the architecture and the RFCs.
-- [examples/](examples/): runnable examples, each with a README, and each runnable with no keys.
+- [examples/](examples/): runnable examples, each with a README, each a team at work on a copy of
+  [the sample project](examples/sample-project/README.md) on a model you name.
 - [docs/architecture.md](docs/architecture.md): the design of record, and [docs/rfcs/](docs/rfcs/README.md) for why each
   decision was made.
 - [docs/STATUS.md](docs/STATUS.md): what is implemented, what is tested and how, and what is planned.
@@ -165,7 +177,7 @@ Nothing is published to PyPI yet.
 |---|---|
 | `packages/sdk/` | `platoon-harness-sdk`, the Python SDK, `platoon_harness`: the kernel, the primitives, the runtime, the topology, the tool plane, the drivers and the testing kit |
 | `packages/cli/` | `platoon-harness-cli`, the `platoon-harness` command: the command line, the terminal UI and the server of SwarmChat's page |
-| `examples/` | runnable examples, each run with no keys by `tests/integration/test_examples.py`, and a sample extension package, installed from its wheel by `tests/integration/test_installed_extensions.py` |
+| `examples/` | runnable examples on pi and OpenHands, each run on the real harnesses against FakeModel by `tests/integration/test_examples.py` and on a real model by `tests/live/test_examples.py`, the sample project they work on, and a sample extension package, installed from its wheel by `tests/integration/test_installed_extensions.py` |
 | `tests/` | `unit/` and `integration/`, on a CPU, with the slow ones marked; `e2e/`, the browser tests; `live/`, on real models and logins; `conformance/`, the conformance suite run on every driver |
 | `docs/` | the documentation, which [docs/README.md](docs/README.md) lists |
 | `pyproject.toml`, `uv.lock` | the uv workspace of the two packages, and the versions every checkout installs |

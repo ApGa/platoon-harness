@@ -12,7 +12,7 @@ see what changed and where a line came from.
 
 - `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
   environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
-- a session to open, such as [your first session](../getting-started/first-session.md)'s, which runs with no keys, or the
+- a session to open, such as [your first session](../getting-started/first-session.md)'s, which runs on a model you name, or the
   harnesses you use on your PATH, signed in as you usually are, to start one, from a team of yours or one the sessions
   screen writes.
 

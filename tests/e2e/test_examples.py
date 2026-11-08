@@ -1,66 +1,76 @@
-"""The mixed-team example in a real browser with the terminal UI attached at once, on the scripted stand-ins of its
-`stand_ins.py` swapped in for its harnesses by the settings its README's no-key command gives: the job sent from the
-page, the lead's answer drawn in both, and the browser's Provenance pane naming everyone the record ties to that
-answer."""
+"""The mixed-team example in a real browser with the terminal UI attached at once, on its real `pi` and OpenHands
+against FakeModel, which plays each agent: the job sent from the page, the lead's answer drawn in both, and the
+browser's Provenance pane naming everyone the record ties to that answer."""
 
-import shlex
+import os
+import shutil
 from pathlib import Path
 
 import pytest
 from playwright.async_api import Browser, expect
 
 from platoon_harness import Session, load_team
+from platoon_harness.testing import FakeModel
 from platoon_harness_cli.tui.app import TerminalUI
 
+from ..integration import plays
 from ..integration.cli import ROOT, shown
+from ..integration.plays import MODEL, OFFLINE, cast, copied, provider
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn
 from .support import SECONDS, chat, opened, serving
 
-pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
+pytestmark = [pytest.mark.e2e, pytest.mark.timeout(300)]
 
 EXAMPLE = ROOT / "examples" / "mixed-team"
-[NO_KEYS] = shown(EXAMPLE / "README.md", where="stand_ins:lead")
-WORDS = shlex.split(NO_KEYS)
-STAND_INS = [WORDS[index + 1] for index, word in enumerate(WORDS) if word == "--set"]
+SETS = [f'roles.lead.model = "{MODEL}"', f'roles.worker.model = "{MODEL}"', OFFLINE]
+"""What the page's `--set` lines say on FakeModel."""
 
 
 async def test_the_mixed_team_runs_from_the_page_with_the_terminal_attached_and_shows_who_contributed(
     browser: Browser, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
-    monkeypatch.syspath_prepend(str(EXAMPLE))
-    team = load_team(EXAMPLE / "team.toml", sets=STAND_INS)
+    if shutil.which("pi") is None:
+        pytest.skip("pi is not installed, so the page met no real pi here")
+    root = tmp_path / "state"
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(root))
     job = (EXAMPLE / "job.md").read_text().strip()
 
-    async with (
-        Session.start(team, name="mixed", root=tmp_path, cwd=tmp_path) as session,
-        serving("mixed", tmp_path) as web,
-    ):
-        await in_state(session, "lead", "idle")
-        page, errors = await opened(browser, web.link("control"))
-        app = TerminalUI("mixed")
-        async with app.run_test(size=(140, 40)) as pilot:
-            await drawn(pilot, lambda text: "@lead" in text)
-            await chat(page, "lead & you")
-            await page.locator("#main .x-composer textarea").fill(job)
-            await page.keyboard.press("Enter")
+    async with FakeModel() as model:
+        cast(model, **plays.MIXED)
+        env = provider(model, tmp_path / "home")
+        copy = copied(shown(EXAMPLE / "README.md", where="cp -r"), tmp_path, {**os.environ, **env})
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        team = load_team(EXAMPLE / "team.toml", sets=SETS, trust_project=True)
+        async with (
+            Session.start(team, name="tally", root=root, cwd=copy) as session,
+            serving("tally", root) as web,
+        ):
+            await in_state(session, "lead", "idle")
+            page, errors = await opened(browser, web.link("control"))
+            app = TerminalUI("tally")
+            async with app.run_test(size=(140, 40)) as pilot:
+                await drawn(pilot, lambda text: "@lead" in text)
+                await chat(page, "lead & you")
+                await page.locator("#main .x-composer textarea").fill(job)
+                await page.keyboard.press("Enter")
 
-            ended = await until(lambda: of_type(session, "agent.ended"), session, lambda found: len(found) == 2)
-            answer = next(event for event in ended if event.agent == "lead")
-            await expect(page.locator("#main .sys", has_text=answer.gist)).to_have_count(1, timeout=SECONDS)
-            await drawn(pilot, lambda text: answer.gist in " ".join(text.split()))
-        finished = next(event for event in await of_type(session, "agent.finished") if event.agent == "lead")
-        cited = f"{finished.stream}@{finished.version}"
-        await page.goto(web.link("control").partition("#")[0] + f"#provenance={cited}")
+                await until(lambda: of_type(session, "agent.ended"), session, lambda found: len(found) == 2)
+                finished = next(event for event in await of_type(session, "agent.finished") if event.agent == "lead")
+                answer = finished.data["gist"]
+                await expect(page.locator("#main .sys", has_text=answer)).to_have_count(1, timeout=SECONDS)
+                await drawn(pilot, lambda text: answer[:40] in " ".join(text.split()))
+            cited = f"{finished.stream}@{finished.version}"
+            await page.goto(web.link("control").partition("#")[0] + f"#provenance={cited}")
 
-        pane = page.locator("#pane .x-provenance")
-        await expect(page.locator("#pane h2")).to_have_text(f"Provenance of {cited}", timeout=SECONDS)
-        await expect(pane).to_contain_text("board/notes/risks@1 by @w")
-        await expect(pane).to_contain_text("@w: declared")
-        await expect(pane).to_contain_text("@you: declared")
-        await page.context.close()
-        sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
+            pane = page.locator("#pane .x-provenance")
+            await expect(page.locator("#pane h2")).to_have_text(f"Provenance of {cited}", timeout=SECONDS)
+            await expect(pane).to_contain_text(f"{plays.NOTE} by @fixer")
+            await expect(pane).to_contain_text("@fixer: declared")
+            await expect(pane).to_contain_text("@you: declared")
+            await page.context.close()
+            sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
 
     assert sent == [job]
     assert errors == []

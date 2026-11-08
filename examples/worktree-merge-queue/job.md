@@ -1,1 +1,1 @@
-Spawn two workers, ada and bob. Each adds a line naming itself at the end of CONTRIBUTORS.md, on its own branch, and hands its branch to the merger through the queue `merges`. When both have finished, finish with what came of each merge.
+Spawn two workers: `ada` to fix issue 1 in ISSUES.md, and `bob` to fix issue 3. Each fixes its issue on its own branch and hands the branch to the merger through the queue `merges`. When both have finished, finish with what came of each merge.

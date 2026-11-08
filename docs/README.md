@@ -2,31 +2,34 @@
 
 This page is the table of contents. New here? [Install](getting-started/install.md) from a checkout, then run
 [your first session](getting-started/first-session.md), which starts with
-[the mixed team](../examples/mixed-team/README.md) on no keys.
+[the mixed team](../examples/mixed-team/README.md) on a model you name.
 
 ## Getting started
 
 - [Install](getting-started/install.md): what you need, installing from a checkout, OpenHands, and what `doctor` says.
 - [Concepts](getting-started/concepts.md): what platoon-harness is and is not, a session on disk, and one session traced.
-- [Your first session](getting-started/first-session.md): a team with no keys, read back and opened, then a team of
+- [Your first session](getting-started/first-session.md): a team on your model, read back and opened, then a team of
   your own.
 - [The quickstart](../README.md#quickstart): the first commands, on one page.
 - [Changelog](../CHANGELOG.md): what changed.
 
 ## Tutorials
 
-Each example has a README that says what it does and how to run it.
+Each example has a README that says what it does and how to run it. Each team runs on pi and OpenHands, on a model you
+name at any endpoint that speaks OpenAI's Chat Completions, and works on a copy of
+[the sample project](../examples/sample-project/README.md), a small Python package with its own tests, defects and
+feature requests.
 
-- [A mixed team](../examples/mixed-team/README.md): a Claude Code lead and a Codex worker in one session, run, watched,
-  steered and read back, with no keys too.
-- [A headless script](../examples/sdk-script/README.md): a team run from Python on the SDK alone, waited on and read back,
-  with no key and no model.
-- [A worktree team with a merge queue](../examples/worktree-merge-queue/README.md): workers on branches of their own
-  handing them to one merger through a queue, a conflict reaching its worker as its task's result, with no keys too.
-- [A review and verification team](../examples/review-verification/README.md): an author's commit read by a reviewer and
-  checked by a verifier in Codex's read-only sandbox, with your test of it as evidence, with no keys too.
-- [A GitSwarm population](../examples/git-swarm/README.md): workers in worktrees of their own, started by a script that
-  owns the session and gives each one outcome, one building on another's commit and one nominating it, with no keys too.
+- [A mixed team](../examples/mixed-team/README.md): a pi lead and an OpenHands worker in one session fixing a bug, run,
+  watched, steered and read back.
+- [A headless script](../examples/sdk-script/README.md): a team run from Python on the SDK alone, two OpenHands agents
+  each fixing an issue on a branch of its own, waited on and read back.
+- [A worktree team with a merge queue](../examples/worktree-merge-queue/README.md): workers fixing issues on branches of
+  their own and handing them to one merger through a queue, a conflict reaching its worker as its task's result.
+- [A review and verification team](../examples/review-verification/README.md): an author's fix read by a reviewer and
+  checked by a verifier that can run nothing, with your test of it as evidence.
+- [A GitSwarm population](../examples/git-swarm/README.md): workers in worktrees of their own on one feature, started by
+  a script that owns the session and gives each one outcome, among which you choose.
 - [A sample extension package](../examples/extension-package/README.md): an op, a view and a preset in a package of
   your own, installed beside platoon-harness, named by a team and reached from every surface with no core edit.
 

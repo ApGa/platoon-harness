@@ -1,0 +1,8 @@
+# The project each example works on, in a copy of its own, written for the examples. MIT, as LICENSE says.
+
+[project]
+name = "tally"
+version = "0.3.0"
+description = "Split shared expenses, and say who pays whom to settle them."
+requires-python = ">=3.9"
+license = "MIT"

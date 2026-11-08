@@ -1,1 +1,1 @@
-Put one task on the queue `tasks`: list three risks of caching DNS answers, as a note named `risks` on the board `notes`. Spawn one worker to do it. When it reports, read the note, then finish with a one-line summary that cites it.
+Fix issue 1 in ISSUES.md. Add one task to the queue `tasks` saying so, citing this message, and spawn one worker, `fixer`, to take it. When it reports, read its note `fix-1` on the board `notes` and the code it changed, and finish with a one-line summary citing the note.

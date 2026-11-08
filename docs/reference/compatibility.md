@@ -157,8 +157,9 @@ by a driver landing; only the row below changes. Each driver's state is the one
 - Inline `--mcp-config` JSON expands `${PLATOON_HARNESS_TOKEN}` from the harness's environment, so the token is in no file and not in argv [L] [R].
 - The transcript is internal, and the driver reads it for one thing: whether an input's uuid is on a line, to `reconcile` after a crash. A miss says `unknown`. On a native login it is also the one place a live test can read a request: all of a session's requests shared one `api-request-shape`, across a resume too [R].
 - Real teams, in [the spike](../research/spikes/real-harness.md): a lead and two workers fixed a seeded bug through the queue and a board and settled, in 25 calls and 28.5 s, and a lead with a Codex worker in 22 and 23 calls. `ready` took 1.2 s at the median and 1.4 s at worst, and a handover 0.03 s to begin a turn, or up to 0.8 s as a process's first [R].
-- The mixed-team example, from SwarmChat's page with the terminal UI attached: as the lead it added the task, spawned a
-  Codex worker, read the worker's note when its report came and finished citing it, in 6 calls of the run's 11, run 80 [R].
+- The mixed-team example as it stood at run 80, a Claude Code lead and a Codex worker, from SwarmChat's page with the terminal
+  UI attached: as the lead it added the task, spawned the worker, read the worker's note when its report came and finished
+  citing it, in 6 calls of the run's 11 [R].
 - The live run: a goal, `board_post` called directly with no `ToolSearch`, its `toolUseId` matching the item, a delivery, an interrupt, an approval, and a resume by a new process, with the preamble once in every request and no unknown frame, in the user's own setup, at 7 model calls. Getting there took 20 calls over four runs [R]. It passed again on the launch of now, in run 19, at 7 calls: our tool reached through `--mcp-config` naming the token's variable, the approval asked under `--permission-mode default`, and the interrupt that dropped the queue read `interrupted` [R].
 - A child that stays: a lead spawned one with `stays`, gave it a follow-up task and a question, each once the last was answered, and
   retired it, on one helper process, in 13 calls, twice, runs 22 and 25. Each answer reached the lead at the end of the helper's turn,
@@ -234,8 +235,8 @@ by a driver landing; only the row below changes. Each driver's state is the one
 - An empty read names what was already handed over (RFC 0047): woken three times by a memo on a `wake` topic and asked to read
   `#memo`, it read right after the first wake, was told nothing was new past `channel/memo@1` and given the `after` that reads it,
   read again with it, and answered from the memo; in the next two turns it read with `after` at once, in 7 calls, run 79 [R].
-- The mixed-team example: a Codex worker under a Claude Code lead claimed the task, posted the note, completed the task and
-  finished citing the note and its result, in 5 calls of the run's 11, run 80 [R].
+- The mixed-team example as it stood at run 80: a Codex worker under a Claude Code lead claimed the task, posted the note,
+  completed the task and finished citing the note and its result, in 5 calls of the run's 11 [R].
 - The live run: `board_post` reached on a first turn with no discovery call, a delivery, an interrupt, an approval through the runtime, and a resume by a new process with `excludeTurns`, no unknown frame, in the user's own setup. A first mixed team, `claude-haiku-5-5` and `gpt-6-luna`, exchanged a message each way and a board entry, in 7 calls. Getting there took 29 calls over five runs [R].
 - What a client reads: a follower of live text was shown the start of the message item it became, a child spawned through our tool
   carries as its spawn's anchor the `native_id` of the tool item of its call, the call's own id with no Code Mode, and an interrupt

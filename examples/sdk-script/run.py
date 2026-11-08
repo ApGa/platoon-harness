@@ -1,29 +1,44 @@
-"""A headless script on the Python SDK alone, with no key and no model: a team of one role on a command that runs once
-per agent, two agents spawned with a goal each, the session waited on until it settles, and what each agent said read
-back from the journal."""
+"""A team run from a Python script on the SDK alone: two OpenHands agents on a model you name, each fixing one issue of
+the sample project on a branch of its own, in a worktree of its own, the session waited on until it settles, and what
+each reported read back. Run it from your copy of the sample project, with `OPENAI_BASE_URL` and `OPENAI_API_KEY`
+naming your endpoint and key."""
 
+import argparse
 import asyncio
-import sys
 
 from platoon_harness import Role, Session, Team
-from platoon_harness.team import Command
+from platoon_harness.team import AuthProfile, Budget
 
-COUNT = Command(command=[sys.executable, "-c", "import sys; print(len(sys.argv[1].split()), 'words')", "{goal}"])
-"""A one-shot harness, which the `exec` driver runs once per agent, with the agent's goal in place of `{goal}`."""
-TEAM = Team(roles={"counter": Role(harness=COUNT, count=0)})
-"""One role, of which the session starts no agent, as the script spawns each with a goal."""
-GOALS = ["Count the words of this goal", "And of this one"]
+PROVIDER = AuthProfile(env=("OPENAI_BASE_URL", "OPENAI_API_KEY"))
+"""The variables that name your endpoint and key, which each agent's harness is handed. Names only: a value never
+enters a team."""
+ASKED = "with a test that fails without your fix. Run `python3 -m unittest`, commit on your branch, and finish saying"
+GOALS = {
+    "cents": f"Fix issue 1 in ISSUES.md, {ASKED} what you changed.",
+    "comments": f"Fix issue 3 in ISSUES.md, {ASKED} what you changed.",
+}
+"""Each agent's name and its goal, within a goal's 280 characters."""
 
 
-async def main() -> None:
-    async with Session.start(TEAM) as session:
-        for number, goal in enumerate(GOALS, 1):
-            await session.spawn(f"counter-{number}", "counter", goal)
-        ending = await session.settled(timeout="30s")
-        said = [f"{event.agent}: {event.gist}" async for event in session.events() if event.type == "item.recorded"]
+def team(model: str) -> Team:
+    """One role, `fixer`: OpenHands on your model, in a worktree of its own, whose approvals allow, as nobody is there
+    to answer one, and of which the session starts none, as the script spawns each with a goal. A budget stops a
+    runaway."""
+    fixer = Role(harness="openhands", model=model, auth="provider", workspace="worktree", approvals="allow", count=0)
+    return Team(roles={"fixer": fixer}, auth={"provider": PROVIDER}, budget=Budget(turns=8, wall="15m"))
+
+
+async def main(model: str) -> None:
+    async with Session.start(team(model)) as session:
+        for name, goal in GOALS.items():
+            await session.spawn(name, "fixer", goal)
+        ending = await session.settled(timeout="15m")
     print(f"session {session.name}: {ending.reason}")
-    print(*sorted(said), sep="\n")
+    for agent in ending.agents:
+        print(f"{agent['agent']}: {agent['report']['gist'] if agent['report'] else 'no report'}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", required=True, help="the model, as your endpoint names it")
+    asyncio.run(main(parser.parse_args().model))

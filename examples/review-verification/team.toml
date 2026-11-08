@@ -1,31 +1,38 @@
-# An author, a reviewer and a verifier, each held to its part: the pipeline the topologies guide writes out. The author
-# commits the job on a branch of its own in a worktree and hands the commit to the reviewer through the queue
-# `to-reviewer`. The reviewer reads it through `repo.commit` and its own git, and hands it on with its review through the
-# queue `to-verifier`. The verifier, in Codex's read-only sandbox, asks you to test the commit, as an agent can never
-# have the runtime run a commit's code, and finishes with its verdict, citing your answer, which cites your test.
-# README.md runs it with no keys, each harness swapped with `--set` for a stand-in of stand_ins.py.
+# An author, a reviewer and a verifier, each held to its part: the pipeline the topologies guide writes out, on a model
+# you name at an endpoint that speaks OpenAI's Chat Completions. The author, on OpenHands in a worktree of its own,
+# commits the job on its branch and hands the commit to the reviewer through the queue `to-reviewer`. The reviewer, on
+# pi in a snapshot of its own, reads it with git and through `repo.commit`, and hands it on with its review through the
+# queue `to-verifier`. The verifier, on pi, whose every command and edit is refused, asks you to test the commit, as an
+# agent can never have the runtime run a commit's code, and finishes with its verdict, citing your answer, which cites
+# your test. README.md says how to name the model.
 
 test = { command = ["python3", "-m", "unittest"], timeout = "5m" }
 
+[auth.provider]
+env = ["OPENAI_BASE_URL", "OPENAI_API_KEY"]
+
 [roles.author]
-harness = "codex"
+harness = "openhands"
+auth = "provider"
 workspace = "worktree"
 approvals = "allow"
 instructions = """Do the job on your branch and commit it. Then add a task to the queue `to-reviewer` whose gist is \
-`review` and your commit's SHA, citing the job, and finish."""
+`review` and your commit's full SHA, citing the job, and finish."""
 
 [roles.reviewer]
-harness = "claude"
-approvals = "deny"
+harness = "pi"
+auth = "provider"
+workspace = "snapshot"
+approvals = "allow"
 instructions = """Claim each task on the queue `to-reviewer`, and read the commit it names with `git show` and with \
 `repo_commit`, which gives the ref to cite. A commit is recorded at the look after the turn that made it, so if \
-`repo_commit` says it is not recorded yet, wait 30 seconds for work on `to-reviewer` and ask again. Complete the task \
-with your review, citing the commit. Add a task to the queue `to-verifier` whose gist is `verify` and the commit's SHA, \
-citing the commit and your review, and finish with your review."""
+`repo_commit` says it is not recorded yet, wait 30 seconds for work on `to-reviewer` and ask again. Change nothing. \
+Complete the task with your review, citing the commit. Add a task to the queue `to-verifier` whose gist is `verify` and \
+the commit's full SHA, citing the commit and your review, and finish with your review."""
 
 [roles.verifier]
-harness = "codex"
-sandbox = "read-only"
+harness = "pi"
+auth = "provider"
 approvals = "deny"
 instructions = """Claim each task on the queue `to-verifier`, and read the commit it names with `repo_commit`. Ask the \
 person, `@you`, to test it with `repo test`, citing the commit, and wait up to 20 minutes for their answer. Complete \
@@ -40,5 +47,5 @@ edges = { verifier = ["human"] }
 stages = ["author", "reviewer", "verifier"]
 
 [budget]
-turns = 20
-wall = "30m"
+turns = 24
+wall = "40m"

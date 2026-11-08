@@ -171,9 +171,12 @@ def test_a_role_a_written_grant_lets_spawn_counts_as_several_too(tmp_path):
 
 def test_a_role_only_its_program_starts_counts_as_several_unless_max_live_holds_it_to_one(tmp_path):
     """Under `until = "program"` the program that owns the session starts a role nothing else does, as the git-swarm
-    example's workers are, as many at once as `max_live` lets it, so before any cost such a role on a plan login
-    counts as several, as one another role can spawn does, unless `max_live` is 1 or its owner says so."""
-    text = EXAMPLE.read_text().replace('harness = "codex"', f'harness = "{harness(OnAPlan)}"')
+    example's workers are, as many at once as `max_live` lets it, so before any cost such a role on a plan login, as
+    those workers are on a harness signed in on a plan in place of their auth profile, counts as several, as one
+    another role can spawn does, unless `max_live` is 1 or its owner says so."""
+    on_their_key = 'harness = "pi"\nauth = "provider"'
+    assert on_their_key in EXAMPLE.read_text()
+    text = EXAMPLE.read_text().replace(on_their_key, f'harness = "{harness(OnAPlan)}"')
     swarm, one_at_a_time = Team.loads(text), Team.loads(text.replace("live = 2", "live = 1"))
 
     def refused(team: Team, **options: Any) -> list[str]:

@@ -154,7 +154,7 @@ What changes for users:
 - **What a worker is told names our ops as the kernel does.** The body beside its goal says `repo.commit` and `#nominations`, and
   a spawn's body reaches its harness as it was written, while its preamble names each tool as that harness shows it
   ([RFC 0029](0029-a-harness-names-our-tools-as-it-shows-them.md)), such as `mcp__ph__repo_commit`. Whether a real model finds
-  the tool by the kernel's name is unknown, as no real harness has run a population.
+  the tool by the kernel's name is unknown, as no real model has run a population: pi has run one only against FakeModel.
 
 ## Alternatives
 
@@ -183,9 +183,11 @@ What changes for users:
 - A team under `until = "program"` with a role only the program starts and no budget is warned of, so the topologies guide's
   reviewers' team has one.
 - On a plan login, a population's role counts as several agents before any cost, as `live` above 1 runs several at once, so its
-  start is refused unless the script says `plan_login=True`, as the example's `--plan-login` does.
+  start is refused unless the script says `plan_login=True`. The example's workers reach their model through an auth profile,
+  which is on no plan login.
 - No winner is read out. Which nomination a population favours, if any, is the person's to read from the board.
-- How often workers abstain, nominate or contribute on real harnesses is unknown: no real harness has run a population.
+- How often workers abstain, nominate or contribute on real models is unknown: no real model has run a population, and pi has
+  run one only against FakeModel, in the GitSwarm example's test.
 
 ## Rollout plan
 
