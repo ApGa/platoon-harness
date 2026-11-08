@@ -13,9 +13,7 @@
 const X = {caps: null};
 
 // What is not built over a session yet, and why: what the brief asks the page to show.
-X.unbuilt = {tasks: 'Not built yet: the tasks and board views are planned, with each task open, claimed and by whom ' +
-    'under what lease, or done, and each board entry with its versions. This chat holds what its queue or board announced.',
-  activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.'};
+X.unbuilt = {activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.'};
 
 // What the Provenance pane says first: what the record holds, and what it cannot.
 X.RECORD = 'This is what the record holds: a citation is the agent\'s claim, being handed something is not using it, and ' +
@@ -152,9 +150,10 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-form textarea { resize: vertical; }
 .x-form .x-acts { margin-top: 2px; }
 .x-form .x-said { margin: 0; overflow-wrap: anywhere; }
-.x-review .x-change { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 14px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.x-review .x-change, .x-channel .x-change { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 14px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .x-review .x-heading { padding-top: 12px; }
-.x-review .x-path, .x-review .x-more { padding-left: 28px; }
+.x-review .x-path, .x-review .x-more, .x-channel .x-version { padding-left: 28px; }
+.x-channel .x-task, .x-channel .x-entry { padding-top: 8px; }
 .x-review > .x-about, .x-review .x-end, .x-review .x-comment { padding: 8px 14px; margin: 0; font-size: 12.5px; }
 .x-tone-strong { font-weight: 700; }
 .x-tone-faint { color: var(--faint); }
@@ -217,8 +216,8 @@ setLive = state => {
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
 // a thread or what had reached an agent takes it from every pane of ours, and of ours, the first `X.PANES` names that
 // the address names takes it from the rest. A form's `args` go with it.
-X.PANES = ['provenance', 'act', 'review', 'ask'];
-KEYS.push('provenance', 'act', 'args', 'review', 'ask');
+X.PANES = ['provenance', 'act', 'review', 'ask', 'tasks', 'entries'];
+KEYS.push('provenance', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
@@ -235,13 +234,13 @@ readRoute = () => {
 
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
 // `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, what changed or
-// a diff, `review=`, or what an approval asks, `ask=`. SwarmChat's own route takes the pane for a thread, for what had
-// reached an agent and for the map, and otherwise leaves it to this one. A pane drawn again for the same address keeps
-// what was typed in it, and says again what it may do now.
+// a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a board's entries, `entries=`.
+// SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise leaves
+// it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may do now.
 X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review
-  || pane instanceof X.Ask;
+  || pane instanceof X.Ask || pane instanceof X.Channel;
 // An address with none of ours, for a go that opens something else in the pane.
-X.none = {provenance: null, act: null, args: null, review: null, ask: null};
+X.none = {provenance: null, act: null, args: null, review: null, ask: null, tasks: null, entries: null};
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
@@ -249,7 +248,8 @@ route = async function () {
   const r = S.route, pane = $('#pane');
   if (r.layout === 'map' || r.thread || r.knew) return;
   const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form]
-    : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : [];
+    : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : r.tasks ? ['tasks', X.Tasks]
+      : r.entries ? ['entries', X.Entries] : [];
   if (!key) {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
@@ -282,11 +282,14 @@ overlay.close = function () {
 };
 
 // A request's card drawn again while focus is in it keeps focus: on the same control, or on what the card now says came
-// of it, which a screen reader then reads.
+// of it, which a screen reader then reads. What the feed says moved a queue's or a board's view, `x_moved`, is ours, and
+// reads that view again where the pane shows it; the rest is SwarmChat's.
 const baseApply = apply;
 apply = events => {
+  const theirs = events.filter(e => e.kind !== 'x_moved');
+  if (S.pane instanceof X.Channel && events.some(e => e.kind === 'x_moved' && S.pane.holds(e.chat))) S.pane.load();
   const at = document.activeElement, card = at && at.closest && at.closest('[data-x-card]');
-  baseApply(events);
+  if (theirs.length) baseApply(theirs);
   const again = card && !card.isConnected && $(`[data-x-card="${CSS.escape(card.dataset.xCard)}"]`);
   if (again) ((at.dataset.xDecide && $(`[data-x-decide="${at.dataset.xDecide}"]`, again)) || again).focus();
   X.needed();
@@ -1144,10 +1147,49 @@ X.reveal = (at, ref) => {
   go({layout: 'chat', chat, m: seq, provenance: ref});
 };
 
-// A queue's or a board's own view, of its tasks or its entries, drawn disabled in its chat, saying why.
+// A queue's or a board's own view, of its tasks or its entries, opened in the pane from its chat.
 X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)
-  ? html`<button class="btn"${X.disabled(X.unbuilt.tasks)}>${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
+  ? html`<button class="btn" data-x-channel="${c.description}" data-x-name="${c.name}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
   : html``;
+
+// A queue's tasks or a board's entries, in the pane the address names, `tasks=` or `entries=` and its name, in the words
+// the terminal's /tasks says, read through x_read as it opens and again whenever the feed says what it reads moved, so
+// no timer of the page's decides anything: each task's state, who claimed it, which attempt that is and until when its
+// lease holds, its gist and its result, or each entry with every version. Only the newest read is drawn.
+X.Channel = class {
+  constructor(pane, kind, name) {
+    this.pane = pane;
+    this.kind = kind;
+    this.name = name;
+    $('#pane').innerHTML = html`<div class="phead"><h2>${pane === 'tasks' ? 'Tasks' : 'Entries'} on ${name}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-channel"><div class="loading">Loading</div></div></div>`.s;
+    this.box = $('#pane .x-channel');
+    this.reads = 0;
+    this.load();
+  }
+  // Whether the chat `id` is this queue's or board's.
+  holds(id) {
+    const c = S.chats.get(id);
+    return !!c && c.description === this.kind && c.name === this.name;
+  }
+  async load() {
+    const n = ++this.reads;
+    let r;
+    try { r = await api('x_read', {pane: this.pane, [this.kind]: this.name}); } catch (e) {
+      if (!this.dead && n === this.reads) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
+      return;
+    }
+    if (this.dead || n !== this.reads) return;
+    this.view = r;
+    $('#pane h2').textContent = r.title;
+    this.box.innerHTML = html`${r.lines.map(X.listed)}`.s;
+  }
+  destroy() { this.dead = true; }
+};
+X.Tasks = class extends X.Channel { constructor(name) { super('tasks', 'queue', name); } };
+X.Entries = class extends X.Channel { constructor(name) { super('entries', 'board', name); } };
+
+// One line of a queue's or a board's view: its words, each part drawn by its tone.
+X.listed = l => html`<div class="x-change x-${l.kind}"><span>${l.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span></div>`;
 
 // Posts, with the sorts that rank by votes disabled, saying why, and a queue's or a board's own view beside them.
 BoardView = class extends BoardView {
@@ -1263,13 +1305,14 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel]');
   if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
   if ('xCommands' in d) return X.openCommands();
   if (d.xReview || d.xDiff) return go({...X.none, review: d.xReview || d.xDiff, thread: null, knew: null}, true);
   if (d.xAsk) return go({...X.none, ask: d.xAsk, thread: null, knew: null}, true);
+  if (d.xChannel) return go({...X.none, [d.xChannel === 'queue' ? 'tasks' : 'entries']: d.xName, thread: null, knew: null}, true);
   if (d.xTest) return X.test(el);
   if ('xMore' in d) return S.pane.more();
   if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);

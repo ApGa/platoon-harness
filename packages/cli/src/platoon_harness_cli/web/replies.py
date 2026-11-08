@@ -521,7 +521,7 @@ def attachment(projection: Projection, params: Mapping[str, Any]) -> tuple[dict[
 
 def feed(projection: Projection, after: int, statuses: Statuses) -> dict[str, Any]:
     """The feed past `after`, each entry as it stands now: a message, a change to one, a line of a chat's own with
-    the chat, a person, or how far a chat was delivered to an agent."""
+    the chat, a person, how far a chat was delivered to an agent, or a queue's or a board's chat whose view moved."""
     db = projection.db
     entries = list(projection.entries(after, FEED_LIMIT))
     events = []
@@ -529,6 +529,9 @@ def feed(projection: Projection, after: int, statuses: Statuses) -> dict[str, An
         n, kind, chat, seq = entry["n"], entry["kind"], entry["chat"], entry["seq"]
         if kind == "user":
             events.append({"n": n, "kind": "user", "user": person(projection, entry["user"], statuses)})
+            continue
+        if kind == "x_moved":
+            events.append({"n": n, "kind": "x_moved", "chat": chat})
             continue
         if kind == "read":
             line = db.execute("SELECT at FROM lines WHERE chat = ? AND seq = ?", (chat, entry["upto"])).fetchone()

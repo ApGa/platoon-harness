@@ -109,6 +109,14 @@ a plan login on loopback alone: see [Security](#security).
   you from its start, which the page says the runtime made, and a direct chat between two agents merges both their inboxes,
   in the order the journal has them. An agent's goal is the first message in its chat with whoever started it.
   A queue's or board's chat holds what it announced, as the terminal's channel lines do.
+- **Tasks and entries.** Tasks, in a queue's chat, as a chat and as a board, opens its tasks in the pane, which the address
+  names, `tasks=` and the queue's name, in the words the terminal's `/tasks` says: each task's state, by whom it is claimed,
+  which attempt that is and until when its lease holds, on the session's clock, its gist and its result. Entries, in a
+  board's chat, opens its entries, `entries=`: each entry with every version, its author, gist and fields. The pane is read
+  through `x_read` as it opens, and again whenever the feed says that what it reads moved: an event of one of its tasks or
+  entries, a claim or a lease's expiry among them, which its chat never hears of, or for a queue an agent's end. No timer
+  of the page's decides anything, so a claim stands until the runtime records its lease's expiry. It reads 256 tasks or
+  versions at most, and past them says how many more there are and the command that reads on. Esc or × closes it.
 - **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
   message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
   cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.
@@ -229,6 +237,8 @@ The page asks one read of ours beside them, `x_read`, for each pane of ours, in 
 as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
 and for a diff and an ask the journal and the body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
+Its `tasks` pane is a queue's tasks, by `queue`, and its `entries` pane a board's entries, by `board`, in the words the
+terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
 `diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
 at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
@@ -239,9 +249,7 @@ where the record cut it, or, where the record holds no body, that what it asks b
 
 ## Not built yet
 
-Each is drawn disabled where its control is, saying why: the tasks and board views, with each task open, claimed and by
-whom under what lease, or done, and each board entry with its versions, as Tasks or Entries in a queue's or a board's
-chat, which holds what it announced; and Tool activity on an agent's page. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
+Each is drawn disabled where its control is, saying why: Tool activity on an agent's page. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. A form starts
 empty wherever it was opened from. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 

@@ -6,7 +6,8 @@ again. A chat's id is 16 hex of a hash of the session and what the chat is: a ch
 direct chat, whose inboxes it merges in journal order. A line's seq is its place in its chat, in journal order. The feed
 numbers what the page must hear, in the same order, and `feed_id` hashes the session and this version of the projection,
 whose change drops the file and folds again, which the page hears as a reset. A line shows one event, by its ref, which
-its Provenance follows.
+its Provenance follows. The feed also tells the page that what a queue's or a board's view reads moved, `x_moved`,
+naming its chat, so the page reads that view again.
 """
 
 import hashlib
@@ -21,9 +22,10 @@ from typing import Any
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
 
+from ..channels import moves
 from ..provenance import shows
 
-VERSION = 6
+VERSION = 7
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -246,6 +248,7 @@ class Projection:
                 fold(event, bodies)
             if event.type in STATUS and event.agent is not None:
                 self._feed("user", user=event.agent)
+            self._moved(event)
             self.db.execute("UPDATE meta SET value = ? WHERE key = 'through'", (str(event.seq),))
         if event.type == "body.tombstoned":  # What held the erased text goes from the file and its log at once.
             self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -487,6 +490,16 @@ class Projection:
             chat = self._direct(self.person, event.agent, event)
             end = {"status": event.data["status"], "gist": event.gist}
             self._line(chat, "ended", event.agent, event, extra={"x_end": end})
+
+    def _moved(self, event: Event) -> None:
+        """Tell the feed of each queue's or board's chat whose view `event` moves, as the page reads that view through
+        `x_read` and never from here."""
+        if not event.stream.startswith(("task/", "board/")) and event.type != "agent.ended":
+            return
+        chats = self.db.execute("SELECT id, key FROM chats WHERE key GLOB 'queue/*' OR key GLOB 'board/*' ORDER BY key")
+        for id, key in chats.fetchall():
+            if moves(key, event):
+                self._feed("x_moved", id)
 
     # Evidence.
 

@@ -21,13 +21,14 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Hang, ScriptedDriver
+from platoon_harness_cli import channels
 from platoon_harness_cli.ops import _command, cut, person_ops
 from platoon_harness_cli.review import PAGE, changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
 from platoon_harness_cli.web.page import load
-from platoon_harness_cli.web.projection import Projection
+from platoon_harness_cli.web.projection import Projection, hashed
 from platoon_harness_cli.web.server import Web
 
 from ..runtime.gitting import commit, repository, working
@@ -453,9 +454,50 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert [action["op"] for action in places[0]["actions"]] == ["approval.resolve"] * 2
     assert places[0]["actions"][0]["args"]["id"] == approvals[0]["id"]
     assert provenance["ref"] == "agent/w1@1" and "heading" in {line["kind"] for line in provenance["lines"]}
-    assert unnamed.status == 404 and "provenance, attention, changes, diff and ask" in unnamed.json()["error"]
+    assert (
+        unnamed.status == 404
+        and "provenance, attention, changes, diff, ask, tasks and entries" in unnamed.json()["error"]
+    )
     assert gone.status == 404
     assert refused.status == 403 and "acts on nothing" in refused.json()["error"]
+
+
+async def test_tasks_and_entries_are_panes_of_x_read_and_the_feed_says_whenever_one_moves(web, session, monkeypatch):
+    """`tasks` is a queue's tasks and `entries` a board's entries, by its name, in the words the terminal's `/tasks`
+    says, which a view link reads, writing nothing and submitting no op. A claim, which announces nothing in the queue's
+    chat, and a revision each tell the feed that their chat's view moved, as `x_moved`, so the page reads it again."""
+    await session.create_channel("notes", "board", readers=["all"], writers=["all"])
+    await session.task_add("tasks", "fix the flaky test")
+    await session.board_post("notes", "plan", "first", fields={"step": 1})
+    await caught_up(web, session)
+    after = web.projection.count
+    await session.task_claim("tasks")
+    await session.board_revise("notes", "plan", "second", 1)
+    await caught_up(web, session)
+    viewer = await Browser(web).opened("view")
+    head, submitted, submit = await session.head(), [], session.submit
+
+    async def recorded(op: str, /, **args: object) -> object:
+        submitted.append(op)
+        return await submit(op, **args)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(session, "submit", recorded)
+        tasks = await viewer.view("x_read", {"pane": "tasks", "queue": "tasks"})
+        entries = await viewer.view("x_read", {"pane": "entries", "board": "notes"})
+        unknown = await viewer.request("POST", "/v1/x_read", {"pane": "tasks", "queue": "nowhere"})
+        unnamed = await viewer.request("POST", "/v1/x_read", {"pane": "entries"})
+    feed = await viewer.view("view_feed", {"after": after, "timeout": 0})
+    assert await session.head() == head and submitted == []
+
+    words = [dataclasses.asdict(await channels.read(session, kind, "you")) for kind in ("queue/tasks", "board/notes")]
+    assert [tasks, entries] == json.loads(json.dumps(words))
+    claimed = tasks["lines"][0]["parts"]
+    assert claimed[0][0] == "task 1" and claimed[1][0].startswith("  claimed by @you, attempt 1, lease until ")
+    assert [line["kind"] for line in entries["lines"]] == ["entry", "version", "version"]
+    moved = [event["chat"] for event in feed["events"] if event["kind"] == "x_moved"]
+    assert moved == [hashed("s", "queue/tasks"), hashed("s", "board/notes")]
+    assert unknown.status == 404 and unnamed.status == 400
 
 
 async def test_browsing_writes_no_event_and_moves_no_cursor_or_mark(root, clock):

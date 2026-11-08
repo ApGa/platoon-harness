@@ -41,6 +41,11 @@ named here is closed.
   ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
   `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
+- **Tasks and Entries in the page.** In a queue's chat, as a chat and as a board, Tasks opens its tasks in the pane, and in
+  a board's chat Entries its entries, in the words the terminal's `/tasks` says, read through `x_read`'s new `tasks` and
+  `entries` panes, which a view link reaches. The pane is read again whenever the feed says that what it reads moved, as the
+  projection, now at version 7, tells it with `x_moved`, naming the chat, and at no other time. Before, both buttons were
+  drawn disabled, saying they were not built.
 - **A queue's tasks and a board's entries in the terminal UI.** On a queue's focus, `/tasks` or Ctrl+T lists each task's
   state, by whom it is claimed, which attempt that is and until when its lease holds, on the session's clock, its gist and its
   result, and on a board's, each entry with every version, its author, gist and fields. The list is read again whenever the

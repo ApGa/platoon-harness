@@ -20,7 +20,7 @@ from platoon_harness.http import Head, Rejected, Server, bearer, check_site, res
 from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
-from .. import __version__, approvals, review
+from .. import __version__, approvals, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import read
 from ..review import changes_of, snapshots_of
@@ -300,9 +300,28 @@ class Web(Server[Request]):
                 return await self._diff(params)
             case "ask":
                 return await self._ask(params)
+            case "tasks":
+                return await self._channel("queue", params)
+            case "entries":
+                return await self._channel("board", params)
         raise replies.Error(
-            404, "there is no such pane: the page's panes are provenance, attention, changes, diff and ask"
+            404,
+            "there is no such pane: the page's panes are provenance, attention, changes, diff, ask, tasks and entries",
         )
+
+    async def _channel(self, kind: Literal["queue", "board"], params: Mapping[str, Any]) -> dict[str, Any]:
+        """A queue's tasks or a board's entries, by its name, `queue` or `board`, in the words the terminal's `/tasks`
+        says, with what each line offers the person."""
+        name = params.get(kind)
+        if not isinstance(name, str):
+            raise replies.Error(400, f"{kind} is a {kind}'s name, as `channel list` names it")
+        try:
+            view = await channels.read(self.session, f"{kind}/{name}", self.projection.person)
+        except Refused as refused:
+            code = refused.refusal.code
+            status = {"not_found": 404, "not_permitted": 403}.get(code, 400)
+            raise replies.Error(status, f"{code}: {refused.refusal.detail}") from None
+        return asdict(view)
 
     async def _snapshot(self, view: Literal["roster", "changes"]) -> list[dict[str, Any]]:
         """The rows of one of the runtime's client views, as its first snapshot gives them."""

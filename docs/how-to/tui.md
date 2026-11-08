@@ -200,7 +200,7 @@ its lease holds, `claimed by @ada, attempt 2, lease until 14:02:11`, on the sess
 its result. A failed or open task says how many attempts it has had, and a dead one after how many it died. On a board's
 focus the same keys list its entries, as `board query --history` gives them: each entry's name and how many versions it has, then
 each version, who wrote it, its gist and its fields. Every word an agent wrote is drawn through `SafeText`, so a control shows
-as its escape and markup as itself.
+as its escape and markup as itself. The page's Tasks and Entries say the same ([web.md](web.md#what-the-page-shows)).
 
 The list is read again whenever the journal holds an event on one of its tasks' or entries' streams, or for a queue an agent's
 end, which gives back each task the agent held, and at no other time: no timer of the terminal's decides anything. A claim

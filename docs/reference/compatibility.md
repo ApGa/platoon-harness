@@ -400,12 +400,13 @@ the installed package and held to these SHA-256 values when it starts. A file th
 - What the page asks is SwarmChat's internal shape, unversioned upstream. A test runs one scenario through SwarmChat's own server,
   in the test alone, and through ours, and holds every reply the page uses to the same keys of the same types: `view_info`,
   `view_snapshot`, `view_messages`, `view_thread`, `view_receipts`, `view_posts`, `view_search`, `view_activity`, `view_as`,
-  `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by, and the one read
-  of ours, `x_read`, is asked only by our overlay.
+  `view_knew`, `view_text` and `view_feed`. What we add is named `x` or begins `x_`, which the page passes by, the feed's `x_moved`
+  among them, which the overlay takes before SwarmChat's `apply` sees the feed, and the one read of ours, `x_read`, is
+  asked only by our overlay.
 - The overlay is our script after SwarmChat's, in the same script, and reaches only names its script declares at its top level.
   It replaces `api`, `start`, `login`, `setLive`, `readRoute`, `route`, `onKey`, `apply`, `onClick`, `renderTop`, `avatar`,
   `messageHtml`, `systemHtml`, `openReceipts`, `openMembers`, `chatRow`, `chatRows`, `postHtml`, and the classes `ChatView`,
-  `ThreadPane`, `PersonView`, `KnewPane`, `UnreadView`, `BoardView` and `MapView`, adds `provenance` and `act` to the address keys `KEYS`, puts Commands before `#find`, and
+  `ThreadPane`, `PersonView`, `KnewPane`, `UnreadView`, `BoardView` and `MapView`, adds `provenance`, `act`, `args`, `review`, `ask`, `tasks` and `entries` to the address keys `KEYS`, puts Commands before `#find`, and
   uses `S`, `TOKEN`, `ARROW`, `go`, `overlay`, `toast`, `throttle`, `buildSide` and the helpers `html`, `Safe`, `$` and `$$`. An upgrade that renames one breaks the browser tests,
   which fail on any page error.
 - The link exchange is a script of ours before the gate's. It hands the gate the session token through the `#token=` the gate

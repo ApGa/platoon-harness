@@ -40,7 +40,7 @@ PLACES = {
         "#main .msg button:has-text('What had reached you?')",
     ),
     "a chat between agents": ("#layout=chat", "lead & w1", "#main .msg [data-x-reply]"),
-    "a queue's chat": ("#layout=chat", "#tasks", "#main button:has-text('Tasks')"),
+    "a queue's chat": ("#layout=chat", "#tasks", "#main .x-composer button:has-text('Send')"),
     "a board": ("#layout=board", "#general", "#main .post .votes"),
     "an agent's page": ("#person=lead", "lead", ".person .x-acts button:has-text('Tool activity')"),
     "the person's own page": ("#person=you", "you", "[data-see-as=you]"),

@@ -1,6 +1,7 @@
 """SwarmChat's Board and Map in a real browser, over a session on scripted harnesses: a channel's posts and one opened
-with its replies, the sorts by votes disabled, saying why, and no vote counted, a queue's own view not built yet, and
-the map of everyone with its timeline, from a control link and from a view link."""
+with its replies, the sorts by votes disabled, saying why, and no vote counted, a queue's tasks and a board's entries in
+the pane, read again as they move, and the map of everyone with its timeline, from a control link and from a view
+link."""
 
 import re
 from collections.abc import AsyncIterator
@@ -19,7 +20,6 @@ from .support import SECONDS, chat, opened, serving
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 UNVOTED = "A session's messages take no reactions, so there are no votes to count or to rank by."
-UNBUILT = re.compile("^Not built yet: the tasks and board views are planned")
 SEEN_AS_W1 = """() => S.as && S.as.user === 'w1'
     && S.view.act.counts.reduce((a, b) => a + b, 0)
         === [...S.as.chats.keys()].reduce((n, id) => n + S.chats.get(id).messages, 0)
@@ -74,16 +74,55 @@ async def test_the_board_lists_a_channel_s_posts_and_opens_one_with_its_replies_
     await expect(page.locator("#main [data-sort=new]")).to_have_class(re.compile(r"\bon\b"))
     await expect(page.locator("#main .post", has_text="plan")).to_have_count(1, timeout=SECONDS)
     await expect(page.locator("#main .post", has_text="I started a worker.")).to_have_count(0)
+    assert errors == []
 
-    await page.locator("#list .row", has_text="tasks").click()
-    tasks = page.locator("#main button", has_text="Tasks")
-    await expect(page.locator("#main [data-goto=chat]")).to_be_visible(timeout=SECONDS)
-    await expect(tasks).to_be_disabled()
-    await expect(tasks).to_have_accessible_description(UNBUILT)
+
+@pytest.fixture
+async def worked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[tuple[Session, Web]]:
+    """The scenario's session, settled, its worker gone with the task it claimed, which is open again, a board `notes`
+    with `plan` revised once, and `web` serving it."""
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    async with Session.start(team(), name="s", root=tmp_path, cwd=tmp_path) as session:
+        await scenario(session)
+        await session.create_channel("notes", "board", readers=["all"], writers=["all"])
+        await session.board_post("notes", "plan", "first", fields={"step": 1})
+        await session.board_revise("notes", "plan", "second", 1, fields={"step": 2})
+        async with serving("s", tmp_path) as web:
+            await caught_up(web, session)
+            yield session, web
+
+
+def pane(page: Page, text: str):
+    """The lines of the pane of ours that hold `text`."""
+    return page.locator("#pane .x-channel .x-change", has_text=text)
+
+
+async def test_tasks_and_entries_show_in_a_queue_s_and_a_board_s_chat(browser: Browser, worked: tuple[Session, Web]):
+    """Tasks, in a queue's chat as a chat and as a board, opens its tasks in the pane, each with its state, which a
+    claim the chat never hears of moves, as the feed says the queue's view moved; and Entries, in a board's chat, its
+    entries, each with every version."""
+    session, web = worked
+    page, errors = await opened(browser, web.link("control"))
+
+    await chat(page, "tasks")
+    await page.locator("#main [data-goto=board]").click()
+    await expect(page.locator("#main [data-x-channel=queue]")).to_have_text("Tasks", timeout=SECONDS)
     await page.locator("#main [data-goto=chat]").click()
-    await expect(page.locator("#main [data-goto=board]")).to_be_visible(timeout=SECONDS)
-    await expect(tasks).to_be_disabled()
-    await expect(tasks).to_have_accessible_description(UNBUILT)
+    await page.locator("#main [data-x-channel=queue]").click()
+    await expect(page.locator("#pane h2")).to_have_text("Tasks on tasks", timeout=SECONDS)
+    await expect(pane(page, "task 1")).to_contain_text("open, 1 attempt  fix the flaky test", timeout=SECONDS)
+    assert "tasks=tasks" in page.url
+    await session.task_claim("tasks", task="1")
+    await expect(pane(page, "task 1")).to_contain_text("claimed by @you, attempt 2, lease until ", timeout=SECONDS)
+
+    await chat(page, "notes")
+    await page.locator("#main [data-x-channel=board]").click()
+    await expect(page.locator("#pane h2")).to_have_text("Entries on notes", timeout=SECONDS)
+    await expect(pane(page, "plan")).to_have_text("plan  2 versions", timeout=SECONDS)
+    await expect(pane(page, "v1")).to_have_text('v1  @you  first  {"step":1}')
+    await expect(pane(page, "v2")).to_have_text('v2  @you  second  {"step":2}')
+    await page.keyboard.press("Escape")
+    await expect(page.locator("#pane .x-channel")).to_have_count(0, timeout=SECONDS)
     assert errors == []
 
 
