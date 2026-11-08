@@ -1722,7 +1722,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   agents on one plan login. [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
-  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
+  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft, its decisions.
 
 ## 13. Workspaces
 

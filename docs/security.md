@@ -72,7 +72,7 @@ and nothing the file says since ([§15](architecture.md#15-security)).
   never reaches a browser. The sessions page's link is the command's alone: the page makes none, its server keeps
   credentials of its own, so no link of a session's page opens it and its own opens no session's page, and it is served on
   loopback alone, as it acts as you on every session there and starts a team's harnesses, which run what its files name
-  ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md)).
+  ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft).
 
 ## Retention
 

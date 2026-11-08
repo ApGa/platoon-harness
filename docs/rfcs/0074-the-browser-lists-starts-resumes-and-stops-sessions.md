@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-08 |
+| Status | Draft |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`web/__init__.py`](../../packages/cli/src/platoon_harness_cli/web/__init__.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/credentials.py`](../../packages/cli/src/platoon_harness_cli/web/credentials.py), [`tui/sessions.py`](../../packages/cli/src/platoon_harness_cli/tui/sessions.py), [`teams.py`](../../packages/cli/src/platoon_harness_cli/teams.py), [architecture sections 12 and 15](../architecture.md#12-clients), [security.md](../security.md), [RFC 0016](0016-plan-logins-and-credentials.md), [RFC 0027](0027-the-browser-on-our-backend.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | The owner's ruling of 2026-11-08 on milestone 4's plan, which reversed its default for this question and asked for a security design, kept outside this repository |
+| Discussion | The owner's ruling of 2026-11-08 on milestone 4's plan, which reversed its default for this question and asked for a security design, kept outside this repository. The ruling accepts no design: this one waits for the owner's acceptance |
 | Implementation | `feat: List and open your sessions from the browser with web and no session`; `feat: Start, resume and stop a session from the browser's sessions page` |
 
 ## Summary
@@ -225,8 +225,9 @@ as the session's page does, so nothing under the pointer moves.
 
 1. That other users on this machine are out of scope, which every loopback service of ours rests on, is the default pending the
    owner's ruling on the threat model. The sessions page's bearer keeps another user from reading or acting, and nothing keeps one
-   from holding its connections. A ruling the other way would move the page from a port to a socket only you can open, and tear
-   nothing else out.
+   from holding its connections. A ruling the other way would need a transport only you can reach, for this page and for every
+   session it opens, each on a loopback port of its own as `web SESSION` serves one, which this RFC does not design: a browser
+   opens no Unix socket without something between, so what it would change is not known.
 2. Whether the terminal's start form should ask for trust as the page does, naming what it trusts once the team needs it, is the
    owner's. The default, pending the owner's ruling, is that it keeps its field, which no test or guide of this RFC changes. A ruling
    the other way would change that form, and tear nothing here out.

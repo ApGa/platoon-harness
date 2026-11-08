@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
+| Status | Accepted, 2026-11-04; amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) (a draft) |
 
-**Its "starts and resumes nothing" is amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)**,
-2026-11-08: `web SESSION` still starts and resumes nothing, and `web` with no session serves a page of your sessions, on loopback
+**Its "starts and resumes nothing" is amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)**, a
+draft, 2026-11-08: `web SESSION` still starts and resumes nothing, and `web` with no session serves a page of your sessions, on loopback
 alone, from one link the command says, which lists, starts, resumes and stops them and opens each on a control link of its own
 
 ## Summary
