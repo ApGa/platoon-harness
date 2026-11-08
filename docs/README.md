@@ -27,6 +27,8 @@ Each example has a README that says what it does and how to run it.
   checked by a verifier in Codex's read-only sandbox, with your test of it as evidence, with no keys too.
 - [A GitSwarm population](../examples/git-swarm/README.md): workers in worktrees of their own, started by a script that
   owns the session and gives each one outcome, one building on another's commit and one nominating it, with no keys too.
+- [A sample extension package](../examples/extension-package/README.md): an op, a view and a preset in a package of
+  your own, installed beside platoon-harness, named by a team and reached from every surface with no core edit.
 
 ## How-to guides
 

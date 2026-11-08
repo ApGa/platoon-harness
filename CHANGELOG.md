@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **A sample extension package.** [examples/extension-package](examples/extension-package/README.md) is `ballot`, the
+  extension of architecture section 17, as a package of its own: `ballot.cast`, a vote on an agent's work, recorded on that
+  agent's own stream and refused a second time from the same voter, `Votes`, the view that holds each vote, and
+  `pair-review`, a preset that pairs an author with the reviewer who may vote on its work. Its README installs it in a
+  checkout's environment, where it activates nothing until a team names it, and casts a vote from each surface with no
+  core edit.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a

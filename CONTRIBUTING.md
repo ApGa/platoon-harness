@@ -333,13 +333,16 @@ An extension adds ops, views, daemons, presets or an isolation with no core edit
 
 ```toml
 [project.entry-points."platoon_harness.extensions"]
-ballot = "my_package:extension"
+ballot = "ballot:extension"
 ```
 
 Installing it activates nothing: a team names it in `extensions = [...]`. It uses only the kernel's public names, as the
-core's primitives do, and its ops are usable through the SDK, MCP and `ph` with no core edit, though the command line and
-the terminal UI have no command for them yet ([architecture §17](docs/architecture.md#17-extensions-and-configuration),
+core's primitives do, and its ops are usable through the SDK, MCP, `ph`, the terminal's palette and the page's form with
+no core edit, though the command line has no command for them yet
+([architecture §17](docs/architecture.md#17-extensions-and-configuration),
 [STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)).
+[examples/extension-package](examples/extension-package/README.md) is one, a package of its own with an op, a view and a
+preset.
 Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`
 ([Drivers, Extensions](docs/extending/drivers.md#extensions)).
 

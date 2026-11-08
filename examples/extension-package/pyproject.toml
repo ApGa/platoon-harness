@@ -1,0 +1,22 @@
+# The ballot extension of architecture section 17, packaged as a third party's would be. Installed beside
+# platoon-harness, it activates nothing until a team names it.
+
+[project]
+name = "ballot"
+version = "0.1.0"
+description = "A sample extension of platoon-harness: a vote on an agent's work, the view that holds each vote, and a preset that pairs an author with its reviewer."
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["platoon-harness-sdk>=0.1,<0.2"]
+
+# The entry point's name is the name a team gives in `extensions = [...]`, and its value is the Extension, imported only
+# when a team names it.
+[project.entry-points."platoon_harness.extensions"]
+ballot = "ballot:extension"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ballot"]
