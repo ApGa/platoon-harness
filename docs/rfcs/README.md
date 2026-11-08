@@ -42,8 +42,8 @@ amended or extended an RFC.
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | Accepted |
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
-| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted; amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) (a draft) |
-| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
+| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted; amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) (drafts) |
+| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) (drafts) |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
 | [0031](0031-a-workspace-is-a-place-git-already-knows.md) | A workspace is a place git already knows | Accepted |
@@ -88,6 +88,7 @@ amended or extended an RFC.
 | [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
 | [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft |
+| [0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) | An agent's page shows its tool activity and live text outside any chat | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
 | [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |
 | [0076](0076-holding-an-agent-is-agent-hold.md) | Holding an agent is `agent hold`, and a takeover drives its terminal | Accepted |

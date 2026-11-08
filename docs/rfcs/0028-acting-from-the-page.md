@@ -2,13 +2,16 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
+| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) (drafts) |
 
 **Amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)**: Provenance among a
 message's actions is built, and opens a pane.
 
 **Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**, a draft: Needs you reads `x_read`'s `attention` pane, which a view link reaches, so a view link
 and history show where the person must act, each action disabled, saying why; `/x/command` is sent no read.
+
+**Amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md)**, a draft: Tool
+activity on an agent's page is built, and opens a pane of its tool calls and its live text.
 
 ## Summary
 
