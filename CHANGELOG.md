@@ -32,7 +32,9 @@ named here is closed.
   the address shows, a chat with its composer at the screen's foot. A press on a message gives it focus, which shows its
   actions below it. At 390 px it scrolls no wider than the screen, and every act lies within it. A resize keeps where
   each list is read, so a chat at its foot goes on following the session, and keeps focus and the composer's target.
-  Before, the page was laid out for a wide window alone, and at a phone's width it was not usable.
+  From 760 px to about 1,000 px, as a phone held sideways is, the page is still laid out side by side, where an open
+  pane leaves a chat too narrow to read. Before, the page was laid out for a wide window alone, and at a phone's width
+  it was not usable.
 - **An agent's live text in the page.** Tool activity now shows, above an agent's calls, what it is saying now, under
   words saying the journal does not hold it yet, read through a new `saying` pane of `x_read`: what it said since the
   journal last took what it said, its newest 20,000 characters, led by an ellipsis where some before them was lost or

@@ -223,7 +223,9 @@ history.*
   what the address shows, a chat with its composer at the screen's foot, or at home, to the top. A message's actions show below it
   while focus is in it, which a press on it gives it. At 390 px the page scrolls no wider than the screen, and every act,
   scrolled into view, lies within it with nothing over it. At any width the top bar's controls take as many rows as they
-  need.
+  need. From 760 px to about 1,000 px, as a phone held sideways is, the list, what the address shows and the pane stand
+  side by side, as SwarmChat lays them out, and an open pane leaves a chat too narrow to read: close the pane, or turn
+  the phone upright.
 - **A resize.** A resize keeps where each list is read: a chat at its foot stays at its foot, so it goes on following the
   session, and any other list keeps its first line in view where it was. It keeps focus, and the composer's target, which
   the address names. Into a phone's width, the page goes to the part that has focus, or else to what you opened.
