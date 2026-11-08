@@ -240,7 +240,10 @@ def _patch(changes: Sequence[Mapping[str, Any]]) -> str:
 def _beside(params: Mapping[str, Any]) -> str:
     """Each of `_BESIDE` a request gives, a line each, as `name: value`."""
     given = ((name, params.get(name)) for name in _BESIDE)
-    return "".join(f"{name}: {v if isinstance(v, str) else json.dumps(v)}\n" for name, v in given if v is not None)
+    shown = (
+        (name, v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)) for name, v in given if v is not None
+    )
+    return "".join(f"{name}: {value}\n" for name, value in shown)
 
 
 def _reply(method: str, params: Mapping[str, Any], verdict: Verdict) -> Mapping[str, Any]:
@@ -495,7 +498,7 @@ class CodexDriver:
             case _, {"command": str(command)}:
                 return _beside(params) + command
             case _:
-                return json.dumps(params)
+                return json.dumps(params, ensure_ascii=False)
 
     def _begin(self, thread: str, turn: str) -> None:
         if not self._turns:

@@ -317,6 +317,25 @@ async def test_a_driver_that_cuts_its_ask_to_a_gist_fails_approval_shows_its_ask
     assert gisted.get("approval_answered").state == "passed"
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda body: body.encode()[:4096].decode(errors="ignore"),
+        lambda body: json.dumps(body)[1:-1],
+    ],
+    ids=["cut at 4 KiB", "escaped"],
+)
+async def test_a_driver_that_cuts_its_ask_or_escapes_it_fails_too(tmp_path, change):
+    def changed(report):
+        if isinstance(report, ApprovalRequested) and report.body is not None:
+            return report.model_copy(update={"body": change(report.body)})
+        return report
+
+    result = await check(lambda: Filtered(changed), tmp_path)
+
+    assert result.get("approval_shows_its_ask").reason == "its approval does not carry the whole command it asks"
+
+
 async def test_an_effort_dropped_fails_and_one_refused_passes(tmp_path):
     class Careless(Filtered):
         async def start(self, spec: AgentSpec, report: Reporter) -> None:

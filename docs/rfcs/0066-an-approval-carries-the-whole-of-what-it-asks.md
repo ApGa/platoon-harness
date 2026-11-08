@@ -98,9 +98,13 @@ when it shows it.
 | `claude` | The tool's name, then its input as JSON, the text the gist begins with, after a line for each of `decision_reason`, why it asks, as a hook can say, and `blocked_path`, the path that made it ask, that the request gives |
 | `codex` | A command's `command`, and a file change's patch, below, each after a line for each of `reason`, `cwd`, `networkApprovalContext` and `grantRoot`, the root a patch would write under for the rest of the session, that the request gives; and any other request, for permissions or a tool of the user's own, its params as JSON |
 | `pi` | What the gate asks pi to confirm, the tool's name and its input as JSON, or a user's own extension's title and message |
-| `openhands` | Each action of the step it asks about, its tool's name and its arguments as the model gave them, as one approval covers a step |
+| `openhands` | Each action of the step it asks about, its tool's name and its arguments as JSON, as one approval covers a step |
 | `ScriptedDriver` | The gated tool's name and its input as JSON; `Ask(gist, body)` scripts one |
 | The wire | What the program sends, an optional field within protocol 2 |
+
+JSON keeps letters outside ASCII as themselves, as a person reads them, where Python escapes them unless told not to: Claude
+Code's input, Codex's params, `ScriptedDriver`'s input and the OpenHands worker's arguments, which OpenHands holds escaped, are
+written so. pi's `JSON.stringify` keeps them already.
 
 ### 5. Codex's file change is the patch of the item it names
 
@@ -115,11 +119,12 @@ A completed patch item's body is the same text, so a person reads one patch whet
 
 ### 6. A check proves it
 
-`approval_shows_its_ask` scripts the harness's gated tool with a command longer than a gist holds, `touch asked` and a comment,
-waits for the approval, denies it, and passes when the approval's body holds that command whole. The command writes a file, as
-Claude Code runs an `echo` without asking, and the denial keeps it from running. It needs `approvals`, as
-`approval_answered` does. FakeModel's log is the ground truth: the command is what the model asked to run. A failure leaves
-`operational` unmet, as one of `approval_answered` or `denial_holds` does, since a person cannot control what they cannot see.
+`approval_shows_its_ask` scripts the harness's gated tool with a command of some 5 KiB, `touch asked` and a comment that holds
+letters outside ASCII, waits for the approval, denies it, and passes when the approval's body holds that command whole and as it
+was written, so a driver that cuts its ask to a gist or to a few KiB, or escapes its letters, fails. The command writes a file, as
+Claude Code runs an `echo` without asking, and the denial keeps it from running. It needs `approvals`, as `approval_answered`
+does. The ground truth is the command the check has the model ask to run. A failure leaves `operational` unmet, as one of
+`approval_answered` or `denial_holds` does, since a person cannot control what they cannot see.
 
 ### 7. The wire
 

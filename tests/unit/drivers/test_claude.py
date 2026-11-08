@@ -948,14 +948,15 @@ async def test_an_approval_goes_to_the_runtime_and_its_answer_to_the_harness(tmp
 
 
 async def test_an_edit_approval_carries_its_whole_input(tmp_path, stand):
-    """The text it would write, past what a gist holds, which the gist begins."""
-    edit = {"file_path": "app.py", "old_string": "x = 1", "new_string": "".join(f"line {n}\n" for n in range(100))}
+    """The text it would write, past what a gist holds, which the gist begins, and its letters outside ASCII as
+    themselves, as a person reads them."""
+    edit = {"file_path": "app.py", "old_string": "x = 1", "new_string": "".join(f"é 日本 {n}\n" for n in range(100))}
     stand.install(turns=[[STARTED, assistant(using(name="Edit", **edit)), asking(name="Edit", **edit)]])
 
     async with running(make_spec(tmp_path)) as (_, heard):
         asked = await heard.until(ApprovalRequested)
 
-    assert asked.body == f"Edit {json.dumps(edit)}"
+    assert asked.body == f"Edit {json.dumps(edit, ensure_ascii=False)}" and "é 日本 99" in asked.body
     assert len(asked.gist) == 280 and asked.body.startswith(asked.gist) and asked.cut == 0
 
 

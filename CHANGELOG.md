@@ -26,9 +26,10 @@ named here is closed.
   or for a tool of the user's own as its params, pi's what our gate asks pi to confirm, the tool's name and its input, or a user's
   own extension's title and message, and the OpenHands worker's each action of the step it asks about. `ScriptedDriver`'s
   `Ask(gist, body)` scripts one, and the approval its own tool asks for carries the tool's name and input. `check_driver`'s new
-  `approval_shows_its_ask` has the harness ask about a command longer than a gist holds and passes when the approval's body holds
-  it whole, and `operational` is unmet when it fails, as when `denial_holds` does. An approval said only its first 280 characters,
-  so a person allowed a long command or an edit having read part of it. Neither client shows the body yet. See
+  `approval_shows_its_ask` has the harness ask about a command of some 5 KiB with letters outside ASCII and passes when the
+  approval's body holds it whole, as it was written, which each driver keeps as themselves in the JSON it writes, and
+  `operational` is unmet when it fails, as when `denial_holds` does. An approval said only its first 280 characters, so a person
+  allowed a long command or an edit having read part of it. Neither client shows the body yet. See
   [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that

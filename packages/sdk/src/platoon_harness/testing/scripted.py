@@ -424,7 +424,7 @@ class ScriptedDriver:
         `shell` runs its `command`."""
         if self._capabilities.approvals == "none":
             return f"{name} needs an approval this harness cannot ask for"
-        verdict = await self._ask(f"run {name}?", f"{name} {json.dumps(arguments)}")
+        verdict = await self._ask(f"run {name}?", f"{name} {json.dumps(arguments, ensure_ascii=False)}")
         if verdict == "allow" and name == SHELL and "command" in arguments:
             return await self._shell(str(arguments["command"]))
         return f"{name} {verdict}"

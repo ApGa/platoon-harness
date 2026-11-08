@@ -346,7 +346,7 @@ class ClaudeDriver:
                 } as request,
             }:
                 self._asking[id] = (tool, input)
-                said = f"{name} {json.dumps(input)}"
+                said = f"{name} {json.dumps(input, ensure_ascii=False)}"
                 beside = "".join(f"{key}: {request[key]}\n" for key in _BESIDE if request.get(key) is not None)
                 self._process.put(ApprovalRequested(id=id, gist=self._process.gist(said), body=beside + said))
             case {"type": "control_request", "request_id": id}:

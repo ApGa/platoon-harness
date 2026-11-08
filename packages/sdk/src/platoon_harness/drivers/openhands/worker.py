@@ -526,5 +526,14 @@ def _is_users(event: Any) -> bool:
 
 
 def _said(actions: Iterable[Any]) -> str:
-    """What actions would do, as the model asked for each."""
-    return "; ".join(f"{action.tool_name} {action.tool_call.arguments}" for action in actions)
+    """What actions would do, as the model asked for each: its tool's name and its arguments."""
+    return "; ".join(f"{action.tool_name} {_unescaped(action.tool_call.arguments)}" for action in actions)
+
+
+def _unescaped(arguments: str) -> str:
+    """Arguments as JSON with their letters outside ASCII as themselves, which OpenHands escapes, or as they came if
+    they are no JSON."""
+    try:
+        return json.dumps(json.loads(arguments), ensure_ascii=False)
+    except ValueError:
+        return arguments
