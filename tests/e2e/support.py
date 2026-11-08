@@ -26,13 +26,19 @@ def watched(page: Page, *expected: str) -> list[str]:
     """What went wrong on a page: an exception, or an error or a warning on its console that matches none of
     `expected`, such as the line a browser logs for a request the test refused on purpose."""
     errors: list[str] = []
-    page.on("pageerror", lambda error: errors.append(f"pageerror: {error}"))
+    page.on(
+        "pageerror", lambda error: errors.append(f"pageerror: {error}") if _unexpected(str(error), expected) else None
+    )
     page.on("console", lambda message: errors.append(message.text) if _wrong(message, expected) else None)
     return errors
 
 
 def _wrong(message: ConsoleMessage, expected: tuple[str, ...]) -> bool:
-    return message.type in ("error", "warning") and not any(re.search(found, message.text) for found in expected)
+    return message.type in ("error", "warning") and _unexpected(message.text, expected)
+
+
+def _unexpected(text: str, expected: tuple[str, ...]) -> bool:
+    return not any(re.search(found, text) for found in expected)
 
 
 async def opened(browser: Browser, link: str, *expected: str) -> tuple[Page, list[str]]:

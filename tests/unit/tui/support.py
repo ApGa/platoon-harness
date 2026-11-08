@@ -11,7 +11,9 @@ from platoon_harness.kernel import first
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.workspace import Workspace
 
-SECONDS = 20.0
+# How long a wait here may take before it fails as a hang: it bounds no claim, so it is sized for the slowest machine
+# that runs the suite, GitHub's runners, where a diff read by git outlasted 20 s.
+SECONDS = 60.0
 
 
 def at_once(app: TerminalUI, sent: str) -> None:

@@ -20,9 +20,14 @@ from .support import SECONDS, chat, opened, said, serving
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 COMPOSER = "#main .x-composer textarea"
-OFFLINE = ("ERR_INTERNET_DISCONNECTED", "ERR_FAILED", "WebKit encountered an internal error")
+OFFLINE = (
+    "ERR_INTERNET_DISCONNECTED",
+    "ERR_FAILED",
+    "WebKit encountered an internal error",
+    "due to access control checks",
+)
 """What a browser logs for a request it could not make, which these tests cause: Chromium names the network, and WebKit
-says only that it failed."""
+says only that it failed, on its console or, for a read the page catches, as an error of the page's."""
 
 
 @pytest.fixture
