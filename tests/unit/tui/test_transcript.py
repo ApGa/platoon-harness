@@ -436,8 +436,10 @@ def span(first: int, last: int, *writes: str) -> Span:
 async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
     """A cut stands at the first call of the span after it, so it is drawn under what the calls before it made, and it
     names the span it ends by its last call, which it shows. A turn's last span ends with the turn, which says so
-    itself. Cuts are read as the agent is shown and again as each turn of its ends, and one whose two calls come on
-    pages read back apart is drawn once, where it stands."""
+    itself. Cuts are read as the agent is shown, in a turn under way too, and again as each turn of its ends, so one
+    made while a turn runs is drawn as that turn ends; one whose two calls come on pages read back apart is drawn once,
+    where it stands. `spans` answers as the query would at each read, which cuts a turn under way as soon as a call is
+    reported after one that chose a write."""
     turn = [
         event(1, "turn/lead", "turn.started", "turn t1 started", {"turn": "t1"}),
         called(2),
@@ -452,17 +454,23 @@ async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
     ended = event(10, "turn/lead", "turn.ended", "turn t1 ended: stopped", {"reason": "stopped"})
     cut = [span(2, 2, "task/q/1@3"), span(5, 8, "task/q/2@3")]
     journal = Journal([*turn, ended])
+    journal.cut = [span(2, 2, "task/q/1@3")]
     app = Alone()
     async with app.run_test(size=(80, 20)):
         transcript = app.query_one(Transcript)
-        await transcript.show(Focus.of_agent("lead"), journal, 9)  # type: ignore[arg-type]
+        await transcript.show(Focus.of_agent("lead"), journal, 4)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+        transcript.take(turn[4:])
+        journal.cut = cut
         await app.workers.wait_for_complete()
         under_way = [line.strip() for line in drawn(transcript)]
-        journal.cut = cut
         transcript.take([ended])
         await app.workers.wait_for_complete()
         followed = [line.strip() for line in drawn(transcript)]
         (shown,) = [block for block in transcript.blocks if "ends" in block.line.plain]
+        await transcript.show(Focus.of_agent("lead"), journal, 9)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+        shown_under_way = [line.strip() for line in drawn(transcript)]
     monkeypatch.setattr(transcript_module, "PAGE", 3)
     app = Alone()
     async with app.run_test(size=(80, 1)):
@@ -478,6 +486,7 @@ async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
     assert under_way == ["── turn ──", "✓ task 1 done", "✓ task 2 done", "@lead  both are done"]
     assert (
         followed
+        == shown_under_way
         == read_back
         == [
             "── turn ──",

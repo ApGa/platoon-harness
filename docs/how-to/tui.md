@@ -107,7 +107,7 @@ has it, saying it joins no known call, as OpenHands' and an `exec` harness's are
 `── span … ends ──` where each span but its last ends, under what its calls made and above the first call of the next,
 naming the span by its last call, which the line shows: `p` on it says that a credit row on that call is the whole
 span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
-ends, so a turn under way is drawn cut once it has ended. Each ref a line's words name, standing apart from the words
+ends, so a cut made while a turn is under way is drawn when that turn ends, or when the agent is shown again. Each ref a line's words name, standing apart from the words
 around it and in no link's address, is underlined, and a click on it shows that ref's own provenance, which says first that
 it was opened from a ref in text, which records no link; one that names no event says so. A ref in an opened line's body
 is no link. The transcript also shows each approval the agent
