@@ -203,8 +203,8 @@ extension  ballot       ballot 0.1.0
 ```
 
 Installing activates nothing: no session loads `ballot` until its team names it. Where two installed distributions both
-register an extension called `ballot`, a team that names `ballot` is refused before either is imported, and one that names
-`ballot@0.1.0` loads this one alone.
+register an extension called `ballot`, a team that names `ballot` is refused before either is imported, and one that pins
+this one by its version, `ballot@0.1.0`, loads it alone, as long as the other is of another version.
 
 ## 9. Name it in a team
 
@@ -350,11 +350,11 @@ that failed and why.
 | Check | What it holds the extension to |
 |---|---|
 | `names` | Neither its name nor that of an op, a tool, a view, a table or a daemon of it is one the SDK's primitives take |
-| `naming_law` | Each op's name is in the extension's namespace and in the imperative, and each event a view folds is in the past tense |
+| `naming_law` | Each op's name is in the extension's namespace and does not read as past tense, which is as far as a machine checks the imperative, and each event a view folds is under a namespace and reads as past tense |
 | `schemas` | Each tool's arguments refuse an undeclared field and describe each field |
-| `descriptions` | Each tool's docstring says what a refusal means, and each op it names is one |
+| `descriptions` | Each tool's docstring mentions `Refused`, which is as far as a machine checks that it says what a refusal means, and each dotted name it puts in backticks is an op |
 | `public_api_only` | The files that define its ops, views, daemons and presets reach into no module of the kernel's package, import from the package only the names it publishes, and reach no underscored attribute but on `self` or `cls` |
-| `rebuild_equals_live` | Each view's rows, once the scenario has run on a live kernel, are the rows a rebuild from the journal makes. With no scenario it is a skip, which is no pass |
+| `rebuild_equals_live` | Each view's rows, once the scenario has run on a live kernel, are the rows a rebuild from the journal makes. With no scenario, or where the kernel refuses to load the extension, it is a skip, which is no pass |
 
 What it does not check:
 
@@ -363,9 +363,13 @@ What it does not check:
   view was live. The other checks need no kernel, and run. Fix the fault and check again.
 - **Its daemons, its presets and its isolation.** It runs none, and names each in `unchecked`, saying what that leaves
   unknown: what a daemon does and which effects it performs, whether a preset's topology is valid, and whether an
-  isolation confines. So a pass never reads as more than ran: the SDK's `bwrap` passes, and its result says that
-  nothing in it says Bubblewrap confines. `team show` and `team check` on a team that uses a preset are how to see its
-  topology.
+  isolation confines. So a pass never reads as more than ran: the SDK's `bwrap`, which is
+  [experimental](../reference/python.md#platoon_harnessbwrap), passes, and its result says that nothing in it says
+  Bubblewrap confines. `team show` and `team check` on a team that uses a preset are how to see its topology.
+- **Names outside the kernel.** `names` holds an extension to the names the kernel loads. One named as a command of the
+  command line's own, such as `run`, passes and gets no commands, as step 7 says, and a preset that takes the name of a
+  built-in preset, of another extension's preset or of a key of `[topology]` passes, and is refused when a team that
+  names the extension is loaded.
 - **What an op does.** It checks no op's result, refusal or event beyond what the scenario runs and the rebuild compares:
   that a second vote is refused is your test's to show, as `vote.py` shows it.
 - **Who may run an op.** No check reads a grant, so nothing in it says a topology lets anyone cast a vote.
@@ -383,7 +387,7 @@ A package on an index is installed by name, so before you publish one:
 
 - **Choose its names.** The distribution's name is yours to make unique on the index. The entry point's name is what
   teams name, and another distribution may register the same: a team that names a name two installed distributions
-  register is refused, saying both, and pins one as `name@version`.
+  register is refused, saying both, and pins one as `name@version` where their versions differ.
 - **Say what it needs.** Require the SDK's minor releases you have tested on, as `platoon-harness-sdk>=0.1,<0.2` does.
   Below 1.0, as [CHANGELOG](../../CHANGELOG.md) says, a minor release may change the Python API, the team file or the
   command line, and a patch release only fixes bugs.

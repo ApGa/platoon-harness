@@ -16,7 +16,7 @@ rules your code keeps, and links the guide to each.
 | A driver of an agent that speaks ACP | A subclass of `AcpDriver`, from the first-party extension `platoon-harness-acp`, that names the agent's command | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [ACP agents](drivers.md#acp-agents-a-first-party-extension) |
 | An extension | An `Extension`, of [the parts below](#an-extensions-parts) | The `platoon_harness.extensions` entry-point group, or `module:attr` | A team's `extensions = [...]` | [Write an extension](extensions.md) |
 | A topology preset | A function that returns a `Topology` | An extension's `presets` | A team's `[topology.<name>]` table | [Write your own preset](../how-to/topologies.md#write-your-own-preset) |
-| An isolation | An object with `refusal()` and `wrap(writable, readable, hidden)` | An extension's `isolation` | A team that names the extension, and a role's `workspace = "isolated"` | [Where an isolated agent runs](../how-to/workspaces.md#where-an-isolated-agent-runs) |
+| An isolation | An object with `refusal()` and `wrap(writable, readable, hidden)` | An extension's `isolation` | A team that names the extension, and a role's `workspace = "isolated"`, which is [experimental](../reference/python.md#platoon_harnessruntimeisolation) | [Where an isolated agent runs](../how-to/workspaces.md#where-an-isolated-agent-runs) |
 | A program | A Python script that starts its session as `program:<name>` and drives it through the session's ops | Nothing: you run it | `until = "program"`, which leaves the session to the program | [Programs](#programs) |
 | A training system | An `Authority` that admits each agent through a gateway of yours, and what trains | Nothing: your program passes it to `Session.start` | `authority=` and `trainable=True` | [The training contract](#the-training-contract) |
 | An estimator | Code that reads the record and writes rewards or credit beside the journal through `Session.annotate` | Nothing: you run it | The producer and version each statement names | [Write credit](../how-to/provenance.md#write-credit) |
@@ -33,11 +33,12 @@ An extension is an `Extension` from `platoon_harness.kernel`: a name, and any of
 | `views` | `View` classes, each a schema and the `@fold` methods that keep its tables from the journal | Tables an op reads through `txn.view`, which a rebuild from the journal makes again row for row |
 | `daemons` | `Daemon`s, each a named task that reads views, does in the world what an op asked for, and reports through ops | A task the runtime runs beside the session, started again when it fails |
 | `presets` | Functions that each return a `Topology` fragment | A team's `[topology.<name>]` table, named after the function with dashes for underscores, its keys the function's arguments |
-| `isolation` | What confines an isolated agent: `refusal()`, why it cannot here, and `wrap(writable, readable, hidden)`, the argv a command runs under | The confinement of each isolated agent of a team that names the extension, as a team names at most one extension that gives one |
+| `isolation` | What confines an isolated agent: `refusal()`, why it cannot here, and `wrap(writable, readable, hidden)`, the argv a command runs under | The confinement of each isolated agent of a team that names the extension, as a team names at most one extension that gives one. An isolated agent is [experimental](../reference/python.md#platoon_harnessruntimeisolation) |
 
-An op is usable through the SDK, MCP, `ph`, the command line and both clients' palettes with no core edit, as each derives
-from the op table, and any client draws its events by their `gist`. The SDK's own primitives are extensions of the same
-kind, which every session holds, and `bwrap`, the SDK's isolation, is one that only a team that names it loads.
+An op is usable through the SDK, MCP, `ph`, the command line and both clients' palettes with no core edit, as each
+derives from the op table, and any client draws its events by their `gist`. The SDK's own primitives are extensions of
+the same kind, which every session holds, and `bwrap`, the SDK's isolation, which is
+[experimental](../reference/python.md#platoon_harnessbwrap), is one that only a team that names it loads.
 
 ## How platoon-harness finds your code
 
@@ -49,11 +50,12 @@ A role's `harness` and a team's `extensions` name your code in one of two ways:
 | `module:attr` | `harness = "my_drivers:MyDriver"`, `extensions = ["ballot:extension"]` | When the team is loaded, from a layer you trust | You try something out, or your code is in no package |
 
 There are two entry-point groups: `platoon_harness.drivers`, whose names are drivers' names and whose values are driver
-classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s. A kind of
-code gets a group when a second independent user needs a short name for it. Discovery reads installed metadata and
+classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s. A kind
+of code gets a group when a second independent user needs a short name for it. Discovery reads installed metadata and
 imports nothing, so before any code loads or any cost is spent it refuses a name that two distributions both register,
-unless the team pins one as `name@version`, and a distribution whose requirement on `platoon-harness-sdk` excludes the
-SDK that runs. `platoon-harness extension list` shows what each group holds, from metadata alone.
+unless the team pins one as `name@version` by a version the other does not have, and a distribution whose requirement on
+`platoon-harness-sdk` excludes the SDK that runs. `platoon-harness extension list` shows what each group holds, from
+metadata alone.
 
 `module:attr` imports, so it is taken only from a layer you trust: Python, your user config, `--set` and the
 environment. A project or team file that names one is refused without `--trust`, as
@@ -66,9 +68,9 @@ of its fields concern a driver of yours in particular:
 
 - **`check`** names the check that ships with a driver outside the SDK, as `module:function`, which
   `platoon-harness doctor --check` runs against FakeModel and keeps, and which is imported only to run it. The SDK's own
-  drivers name none, as `levels.CHECKED` holds theirs. The ACP driver is the first first-party extension: a
-  distribution of its own under `extensions/`, on a version and a tag of its own, whose `opencode` driver names
-  `platoon_harness_acp.check:opencode`
+  drivers name none, as `levels.CHECKED` holds theirs. The ACP driver is the first first-party extension, whose
+  `opencode` driver names `platoon_harness_acp.check:opencode`. That a first-party extension is a distribution of its
+  own under `extensions/`, on a version and a tag of its own, is the default, pending the owner's ruling
   ([RFC 0072](../rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft).
 - **`credentials`** names where, beneath the agent's folder, its harness keeps a credential, as relative paths that
   cannot leave that folder. When the agent ends, its stop removes them with the harness's `TMPDIR`, and a rest removes
