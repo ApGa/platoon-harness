@@ -13,6 +13,8 @@ loopback, where FakeModel serves.
 """
 
 import asyncio
+import getpass
+import grp
 import ipaddress
 import json
 import os
@@ -131,6 +133,8 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
             str(ROOT): "/path/to/platoon-harness",
             str(Path.home()): "/path/to/home",
             socket.gethostname(): "host",
+            getpass.getuser(): "user",
+            grp.getgrgid(os.getgid()).gr_name: "group",
             os.environ["OPENAI_BASE_URL"]: "<endpoint>",
             os.environ["OPENAI_API_KEY"]: "<key>",
         }
@@ -199,7 +203,8 @@ async def test_the_merge_queue_example_merges_on_a_real_model(tmp_path: Path):
 async def test_the_review_example_s_verdict_rests_on_your_test_on_a_real_model(tmp_path: Path):
     """Budget: at most 60 model calls and 40 minutes, your answer included. The run goes on until the verifier asks
     you; the test then tests the author's commit and answers citing the test's record, as a person would, and the run
-    settles with the verifier finished, having asked you citing that commit."""
+    settles with the verifier finished. Whether its ask cites the commit and its verdict your answer, as its
+    instructions ask, is its model's to do, so the test prints which it cited, and the FakeModel test holds them."""
     [run] = shown(REVIEW, where="--prompt-file")
 
     async with on_sample(tmp_path, REVIEW, yours(tmp_path / "home")) as cli:
@@ -216,10 +221,12 @@ async def test_the_review_example_s_verdict_rests_on_your_test_on_a_real_model(t
         )
         ran = await finished(running, within=10 * MINUTE)
         events = await journal(cli, "review")
-    print(stated(events), flush=True)
+    verdict = next(event for event in events if event["type"] == "agent.finished" and event["agent"] == "verifier")
+    cited = {"ask cites the commit": ref(authored[-1]) in asked["based_on"], "verdict cites": verdict["based_on"]}
+    print(stated(events), json.dumps(cited), flush=True)
 
     assert (tested.code, replied.code, ran.code) == (0, 0, 0), ran.stderr[-2000:]
-    assert result["data"]["outcome"] == "passed" and ref(authored[-1]) in asked["based_on"]
+    assert result["data"]["outcome"] == "passed"
     assert "verifier" in {event["agent"] for event in events if event["type"] == "agent.finished"}
     assert calls(events) <= 60
 

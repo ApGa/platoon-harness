@@ -11,8 +11,9 @@ part. The author fixes issue 2 of its `ISSUES.md` with a test, commits both on i
 reviewer through the queue `to-reviewer`. The reviewer reads it with `git show` and through `repo.commit`, which gives
 the ref its review cites, and hands it on with its review through the queue `to-verifier`. No agent can have the runtime
 run a commit's code, as [RFC 0056](../../docs/rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md)
-decided, so the verifier asks you to test the commit and waits for your answer. It finishes with its verdict, citing the
-commit, its task and your answer, which cites the record of your test.
+decided, so the verifier asks you to test the commit and waits for your answer. Its instructions have it finish with its
+verdict, citing the commit, its task and your answer, which cites the record of your test. A citation is its model's to
+make, and step 4 shows which it made.
 
 **Prerequisites:**
 
