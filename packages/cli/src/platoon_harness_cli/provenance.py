@@ -36,11 +36,13 @@ script, which may never have shown it to the model."""
 
 @dataclass(frozen=True)
 class Line:
-    """One line of a provenance panel: a part's `heading`; a fact of an answer, which has no kind; a link of the kind
-    it is known by, `declared`, `observed`, `cause`, `ancestry` or `gap`, an `unresolved` citation, or `unconfirmed`
-    offers, which their harness had not said it took; or what an estimator said, a `credit` or a `reward`. Its words;
-    the ref following it opens, or None, where its words say why; and whether it says something is unknown, missing or
-    cut, which a client draws as a warning."""
+    """One line a client draws, following which opens an event's provenance. Of a provenance panel: a part's
+    `heading`; a fact of an answer, which has no kind; a link of the kind it is known by, `declared`, `observed`,
+    `cause`, `ancestry` or `gap`, an `unresolved` citation, or `unconfirmed` offers, which their harness had not said it
+    took; or what an estimator said, a `credit` or a `reward`. Of an agent's tool calls (`calls.page`): a turn's
+    `heading`, a call by how it ended, or `started` where it has no end, or a child it `spawned`. Its words; the ref
+    following it opens, or None, where its words say why; and whether it says something is unknown, missing, cut or
+    failed, which a client draws as a warning."""
 
     kind: str
     text: str

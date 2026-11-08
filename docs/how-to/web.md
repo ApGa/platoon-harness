@@ -131,6 +131,18 @@ history.*
 - **What an agent says.** What its harness says in a turn is its message to you, in its chat with you. Thoughts, tool
   calls and their output, token counts and live text never enter a chat. Live text, as it streams, is not shown in this
   stage.
+- **Tool activity.** Tool activity, on an agent's page, opens its tool calls in the pane, which the address names,
+  `tools=` and the agent, read through `x_read`, so a view link and history show them too. They come a page at a time,
+  newest first, in whole turns, as many as 100 calls take, so no page splits a call from its end or a spawn from its call.
+  Each turn is a heading, with the id its harness gave it and how it ended, or `not ended`, over its calls. A call is one
+  line: what its first item says it was called with, beside how its last end says it ended, `completed`, `failed`, or an
+  approval's `allow` or `deny`, or `started` where the journal holds no end of it, which is not to say it still runs. A
+  call that came under no id cannot be joined to its end, so each of its items is a line of its own. A child the agent
+  spawned stands under the call whose id the spawn's anchor holds, and one that joins none, as OpenHands' and an `exec`
+  harness's do, whose calls reach us under ids of their own, stands where the journal has it, saying it joins no known
+  call. Each line follows into its event's provenance, and Back comes back. Read again reads the newest calls again, and
+  Read on draws the turns before them, below them. A turn of more than 100 calls is listed in its newest, saying how many
+  it leaves out and the `platoon-harness events` command that prints them. None of it enters a chat.
 - **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
   apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
   it is doing. The people list shows it beside each agent's name, where SwarmChat shows a first field, so who is working
@@ -260,11 +272,12 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
 as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
-and for a diff and an ask the journal and the body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
+and for a diff, an ask and an agent's tool calls the journal and a body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `interactions` pane is who reached whom, the first page
 of `interactions`, in the lines the terminal's `/reached` draws. Its `attention` pane is every place you must act, but a mention.
 Its `tasks` pane is a queue's tasks, by `queue`, and its `entries` pane a board's entries, by `board`, in the words the
-terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved.
+terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved. Its `tools` pane is an
+agent's tool calls, by `agent`, a page before the seq `before`, or the newest, with the `cursor` of the page before it.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
 `diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
 at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
@@ -275,7 +288,7 @@ where the record cut it, or, where the record holds no body, that what it asks b
 
 ## Not built yet
 
-Each is drawn disabled where its control is, saying why: Tool activity on an agent's page. Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
+Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
 words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 
 ## Security

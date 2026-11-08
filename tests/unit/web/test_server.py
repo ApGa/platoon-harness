@@ -21,7 +21,7 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Hang, ScriptedDriver
-from platoon_harness_cli import channels
+from platoon_harness_cli import calls, channels
 from platoon_harness_cli.ops import _command, cut, person_ops
 from platoon_harness_cli.provenance import FROM_TEXT
 from platoon_harness_cli.review import PAGE, changes_of
@@ -476,10 +476,47 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert {"kind": "heading", "text": "Each agent's unknowns", "ref": None, "warn": False} in reached["lines"]
     assert (
         unnamed.status == 404
-        and "provenance, interactions, attention, changes, diff, ask, tasks and entries" in unnamed.json()["error"]
+        and "provenance, interactions, attention, changes, diff, ask, tasks, entries and tools"
+        in unnamed.json()["error"]
     )
     assert gone.status == 404
     assert refused.status == 403 and "acts on nothing" in refused.json()["error"]
+
+
+async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
+    """An agent's tool calls are a pane of `x_read`, a page at a time in the words of `calls.page`, which a view link
+    reads as it reads `view_*`, submitting no op and writing nothing. A name that is no agent's is refused, and so is a
+    cursor that is no seq."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
+        await scenario(session)
+        await caught_up(web, session)
+        head = await session.head()
+        viewer = await Browser(web).opened("view")
+        submitted, submit = [], session.submit
+
+        async def recorded(op: str, /, **args: object) -> object:
+            submitted.append(op)
+            return await submit(op, **args)
+
+        with monkeypatch.context() as patched:
+            patched.setattr(session, "submit", recorded)
+            tools = await viewer.view("x_read", {"pane": "tools", "agent": "lead"})
+            older = await viewer.view("x_read", {"pane": "tools", "agent": "@lead", "before": 2})
+            nobody = await viewer.request("POST", "/v1/x_read", {"pane": "tools", "agent": "nobody"})
+            unnamed = await viewer.request("POST", "/v1/x_read", {"pane": "tools"})
+            wrong = await viewer.request("POST", "/v1/x_read", {"pane": "tools", "agent": "lead", "before": True})
+        words = dataclasses.asdict(await calls.page(session, "lead"))
+
+        assert await session.head() == head, "a read wrote an event"
+        assert submitted == [], "a pane submitted an op, which may write"
+    assert tools == json.loads(json.dumps(words)) and tools["cursor"] is None
+    assert tools["lines"][0]["text"].startswith("turn t1-") and tools["lines"][1]["text"] == "message_send completed"
+    assert any(line["text"] == f"w1 spawned as worker · {calls.UNJOINED}" for line in tools["lines"])
+    assert older["lines"] == [
+        {"kind": "", "text": "The journal holds no tool call of @lead's before these.", "ref": None, "warn": False}
+    ]
+    assert nobody.status == 404 and nobody.json()["error"] == "not_found: no agent nobody"
+    assert unnamed.status == wrong.status == 400
 
 
 async def test_tasks_and_entries_are_panes_of_x_read_and_the_feed_says_whenever_one_moves(web, session, monkeypatch):

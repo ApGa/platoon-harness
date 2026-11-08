@@ -20,7 +20,7 @@ from platoon_harness.http import Head, Rejected, Server, bearer, check_site, res
 from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
-from .. import __version__, approvals, channels, review
+from .. import __version__, approvals, calls, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import REF_IN_TEXT, no_interactions, no_provenance, read, who_reached_whom
 from ..review import changes_of, snapshots_of
@@ -308,11 +308,29 @@ class Web(Server[Request]):
                 return await self._channel("queue", params)
             case "entries":
                 return await self._channel("board", params)
+            case "tools":
+                return await self._tools(params)
         raise replies.Error(
             404,
             "there is no such pane: the page's panes are provenance, interactions, attention, changes, diff, ask, "
-            "tasks and entries",
+            "tasks, entries and tools",
         )
+
+    async def _tools(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """A page of the tool calls of the agent `agent`, in the words of `calls.page`, before the seq `before`, or the
+        newest, and the `cursor` of the page before it."""
+        agent, before = params.get("agent"), params.get("before")
+        if not isinstance(agent, str):
+            raise replies.Error(400, "agent is an agent's name, as its page names it")
+        if before is not None and (not isinstance(before, int) or isinstance(before, bool) or before < 1):
+            raise replies.Error(400, "before is a seq, the cursor of the page after it")
+        name = agent.removeprefix("@")
+        try:
+            await self.session.status(name)
+            return asdict(await calls.page(self.session, name, before=before))
+        except Refused as refused:
+            status = 404 if refused.refusal.code == "not_found" else 400
+            raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
 
     async def _channel(self, kind: Literal["queue", "board"], params: Mapping[str, Any]) -> dict[str, Any]:
         """A queue's tasks or a board's entries, by its name, `queue` or `board`, in the words the terminal's `/tasks`

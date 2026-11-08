@@ -3,7 +3,6 @@ from its link, shows the channels, the direct chats and the messages, follows th
 nothing twice, and on a view link shows every act disabled, saying why."""
 
 import asyncio
-import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -115,9 +114,7 @@ async def test_a_view_link_shows_every_act_disabled_saying_why(browser: Browser,
     for act in await acts.all():
         await expect(act).to_be_disabled()
         await expect(act).to_have_accessible_description(why)
-    unbuilt = page.locator(".person .x-acts button", has_text="Tool activity")
-    await expect(unbuilt).to_be_disabled()
-    await expect(unbuilt).to_have_accessible_description(re.compile("^Not built yet: "))
+    await expect(page.locator(".person .x-acts [data-x-tools]")).to_be_enabled()
     await expect(page.locator(".person .x-acts [data-x-review]")).to_be_enabled()
     await page.goto(served["view"].partition("#")[0] + "#person=you")
     links = page.locator("[data-x-link]")

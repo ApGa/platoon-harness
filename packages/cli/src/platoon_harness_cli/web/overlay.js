@@ -13,9 +13,6 @@
 // The feed keeps `live` current.
 const X = {caps: null};
 
-// What is not built over a session yet, and why: what the brief asks the page to show.
-X.unbuilt = {activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.'};
-
 // What the Provenance pane's field takes.
 X.REF = 'An event\'s ref, stream@version, whose provenance to show';
 
@@ -163,6 +160,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-channel .x-task, .x-channel .x-entry { padding-top: 8px; }
 .x-channel > .x-acts { padding: 8px 14px 0; }
 .x-review > .x-about, .x-review .x-end, .x-review .x-comment { padding: 8px 14px; margin: 0; font-size: 12.5px; }
+.x-tools > .x-end { padding: 8px 14px; }
 .x-tone-strong { font-weight: 700; }
 .x-tone-faint { color: var(--faint); }
 .x-tone-good { color: var(--good); }
@@ -225,8 +223,8 @@ setLive = state => {
 // a thread or what had reached an agent takes it from every pane of ours, and of ours, the first `X.PANES` names that
 // the address names takes it from the rest. A form's `args` go with it, and with provenance `from`, `text` where a
 // ref in text opened it.
-X.PANES = ['provenance', 'interactions', 'act', 'review', 'ask', 'tasks', 'entries'];
-KEYS.push('provenance', 'from', 'interactions', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
+X.PANES = ['provenance', 'interactions', 'act', 'review', 'ask', 'tasks', 'entries', 'tools'];
+KEYS.push('provenance', 'from', 'interactions', 'act', 'args', 'review', 'ask', 'tasks', 'entries', 'tools');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
@@ -244,17 +242,17 @@ readRoute = () => {
 
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, who reached whom,
 // `interactions=1`, an op's form, `act=`, filled in with `args=` where an action of a place in Needs you opened it with
-// what it fixes, what changed or a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a
-// board's entries, `entries=`. A pane's `args` is what else the address gives it: a form's `args`, or provenance's
-// `from`.
+// what it fixes, what changed or a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, a
+// board's entries, `entries=`, or an agent's tool activity, `tools=`. A pane's `args` is what else the address gives
+// it: a form's `args`, or provenance's `from`.
 // SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise
 // leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may
 // do now.
 X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Interactions || pane instanceof X.Form
-  || pane instanceof X.Review || pane instanceof X.Ask || pane instanceof X.Channel;
+  || pane instanceof X.Review || pane instanceof X.Ask || pane instanceof X.Channel || pane instanceof X.Tools;
 // An address with none of ours, for a go that opens something else in the pane.
 X.none = {provenance: null, from: null, interactions: null, act: null, args: null, review: null, ask: null, tasks: null,
-  entries: null};
+  entries: null, tools: null};
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
@@ -263,7 +261,7 @@ route = async function () {
   if (r.layout === 'map' || r.thread || r.knew) return;
   const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.interactions ? ['interactions', X.Interactions]
     : r.act ? ['act', X.Form] : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : r.tasks ? ['tasks', X.Tasks]
-      : r.entries ? ['entries', X.Entries] : [];
+      : r.entries ? ['entries', X.Entries] : r.tools ? ['tools', X.Tools] : [];
   if (!key) {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
@@ -1219,6 +1217,57 @@ document.addEventListener('submit', e => {
   X.provenance(f.elements.ref.value.trim(), false);
 });
 
+// An agent's tool activity, in the pane the address names, `tools=` and the agent: its tool calls, read through x_read
+// in the words of calls.py, a page at a time, newest first, whole turns of them, each a heading over its calls, each
+// call one line from its first item to its last, and each spawn under the call whose id its anchor holds, or saying it
+// joins no known call. A line follows into its event's provenance, as a link of the Provenance pane does, and Back
+// comes back. Read again reads the newest page again, and Read on the page before the last drawn, below it. Only the
+// newest read is drawn.
+X.Tools = class {
+  constructor(agent) {
+    this.name = agent;
+    $('#pane').innerHTML = html`<div class="phead"><h2>Tool activity of ${name(agent)}</h2><button class="btn" data-x-again>Read again</button><button class="close" data-close-pane title="Close">×</button></div><div class="scroll x-tools"><div class="x-provenance"><div class="loading">Loading</div></div><div class="x-end"></div></div>`.s;
+    this.box = $('#pane .x-provenance');
+    this.foot = $('#pane .x-tools > .x-end');
+    this.reads = 0;
+    this.list();
+  }
+  async list() {
+    const n = ++this.reads;
+    this.onward(null);
+    let r;
+    try { r = await api('x_read', {pane: 'tools', agent: this.name}); } catch (e) {
+      if (!this.dead && n === this.reads) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
+      return;
+    }
+    if (this.dead || n !== this.reads) return;
+    this.box.innerHTML = html`${r.lines.map(X.line)}`.s;
+    this.onward(r.cursor);
+  }
+  // Draw the page before the last drawn, below it, and focus its first line that opens an event.
+  async more() {
+    const n = this.reads, before = this.cursor, drawn = this.box.children.length;
+    if (before == null) return;
+    this.onward(null);
+    let r;
+    try { r = await api('x_read', {pane: 'tools', agent: this.name, before}); } catch (e) {
+      if (!this.dead && n === this.reads) { this.onward(before); this.foot.insertAdjacentHTML('afterbegin', html`<div class="note">${e.message}</div>`.s); }
+      return;
+    }
+    if (this.dead || n !== this.reads) return;
+    this.box.insertAdjacentHTML('beforeend', html`${r.lines.map(X.line)}`.s);
+    this.onward(r.cursor);
+    const next = [...this.box.children].slice(drawn).find(el => el.matches('button'));
+    if (next) next.focus();
+  }
+  // Offer Read on while a page before the last drawn may hold more.
+  onward(cursor) {
+    this.cursor = cursor;
+    this.foot.innerHTML = (cursor == null ? html`` : html`<button class="btn" data-x-more>Earlier calls: read on</button>`).s;
+  }
+  destroy() { this.dead = true; }
+};
+
 // A queue's or a board's own view, of its tasks or its entries, opened in the pane from its chat.
 X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)
   ? html`<button class="btn" data-x-channel="${c.description}" data-x-name="${c.name}">${c.description === 'queue' ? 'Tasks' : 'Entries'}</button>`
@@ -1305,8 +1354,8 @@ MapView = class extends MapView {
   }
 };
 
-// A person's page: an agent's acts, what changed, and what of it is not built yet, or on the person's own, the session's
-// acts and new links, which a view link cannot make.
+// A person's page: an agent's acts, its tool activity and what changed, or on the person's own, the session's acts and
+// new links, which a view link cannot make.
 PersonView = class extends PersonView {
   constructor(main, id) {
     super(main, id);
@@ -1322,7 +1371,7 @@ PersonView = class extends PersonView {
     });
     const why = X.caps.credential === 'view' ? X.caps.cannot : null;
     const more = agent
-      ? [html`<button class="btn"${X.disabled(X.unbuilt.activity)}>Tool activity</button>`, html`<button class="btn" data-x-review="changes">Review changes</button>`]
+      ? [html`<button class="btn" data-x-tools="${id}">Tool activity</button>`, html`<button class="btn" data-x-review="changes">Review changes</button>`]
       : ['view', 'control'].map(kind => html`<button class="btn" data-x-link="${kind}"${X.disabled(why)}>New ${kind} link</button>`);
     card.insertAdjacentHTML('afterend', html`<div class="x-acts">${acts}</div><div class="x-acts">${more}</div><p class="x-said" aria-live="polite"></p>`.s);
   }
@@ -1386,7 +1435,7 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-named], [data-x-interactions], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-named], [data-x-interactions], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open], [data-x-tools]');
   if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
@@ -1396,6 +1445,7 @@ onClick = e => {
   if (d.xAsk) return go({...X.none, ask: d.xAsk, thread: null, knew: null}, true);
   if (d.xChannel) return go({...X.none, [d.xChannel === 'queue' ? 'tasks' : 'entries']: d.xName, thread: null, knew: null}, true);
   if (d.xOpen) return go({...X.none, act: d.xOpen, args: d.xArgs, thread: null, knew: null}, true);
+  if (d.xTools) return go({...X.none, tools: d.xTools, thread: null, knew: null}, true);
   if (d.xTest) return X.test(el);
   if ('xMore' in d) return S.pane.more();
   if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);

@@ -1750,7 +1750,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   name to be drawn, and every `approval/*`, as an approval's id is its harness's, so its approvals and who answered them are
   drawn, a read for each glob, kept to what every read covered. A child's spawn is drawn under the call that made it, the
   tool item of its spawner's whose `native_id` its anchor holds, whichever of the two came first, by the join in `calls.py`,
-  which the page's Tool activity is to share, and a call leaves the window with the spawns under it. A spawn that joins no
+  which the page's Tool activity shares, and a call leaves the window with the spawns under it. A spawn that joins no
   call the transcript holds is drawn where the journal has it, saying it joins no known call. An agent's turns are drawn
   cut where `spans` says, read as the agent is shown and again as each of its turns ends: a cut stands at the first call
   of the span after it and shows the last call of the span it ends, whose provenance says its credit row is the whole
@@ -1788,7 +1788,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
   `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, but for a
   diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op that
-  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, who reached whom, in the lines `/reached` draws, and the provenance a message's actions open, where the
+  writes, and for a diff and an agent's tool calls the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, who reached whom, in the lines `/reached` draws, an agent's tool calls, a page of whole turns at a time, each spawn under its call by the join in `calls.py` or said to join no known call, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
   actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every
