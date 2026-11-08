@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`topology/spec.py`](../../packages/sdk/src/platoon_harness/topology/spec.py), [`runtime/opening.py`](../../packages/sdk/src/platoon_harness/runtime/opening.py), [architecture section 5.1](../architecture.md#51-one-write), [section 6](../architecture.md#6-operations), [section 7](../architecture.md#completion) and [section 8](../architecture.md#8-topology), [RFC 0007](0007-topology-as-grants.md), [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md) and [RFC 0050](0050-a-script-is-a-person-or-a-program.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's ruling of 2026-11-08 on its first question, which accepted this design |
-| Implementation | `refactor!: Remove the map-reduce preset, which no program runs`, `refactor!: Drop the program key from a topology, as a program is a script` and `docs: Show a program run from Python in the topologies guide` |
+| Implementation | `refactor!: Remove the map-reduce preset, which no program runs`, `refactor!: Drop the program key from a topology, as a program is a script`, `docs: Show a program run from Python in the topologies guide`, `fix: Name the script way when run is given a team left to its program` and `feat: Refuse a person's resume of a session left to its program` |
 
 ## Summary
 
@@ -17,7 +17,8 @@ survive a restart: after a crash it is run again on the session, reads what the 
 it makes the same way on every run, so a command the journal answered before is answered again and acts once. A topology names no
 program: its `program` key and the `Program` model go, and a team or a manifest that sets the key is refused as any unknown key is.
 `until = "program"` stays, and leaves the session to the program that owns it, so a person's start of such a team, by `run`, by the
-terminal UI or by `Session.start` under `human:<name>`, is refused before any cost, naming the script way. The `map-reduce` preset,
+terminal UI or by `Session.start` under `human:<name>`, is refused before any cost, naming the script way, and so is a person's
+resume of such a session, by `session resume`. The `map-reduce` preset,
 which only a program could run, goes, and `git-swarm` keeps its channels and its `until`, its program's arguments going with the key.
 
 ## Motivation
@@ -84,7 +85,15 @@ and its journal still reads as history. The project is unreleased, and [AGENTS.m
 `until = "program"` stays. A session under it is done only when its program closes it, or its budget runs out (section 7), so a
 session a person starts under it would wait for a close no program makes. `prepare`, which every start goes through, refuses it
 under a person's principal, `human:<name>`, naming the script way, with every other problem the team has, before any cost. `run`,
-the terminal UI and `Session.start`'s default each start a session as a person, so each refuses such a team, `run` with exit 78.
+the terminal UI and `Session.start`'s default each start a session as a person, so each refuses such a team, `run` with exit 78,
+whomever the team starts.
+
+A person's resume of such a session would wait alike, for a close only its program makes, once the harnesses it brought back had
+begun to spend. `session resume` is a person's, so it refuses a session whose manifest says `until = "program"`, with exit 78,
+before any harness comes back, naming the program and the script way: its script runs again, with `Session.resume`. The terminal
+UI resumes on a runtime of its own, which a program's session refuses already, as it issues no owner credential (RFC 0050).
+`Session.resume` takes no principal, as the runtime acts as the one the manifest names, so a script that calls it on a program's
+session acts as that program, which is how the program's own script runs again.
 
 `team check` knows no principal, as a team is checked before anyone starts it, so it says nothing of `until = "program"`: a script's
 team is sound. A training system starts each rollout as a program, which can close it, so `trainable_problems` no longer counts
@@ -106,7 +115,8 @@ What changes for users:
 - **Python:** `platoon_harness.topology.Program` and `platoon_harness.topology.map_reduce` are gone, and `git_swarm` takes `role`
   alone.
 - **The command line and the terminal UI:** `run` refuses a team under `until = "program"` with exit 78, and the terminal UI's start
-  refuses it, each naming the script way.
+  refuses it, each naming the script way. `session resume` refuses a session under it with exit 78, naming its program and the
+  script way.
 - **The journal:** nothing changes.
 
 ## Alternatives
@@ -128,7 +138,8 @@ What changes for users:
 - A program's session lives in the script's process: the script leaving stops it, resumable, and a crash of the script is a crash
   of the runtime.
 - A program run again after a crash adds nothing it added before, as long as it keys each command by what it is for.
-- `run` and the terminal UI cannot start a `git-swarm` team, or any team under `until = "program"`. A script can.
+- `run` and the terminal UI cannot start a `git-swarm` team, or any team under `until = "program"`, and `session resume` cannot
+  resume such a session. A script can do both.
 - A team file that sets `program`, a third party's among them, is refused as any unknown key is, and a session from before 13926da
   that named a program is refused on resume and reads as history.
 - A trainable team may say `until = "program"`, and the training system's program then closes each rollout's session itself.
@@ -138,7 +149,7 @@ What changes for users:
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone; `until = "program"` refused under a person's principal; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/integration/test_tui.py::test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way`, `tests/unit/topology/test_check.py::test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is` and `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
+| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone; `until = "program"` refused under a person's principal, and to a person's resume; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78`, `::test_a_person_s_resume_of_a_session_left_to_its_program_is_refused_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/integration/test_tui.py::test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way`, `tests/unit/topology/test_check.py::test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is` and `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
 | M2 the script way, shown | The topologies guide's program, run again after a crash by a test | `tests/unit/runtime/test_programs.py::test_a_program_run_again_after_a_crash_adds_nothing_twice` | |
 
 ## Open questions

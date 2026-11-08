@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness import Team
+from platoon_harness import Session, Team
 from platoon_harness.config import Manifest
 from platoon_harness.runtime.paths import read_conformance
 
@@ -664,6 +664,27 @@ async def test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with
     assert checked.code == 0, checked.stdout
     assert (ran.code, ran.stderr) == (78, f"platoon-harness: {SCRIPT_WAY}\n")
     assert not (repo.folder / "home" / "sessions").exists()
+
+
+async def test_a_person_s_resume_of_a_session_left_to_its_program_is_refused_naming_the_script_way_with_78(cli: Cli):
+    """`session resume` is a person's and waits for the session to settle, which one left to its program does once that
+    program closes it, so it is refused before its harnesses come back, and the script that owns the session resumes
+    it. Its journal still reads."""
+    team = Team.loads(guide_s_reviewers().replace('harness = "claude"', f"harness = {STAND_IN}"))
+    async with Session.start(team, name="s", principal="program:reviews", root=cli.folder / "home", cwd=cli.folder):
+        pass
+    before = journal(cli, "s").read_bytes()
+
+    resumed = await cli.run("session", "resume", "s")
+    read = await cli.run("events", "s", "--json")
+
+    assert resumed.code == 78
+    assert resumed.stderr == (
+        "platoon-harness: topology.until: `program` leaves session s to the program that owns it, `program:reviews`, "
+        'and `session resume` is a person\'s: run its script again, with `Session.resume("s")`\n'
+    )
+    assert journal(cli, "s").read_bytes() == before
+    assert read.code == 0 and read.lines()[-1]["type"] == "session.stopped"
 
 
 async def test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key(cli: Cli):

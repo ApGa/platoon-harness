@@ -10,15 +10,17 @@ from pathlib import Path
 from typing import Annotated
 
 from cyclopts import Parameter
+from pydantic import ValidationError
 
 from platoon_harness import ConfigError, Refused, Session, Team
+from platoon_harness.config import Manifest
 from platoon_harness.extensions import Installed
 from platoon_harness.kernel import GIST_LIMIT, first
 from platoon_harness.primitives import Policy
 from platoon_harness.runtime import Runtime
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import find_root, session_folder
-from platoon_harness.schema import seconds
+from platoon_harness.runtime.paths import MANIFEST, find_root, session_folder
+from platoon_harness.schema import Problem, seconds
 from platoon_harness.session import Reason
 
 from .exits import ENDINGS, INTERRUPTED, Usage
@@ -247,6 +249,19 @@ async def run(
     return await own(session, within=within, json=json, message=(recipients, text))
 
 
+def _refuse_a_session_left_to_its_program(folder: Path) -> None:
+    """`session resume` is a person's, and a session left to its program waits for that program to close it, which
+    nobody here would do. A manifest that does not read is the runtime's to report."""
+    with contextlib.suppress(ValidationError):
+        manifest = Manifest.model_validate_json((folder / MANIFEST).read_bytes())
+        if Team.loads(manifest.team).topology.until == "program":
+            what = (
+                f"`program` leaves session {folder.name} to the program that owns it, `{manifest.principal}`, and "
+                f'`session resume` is a person\'s: run its script again, with `Session.resume("{folder.name}")`'
+            )
+            raise ConfigError([Problem("topology.until", what)])
+
+
 async def resume(
     session: str,
     /,
@@ -257,7 +272,9 @@ async def resume(
     """Restart a session whose runtime has gone, and own it in the foreground until it settles.
 
     Its harnesses come back, and a turn they were cut off in is told and woken, which can spend money. It prints what
-    its runtime does, from its start, and exits as `run` does.
+    its runtime does, from its start, and exits as `run` does. A session left to its program, under
+    `until = "program"`, waits for that program to close it, so it is refused with exit 78, before any cost, naming
+    the script way: its script resumes it.
 
     For example:
 
@@ -275,7 +292,8 @@ async def resume(
     """
     within = _seconds(timeout)
     with as_given():
-        session_folder(find_root(), session)
+        folder = session_folder(find_root(), session)
+    _refuse_a_session_left_to_its_program(folder)
     note(f"resuming session {session}: its harnesses come back, and can spend money")
     return await own(Session.resume(session), within=within, json=json)
 

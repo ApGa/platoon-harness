@@ -565,6 +565,7 @@ so it adds no task and starts no reviewer twice, and it goes on from there. `Ses
 methods, such as `task_add`, choose a new one for each call, so send what must act once through `submit`, keyed by what it is for and
 not by when it was sent: a second run can read what the first did not. The session issues no owner credential, so anyone who attaches
 only reads, and it cannot detach: its runtime runs in the script's process, and the script leaving stops it, resumable.
+`platoon-harness session resume` is a person's, so it refuses such a session, naming this way.
 
 ## Check before you spend
 

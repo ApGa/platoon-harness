@@ -903,8 +903,8 @@ due timer. A wait the runtime could close counts as a deliverable delivery, and 
 un-settle a session. Only `close` ends it. `session.close` with `if_done` closes only if that is still true at commit, so a message
 that gets in first keeps a session open, and once it is closing `message.send` is refused `conflict`, since nothing would reach
 anyone. `until` picks when a headless session closes: `"settled"`, `"role:lead"` or `"program"`. All stop at budget exhaustion.
-`"program"` leaves it to the program that owns the session, which closes it, so a person's start of such a team is refused before any
-cost, naming the script way. A team with no root uses `"settled"`. A session's prompt goes to the agent it names, or else to every agent the session starts, as
+`"program"` leaves it to the program that owns the session, which closes it, so a person's start of such a team, and a person's
+resume of such a session by `session resume`, is refused before any cost, naming the script way. A team with no root uses `"settled"`. A session's prompt goes to the agent it names, or else to every agent the session starts, as
 `Team.recipients` says. A close ends no agent: one left idle keeps no end in the journal, which is unknown and not `cancelled`, so a
 training system retires or cancels each of its agents before a rollout returns (§14).
 

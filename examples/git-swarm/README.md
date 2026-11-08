@@ -115,5 +115,6 @@ The same command without the `--set` line, and with `--plan-login`, runs the wor
 mean to run several agents headless on your plan login at once, as `Session.start`'s `plan_login` does. If the script
 dies, its session stops with it, resumable: `population` keeps nothing, so a script that runs it again on the session,
 with `Session.resume` in place of `Session.start`, starts no worker and records no outcome twice, as
-[Run a program from Python](../../docs/how-to/topologies.md#run-a-program-from-python) says. This population has not run
+[Run a program from Python](../../docs/how-to/topologies.md#run-a-program-from-python) says, and
+`platoon-harness session resume`, a person's, refuses the session, naming this way. This population has not run
 on real models yet: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.

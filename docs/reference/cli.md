@@ -452,7 +452,9 @@ platoon-harness session resume [OPTIONS] SESSION
 Restart a session whose runtime has gone, and own it in the foreground until it settles.
 
 Its harnesses come back, and a turn they were cut off in is told and woken, which can spend money. It prints what
-its runtime does, from its start, and exits as `run` does.
+its runtime does, from its start, and exits as `run` does. A session left to its program, under
+`until = "program"`, waits for that program to close it, so it is refused with exit 78, before any cost, naming
+the script way: its script resumes it.
 
 For example:
 

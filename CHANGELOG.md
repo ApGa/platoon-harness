@@ -777,12 +777,13 @@ named here is closed.
   agents may be live at once, which the kernel holds against every spawner, and `git_swarm(role, *, live)` takes it. A team that
   leaves it out is refused at load, naming it. Board `outcomes` is where its program writes each worker's outcome, and everyone
   reads it. See [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
-- **A team left to its program is a program's to start.** `until = "program"` leaves a session to the program that owns it, which
-  closes it, so a person's start of such a team, by `run`, the terminal UI or `Session.start` under `human:<name>`, is refused before
-  any cost, `run` with exit 78, naming the script way: `Session.start(team, principal="program:<name>")`. `team check` says nothing
-  of it, as a script's team is sound, and `trainable_problems` no longer counts `program` among the `until`s only a person reaches,
-  as a training system's program owns each rollout's session. `team show` says such a session closes when the program closes it.
-  See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
+- **A team left to its program is a program's to start and to resume.** `until = "program"` leaves a session to the program that
+  owns it, which closes it, so a person's start of such a team, by `run`, the terminal UI or `Session.start` under `human:<name>`,
+  is refused before any cost, `run` with exit 78, naming the script way: `Session.start(team, principal="program:<name>")`. So is a
+  person's resume of such a session by `session resume`, with exit 78, naming its program and `Session.resume`. `team check` says
+  nothing of it, as a script's team is sound, and `trainable_problems` no longer counts `program` among the `until`s only a person
+  reaches, as a training system's program owns each rollout's session. `team show` says such a session closes when the program
+  closes it. See [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,
   which it reads and never writes, so nothing is written through it, and a view link reaches it as it reaches SwarmChat's
