@@ -812,16 +812,16 @@ async def test_an_answer_goes_around_a_delivery_that_hangs(tmp_path):
         assert items[-2].data["outcome"] == "allow"
 
 
-# Takeover.
+# Hold.
 
 
-async def test_deliveries_wait_while_a_takeover_holds_an_agent(tmp_path):
+async def test_deliveries_wait_while_an_agent_is_held(tmp_path):
     async with Session.start(solo([Say("heard")]), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
         await session.send("@bob", "first")
         await in_state(session, "bob", "waking", "running", "idle")
         await until(lambda: of_type(session, "turn.ended"), session)
-        await session.takeover("@bob")
+        await session.hold("@bob")
 
         await session.send("@bob", "while held")
 
@@ -834,7 +834,7 @@ async def test_deliveries_wait_while_a_takeover_holds_an_agent(tmp_path):
         assert offered[-1].data["items"][0]["ref"] == "inbox/bob@2"
 
 
-async def test_a_delivery_already_asked_for_waits_out_a_takeover(tmp_path):
+async def test_a_delivery_already_asked_for_waits_out_a_hold(tmp_path):
     held = asyncio.Event()
     delivered = asyncio.Event()
 
@@ -858,7 +858,7 @@ async def test_a_delivery_already_asked_for_waits_out_a_takeover(tmp_path):
         host._dispatch = paused
         await session.send("@bob", "held back")
         await until(lambda: runtime_ready(runtime), session)
-        await session.takeover("@bob")
+        await session.hold("@bob")
         host._dispatch = real
         held.set()
         await session.submit("agent.status", agent="@bob")

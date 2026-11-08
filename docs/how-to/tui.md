@@ -143,9 +143,9 @@ all it takes, and what stands when it is left empty. A body's field stores its t
 command line's flag does. The ones that end an agent or the session, erase a body, or run a commit's code as you, ask
 once, and what came of an op is said: done, with what it answered, or its refusal. A read is what the screen draws, so
 the palette offers no query: the command line prints any. `wait`
-and the ops on a wait are left out too, as a wait parks a turn and you have none. `agent takeover` holds an agent's
-deliveries until `agent release`, as the command line's does, and says, as `/takeover` does, that driving the agent's
-native session is not built yet.
+and the ops on a wait are left out too, as a wait parks a turn and you have none. `agent hold` holds an agent's
+deliveries until `agent release`, as the command line's does. Driving the agent's own terminal, `/takeover`, is not
+built yet.
 
 ### Review what changed
 
@@ -305,7 +305,7 @@ before the session's. `^` is Ctrl.
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
-| `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more |
+| `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |
 
 ### Between a session's parts

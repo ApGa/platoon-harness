@@ -858,6 +858,16 @@ named here is closed.
 
 ### Changes
 
+- **`agent takeover` is `agent hold`, as it holds an agent's deliveries and no more.** The op `agent.hold`, the command
+  `platoon-harness agent hold`, `Session.hold` and the gap `hold` replace `agent.takeover`, `agent takeover`,
+  `Session.takeover` and the gap `takeover`, with no alias, and do what they did. A journal recorded before the rename names
+  the old op and gap kind, and is read as it stands: it opens and its views fold, an agent it held stays held until
+  `agent release`, and its gap reads `takeover` wherever a gap's kind is said, in `exposure`, `session.ending`,
+  `session.metrics`, the terminal's transcript and inspector and the provenance lines of the command line and the page, and
+  counts, as `hold` does, as one content could come through. `agent.takeover` is refused `not_found`, but for a retry under a
+  key the journal answered, which is answered again, as any retry is, and `agent takeover` is an unknown command, exit 64. The
+  terminal's Alt+T and `/takeover` stay the planned driving of an agent's own terminal, and say that `agent hold` holds
+  deliveries and no more. See [RFC 0076](docs/rfcs/0076-holding-an-agent-is-agent-hold.md).
 - **The courier reads only the waits it closes.** Each pass asked for the waits that hold or have run out by reading every
   wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
   waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded

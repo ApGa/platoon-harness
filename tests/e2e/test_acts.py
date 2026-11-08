@@ -646,7 +646,7 @@ async def test_the_page_runs_every_write_op_the_person_holds_through_one_form(br
             "body.tombstone": {"--sha256": erased},
             "agent.spawn": {"--name": "w9", "--child-role": "worker", "--goal": "take work", "--stays": "no"},
             "agent.interrupt": {"--agent": "@lead", "--below": "yes"},
-            "agent.takeover": {"--agent": "@lead"},
+            "agent.hold": {"--agent": "@lead"},
             "agent.release": {"--agent": "@lead"},
             "agent.cancel": {"--agent": "@w9"},
             "repo.test": {"--commit": "0" * 40},

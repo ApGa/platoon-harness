@@ -116,13 +116,13 @@ For example:
 - [`annotations`](#platoon-harness-annotations)
 - [`agent`](#platoon-harness-agent)
     - [`cancel`](#platoon-harness-agent-cancel)
+    - [`hold`](#platoon-harness-agent-hold)
     - [`interrupt`](#platoon-harness-agent-interrupt)
     - [`list`](#platoon-harness-agent-list)
     - [`release`](#platoon-harness-agent-release)
     - [`retire`](#platoon-harness-agent-retire)
     - [`spawn`](#platoon-harness-agent-spawn)
     - [`status`](#platoon-harness-agent-status)
-    - [`takeover`](#platoon-harness-agent-takeover)
     - [`unread`](#platoon-harness-agent-unread)
 - [`approval`](#platoon-harness-approval)
     - [`resolve`](#platoon-harness-approval-resolve)
@@ -850,6 +850,29 @@ For example:
 * `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
+#### platoon-harness agent hold
+
+```console
+platoon-harness agent hold --agent STR [OPTIONS] SESSION
+```
+
+Hold an agent's deliveries until `platoon-harness agent release` returns it, recording the gap `hold` from here.
+
+Refused `unsupported` with no resume.
+
+For example:
+
+    platoon-harness agent hold SESSION --agent AGENT
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+**Parameters**:
+
+* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
+* `--key`: Name this command, so that running it again with the same key is one operation.
+
 #### platoon-harness agent interrupt
 
 ```console
@@ -986,29 +1009,6 @@ For example:
 **Parameters**:
 
 * `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
-
-#### platoon-harness agent takeover
-
-```console
-platoon-harness agent takeover --agent STR [OPTIONS] SESSION
-```
-
-Hold an agent's deliveries until `platoon-harness agent release` returns it, recording the gap `takeover` from here.
-
-Driving its native session while it is held is not built. Refused `unsupported` with no resume.
-
-For example:
-
-    platoon-harness agent takeover SESSION --agent AGENT
-
-**Arguments**:
-
-* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
-
-**Parameters**:
-
-* `--agent`: An agent, as `@agent`. `platoon-harness peers` shows who is here. **[required]**
-* `--key`: Name this command, so that running it again with the same key is one operation.
 
 #### platoon-harness agent unread
 

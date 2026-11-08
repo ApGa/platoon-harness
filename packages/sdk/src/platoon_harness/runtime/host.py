@@ -203,7 +203,7 @@ class Host:
                     self._begin(effect)
 
     def _held(self, agent: str | None) -> bool:
-        """Whether a takeover holds this agent's deliveries. A release moves the journal, so this looks again."""
+        """Whether a person holds this agent's deliveries. A release moves the journal, so this looks again."""
         kernel = self._kernel
         return kernel.query(kernel.runtime, "agent.status", {"agent": agent}).result["state"] == "held"
 

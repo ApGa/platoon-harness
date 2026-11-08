@@ -401,7 +401,7 @@ async def test_a_roster_row_names_its_parent_as_that_parent_s_row_does(kernel):
 async def test_a_roster_row_says_who_holds_an_agent(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
 
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
     assert roster(kernel, "bob")["held_by"] == "ada"
 
     result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))

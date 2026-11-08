@@ -68,8 +68,9 @@ Of what `ops.list` says the person holds, every op but `wait` and the ops on a w
 since a wait parks a turn and a person has none, and but a query, one marked `query` or `exposes`, which a pane draws and the
 command line prints. `ops.list` already leaves out what no grant gives a person, the runtime's ops and an agent's own. No field is
 added to the op table: an extension's op is offered when the person holds its grant, as every op is, and no extension needs a field
-yet. `agent.takeover` is offered and runs, as it does at the command line, holding an agent's deliveries until `agent.release`,
-and its own words say that driving the agent's native session is not built, as `/takeover` says.
+yet. `agent.hold` is offered and runs, as it does at the command line, holding an agent's deliveries until `agent.release`,
+and driving the agent's native session is not built, as `/takeover` says. The op was `agent.takeover` until
+[RFC 0076](0076-holding-an-agent-is-agent-hold.md) named it for what it does.
 
 ### 2. One form, made from the schema
 
@@ -200,8 +201,8 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
 - An extension's op is offered in both palettes and run through the form with no core edit, and never asked about.
 - A view link sees what needs the person, each action disabled saying why, and on history Needs you shows what the journal holds,
   where both were disabled.
-- `agent takeover` runs from both palettes, where the terminal's said it was not built, and its words, at the command line too,
-  say that driving the agent's native session is not built, where they said it held deliveries so that a human could drive it.
+- `agent hold` runs from both palettes, where the terminal's said it was not built, and its name and words, at the command line
+  too, say it holds deliveries and no more, where they said it held deliveries so that a human could drive it.
 - The page's form takes the pane, so opening a thread or provenance closes it, as each closes the other.
 - `view_info` reads `ops.list` on every link and every load, where it read it on a live control link alone.
 - Every pane milestone 4 adds reads through `x_read`, and words its answer in Python.
@@ -233,11 +234,11 @@ are reverted.
    said it may not. On 2026-11-08 the owner ruled that it may, and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md),
    a draft, does it on a page of its own, which `web` with no session serves, so the page's palette still offers the ops of the one session
    it serves, and nothing here was torn out.
-2. Whether both palettes run `agent takeover` is the owner's to confirm: the terminal's palette kept it out until now, as an
+2. Whether both palettes run `agent hold` is the owner's to confirm: the terminal's palette kept it out until now, as an
    earlier fix said a hold for a terminal not built was a defect. The default, pending the owner's ruling, is that every write op
-   a person holds runs from both, as the plan's definition of done asks, with the op's words saying what it does and that driving
-   the agent's native session is not built, which the owner's question on the terminal's features defers by default. A ruling
-   the other way would leave it out of both palettes, and tear nothing else out.
+   a person holds runs from both, as the plan's definition of done asks, with the op's name and words saying what it does, and
+   driving the agent's native session, which the owner's question on the terminal's features defers by default, left to
+   `/takeover`. A ruling the other way would leave it out of both palettes, and tear nothing else out.
 3. Where a person resolves a conflict in an agent's workspace is the owner's. The default, pending the owner's ruling, is that the
    conflict's gist says to tell its agent or to resolve it in your own checkout, never in the agent's workspace, and the workspace
    guide says a commit made there is recorded as that agent's, as evidence at the workspace's assurance. Recording a commit's

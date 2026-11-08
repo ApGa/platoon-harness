@@ -2,13 +2,15 @@
 architecture section 11, Coverage."""
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import get_args
 
 from platoon_harness import primitives
-from platoon_harness.primitives import GAPS, Gap
+from platoon_harness.kernel import Args, Kernel, Principal, Txn, op
+from platoon_harness.primitives import GAPS, PRIMITIVES, Gap
 
-from .support import end_turn, of_type, report, result_of, spawn, start_turn
+from .support import ROLES, end_turn, enroll, grant, of_type, refusal, report, result_of, send, spawn, start_turn
 
 SDK = Path(primitives.__file__).parents[1]
 
@@ -72,16 +74,65 @@ async def test_a_crash_window_outside_a_turn_begins_at_the_work_it_could_not_pro
     assert admit["kind"] == "admit" and of_type(kernel, "gap.recorded")[-1].data["since"] == admit["id"]
 
 
-async def test_a_takeover_records_its_gap_where_the_hold_begins(kernel, ada):
+async def test_a_hold_records_its_gap_where_it_begins(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
 
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "@bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "@bob"}))
     held = of_type(kernel, "agent.held")[-1]
     gap = of_type(kernel, "gap.recorded")[-1]
     result_of(await kernel.submit(ada, "agent.release", {"agent": "@bob"}))
 
-    assert gap.seq > held.seq and gap.data == {"plane": "control", "what": "takeover", "since": None}
-    assert [event.data["what"] for event in of_type(kernel, "gap.recorded")] == ["takeover"]
+    assert gap.seq > held.seq and gap.data == {"plane": "control", "what": "hold", "since": None}
+    assert [event.data["what"] for event in of_type(kernel, "gap.recorded")] == ["hold"]
+
+
+@op("agent.takeover")
+def takeover(txn: Txn, a: Args) -> None:
+    """bob held, as `agent.takeover` recorded it before it was renamed `agent.hold`: its gap named `takeover`."""
+    txn.emit("agent.held", "agent/bob", gist=f"bob held by {txn.me.id}", agent="bob", data={"by": txn.me.id})
+    data = {"plane": "control", "what": "takeover", "since": None}
+    txn.emit("gap.recorded", "agent/bob", gist="gap: takeover", agent="bob", data=data, v=2)
+
+
+BEFORE = tuple(replace(found, ops=(*found.ops, takeover)) if found.name == "agent" else found for found in PRIMITIVES)
+"""The primitives as they were before the rename, as far as a hold goes."""
+
+
+async def test_a_journal_from_before_the_rename_keeps_its_gap_named_takeover(folder, clock):
+    """A journal from before `agent.takeover` became `agent.hold` opens and folds as it is: its agent stays held until
+    `agent.release`, and its gap keeps the name `takeover`, which `GAPS` no longer holds, so it is taken as a gap
+    content could come through, as `hold` is. `agent.takeover` is refused `not_found`, but for a retry of a command the
+    journal answered, which is answered from it, as any retry is."""
+    ada = Principal(id="human:ada")
+    before = Kernel.open(folder, clock=clock, extensions=BEFORE)
+    result_of(await before.submit(before.runtime, "session.open", {"roles": ROLES, "limits": {}}))
+    await grant(before, "agent")
+    await grant(before, "human")
+    await enroll(before, ada)
+    alice = await spawn(before, "alice")
+    await spawn(before, "bob", ready={"resume": True})
+    sent = (await send(before, alice, "@bob", "while held"))["ref"]
+    result_of(await before.submit(ada, "agent.takeover", {}, key="hold bob"))
+    inside = (await send(before, alice, "@alice", "meanwhile"))["ref"]
+    before.close()
+
+    kernel = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+    try:
+        await kernel.rebuild_all()
+        held = result_of(kernel.query(kernel.runtime, "exposure", {"agent": "bob", "ref": sent, "before": inside}))
+        ending = result_of(kernel.query(kernel.runtime, "session.ending", {}))
+
+        assert held["answer"] == "unknown"
+        assert [(incident["what"], incident["carries"]) for incident in held["incidents"]] == [("takeover", True)]
+        assert ending["gaps"] == [{"agent": "bob", "what": "takeover", "plane": "control", "count": 1}]
+        assert result_of(await kernel.submit(ada, "agent.takeover", {}, key="hold bob")) is None
+        assert refusal(await kernel.submit(ada, "agent.takeover", {})).code == "not_found"
+        assert refusal(await kernel.submit(ada, "agent.hold", {"agent": "@bob"})).code == "conflict"
+        result_of(await kernel.submit(ada, "agent.release", {"agent": "@bob"}))
+        result_of(await kernel.submit(ada, "agent.hold", {"agent": "@bob"}))
+        assert [event.data["what"] for event in of_type(kernel, "gap.recorded")] == ["takeover", "hold"]
+    finally:
+        kernel.close()
 
 
 async def test_every_gap_is_on_its_member_s_plane(kernel):

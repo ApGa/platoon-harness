@@ -121,7 +121,7 @@ PRIMITIVES = (
             lifecycle.interrupt,
             lifecycle.cancel,
             lifecycle.retire,
-            lifecycle.takeover,
+            lifecycle.hold,
             lifecycle.release,
             lifecycle.start,
             lifecycle.instruct,

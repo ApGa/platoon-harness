@@ -5279,7 +5279,7 @@ GAPS: Mapping[Gap, Kind] = {
     "unknown_update": Kind("control", ("driver", "runtime"), carries=True),
     "hidden_call": Kind("model", ("driver",), carries=True),
     "crash_window": Kind("control", ("driver", "runtime"), carries=True),
-    "takeover": Kind("control", ("runtime",), carries=True),
+    "hold": Kind("control", ("runtime",), carries=True),
     "workspace_unobserved": Kind("control", ("runtime",), carries=True),
 }
 ```
@@ -5297,7 +5297,7 @@ Gap = Literal[
     "unknown_update",
     "hidden_call",
     "crash_window",
-    "takeover",
+    "hold",
     "workspace_unobserved",
 ]
 ```
@@ -5830,7 +5830,7 @@ PRIMITIVES = (
             lifecycle.interrupt,
             lifecycle.cancel,
             lifecycle.retire,
-            lifecycle.takeover,
+            lifecycle.hold,
             lifecycle.release,
             lifecycle.start,
             lifecycle.instruct,
@@ -8571,13 +8571,13 @@ async def retire(self, agent: str) -> None: ...
 
 Take an agent that has stopped working out of the team. Its history stays.
 
-**`takeover`**
+**`hold`**
 
 ```python
-async def takeover(self, agent: str) -> None: ...
+async def hold(self, agent: str) -> None: ...
 ```
 
-Hold an agent's deliveries.
+Hold an agent's deliveries until `release`.
 
 **`release`**
 
@@ -8585,7 +8585,7 @@ Hold an agent's deliveries.
 async def release(self, agent: str) -> None: ...
 ```
 
-Hand a held agent back, which records the gap.
+Hand a held agent back.
 
 **`close`**
 

@@ -212,7 +212,7 @@ async def test_an_offered_entry_is_not_offered_twice(kernel):
 async def test_a_held_agent_gets_nothing(kernel, ada):
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob", ready={"resume": True})
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
 
     await send(kernel, alice, "@bob", "queued")
 

@@ -189,7 +189,7 @@ KEYMAP: tuple[Key, ...] = (
         "takeover",
         "Drive the agent in view in its own terminal",
         "workspace",
-        planned="driving an agent's own terminal is planned: `agent takeover` holds its deliveries and no more",
+        planned="driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more",
     ),
     Key(
         "ctrl+d",

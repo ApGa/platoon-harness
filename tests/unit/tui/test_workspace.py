@@ -400,7 +400,7 @@ async def test_a_frame_cut_short_by_its_screen_going_is_dropped(root, monkeypatc
 
 async def test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_gives_it(root):
     """After the session's acts by their typed commands, each op `ops.list` says the person holds that is no query and
-    no wait, named with a space for its dot and worded as its command's help, a takeover among them, which holds an
+    no wait, named with a space for its dot and worded as its command's help, a hold among them, which holds an
     agent's deliveries as the command line's does; and each runs through its form."""
     async with attached(team(), root) as (owner, app, pilot):
         held = await owner.ops()
@@ -411,7 +411,7 @@ async def test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_giv
         assert sorted(commands) == sorted(name.replace(".", " ") for name in writes)
         for name in writes:
             assert commands[name.replace(".", " ")] == _command(person_ops()[name]).__doc__.split("\n\n")[0]
-        assert "agent takeover" in commands
+        assert "agent hold" in commands
 
         await pilot.press("ctrl+p", *"agent retire")
         await pilot.press("enter")

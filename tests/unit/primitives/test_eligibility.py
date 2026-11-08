@@ -200,7 +200,7 @@ async def test_a_person_entry_handed_below_a_call_makes_it_ineligible_unless_not
     await send(kernel, ada, "@bob", "a person's word")
     await worked(kernel, "bob", ("after the person", None), read=True)
     await admitted(kernel, "cy")
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "@cy"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "@cy"}))
     await worked(kernel, "cy", ("held", None))
     result_of(await kernel.submit(ada, "agent.release", {"agent": "@cy"}))
     for name in ("bob", "cy"):

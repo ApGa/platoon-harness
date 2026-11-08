@@ -29,7 +29,7 @@ Gap = Literal[
     "unknown_update",
     "hidden_call",
     "crash_window",
-    "takeover",
+    "hold",
     "workspace_unobserved",
 ]
 
@@ -51,7 +51,7 @@ GAPS: Mapping[Gap, Kind] = {
     "unknown_update": Kind("control", ("driver", "runtime"), carries=True),
     "hidden_call": Kind("model", ("driver",), carries=True),
     "crash_window": Kind("control", ("driver", "runtime"), carries=True),
-    "takeover": Kind("control", ("runtime",), carries=True),
+    "hold": Kind("control", ("runtime",), carries=True),
     "workspace_unobserved": Kind("control", ("runtime",), carries=True),
 }
 """Every gap a `gap.recorded` can name, and what each is."""

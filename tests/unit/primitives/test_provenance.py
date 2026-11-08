@@ -468,11 +468,11 @@ async def test_a_compaction_never_undoes_seen(kernel):
 
 
 async def test_a_gap_qualifies_answers_after_where_it_began(kernel, ada):
-    """A takeover is recorded where its hold begins, and a crash_window names the start of the turn it cut."""
+    """A hold is recorded where it begins, and a crash_window names the start of the turn it cut."""
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob", ready={"resume": True})
     sent = (await send(kernel, alice, "@bob", "while held"))["ref"]
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "@bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "@bob"}))
     inside = (await send(kernel, alice, "@alice", "meanwhile"))["ref"]
     await start_turn(kernel, "bob")
     began = of_type(kernel, "turn.started")[-1].seq
@@ -481,13 +481,13 @@ async def test_a_gap_qualifies_answers_after_where_it_began(kernel, ada):
 
     held = exposure(kernel, "bob", sent, before=inside)
 
-    assert isinstance(held, Unknown) and [incident.what for incident in held.incidents] == ["takeover"]
+    assert isinstance(held, Unknown) and [incident.what for incident in held.incidents] == ["hold"]
     assert (crashed.data["what"], crashed.data["since"]) == ("crash_window", began)
     whole = exposure(kernel, "bob", sent)
     assert isinstance(whole, Unknown)
     assert [(incident.what, incident.began) for incident in whole.incidents] == [
         ("crash_window", began),
-        ("takeover", held.incidents[0].began),
+        ("hold", held.incidents[0].began),
     ]
 
 
@@ -1073,7 +1073,7 @@ CARRYING = {
     "unknown_update",
     "hidden_call",
     "crash_window",
-    "takeover",
+    "hold",
     "workspace_unobserved",
 }
 steps = st.lists(

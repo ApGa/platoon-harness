@@ -437,12 +437,12 @@ class Session:
         """Take an agent that has stopped working out of the team. Its history stays."""
         await self._do("agent.retire", agent=agent)
 
-    async def takeover(self, agent: str) -> None:
-        """Hold an agent's deliveries."""
-        await self._do("agent.takeover", agent=agent)
+    async def hold(self, agent: str) -> None:
+        """Hold an agent's deliveries until `release`."""
+        await self._do("agent.hold", agent=agent)
 
     async def release(self, agent: str) -> None:
-        """Hand a held agent back, which records the gap."""
+        """Hand a held agent back."""
         await self._do("agent.release", agent=agent)
 
     async def close(self) -> None:

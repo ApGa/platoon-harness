@@ -387,7 +387,7 @@ once that one has finished, so a failed `admit` stops its `launch`. An op may em
   itself. Otherwise a row nobody settles waits in `attention`, for a person to say with `effect.settle`.
 - **The host** is the daemon that performs these kinds, but for `erase`, which the kernel's own eraser does, on public names. It reads `effect.ready`, level-triggered, and gives each
   effect its own task, so a hung `deliver` holds up nothing with a priority. Driver links live on the `Host` object and not in the
-  daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while a takeover holds its agent. Each
+  daemon, so a restarted daemon loses none, and a task it started finishes. A delivery waits while its agent is held. Each
   agent's reports are heard in order, one at a time, and a driver waits for its turn: `Process`'s own queue is what keeps a pipe
   draining. Every report is masked on the way in, whichever driver said it. Live text is masked as one stream, since a secret can
   straddle two deltas, so its tail waits for the next delta or any other report. Observed activity renews an agent's leases past half their
@@ -578,7 +578,7 @@ to do next.
 | Area | Commands | Queries |
 |---|---|---|
 | Session | `session.close` `session.cancel` `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `session.metrics` `topology.show` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `ops.list` `budget.status` |
-| Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `agent.unread` `peers` |
+| Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.hold` `agent.release` | `agent.list` `agent.status` `agent.unread` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
 | Queue | `task.add` `task.claim` `task.renew` `task.release` `task.complete` `task.fail` `task.list` | |
@@ -901,8 +901,10 @@ A goal no turn has begun on keeps the session unsettled, until a wake the budget
   [RFC 0062](rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md).
 - **Retiring** takes an agent that has stopped working out of the live team, never out of history. While it is at work, in a turn or
   on its way to one, it is refused `conflict`, and over working children as `finish` is: `cancel` is what stops one.
-- **Takeover.** `agent.takeover` holds deliveries, and the human drives the native session (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)), which records the gap `takeover` where
-  the hold begins; `agent.release` returns it, to its open turn if it has one. Human-driven turns carry human identity. Disabled with a reason on harnesses without resume.
+- **Hold.** `agent.hold` holds an agent's deliveries, already requested ones too, and records the gap `hold` where the hold begins;
+  `agent.release` returns it, to its open turn if it has one. Human-driven turns carry human identity. Disabled with a reason on
+  harnesses without resume. A person driving the native session, the terminal's `/takeover`, is planned (see
+  [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)). See [RFC 0076](rfcs/0076-holding-an-agent-is-agent-hold.md).
 
 ### Completion
 
@@ -1422,7 +1424,7 @@ writers, and whether content could reach an agent through it unseen:
 | `unknown_update` | control | a driver or the host, for a frame nobody's vocabulary covers | yes |
 | `hidden_call` | model | a driver, for a call the harness made out of sight | yes |
 | `crash_window` | control | the runtime, for a turn a crash or an exit cut, and a driver whose stop came to `SIGKILL` | yes |
-| `takeover` | control | the runtime, where a person's hold begins | yes |
+| `hold` | control | the runtime, where a person's hold begins | yes |
 | `workspace_unobserved` | control | the runtime, for a look that could not read a workspace | yes |
 
 `since` names where a gap recorded after the fact began: a `crash_window` names where the work it could not prove began, the

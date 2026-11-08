@@ -675,7 +675,7 @@ async def test_a_held_child_with_a_turn_open_holds_up_a_finish(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
     await spawn(kernel, "bob", role="linked", by=lead, ready={"resume": True})
     await start_turn(kernel, "bob")
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
 
     assert "@bob" in refusal(await kernel.submit(lead, "agent.finish", {})).detail
 
@@ -1154,7 +1154,7 @@ async def test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come(kern
     bob = await spawn(kernel, "bob", role="steerer", by=lead, goal="", ready=declared)
     await channel(kernel, "news")
     if still == "a person holding it":
-        result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+        result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
     await start_turn(kernel, "bob")
     if still == "a wait":
         result_of(await kernel.submit(bob, "wait", {"channels": ["#news"]}))
@@ -1174,7 +1174,7 @@ async def test_an_agent_that_does_not_stay_is_kept_by_what_is_still_to_come(kern
         await end_turn(kernel, "cy")
     elif still == "a child a person holds":
         await spawn(kernel, "cy", role="linked", by=bob, goal="", ready=declared)
-        result_of(await kernel.submit(ada, "agent.takeover", {"agent": "cy"}))
+        result_of(await kernel.submit(ada, "agent.hold", {"agent": "cy"}))
 
     await end_turn(kernel, "bob")
 
@@ -1278,7 +1278,7 @@ async def test_a_parent_that_does_not_stay_hears_each_child_s_end_before_its_own
     assert (state_of(kernel, "p")["status"], ready(kernel)["agents"]) == (None, ["p"])
 
 
-# Interrupt and takeover.
+# Interrupt and hold.
 
 
 async def test_interrupt_stops_a_turn_and_leaves_the_agent(kernel, ada):
@@ -1344,21 +1344,21 @@ async def test_stop_below_with_nobody_at_work_is_refused_saying_so(kernel, ada):
     assert refused.detail == "neither lead nor anyone below it is in a turn or on its way to one"
 
 
-async def test_takeover_holds_deliveries_and_release_records_a_gap(kernel, ada):
+async def test_hold_holds_deliveries_until_release_and_records_a_gap(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
 
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
     assert state_of(kernel, "bob")["state"] == "held"
 
     result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
     assert state_of(kernel, "bob")["state"] == "idle"
-    assert of_type(kernel, "gap.recorded")[-1].data["what"] == "takeover"
+    assert of_type(kernel, "gap.recorded")[-1].data["what"] == "hold"
 
 
 async def test_release_during_an_open_turn_returns_to_that_turn(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
     await start_turn(kernel, "bob")
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
 
     result_of(await kernel.submit(ada, "agent.release", {"agent": "bob"}))
     await send(kernel, ada, "@bob", "go")
@@ -1367,24 +1367,24 @@ async def test_release_during_an_open_turn_returns_to_that_turn(kernel, ada):
     assert result_of(kernel.query(kernel.runtime, "delivery.ready", {}))["agents"] == []
 
 
-async def test_takeover_is_disabled_with_a_reason_without_resume(kernel, ada):
+async def test_hold_is_disabled_with_a_reason_without_resume(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": False})
 
-    refused = refusal(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    refused = refusal(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
 
     assert refused.code == "unsupported" and "resume" in refused.detail
 
 
-async def test_takeover_is_for_humans(kernel):
+async def test_hold_is_for_humans(kernel):
     alice = await spawn(kernel, "alice")
     await spawn(kernel, "bob", ready={"resume": True})
 
-    assert refusal(await kernel.submit(alice, "agent.takeover", {"agent": "bob"})).code == "not_permitted"
+    assert refusal(await kernel.submit(alice, "agent.hold", {"agent": "bob"})).code == "not_permitted"
 
 
 async def test_human_driven_turns_carry_human_identity(kernel, ada):
     await spawn(kernel, "bob", ready={"resume": True})
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
 
     await start_turn(kernel, "bob")
 
@@ -1395,7 +1395,7 @@ async def test_human_driven_turns_carry_human_identity(kernel, ada):
 async def test_a_held_turn_posts_no_monitor(kernel, ada):
     lead = await spawn(kernel, "lead", role="lead")
     await spawn(kernel, "bob", by=lead, ready={"resume": True})
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
     await start_turn(kernel, "bob")
     head = kernel.head
 
@@ -3177,7 +3177,7 @@ async def test_an_agent_between_turns_for_ten_minutes_is_put_to_rest(kernel, clo
 
 async def test_an_agent_that_is_held_or_on_a_harness_that_cannot_resume_never_rests(kernel, clock, ada):
     await resumable(kernel, "bob")
-    result_of(await kernel.submit(ada, "agent.takeover", {"agent": "bob"}))
+    result_of(await kernel.submit(ada, "agent.hold", {"agent": "bob"}))
     await spawn(kernel, "cal", goal="")
     clock.advance(600)
 

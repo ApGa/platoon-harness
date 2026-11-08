@@ -480,12 +480,12 @@ def retire(txn: Txn, a: Named) -> None:
     end(txn, agent, "retired", reason=f"retired by {txn.me.id}")
 
 
-@op("agent.takeover", on=lambda a: f"agent/{a.agent}")
-def takeover(txn: Txn, a: Named) -> None:
-    """Hold an agent's deliveries until `agent.release` returns it, recording the gap `takeover` from here. Driving its
-    native session while it is held is not built. Refused `unsupported` with no resume."""
+@op("agent.hold", on=lambda a: f"agent/{a.agent}")
+def hold(txn: Txn, a: Named) -> None:
+    """Hold an agent's deliveries until `agent.release` returns it, recording the gap `hold` from here. Refused
+    `unsupported` with no resume."""
     if txn.me.kind != "human":
-        raise Refused("not_permitted", "only a human takes over an agent")
+        raise Refused("not_permitted", "only a human holds an agent")
     agent = _live(txn, a.agent)
     if not agent.resume:
         raise Refused("unsupported", f"{agent.name}'s harness cannot resume, so a human cannot return it")
@@ -500,7 +500,7 @@ def takeover(txn: Txn, a: Named) -> None:
         agent=agent.name,
         data={"by": txn.me.id},
     )
-    record_gap(txn, agent.name, "takeover")
+    record_gap(txn, agent.name, "hold")
 
 
 @op("agent.release", on=lambda a: f"agent/{a.agent}")
