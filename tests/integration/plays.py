@@ -5,6 +5,7 @@ request that comes after it, so a later reply can rest on what a tool answered, 
 
 import json
 import re
+import shlex
 import subprocess
 from collections.abc import Callable, Generator, Mapping
 from pathlib import Path
@@ -21,7 +22,6 @@ MODEL = "fake-model"
 """The model each role names on FakeModel, in place of the MODEL its example's page shows."""
 OFFLINE = 'auth.provider.env = ["OPENAI_BASE_URL", "OPENAI_API_KEY", "PI_OFFLINE"]'
 """The one line a run on FakeModel adds to an example's team, so pi starts with no network, as tests reach none."""
-SAMPLE = ROOT / "examples" / "sample-project"
 
 
 def provider(model: FakeModel, home: Path) -> dict[str, str]:
@@ -116,17 +116,13 @@ def patched(path: str, old: str, new: str) -> str:
     """A shell command that replaces `old` in a file with `new`, once, and fails if `old` is not there. Each command
     here is one line, as OpenHands' terminal runs one command at a time, and several only joined by `&&` or `;`."""
     script = f"p = Path({path!r}); t = p.read_text(); assert {old!r} in t; p.write_text(t.replace({old!r}, {new!r}, 1))"
-    return f"python3 -c {_quoted(f'from pathlib import Path; {script}')}"
+    return f"python3 -c {shlex.quote(f'from pathlib import Path; {script}')}"
 
 
 def appended(path: str, text: str) -> str:
     """A shell command that adds `text` at the end of a file."""
     script = f"p = Path({path!r}); p.write_text(p.read_text() + {text!r})"
-    return f"python3 -c {_quoted(f'from pathlib import Path; {script}')}"
-
-
-def _quoted(text: str) -> str:
-    return "'" + text.replace("'", "'\"'\"'") + "'"
+    return f"python3 -c {shlex.quote(f'from pathlib import Path; {script}')}"
 
 
 def sha_in(text: str) -> str:
@@ -213,7 +209,7 @@ def fixing(fix: str, subject: str, report: str) -> Play:
 
     def play(request: Request) -> Generator[Reply, Request]:
         yield terminal(fix)
-        yield terminal(f"{COMMITTED} {_quoted(subject)}")
+        yield terminal(f"{COMMITTED} {shlex.quote(subject)}")
         yield openhands("agent_finish", gist=report)
 
     return play
@@ -251,7 +247,7 @@ def queue_worker(fix: str, line: str, subject: str) -> Play:
     the merger and waits on its task, then finishes with the task's result."""
 
     def play(request: Request) -> Generator[Reply, Request]:
-        yield terminal(" && ".join([fix, noted(line), f"{COMMITTED} {_quoted(subject)}"]))
+        yield terminal(" && ".join([fix, noted(line), f"{COMMITTED} {shlex.quote(subject)}"]))
         branch = re.search(r"platoon-harness/\S+", said((yield terminal("git branch --show-current"))))
         assert branch is not None
         task = answered((yield openhands("task_add", queue="merges", gist=f"merge {branch[0]}")))["task"]
