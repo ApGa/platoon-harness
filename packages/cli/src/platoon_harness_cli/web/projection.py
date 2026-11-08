@@ -25,7 +25,7 @@ from platoon_harness.primitives import IN_A_RESULT
 from ..channels import moves
 from ..provenance import shows
 
-VERSION = 7
+VERSION = 8
 FILE = "swarmchat.sqlite"
 SHOWN = 20_000
 """The most a message shows, in characters: SwarmChat's own longest message."""
@@ -141,6 +141,13 @@ def preview(text: str) -> dict[str, Any]:
 def unshown(gist: str, refusal: Refusal) -> str:
     detail = refusal.detail if isinstance(refusal.detail, str) else json.dumps(refusal.detail)
     return f"{gist}\n\n[Its body is not shown: {detail}.]"
+
+
+def blank(event: Event, bodies: Bodies) -> bool:
+    """Whether what `event` says is whitespace alone: its gist, and its body, read, if it has one. A body unread is
+    not known to be blank."""
+    body = bodies.get(event.data["body"]) if event.data.get("body") else b""
+    return not event.gist.strip() and isinstance(body, bytes) and not body.strip()
 
 
 def shown(gist: str, body: bytes | Refusal | None) -> tuple[str, dict[str, Any] | None]:
@@ -440,8 +447,9 @@ class Projection:
 
     def _said(self, event: Event, bodies: Bodies) -> None:
         """What an agent's harness says in a turn it says to whoever runs it, so it is the agent's message to the
-        person. Thoughts and tools are no message."""
-        if event.data["kind"] == "message" and event.agent is not None:
+        person. Thoughts and tools are no message, and nor is text of whitespace alone, as a model can say before a
+        tool call: it says nothing, and the journal keeps it."""
+        if event.data["kind"] == "message" and event.agent is not None and not blank(event, bodies):
             chat = self._direct(self.person, event.agent, event)
             self._message(chat, event.agent, event, event.gist, event.data["body"], bodies)
 

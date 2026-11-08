@@ -8,11 +8,12 @@ import pytest
 
 from platoon_harness import Session
 from platoon_harness.kernel import Refusal
+from platoon_harness.testing import Say
 from platoon_harness_cli.web import bodies
 from platoon_harness_cli.web import projection as projection_module
 from platoon_harness_cli.web.projection import FILE, SHOWN, Projection, hashed, shown
 
-from ..runtime.support import in_state, of_type
+from ..runtime.support import in_state, of_type, until
 from .support import LONG, QUIET, caught_up, rebuilt, scenario, served, tables, team
 
 pytestmark = pytest.mark.timeout(60)
@@ -93,6 +94,25 @@ async def test_an_agent_s_own_words_are_its_message_to_the_person_and_nothing_el
     assert not any("what to do" in text for text in texts), "a thought reached a chat"
     assert not any("task_add" in text or "agent_spawn" in text or "usage" in text for text in texts)
     assert {kind for kind, _, _ in lines} <= {"message", "created", "ended"}
+
+
+async def test_text_of_whitespace_alone_is_no_line_and_the_journal_keeps_it(root):
+    """A harness's text of whitespace alone, as a model's before a tool call can be, says nothing to the person, so it
+    is no line of their chat, though the journal keeps it; a body of whitespace alone is none either."""
+    lead = [[Say("\n\n"), Say("  \n"), Say("on it")]]
+    async with Session.start(team(lead), name="s", root=root, cwd=root) as session, served(session, root) as web:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "go")
+
+        async def messages() -> list:
+            return [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "message"]
+
+        said = await until(messages, session, lambda found: len(found) == 3)
+        await caught_up(web, session)
+        lines = rows(session.folder, "SELECT text FROM lines WHERE kind = 'message' AND sender = 'lead'")
+
+    assert [event.gist for event in said] == ["\n\n", "  \n", "on it"]
+    assert lines == [("on it",)]
 
 
 async def test_a_message_is_delivered_by_evidence_alone_and_a_person_s_reading_is_none(root):
