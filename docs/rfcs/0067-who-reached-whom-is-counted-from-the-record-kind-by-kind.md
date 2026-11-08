@@ -202,9 +202,11 @@ link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), wher
 1. Should who reached whom be a pane over a new query, or SwarmChat's Map extended, and which edges count? M1 builds the default,
    pending the owner's ruling: a query listed in both clients' provenance and not on the Map, counting declared, observed, cause
    and ancestry edges apart, with each agent's unknowns. A Map drawn from the same query would remove nothing M1 builds, and a
-   different set of edges would change what the walk counts, not the answer's shape. M2 draws that default too, pending the
-   ruling: a Map drawn from the same query, or a different set of edges, would remove none of the wording, which draws what
-   the answer holds. Needed before this RFC is accepted.
+   different set of edges would change what the walk counts, not the answer's shape. The ruling was needed before M2, and M2
+   was built on the default while it waits, as milestone 4's plan says. A different set of edges would remove none of M2's
+   wording, which draws what the answer holds. A ruling for the Map would remove the page's Who reached whom button and its
+   `interactions` pane of `x_read`, while keeping the wording both clients share and the terminal's `/reached`. Needed
+   before this RFC is accepted.
 2. Is a walk per page cheap enough at scale? The scale tests of milestone 4 measure it at 100,000 events on the real stack and
    set its budget. Past that budget, a fold under an RFC of its own. Needed before the budget is set.
 
