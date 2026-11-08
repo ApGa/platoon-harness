@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **The page on a phone.** In a window narrower than 760 px the page is one column, the top bar, the list, what the
+  address shows and the pane, each at most as tall as the screen, and it goes to what you open: the pane, or else what
+  the address shows, a chat with its composer at the screen's foot. A press on a message gives it focus, which shows its
+  actions below it. At 390 px it scrolls no wider than the screen, and every act lies within it. A resize keeps where
+  each list is read, so a chat at its foot goes on following the session, and keeps focus and the composer's target.
+  Before, the page was laid out for a wide window alone, and at a phone's width it was not usable.
 - **An agent's live text in the page.** Tool activity now shows, above an agent's calls, what it is saying now, under
   words saying the journal does not hold it yet, read through a new `saying` pane of `x_read`: what it said since the
   journal last took what it said, its newest 20,000 characters, led by an ellipsis where some before them was lost or
@@ -1418,6 +1424,8 @@ named here is closed.
   did 25 times in the mixed team's recorded session through pi and OpenHands, and the page showed each as a message of blank
   space. The projection, at version 8, leaves such text out of a chat, and the journal keeps it, as the terminal does with a
   line you can open. A body it has not read is not taken for blank.
+- **The page's top bar wraps.** In a window narrower than about 1,100 px, its controls ran past its right edge, so Search,
+  the theme and whether the page is live could not be reached. They now take as many rows as they need.
 - **`check_extension` reports a check that could not run as a skip, never a pass.** Where the kernel refused to load an
   extension, its result held `names` and `naming_law` alone, the one the refusal was not of passed with the other's
   reason, and no other check ran, so faults it would have found went unsaid. The kernel stops loading at its first

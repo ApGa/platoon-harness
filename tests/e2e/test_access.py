@@ -1,7 +1,9 @@
-"""A disabled control in SwarmChat's page, in a real browser, over a session on scripted harnesses whose worker waits on
-an approval: the keyboard reaches it, its reason shows beside it, and a press does nothing else; and in every place the
-page draws one, from a view link and from a control link, it takes focus and its reason is its accessible description,
-as Playwright computes it by the accessible name and description spec. No screen reader is driven."""
+"""SwarmChat's page for the keyboard, a screen reader and a phone, in a real browser, over a session on scripted
+harnesses whose worker waits on an approval. A disabled control: the keyboard reaches it, its reason shows beside it,
+and a press does nothing else; and in every place the page draws one, from a view link and from a control link, it takes
+focus and its reason is its accessible description, as Playwright computes it by the accessible name and description
+spec. No screen reader is driven. On a phone's screen, emulated with touch, the page scrolls no wider than the screen
+and every act lies within it, and a resize keeps where a chat is read, focus and the composer's target."""
 
 import re
 from collections.abc import AsyncIterator
@@ -14,8 +16,8 @@ from platoon_harness import Session
 from platoon_harness_cli.web.server import Web
 
 from ..unit.runtime.support import in_state, of_type, until
-from ..unit.web.support import caught_up, team
-from .support import SECONDS, chat, opened, serving
+from ..unit.web.support import QUIET, caught_up, team
+from .support import SECONDS, chat, opened, said, serving, watched
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -187,3 +189,157 @@ async def test_no_disabled_control_lacks_a_reason_a_screen_reader_reads(browser:
         assert errors == []
 
     assert [place for place, count in held.items() if not count] == []
+
+
+PHONE = {"width": 390, "height": 844}
+"""A phone's screen held upright, in CSS pixels, as an iPhone 12, 13 or 14 gives it."""
+WIDE = {"width": 1280, "height": 800}
+REACHED = """() => {
+    const screen = document.documentElement, shown = el => el.checkVisibility({visibilityProperty: true});
+    const pointed = el => getComputedStyle(el).cursor === 'pointer'
+        && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer');
+    const controls = 'button, a[href], input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
+    const shows = document.querySelector('#overlay.on') || document.body;
+    const acts = [...shows.querySelectorAll('*')].filter(el => shown(el) && (el.matches(controls) || pointed(el)));
+    const missed = [];
+    for (const act of acts) {
+        act.closest('.msg')?.focus({preventScroll: true});
+        act.scrollIntoView({block: 'nearest', inline: 'nearest'});
+        const r = act.getBoundingClientRect(), x = r.left + r.width / 2;
+        const hit = document.elementFromPoint(x, r.top + Math.min(r.height, screen.clientHeight) / 2);
+        if (r.left < 0 || r.right > screen.clientWidth + 0.5 || !act.contains(hit)) missed.push(act.outerHTML);
+    }
+    return {acts: acts.length, missed, wider: screen.scrollWidth - screen.clientWidth};
+}"""
+"""Every act shown, a control or what the pointer presses, each scrolled into view, its message given focus first as a
+press gives it: the count, each that lies past the screen's sides or under something else, and how much wider than
+the screen the page scrolls."""
+PANES = {
+    "who reached whom": ("#layout=chat&interactions=1", "#pane .x-provenance button"),
+    "tool activity": ("#person=lead&tools=lead", "#pane .x-provenance button"),
+    "a queue's tasks": ("#layout=chat&tasks=tasks", "#pane .x-channel .x-change"),
+    "the map": ("#layout=map", "#pane .prow[data-person=lead]"),
+}
+"""More places, at an address alone, with what shows once each is drawn."""
+
+
+async def reached(page: Page) -> dict[str, object]:
+    """What `REACHED` finds, once nothing shown is loading."""
+    await expect(page.locator(".loading:visible")).to_have_count(0, timeout=SECONDS)
+    return await page.evaluate(REACHED)
+
+
+async def test_at_390_px_the_page_scrolls_no_wider_reaches_every_act_and_shows_the_composer(
+    browser: Browser, web: tuple[Session, Web]
+):
+    """On a phone's screen with touch, from a control link, in every place that draws a disabled control, in panes and
+    on the map: the page scrolls no wider than the screen, and every act, scrolled into view, lies within its sides with
+    nothing over it, Needs you's among them. A tap on a message gives it focus, which shows its actions, and the
+    composer shows whole at the foot of a chat as a press on its row opens it, and as a reload opens it."""
+    _, served = web
+    page = await (await browser.new_context(viewport=PHONE, has_touch=True)).new_page()
+    errors = watched(page)
+    await page.goto(served.link("control"))
+    await expect(page.locator("#list .row").first).to_be_visible(timeout=SECONDS)
+    base = page.url.partition("#")[0]
+    found: dict[str, dict[str, object]] = {}
+    for place, (route, heading, _) in PLACES.items():
+        await page.goto(base + route)
+        if "person=" not in route:
+            await page.locator("#list .row", has_text=heading.removeprefix("#")).first.click()
+        await expect(page.locator("#main h1")).to_have_text(heading, timeout=SECONDS)
+        found[place] = await reached(page)
+    for place, (route, drawn) in PANES.items():
+        await page.goto(base + route)
+        await expect(page.locator(drawn).first).to_be_visible(timeout=SECONDS)
+        found[place] = await reached(page)
+    await page.goto(base + "#layout=chat")
+    await page.locator("[data-x-needs]").click()
+    await expect(page.locator(".x-needs [data-x-action]").first).to_be_visible(timeout=SECONDS)
+    found["needs you"] = await reached(page)
+    await page.keyboard.press("Escape")
+
+    await chat(page, "w1 & you")
+    composer = page.locator("#main .x-composer")
+    await expect(composer).to_be_in_viewport(ratio=0.99)
+    message = page.locator("#main .msg", has_text="Ship the fix?")
+    await message.locator(".text").tap()
+    await expect(message).to_be_focused()
+    await expect(message.locator(".actions")).to_have_css("opacity", "1")
+    await page.reload()
+    await expect(page.locator("#main .msg", has_text="Ship the fix?")).to_be_visible(timeout=SECONDS)
+    await expect(composer).to_be_in_viewport(ratio=0.99)
+    await page.context.close()
+
+    assert {place: (it["missed"], it["wider"]) for place, it in found.items()} == {place: ([], 0) for place in found}
+    assert all(it["acts"] for it in found.values())
+    assert errors == []
+
+
+@pytest.fixture
+async def chatty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Web]:
+    """A session whose lead hangs in its first turn while forty messages from the person wait for it, each two lines
+    long or more on a phone, and `web` serving it."""
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    async with Session.start(QUIET, name="s", root=tmp_path, cwd=tmp_path) as session:
+        for n in range(1, 41):
+            await session.send("@lead", f"Message {n}: the parser splits on whitespace, so a quoted name breaks it")
+        async with serving("s", tmp_path) as served:
+            await caught_up(served, session)
+            yield served
+
+
+FRAME = "() => new Promise(done => requestAnimationFrame(() => done()))"
+"""A frame of the page's, which runs after any resize the frame began with has been handled."""
+FOOT = "el => el.scrollHeight - el.scrollTop - el.clientHeight"
+"""How far a list is from its foot."""
+TOP = """box => {
+    const edge = box.getBoundingClientRect().top;
+    const first = [...box.querySelectorAll('.msg')].find(m => m.getBoundingClientRect().top >= edge);
+    return [first.querySelector('.text').textContent, Math.round(first.getBoundingClientRect().top - edge)];
+}"""
+"""The first message whose top is in view, by its words, and how far below the list's top it is."""
+
+
+async def resized(page: Page, size: dict[str, int]) -> None:
+    """Resize the page, and wait until it has handled the resize."""
+    await page.set_viewport_size(size)
+    await page.wait_for_function(f"() => innerWidth === {size['width']}")
+    await page.evaluate(FRAME)
+
+
+async def test_a_resize_keeps_scroll_focus_and_the_composer_s_target(browser: Browser, chatty: Web):
+    """Between a wide window and a phone's screen, and back: a chat at its foot stays at its foot, so it goes on
+    following, and one read higher up keeps the message at its top where it was; focus stays in the composer, which
+    shows, with its draft, and its target stays the chat's."""
+    page, errors = await opened(browser, chatty.link("control"))
+    await chat(page, "lead & you")
+    await expect(said(page, "Message 40:")).to_be_visible(timeout=SECONDS)
+    box, composer = page.locator("#main .scroll"), page.locator("#main .x-composer textarea")
+    await composer.fill("a draft")
+    feet = []
+    for size in (PHONE, WIDE):
+        await resized(page, size)
+        feet.append(await box.evaluate(FOOT))
+        await expect(composer).to_be_focused()
+        await expect(composer).to_be_in_viewport(ratio=0.99)
+
+    await said(page, "Message 10:").evaluate(
+        "el => { const box = el.closest('.scroll'), m = el.closest('.msg');"
+        " box.scrollTop += m.getBoundingClientRect().top - box.getBoundingClientRect().top - 10; }"
+    )
+    await page.evaluate(FRAME)
+    above = await box.evaluate(FOOT)
+    read = [await box.evaluate(TOP)]
+    for size in (PHONE, WIDE):
+        await resized(page, size)
+        read.append(await box.evaluate(TOP))
+        await expect(composer).to_be_focused()
+        await expect(composer).to_have_value("a draft")
+        await expect(composer).to_be_in_viewport(ratio=0.99)
+        await expect(page.locator("#main .x-composer .x-to")).to_have_text("To @lead")
+    await page.context.close()
+
+    assert [foot <= 1 for foot in feet] == [True, True]
+    assert above > 80 and read[0][0].startswith("Message 10:") and read == [read[0]] * 3
+    assert errors == []

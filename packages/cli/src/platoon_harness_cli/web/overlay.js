@@ -120,6 +120,11 @@ X.refresh = async () => {
   X.needed();
 };
 
+// The top bar's controls take as many rows as they need at any width. At a phone's width the page is one column, the top
+// bar, the list, what main shows and the pane, each at most as tall as the screen, which the page scrolls down, and a
+// message's actions sit below it while focus is in it.
+X.PHONE = '(max-width: 759px)';
+
 document.head.insertAdjacentHTML('beforeend', `<style>
 .av.x-human { border-radius: 50%; }
 .x-composer { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; padding: 8px 16px 12px; border-top: 1px solid var(--line); }
@@ -182,6 +187,25 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-ask .x-whole { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .x-ask .x-below { margin: 0; padding: 0 14px 12px; color: var(--warn); font-size: 12.5px; }
 [aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+#app { grid-template-rows: auto minmax(0, 1fr); }
+#top { flex-wrap: wrap; row-gap: 8px; min-height: 48px; padding-block: 6px; }
+#stats { flex: 100 1 0; max-width: max-content; }
+@media ${X.PHONE} {
+  body { overflow: visible; }
+  #app, body.layout-map #app { height: auto; grid-template-rows: none; grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "side" "main" "pane"; }
+  #top { column-gap: 8px; padding-inline: 10px; }
+  #stats { order: 1; flex-basis: 100%; max-width: none; }
+  #side { max-height: 100svh; border-right: 0; border-bottom: 1px solid var(--line); }
+  #list { contain: layout paint; }
+  #main { height: 100svh; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .msg { flex-wrap: wrap; row-gap: 0; }
+  .actions { position: static; flex-basis: 100%; max-width: none; justify-content: flex-start; margin: 4px 0 0 44px; }
+  .msg:not(:focus-within) .actions { max-height: 0; margin: 0; padding: 0; border: 0; overflow: hidden; }
+  #pane { border-left: 0; border-top: 1px solid var(--line); }
+  #pane.open { width: auto; height: 100svh; }
+  #pane:not(.open) { display: none; }
+}
 </style>`);
 
 $('#find').insertAdjacentHTML('beforebegin', html`<button class="find" data-x-commands title="Each op you hold that writes, run through its form">Commands</button><button class="find" data-x-review="changes" title="What changed: each commit with its test and patch, and each workspace's uncommitted diff">Review changes</button><button class="find" data-x-interactions title="Each pair of makers, with the edges of each kind that lead from the first's events to the second's, and each agent's unknowns">Who reached whom</button>`.s);
@@ -311,6 +335,70 @@ apply = events => {
   if (again) ((at.dataset.xDecide && $(`[data-x-decide="${at.dataset.xDecide}"]`, again)) || again).focus();
   X.needed();
 };
+
+// ---------------------------------------------------------------------- a phone's width, and a resize
+
+// At a phone's width the page goes to what a person opens, as it opens and at each go, Back and Forward among them: to
+// the pane the address names, or else to what main shows, or at home, where all of it begins, to the top. A route that
+// no go asked for, as when the page reads what it may do again, moves nothing.
+X.phone = matchMedia(X.PHONE);
+X.went = true;
+const baseGo = go;
+go = (changes, keep) => { X.went = true; baseGo(changes, keep); };
+addEventListener('hashchange', () => { X.went = true; });
+X.show = () => {
+  const r = S.route, home = r.layout !== 'map' && !r.chat && !r.person && !r.q && !r.post && !r.unread;
+  if (r.layout !== 'map' && (r.thread || r.knew || X.PANES.some(key => r[key]))) $('#pane').scrollIntoView();
+  else if (home) scrollTo(0, 0);
+  else $('#main').scrollIntoView();
+};
+const routed = route;
+route = async function () {
+  await routed();
+  if (X.went && X.phone.matches) X.show();
+  X.went = false;
+};
+
+// A resize keeps where each list is read, though it moves every line in it: a chat at its foot, which follows the
+// session, stays at its foot, and any other list keeps its first line in view where it was, looked for in whatever runs
+// past both its edges, as its lines do. Where each is read is noted as it scrolls and as what it shows is drawn, by the
+// path to that line, which a list drawn again keeps. Into a phone's width, the page goes to the part that has focus, or
+// else to what a person opened.
+X.places = new WeakMap();
+X.note = box => {
+  const edge = box.getBoundingClientRect(), path = [];
+  let line = box;
+  for (;;) {
+    const i = [...line.children].findIndex(el => {
+      const r = el.getBoundingClientRect();
+      return r.height && (r.top >= edge.top || r.bottom > edge.bottom);
+    });
+    if (i < 0) break;
+    path.push(i);
+    line = line.children[i];
+    if (line.getBoundingClientRect().top >= edge.top) break;
+  }
+  const foot = S.view instanceof ChatView && S.view.scroll === box && S.view.atBottom();
+  X.places.set(box, {foot, path, offset: line.getBoundingClientRect().top - edge.top});
+};
+X.restore = () => {
+  for (const box of $$('.scroll')) {
+    const place = X.places.get(box);
+    if (!place) continue;
+    if (place.foot) { box.scrollTop = box.scrollHeight; continue; }
+    const line = place.path.reduce((el, i) => el && el.children[i], box);
+    if (line) box.scrollTop += line.getBoundingClientRect().top - box.getBoundingClientRect().top - place.offset;
+  }
+};
+document.addEventListener('scroll', e => { if (e.target.matches && e.target.matches('.scroll')) X.note(e.target); }, true);
+X.drawn = new MutationObserver(() => $$('.scroll').forEach(X.note));
+for (const part of ['#main', '#pane']) X.drawn.observe($(part), {childList: true, subtree: true});
+addEventListener('resize', X.restore);
+X.phone.addEventListener('change', () => {
+  if (!X.phone.matches) return;
+  const at = document.activeElement, part = at && at.closest('#top, #side, #main, #pane');
+  if (part) part.scrollIntoView(); else X.show();
+});
 
 // ---------------------------------------------------------------------- acting
 
@@ -943,7 +1031,8 @@ inline = text => {
 
 // Delivered, where SwarmChat says read: what a handover landed or a tool's result showed, which is evidence, and never
 // that it was understood. A person's reading leaves none. A reply cites the message's entry in the journal, which
-// its Reply button carries.
+// its Reply button carries. A press on a message gives it focus, so its actions show where no pointer hovers, as on a
+// phone, as they show while focus is in it.
 const baseMessageHtml = messageHtml;
 messageHtml = (m, prev, o = {}) => {
   const drawn = baseMessageHtml(m, prev, o);
@@ -959,6 +1048,7 @@ messageHtml = (m, prev, o = {}) => {
   const reply = html`<button data-x-reply="${m.id}" data-x-ref="${m.x_ref || ''}"${X.disabled(why)}>Reply</button>`;
   const provenance = html`<button data-x-provenance="${m.x_shows}" title="What ${m.x_shows} rests on, what came of it and whose work it reaches">Provenance</button>`;
   return new Safe(drawn.s
+    .replace('<div class="msg', () => '<div tabindex="-1" class="msg')
     .replace(knew, () => reached.s)
     .replace(html`<button data-receipts="${m.id}">Read by</button>`.s, () => html`<button data-receipts="${m.id}">Delivered to</button>`.s)
     .replace('\n</div><div class="actions">', () => `${X.card(m).s}\n</div><div class="actions">${reply.s}${provenance.s}`));

@@ -1791,7 +1791,9 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   writes, and for a diff the journal and the patch's body, and for an agent's tool calls the journal, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, who reached whom, in the lines `/reached` draws, an agent's tool calls, a page of whole turns at a time, each spawn under its call by the join in `calls.py` or said to join no known call, and what it is saying now, said not to be in the journal yet, which `web` reads only while a page asks, and lets go 25 s after the last ask or with the runtime that said it, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
-  actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every
+  actions show while focus is in it, so the keyboard reaches both, and a press gives it focus, so a phone reaches them. At a
+  phone's width the page is one column, which goes to what a person opens, and a resize keeps where each list is read,
+  focus and the composer's target. `web` with no session serves a page of our own, of every
   session under the root and how it stands, as the TUI's sessions screen lists them, on loopback alone, from one link the
   command says, whose server keeps its own credentials, so no link of a session's page opens it and it makes none. Open
   serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it,
