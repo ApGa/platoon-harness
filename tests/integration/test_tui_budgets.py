@@ -144,6 +144,7 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
 
 
 @pytest.mark.timeout(1800)
+@pytest.mark.xdist_group("scale")
 async def test_the_tui_attaches_to_a_100000_event_journal_within_its_budget(tmp_path):
     """The Scale case's run, then the terminal UI attached to it, until it draws every member idle and the first one's
     transcript to its last turn."""
