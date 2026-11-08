@@ -164,6 +164,13 @@ owner's ruling (Open questions).
   attention row. At 20,000 open mentions a reading took about 110 ms, nearly all of it there, and everything else under 5 ms.
   A second, cheaper way to group agents would drift from what the roster draws. If the scale tests find the roster past its
   budget, the remedy serves both.
+- **Law 8, with a view link polling.** No client may slow the writer, and anyone holding a view link may ask for the metrics
+  as often as they like. A reading runs on a read connection, off the runtime's event loop, and a reader of the WAL blocks no
+  commit; it takes the writer's lock only to copy its counters, as briefly as admitting a write does. But its Python shares
+  the interpreter's lock with the writer's thread, so a client that polls it fast takes time from the writer, as one that
+  polls the roster snapshot does today. Law 8 holds here no better and no worse than there. Milestone 4's scale tests
+  measure what a reading costs the writer on the real stack, `test_metrics_cost_the_writer_no_more_than_their_budget`, and
+  hold it to a budget set from what they measure; past it, the remedy is the roster's, above.
 - **Three horizons.** Counters cover the record since the session began, the views stand now, and the gauges run since the
   runtime started, so a resumed session's gauges start again. Each field says which it is. The gauges are read as they stand,
   so they may be past `head`, which says where the record was read.
@@ -191,8 +198,10 @@ owner's ruling (Open questions).
 - A person or a program asks how a session runs, from the command line, Python or a view link, and the scale tests read
   throughput, ack latency and memory by public names.
 - A query may read the kernel's gauges, so `Txn` has six members, and a command that asks is refused. Tests pin both.
-- Each session folds one view more, at one upsert an event; a session from before it refolds it as its writer opens, and a
-  read-only reader of one that never had it is refused `unavailable`, naming the view, until a writer has.
+- Each session folds one view more, at one upsert an event; a session from before it refolds it as its writer opens. Until a
+  writer has, a read-only reader of such a session, as of every session closed before this change, is refused `unavailable`
+  on every query, naming the view, and not on `session.metrics` alone, as a read-only kernel answers nothing from views
+  behind its journal: `platoon-harness session refold`, or resuming it, brings it up to date.
 - Nothing is limited. Resource use is reported, the runtime's own, and an agent's harness reads unknown.
 - What no runtime measured reads None, with why, and never zero.
 

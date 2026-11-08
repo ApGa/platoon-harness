@@ -75,7 +75,8 @@ named here is closed.
   a sentence, and what nothing measured is None, never zero, with why in `unknown`: every gauge on a closed session,
   and what an agent's harness processes use, always. A person or a program reads it, on a view credential too, and an
   agent is refused it. That no agent holds it, and that resource use is reported and never limited, is the default
-  pending the owner's ruling. See
+  pending the owner's ruling. A session closed before this change has no `Counters`, so every query of it is refused,
+  naming the view, until `platoon-harness session refold`, or resuming it, folds it. See
   [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
 - **The kernel's gauges, by public names.** `Kernel.gauges()`, and `txn.gauges()` for a query, give what a live kernel
   has measured since it opened its journal for writing, as `Gauges`: the events and commits, the writes queued now and
