@@ -22,7 +22,7 @@ from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__, approvals, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
-from ..provenance import read
+from ..provenance import REF_IN_TEXT, no_provenance, read
 from ..review import changes_of, snapshots_of
 from ..roster import status_of
 from . import replies
@@ -201,7 +201,8 @@ class Web(Server[Request]):
     async def _info(self, held: Held) -> dict[str, Any]:
         """The server, and in `x` what this page may do: the credential's class, whether a runtime holds the session,
         who the person is, the ops their grants hold, a form for each op they hold that writes, on any link, the ops
-        asked about before they run, the most bytes a body may be, and why the page may do nothing, when it may not."""
+        asked about before they run, the most bytes a body may be, the pattern a ref in text is found by, and why the
+        page may do nothing, when it may not."""
         live, name = self.live(), self.session.name
         cannot = None
         if held.kind == "view":
@@ -221,6 +222,7 @@ class Web(Server[Request]):
             "forms": [_page_form(form) for form in forms(ops)],
             "confirmed": sorted(CONFIRMED),
             "body_limit": BODY_LIMIT,
+            "refs": REF_IN_TEXT.pattern,
             "cannot": cannot,
         }
         return self._server_info() | {"x": x}
@@ -390,16 +392,20 @@ class Web(Server[Request]):
         return asdict(ask)
 
     async def _provenance(self, params: Mapping[str, Any]) -> dict[str, Any]:
-        """What the session's provenance queries say of the event `ref`, in the lines the terminal draws, and `at`, the
-        message it is in its chat, if one shows it, where following it opens."""
-        ref = params.get("ref")
+        """What the session's provenance queries say of the event `ref`, opened `from` `text` where a text named it, in
+        the lines the terminal draws, and `at`, the message it is in its chat, if one shows it, where following it
+        opens."""
+        ref, opened = params.get("ref"), params.get("from")
         if not isinstance(ref, str):
             raise replies.Error(400, "ref is an event's ref, `stream@version`")
+        if opened not in (None, "text"):
+            raise replies.Error(400, "from is `text`, for a ref opened from text, or left out")
+        from_text = opened == "text"
         try:
-            panel = await read(self.session, ref)
+            panel = await read(self.session, ref, from_text=from_text)
         except Refused as refused:
             status = 404 if refused.refusal.code == "not_found" else 400
-            raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+            raise replies.Error(status, no_provenance(ref, refused, from_text=from_text)) from None
         event = panel.event
         return {
             "ref": event["ref"],

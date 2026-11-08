@@ -1,17 +1,32 @@
 """How provenance reads, which the terminal and the browser say alike: one event's sources, its uses and the
 contributors to it, each link labelled by how it is known, from the four queries, and what estimators said of
 it, each by its producer and version, beside the span a model call lies in, from `spans`. Every answer says the head it
-was read at, where it stops counting, whether its turn was still open, and what its page left out."""
+was read at, where it stops counting, whether its turn was still open, and what its page left out. A ref a text names is
+found by one pattern, which both clients follow to that ref's own provenance."""
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from platoon_harness import Session
+from platoon_harness import Refused, Session
 from platoon_harness.kernel import Event
 
 Answer = Mapping[str, Any]
 """A query's answer, or an annotation, as JSON."""
+
+REF_IN_TEXT = re.compile(
+    r"(?<![A-Za-z0-9_./+@#-])([a-z]+(?:/[A-Za-z0-9_.+-]+)+@[1-9][0-9]{0,17})(?:#L[1-9][0-9]*-[1-9][0-9]*)?"
+    r"(?![A-Za-z0-9_@/-])"
+)
+"""A ref as a text names one, `stream@version` with `#La-b` for lines, standing apart from the words around it, so
+none is found inside a link's address. Its first group is the event it names. It is written so that a browser's
+`RegExp` reads it as Python does, and the page finds refs by it too."""
+FROM_TEXT = (
+    "opened from a ref in text, which records no link: naming an event in text is no citation, and joins nothing in "
+    "the record"
+)
+"""What a panel opened from a ref in text says first: following it is reading, and the record holds nothing of it."""
 
 _SCRIPT = "callId"
 """Codex's anchor, which names the Code Mode script that made a call, so what a call under it returned went to that
@@ -45,16 +60,28 @@ def shows(event: Event) -> str:
     return carried or f"{event.stream}@{event.version}"
 
 
-async def read(session: Session, ref: str) -> Panel:
+async def read(session: Session, ref: str, *, from_text: bool = False) -> Panel:
     """What a panel shows of one event, asked of `session` now, each answer at a head of its own, and for a model call
-    the spans of the turn it was reported in."""
+    the spans of the turn it was reported in; opened `from_text`, saying first that this records no link. A ref that
+    names no event is refused as the queries refuse it, which `no_provenance` words."""
     lineage = (await session.lineage(ref)).model_dump(mode="json")
     asked = lineage["event"]["ref"]
     uses, contributors = await session.uses(asked), await session.contributors(asked)
     said = [annotation.model_dump(mode="json") for annotation in await session.annotations(asked)]
     answers = (answer.model_dump(mode="json") for answer in (uses, contributors))
     spans = await _spans_of(session, lineage["made"]) if lineage["event"]["type"] == "model.called" else None
-    return Panel(lineage["event"], lines_of(session.name, lineage, *answers, said, spans))
+    lines = lines_of(session.name, lineage, *answers, said, spans)
+    if from_text:
+        lines.insert(1, Line("", FROM_TEXT))
+    return Panel(lineage["event"], lines)
+
+
+def no_provenance(ref: str, refused: Refused, *, from_text: bool = False) -> str:
+    """Why `ref` has no provenance to show, as the queries refused it, and for a ref opened from text that names no
+    event, that text can name what nothing is."""
+    if from_text and refused.refusal.code == "not_found":
+        return f"{ref} names no event of this session: text can name what nothing is, as only a citation is checked"
+    return f"{ref} has no provenance to show: {refused}"
 
 
 async def _spans_of(session: Session, made: Answer) -> list[Answer]:

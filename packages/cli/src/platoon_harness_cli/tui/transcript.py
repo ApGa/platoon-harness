@@ -18,6 +18,7 @@ from textual.geometry import Region, Size
 from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
+from textual.style import Style
 
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Delta, Event, Page
@@ -26,6 +27,7 @@ from platoon_harness.primitives import Span
 from .. import approvals
 from ..approvals import Ask
 from ..calls import UNJOINED, Join
+from ..provenance import REF_IN_TEXT
 from .approvals import rows_of
 from .keymap import bindings
 from .rows import CHOSEN, strip_of
@@ -131,10 +133,18 @@ def _who(said: str) -> Content:
     return SafeText(said if said.startswith("@") or said == "runtime" else f"@{said.partition(':')[2] or said}", "bold")
 
 
+def _linked(text: Content) -> Content:
+    """Text with each ref it names underlined, holding the event that ref names, which a click on it opens."""
+    for found in REF_IN_TEXT.finditer(text.plain):
+        text = text.stylize(Style(underline=True) + Style.from_meta({"ref": found[1]}), found.start(), found.end())
+    return text
+
+
 def line_of(event: Event) -> Content | None:
-    """An event as one line, or None for one a transcript leaves out. Any event has a line: its gist, at least."""
+    """An event as one line, or None for one a transcript leaves out. Any event has a line: its gist, at least, with
+    each ref it names a link."""
     data: dict[str, Any] = event.data if isinstance(event.data, dict) else {}
-    gist = SafeText(" ".join(event.gist.split()))
+    gist = _linked(SafeText(" ".join(event.gist.split())))
     more = (" ▸", "dim") if data.get("body") else ""
     match event.type:
         case "message.sent":
@@ -272,6 +282,13 @@ class Transcript(ScrollView, can_focus=True):
 
     class Moved(Message):
         """Following started or stopped."""
+
+    class Named(Message):
+        """A ref a line's text names was clicked, which opens that ref's own provenance."""
+
+        def __init__(self, ref: str) -> None:
+            super().__init__()
+            self.ref = ref
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -783,6 +800,10 @@ class Transcript(ScrollView, can_focus=True):
         self.refresh()
 
     def on_click(self, event: events.Click) -> None:
+        """Open or close the line clicked, or on a ref its text names, open that ref's provenance."""
+        if (ref := event.style.meta.get("ref")) is not None:
+            self.post_message(self.Named(ref))
+            return
         index = event.y + int(self.scroll_y)
         if 0 <= index < len(self._rows):
             self.toggle(self._rows[index][0])

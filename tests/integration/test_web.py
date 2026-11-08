@@ -15,6 +15,8 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from platoon_harness_cli.provenance import REF_IN_TEXT
+
 from .cli import SECONDS, Cli, crew, finished, line_where, said, solo
 
 pytestmark = pytest.mark.timeout(120)
@@ -92,6 +94,7 @@ async def test_web_says_its_links_and_ends_cleanly_on_sigterm_or_ctrl_c_leaving_
             "forms": [],
             "confirmed": info["x"]["confirmed"],
             "body_limit": info["x"]["body_limit"],
+            "refs": REF_IN_TEXT.pattern,
             "cannot": None,
         }
         assert {"message.send", "session.close"} <= {form["op"] for form in info["x"]["forms"]}

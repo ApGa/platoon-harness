@@ -10,6 +10,7 @@ import pytest
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
+from platoon_harness_cli.provenance import FROM_TEXT
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.provenance import Provenance
@@ -257,3 +258,36 @@ async def test_a_turn_s_cut_opens_the_span_it_ends_whose_row_is_the_whole_span_s
     assert f"{whole} from {first.first} to this one" in said_of
     assert f"one of the span's calls chose the write {first.writes[0]}" in said_of
     assert second.first not in said_of
+
+
+async def click(pilot, app: TerminalUI, words: str) -> None:
+    """Click the transcript where it draws `words`, as a person would."""
+    transcript = app.screen.query_one(Transcript)
+    for y in range(transcript.size.height):
+        if (x := transcript.render_line(y).text.find(words)) >= 0:
+            await pilot.click(Transcript, offset=(x + 1, y))
+            return
+    raise AssertionError(f"the transcript draws no {words!r}")
+
+
+async def test_a_ref_in_a_line_s_text_opens_its_own_provenance_saying_it_records_no_link(root):
+    """A ref a message's text names opens that ref's own panel, which says first that it was opened from text, which
+    records no link; one that names no event says so."""
+    answer = {**ANSWER, "gist": f"the tests pass, as {ASKED} says, and nothing/here@9 does not"}
+    async with answered(root, [Call("message_send", answer)]) as (_, app, pilot):
+        await workspace(app).show(Focus.of_person("human:you"))
+        await drawn(pilot, lambda text: "nothing/here@9" in text)
+
+        await click(pilot, app, ASKED)
+        await drawn(pilot, lambda text: f"Provenance of {ASKED}" in text and "Credit and rewards" in text)
+        opened = said(app)
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: not isinstance(app.screen, Provenance))
+        await click(pilot, app, "nothing/here@9")
+        await drawn(pilot, lambda text: "Provenance of nothing/here@9" in text and "names no event" in text)
+        missing = said(app)
+
+    assert opened.startswith(f"message.sent {ASKED}: check the tests\n{FROM_TEXT}\nheading Sources")
+    assert missing == (
+        "nothing/here@9 names no event of this session: text can name what nothing is, as only a citation is checked"
+    )

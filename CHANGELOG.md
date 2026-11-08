@@ -41,6 +41,12 @@ named here is closed.
   ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
   `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
+- **A ref in a message's text opens its own provenance.** In the terminal's transcript each ref a line's words name is
+  underlined, and in the page each ref a message's text names is a button, and either opens that ref's own provenance,
+  which says first that it was opened from a ref in text, which records no link, or that the ref names no event. A ref is
+  found in text by one pattern both clients follow, standing apart from the words around it, so none is found inside a
+  link's address. The pane's address says `from=text`, and `x_read`'s `provenance` pane takes `from`. A refusal in the
+  pane now says why in the terminal's words, `… has no provenance to show: …`. Before, a ref in text was only words.
 - **A turn's cuts drawn in the terminal UI.** An agent's transcript draws a line where each span of a turn but its last
   ends, as `spans` cuts it, under what the span's calls made and above the next span's first call, naming the span by
   its last call, which `/provenance` on the line opens. The cuts are read as the agent is shown and again as each of its

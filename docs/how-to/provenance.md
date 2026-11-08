@@ -159,6 +159,12 @@ names the command below that reads on. A harness's report of a tool item names t
 command of its agent's under that call's id made, so an agent's own transcript leads to its writes. What was not said below a bound
 reads as not said there, never as never. [tui.md](tui.md) and [web.md](web.md) are the clients' guides.
 
+A ref a message's text names is a link in both, a click on it in the terminal's transcript and a button in the page: it shows that
+ref's own provenance, which says first that it was opened from a ref in text, which records no link. Naming an event in text is no
+citation, so nothing checks it, and one that names no event says so. A ref is found in text as `stream@version`, with `#La-b` for
+lines, standing apart from the words around it, so none is found inside a link's address, by one pattern both clients follow,
+`REF_IN_TEXT` in `platoon_harness_cli.provenance`.
+
 ## What `unknown` means
 
 `unknown` lists its reasons: offers its harness had not said by the bound that it took, surfaces of the agent's harness no stored

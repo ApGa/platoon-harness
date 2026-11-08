@@ -149,7 +149,10 @@ a plan login on loopback alone: see [Security](#security).
   that chat at its message too. A message's actions show while focus is in it, so Tab reaches Provenance.
   The address names the event, so Back goes back a hop and a reload keeps it, and Esc or × closes the pane. It is read when it opens,
   and again when its Provenance is pressed again. It is a read, so a view link has it, and on history it answers what the journal
-  holds. Credit is only what an estimator said, by producer, version and params.
+  holds. Credit is only what an estimator said, by producer, version and params. Each ref a message's text names, standing apart
+  from the words around it and in no link's address, is a button, which Tab reaches, and opens that ref's own pane, which says first
+  that it was opened from a ref in text, which records no link: naming an event in text is no citation. The address says so too,
+  `from=text`, so a reload keeps it. One that names no event says so in the pane.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.

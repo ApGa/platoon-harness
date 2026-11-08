@@ -10,6 +10,7 @@ from playwright.async_api import Browser, Page, expect
 
 from platoon_harness import Session, Team
 from platoon_harness.testing import Call
+from platoon_harness_cli.provenance import FROM_TEXT
 
 from ..unit.runtime.support import in_state, scripted, until
 from .support import SECONDS, chat, opened, serving
@@ -32,8 +33,8 @@ def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def team() -> Team:
-    answer = {"to": "@you", "gist": "the tests pass", "reply_to": ASKED, "based_on": [ASKED]}
+def team(gist: str = "the tests pass") -> Team:
+    answer = {"to": "@you", "gist": gist, "reply_to": ASKED, "based_on": [ASKED]}
     bob = {"harness": scripted([Call("message_send", answer)])}
     return Team.model_validate({"roles": {"bob": bob}, "topology": {"edges": {"bob": ["human"]}}})
 
@@ -200,4 +201,36 @@ async def test_a_message_s_actions_stay_within_it_beside_the_pane(browser: Brows
 
     assert actions is not None and whole is not None
     assert whole["x"] <= actions["x"] and actions["x"] + actions["width"] <= whole["x"] + whole["width"]
+    assert errors == []
+
+
+async def test_a_ref_in_a_message_opens_its_own_pane_saying_it_records_no_link(browser: Browser, root: Path):
+    """Each ref a message's text names is a button, which the keyboard reaches, and opens that ref's own pane, which
+    says it was opened from text, which records no link, and a reload keeps; one that names no event says so."""
+    answer = f"the tests pass, as {ASKED} says, and nothing/here@9 does not"
+    async with Session.start(team(answer), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await answered(session)
+        page, errors = await opened(browser, web.link("view"), "status of 404")
+        await chat(page, "bob & you")
+        named = message_of(page, answer).locator(".text [data-x-named]")
+        await expect(named).to_have_text([ASKED, "nothing/here@9"], timeout=SECONDS)
+
+        await named.first.focus()
+        await page.keyboard.press("Enter")
+        heading, pane = page.locator("#pane h2"), page.locator(PANE)
+        await expect(heading).to_have_text(f"Provenance of {ASKED}", timeout=SECONDS)
+        await expect(pane.locator(".x-line").nth(1)).to_have_text(FROM_TEXT)
+        await expect(pane.locator(".x-part")).to_have_text(["Sources", "Uses", "Contributors", "Credit and rewards"])
+        opened_from_text = page.url
+        await page.reload()
+        await expect(page.locator(PANE).locator(".x-line").nth(1)).to_have_text(FROM_TEXT, timeout=SECONDS)
+        await page.go_back()
+        await chat(page, "bob & you")
+        await message_of(page, answer).locator(".text [data-x-named]").nth(1).click()
+        await expect(heading).to_have_text("Provenance of nothing/here@9", timeout=SECONDS)
+        missing = page.locator(PANE).locator(".note")
+        await expect(missing).to_have_text(re.compile(r"^nothing/here@9 names no event of this session: "))
+        await page.context.close()
+
+    assert "from=text" in opened_from_text
     assert errors == []

@@ -9,7 +9,8 @@
 // What this page may do, read from view_info before the page starts: `credential`, view or control, `live`, whether a
 // runtime holds the session, `person`, who acts here, `may`, the ops their grants hold, `forms`, a form for each op the
 // person holds that writes, `confirmed`, the ops asked about before they run, `body_limit`, the most bytes a body may
-// be, and `cannot`, why this page may do nothing, when it may not. The feed keeps `live` current.
+// be, `refs`, the pattern Python finds a ref in text by, and `cannot`, why this page may do nothing, when it may not.
+// The feed keeps `live` current.
 const X = {caps: null};
 
 // What is not built over a session yet, and why: what the brief asks the page to show.
@@ -142,6 +143,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .msg:hover .actions, .msg:focus-within .actions { opacity: 1; pointer-events: auto; }
 .x-provenance .x-kind { color: var(--faint); }
 .x-provenance .x-warn { color: var(--warn); }
+.x-ref { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
 .x-form { display: grid; gap: 12px; padding: 12px 14px; }
 .x-form .x-about { margin: 0; color: var(--muted); font-size: 12.5px; }
 .x-form .x-field { display: grid; gap: 4px; }
@@ -216,15 +218,17 @@ setLive = state => {
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
 // a thread or what had reached an agent takes it from every pane of ours, and of ours, the first `X.PANES` names that
-// the address names takes it from the rest. A form's `args` go with it.
+// the address names takes it from the rest. A form's `args` go with it, and with provenance `from`, `text` where a
+// ref in text opened it.
 X.PANES = ['provenance', 'act', 'review', 'ask', 'tasks', 'entries'];
-KEYS.push('provenance', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
+KEYS.push('provenance', 'from', 'act', 'args', 'review', 'ask', 'tasks', 'entries');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
   const kept = r.thread || r.knew ? null : X.PANES.find(key => r[key]);
   for (const key of X.PANES) if (key !== kept) delete r[key];
   if (!r.act) delete r.args;
+  if (!r.provenance || r.from !== 'text') delete r.from;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
     if (r.sort) toast(X.UNVOTED);
@@ -235,14 +239,15 @@ readRoute = () => {
 
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
 // `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, what changed or
-// a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a board's entries, `entries=`.
+// a diff, `review=`, what an approval asks, `ask=`, a queue's tasks, `tasks=`, or a board's entries, `entries=`. A
+// pane's `args` is what else the address gives it: a form's `args`, or provenance's `from`.
 // SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map, and otherwise
 // leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says again what it may
 // do now.
 X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review
   || pane instanceof X.Ask || pane instanceof X.Channel;
 // An address with none of ours, for a go that opens something else in the pane.
-X.none = {provenance: null, act: null, args: null, review: null, ask: null, tasks: null, entries: null};
+X.none = {provenance: null, from: null, act: null, args: null, review: null, ask: null, tasks: null, entries: null};
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
@@ -256,11 +261,12 @@ route = async function () {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
   }
-  if (!(S.pane instanceof Pane && S.pane.name === r[key] && S.pane.args === r.args)) {
+  const args = key === 'provenance' ? r.from : r.args;
+  if (!(S.pane instanceof Pane && S.pane.name === r[key] && S.pane.args === args)) {
     if (S.pane && S.pane.destroy) S.pane.destroy();
-    S.pane = new Pane(r[key], r.args);
+    S.pane = new Pane(r[key], args);
   } else if (S.pane.paint) S.pane.paint();
-  S.paneKey = `${key}|${r[key]}|${r.args || ''}`;
+  S.paneKey = `${key}|${r[key]}|${args || ''}`;
   pane.classList.add('open');
 };
 
@@ -914,6 +920,17 @@ openAsPicker = anchor => {
   $('input', box).addEventListener('input', off);
 };
 
+// A ref a text names is a button, which opens that ref's own provenance, saying it was opened from text, which records
+// no link. Python's pattern finds it, so both clients find the same refs; a tag, and a link with its words, are passed
+// over, so no ref in an address becomes a button.
+const baseInline = inline;
+inline = text => {
+  if (!X.caps) return baseInline(text);
+  X.refs = X.refs || new RegExp(`(<a\\b[\\s\\S]*?</a>|<[^>]*>)|${X.caps.refs}`, 'g');
+  return baseInline(text).replace(X.refs, (found, passed, ref) => passed ? found
+    : html`<button type="button" class="x-ref" data-x-named="${ref}" title="The provenance of ${ref}, which this text names">${found}</button>`.s);
+};
+
 // Delivered, where SwarmChat says read: what a handover landed or a tool's result showed, which is evidence, and never
 // that it was understood. A person's reading leaves none. A reply cites the message's entry in the journal, which
 // its Reply button carries.
@@ -1106,10 +1123,11 @@ ThreadPane = class extends ThreadPane {
 
 // The provenance of one event, in the lines the terminal draws, read when it opens and when its event is asked again:
 // what it rests on, what came of it and whose work it reaches, each link by how it is known. Following a link shows that
-// event's, and one a chat shows opens there too.
+// event's, and one a chat shows opens there too. Opened `from` `text`, where a ref in text opened it, it says so.
 X.Provenance = class {
-  constructor(ref) {
+  constructor(ref, from) {
     this.ref = this.name = ref;
+    this.from = this.args = from;
     const pane = $('#pane');
     pane.innerHTML = html`<div class="phead"><h2>Provenance of ${ref}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
     this.box = $('.x-provenance', pane);
@@ -1117,7 +1135,7 @@ X.Provenance = class {
   }
   async load() {
     let r;
-    try { r = await api('x_read', {pane: 'provenance', ref: this.ref}); } catch (e) {
+    try { r = await api('x_read', {pane: 'provenance', ref: this.ref, ...(this.from ? {from: this.from} : {})}); } catch (e) {
       if (!this.dead) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
       return;
     }
@@ -1135,13 +1153,13 @@ X.line = l => l.kind === 'heading' ? html`<div class="x-part">${l.text}</div>`
   : l.ref ? html`<button type="button" class="x-line${l.warn ? ' x-warn' : ''}" data-x-follow="${l.ref}" title="Follow it into the provenance of ${l.ref}"><span class="x-kind">${l.kind}</span><span>${l.text}</span></button>`
   : html`<div class="x-line${l.warn ? ' x-warn' : ''}"><span class="x-kind">${l.kind}</span><span>${l.text}</span></div>`;
 
-// Show an event's provenance in the pane, read again when it is the one shown. One followed there that a chat shows opens
-// in that chat too.
+// Show an event's provenance in the pane, read again when it is the one shown, opened `from` `text` where a ref in text
+// opened it. One followed there that a chat shows opens in that chat too.
 X.followed = null;
-X.provenance = (ref, followed) => {
+X.provenance = (ref, followed, from = null) => {
   X.followed = followed ? ref : null;
-  if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
-  go({...X.none, provenance: ref, thread: null, knew: null}, true);
+  if (S.pane instanceof X.Provenance && S.pane.ref === ref && (S.pane.from || null) === from) return S.pane.load();
+  go({...X.none, provenance: ref, from, thread: null, knew: null}, true);
 };
 X.reveal = (at, ref) => {
   const [chat, seq] = at.split(':');
@@ -1316,7 +1334,7 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-named], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again], [data-x-channel], [data-x-open]');
   if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
@@ -1331,6 +1349,7 @@ onClick = e => {
   if ('xAgain' in d) return S.pane.list();
   if (d.xProvenance) return X.provenance(d.xProvenance, false);
   if (d.xFollow) return X.provenance(d.xFollow, true);
+  if (d.xNamed) return X.provenance(d.xNamed, false, 'text');
   if (d.xReply) return go({thread: d.xReply, knew: null}, true);
   if (d.xDecide) return X.decide(el);
   if (d.xAct) return X.lifecycle(el);

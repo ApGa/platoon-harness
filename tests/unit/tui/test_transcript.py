@@ -489,3 +489,33 @@ async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
     )
     assert (shown.first, f"{shown.event.stream}@{shown.event.version}") == (5, "turn/lead@2")
     assert held == ["turn/lead@8", "turn/lead@5"], "the page holding the cut's last call is read after its spans"
+
+
+class Naming(Alone):
+    """A transcript alone, keeping each ref a click on a line's words named."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.named: list[str] = []
+
+    def on_transcript_named(self, named: Transcript.Named) -> None:
+        self.named.append(named.ref)
+
+
+async def test_a_ref_in_a_line_s_text_opens_its_provenance():
+    """A ref a line's words name is a link, standing apart from the words around it, so none is found in a link's
+    address: a click on it opens the provenance of the event it names, whatever lines it names of it, and a click on the
+    rest of the line opens the line."""
+    words = "done, as board/notes/spec@3#L1-2 and inbox/you@1 say; https://x/inbox/you@1 is no ref"
+    app = Naming()
+    async with app.run_test(size=(120, 5)) as pilot:
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal([said(1, words)]), 1)  # type: ignore[arg-type]
+        (line,) = drawn(transcript)
+        for ref in ("board/notes/spec@3#L1-2", "inbox/you@1"):
+            await pilot.click(Transcript, offset=(line.index(ref) + len(ref) - 1, 0))
+        await pilot.click(Transcript, offset=(line.index("https://x/inbox") + 12, 0))
+        await pilot.pause()
+
+    assert app.named == ["board/notes/spec@3", "inbox/you@1"]
+    assert transcript.blocks[0].open, "a click on words that name no ref opens the line"

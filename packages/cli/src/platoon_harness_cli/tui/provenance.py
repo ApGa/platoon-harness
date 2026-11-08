@@ -10,7 +10,7 @@ from textual.widgets import Static
 
 from platoon_harness import Refused, Session
 
-from ..provenance import Line, read
+from ..provenance import Line, no_provenance, read
 from .keymap import bindings
 from .rows import Row, Rows
 from .safe import SafeText
@@ -41,15 +41,16 @@ def rows_of(lines: list[Line], width: int, keyed: str) -> tuple[list[Row], dict[
 
 
 class Provenance(ModalScreen[None]):
-    """The provenance of the event `ref`, then of each event a link of it is followed into: Enter on a link follows it,
-    and Esc goes back one hop, and from the first leaves. Each hop is read again when it is shown, at the head then, and
-    `lines` is what it says."""
+    """The provenance of the event `ref`, opened `from_text` where a text named it, then of each event a link of it is
+    followed into: Enter on a link follows it, and Esc goes back one hop, and from the first leaves. Each hop is read
+    again when it is shown, at the head then, and `lines` is what it says."""
 
     BINDINGS = bindings("provenance")
 
-    def __init__(self, session: Session, ref: str) -> None:
+    def __init__(self, session: Session, ref: str, *, from_text: bool = False) -> None:
         super().__init__()
         self._session = session
+        self._from_text = from_text
         self._trail: list[tuple[str, str | None]] = [(ref, None)]
         self.lines: list[Line] = []
         self._refs: dict[str, str] = {}
@@ -70,10 +71,11 @@ class Provenance(ModalScreen[None]):
         hops = len(self._trail) - 1
         back = f", {hops} hop{'' if hops == 1 else 's'} from where you began" if hops else ""
         self.query_one("#asked", Static).update(SafeText(f"Provenance of {ref}{back}", "bold"))
+        from_text = self._from_text and not hops
         try:
-            self.lines = (await read(self._session, ref)).lines
+            self.lines = (await read(self._session, ref, from_text=from_text)).lines
         except Refused as refused:
-            self.lines = [Line("", f"{ref} has no provenance to show: {refused}", warn=True)]
+            self.lines = [Line("", no_provenance(ref, refused, from_text=from_text), warn=True)]
         self._reads += 1
         self._draw()
         listing = self.query_one(Rows)

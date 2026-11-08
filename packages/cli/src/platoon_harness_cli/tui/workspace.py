@@ -1045,6 +1045,11 @@ class Workspace(Screen[None]):
             return
         self.app.push_screen(Provenance(live.session, shows(chosen.event)))
 
+    def on_transcript_named(self, named: Transcript.Named) -> None:
+        """Show the provenance of a ref a line's text names, saying it was opened from text, which records no link."""
+        if (live := self.live) is not None:
+            self.app.push_screen(Provenance(live.session, named.ref, from_text=True))
+
     def action_planned(self, action: str) -> None:
         key = next(key for key in KEYMAP if key.action == action and key.planned)
         note(self, f"{key.does}: not built yet, as {key.planned}", severity="warning")

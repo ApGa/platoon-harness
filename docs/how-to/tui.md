@@ -107,7 +107,10 @@ has it, saying it joins no known call, as OpenHands' and an `exec` harness's are
 `── span … ends ──` where each span but its last ends, under what its calls made and above the first call of the next,
 naming the span by its last call, which the line shows: `/provenance` on it says that a credit row on that call is the
 whole span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
-ends, so a turn under way is drawn cut once it has ended. The transcript also shows each approval the agent
+ends, so a turn under way is drawn cut once it has ended. Each ref a line's words name, standing apart from the words
+around it and in no link's address, is underlined, and a click on it shows that ref's own provenance, which says first that
+it was opened from a ref in text, which records no link; one that names no event says so. A ref in an opened line's body
+is no link. The transcript also shows each approval the agent
 asked for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and
 through what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
 which no event records, so no answer is drawn under it, and the dock no longer lists it. Below the lines is what the
@@ -425,6 +428,5 @@ before the session's. `^` is Ctrl.
 Disabled where a control for it would be, or absent from the palette: search in a transcript,
 threads, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
-the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in
-a message's text followed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+the transcript, themes and notifications, and in provenance the interaction graph and credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.

@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
+from platoon_harness import Refused
 from platoon_harness.kernel import Kernel, ManualClock
-from platoon_harness.primitives import PRIMITIVES, Spans
-from platoon_harness_cli import provenance
-from platoon_harness_cli.provenance import Line, lines_of
+from platoon_harness.primitives import PRIMITIVES, Contributors, Lineage, Spans, Uses
+from platoon_harness_cli.provenance import FROM_TEXT, REF_IN_TEXT, Line, lines_of, no_provenance, read
 
 from ..kernel.support import grant, result_of
 from ..primitives.support import ROLES, channel, confirm, end_turn, of_type, report, send, spawn, start_turn
@@ -66,6 +66,39 @@ def lines(
     """What a panel says of `ref`, from the queries' answers as both clients take them."""
     answers = [ask(kernel, query, ref=ref) for query in ("lineage", "uses", "contributors")]
     return lines_of("s", *answers, list(estimates), spans)
+
+
+class Asked:
+    """What a panel asks of a session, answered by `kernel` as a session answers, with nothing an estimator said, and
+    each `after` it read `spans` from."""
+
+    name = "s"
+
+    def __init__(self, kernel: Kernel) -> None:
+        self.kernel = kernel
+        self.read_from: list[str | None] = []
+
+    def _ask(self, op: str, **args: Any) -> Any:
+        outcome = self.kernel.query(self.kernel.runtime, op, args)
+        if outcome.refusal is not None:
+            raise Refused.of(outcome.refusal)
+        return outcome.result
+
+    async def lineage(self, ref: str) -> Lineage:
+        return Lineage.model_validate(self._ask("lineage", ref=ref))
+
+    async def uses(self, ref: str) -> Uses:
+        return Uses.model_validate(self._ask("uses", ref=ref))
+
+    async def contributors(self, ref: str) -> Contributors:
+        return Contributors.model_validate(self._ask("contributors", ref=ref))
+
+    async def annotations(self, target: str) -> list[Any]:
+        return []
+
+    async def spans(self, agent: str, *, after: str | None = None) -> Spans:
+        self.read_from.append(after)
+        return Spans.model_validate(self._ask("spans", agent=agent, after=after))
 
 
 def turn_of(kernel: Kernel, call: str) -> list[dict[str, Any]]:
@@ -470,15 +503,6 @@ async def test_a_turn_of_one_span_says_why_its_harness_cuts_it_no_further(kernel
 async def test_a_span_is_found_on_whichever_page_of_its_agent_s_spans_holds_it(kernel):
     """`spans` answers a page at a time, so the panel reads on until the turn of the call it asks about has ended, and
     no further."""
-    asked: list[str | None] = []
-
-    class Asked:
-        """What the panel asks of a session for a model call's spans, answered by `kernel` as a session answers."""
-
-        async def spans(self, agent: str, *, after: str | None = None) -> Spans:
-            asked.append(after)
-            return Spans.model_validate(ask(kernel, "spans", agent=agent, after=after))
-
     await spanned(kernel)
     calls = []
     for turn in range(40):
@@ -486,12 +510,47 @@ async def test_a_span_is_found_on_whichever_page_of_its_agent_s_spans_holds_it(k
         calls.append(await called(kernel, f"c{turn}"))
         await end_turn(kernel, "w")
 
-    pages = []
-    for call in (calls[0], calls[33], calls[39]):
-        asked.clear()
-        made = ask(kernel, "lineage", ref=call)["made"]
-        found = await provenance._spans_of(Asked(), made)  # type: ignore[arg-type]
-        pages.append(len(asked))
-        assert [span["ref"] for span in found] == [call]
+    pages, named = [], []
+    for at in (0, 33, 39):
+        session = Asked(kernel)
+        said = await read(session, calls[at])  # type: ignore[arg-type]
+        pages.append(len(session.read_from))
+        named += [line.text for line in said.lines if line.text.startswith("it names a span")]
 
     assert pages == [1, 2, 2]
+    whole = "it names a span of @w's, so a credit row on it is the whole span's: this one model call"
+    assert named == [f"{whole}, in turn t{at}" for at in (0, 33, 39)]
+
+
+async def test_a_ref_opened_from_text_says_it_records_no_link(kernel):
+    """A ref a text names is found standing apart from the words around it, never in a link's address, and its panel
+    says first that it was opened from text, which records no link, and then all a panel opened by hand says."""
+    refs = await scenario(kernel)
+    text = f"as {refs['message']} says, see board/notes/spec@1#L1-2, not https://x/{refs['message']} or a@3"
+
+    found = [(match[0], match[1]) for match in REF_IN_TEXT.finditer(text)]
+    by_hand = await read(Asked(kernel), refs["message"])  # type: ignore[arg-type]
+    from_text = await read(Asked(kernel), refs["message"], from_text=True)  # type: ignore[arg-type]
+
+    assert found == [(refs["message"], refs["message"]), ("board/notes/spec@1#L1-2", "board/notes/spec@1")]
+    assert from_text.lines == [by_hand.lines[0], Line("", FROM_TEXT), *by_hand.lines[1:]]
+    assert FROM_TEXT == (
+        "opened from a ref in text, which records no link: naming an event in text is no citation, and joins nothing "
+        "in the record"
+    )
+
+
+async def test_a_ref_in_text_that_names_no_event_says_so(kernel):
+    """Text can name what nothing is, as nothing checks it, where a citation is checked to name an event."""
+    await scenario(kernel)
+
+    with pytest.raises(Refused) as missing:
+        await read(Asked(kernel), "board/notes/nothing@9", from_text=True)  # type: ignore[arg-type]
+
+    assert no_provenance("board/notes/nothing@9", missing.value, from_text=True) == (
+        "board/notes/nothing@9 names no event of this session: text can name what nothing is, as only a citation is "
+        "checked"
+    )
+    assert no_provenance("board/notes/nothing@9", missing.value) == (
+        "board/notes/nothing@9 has no provenance to show: not_found: nothing is board/notes/nothing@9"
+    )

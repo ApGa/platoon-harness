@@ -23,6 +23,7 @@ from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Hang, ScriptedDriver
 from platoon_harness_cli import channels
 from platoon_harness_cli.ops import _command, cut, person_ops
+from platoon_harness_cli.provenance import FROM_TEXT
 from platoon_harness_cli.review import PAGE, changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
@@ -399,9 +400,9 @@ async def test_provenance_is_a_read_a_view_link_reaches_naming_where_a_chat_show
 @pytest.mark.parametrize(
     ("ref", "status", "said"),
     [
-        ("nothing/here@1", 404, "not_found: nothing is nothing/here@1"),
-        ("inbox/lead@1#L1-2", 400, "invalid: these ask about events"),
-        (f"sha256:{'0' * 64}", 400, "invalid: a body's hash names bytes and no event"),
+        ("nothing/here@1", 404, "nothing/here@1 has no provenance to show: not_found: nothing is nothing/here@1"),
+        ("inbox/lead@1#L1-2", 400, "inbox/lead@1#L1-2 has no provenance to show: invalid: these ask about events"),
+        (f"sha256:{'0' * 64}", 400, f"sha256:{'0' * 64} has no provenance to show: invalid: a body's hash names bytes"),
         (None, 400, "ref is an event's ref"),
     ],
 )
@@ -411,6 +412,21 @@ async def test_provenance_of_what_is_no_event_is_refused_saying_why(web, ref, st
     reply = await browser.request("POST", "/v1/x_read", {"pane": "provenance", "ref": ref})
 
     assert reply.status == status and reply.json()["error"].startswith(said)
+
+
+async def test_a_ref_opened_from_text_says_it_records_no_link_or_that_it_names_no_event(web):
+    """The page opens a ref a message's text names with `from` `text`, and the pane says so in the terminal's words."""
+    browser = await Browser(web).opened("view")
+
+    opened = await browser.view("x_read", {"pane": "provenance", "ref": "agent/lead@1", "from": "text"})
+    missing = await browser.request(
+        "POST", "/v1/x_read", {"pane": "provenance", "ref": "nothing/here@1", "from": "text"}
+    )
+    unnamed = await browser.request("POST", "/v1/x_read", {"pane": "provenance", "ref": "agent/lead@1", "from": "hand"})
+
+    assert opened["lines"][1] == {"kind": "", "text": FROM_TEXT, "ref": None, "warn": False}
+    assert missing.status == 404 and missing.json()["error"].startswith("nothing/here@1 names no event of this session")
+    assert unnamed.status == 400 and unnamed.json()["error"].startswith("from is `text`")
 
 
 async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command(
