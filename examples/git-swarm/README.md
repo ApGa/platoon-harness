@@ -38,11 +38,13 @@ From your repository, with the checkout's environment active:
 
 ```console
 $ source path/to/platoon-harness/.venv/bin/activate
-$ platoon-harness team check path/to/platoon-harness/examples/git-swarm/team.toml
+$ platoon-harness team check path/to/platoon-harness/examples/git-swarm/team.toml --plan-login
 $ platoon-harness team show path/to/platoon-harness/examples/git-swarm/team.toml
 ```
 
-`team check` says `no problems`, before any cost. `team show` says in sentences what the team allows:
+`team check` says `no problems`, before any cost. `--plan-login` checks it as the run on Codex starts it, in section 5:
+two workers may run at once, so without it a Codex signed in on a plan is refused here. `team show` says in sentences
+what the team allows:
 
 ```text
 Workers (codex, own worktrees) may message no one.
