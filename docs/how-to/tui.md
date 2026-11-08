@@ -120,10 +120,14 @@ says why it does not.
 
 Approvals never take focus, so a key meant for the composer never answers one. `/next-place`, or Alt+A, goes to the next
 place you must act, and `/yes` and `/no` take its first and second action, Allow and Deny for an approval, each carrying
-the version it was drawn from. An action that leaves arguments to you, as a budget's Set the budget leaves you its limits,
-opens its op's form, the palette's, filled in with what it fixes: for a budget, the limits and estimate its scope was set to,
-which `budget set` replaces whole. With the dock reached by Shift+Tab, the arrows choose a
-place, Enter goes to it, and `y` and `n` take the same two actions. Only you move where you are: a place that goes,
+the version it was drawn from. On an approval, `/ask` opens the whole of what it asks before you answer it, the command,
+the patch or the tool's input, past the 280 characters its gist holds, each line as it was asked and never as Markdown, and
+answers nothing: Esc goes back. An ask cut where the record stops keeping it says how many bytes more it asks, which Allow
+allows too, and one whose harness said nothing beyond its gist says so. An action that leaves arguments to you, as a
+budget's Set the budget leaves you its limits, opens its op's form, the palette's, filled in with what it fixes: for a
+budget, the limits and estimate its scope was set to, which `budget set` replaces whole. With the dock reached by
+Shift+Tab, the arrows choose a place, Enter goes to it, `y` and `n` take the same two actions, and `a` reads an
+approval's ask whole. Only you move where you are: a place that goes,
 answered here or by another client, takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows
 as theirs. Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent
 below it: both stop turns, not waits. When the runtime refuses one, the refusal is kept: the key shows disabled,
@@ -282,6 +286,7 @@ before the session's. `^` is Ctrl.
 | `Alt+A` | `/next-place` | Go to the next place you must act |
 |  | `/yes` | Take the first action of where you are, such as Allow |
 |  | `/no` | Take the second action of where you are, such as Deny |
+|  | `/ask` | Read the whole of what the approval you are at asks, before you answer it |
 | `Alt+↓` | `/next` | Show the next agent or channel |
 | `Alt+↑` | `/previous` | Show the previous agent or channel |
 | `^B` | `/navigator` | Show or hide the agents and channels |
@@ -330,6 +335,7 @@ before the session's. `^` is Ctrl.
 |---|---|
 | `y` | Take the first action of the chosen place, such as Allow |
 | `n` | Take the second action of the chosen place, such as Deny |
+| `a` | Read the whole of what the chosen approval asks |
 
 ### The composer
 
@@ -340,7 +346,7 @@ before the session's. `^` is Ctrl.
 | `↑` | On the first line, what you sent or ran before |
 | `↓` | On the last line, what you sent or ran after |
 
-### A list: sessions, agents, places, help, provenance, what changed
+### A list: sessions, agents, places, help, provenance, what changed, an ask
 
 | Keys | Does |
 |---|---|
@@ -374,7 +380,7 @@ before the session's. `^` is Ctrl.
 | `y` | Say yes |
 | `n` or `Esc` | Say no |
 
-### A form or the help
+### A form, the help or an approval's ask
 
 | Keys | Does |
 |---|---|

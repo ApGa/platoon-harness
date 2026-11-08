@@ -34,12 +34,12 @@ WHERE: dict[Where, str] = {
     "transcript": "The transcript, once it has focus",
     "dock": "The dock, once it has focus",
     "composer": "The composer",
-    "list": "A list: sessions, agents, places, help, provenance, what changed",
+    "list": "A list: sessions, agents, places, help, provenance, what changed, an ask",
     "review": "What changed",
     "patch": "A diff",
     "provenance": "The provenance panel",
     "question": "A question",
-    "dialog": "A form or the help",
+    "dialog": "A form, the help or an approval's ask",
 }
 
 TYPED: tuple[Where, ...] = ("everywhere", "workspace")
@@ -141,6 +141,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("alt+a", "next_place", "next-place", "Go to the next place you must act", "workspace", footer=True),
     Key("", "first_action", "yes", "Take the first action of where you are, such as Allow", "workspace"),
     Key("", "second_action", "no", "Take the second action of where you are, such as Deny", "workspace"),
+    Key("", "ask", "ask", "Read the whole of what the approval you are at asks, before you answer it", "workspace"),
     Key("alt+down", "next_row", "next", "Show the next agent or channel", "workspace"),
     Key("alt+up", "previous_row", "previous", "Show the previous agent or channel", "workspace"),
     Key("ctrl+b", "navigator", "navigator", "Show or hide the agents and channels", "workspace"),
@@ -216,6 +217,7 @@ KEYMAP: tuple[Key, ...] = (
     Key("p", "screen.provenance", "provenance", "Show the chosen line's provenance", "transcript"),
     Key("y", "screen.first_action", "yes", "Take the first action of the chosen place, such as Allow", "dock"),
     Key("n", "screen.second_action", "no", "Take the second action of the chosen place, such as Deny", "dock"),
+    Key("a", "screen.ask", "ask", "Read the whole of what the chosen approval asks", "dock"),
     Key(
         "enter",
         "send",

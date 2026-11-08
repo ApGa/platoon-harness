@@ -13,6 +13,7 @@ from platoon_harness.config import PROJECT_FILE
 from platoon_harness.testing import ScriptedDriver
 from platoon_harness_cli.main import build
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.approvals import Approval
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
 from platoon_harness_cli.tui.keymap import KEYMAP, TYPED, command, keys, reference, regenerate
@@ -38,6 +39,7 @@ PLACES = {
     Provenance: ("provenance",),
     Review: ("dialog", "review"),
     Patch: ("dialog", "patch"),
+    Approval: ("dialog",),
     Confirm: ("question",),
     Form: ("dialog",),
     Help: ("dialog",),

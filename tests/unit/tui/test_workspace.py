@@ -17,16 +17,20 @@ from platoon_harness import Session, Team
 from platoon_harness import session as session_module
 from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives import delivery
+from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
+from platoon_harness_cli.approvals import UNSAID
 from platoon_harness_cli.ops import _command, person_ops
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.approvals import Approval
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.keymap import keys
+from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import CHOOSE, Dock, _asked, _value
+from platoon_harness_cli.tui.workspace import CHOOSE, Dock, Workspace, _asked, _value
 
 from ..runtime.support import BALLOT, SECONDS, extension, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
@@ -691,7 +695,7 @@ async def test_alt_a_goes_round_every_place_and_yes_answers_the_one_it_is_at(roo
         at = dock_of(app).cursor
         row = dock_of(app).rows.index(next(row for row in dock_of(app).rows if row.key == at))
         gist = workspace(app).live.attention[at]["gist"]
-        assert row_text(dock_of(app), row).endswith(f"/yes Allow  /no Deny  {gist}")
+        assert row_text(dock_of(app), row).endswith(f"/yes Allow  /no Deny  /ask Read it whole  {gist}")
         assert next(iter(dock_of(app).render_line(row))).style.reverse
         await pilot.press(*"/yes", "enter")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
@@ -775,9 +779,55 @@ async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_scre
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Run the migration" in text)
         await pilot.press(*"/next-place", "enter")
-        text = await drawn(pilot, lambda text: "/yes Allow  /no Deny  Run the migration" in text)
+        text = await drawn(pilot, lambda text: "/yes Allow  /no Deny  /ask Read it whole  Run the migration" in text)
 
         assert gist not in text
+
+
+async def test_an_approval_s_whole_ask_opens_from_the_dock_before_it_is_answered(root):
+    """What follows a gist's 280 characters is what a person most needs to see, so `/ask`, or `a` in the dock, opens
+    the whole of it, each line as it was asked and never as Markdown, answering nothing; an ask past what the record
+    keeps says where it was cut, and one nobody stated says so."""
+    command = "cd build && " + "make target_%d && " * 40 % tuple(range(40)) + "rm -rf *_old_* ~/.cache"
+    big = "y" * (ASK_LIMIT + 10)
+    asks = [Ask("Run the build?", body=f"Bash\n{command}"), Ask("Write the big file?", body=big), Ask("Go on?")]
+    async with attached(team(asks), root) as (owner, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "Run the build?" in text)
+        await pilot.press("alt+a", *"/ask", "enter")
+        await drawn(pilot, lambda _: isinstance(app.screen, Approval))
+        text = await drawn(pilot, lambda text: "rm -rf *_old_* ~/.cache" in text)
+
+        assert "What @lead asks" in text and "Bash" in text and "Cut here" not in text
+        assert await of_type(owner, "approval.resolved") == []
+        await pilot.press("escape", "shift+tab", "down", "a")
+        await drawn(pilot, lambda text: "rm -rf *_old_* ~/.cache" in text)
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
+        await pilot.press("y")
+        await drawn(pilot, lambda text: "Write the big file?" in text)
+        await pilot.click("#composer")
+        await pilot.press("alt+a", *"/ask", "enter")
+        await drawn(pilot, lambda text: "yyyy" in text)
+        await pilot.press("end")
+        await drawn(pilot, lambda text: "Cut here" in text)
+        below = " ".join(
+            row.line.plain for row in app.screen.query_one(Rows).rows if not row.line.plain.startswith("y")
+        )
+
+        assert app.screen.ask.text == "y" * ASK_LIMIT
+        assert below == "Cut here: it asks 10 bytes more, which the record does not keep, and Allow allows them too."
+        await pilot.press("escape", *"/no", "enter")
+        await drawn(pilot, lambda text: "Go on?" in text)
+        await pilot.press("alt+a", *"/ask", "enter")
+        await drawn(pilot, lambda _: isinstance(app.screen, Approval) and app.screen.ask is not None)
+        said = [row.line.plain for row in app.screen.query_one(Rows).rows]
+        await pilot.press("escape", *"/yes", "enter")
+        resolved = await until(lambda: of_type(owner, "approval.resolved"), owner, lambda found: len(found) == 3)
+
+    assert said == ["Go on?", UNSAID]
+    assert [event.data["verdict"] for event in resolved] == ["allow", "deny", "allow"]
+    assert {event.data["via"] for event in resolved} == {"tui"}
 
 
 async def test_a_place_another_client_answered_takes_the_cursor_with_it(root):

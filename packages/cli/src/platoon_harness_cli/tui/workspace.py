@@ -27,6 +27,7 @@ from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
 from ..review import snapshots_of
 from ..roster import detail_of, why_said
+from .approvals import Approval
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
@@ -606,13 +607,14 @@ class Workspace(Screen[None]):
 
     def _dock(self, live: Live) -> list[Row]:
         """A row per place you must act, and on the one you are at, the keys that take its actions from where the focus
-        is: the dock's own letters, or a session's typed commands. A dock with focus and no place chosen says how to
-        choose one on its first row. Hints come before the gist, so a narrow screen cuts the gist and never a hint."""
+        is, the dock's own letters or a session's typed commands, and on an approval the one that reads its whole ask.
+        A dock with focus and no place chosen says how to choose one on its first row. Hints come before the gist, so a
+        narrow screen cuts the gist and never a hint."""
         dock = self.query_one(Dock)
         chosen = dock.cursor
         rows = []
-        acts = ("first_action", "second_action")
-        first, second = [key.shown for key in keys("dock")] if dock.has_focus else [reach(act) for act in acts]
+        acts = ("first_action", "second_action", "ask")
+        first, second, ask = [key.shown for key in keys("dock")] if dock.has_focus else [reach(act) for act in acts]
         for index, place in enumerate(self._places(live)):
             actions = place["actions"]
             hints: list[Any] = []
@@ -621,6 +623,7 @@ class Workspace(Screen[None]):
                     (f"{hint} {action['label']}  ", "bold")
                     for hint, action in zip((first, second), actions, strict=False)
                 ]
+                hints += [(f"{ask} Read it whole  ", "bold")] if place["kind"] == "approval" else []
             elif chosen is None and dock.has_focus and index == 0:
                 hints = [(f"{CHOOSE}  ", "bold")]
             line = Content.assemble(
@@ -852,6 +855,16 @@ class Workspace(Screen[None]):
 
     def action_second_action(self) -> None:
         self._act(1, self.query_one(Dock).cursor)
+
+    def action_ask(self) -> None:
+        """Read the whole of what the approval you are at asks, which answers nothing."""
+        live = self.live
+        place = live.attention.get(self.query_one(Dock).cursor or "") if live else None
+        if live is None or place is None or place["kind"] != "approval":
+            how = CHOOSE if self.query_one(Dock).has_focus else f"{reach('next_place')} goes to where you must act"
+            note(self, f"Only an approval has an ask to read whole: {how}.", severity="warning")
+            return
+        self.app.push_screen(Approval(live.session, place["id"].removeprefix("approval/"), place["since_seq"]))
 
     @work(group="act")
     async def _act(self, index: int, chosen: str | None) -> None:
