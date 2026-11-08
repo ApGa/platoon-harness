@@ -161,6 +161,10 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-channel > .x-acts { padding: 8px 14px 0; }
 .x-review > .x-about, .x-review .x-end, .x-review .x-comment { padding: 8px 14px; margin: 0; font-size: 12.5px; }
 .x-tools > .x-end { padding: 8px 14px; }
+.x-saying { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.x-saying .x-about { margin: 0; color: var(--muted); font-size: 12.5px; }
+.x-saying pre { margin: 6px 0 0; max-height: 40vh; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.x-saying .x-about:empty, .x-saying pre:empty { display: none; }
 .x-tone-strong { font-weight: 700; }
 .x-tone-faint { color: var(--faint); }
 .x-tone-good { color: var(--good); }
@@ -1217,23 +1221,28 @@ document.addEventListener('submit', e => {
   X.provenance(f.elements.ref.value.trim(), false);
 });
 
-// An agent's tool activity, in the pane the address names, `tools=` and the agent: its tool calls, read through x_read
-// in the words of calls.py, a page at a time, newest first, whole turns of them, each a heading over its calls, each
-// call one line from its first item to its last, and each spawn under the call whose id its anchor holds, or saying it
-// joins no known call. A line follows into its event's provenance, as a link of the Provenance pane does, and Back
-// comes back. Read again reads the newest page again, and Read on the page before the last drawn, below it. Only the
-// newest read is drawn.
+// An agent's tool activity, in the pane the address names, `tools=` and the agent. Above, what it is saying now, which
+// the journal does not hold yet, read through x_read's saying pane while the pane is open, asked again as each answer
+// comes, and never put in a chat. Below, its tool calls, read through x_read in the words of calls.py, a page at a
+// time, newest first, whole turns of them, each a heading over its calls, each call one line from its first item to
+// its last, and each spawn under the call whose id its anchor holds, or saying it joins no known call. A line follows
+// into its event's provenance, as a link of the Provenance pane does, and Back comes back. Read again reads the newest
+// page again, and hears the agent again where that had stopped, and Read on draws the page before the last drawn,
+// below it. Only the newest read is drawn.
 X.Tools = class {
   constructor(agent) {
     this.name = agent;
-    $('#pane').innerHTML = html`<div class="phead"><h2>Tool activity of ${name(agent)}</h2><button class="btn" data-x-again>Read again</button><button class="close" data-close-pane title="Close">×</button></div><div class="scroll x-tools"><div class="x-provenance"><div class="loading">Loading</div></div><div class="x-end"></div></div>`.s;
+    $('#pane').innerHTML = html`<div class="phead"><h2>Tool activity of ${name(agent)}</h2><button class="btn" data-x-again>Read again</button><button class="close" data-close-pane title="Close">×</button></div><div class="scroll x-tools"><div class="x-saying"><p class="x-about"></p><pre></pre></div><div class="x-provenance"><div class="loading">Loading</div></div><div class="x-end"></div></div>`.s;
     this.box = $('#pane .x-provenance');
+    this.saying = $('#pane .x-saying');
     this.foot = $('#pane .x-tools > .x-end');
     this.reads = 0;
+    this.version = null;
     this.list();
   }
   async list() {
     const n = ++this.reads;
+    if (!this.hearing) this.hear();
     this.onward(null);
     let r;
     try { r = await api('x_read', {pane: 'tools', agent: this.name}); } catch (e) {
@@ -1265,6 +1274,30 @@ X.Tools = class {
     this.cursor = cursor;
     this.foot.innerHTML = (cursor == null ? html`` : html`<button class="btn" data-x-more>Earlier calls: read on</button>`).s;
   }
+  // Ask what the agent is saying past what the pane shows, and again as each answer comes, until the pane closes, the
+  // answer says nothing more comes, or web would not answer, which the pane says.
+  async hear() {
+    this.hearing = true;
+    while (!this.dead) {
+      let r;
+      try { r = await api('x_read', {pane: 'saying', agent: this.name, version: this.version}); } catch (e) {
+        if (!this.dead) this.said(e.message, '');
+        break;
+      }
+      if (this.dead) break;
+      this.version = r.version;
+      this.said(r.about, r.text);
+      if (r.over) break;
+    }
+    this.hearing = false;
+  }
+  said(about, text) {
+    $('.x-about', this.saying).textContent = about;
+    $('pre', this.saying).textContent = text;
+  }
+  // Drawn again for the same address, as when a runtime takes the session up again, it hears the agent again where
+  // that had stopped.
+  paint() { if (!this.hearing) this.hear(); }
   destroy() { this.dead = true; }
 };
 

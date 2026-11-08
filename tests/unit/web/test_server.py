@@ -29,7 +29,7 @@ from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
 from platoon_harness_cli.web.page import load
-from platoon_harness_cli.web.projection import Projection, hashed
+from platoon_harness_cli.web.projection import SHOWN, Projection, hashed
 from platoon_harness_cli.web.server import Web
 
 from ..runtime.gitting import commit, repository, working
@@ -476,7 +476,7 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert {"kind": "heading", "text": "Each agent's unknowns", "ref": None, "warn": False} in reached["lines"]
     assert (
         unnamed.status == 404
-        and "provenance, interactions, attention, changes, diff, ask, tasks, entries and tools"
+        and "provenance, interactions, attention, changes, diff, ask, tasks, entries, tools and saying"
         in unnamed.json()["error"]
     )
     assert gone.status == 404
@@ -484,9 +484,9 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
 
 
 async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
-    """An agent's tool calls are a pane of `x_read`, a page at a time in the words of `calls.page`, which a view link
-    reads as it reads `view_*`, submitting no op and writing nothing. A name that is no agent's is refused, and so is a
-    cursor that is no seq."""
+    """An agent's tool calls are a pane of `x_read`, a page at a time in the words of `calls.page`, and what it is
+    saying now another, which a view link reads as it reads `view_*`, submitting no op and writing nothing. A name that
+    is no agent's is refused, and so is a cursor that is no seq."""
     async with Session.start(team(), name="s", root=root, cwd=root) as session, served(session, root, clock) as web:
         await scenario(session)
         await caught_up(web, session)
@@ -505,6 +505,11 @@ async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
             nobody = await viewer.request("POST", "/v1/x_read", {"pane": "tools", "agent": "nobody"})
             unnamed = await viewer.request("POST", "/v1/x_read", {"pane": "tools"})
             wrong = await viewer.request("POST", "/v1/x_read", {"pane": "tools", "agent": "lead", "before": True})
+            heard = await viewer.view("x_read", {"pane": "saying", "agent": "lead"})
+            session._runtime.kernel.push_delta("lead", "thinking aloud")
+            saying = await viewer.view("x_read", {"pane": "saying", "agent": "lead", "version": heard["version"]})
+            unheard = await viewer.request("POST", "/v1/x_read", {"pane": "saying", "agent": "nobody"})
+            ended = await viewer.view("x_read", {"pane": "saying", "agent": "w1"})
         words = dataclasses.asdict(await calls.page(session, "lead"))
 
         assert await session.head() == head, "a read wrote an event"
@@ -517,6 +522,50 @@ async def test_activity_on_a_view_link_writes_nothing(root, clock, monkeypatch):
     ]
     assert nobody.status == 404 and nobody.json()["error"] == "not_found: no agent nobody"
     assert unnamed.status == wrong.status == 400
+    about = "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
+    assert heard == {"version": heard["version"], "text": "", "about": about, "over": False}
+    assert saying["text"] == "thinking aloud" and saying["version"] != heard["version"]
+    assert unheard.status == 404 and unheard.json()["error"] == "not_found: no agent nobody"
+    assert ended == {"version": None, "text": "", "about": "@w1 has ended, so it says nothing more.", "over": True}
+
+
+async def test_live_text_is_held_only_while_its_pane_is_open_and_bounded(web, session, clock):
+    """`web` reads what an agent is saying from a page's first ask for it, never before, holds the newest `SHOWN`
+    characters of what it said since the journal last took it, led by an ellipsis where some before them was cut,
+    drops what the journal takes, and lets it all go once `HOLD` passes with no ask held for it, so the next ask reads
+    anew."""
+    kernel = session._runtime.kernel
+    browser = await Browser(web).opened("control")
+
+    async def heard(said: str, version: int | None) -> dict[str, typing.Any]:
+        """Ask until the pane says `said`, each ask answered once what `web` holds moves past `version`."""
+        while (answer := await browser.view("x_read", {"pane": "saying", "agent": "@lead", "version": version}))[
+            "text"
+        ] != said:
+            version = answer["version"]
+        return answer
+
+    kernel.push_delta("lead", "before anyone asked. ")
+    unasked = dict(web._saying)
+    first = await heard("before anyone asked. ", None)
+    kernel.push_delta("lead", "x" * 100 + "y" * SHOWN)
+    cut = await heard(f"… {'y' * SHOWN}", first["version"])
+    kernel.push_delta("lead", " and on")
+    more = await heard(f"… {('y' * SHOWN + ' and on')[-SHOWN:]}", cut["version"])
+    held, hearing = web._saying["lead"], next(iter(web._hearing))
+    kernel.end_delta("lead", await session.head())
+    taken = await heard("", more["version"])
+    await clock.slept_until(clock.now() + server_module.HOLD)
+    clock.advance(server_module.HOLD)
+    await hearing
+    let_go = dict(web._saying)
+    kernel.push_delta("lead", "anew")
+    again = await heard("anew", taken["version"])
+
+    assert unasked == {} and len(cut["text"]) == SHOWN + 2
+    assert taken["version"] > more["version"] > cut["version"] > first["version"]
+    assert held.gone and held.text == "" and let_go == {} and web._saying["lead"] is not held
+    assert again["about"] == "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
 
 
 async def test_tasks_and_entries_are_panes_of_x_read_and_the_feed_says_whenever_one_moves(web, session, monkeypatch):

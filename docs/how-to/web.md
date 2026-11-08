@@ -129,8 +129,8 @@ history.*
   cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.
   A reply, or a message in a thread, shows under what it answers when that is in the same chat.
 - **What an agent says.** What its harness says in a turn is its message to you, in its chat with you. Thoughts, tool
-  calls and their output, token counts and live text never enter a chat. Live text, as it streams, is not shown in this
-  stage.
+  calls and their output, token counts and live text never enter a chat: Tool activity, on its page, shows its calls and
+  what it is saying now.
 - **Tool activity.** Tool activity, on an agent's page, opens its tool calls in the pane, which the address names,
   `tools=` and the agent, read through `x_read`, so a view link and history show them too. They come a page at a time,
   newest first, in whole turns, as many as 100 calls take, so no page splits a call from its end or a spawn from its call.
@@ -143,6 +143,13 @@ history.*
   call. Each line follows into its event's provenance, and Back comes back. Read again reads the newest calls again, and
   Read on draws the turns before them, below them. A turn of more than 100 calls is listed in its newest, saying how many
   it leaves out and the `platoon-harness events` command that prints them. None of it enters a chat.
+
+  Above its calls is what the agent is saying now, its live text, under words saying the journal does not hold it yet:
+  what it said since the journal last took what it said, its newest 20,000 characters, led by an ellipsis where some
+  before them was lost on the way or cut. It goes once the item it becomes is recorded, which reaches its chat with you
+  where it is a message, and a thought never does, and with the runtime that said it, which the pane then says, so what
+  a runtime that comes back says stands alone. Where the agent has ended, the pane says it says nothing more. `web` reads
+  it only while a page's pane asks for it, and lets it go 25 s after the last ask, so a closed pane costs nothing.
 - **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
   apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
   it is doing. The people list shows it beside each agent's name, where SwarmChat shows a first field, so who is working
@@ -278,6 +285,9 @@ of `interactions`, in the lines the terminal's `/reached` draws. Its `attention`
 Its `tasks` pane is a queue's tasks, by `queue`, and its `entries` pane a board's entries, by `board`, in the words the
 terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved. Its `tools` pane is an
 agent's tool calls, by `agent`, a page before the seq `before`, or the newest, with the `cursor` of the page before it.
+Its `saying` pane is what an agent, by `agent`, is saying now, once it moves past the `version` the page shows, held until
+then for at most 25 s, and on history until a runtime takes the session up again, for as long; `over` says the agent has
+ended.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
 `diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
 at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
@@ -288,8 +298,7 @@ where the record cut it, or, where the record holds no body, that what it asks b
 
 ## Not built yet
 
-Live text, what an agent is saying before its turn commits it, is not shown in the page: an agent's
-words appear once they are in the journal. Pictures in a body are offered as a download and not drawn. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
+Pictures in a body are offered as a download and not drawn. The page is laid out for a wide window, and at a phone's width it is not usable yet. [STATUS.md](../STATUS.md) says what each is.
 
 ## Security
 

@@ -4,11 +4,13 @@ Every request is bounded before it is believed, by the SDK's HTTP: its head, the
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
 of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours but a
 diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op
-that writes, its journal and a diff's patch. Every mutation is `/x/command` into `Session.submit`, the op path the
-terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
+that writes, its journal, a diff's patch and an agent's live text. Every mutation is `/x/command` into `Session.submit`,
+the op path the terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
 """
 
 import asyncio
+import contextlib
+import itertools
 import json
 import re
 from collections.abc import Mapping
@@ -17,7 +19,7 @@ from typing import Any, Literal, NamedTuple
 
 from platoon_harness import Refused, Session
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
-from platoon_harness.kernel import Clock, Outcome, first, is_held
+from platoon_harness.kernel import Clock, Delta, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__, approvals, calls, channels, review
@@ -46,6 +48,27 @@ _ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
 _READS = ("/v1/x_read",)
 """The page's one read of our own, beside SwarmChat's `view_*`, which a view credential reaches as it reaches those."""
 _SPENT = "this link was used already or has expired: ask for a new one"
+_GONE = (
+    "No runtime holds this session, so nothing is being said: what was being said went with the runtime that said it."
+)
+
+
+class Saying:
+    """What an agent is saying now, as `web` holds it while a page asks for it: what it said since the journal last
+    took what it said, its newest `SHOWN` characters, as much as a message shows, `lost` where some before them was
+    lost on the way or cut, and `version`, which moves with each change. `asking` counts the asks held for it, and
+    `gone` says it holds nothing more: its reader ended or was let go."""
+
+    def __init__(self, version: int) -> None:
+        self.text, self.lost, self.version, self.gone = "", False, version, False
+        self.asking = 1
+        self.changed = asyncio.Condition()
+
+    def take(self, delta: Delta, version: int) -> None:
+        """A frame: what the journal took, which `ended` says, goes, and what was said since joins what is held."""
+        said = ("" if delta.ended is not None else self.text) + delta.text
+        self.lost = delta.lag > 0 or (self.lost and delta.ended is None) or len(said) > SHOWN
+        self.text, self.version = said[-SHOWN:], version
 
 
 class Request(NamedTuple):
@@ -80,6 +103,9 @@ class Web(Server[Request]):
         self._host, self._scheme = host, scheme
         self._holding = 0
         self._statuses: tuple[int, dict[str, str]] = (-1, {})
+        self._saying: dict[str, Saying] = {}
+        self._hearing: set[asyncio.Task[None]] = set()
+        self._versions = itertools.count(1)
 
     @property
     def authorities(self) -> tuple[str, ...]:
@@ -92,6 +118,14 @@ class Web(Server[Request]):
     def live(self) -> bool:
         """Whether a runtime holds the session, which only the kernel's own check says."""
         return is_held(self.session.folder)
+
+    async def stop(self) -> None:
+        """Stop serving, and stop reading what any agent is saying."""
+        await super().stop()
+        hearing = tuple(self._hearing)
+        for task in hearing:
+            task.cancel()
+        await asyncio.gather(*hearing, return_exceptions=True)
 
     # HTTP.
 
@@ -310,10 +344,12 @@ class Web(Server[Request]):
                 return await self._channel("board", params)
             case "tools":
                 return await self._tools(params)
+            case "saying":
+                return await self._said(params)
         raise replies.Error(
             404,
             "there is no such pane: the page's panes are provenance, interactions, attention, changes, diff, ask, "
-            "tasks, entries and tools",
+            "tasks, entries, tools and saying",
         )
 
     async def _tools(self, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -331,6 +367,116 @@ class Web(Server[Request]):
         except Refused as refused:
             status = 404 if refused.refusal.code == "not_found" else 400
             raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+
+    async def _said(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """What the agent `agent` is saying now, which the journal does not hold yet, past the `version` the page shows:
+        held until it moves, for at most `HOLD`. `web` reads it only while a page asks for it, from the first ask until
+        no ask has been held for it for `HOLD`. One that has ended says nothing more, `over`, and on history an ask is
+        held until a runtime takes the session up again, for at most `HOLD`."""
+        agent, version = params.get("agent"), params.get("version")
+        if not isinstance(agent, str):
+            raise replies.Error(400, "agent is an agent's name, as its page names it")
+        if version is not None and (not isinstance(version, int) or isinstance(version, bool)):
+            raise replies.Error(400, "version is the one the last answer gave")
+        if self._holding >= HOLDING:
+            raise Rejected(503, why="too many pages are waiting for news: try again shortly")
+        self._holding += 1
+        try:
+            return await self._heard(agent.removeprefix("@"), version)
+        finally:
+            self._holding -= 1
+
+    async def _heard(self, name: str, version: int | None) -> dict[str, Any]:
+        saying = self._saying.get(name)
+        if saying is None:
+            if (ended := await self._ended(name)) is not None:
+                return ended | {"version": version}
+            if not self.live():
+                await first(self._moved(), self.clock.sleep(HOLD))
+                if not self.live():
+                    return {"version": version, "text": "", "about": _GONE, "over": False}
+                return await self._heard(name, version)
+            saying = self._saying[name] = Saying(next(self._versions))
+            hearing = asyncio.ensure_future(self._hear(name, saying))
+            self._hearing.add(hearing)
+            hearing.add_done_callback(self._hearing.discard)
+        else:
+            async with saying.changed:
+                saying.asking += 1
+                saying.changed.notify_all()
+        try:
+            await first(self._said_past(saying, version), self.clock.sleep(HOLD))
+        finally:
+            async with saying.changed:
+                saying.asking -= 1
+                saying.changed.notify_all()
+        if saying.gone and self.live():  # The agent ended, or a runtime took the session up again: ask anew.
+            return await self._heard(name, version)
+        if saying.gone:
+            with contextlib.suppress(replies.Error):  # A runtime going may refuse a read on its way out.
+                if (ended := await self._ended(name)) is not None:
+                    return ended | {"version": version}
+            return {"version": version, "text": "", "about": _GONE, "over": False}
+        text = f"… {saying.text}" if saying.lost and saying.text else saying.text
+        about = f"Not in the journal yet: what @{name} is saying now, until the item it becomes replaces it."
+        return {"version": saying.version, "text": text, "about": about, "over": False}
+
+    async def _ended(self, name: str) -> dict[str, Any] | None:
+        """What a page is told of an agent that has ended, which says nothing more, or None for one that has not. A
+        name that is no agent's is refused."""
+        try:
+            status = await self.session.status(name)
+        except Refused as refused:
+            code = refused.refusal.code
+            raise replies.Error(404 if code == "not_found" else 400, f"{code}: {refused.refusal.detail}") from None
+        if status["state"] != "ended":
+            return None
+        return {"text": "", "about": f"@{name} has ended, so it says nothing more.", "over": True}
+
+    async def _moved(self) -> None:
+        async with self.moved:
+            await self.moved.wait()
+
+    async def _said_past(self, saying: Saying, version: int | None) -> None:
+        async with saying.changed:
+            await saying.changed.wait_for(lambda: saying.version != version or saying.gone)
+
+    async def _hear(self, name: str, saying: Saying) -> None:
+        """Hold what `name` is saying, read as the terminal reads the agent in view, while a page asks for it: until no
+        ask has been held for it for `HOLD`, or its live text ends, as it does with the agent or with the runtime that
+        said it, and then hold nothing of it."""
+        try:
+            with contextlib.suppress(Refused):
+                await first(self._listen(name, saying), self._unasked(name, saying))
+        finally:
+            self._let_go(name, saying)
+            async with saying.changed:
+                saying.changed.notify_all()
+
+    async def _listen(self, name: str, saying: Saying) -> None:
+        async for delta in self.session.deltas(name):
+            async with saying.changed:
+                saying.take(delta, next(self._versions))
+                saying.changed.notify_all()
+        self._let_go(name, saying)
+
+    async def _unasked(self, name: str, saying: Saying) -> None:
+        """Return once `HOLD` passes with no ask held for what `saying` holds, letting it go then."""
+        while True:
+            async with saying.changed:
+                await saying.changed.wait_for(lambda: saying.asking == 0)
+            if await first(self.clock.sleep(HOLD), self._asked(saying)):
+                return self._let_go(name, saying)
+
+    async def _asked(self, saying: Saying) -> None:
+        async with saying.changed:
+            await saying.changed.wait_for(lambda: saying.asking > 0)
+
+    def _let_go(self, name: str, saying: Saying) -> None:
+        """Hold nothing more of what `name` is saying, so the next ask reads it anew."""
+        if self._saying.get(name) is saying:
+            del self._saying[name]
+        saying.gone = True
 
     async def _channel(self, kind: Literal["queue", "board"], params: Mapping[str, Any]) -> dict[str, Any]:
         """A queue's tasks or a board's entries, by its name, `queue` or `board`, in the words the terminal's `/tasks`
