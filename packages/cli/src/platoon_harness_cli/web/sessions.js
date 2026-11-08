@@ -9,6 +9,7 @@
   const KEY = 'platoon-harness.sessions.token';
   const WAITING = 'Sent, and waiting for its answer.';
   const NO_LINK = 'Open the link `platoon-harness web` says on its terminal. It opens once, within ten minutes.';
+  const UNLISTED = 'Start waits for the list, which says where a session starts and that starting can spend money.';
   const $ = selector => document.querySelector(selector);
   let token = sessionStorage.getItem(KEY), found = null, busy = false;
 
@@ -194,6 +195,7 @@
       args = {...args, ...p.ask.answer};
     }
   }
+  $('#start [data-act]').xWhy = () => found ? null : UNLISTED;
   $('#start').addEventListener('submit', e => {
     e.preventDefault();
     if (!cannot(e.target.querySelector('[data-act]'))) start(e.target);

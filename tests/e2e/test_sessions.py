@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
-from playwright.async_api import Browser, Page, expect
+from playwright.async_api import Browser, Page, Route, expect
 
 from platoon_harness_cli.web.sessions import SPENT
 
@@ -104,6 +104,43 @@ async def test_the_sessions_page_starts_a_session_asking_trust_once_and_opens_it
 
     assert not nothing and done.code == 0, done.stderr
     assert stopped.code == 0, stopped.stderr
+    assert errors == []
+
+
+async def test_start_is_disabled_until_the_list_has_said_where_it_starts_and_that_it_can_spend_money(
+    browser: Browser, cli: Cli
+):
+    """The list's answer says both, so until it comes Start says why it waits, a press starts nothing, and then it is
+    there above Start and Start is enabled."""
+    cli.write("platoon-harness.toml", solo("listening"))
+    web = await cli.start("web")
+    link = await sessions_link(web)
+    waits = "Start waits for the list, which says where a session starts and that starting can spend money."
+    listed = asyncio.Event()
+
+    async def held(route: Route) -> None:
+        await listed.wait()
+        await route.continue_()
+
+    page = await (await browser.new_context(viewport={"width": 1280, "height": 800})).new_page()
+    errors = watched(page)
+    await page.route("**/x/sessions", held)
+    await page.goto(link)
+    start = page.get_by_role("button", name="Start")
+    await expect(start).to_have_accessible_description(waits, timeout=SECONDS)
+    await start.click(force=True)
+    await expect(page.locator("#tip")).to_have_text(waits)
+    cost = await page.locator("#cost").text_content()
+    listed.set()
+    await expect(page.locator("#cost")).to_contain_text("which can spend money", timeout=SECONDS)
+    await expect(start).not_to_have_attribute("aria-disabled", "true")
+    await page.context.close()
+
+    web.terminate()
+    done = await finished(web)
+
+    assert cost == "" and not any((cli.folder / "home" / "sessions").glob("*"))
+    assert done.code == 0, done.stderr
     assert errors == []
 
 
