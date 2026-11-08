@@ -339,7 +339,8 @@ async def test_over_budget_is_policy_and_unavailable_is_infrastructure(kernel):
 
     refused = of_type(kernel, "wake.refused")[-1]
     assert refused.data["why"] == "unavailable"
-    assert "however high: remove it" in refused.data["detail"]
+    assert refused.data["detail"]["scope"] == "shared" and refused.data["detail"]["unit"] == "tokens"
+    assert "however high: remove it" in refused.data["detail"]["detail"]
 
 
 async def test_what_was_measured_is_charged_beneath_the_estimate_when_a_call_of_the_turn_was_not(kernel):

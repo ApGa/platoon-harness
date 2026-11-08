@@ -53,12 +53,6 @@ def _settle_actions(event: Event) -> list[dict[str, Any]]:
     ]
 
 
-def _budget_actions(scope: str | None) -> list[dict[str, Any]]:
-    """Setting a budget settles every place one held up: the scope that held it up is fixed where the record names
-    one, and its limits are the person's to give."""
-    return [_action("Set the budget", "budget.set", {} if scope is None else {"scope": scope}, form=True)]
-
-
 def _write_to(agent: str | None) -> list[dict[str, Any]]:
     """What settles a place its agent's next turn settles: a message from the person, whose words are theirs to give,
     and which is no hop, so it wakes the agent. A place of no agent's has none."""
@@ -67,9 +61,10 @@ def _write_to(agent: str | None) -> list[dict[str, Any]]:
 
 class Attention(View):
     """Where a human must act. A row closes in place, so a watcher hears that it went away. Each workspace whose latest
-    look found conflicted paths is kept, so that its row comes back after the next look that still finds them."""
+    look found conflicted paths is kept, so that its row comes back after the next look that still finds them, and
+    what each budget scope was last set to, which setting it again replaces whole."""
 
-    version = 5
+    version = 6
     schema = """
     CREATE TABLE v_attention(
         id TEXT PRIMARY KEY,
@@ -85,6 +80,7 @@ class Attention(View):
     CREATE INDEX v_attention_open ON v_attention(open, since_seq);
     CREATE INDEX v_attention_seq ON v_attention(seq);
     CREATE TABLE v_attention_conflicts(workspace TEXT PRIMARY KEY, gist TEXT NOT NULL) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_attention_budgets(scope TEXT PRIMARY KEY, set_to TEXT NOT NULL) WITHOUT ROWID, STRICT;
     """
 
     def _raise(
@@ -205,22 +201,38 @@ class Attention(View):
         for ref in event.based_on:
             self._lower(event, "id = ? AND kind = 'dead_task'", ref.partition("@")[0])
 
+    def _set_budget(self, scope: str | None) -> list[dict[str, Any]]:
+        """Setting a budget settles every place one held up. `budget.set` replaces a scope's limits and estimate whole,
+        so the action fixes the scope that held it up, where the record names one, filled in with what it was set to,
+        for the person to change."""
+        if scope is None:
+            return [_action("Set the budget", "budget.set", {}, form=True)]
+        found = self.db.execute("SELECT set_to FROM v_attention_budgets WHERE scope = ?", (scope,)).fetchone()
+        set_to = {} if found is None else {key: value for key, value in json.loads(found["set_to"]).items() if value}
+        return [_action("Set the budget", "budget.set", {"scope": scope, **set_to}, form=True)]
+
     @fold("wake.refused")
     def wake_refused(self, event: Event) -> None:
-        """A wake past `max_hops`, or one a budget refused, naming its scope where it was over that scope's limit."""
+        """A wake past `max_hops`, or one a budget refused, naming the scope that refused it, and for a limit no amount
+        can hold, saying in its gist that it is to be removed."""
         if event.data["why"] == "hops":
             self._raise(f"wake/{event.agent}", "hops", event, _write_to(event.agent))
             return
         detail = event.data["detail"]
-        scope = detail.get("scope") if isinstance(detail, dict) else None
-        self._raise(f"wake/{event.agent}", "budget", event, _budget_actions(scope))
+        scope, why = (detail.get("scope"), detail.get("detail")) if isinstance(detail, dict) else (None, None)
+        gist = None if why is None else f"{event.gist}: {why}"[:GIST_LIMIT]
+        self._raise(f"wake/{event.agent}", "budget", event, self._set_budget(scope), gist=gist)
 
     @fold("budget.lapsed")
     def budget_lapsed(self, event: Event) -> None:
-        self._raise(event.stream, "budget", event, _budget_actions("shared"))
+        self._raise(event.stream, "budget", event, self._set_budget("shared"))
 
     @fold("budget.set")
     def budget_set(self, event: Event) -> None:
+        set_to = {key: event.data[key] for key in ("limits", "estimate")}
+        self.db.execute(
+            "INSERT OR REPLACE INTO v_attention_budgets VALUES (?, ?)", (event.data["scope"], json.dumps(set_to))
+        )
         self._lower(event, "kind = 'budget'")
 
     @fold("daemon.failed")

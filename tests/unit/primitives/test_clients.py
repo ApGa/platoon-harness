@@ -4,7 +4,7 @@ import pytest
 
 from platoon_harness.primitives import clients
 
-from .support import channel, end_turn, refusal, report, result_of, send, spawn, start_turn
+from .support import channel, end_turn, of_type, refusal, report, result_of, send, spawn, start_turn
 from .test_repo import BASE, ONE, conflicted, looked, path, reading
 
 
@@ -504,8 +504,8 @@ async def offered(kernel, name: str) -> None:
 
 
 async def test_a_budget_place_offers_budget_set_with_its_scope_fixed(kernel, ada, clock):
-    """Setting a budget settles every place a budget held up: the scope the record names is fixed, and the limits are
-    the person's to give, in its op's form."""
+    """Setting a budget settles every place a budget held up: the scope the record names is fixed, filled in with what
+    it was set to, which `budget.set` replaces whole, and what to change is the person's, in its op's form."""
     await spawn(kernel, "bob")
     over = {"scope": "role:worker", "limits": {"tokens": 10}, "estimate": {"tokens": 99}}
     result_of(await kernel.submit(kernel.runtime, "budget.set", over))
@@ -518,16 +518,35 @@ async def test_a_budget_place_offers_budget_set_with_its_scope_fixed(kernel, ada
 
     set_it = {"label": "Set the budget", "op": "budget.set", "form": True}
     assert [(row["id"], row["kind"], row["actions"]) for row in refused] == [
-        ("wake/bob", "budget", [{**set_it, "args": {"scope": "role:worker"}}])
+        ("wake/bob", "budget", [{**set_it, "args": over}])
     ]
-    assert [row["actions"] for row in lapsed] == [[{**set_it, "args": {"scope": "shared"}}]]
+    assert [row["actions"] for row in lapsed] == [[{**set_it, "args": {"scope": "shared", "limits": {"wall": 60}}}]]
     result_of(await kernel.submit(ada, "budget.set", {**lapsed[0]["actions"][0]["args"], "limits": {"wall": 600}}))
     assert attention(kernel) == []
 
 
+async def test_a_limit_left_as_filled_in_stands_once_a_budget_place_is_settled(kernel, ada, clock):
+    """`budget.set` replaces a scope's limits and estimate whole, so a person who changes one limit in the form its
+    action fills in keeps the others and the estimate, as `budget.status` says."""
+    result_of(
+        await kernel.submit(kernel.runtime, "budget.set", {"limits": {"wall": 60, "usd": 5}, "estimate": {"usd": 1}})
+    )
+    clock.advance(60.0)
+    result_of(await kernel.submit(kernel.runtime, "budget.lapse", {}))
+    [row] = attention(kernel)
+    args = row["actions"][0]["args"]
+
+    result_of(await kernel.submit(ada, "budget.set", {**args, "limits": {**args["limits"], "wall": 600}}))
+
+    status = result_of(kernel.query(ada, "budget.status", {}))
+    assert sorted((found["unit"], found["limit"]) for found in status) == [("usd", 5), ("wall", 600)]
+    assert of_type(kernel, "budget.set")[-1].data["estimate"] == {"usd": 1}
+    assert attention(kernel) == []
+
+
 async def test_an_action_names_only_the_arguments_it_knows(kernel):
-    """A limit no amount can hold refuses a wake in words that name no scope, so its action fixes none, and leaves the
-    scope to its op's form with the limits."""
+    """A limit no amount can hold refuses a wake naming its scope and unit, so its action fixes that scope and what it
+    was set to, as the records name them, and its gist says what to change, which is the person's: remove the limit."""
     await spawn(kernel, "bob")
     await offered(kernel, "bob")
     await start_turn(kernel, "bob")
@@ -538,8 +557,14 @@ async def test_an_action_names_only_the_arguments_it_knows(kernel):
     await offered(kernel, "bob")
 
     [row] = attention(kernel)
-    assert (row["kind"], row["gist"]) == ("budget", "wake of bob refused: unavailable")
-    assert [(action["op"], action["args"], action["form"]) for action in row["actions"]] == [("budget.set", {}, True)]
+    assert (row["kind"], row["gist"]) == (
+        "budget",
+        "wake of bob refused: unavailable: 1 turn of tokens went unmeasured before shared had an estimate to charge "
+        "it, so its tokens limit cannot hold, however high: remove it",
+    )
+    assert [(action["op"], action["args"], action["form"]) for action in row["actions"]] == [
+        ("budget.set", {"scope": "shared", **limited}, True)
+    ]
 
 
 async def in_flight(kernel, name: str, kind: str) -> dict:
@@ -622,7 +647,9 @@ async def test_every_kind_of_place_carries_an_action_or_names_what_settles_it(ke
         ("kim finished: nobody asked, but here", []),
     ]
     assert acts["task/q/1"] == [("Add it again", "task.add", {"queue": "q", "based_on": ["task/q/1@1"]}, True)]
-    assert acts["budget/shared"] == [("Set the budget", "budget.set", {"scope": "shared"}, True)]
+    assert acts["budget/shared"] == [
+        ("Set the budget", "budget.set", {"scope": "shared", "limits": {"wall": 60}}, True)
+    ]
     assert [act[:2] for act in acts["approval/a1"]] == [("Allow", "approval.resolve"), ("Deny", "approval.resolve")]
     assert [act[:2] for act in acts[f"effect/{uncertain['id']}"]] == [
         ("It happened", "effect.settle"),

@@ -214,17 +214,19 @@ class Budgets(View):
             return
         spent, label, unmeasured = self.spent(scope, unit)
         if label == "unavailable":
-            raise Refused(
-                "unavailable",
-                f"{unmeasured} turns of {unit} went unmeasured before {scope} had an estimate to charge them, so its "
-                f"{unit} limit cannot hold, however high: remove it",
+            turns, them = ("1 turn", "it") if unmeasured == 1 else (f"{unmeasured} turns", "them")
+            why = (
+                f"{turns} of {unit} went unmeasured before {scope} had an estimate to charge {them}, so its {unit} "
+                "limit cannot hold, however high: remove it"
             )
+            raise Refused("unavailable", {"scope": scope, "unit": unit, "detail": why})
         held = self.held(scope, unit)
         if spent >= limit or spent + held + want > limit:
             raise Refused("over_budget", {"scope": scope, "unit": unit, "limit": limit, "spent": spent, "held": held})
 
     def check(self, role: str, wanted: dict[str, float], now: float) -> None:
-        """Refuse `over_budget` past a limit, and `unavailable` when what a limit holds on has no amount."""
+        """Refuse `over_budget` past a limit, and `unavailable` when what a limit holds on has no amount, each naming
+        the scope and the unit."""
         for scope in ("shared", f"role:{role}"):
             if (found := self._scope(scope)) is not None:
                 for unit, limit in found.limits.items():
@@ -322,8 +324,9 @@ class SetBudget(Args):
 
 @op("budget.set", on=lambda a: f"budget/{a.scope}")
 def set_budget(txn: Txn, a: SetBudget) -> None:
-    """Set a scope's limits and turn estimate. Refused `invalid` for a `tokens` or `usd` limit with no estimate in that
-    unit, its own or, for a role, the shared one, which a turn nobody measured whole could not be charged."""
+    """Set a scope's limits and turn estimate, replacing what it had whole. Refused `invalid` for a `tokens` or `usd`
+    limit with no estimate in that unit, its own or, for a role, the shared one, which a turn nobody measured whole
+    could not be charged."""
     known = {**(txn.view(Budgets).estimate() if a.scope != "shared" else {}), **a.estimate}
     if missing := [unit for unit in _METERED if unit in a.limits and unit not in known]:
         raise Refused("invalid", f"a {missing[0]} limit needs an estimate in {missing[0]}")

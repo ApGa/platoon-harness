@@ -1644,7 +1644,8 @@ view so every client says the same, and no state: `needs_you` while an attention
 otherwise. A mention is the person's to read, which their marks say, so it names no group. `actions[]` are
 op references, each with whatever keeps a stale button from deciding anything, so any client can draw them. An action fixes only
 the arguments it knows, which the record names, and with `form` leaves the rest to its op's form, which a client opens filled in
-with what it fixes, as a budget's place offers `budget.set` with its scope and leaves its limits to the person. Every kind of
+with what it fixes, as a budget's place offers `budget.set` with its scope, filled in with the limits and estimate that scope was
+set to, which `budget.set` replaces whole, and leaves the change to the person. Every kind of
 place carries such an action or says in its gist what settles it. A lost turn, a wake past `max_hops`, and an agent's failure or
 conflict, which its next turn settles, offer to write to it, as a person's message is no hop; a mention is read, and offers a reply
 where its sender takes one; a dead task offers to add it again, citing it, which closes it; your checkout's conflict and a daemon

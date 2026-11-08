@@ -128,17 +128,19 @@ This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read throu
 ### 6. An action fixes what it knows, and leaves the rest to its op's form
 
 ```python
-{"label": "Set the budget", "op": "budget.set", "args": {"scope": "role:worker"}, "form": True}
+{"label": "Set the budget", "op": "budget.set", "args": {"scope": "role:worker", "limits": {"tokens": 200000}}, "form": True}
 ```
 
 An action of the `attention` view is its `label`, its `op`, `args`, the arguments it fixes, and `form`, whether it leaves the rest
 to its op's form. One without `form` runs as it stands, as Allow does. One with it fixes only what the place knows, which the record
-names, and never guesses an argument: a budget the record does not name is no scope the action fixes. The terminal's dock opens the
+names, and never guesses an argument: a budget the record does not name is no scope the action fixes. A budget's action fixes the
+scope the refusal names and what that scope was last set to, its `limits` and `estimate`, which the view keeps, as `budget.set`
+replaces both whole: a person who changes one limit in the form keeps the others. The terminal's dock opens the
 op's form, its palette's, filled in with what the action fixes, and the page's Needs you opens the op's form in the pane, the address
 holding what the action fixes as `args=`, so Back and a reload keep it. The person may change any field, as in any form, and the form
 asks once first for an op in `CONFIRMED`, runs and says what came of it as the form always does. `session show` writes such an action
-as its command, ending in `...`, the flags still to give, so it does not run as it stands: `budget set` with its scope alone would set
-no limit. A client that holds no form for the op says that the person's grants hold none.
+as its command, ending in `...`, the flags still to give, so it does not run as it stands: `message send` with its `to` alone has no
+gist, and `budget set` as filled in would set again what stands, restarting its wall clock. A client that holds no form for the op says that the person's grants hold none.
 
 ### 7. What settles each kind of place
 
@@ -155,7 +157,7 @@ no limit. A client that holds no form for the op says that the person's grants h
 | `failed` | An effect of no agent's | Its gist: `<kind> failed, and nothing tries it again: <error>` | Nothing: it stands as news, open question 4 |
 | `dead_task` | A task past `max_attempts` | Add it again, `task.add` with `queue` and `based_on`, the dead task's ref, in a form | A task added that cites it |
 | `hops` | A wake past `max_hops` | Write to it, `message.send` with `to`, in a form: a person's message is no hop, so it wakes the agent | Its agent's next turn |
-| `budget` | A wake a budget refused, or the shared wall budget run out | Set the budget, `budget.set` with `scope` where the record names it, in a form | Any `budget.set` |
+| `budget` | A wake a budget refused, or the shared wall budget run out | Set the budget, `budget.set` with `scope`, the one the record names, and the `limits` and `estimate` it was set to, in a form; for a limit no amount can hold, its gist: `... cannot hold, however high: remove it` | Any `budget.set` |
 | `daemon` | A daemon that keeps failing | Its gist: `` `session stop` then `session resume` start it anew `` ([RFC 0046](0046-a-daemon-that-keeps-failing-needs-a-person.md)) | A run of it that lasts, or a new runtime |
 
 Two rules are new. A dead task's place closes once a task is added that cites it, so adding it again, as its action does, settles
@@ -189,6 +191,7 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
 | The form in a popover, as Needs you is | The question asked before an op opens a popover, which would replace the form and what was typed in it |
 | An action as an op with every argument, the person's choices left to a command | A budget's limits are the person's alone, so `budget.set` could be offered nowhere |
 | `form` read off the op's form, an action fixing every field running at once | An optional field an op gains would turn Allow into a form |
+| Set the budget filled in with its scope alone | `budget.set` replaces a scope's limits and estimate whole, so a person who typed the one limit they meant to raise would lift every other and the estimate, with nothing to say so |
 | Fixed arguments shown and not to be changed | Each client would draw a field it may not take, saying why, for a value the person can type in the palette's form anyway |
 | A dismiss op, closing a place that is news | A new op and a new state of a place, and a person's dismissing settles nothing the record says. Open question 4 |
 | A conflict resolved in the agent's workspace, recorded as the person's | Whose a commit is would need the committer's identity, which the owner has not asked for. Open question 3 |
@@ -257,7 +260,8 @@ are reverted.
 - `SetBudget` replaces a scope's limits whole, so `budget.set` with a scope alone sets none: an action cannot run it as it stands.
 - A person's message has no hops (`_hops` in [`primitives/messages.py`](../../packages/sdk/src/platoon_harness/primitives/messages.py)),
   so it wakes an agent a wake past `max_hops` left resting.
-- `wake.refused` names the scope that held it up in its detail for `over_budget`, and none for `unavailable`, which says in words a
-  limit no amount can hold.
+- `wake.refused` named the scope that held it up in its detail for `over_budget`, and for `unavailable`, a limit no amount can
+  hold, only in words, which said to remove it. Step 2 has `unavailable` name its scope and unit as data beside those words, as
+  `over_budget` does.
 - A test and a diff record their own failures as outcomes (`Host._test` and `Host._diff` in
   [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py)), so only an error of the runtime's own fails one.

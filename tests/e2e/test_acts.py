@@ -330,8 +330,8 @@ async def test_needs_you_counts_where_the_person_must_act_and_its_actions_settle
 
 
 async def test_needs_you_settles_a_budget_place_through_the_form(browser: Browser, root: Path):
-    """A wake a spent budget refused is a place in Needs you, whose action opens `budget set`'s form in the pane, with
-    the scope it fixes filled in and the limits left to the person, whose Run settles it."""
+    """A wake a spent budget refused is a place in Needs you, whose action opens `budget set`'s form in the pane, filled
+    in with the scope it fixes and what that was set to, for the person to change, whose Run settles it."""
     limited = Team.model_validate({**solo([Say("done")], [Say("again")]).canonical(), "budget": {"turns": 1}})
     async with Session.start(limited, name="s", root=root, cwd=root) as session:
         await in_state(session, "bob", "idle")
@@ -357,7 +357,7 @@ async def test_needs_you_settles_a_budget_place_through_the_form(browser: Browse
             set_it = (await of_type(session, "budget.set"))[-1]
             await page.context.close()
 
-    assert filled == ["shared", "", ""]
+    assert filled == ["shared", '{"turns":1}', ""]
     assert (set_it.actor, set_it.data["scope"], set_it.data["limits"]) == ("human:you", "shared", {"turns": 5})
     assert errors == []
 

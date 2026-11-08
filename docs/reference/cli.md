@@ -1218,7 +1218,7 @@ Budgets: set a scope's limits, and see what is spent and held against each.
 platoon-harness budget set [OPTIONS] SESSION
 ```
 
-Set a scope's limits and turn estimate.
+Set a scope's limits and turn estimate, replacing what it had whole.
 
 Refused `invalid` for a `tokens` or `usd` limit with no estimate in that unit, its own or, for a role, the shared one, which a turn nobody measured whole could not be charged.
 

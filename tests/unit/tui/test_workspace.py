@@ -747,8 +747,9 @@ def _said_so(events: list) -> list[str]:
 
 
 async def test_an_action_that_leaves_arguments_opens_its_op_s_form_prefilled(root):
-    """A wake a spent budget refused waits in the dock, and `/yes` there opens `budget set`'s form with the scope its
-    action fixes filled in, leaving the limits to the person, and runs it as the palette's form would."""
+    """A wake a spent budget refused waits in the dock, and `/yes` there opens `budget set`'s form filled in with what
+    its action fixes, the scope and what it was set to, for the person to change, and runs it as the palette's form
+    would."""
     limited = Team.model_validate({**team([Say("done")], [Say("again")]).canonical(), "budget": {"turns": 1}})
     async with attached(limited, root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
@@ -764,7 +765,7 @@ async def test_an_action_that_leaves_arguments_opens_its_op_s_form_prefilled(roo
         set_it = (await until(lambda: of_type(owner, "budget.set"), owner, lambda found: len(found) == 2))[-1]
         await until(owner.attention, owner, lambda rows: not rows)
 
-    assert filled == {"scope": "shared", "limits": "", "estimate": ""}
+    assert filled == {"scope": "shared", "limits": '{"turns": 1.0}', "estimate": ""}
     assert (set_it.actor, set_it.data["scope"], set_it.data["limits"]) == ("human:you", "shared", {"turns": 5})
 
 
