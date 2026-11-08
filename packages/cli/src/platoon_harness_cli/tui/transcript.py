@@ -23,6 +23,7 @@ from platoon_harness.kernel import Delta, Event, Page
 
 from .. import approvals
 from ..approvals import Ask
+from ..calls import UNJOINED, Join
 from .approvals import rows_of
 from .keymap import bindings
 from .rows import CHOSEN, strip_of
@@ -65,9 +66,9 @@ class Focus:
 
     @classmethod
     def of_agent(cls, name: str, children: Iterable[str] = ()) -> "Focus":
-        """An agent, how each child it spawned began and ended, read from every agent's stream, so a child it spawns
-        later is in it too, however many it spawns, and what it asked approval for and who answered, read from every
-        approval's stream, as an approval's id is its harness's."""
+        """An agent, how each child it spawned began, under the call that spawned it, and ended, read from every
+        agent's stream, so a child it spawns later is in it too, however many it spawns, and what it asked approval for
+        and who answered, read from every approval's stream, as an approval's id is its harness's."""
         streams = (f"inbox/{name}", f"turn/{name}", f"agent/{name}")
         matches = ("agent/*", "approval/*")
         children = frozenset(children)
@@ -174,6 +175,12 @@ def _answered(data: dict[str, Any]) -> Content:
     return Content.assemble(("✓ " if allowed else "✗ ", "green" if allowed else "red"), said, who, via)
 
 
+def _spawned(event: Event, joined: bool) -> Content:
+    """A child's spawn: under the call that made it, or where the journal has it, saying it joins no known call."""
+    line = Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
+    return line if joined else Content.assemble(line, (f" · {UNJOINED}", "dim"))
+
+
 def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content:
     name = SafeText(f"@{agent}", "bold")
     match data.get("kind"):
@@ -269,6 +276,7 @@ class Transcript(ScrollView, can_focus=True):
         self._blocks: list[Block] = []
         self._rows: list[tuple[Block, int]] = []
         self._tools: dict[str, Block] = {}
+        self._join: Join[Block] = Join()
         self._children: set[str] = set()
         self._before = 0
         self._after: int | None = None
@@ -283,11 +291,13 @@ class Transcript(ScrollView, can_focus=True):
 
     @property
     def blocks(self) -> list[Block]:
+        """The lines held, in the journal's order, which is the order they are drawn in but for a spawn drawn under its
+        call."""
         return self._blocks
 
     @property
     def chosen(self) -> Block | None:
-        """The chosen line: the newest while following, or the one the person chose, or None with no line held."""
+        """The chosen line: the last drawn while following, or the one the person chose, or None with no line held."""
         return self._chosen
 
     async def show(self, focus: Focus, session: Session, through: int) -> None:
@@ -300,7 +310,7 @@ class Transcript(ScrollView, can_focus=True):
         """Hold no lines, and read them from the journal again: back from `before`, and on from `after` unless it is
         None, which is following. A page read for an earlier beginning is not put in."""
         self._shown += 1
-        self._blocks, self._rows, self._tools, self._chosen = [], [], {}, None
+        self._blocks, self._rows, self._tools, self._join, self._chosen = [], [], {}, Join(), None
         self._children = set(self.focus_on.children) if self.focus_on else set()
         self._before, self._after = before, after
         self.following, self.unseen = after is None, 0
@@ -321,47 +331,62 @@ class Transcript(ScrollView, can_focus=True):
                 added.append(block)
         self._blocks += added
         if added:
-            self._rows += [row for block in added for row in self._lines_of(block)]
+            self._draw(added)
             if self.following:
-                self._chosen = added[-1]
+                self._chosen = self._rows[-1][0]
             else:
                 self.unseen += len(added)
             self._let_oldest_go()
         self._layout()
         return len(added)
 
+    def _span(self, block: Block) -> tuple[int, int]:
+        """The first and last seq of what a line goes with: from a tool's start to its end, and a call with the spawns
+        drawn under it."""
+        call = self._join.call_of(block) or block
+        seqs = (call.first, call.event.seq, *(spawn.first for spawn in self._join.spawns_of(call)))
+        return min(seqs), max(seqs)
+
     def _let_oldest_go(self) -> None:
         """Keep the window: past it the oldest lines go, to be read back later, and what is on screen stays. A line goes
-        with what lies between its first event and its last, so a tool's line read back finds its end."""
+        with what lies between its first event and its last, so a tool's line read back finds its end, and a call goes
+        with the spawns drawn under it."""
         excess = len(self._blocks) - WINDOW
         if excess <= 0:
             return
-        reach = max(block.event.seq for block in self._blocks[:excess])
-        while excess < len(self._blocks) - 1 and self._blocks[excess].first < reach:
-            reach = max(reach, self._blocks[excess].event.seq)
+        reach = max(self._span(block)[1] for block in self._blocks[:excess])
+        while excess < len(self._blocks) - 1 and self._blocks[excess].first <= reach:
+            reach = max(reach, self._span(self._blocks[excess])[1])
             excess += 1
-        kept = self._blocks[excess]
-        rows = next(index for index, (block, _) in enumerate(self._rows) if block is kept)
+        gone = set(self._blocks[:excess])
+        rows = next(index for index, (block, _) in enumerate(self._rows) if block not in gone)
+        self._before = self._blocks[excess].first
         del self._blocks[:excess], self._rows[:rows]
-        self._before = kept.first
-        self._keep_tools()
+        self._keep_held()
         if not self.following:
             self._place(max(self.scroll_y - rows, 0))
 
     def _let_newest_go(self) -> None:
-        """Keep the window while reading back: past it the newest lines go, read again when the person comes down."""
+        """Keep the window while reading back: past it the newest lines go, read again when the person comes down, and
+        a spawn drawn under a call goes with it."""
         excess = len(self._blocks) - WINDOW
         if excess <= 0:
             return
-        gone = self._blocks[-excess:]
-        del self._blocks[-excess:]
+        cut = len(self._blocks) - excess
+        reach = min(self._span(block)[0] for block in self._blocks[cut:])
+        while cut > 1 and self._blocks[cut - 1].first >= reach:
+            cut -= 1
+            reach = min(reach, self._span(self._blocks[cut])[0])
+        gone = self._blocks[cut:]
+        del self._blocks[cut:]
         self._rows = self._rows[: len(self._rows) - sum(len(self._lines_of(block)) for block in gone)]
-        self._keep_tools()
+        self._keep_held()
         self._after, self.following = self._blocks[-1].first, False
 
-    def _keep_tools(self) -> None:
-        held = set(map(id, self._blocks))
-        self._tools = {native: block for native, block in self._tools.items() if id(block) in held}
+    def _keep_held(self) -> None:
+        held = set(self._blocks)
+        self._tools = {native: block for native, block in self._tools.items() if block in held}
+        self._join.keep(held)
 
     def draw(self, tail: Tail) -> None:
         """Lay out again after `take`, with what the agent in view is saying now, at most once a frame."""
@@ -370,13 +395,13 @@ class Transcript(ScrollView, can_focus=True):
 
     def _line(self, event: Event) -> Content | None:
         """The line an event makes here, or None: for one a transcript leaves out, and for another agent's own but a
-        spawn of this agent's and the end of a child of its."""
+        spawn of this agent's, which says it joins no known call until it joins one, and the end of a child of its."""
         focus = self.focus_on
         if event.type == "agent.spawned" and focus is not None and focus.agent is not None:
             child = event.data.get("name")
             if event.data.get("parent") == f"agent:{focus.agent}":
                 self._children.add(child or "")
-                return Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
+                return _spawned(event, joined=False)
             return line_of(event) if child == focus.agent else None
         theirs = focus is not None and focus.agent is not None and event.agent not in (focus.agent, None)
         if not (theirs and event.stream.startswith(("agent/", "approval/"))):
@@ -385,7 +410,8 @@ class Transcript(ScrollView, can_focus=True):
 
     def _block(self, event: Event) -> Block | None:
         """A new line for an event, or None: for one with no line, and for a tool call's end, which its start's line
-        becomes when the two name one call. A start read again is the line it began already."""
+        becomes when the two name one call. A start read again is the line it began already. A spawn joins the call
+        that made it, whichever of the two came first, and is drawn under it."""
         line = self._line(event)
         if line is None:
             return None
@@ -398,7 +424,38 @@ class Transcript(ScrollView, can_focus=True):
         block = Block(event.seq, event, line)
         if native and event.data.get("phase") == "started":
             self._tools[native] = block
+        self._join.take(event, block)
+        joined = self._join.spawns_of(block)
+        if self._join.call_of(block) is not None:
+            joined.append(block)
+        for spawn in joined:
+            self._forget(spawn)
+            spawn.line = _spawned(spawn.event, joined=True)
         return block
+
+    def _rows_of(self, blocks: Iterable[Block]) -> list[tuple[Block, int]]:
+        """The rows lines are drawn in: each where its first event stands, but a spawn joined to a call, drawn under
+        it."""
+        return [
+            row
+            for block in blocks
+            if self._join.call_of(block) is None
+            for line in (block, *self._join.spawns_of(block))
+            for row in self._lines_of(line)
+        ]
+
+    def _draw(self, new: list[Block], *, above: bool = False) -> int:
+        """Draw new lines below those held, or `above` them, and say how many rows went above. A spawn joined to a
+        call moves the lines it joins, so then all are laid out again, keeping the line at the top of the screen."""
+        if any(self._join.call_of(block) is not None or self._join.spawns_of(block) for block in new):
+            self._relayout()
+            return 0
+        rows = self._rows_of(new)
+        if above:
+            self._rows[:0] = rows
+            return len(rows)
+        self._rows += rows
+        return 0
 
     async def _page(self, *, after: int = 0, before: int | None = None) -> Page | None:
         """A page of the focus's events, or None if it could not be read, which the person is told they missed."""
@@ -431,10 +488,9 @@ class Transcript(ScrollView, can_focus=True):
         self._before = page.cursor
         older = [block for event in page.events if (block := self._block(event)) is not None]
         self._blocks[:0] = older
-        rows = [row for block in older for row in self._lines_of(block)]
-        self._rows[:0] = rows
+        rows = self._draw(older, above=True)
         if self._chosen is None and older:
-            self._chosen = older[-1]
+            self._chosen = self._rows[-1][0]
         if self.following:
             self._let_oldest_go()
         else:
@@ -443,7 +499,7 @@ class Transcript(ScrollView, can_focus=True):
         if self.following:
             self._place(None)
         elif rows:
-            self._place(self.scroll_y + len(rows))
+            self._place(self.scroll_y + rows)
         if (
             self._before
             and len(self._blocks) < WINDOW
@@ -469,7 +525,7 @@ class Transcript(ScrollView, can_focus=True):
         events = [event for event in page.events if event.seq <= self.through]
         newer = [block for event in events if (block := self._block(event)) is not None]
         self._blocks += newer
-        self._rows += [row for block in newer for row in self._lines_of(block)]
+        self._draw(newer)
         self._after = page.cursor if page.cursor < self.through else None
         self._let_oldest_go()
         self._layout()
@@ -536,7 +592,7 @@ class Transcript(ScrollView, can_focus=True):
     def _relayout(self) -> None:
         """Lay every line out again, keeping the line at the top of the screen where it is."""
         top = self._rows[int(self.scroll_y)] if self._rows and int(self.scroll_y) < len(self._rows) else None
-        self._rows = [row for block in self._blocks for row in self._lines_of(block)]
+        self._rows = self._rows_of(self._blocks)
         self._layout()
         if self.following:
             self._place(None)
@@ -604,8 +660,8 @@ class Transcript(ScrollView, can_focus=True):
         if self._after is not None and self.focus_on is not None and self._session is not None:
             await self.show(self.focus_on, self._session, self.through)
         self.following, self.unseen = True, 0
-        if self._blocks:
-            self._chosen = self._blocks[-1]
+        if self._rows:
+            self._chosen = self._rows[-1][0]
         self.scroll_end(animate=False, immediate=True, force=True)
         self.post_message(self.Moved())
         self.refresh()
@@ -617,8 +673,8 @@ class Transcript(ScrollView, can_focus=True):
             self._begin(before=0, after=0)
             await self.page_forward()
         self.following = False
-        if self._blocks:
-            self._chosen = self._blocks[0]
+        if self._rows:
+            self._chosen = self._rows[0][0]
         self._place(0)
         self.post_message(self.Moved())
         self.refresh()
@@ -633,10 +689,12 @@ class Transcript(ScrollView, can_focus=True):
         self.toggle()
 
     def _choose(self, by: int) -> None:
-        if not self._blocks:
+        """Choose the line `by` lines on, as they are drawn."""
+        lines = [block for block, line in self._rows if line == 0]
+        if not lines:
             return
-        at = self._blocks.index(self._chosen) if self._chosen in self._blocks else len(self._blocks) - 1
-        self._chosen = self._blocks[min(max(at + by, 0), len(self._blocks) - 1)]
+        at = lines.index(self._chosen) if self._chosen in lines else len(lines) - 1
+        self._chosen = lines[min(max(at + by, 0), len(lines) - 1)]
         row = self._rows.index((self._chosen, 0))
         if by < 0 and self.following:
             self.following = False

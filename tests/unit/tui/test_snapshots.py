@@ -1,7 +1,7 @@
 """The workspace's layout at each size the guide names, as snapshots, on a session's history so nothing moves."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +10,10 @@ from textual.app import App
 
 from platoon_harness import Session, Team
 from platoon_harness.annotations import Annotation
+from platoon_harness.drivers import AgentSpec
 from platoon_harness.kernel import Event
 from platoon_harness.primitives import Contributors, Lineage, Uses
-from platoon_harness.testing import Call, Say, ScriptedDriver
+from platoon_harness.testing import Do, Say, ScriptedDriver
 from platoon_harness_cli.tui.app import CSS, TerminalUI
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch
@@ -33,11 +34,15 @@ SCREENSHOTS = {
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
 }
 """Each screenshot the docs show, in docs/assets, by the snapshot below that it is a copy of."""
+
+
+async def split(spec: AgentSpec, call: Callable[[str, Mapping[str, Any]], Awaitable[Any]]) -> None:
+    """Spawn the worker under an id of the harness's own, as a harness's call goes, so it is drawn under its call."""
+    await call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "fix the parser"})
+
+
 LEAD = [
-    [
-        Say("kestrel: I will split the work"),
-        Call("agent_spawn", {"name": "w", "child_role": "worker", "goal": "fix the parser"}),
-    ],
+    [Say("kestrel: I will split the work"), Do(split)],
     [Say("Done: the worker fixed the parser, and its 3 tests pass.")],
 ]
 """The lead's turns: it splits the work and spawns a worker, and once the worker's report starts its next turn, says

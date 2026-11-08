@@ -100,9 +100,12 @@ Each event is one line, and a line opens on demand, with Enter on the chosen lin
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
-child it spawned began and ended, where the journal has it, inside the turn that spawned it, and each approval it asked
-for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and through
-what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
+child it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made
+it, even when its harness reported that call after the spawn. A spawn whose call no line holds is drawn where the journal
+has it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim and
+`ph`, each under an id of its own, which none of their items holds. The transcript also shows each approval the agent
+asked for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and
+through what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
 which no event records, so no answer is drawn under it, and the dock no longer lists it. Below the lines is what the
 agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
 stops following, and the line under the transcript counts what came since; `/follow` follows again. A page the journal

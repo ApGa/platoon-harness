@@ -1744,7 +1744,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   on the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and
   drawn through an LRU of strips keyed by width. An agent's reads its own streams, every `agent/*`, so a child of its needs no
   name to be drawn, and every `approval/*`, as an approval's id is its harness's, so its approvals and who answered them are
-  drawn, a read for each glob, kept to what every read covered. Live text follows below it, one tail for the agent in view,
+  drawn, a read for each glob, kept to what every read covered. A child's spawn is drawn under the call that made it, the
+  tool item of its spawner's whose `native_id` its anchor holds, whichever of the two came first, by the join in `calls.py`,
+  which the page's Tool activity is to share, and a call leaves the window with the spawns under it. A spawn that joins no
+  call the transcript holds is drawn where the journal has it, saying it joins no known call.
+  Live text follows below it, one tail for the agent in view,
   which goes with the runtime that said it. Unread counts, of lines the person did not write, and read mentions come from the
   person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans handing a label-like widget anything not
   visibly `Content`. Approvals never take focus: the dock gets it only from the person's Tab, with no place chosen, and only the
