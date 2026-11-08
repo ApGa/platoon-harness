@@ -3,6 +3,7 @@
 import asyncio
 import json
 import random
+import threading
 from typing import Annotated
 
 import pytest
@@ -17,13 +18,16 @@ from platoon_harness.tools.surface import harness_name
 
 from ..primitives.support import end_turn, events_of, grant, of_type, result_of, send, spawn, start_turn
 from .support import (
+    SECONDS,
     Client,
     connect,
     drained,
     enrolled,
     exchange,
+    meeting,
     opened,
     request,
+    serving,
     slept_until,
     text_of,
     tool_call,
@@ -705,6 +709,31 @@ async def test_too_many_calls_at_once_are_told_to_retry(kernel, lead):
     results = await asyncio.gather(*calls)
 
     assert all(not result["isError"] or "busy" in text_of(result) for result in results)
+
+
+# At once.
+
+
+async def test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them(tmp_path, clock):
+    """Three workers call a query that answers only once they and this test are all in it, and this test goes in only
+    once a fourth worker's `wait` holds, so the four calls are in flight together: a server that took one call at a
+    time, or ran a query on its event loop, would never let them meet."""
+    barrier = threading.Barrier(4, timeout=SECONDS)
+    async with serving(tmp_path / "session", clock, meeting(barrier)) as (kernel, server):
+        lead = await enrolled(kernel, server, "lead", role="lead")
+        workers = [await enrolled(kernel, server, f"w{n}", by=lead[0]) for n in range(1, 5)]
+        await start_turn(kernel, "w4")
+        held = asyncio.create_task(workers[3][1].call("wait", {"from": ["lead"], "hold": 20.0}))
+        meeting_calls = [asyncio.create_task(client.call("meet_arrive")) for _, client in workers[:3]]
+        await slept_until(clock, 1020.0)
+
+        place = await asyncio.to_thread(barrier.wait)
+        places = [value_of(await call)["place"] for call in meeting_calls]
+        await send(kernel, lead[0], "@w4", "all met")
+        released = value_of(await held)
+
+    assert sorted([place, *places]) == [0, 1, 2, 3]
+    assert released["state"] == "released"
 
 
 # Bodies.

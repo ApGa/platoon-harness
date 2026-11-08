@@ -2,15 +2,17 @@
 
 import ast
 import asyncio
+import contextlib
 import json
 import secrets
 import sys
-from collections.abc import Mapping
+import threading
+from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any, NamedTuple
 from urllib.parse import urlsplit
 
-from platoon_harness.kernel import Kernel, ManualClock, Principal, hash_token
+from platoon_harness.kernel import Args, Extension, Kernel, ManualClock, Principal, Txn, hash_token, op
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.team import Team
 from platoon_harness.tools import ToolServer
@@ -47,9 +49,10 @@ workers = "worker"
 BUILT = Team.loads(TEAM)
 
 
-async def opened(folder: Path, clock: ManualClock) -> Kernel:
-    """A session of `BUILT` in `folder`, opened with its grants, a queue `tasks` and a board `notes`."""
-    kernel = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
+async def opened(folder: Path, clock: ManualClock, *extensions: Extension) -> Kernel:
+    """A session of `BUILT` in `folder`, opened with its grants, a queue `tasks` and a board `notes`, and any
+    `extensions` besides the primitives, whose ops every agent may call."""
+    kernel = Kernel.open(folder, clock=clock, extensions=(*PRIMITIVES, *extensions))
     roles = {
         name: {"harness": role.driver, "tools": scopes(role), "delivery": role.delivery}
         for name, role in BUILT.roles.items()
@@ -57,9 +60,37 @@ async def opened(folder: Path, clock: ManualClock) -> Kernel:
     result_of(await kernel.submit(kernel.runtime, "session.open", {"roles": roles}))
     for grant in compile(BUILT):
         result_of(await kernel.submit(kernel.runtime, "grant.add", grant.model_dump()))
+    for extension in extensions:
+        granted = {"who": "agent", "ops": f"{extension.name}.*", "on": "*"}
+        result_of(await kernel.submit(kernel.runtime, "grant.add", granted))
     await channel(kernel, "tasks", kind="queue")
     await channel(kernel, "notes", kind="board")
     return kernel
+
+
+def meeting(barrier: threading.Barrier) -> Extension:
+    """An extension whose one tool, `meet.arrive`, is a query that answers once every party of `barrier` has arrived,
+    so calls that are never in flight together fail it, refused `unavailable` once the barrier's wait runs out."""
+
+    @op("meet.arrive", query=True, tool=True)
+    def arrive(txn: Txn, a: Args) -> dict[str, int]:
+        """Arrive, and hear back once everyone has."""
+        return {"place": barrier.wait()}
+
+    return Extension("meet", ops=[arrive])
+
+
+@contextlib.asynccontextmanager
+async def serving(folder: Path, clock: ManualClock, *extensions: Extension) -> AsyncIterator[tuple[Kernel, ToolServer]]:
+    """A kernel `opened` with `extensions`, and a server on it, both gone after."""
+    kernel = await opened(folder, clock, *extensions)
+    server = ToolServer(kernel)
+    await server.start()
+    try:
+        yield kernel, server
+    finally:
+        await server.stop()
+        kernel.close()
 
 
 class Reply(NamedTuple):

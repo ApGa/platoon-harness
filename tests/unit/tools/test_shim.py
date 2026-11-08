@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import sys
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -16,7 +17,17 @@ from platoon_harness.tools import SHIM
 from platoon_harness.tools.shim import TOKEN_VARIABLE, URL_VARIABLE
 
 from ..primitives.support import of_type, send, start_turn
-from .support import SECONDS, Client, check_stands_alone, finished, slept_until, text_of
+from .support import (
+    SECONDS,
+    Client,
+    check_stands_alone,
+    enrolled,
+    finished,
+    meeting,
+    serving,
+    slept_until,
+    text_of,
+)
 
 OTHER_PYTHON = shutil.which("python3", path=os.defpath)
 
@@ -115,6 +126,22 @@ async def test_a_held_wait_does_not_stop_the_next_call(kernel, lead, worker, clo
         held = await pipe.line()
 
     assert held["id"] == 1 and json.loads(text_of(held["result"]))["state"] == "released"
+
+
+async def test_one_agent_s_calls_through_the_shim_are_in_flight_at_once(tmp_path, clock):
+    """Three calls on three lines, of a query that answers only once all three are in it: a shim that relayed one line
+    at a time would never let them meet."""
+    barrier = threading.Barrier(3, timeout=SECONDS)
+    params = {"name": "meet_arrive", "arguments": {}}
+    async with serving(tmp_path / "session", clock, meeting(barrier)) as (kernel, server):
+        _, client = await enrolled(kernel, server, "lead", role="lead")
+        async with shim(client) as pipe:
+            for id in (1, 2, 3):
+                pipe.send({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": params})
+            answers = [await pipe.line() for _ in range(3)]
+
+    assert sorted(answer["id"] for answer in answers) == [1, 2, 3]
+    assert sorted(json.loads(text_of(answer["result"]))["place"] for answer in answers) == [0, 1, 2]
 
 
 async def test_a_second_identical_call_is_a_second_call(kernel, lead, worker):

@@ -241,14 +241,15 @@ class ToolServer(Server[_Request]):
     async def _run(
         self, principal: Principal, tool: _Tool, arguments: dict[str, Any], key: str | None, native: Any
     ) -> Outcome:
-        """Run one call, through `submit` so enforcement happens here however the list was filtered. A query that
+        """Run one call, through `submit` so enforcement happens here however the list was filtered. A query runs on a
+        reader of its own off the event loop, so however long one takes, no other call waits behind it. A query that
         decoding refuses leaves no event, so an agent's is submitted too: `submit` refuses it and journals that."""
         kernel = self._kernel
         name = tool.op.name
         if not tool.op.query:
             stored = await self._stored(tool, arguments)
             return await kernel.submit(principal, name, stored, key=key, native=native)
-        outcome = kernel.query(principal, name, arguments)
+        outcome = await asyncio.to_thread(kernel.query, principal, name, arguments)
         if principal.kind == "agent" and outcome.refusal is not None and outcome.refusal.code == "invalid":
             await kernel.submit(principal, name, arguments, key=key, native=native)
         if outcome.refusal is None and (size := _size(outcome.result)) > _RESULT_LIMIT:
