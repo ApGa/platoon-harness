@@ -185,11 +185,12 @@ def build() -> App:
 
 
 def extended(app: App, words: Sequence[str]) -> App:
-    """`app` with a group per installed extension, when `words` may name one, as any first word but one of its own
-    commands may. Each is found from metadata, and only the one `words` name is loaded. One named as a command of its
-    own, `--help` among them, is refused before any import, saying why."""
+    """`app` with a group per installed extension, when `words` may name one or ask for help: no word at all, a help
+    flag, or any first word but one of its own commands. Each is found from metadata, and only the one `words` name is
+    loaded. One whose name is held, as one of its own commands or an extension every session holds, is refused before
+    any import, saying why."""
     own = set(app)
-    if words and words[0] in own and not words[0].startswith("-"):
+    if words and words[0] in own and words[0] not in app.help_flags:
         return app
     for group in extension_groups(own, words[0] if words else None):
         group.group = (_INSTALLED,)

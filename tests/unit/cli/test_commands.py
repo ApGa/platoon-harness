@@ -375,12 +375,15 @@ def test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_
     site: Site, capsys: pytest.CaptureFixture[str]
 ):
     """`run` and `doctor` are the command line's own, so an extension of either name gets no group: discovery refuses it
-    from metadata, saying why on stderr, and each word still names the command line's own command."""
+    from metadata, saying why on stderr, and each word still names the command line's own command. A command of its
+    own, `--version` among them, reads no metadata, so says nothing of it."""
     makers(site, "run", "doctor")
 
     listed = " ".join(helped([], extended(build(), [])).split())
     said = capsys.readouterr().err
     command, arguments = line(["doctor", "--json"])
+    versioned = main(["--version"])
+    quiet = capsys.readouterr().err
 
     assert said == "".join(
         f"platoon-harness: extensions.{name}: {name}-maker 1.0.0's extension `{name}` has no commands, as `{name}` is "
@@ -391,6 +394,7 @@ def test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_
     assert "-maker" not in listed
     assert "run Start a session, give it a prompt, and own it in the foreground until it settles." in listed
     assert command is machine.doctor and arguments == {"json": True}
+    assert versioned == 0 and quiet == ""
     assert not {"never_run", "never_doctor"} & set(sys.modules)
 
 
