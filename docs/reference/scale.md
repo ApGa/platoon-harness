@@ -3,7 +3,8 @@
 What the brief's Scale case costs on the real stack: 100 agents driving 100,000 events through the real kernel and
 runtime, measured on the hardware below, and the budget a slow test holds each measurement to. Everything in the tables
 was measured on 2026-11-08, in four runs one after another on one node, on the code this page is published with but for
-the budgets, which were set from what the runs measured, and a docstring.
+the budgets, which were set from what the runs measured, and for docstrings and an xdist option that change nothing a
+run without `-n` does.
 
 `tests/integration/test_scale.py` makes the run and measures it, and
 `tests/integration/test_tui_budgets.py`, `test_the_tui_attaches_to_a_100000_event_journal_within_its_budget`, attaches
