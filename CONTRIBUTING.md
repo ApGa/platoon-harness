@@ -339,11 +339,11 @@ ballot = "ballot:extension"
 Installing it activates nothing: a team names it in `extensions = [...]`. It uses only the kernel's public names, as the
 core's primitives do, and its ops are usable through the SDK, MCP, `ph`, the command line, the terminal's palette and the
 page's form with no core edit ([architecture §17](docs/architecture.md#17-extensions-and-configuration),
-[STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)). Its name is its
-command group's, so one named as a command of the command line's own, such as `run`, has no command, and the command line
-says why. No session can load one named as an extension of the SDK's own, which every session holds, such as `task` or
-`lease`. [examples/extension-package](examples/extension-package/README.md) is one, a package of its own with an op, a
-view and a preset.
+[STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)).
+[examples/extension-package](examples/extension-package/README.md) is one, a package of its own with an op, a view and a
+preset. An extension's name is its command group's, so one named as a command of the command line's own, such as `run`,
+has no command, and the command line says why; and no session can load one named as an extension of the SDK's own, which
+every session holds, such as `task` or `lease`.
 Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`
 ([Drivers, Extensions](docs/extending/drivers.md#extensions)).
 
