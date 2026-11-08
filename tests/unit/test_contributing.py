@@ -36,6 +36,16 @@ BY_HAND = {
     "uv run playwright install chromium-headless-shell": "CI installs it with --with-deps, which needs root",
     "PLATOON_HARNESS_LIVE=1 uv run pytest -q -m live tests/live/test_claude.py": "spends model calls on real logins",
     "uv run ruff check . && uv run ruff format --check .": "the ruff hooks' checks, without their fixes",
+    (
+        "PLATOON_HARNESS_LIVE=1 PLATOON_HARNESS_RECORD=tests/fixtures/sessions/mixed-team uv run pytest -q -m live "
+        "tests/live/test_examples.py -k mixed_team"
+    ): "spends model calls on a person's key, and records the docs' session",
+    "uv run pytest -q tests/unit/tui/test_snapshots.py -k recorded --snapshot-update": (
+        "makes the snapshots of a session recorded by hand"
+    ),
+    "PLATOON_HARNESS_IMAGES=docs/assets uv run pytest -q -m e2e tests/e2e/test_page_images.py": (
+        "writes the docs' page images, from a session recorded by hand"
+    ),
     "uv run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename message.txt": (
         "the commit-msg hook, on a message not committed"
     ),

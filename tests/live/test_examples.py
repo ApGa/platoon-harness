@@ -3,6 +3,9 @@ with MODEL the model `PLATOON_HARNESS_LIVE_MODEL` names, at the endpoint `OPENAI
 `OPENAI_API_KEY` holds, which every role's auth profile hands its harness. Set `PLATOON_HARNESS_LIVE=1` and those three
 to run them, and say what ran. A real model chooses its own steps, so each test holds an example to what its page
 promises of any model, and to the budget its page states, in model calls counted from the journal and in wall time.
+
+`PLATOON_HARNESS_RECORD`, naming `tests/fixtures/sessions/mixed-team`, has the mixed team's run recorded there for the
+docs' images, as CONTRIBUTING.md says.
 """
 
 import asyncio
@@ -10,12 +13,13 @@ import json
 import os
 import re
 import shutil
+import socket
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from ..integration.cli import SECONDS, finished, shown
+from ..integration.cli import ROOT, SECONDS, finished, shown
 from ..integration.test_examples import (
     FIRST,
     README,
@@ -31,6 +35,7 @@ from ..integration.test_examples import (
     started,
     typed,
 )
+from ..recorded import record
 from ..unit.runtime.gitting import git
 
 LIVE = ("PLATOON_HARNESS_LIVE_MODEL", "OPENAI_BASE_URL", "OPENAI_API_KEY")
@@ -79,7 +84,8 @@ def stated(events: list[dict[str, Any]]) -> str:
 async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
     """Budget: at most 40 model calls and 15 minutes. The page's run in a copy of the sample project settles, the task
     on `tasks` is done, the worker's note is `fix-1` on `notes`, and the copy's tests pass with its change to
-    `tally/money.py` uncommitted."""
+    `tally/money.py` uncommitted; then, if `PLATOON_HARNESS_RECORD` names a folder, the closed session is recorded
+    there, with every local path, the host, the endpoint and the key replaced."""
     [run] = shown(README, where="--name tally ")
 
     async with on_sample(tmp_path, README, yours(tmp_path / "home")) as cli:
@@ -87,6 +93,17 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
         listed = await typed(cli, "platoon-harness task list tally --queue tasks")
         events = await journal(cli, "tally")
     print(stated(events), flush=True)
+    if into := os.environ.get("PLATOON_HARNESS_RECORD"):
+        private = {
+            str(cli.folder): "/path/to/tally",
+            str(tmp_path): "/path/to/run",
+            str(ROOT): "/path/to/platoon-harness",
+            str(Path.home()): "/path/to/home",
+            socket.gethostname(): "host",
+            os.environ["OPENAI_BASE_URL"]: "<endpoint>",
+            os.environ["OPENAI_API_KEY"]: "<key>",
+        }
+        record(tmp_path / "state" / "sessions" / "tally", Path(into), private)
 
     assert ran.code == 0 and "settled, exit 0" in ran.stdout, ran.stderr[-2000:]
     assert [task["state"] for task in json.loads(listed.stdout)["tasks"]] == ["done"]

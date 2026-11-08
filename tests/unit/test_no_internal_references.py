@@ -95,7 +95,7 @@ def _found(text: str) -> Iterator[tuple[int, str]]:
                 yield number, match.group(0)
 
 
-def _hits(text: str, allowed: Collection[str] = ()) -> list[str]:
+def hits(text: str, allowed: Collection[str] = ()) -> list[str]:
     """`line N: 'match'` for each banned word, path, key or email address in `text`, but those `allowed` by digest."""
     return [f"line {number}: {found!r}" for number, found in _found(text) if _digest(found) not in allowed]
 
@@ -154,13 +154,13 @@ def test_the_matcher_finds_a_word_a_numbered_host_an_account_and_a_resource_type
     assert _banned(f"{host}042") and _banned(f"{host}s") and not _banned(f"{host}x") and not _banned("q1")
     assert _banned(f"{account}12345xy") and not _banned(f"{account}x1")
     assert _banned(resource) and _banned(f"a_{resource}_small") and not _banned("zq") and not _banned("hx_zq")
-    assert _hits(f"RTYPE={resource.upper()}") == [f"line 1: '{resource}'"]
-    assert _hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}_bridge'"]
-    assert _hits(f"class {site.upper()}Bridge:") == [f"line 1: '{site}_bridge'"]
-    assert _hits(f"two {site.upper()}s and {resource.upper()}s") == [f"line 1: '{site}s'", f"line 1: '{resource}s'"]
-    assert _hits(f"x\nssh login1.{site}.example") == [f"line 2: '{site}'"]
-    assert _hits(f"x {site} y", allowed={_digest(site)}) == []
-    assert _hits(f"x {site}@example.com", allowed={_digest(f"{site}@example.com")}) == [f"line 1: '{site}'"]
+    assert hits(f"RTYPE={resource.upper()}") == [f"line 1: '{resource}'"]
+    assert hits(f"class {site.capitalize()}Bridge:") == [f"line 1: '{site}_bridge'"]
+    assert hits(f"class {site.upper()}Bridge:") == [f"line 1: '{site}_bridge'"]
+    assert hits(f"two {site.upper()}s and {resource.upper()}s") == [f"line 1: '{site}s'", f"line 1: '{resource}s'"]
+    assert hits(f"x\nssh login1.{site}.example") == [f"line 2: '{site}'"]
+    assert hits(f"x {site} y", allowed={_digest(site)}) == []
+    assert hits(f"x {site}@example.com", allowed={_digest(f"{site}@example.com")}) == [f"line 1: '{site}'"]
 
 
 HOME, USERS, GROUPS = ("/".join(("", top, "someone", "notes")) for top in ("home", "Users", "groups"))
@@ -185,7 +185,7 @@ HOME, USERS, GROUPS = ("/".join(("", top, "someone", "notes")) for top in ("home
     ],
 )
 def test_the_scan_tells_a_local_path_from_a_path_in_a_repository(line, caught):
-    assert bool(_hits(line)) == caught
+    assert bool(hits(line)) == caught
 
 
 def test_the_scan_catches_openai_github_and_aws_key_shapes():
@@ -206,8 +206,8 @@ def test_the_scan_catches_openai_github_and_aws_key_shapes():
     around = ["token = {}\n", '"key:\\n{}"', "Authorization=Bearer%20{}", "OPENAI_KEY_{}"]
     near = ["api_key = " + "s" + "k-hunter2", "task-" + tail, "g" + "hp_" + tail[:20], "AK" + "IA" + "Q3EXAMPLE7KEY"]
 
-    assert [(line, key) for line in around for key in keys if _hits(line.format(key)) != [f"line 1: {key!r}"]] == []
-    assert [line for line in near if _hits(line)] == []
+    assert [(line, key) for line in around for key in keys if hits(line.format(key)) != [f"line 1: {key!r}"]] == []
+    assert [line for line in near if hits(line)] == []
 
 
 def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(tmp_path, made_up_bans):
@@ -221,7 +221,7 @@ def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(
     (tmp_path / ".editor").mkdir()
     (tmp_path / ".editor" / "settings.md").write_text(f"{site}\n")
 
-    found = {path.as_posix(): _hits((tmp_path / path).read_text()) for path in scanned(tmp_path)}
+    found = {path.as_posix(): hits((tmp_path / path).read_text()) for path in scanned(tmp_path)}
 
     assert found == {".gitignore": [], "new.md": [f"line 1: '{site}'"], "tracked.md": ["line 1: '/groups'"]}
 
@@ -229,15 +229,15 @@ def test_the_scan_finds_a_word_planted_in_a_new_file_and_skips_what_git_ignores(
 @pytest.mark.parametrize("path", FILES, ids=lambda path: path.as_posix())
 def test_no_internal_references(path):
     text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
-    hits = _hits(text, {digest for (file, digest) in ALLOWED if file == path.as_posix()})
+    found = hits(text, {digest for (file, digest) in ALLOWED if file == path.as_posix()})
 
-    assert not hits, f"{path} names a site, an account, a local path, a key or an email address:\n" + "\n".join(hits)
+    assert not found, f"{path} names a site, an account, a local path, a key or an email address:\n" + "\n".join(found)
 
 
 def test_no_file_name_names_a_site_or_an_account():
-    hits = {path.as_posix(): _hits(path.as_posix()) for path in scanned(ROOT, text_only=False)}
+    named = {path.as_posix(): hits(path.as_posix()) for path in scanned(ROOT, text_only=False)}
 
-    assert {path: found for path, found in hits.items() if found} == {}
+    assert {path: found for path, found in named.items() if found} == {}
 
 
 def test_every_allowed_text_is_still_needed():

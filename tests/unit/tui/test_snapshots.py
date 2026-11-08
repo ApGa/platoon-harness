@@ -1,4 +1,6 @@
-"""The workspace's layout at each size the guide names, as snapshots, on a session's history so nothing moves."""
+"""The workspace's layout at each size the guide names, as snapshots, on a session's history so nothing moves: a session
+of scripted harnesses, whose snapshots the docs show, and the mixed team's session as a live run of it recorded it,
+which no live run has recorded yet."""
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -18,6 +20,7 @@ from platoon_harness_cli.tui.app import CSS, TerminalUI
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch
 
+from ...recorded import RECORDED, finish_of, restored
 from ..cli.test_provenance import opened
 from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
@@ -83,6 +86,25 @@ def test_the_workspace_s_layout_at_each_size(snap_compare, history, size):
         await drawn(pilot, lambda text: "kestrel" in text and "Done: the worker" in text)
 
     assert snap_compare(TerminalUI("s"), terminal_size=SIZES[size], run_before=ready)
+
+
+@pytest.fixture
+def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """The mixed team's session as a live run recorded it, made again as history, and its name."""
+    if not RECORDED.exists():
+        pytest.skip("no live run has recorded the mixed team yet, so the docs' screenshots are of scripted harnesses")
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    return restored(RECORDED, tmp_path)
+
+
+@pytest.mark.parametrize("size", SIZES)
+def test_the_recorded_mixed_team_s_layout_at_each_size(snap_compare, recorded, size):
+    answer = finish_of(RECORDED, "lead")["data"]["gist"]
+
+    async def ready(pilot) -> None:
+        await drawn(pilot, lambda text: answer[:30] in " ".join(text.split()))
+
+    assert snap_compare(TerminalUI(recorded), terminal_size=SIZES[size], run_before=ready)
 
 
 WHEN = 1_700_000_000

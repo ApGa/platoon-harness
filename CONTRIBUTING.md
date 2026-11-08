@@ -135,6 +135,7 @@ While you work, run what you touch, such as `uv run pytest -q tests/unit/primiti
 | One test of `tests/unit/runtime/test_bwrap.py` | There is no writable folder outside `/tmp` |
 | One test each of `tests/unit/tools/test_ph.py` and `tests/unit/tools/test_shim.py` | The machine has no system `python3` |
 | One test of `tests/unit/drivers/test_process.py` | There is no `/dev/full` |
+| `test_the_recorded_mixed_team_s_layout_at_each_size` in `tests/unit/tui/test_snapshots.py`, and `tests/e2e/test_page_images.py` | No live run has recorded the mixed team's session yet, as [The docs' images](#the-docs-images) says |
 
 ## Design rules
 
@@ -393,6 +394,26 @@ commands as shown on its real pi or OpenHands against `FakeModel`, which plays e
 live test in `tests/live/test_examples.py` that runs it on a real model within the budget its README states, in model
 calls and wall time. Its files import nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists
 alone, which tests there hold. A cost a README quotes comes from a run that was made.
+
+## The docs' images
+
+The images of the terminal UI in `docs/assets` are copies of snapshots that `tests/unit/tui/test_snapshots.py` draws, which a
+test holds to them byte for byte, and the page's images are what `tests/e2e/test_page_images.py` writes. Each is to show a
+real session: the mixed team's, as a live run of it records it in the folder `RECORDED` names in `tests/recorded.py`, its
+manifest and its journal's events and bodies in text, with every local path, the host, the endpoint and the key replaced, and refused while the
+privacy scan catches anything. No live run has recorded it yet, so the docs still show sessions of scripted harnesses, and
+never one of FakeModel's. Record it with the example's live test, with `PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and
+`OPENAI_API_KEY` set, then draw the images from it:
+
+```bash
+PLATOON_HARNESS_LIVE=1 PLATOON_HARNESS_RECORD=tests/fixtures/sessions/mixed-team uv run pytest -q -m live tests/live/test_examples.py -k mixed_team
+uv run pytest -q tests/unit/tui/test_snapshots.py -k recorded --snapshot-update
+PLATOON_HARNESS_IMAGES=docs/assets uv run pytest -q -m e2e tests/e2e/test_page_images.py
+```
+
+Then map each image in `SCREENSHOTS` of `tests/unit/tui/test_snapshots.py` to the recorded session's snapshot, copy each
+snapshot over its image as that test's message says, and show the page's images where the docs need them. Read the recording
+and each image before you commit them, as they are published with the repository.
 
 ## When a change needs an RFC
 

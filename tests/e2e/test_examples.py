@@ -1,9 +1,11 @@
 """The mixed-team example in a real browser with the terminal UI attached at once, on its real `pi` and OpenHands
 against FakeModel, which plays each agent: the job sent from the page, the lead's answer drawn in both, and the
-browser's Provenance pane naming everyone the record ties to that answer."""
+browser's Provenance pane naming everyone the record ties to that answer. The session is then recorded, as a live run
+records one, and the page's images are drawn from the recording, which nothing keeps, as no real model made it."""
 
 import os
 import shutil
+import socket
 from pathlib import Path
 
 import pytest
@@ -16,9 +18,11 @@ from platoon_harness_cli.tui.app import TerminalUI
 from ..integration import plays
 from ..integration.cli import ROOT, shown
 from ..integration.plays import MODEL, OFFLINE, cast, copied, provider
+from ..recorded import record, restored
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn
 from .support import SECONDS, chat, opened, serving
+from .test_page_images import IMAGES, page_images
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(300)]
 
@@ -72,5 +76,12 @@ async def test_the_mixed_team_runs_from_the_page_with_the_terminal_attached_and_
             await page.context.close()
             sent = [event.gist for event in await of_type(session, "message.sent") if event.actor == "human:you"]
 
+    private = {str(tmp_path): "/path/to/run", str(ROOT): "/path/to/platoon-harness", socket.gethostname(): "host"}
+    record(root / "sessions" / "tally", tmp_path / "recorded", private)
+    again = tmp_path / "again"
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(again))
+    drawn_images = await page_images(browser, again, restored(tmp_path / "recorded", again), cited, tmp_path / "images")
+
     assert sent == [job]
     assert errors == []
+    assert [path.name for path in drawn_images if path.stat().st_size] == list(IMAGES)
