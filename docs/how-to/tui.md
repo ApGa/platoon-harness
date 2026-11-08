@@ -124,17 +124,19 @@ shortcut that decides nothing. The transcript then takes focus and chooses the l
 yours, whatever their case and the spaces between them, reading back from the journal a page at a time, as scrolling up
 does, within its window. A line's words are what it shows, not a body it opens on, nor what an agent is saying now. Ctrl+F
 then Enter finds the next one back. Where no line holds them, back to the first line of the focus, it says so, and goes back
-to following, or to the line it began from. A ref is opened through `/provenance`'s form, not found. That `/find` finds
-words alone, with Ctrl+F its shortcut, is the default pending the owner's ruling.
+to following, or to the line it began from, or where reading back let that line go from the window, to the oldest line
+held. A ref is opened through `/provenance`'s form, not found. That `/find` finds words alone, with Ctrl+F its shortcut, is
+the default pending the owner's ruling.
 
 ### Copy a line
 
 `/copy` sends the chosen line's text to the terminal as OSC 52, the sequence a terminal may take as text for its
 clipboard: the line as the transcript shows it, and while it is open, the text it opens on, its body as read, its gist
-whole or an approval's ask, as text and never as Markdown. Each control in it is shown as its escape, as on the screen,
-so what you paste acts on no terminal. It says how many characters it sent. Whether they reach the clipboard is the
-terminal's, which may take no OSC 52, or none past a length of its own: no real terminal has been measured, nor tmux or
-SSH between. That `/copy` copies the chosen line is the default pending the owner's ruling.
+whole or an approval's ask, as text and never as Markdown. While what it opens on is still being read, its gist goes in
+its place, which it says. Each control in it is shown as its escape, as on the screen, so what you paste acts on no
+terminal. It says how many characters it sent. Whether they reach the clipboard is the terminal's, which may take no
+OSC 52, or none past a length of its own: no real terminal has been measured, nor tmux or SSH between. That `/copy`
+copies the chosen line is the default pending the owner's ruling.
 
 ### The composer
 
@@ -153,12 +155,15 @@ says why it does not.
 sent in it, on any inbox or channel, read from the journal a page at a time as any focus is, and drawn as more come. A
 message's thread is the one it was sent in, or else the one it begins. The composer then replies to that message, where
 the page's Reply sends one ([web.md](web.md)): in the topic or group it is on, or in a direct exchange you are in, to
-the other, so a reply to what an agent sent you goes back to it. The chip above the composer says so,
-`to: #notes  replying to @ada`, and a message between others takes no reply from you, which the chip says too. What you
-send replies while the target is the thread's: retargeted to another with `@agent` or `#channel` at the start, it is a
-message as ever, in no thread. A thread moves no read mark, and a row chosen in the navigator leaves it. What an agent
-says in its turn and an approval are no message, so they have no thread, which `/thread` says. That threads are in
-milestone 4 is the default pending the owner's ruling.
+the other, so a reply to what an agent sent you goes back to it, and one to a runtime's report goes to the agent it is
+about. The chip above the composer says so, `to: #notes  replying to @ada`, or `to: @w1  replying to the runtime's report
+on @w1`, and a message between others takes no reply from you, which the chip says too. What you send replies while the
+target is the thread's: retargeted to another with `@agent` or `#channel` at the start, it is a message as ever, in no
+thread. A thread moves no read mark, and a row chosen in the navigator leaves it. What an agent says in its turn and an
+approval are no message, so they have no thread, which `/thread` says. A thread here holds its messages from every chat,
+where the page shows a reply under what it answers only in the same chat: a reply sent with `Session.reply`, which goes
+to its sender's inbox, is in the terminal's thread of a topic's message, and on the page only in the direct chat it went
+to. That threads are in milestone 4 is the default pending the owner's ruling.
 
 ### Act on the session
 

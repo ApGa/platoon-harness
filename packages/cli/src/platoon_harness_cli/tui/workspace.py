@@ -38,7 +38,7 @@ from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .tasks import Tasks
-from .transcript import Focus, Transcript, page_of, text_of
+from .transcript import Focus, Transcript, page_of, replying_to, text_of
 
 GROUPS = (
     ("needs_you", "Needs you", "⚠", "yellow"),
@@ -662,7 +662,7 @@ class Workspace(Screen[None]):
             return SafeText(cannot, "dim")
         parts: list[Any] = [("to: ", "dim"), SafeText(self.target or "", "bold reverse")]
         if (replying := self._replying()) is not None:
-            parts += [("  replying to ", "dim"), SafeText(replying.data.get("sender", ""), "bold")]
+            parts += [("  replying to ", "dim"), SafeText(replying_to(replying), "bold")]
         if self._queued is not None:
             ways = sorted({entry["delivery"] for entry in self._queued["entries"]})
             parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "cyan")]
@@ -950,8 +950,13 @@ class Workspace(Screen[None]):
             return
         text = text_of(chosen)
         self.app.copy_to_clipboard(text)
-        sent = f"Sent the chosen line's {len(text):,} characters as OSC 52"
-        note(self, f"{sent}: whether they reach your clipboard is your terminal's.")
+        said = (
+            f"Sent the chosen line's {len(text):,} characters as OSC 52: whether they reach your clipboard is your "
+            "terminal's."
+        )
+        if chosen.reading:
+            said += " What it opens on is still being read, so its gist went in its place: /copy again once that shows."
+        note(self, said)
 
     def action_page_up(self) -> None:
         self.query_one(Transcript).scroll_page_up(animate=False)

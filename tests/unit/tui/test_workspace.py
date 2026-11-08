@@ -1361,8 +1361,8 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
 
 async def test_copy_sends_the_chosen_line_s_text_as_osc_52_with_no_escape_in_it(root):
     """`/copy` sends the chosen line's text as the transcript shows it, and once the line is open the text it opens on,
-    as text, each control shown as its escape, so pasting it acts on no terminal. It says that whether it reaches the
-    clipboard is the terminal's."""
+    as text, each control shown as its escape, so pasting it acts on no terminal, or its gist while that is still being
+    read, saying so. It says that whether it reaches the clipboard is the terminal's."""
     body = f"# a heading\n\n{HOSTILE}\n\x1b[31mred\x1b[0m"
     async with attached(with_notes(team()), root) as (owner, app, pilot):
         written: list[str] = []
@@ -1381,10 +1381,17 @@ async def test_copy_sends_the_chosen_line_s_text_as_osc_52_with_no_escape_in_it(
         await drawn(pilot, lambda text: "a heading" in text)
         await pilot.press(*"/copy", "enter")
         await drawn(pilot, lambda _: len(copied()) == 2)
+        chosen = app.screen.query_one(Transcript).chosen
+        assert chosen is not None
+        chosen.text = None  # As while its body is being read.
+        await pilot.press(*"/copy", "enter")
+        await drawn(pilot, lambda _: len(copied()) == 3)
         notices = [notice.message for notice in app._notifications]
 
     line = f"@you → #notes  {safe(HOSTILE)} ▸"
-    assert copied() == [line, f"{line}\n{safe(body)}"]
+    assert copied() == [line, f"{line}\n{safe(body)}", f"{line}\n{safe(HOSTILE)}"]
     assert not [char for char in UNSAFE if char in "".join(copied())]
     terminal_s = "whether they reach your clipboard is your terminal's."
     assert f"Sent the chosen line's {len(line)} characters as OSC 52: {terminal_s}" in notices
+    reading = "What it opens on is still being read, so its gist went in its place: /copy again once that shows."
+    assert notices[-1] == f"Sent the chosen line's {len(copied()[2])} characters as OSC 52: {terminal_s} {reading}"

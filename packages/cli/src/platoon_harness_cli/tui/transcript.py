@@ -120,6 +120,13 @@ class Focus:
         return event.type == "message.sent" and self.thread in (shows(event), event.data.get("thread"))
 
 
+def replying_to(message: Event) -> str:
+    """Whom a reply to `message` answers, as its line names them: its sender, or for a runtime's report, which a reply
+    goes to the agent it is about, that report."""
+    sender, subject = message.data.get("sender", message.actor), message.data.get("subject")
+    return f"the runtime's report on @{subject}" if sender == "runtime" and subject else _who(sender).plain
+
+
 def _reply_address(message: Event, person: str) -> str | None:
     """Where a reply to `message` goes, as the page's chats take one: the topic or the group it is on, or the other of a
     direct exchange `person` is in, which for a runtime's report is the agent it is about, and nowhere for one between
@@ -264,10 +271,20 @@ class Block:
     text: str | None = None
     ask: Ask | None = None
 
+    @property
+    def reading(self) -> bool:
+        """Whether it is open on what is still being read: an approval's ask, or a body."""
+        if not self.open:
+            return False
+        if self.event.type == "approval.requested":
+            return self.ask is None
+        data = self.event.data if isinstance(self.event.data, dict) else {}
+        return self.text is None and isinstance(data.get("body"), str)
+
 
 def text_of(block: Block) -> str:
-    """A line's text, as `/copy` sends it: what it shows and, while it is open, the text it opens on, as text and never
-    as Markdown, each control shown as its escape."""
+    """A line's text, as `/copy` sends it: what it shows and, while it is open, the text it opens on, or its gist while
+    that is being read, as text and never as Markdown, each control shown as its escape."""
     said = [block.line.plain]
     if block.open and block.ask is not None:
         said += [block.ask.gist if block.ask.text is None else block.ask.text]
@@ -862,8 +879,8 @@ class Transcript(ScrollView, can_focus=True):
         reading back from the journal a page at a time, as scrolling up does, until one does. A line's words are what it
         shows, and not a body it opens on. Each line is looked at once, and a read under way puts its page in first.
         Where none does back to the focus's first line it says so, and goes back to following, or else to the line it
-        began from. Reading the focus anew stops it, saying nothing, and a page the journal would not give, which is
-        said as lines missed."""
+        began from, or where reading back let that go from the window, to the oldest line held. Reading the focus anew
+        stops it, saying nothing, and a page the journal would not give, which is said as lines missed."""
         said, start, last = _words(words), self._chosen, None
         followed, shown = self.following, self._shown
         while True:

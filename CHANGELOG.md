@@ -14,19 +14,19 @@ named here is closed.
 ### New features
 
 - **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
-  transcript shows it and, while it is open, the text it opens on, each control shown as its escape, so what is pasted
-  acts on no terminal. Whether it reaches the clipboard is the terminal's, which it says. Before, the terminal copied
-  nothing of its own.
+  transcript shows it and, while it is open, the text it opens on, or its gist while that is still being read, which it
+  says, each control shown as its escape, so what is pasted acts on no terminal. Whether it reaches the clipboard is the
+  terminal's, which it says. Before, the terminal copied nothing of its own.
 - **Threads in the terminal.** `/thread` shows the thread of the chosen line's message in the focus pane, every message
-  sent in it on any inbox or channel, and the composer replies to that message where the page's Reply sends one: in
-  its topic or group, or back to the other of a direct exchange you are in, which the chip above it says. A message
-  between others takes no reply from you. Before, the terminal showed a reply only where it was sent, and could send
-  none.
+  sent in it on any inbox or channel, where the page shows a reply under what it answers only in the same chat, and the
+  composer replies to that message where the page's Reply sends one: in its topic or group, or back to the other of a
+  direct exchange you are in, which the chip above it says. A message between others takes no reply from you. Before,
+  the terminal showed a reply only where it was sent, and could send none.
 - **Words found in the terminal.** `/find`, or Ctrl+F, opens a form for words, filled in with the last ones found, and
   sent, it chooses the line before the chosen one whose words hold them, whatever their case and spacing, reading back
-  from the journal a page at a time as scrolling up does, or says that none does and goes back to where it began. Ctrl+F
-  is a shortcut that decides nothing, and a ref is still opened through `/provenance`. Before, a transcript could be
-  read only by scrolling.
+  from the journal a page at a time as scrolling up does, or says that none does and goes back to where it began, or to
+  the oldest line held where reading back let that go. Ctrl+F is a shortcut that decides nothing, and a ref is still
+  opened through `/provenance`. Before, a transcript could be read only by scrolling.
 - **The page on a phone.** In a window narrower than 760 px the page is one column, the top bar, the list, what the
   address shows and the pane, each at most as tall as the screen, and it goes to what you open: the pane, or else what
   the address shows, a chat with its composer at the screen's foot. A press on a message gives it focus, which shows its

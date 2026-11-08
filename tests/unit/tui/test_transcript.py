@@ -11,7 +11,7 @@ from platoon_harness.kernel import Event, Page
 from platoon_harness.primitives import Span, Spans
 from platoon_harness_cli.approvals import Ask
 from platoon_harness_cli.tui import transcript as transcript_module
-from platoon_harness_cli.tui.transcript import Block, Focus, Transcript, text_of
+from platoon_harness_cli.tui.transcript import Block, Focus, Transcript, replying_to, text_of
 
 
 def event(
@@ -566,7 +566,7 @@ async def test_find_waits_out_a_read_under_way_and_reads_back_each_page_once():
 def test_a_thread_holds_its_messages_alone_and_a_reply_goes_where_the_page_s_reply_goes():
     """A thread is the message it began with and every message sent in it. A reply goes to the topic or the group a
     message is on, or to the other of a direct exchange the person is in, a runtime's report standing for the agent it
-    is about, and nowhere for one between others."""
+    is about, which the chip names as that report, and nowhere for one between others."""
 
     def sent(seq: int, stream: str, sender: str, **data: Any) -> Event:
         return event(seq, stream, "message.sent", "words", {"sender": sender, "thread": None, **data})
@@ -586,11 +586,13 @@ def test_a_thread_holds_its_messages_alone_and_a_reply_goes_where_the_page_s_rep
     assert [to("inbox/you", "@lead"), to("inbox/lead", "@you")] == ["@lead", "@lead"]
     assert to("inbox/you", "runtime", subject="worker") == "@worker"
     assert to("inbox/lead", "@worker") is None and to("inbox/you", "runtime") is None
+    assert replying_to(sent(1, "inbox/you", "runtime", subject="worker")) == "the runtime's report on @worker"
+    assert replying_to(sent(1, "inbox/you", "@lead")) == "@lead"
 
 
 def test_a_line_s_text_is_what_it_shows_and_what_it_opens_on_each_control_as_its_escape():
-    """What `/copy` sends: the line, and while it is open its body as read, its gist whole while the body is read, or
-    an approval's ask as it was asked, with the words below it, never as Markdown."""
+    """What `/copy` sends: the line, and while it is open its body as read, its gist whole while the body is read, which
+    the line says it is, or an approval's ask as it was asked, with the words below it, never as Markdown."""
     asked = event(2, "approval/a1", "approval.requested", "rm -rf \x1b[2J", {"body": "b"})
     said = event(3, "inbox/you", "message.sent", "the  **gist**\x07", {"sender": "@lead", "body": "c"})
     ask = Ask(agent="lead", gist="rm -rf", text="rm -rf \x1b[2J /\nand more", below="cut at 64 KiB")
@@ -598,6 +600,8 @@ def test_a_line_s_text_is_what_it_shows_and_what_it_opens_on_each_control_as_its
     reading = Block(3, said, Content("@lead → @you  the **gist**\\x07 ▸"), open=True)
     read = Block(3, said, reading.line, open=True, text="# the body\n\\x1b[31m")
 
+    assert reading.reading and not read.reading and not shown.reading and not Block(3, said, reading.line).reading
+    assert Block(2, asked, shown.line, open=True).reading
     assert text_of(Block(3, said, reading.line)) == "@lead → @you  the **gist**\\x07 ▸"
     assert text_of(shown) == "@lead asks for approval  rm -rf \\x1b[2J\nrm -rf \\x1b[2J /\nand more\ncut at 64 KiB"
     assert text_of(reading) == "@lead → @you  the **gist**\\x07 ▸\nthe  **gist**\\x07"

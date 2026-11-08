@@ -127,7 +127,9 @@ history.*
 - **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
   message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
   cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.
-  A reply, or a message in a thread, shows under what it answers when that is in the same chat.
+  A reply, or a message in a thread, shows under what it answers when that is in the same chat. The terminal's `/thread`
+  holds a thread's messages from every chat, so a reply sent to another chat, as `Session.reply` sends one to its
+  sender's inbox, is in its thread there and here only in the chat it went to.
 - **What an agent says.** What its harness says in a turn is its message to you, in its chat with you. Thoughts, tool
   calls and their output, token counts and live text never enter a chat: Tool activity, on its page, shows its calls and
   what it is saying now.
