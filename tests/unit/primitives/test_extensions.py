@@ -21,7 +21,7 @@ VIEWS = {
     "tombstones": (1, "4aad641385d8"),
     "session": (2, "47824e611e3a"),
     "counters": (1, "431f295c4857"),
-    "budgets": (3, "55f5bae29c02"),
+    "budgets": (4, "fc4a6126880f"),
     "agents": (14, "c7380a67ce66"),
     "channels": (1, "385abe8c30d1"),
     "groups": (1, "8989bb29c3c8"),

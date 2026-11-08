@@ -4121,7 +4121,7 @@ Boundary = Literal["turn", "tool", "model_call"]
 
 ```python
 class Budgets(View):
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_budgets(
         scope TEXT PRIMARY KEY,
@@ -4152,10 +4152,12 @@ class Budgets(View):
         label TEXT NOT NULL,
         PRIMARY KEY (agent, unit)
     ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_budgets_ended(id INTEGER PRIMARY KEY CHECK (id = 1), at REAL) STRICT;
     """
 ```
 
-Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster.
+Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster, and when the session
+ended, which no wall time is spent past.
 
 **`limits_set`**
 
@@ -4163,6 +4165,30 @@ Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for
 @fold("budget.set")
 def limits_set(self, event: Event) -> None: ...
 ```
+
+**`session_ending`**
+
+```python
+@fold("session.closed", "session.cancelled")
+def session_ending(self, event: Event) -> None: ...
+```
+
+**`session_stopped`**
+
+```python
+@fold("session.stopped")
+def session_stopped(self, event: Event) -> None: ...
+```
+
+A session that was closing or cancelled has ended once its owner stops, as nothing more of it will run.
+
+**`session_ended`**
+
+```python
+def session_ended(self) -> float | None: ...
+```
+
+When the session ended, or None while more of it can run.
 
 **`reserved`**
 
@@ -4285,7 +4311,8 @@ Whether the shared budget has run out, which stops every kind of session. A rese
 def status(self, now: float) -> list[dict[str, Any]]: ...
 ```
 
-Each limit and what is spent against it, which for `wall` is the time since it was set.
+Each limit and what is spent against it, which for `wall` is the time since it was set, up to when the
+session ended, once it has.
 
 **`usage_of`**
 
@@ -9605,7 +9632,8 @@ A scripted model. Each model call takes the next reply, and past the script's en
 
 `async with FakeModel("hello", ToolCall("ping")) as model:` serves on loopback at `model.url`. `model.requests` logs
 everything that arrived, with its bearer and headers, and `model.calls` what was a model call. `await model.call(0)`
-waits for one. `model.gateway(bearer)` is access to it as a training system's gateway gives it.
+waits for one. `model.gateway(bearer)` is access to it as a training system's gateway gives it. `model.answer` has
+a function reply to the calls whose request says a text, such as one agent's name, in place of the script.
 
 **`url`**
 
@@ -9649,6 +9677,15 @@ def script(self, replies: Iterable[Reply]) -> None: ...
 ```
 
 Add to what the model will say.
+
+**`answer`**
+
+```python
+def answer(self, saying: str, reply: Callable[[Request], Reply]) -> None: ...
+```
+
+Answer each model call whose request says `saying` with what `reply` gives for that request, and not from the
+script. A call goes to the first such function whose text it says, in the order they were given.
 
 **`release`**
 

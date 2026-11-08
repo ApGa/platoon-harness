@@ -39,9 +39,10 @@ def _charges(held: dict[str, float], seen: dict[str, tuple[float, str]]) -> list
 
 
 class Budgets(View):
-    """Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster."""
+    """Limits per scope, `shared` or `role:x`. Spending is also kept per `agent:x`, for the roster, and when the session
+    ended, which no wall time is spent past."""
 
-    version = 3
+    version = 4
     schema = """
     CREATE TABLE v_budgets(
         scope TEXT PRIMARY KEY,
@@ -72,6 +73,7 @@ class Budgets(View):
         label TEXT NOT NULL,
         PRIMARY KEY (agent, unit)
     ) WITHOUT ROWID, STRICT;
+    CREATE TABLE v_budgets_ended(id INTEGER PRIMARY KEY CHECK (id = 1), at REAL) STRICT;
     """
 
     @fold("budget.set")
@@ -81,6 +83,20 @@ class Budgets(View):
             "INSERT OR REPLACE INTO v_budgets VALUES (?, ?, ?, ?)",
             (data["scope"], json.dumps(data["limits"]), json.dumps(data["estimate"]), event.wall_time),
         )
+
+    @fold("session.closed", "session.cancelled")
+    def session_ending(self, event: Event) -> None:
+        self.db.execute("INSERT OR IGNORE INTO v_budgets_ended(id) VALUES (1)")
+
+    @fold("session.stopped")
+    def session_stopped(self, event: Event) -> None:
+        """A session that was closing or cancelled has ended once its owner stops, as nothing more of it will run."""
+        self.db.execute("UPDATE v_budgets_ended SET at = ? WHERE at IS NULL", (event.wall_time,))
+
+    def session_ended(self) -> float | None:
+        """When the session ended, or None while more of it can run."""
+        row = self.db.execute("SELECT at FROM v_budgets_ended").fetchone()
+        return None if row is None else row["at"]
 
     @fold("budget.reserved")
     def reserved(self, event: Event) -> None:
@@ -243,14 +259,16 @@ class Budgets(View):
         )
 
     def status(self, now: float) -> list[dict[str, Any]]:
-        """Each limit and what is spent against it, which for `wall` is the time since it was set."""
+        """Each limit and what is spent against it, which for `wall` is the time since it was set, up to when the
+        session ended, once it has."""
         scopes = self.db.execute("SELECT scope FROM v_budgets ORDER BY scope").fetchall()
+        until = now if (ended := self.session_ended()) is None else min(now, ended)
         rows = []
         for scope in (row["scope"] for row in scopes):
             found = self._scope(scope)
             assert found is not None
             for unit, limit in found.limits.items():
-                elapsed = (now - found.since, "counted", 0)
+                elapsed = (until - found.since, "counted", 0)
                 spent, label, unmeasured = elapsed if unit == "wall" else self.spent(scope, unit)
                 rows.append(
                     {

@@ -3,6 +3,7 @@
 import asyncio
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -414,6 +415,23 @@ async def test_the_time_spent_against_a_wall_limit_is_the_time_since_it_was_set(
 
     row = limit(kernel, "wall")
     assert (row["spent"], row["label"], row["limit"]) == (25, "counted", 60)
+
+
+@pytest.mark.parametrize("ending", ["session.close", "session.cancel"])
+async def test_a_session_that_has_ended_spends_no_more_wall_time(kernel, clock, ending):
+    """Its wall time is counted up to the stop that ended it, which a stop of an open session, resumable, is not."""
+    await set_budget(kernel, limits={"wall": 60})
+    clock.advance(10)
+    result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+    result_of(await kernel.submit(kernel.runtime, "runtime.start", {}))
+    clock.advance(10)
+    result_of(await kernel.submit(kernel.runtime, ending, {}))
+    clock.advance(5)
+    result_of(await kernel.submit(kernel.runtime, "session.stop", {}))
+
+    clock.advance(3600)
+
+    assert limit(kernel, "wall")["spent"] == 25
 
 
 async def test_usage_unknown_is_not_zero(kernel):

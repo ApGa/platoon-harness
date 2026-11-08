@@ -1393,6 +1393,11 @@ named here is closed.
   reports and every daemon until it returned. It now runs on a thread of the event loop's pool, as a person's query already
   did, and the host's git and files run on threads of their own, so a round of looks, which now run at once across
   workspaces, cannot fill the pool that readers use.
+- **A closed session says the wall time it ran.** `budget.status` counted the time spent against a wall limit up to the
+  present, so a closed session's history, the terminal UI's header among others, said the time since it began, a minute
+  more each minute, and one closed a day ago read as far past its limit. The count now stops at the stop that ended a
+  session that closed or was cancelled; a stopped session that can resume counts on, as its limit lapses on resume. The
+  `Budgets` view is at version 4, so an older session's is refolded.
 - **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
   harness's `tmp` and the files its harness kept a credential in, so every copy of a session, which is its export, carried
   them. In the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and pi's caches in `tmp`,
