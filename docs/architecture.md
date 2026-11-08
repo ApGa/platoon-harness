@@ -327,8 +327,8 @@ such as the monitor; it can name nobody else. The kernel takes the rest from che
 
 `refs` passed to `emit` name the refs inside `data`. `cause` and `based_on` and these all resolve to a lower `seq` or `emit`
 refuses. A ref is `stream@version`, with an optional `#range`. Data names a body by `sha256:<hash>`, which `refs` may hold too, and
-`based_on` holds event refs alone. A body's hash resolves once the journal holds the body, and still does once a person redacts
-it, as its hash outlives its bytes. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
+`based_on` holds event refs alone. A body's hash resolves once the journal holds the body, and once a person tombstones that hash,
+as a hash outlives its bytes: `body.tombstone` takes a hash whether or not the journal held it. An event's body is the one its data names `body`. `cause`, `based_on`, `native` and
 `correlation` can hold caller text, so together they are held to 16 KiB as well, and a stream name to 512 characters.
 
 An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A commit's maker is the agent whose
@@ -1128,7 +1128,9 @@ report's `body` is text until the host stores it and journals the hash, as ingre
 and `summary` go the same way, since either can pass what an event holds. It is stored in UTF-8, where a lone surrogate, which a
 harness's JSON can carry and UTF-8 cannot, is written as its escape, `\udcc3`. Redacted content does not come back, so a body a
 person redacted is journaled by the hash it had, which reads as redacted, nothing standing in for it, and its agent lives on: an
-item is recorded so, and an ask is refused and denied, as below. An approval's `body` is its whole ask, which the host
+item is recorded so, and an ask is refused and denied, as below. What a harness is told is stored so too. Nothing stands in for a
+body the host must hand a harness, a spawn's goal or, on a resume, what it was told when its session began, so once a person
+redacts one the launch or the resume that needs it fails, saying so, and the agent is lost. An approval's `body` is its whole ask, which the host
 masks and then cuts to 64 KiB, adding the bytes it left out to `cut`, so a driver sends it whole. `forgotten` holds native ids, and
 with `None` the runtime records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
 agent's surface, with each entry's ref and sender, whether it has a body, which `blob.get` reads by that ref, and the input id. So a

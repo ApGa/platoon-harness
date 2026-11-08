@@ -377,7 +377,7 @@ class Host:
         body = data["body"]
         text = data["goal"]
         if body is not None:
-            said = self._kernel.get_body(body.removeprefix("sha256:"), limit=_GOAL_BODY_LIMIT).decode(errors="replace")
+            said = self._handed(body, f"{agent}'s goal", limit=_GOAL_BODY_LIMIT).decode(errors="replace")
             text = "\n\n".join(filter(None, (text, said)))
         item = Offered(ref=f"agent/{agent}@1", gist=data["goal"], body=body is not None)
         return Delivery(input=str(offer), boundary="turn", text=text, items=(item,))
@@ -421,8 +421,8 @@ class Host:
         await asyncio.to_thread(present, workspace, wrap)
         driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
-        self._links[agent] = link
         spec = self._spec(link, admission, resume, Path(workspace.path), wrap)
+        self._links[agent] = link
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
 
@@ -571,7 +571,17 @@ class Host:
         """What an agent's harness was told last, which `agent.instruct` journaled."""
         kernel = self._kernel
         body = kernel.query(kernel.runtime, "agent.records", {"agent": agent}).result[0]["instructions"]
-        return None if body is None else kernel.get_body(body.removeprefix("sha256:")).decode()
+        return None if body is None else self._handed(body, f"what {agent} was told").decode()
+
+    def _handed(self, ref: str, what: str, *, limit: int | None = None) -> bytes:
+        """A body a harness is handed, by its ref. One a person redacted is not there to hand, and nothing stands in for
+        it, so the launch or the resume that needs it fails, saying `what` it was."""
+        try:
+            return self._kernel.get_body(ref.removeprefix("sha256:"), limit=limit)
+        except Refused as refused:
+            if refused.refusal.code != "not_found":
+                raise
+            raise DriverError(f"{what} was redacted, and its harness cannot be handed it") from None
 
     def _binding(self, folder: Path, token: Secret, *, surface: str) -> ToolBinding:
         bin = folder / "bin"

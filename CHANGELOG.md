@@ -1189,6 +1189,11 @@ named here is closed.
 
 ### Fixes
 
+- **A launch or a resume that needs a body a person redacted says so.** Nothing stands in for a body a harness must be
+  handed: a spawn's goal, or what an agent was told when its session began, which a harness that reopens its session is
+  handed again. Once a person redacted one, the launch failed and the resume lost its agent, each naming only a refusal. Each
+  now fails saying what was redacted. What a harness is told is stored as an item's body is, so instructions equal to a body a
+  person redacted are recorded by its hash, where they failed the start, and their agent is then lost on resume, saying so.
 - **A lone surrogate in an item's body is kept as its escape.** A harness's JSON can carry half of a character, which UTF-8
   cannot, and the host stored one in an item's body or a compaction's summary as `?`, where it keeps one in an ask as its
   escape, `\udcc3`, as RFC 0066 says it does in an item's. Each is now kept as an ask's is.

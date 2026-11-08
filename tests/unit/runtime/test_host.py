@@ -1203,6 +1203,60 @@ async def test_an_agent_whose_last_words_a_person_redacted_ends_and_its_authorit
     assert heard.result() == AgentOutcome(status="retired", report="bob retired: retired by human:you")
 
 
+async def test_an_agent_whose_instructions_a_person_redacted_is_lost_on_resume_saying_why(tmp_path, recording):
+    """A harness that reopens its session is handed again what it was told when that began, and nothing stands in for
+    words a person redacted, so its agent cannot come back, and ends saying so, where it once ended with a bare
+    refusal's name."""
+    team = solo_with(recording, instructions="The key is leaked-key.")
+    async with Session.start(team, name="told", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        [instructed] = await of_type(session, "agent.instructed")
+        await session.tombstone(instructed.data["body"])
+        await until(lambda: erased(session), session)
+    async with Session.resume("told", root=tmp_path) as session:
+        end = await ended(session, "bob")
+
+    assert (end["status"], end["reason"]) == (
+        "lost",
+        "what bob was told was redacted, and its harness cannot be handed it",
+    )
+    assert [spec.resume for spec in recording.specs] == [None]
+
+
+async def test_instructions_equal_to_a_body_a_person_redacted_are_recorded_by_its_hash_and_their_agent_starts(
+    tmp_path, recording
+):
+    """What a harness is told is stored as an item's body is: redacted content does not come back, so it is recorded by
+    the hash it had, which reads as redacted, and its harness is told it all the same, as its role says it."""
+    role = {"harness": harness(recording), "preamble": "", "instructions": "The key is leaked-key.", "count": 1}
+    team = Team.model_validate({"roles": {"bob": role}})
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        [first] = await of_type(session, "agent.instructed")
+        await session.tombstone(first.data["body"])
+        await until(lambda: erased(session), session)
+        await session.spawn("ada", "bob")
+        await in_state(session, "ada", "idle")
+        told = [event.data["body"] for event in await of_type(session, "agent.instructed")]
+
+    assert told == [first.data["body"]] * 2
+    assert [spec.instructions for spec in recording.specs] == ["The key is leaked-key."] * 2
+
+
+async def test_a_goal_a_person_redacted_before_its_harness_was_handed_it_is_not_handed_and_says_why(tmp_path):
+    """Nothing stands in for a goal's body a person redacted, so the launch that would hand it over fails, saying so."""
+    async with Session.start(solo(), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        ref = await session.put_body(b"the key is leaked-key")
+        await session.tombstone(ref)
+        with pytest.raises(DriverError) as handed:
+            session._runtime.host._goal("ada", {"goal": "the short of it", "body": ref}, 1)
+
+    assert str(handed.value) == "ada's goal was redacted, and its harness cannot be handed it"
+
+
 async def test_a_restarted_daemon_loses_no_harness(tmp_path, monkeypatch):
     async with Session.start(solo([Say("still here")]), root=tmp_path) as session:
         await in_state(session, "bob", "idle")
