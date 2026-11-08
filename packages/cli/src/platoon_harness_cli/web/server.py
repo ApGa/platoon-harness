@@ -318,33 +318,27 @@ class Web(Server[Request]):
 
     async def _diff(self, params: Mapping[str, Any]) -> dict[str, Any]:
         """A diff, in the words the terminal's `/review` says: by `effect`, the id `repo.diff` gave, the diff it read
-        with its first page, held until the journal records it, for at most `HOLD`, and `reading` while it does not; or
-        by `ref`, a page's `rest`, the page that names, None for a patch that is no text."""
-        effect, ref = params.get("effect"), params.get("ref")
+        with every line of its patch, held until the journal records it, for at most `HOLD`, and `reading` while it
+        does not; and how many lines the page draws at a time."""
+        effect = params.get("effect")
+        if not isinstance(effect, int) or isinstance(effect, bool) or effect < 1:
+            raise replies.Error(400, "a diff is read by the effect `repo diff` gave")
+        if self._holding >= HOLDING:
+            raise Rejected(503, why="too many pages are waiting for news: try again shortly")
+        read: list[review.Diff] = []
+
+        async def reading() -> None:
+            read.append(await review.read(self.session, effect))
+
+        self._holding += 1
         try:
-            if isinstance(ref, str):
-                found = await review.page(self.session, ref)
-                return {"page": None if found is None else asdict(found)}
-            if not isinstance(effect, int) or isinstance(effect, bool) or effect < 1:
-                raise replies.Error(
-                    400, "a diff is read by the effect `repo diff` gave, or a page by the ref of its lines"
-                )
-            if self._holding >= HOLDING:
-                raise Rejected(503, why="too many pages are waiting for news: try again shortly")
-            read: list[review.Diff] = []
-
-            async def reading() -> None:
-                read.append(await review.read(self.session, effect))
-
-            self._holding += 1
-            try:
-                await first(reading(), self.clock.sleep(HOLD))
-            finally:
-                self._holding -= 1
+            await first(reading(), self.clock.sleep(HOLD))
         except Refused as refused:
             status = 404 if refused.refusal.code == "not_found" else 400
             raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
-        return {"diff": asdict(read[0])} if read else {"reading": True}
+        finally:
+            self._holding -= 1
+        return {"diff": asdict(read[0]), "page": review.PAGE} if read else {"reading": True}
 
     async def _attention(self) -> dict[str, Any]:
         """Where the person must act: every row of the runtime's `attention` view but a mention, which is a message to

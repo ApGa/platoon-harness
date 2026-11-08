@@ -182,8 +182,8 @@ as it asks the others. It reads through the session's queries, which the kernel 
 so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
-`diff` pane is, by the effect `repo diff` gave, the diff that effect read with its first page, held until the journal records it,
-for at most 25 s, and saying it is still `reading` past that; and by the ref of a page's lines, that page. Asking for a diff is an
+`diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
+at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
 act, so a view link and history read none, and Patch and Uncommitted diff say why.
 
 ## Not built yet

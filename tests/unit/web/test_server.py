@@ -21,7 +21,7 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Hang, ScriptedDriver
 from platoon_harness_cli.ops import _command, cut, person_ops
-from platoon_harness_cli.review import changes_of
+from platoon_harness_cli.review import PAGE, changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
 from platoon_harness_cli.web import server as server_module
 from platoon_harness_cli.web.credentials import LINK_SECONDS, SESSION_SECONDS
@@ -878,10 +878,12 @@ def test_a_role_is_on_a_plan_login_past_loopback_as_the_runtime_counts_one():
 
 async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words(root, clock, monkeypatch):
     """`changes` is what changed in the lines the terminal's `/review` draws, with none new, as the page keeps no
-    marks; `diff` is, by the effect `repo diff` gave, the diff it read with its first page, and by a ref the page that
-    names. A view link reads both, and neither submits an op or writes anything."""
+    marks; `diff` is, by the effect `repo diff` gave, the diff it read with every line of its patch, a line longer
+    than a `blob.get` result holds among them, and how many the page draws at a time. A view link reads both, and
+    neither submits an op or writes anything."""
     repo = repository(root / "repo", monkeypatch)
-    lead = {"harness": working(lambda cwd: commit(cwd, "notes.txt", "one\ntwo\n")), "workspace": "worktree"}
+    long = "y" * 13_000
+    lead = {"harness": working(lambda cwd: commit(cwd, "notes.txt", f"one\n{long}\ntwo\n")), "workspace": "worktree"}
     team = Team.model_validate({"roles": {"lead": lead}, "test": {"command": ["true"], "timeout": "1m"}})
     async with Session.start(team, name="s", root=root / "home", cwd=repo) as session:
         await in_state(session, "lead", "idle")
@@ -901,8 +903,7 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
             with monkeypatch.context() as patched:
                 patched.setattr(session, "submit", recorded)
                 changes = await browser.view("x_read", {"pane": "changes"})
-                diff = (await browser.view("x_read", {"pane": "diff", "effect": effect}))["diff"]
-                page = (await browser.view("x_read", {"pane": "diff", "ref": f"{diff['ref']}#L7-8"}))["page"]
+                read = await browser.view("x_read", {"pane": "diff", "effect": effect})
                 wrong = await browser.request("POST", "/v1/x_read", {"pane": "diff", "effect": "38"})
             assert await session.head() == head and submitted == []
 
@@ -913,13 +914,15 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
         line["new"] for line in changes["lines"]
     )
     assert changes["lines"][1]["of"] == sha and changes["lines"][1]["actions"][0]["op"] == "repo.test"
+    diff = read["diff"]
     assert (diff["ref"], diff["above"], diff["to"], diff["whole"]) == (
         ref,
         [record.gist, "Read in @lead's worktree."],
         "@lead",
         f"{made.stream}@{made.version}",
     )
-    assert [line["text"] for line in diff["first"]["lines"]][-2:] == ["+one", "+two"]
-    added = [{"number": 7, "text": "+one", "tone": "good"}, {"number": 8, "text": "+two", "tone": "good"}]
-    assert page == {"lines": added, "total": 8, "rest": None}
+    added = [
+        {"number": number, "text": f"+{text}", "tone": "good"} for number, text in ((7, "one"), (8, long), (9, "two"))
+    ]
+    assert (diff["lines"][-3:], len(diff["lines"]), read["page"]) == (added, 9, PAGE)
     assert wrong.status == 400

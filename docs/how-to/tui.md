@@ -164,8 +164,8 @@ is read once and opened again shows what was kept, while an uncommitted diff is 
 are its record's words, what it is of and how many lines, and where it was read: your repository or your checkout, an agent's
 worktree, a snapshot's own repository, or inside an isolation; an uncommitted diff says when, `What it held at 14:02:11`, as it
 changes while its agent works. Each line is numbered as a citation names it and drawn as text, whatever it holds, so a control
-shows as its escape and markup as itself. `blob get` reads the patch a page at a time, and Enter on the last row,
-`312 more lines: Enter reads on`, reads the next. A file git takes for binary is named, as git names it, and never drawn. Below a
+shows as its escape and markup as itself. The patch is read whole and drawn 500 lines at a time, and Enter on the last row,
+`312 more lines: Enter reads on`, draws the next, so a line of any length is drawn, wrapped. A file git takes for binary is named, as git names it, and never drawn. Below a
 cut patch's last line it says it was cut at 64 KiB and that the rest is in git, at its commit, and a patch that is not UTF-8 is not
 drawn, saying why. A session that is its history cannot ask for a diff, and says what restarts it.
 [Its snapshot](../assets/tui-patch.svg) shows a commit's patch with a file git takes for binary.

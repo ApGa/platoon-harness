@@ -159,6 +159,34 @@ async def test_a_hostile_patch_stays_text_under_the_page_s_policy(browser: Brows
     assert errors == []
 
 
+async def test_a_patch_is_drawn_a_page_at_a_time_to_its_last_line_however_long(
+    browser: Browser, root: Path, monkeypatch
+):
+    """The page draws a patch 500 lines at a time, and Read on draws the next, its first line focused, to the last,
+    which is longer than a `blob.get` result holds."""
+    long = "y" * 13_000
+    text = "".join(f"line {number}\n" for number in range(600)) + f"{long}\n"
+    repo = repository(root / "repo", monkeypatch)
+    async with started(lambda cwd: commit(cwd, "big.txt", text), root, repo) as session:
+        await worked(session)
+        async with serving("s", root / "home") as web:
+            page, errors = await opened(browser, web.link("control"))
+            await review(page)
+            await page.locator("#pane .x-change").nth(1).get_by_role("button", name="Patch").click()
+            await expect(line(page, 500)).to_be_visible(timeout=SECONDS)
+            more = page.locator("#pane [data-x-more]")
+            await expect(more).to_have_text("107 more lines: read on")
+            drawn = await page.locator("#pane .x-pl").count()
+            await more.click()
+            await expect(line(page, 607)).to_have_text(f"607+{long}", timeout=SECONDS)
+            focused = await page.evaluate("document.activeElement.dataset.xLine")
+            left = await more.count()
+            await page.context.close()
+
+    assert (drawn, focused, left) == (500, "501", 0)
+    assert errors == []
+
+
 async def test_a_comment_from_the_page_cites_the_lines_it_is_on(browser: Browser, root: Path, monkeypatch):
     """A click on a line's number chooses it, and Shift and a click every line from it to another. Comment sends what
     is written as the person's message to the commit's maker, its `based_on` citing those lines by the record's ref."""

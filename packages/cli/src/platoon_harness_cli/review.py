@@ -1,8 +1,7 @@
 """What changed, which the terminal and the browser say alike: each workspace's commits and uncommitted paths, from the
-`changes` view, and a commit's patch or a workspace's uncommitted diff, read a page at a time, each line in parts or a
+`changes` view, and a commit's patch or a workspace's uncommitted diff, drawn a page at a time, each line in parts or a
 tone that each client draws its own way."""
 
-import re
 import time
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
@@ -23,6 +22,8 @@ NOBODY = "nobody's"
 TESTS: dict[str, Tone] = {"passed": "good", "failed": "bad", "error": "warn"}
 SIGNS: dict[str, Tone] = {"+": "good", "-": "bad"}
 """How a line of a hunk is drawn by its first character: added, removed, or neither."""
+PAGE = 500
+"""How many lines of a patch a client draws at a time, and draws on by when the person asks."""
 
 
 @dataclass(frozen=True)
@@ -134,28 +135,18 @@ class Line:
 
 
 @dataclass(frozen=True)
-class Page:
-    """Lines of a patch as `blob.get` reads them, a page at a time: these, how many lines the patch has in all, and the
-    ref of the lines after these, or None at its end."""
-
-    lines: tuple[Line, ...]
-    total: int
-    rest: str | None
-
-
-@dataclass(frozen=True)
 class Diff:
-    """A diff as a person reads it: the `ref` of its record, which `blob.get` reads and a citation names lines of; the
-    words `above` its patch, what it is of and how long, then where it was read and, for what a workspace holds
-    uncommitted, when; its `first` page, or None where it has no text to draw; and the words `below` its last line,
-    where it was cut or why it is not drawn. `of` says what it is of. A comment on it goes `to` the change's maker, the
-    agent whose workspace made the commit or holds what is uncommitted, or where none did, `unsendable` says why it has
-    nobody to go to; and a comment on no lines cites `whole`, the commit, or an uncommitted diff's record, which
-    `about` says."""
+    """A diff as a person reads it: the `ref` of its record, which a citation names lines of; the words `above` its
+    patch, what it is of and how long, then where it was read and, for what a workspace holds uncommitted, when; its
+    `lines`, which a client draws `PAGE` at a time, or None where it has no text to draw; and the words `below` its
+    last line, where it was cut or why it is not drawn. `of` says what it is of. A comment on it goes `to` the change's
+    maker, the agent whose workspace made the commit or holds what is uncommitted, or where none did, `unsendable` says
+    why it has nobody to go to; and a comment on no lines cites `whole`, the commit, or an uncommitted diff's record,
+    which `about` says."""
 
     ref: str
     above: tuple[str, ...]
-    first: Page | None
+    lines: tuple[Line, ...] | None
     below: str | None
     of: str
     to: str | None
@@ -165,27 +156,36 @@ class Diff:
 
 
 async def kept(session: Session, effect: int) -> Event:
-    """The record of what the diff `effect` read, once the journal holds it: its `repo.diffed`, past its request.
-    Refused `unavailable` when the effect failed, saying why, or when nothing more can come."""
+    """The record of what the diff `effect` read, once the journal holds it: its `repo.diffed`, past its request and
+    before the effect ends. Refused `unavailable` when the effect failed, saying why, or when nothing more can come, and
+    `not_found` when it ended keeping none, as an effect that reads no diff does."""
     async for event in session.events(effect, match="repo/*", streams=[f"effect/{effect}"], follow=True):
         if event.type == "repo.diffed" and event.data["effect"] == effect:
             return event
-        if event.type == "effect.failed" and event.stream == f"effect/{effect}":
+        if event.stream != f"effect/{effect}":
+            continue
+        if event.type == "effect.failed":
             raise Refused("unavailable", f"the diff was not read: {event.data['error']}")
+        if event.type in ("effect.finished", "effect.cancelled"):
+            raise Refused("not_found", f"effect {effect} kept no diff")
     raise Refused("unavailable", "the session's runtime went before the diff was read")
 
 
 async def read(session: Session, effect: int) -> Diff:
-    """The diff the effect `effect` read, as `repo.diff` gave it, once it is recorded, with its first page."""
+    """The diff the effect `effect` read, as `repo.diff` gave it, once it is recorded, with every line of its patch,
+    which is at most `PATCH_LIMIT` bytes."""
     record = await kept(session, effect)
     data, ref = record.data, f"{record.stream}@{record.version}"
     above = [record.gist]
+    lines = None
     if data["body"] is not None:
         read_in = data["read_in"]
         mode = None if read_in == "shared" else ((await session.status(read_in))["workspace"] or {}).get("mode")
         where = place(read_in, mode, commit=data["sha"] is not None)
         when = data["read_at"]
         above.append(f"Read in {where}." if when is None else f"What it held at {_clock(when)}, read in {where}.")
+        patch = _text(await session.get_body(data["body"], limit=PATCH_LIMIT))
+        lines = None if patch is None else lines_of(patch)
     if data["sha"] is not None:
         commit = await session.repo_commit(data["sha"])
         maker, whole = commit["made_in"] or "", commit["ref"]
@@ -196,14 +196,13 @@ async def read(session: Session, effect: int) -> Diff:
         nobody = "your checkout"
     to = maker if maker.startswith("@") else None
     unsendable = None if to else f"A comment goes to whoever made the change, and no agent's workspace made {nobody}."
-    first = None if data["body"] is None else await page(session, ref)
     below = None
-    if data["body"] is not None and first is None:
+    if data["body"] is not None and lines is None:
         below = "It is not UTF-8, so it is not drawn, and no line of it can be cited."
     elif data["cut"]:
         rest = f"in git, at {data['sha'][:12]}" if data["sha"] else f"uncommitted in {_whose(data['workspace'])}"
         below = f"Cut here, at the end of the last line within {PATCH_LIMIT // 1024} KiB: the rest is {rest}."
-    return Diff(ref, tuple(above), first, below, of, to, unsendable, whole, about)
+    return Diff(ref, tuple(above), lines, below, of, to, unsendable, whole, about)
 
 
 def on(diff: Diff, lines: tuple[int, int] | None) -> str:
@@ -232,22 +231,19 @@ async def comment(session: Session, diff: Diff, lines: tuple[int, int] | None, t
     return cited
 
 
-async def page(session: Session, ref: str) -> Page | None:
-    """The lines of a patch that `blob.get` gives by `ref`, its record's or a page's `rest`, or None for a patch that
-    is no text."""
-    got = await session.blob(ref)
-    if got["text"] is None:
+def _text(patch: bytes) -> str | None:
+    """A patch as text, as the kernel reads a body to number its lines, or None where it is not UTF-8."""
+    try:
+        return patch.decode()
+    except UnicodeDecodeError:
         return None
-    first = int(found[1]) if (found := re.search(r"#L(\d+)-", got["ref"])) else 1
-    return Page(lines_of(first, got["text"]), got["lines"], got["rest"])
 
 
-def lines_of(first: int, text: str) -> tuple[Line, ...]:
-    """The lines of a page of a patch from line `first`, each with its tone. A page that begins past the patch's first
-    line is taken to begin in a hunk, until a file's first line says otherwise."""
+def lines_of(text: str) -> tuple[Line, ...]:
+    """The lines of a patch, numbered as the kernel numbers them, each with its tone."""
     found = []
-    hunk = first > 1
-    for number, said in enumerate(text.splitlines(), first):
+    hunk = False
+    for number, said in enumerate(text.splitlines(), 1):
         if said.startswith("diff --git "):
             hunk, tone = False, "strong"
         elif said.startswith("@@"):

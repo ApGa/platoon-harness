@@ -36,7 +36,7 @@ named here is closed.
   Uncommitted diff. A diff opens in the same pane a page at a time, every word of it through the page's escaping. Test asks
   once, saying whose code it runs as you. A click on a line's number chooses it, Shift and a click a range, and Comment sends
   your message to the change's maker citing those lines, or the commit. `x_read` gains a `changes` pane and a `diff` pane, which
-  reads a diff's record by the effect `repo diff` gave, or a page by its ref. See
+  reads a diff's record by the effect `repo diff` gave, with every line of its patch. See
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **A comment on a diff's lines, from the terminal.** In a diff `/review` opens, Space chooses a line, and on another every
   line between, and `c` writes a comment at the foot, sent as your message to the agent whose workspace made the change, its
@@ -44,8 +44,8 @@ named here is closed.
   agent's workspace made has nobody to take a comment, and `c` says so. See
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **Diffs in the terminal's `/review`.** Enter on a commit opens its patch, and on a workspace or one of its paths what it holds
-  uncommitted, each asked for with `repo diff` and drawn a page at a time as `blob get` gives it, each line numbered as a
-  citation names it and drawn as text, whatever it holds. Above it are its record's words and where it was read, and for an
+  uncommitted, each asked for with `repo diff`, read whole and drawn a page at a time, each line numbered as a citation names
+  it and drawn as text, whatever it holds, however long. Above it are its record's words and where it was read, and for an
   uncommitted diff when; below a cut patch, that it was cut at 64 KiB and the rest is in git. A file git takes for binary is
   named and never drawn, and a patch that is not UTF-8 is not drawn, saying why. A commit's patch opened again shows what was
   kept. `t` tests the chosen commit, once you say yes, where Enter did, and the list's words are the command line package's,

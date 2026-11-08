@@ -14,7 +14,7 @@ import pytest
 from platoon_harness import Refused, Session, Team
 from platoon_harness.kernel import Clock, ManualClock
 from platoon_harness_cli import review
-from platoon_harness_cli.review import Diff, Page, place, snapshots_of
+from platoon_harness_cli.review import PAGE, Diff, place, snapshots_of
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.review import Patch, patch_rows, rows_of
 
@@ -64,15 +64,9 @@ async def worked_on(team: Team, root: Path, repo: Path) -> AsyncIterator[Session
         yield owner
 
 
-async def read_whole(session: Session, of: str) -> tuple[Diff, list[Page]]:
-    """The diff of `of`, as `/review` asks for it, and every page of it."""
-    diff = await review.read(session, (await session.repo_diff(of))["effect"])
-    pages = [] if diff.first is None else [diff.first]
-    while pages and (rest := pages[-1].rest) is not None:
-        found = await review.page(session, rest)
-        assert found is not None
-        pages.append(found)
-    return diff, pages
+async def read_of(session: Session, of: str) -> Diff:
+    """The diff of `of`, as `/review` asks for it."""
+    return await review.read(session, (await session.repo_diff(of))["effect"])
 
 
 def diffs_read(session_events: list[Any]) -> list[Any]:
@@ -325,8 +319,8 @@ HOSTILE = "\x1b]0;owned\x07 [bold]not markup[/bold]"
 
 async def test_a_commit_s_patch_is_asked_for_once_and_drawn_a_page_at_a_time_through_safetext(root, repo):
     """Enter on a commit asks for its patch, which the runtime reads once: opened again, it gives the patch it kept.
-    `blob.get` gives its lines a page at a time, and Enter on the last row reads on. Each line is text, whatever it
-    holds: a control shows as its escape, and markup as itself."""
+    Its lines are drawn a page at a time, and Enter on the last row draws on. Each line is text, whatever it holds: a
+    control shows as its escape, and markup as itself."""
     lines = "".join(f"line {number} of a long file\n" for number in range(800))
 
     async with attached(team(lambda cwd: commit(cwd, "long.txt", f"{HOSTILE}\n{lines}")), root, repo) as (
@@ -345,7 +339,7 @@ async def test_a_commit_s_patch_is_asked_for_once_and_drawn_a_page_at_a_time_thr
         await pilot.press("enter")
         patch = pilot.app.screen
         assert isinstance(patch, Patch)
-        on = await drawn(pilot, lambda text: len(patch.pages) == 2)
+        on = await drawn(pilot, lambda text: patch.shown > PAGE)
         await pilot.press("escape")
         await drawn(pilot, lambda text: "What changed" in text)
         await pilot.press("enter")
@@ -354,13 +348,14 @@ async def test_a_commit_s_patch_is_asked_for_once_and_drawn_a_page_at_a_time_thr
         records = await of_type(owner, "repo.diffed")
 
     head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
-    second = patch.pages[1]
-    assert f"{head[:12]} patch, {second.total} lines" in first
+    lines = patch.diff.lines if patch.diff else None
+    assert lines is not None and len(lines) > PAGE
+    assert f"{head[:12]} patch, {len(lines)} lines" in first
     assert "    7 +\\x1b]0;owned\\x07 [bold]not markup[/bold]" in first
-    assert f"{second.total - second.lines[0].number + 1} more lines: Enter reads on" in last
-    assert f"{second.lines[0].number:>5} {second.lines[0].text}" in on and second.rest is None
-    assert [line.number for page in patch.pages for line in page.lines] == list(range(1, second.total + 1))
-    assert f"{head[:12]} patch, {second.total} lines" in again
+    assert f"{len(lines) - PAGE} more lines: Enter reads on" in last
+    assert f"{lines[PAGE].number:>5} {lines[PAGE].text}" in on and "more lines" not in on
+    assert [line.number for line in lines] == list(range(1, len(lines) + 1))
+    assert f"{head[:12]} patch, {len(lines)} lines" in again
     assert len(asked) == len(records) == 1
 
 
@@ -370,13 +365,47 @@ async def test_a_cut_patch_says_where_it_was_cut(root, repo):
 
     async with worked_on(team(lambda cwd: commit(cwd, "long.txt", lines)), root, repo) as owner:
         sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
-        diff, pages = await read_whole(owner, sha)
+        diff = await read_of(owner, sha)
 
-    rows = [row.line.plain.rstrip() for row in patch_rows(diff, pages, 120)]
-    kept = pages[-1].lines[-1].number
-    assert diff.above[0] == f"{sha[:12]} patch, cut after {kept} lines at 64 KiB"
-    assert rows[-2] == f"{kept:>5} {pages[-1].lines[-1].text}"
+    assert diff.lines is not None
+    rows = [row.line.plain.rstrip() for row in patch_rows(diff, len(diff.lines), 120)]
+    kept = diff.lines[-1]
+    assert diff.above[0] == f"{sha[:12]} patch, cut after {kept.number} lines at 64 KiB"
+    assert rows[-2] == f"{kept.number:>5} {kept.text}"
     assert rows[-1] == f"Cut here, at the end of the last line within 64 KiB: the rest is in git, at {sha[:12]}."
+
+
+async def test_a_line_longer_than_one_result_holds_is_drawn_and_so_is_every_line_after_it(root, repo):
+    """A patch is read whole, so a line past the 12 KiB a `blob.get` result holds, as a minified file's can be, is
+    drawn like any other, and so is each line after it."""
+    long = "y" * 13_000
+    text = "short\n" * 50 + f"{long}\n" + "tail\n" * 5
+
+    async with worked_on(team(lambda cwd: commit(cwd, "app.min.js", text)), root, repo) as owner:
+        sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
+        diff = await read_of(owner, sha)
+
+    assert diff.lines is not None and diff.below is None
+    assert [(line.number, line.text, line.tone) for line in diff.lines[-6:]] == [
+        (57, f"+{long}", "good"),
+        *((number, "+tail", "good") for number in range(58, 63)),
+    ]
+    rows = patch_rows(diff, PAGE, 120)
+    assert "".join(row.line.plain[6:] for row in rows if row.key == "57") == f"+{long}"
+    assert rows[-1].line.plain.rstrip() == "   62 +tail"
+
+
+async def test_an_effect_that_ends_keeping_no_diff_is_refused_where_waiting_would_never_end(root, repo):
+    """A diff is read by the effect `repo diff` gave, and a test's, which keeps none, is refused once it ends."""
+    tested = team(worked, test={"command": ["true"], "timeout": "1m"})
+    async with worked_on(tested, root, repo) as owner:
+        sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
+        effect = await owner.repo_test(sha)
+        await until(lambda: of_type(owner, "repo.tested"), owner)
+        with pytest.raises(Refused) as refused:
+            await review.read(owner, effect)
+
+    assert (refused.value.refusal.code, refused.value.refusal.detail) == ("not_found", f"effect {effect} kept no diff")
 
 
 async def test_a_binary_file_is_named_and_never_drawn(root, repo):
@@ -399,11 +428,11 @@ async def test_a_binary_file_is_named_and_never_drawn(root, repo):
         await pilot.press("down", "down", "enter")
         binary = await drawn(pilot, lambda text: "Binary files" in text)
         latin = (await of_type(owner, "repo.committed"))[1].data["sha"]
-        diff, pages = await read_whole(owner, latin)
+        diff = await read_of(owner, latin)
 
     assert "    4 Binary files /dev/null and b/blob.bin differ" in binary and "bytes nobody reads" not in binary
-    assert diff.first is None and pages == []
-    assert [row.line.plain for row in patch_rows(diff, pages, 120)] == [
+    assert diff.lines is None
+    assert [row.line.plain for row in patch_rows(diff, PAGE, 120)] == [
         "It is not UTF-8, so it is not drawn, and no line of it can be cited."
     ]
 
@@ -433,7 +462,7 @@ async def test_a_snapshot_or_isolated_workspace_s_diff_says_where_it_was_read(ro
     or for a commit whose workspace has gone, yours."""
     async with worked_on(team(worked, workspace="snapshot"), root, repo) as owner:
         sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
-        (of_commit, _), (of_workspace, _) = [await read_whole(owner, of) for of in (sha, "@lead")]
+        of_commit, of_workspace = [await read_of(owner, of) for of in (sha, "@lead")]
 
     assert of_commit.above[1] == "Read in @lead's own repository, a snapshot."
     assert of_workspace.above[1].startswith("What it held at ")

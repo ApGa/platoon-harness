@@ -182,8 +182,8 @@ class Read:
     async def repo_commit(self, sha: str) -> dict[str, Any]:
         return {"ref": "repo/app@9", "sha": SHA, "gist": f"{SHA[:12]} fix the parser", "made_in": "@lead"}
 
-    async def blob(self, ref: str) -> dict[str, Any]:
-        return {"ref": ref, "text": PATCH, "lines": PATCH.count("\n"), "rest": None}
+    async def get_body(self, ref: str, *, limit: int | None = None) -> bytes:
+        return PATCH.encode()
 
 
 class Patched(App[None]):

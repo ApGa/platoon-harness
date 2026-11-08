@@ -14,7 +14,7 @@ from textual.widgets import Static
 from platoon_harness import Refused, Session
 
 from .. import review
-from ..review import Change, Diff, Page, Tone, changes_of
+from ..review import PAGE, Change, Diff, Tone, changes_of
 from .composer import Composer
 from .keymap import bindings, keys
 from .rows import Row, Rows
@@ -25,7 +25,7 @@ STYLES: dict[Tone, str] = {"": "", "strong": "bold", "faint": "dim", "good": "gr
 NUMBER = 6
 """How wide the column is that numbers a patch's lines."""
 MORE = "more"
-"""The key of the row that reads a patch's next page."""
+"""The key of the row that draws a patch's next page."""
 
 
 def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:
@@ -40,22 +40,21 @@ def _row(change: Change) -> Row:
     return Row(Content.assemble(lead, *parts), change.key)
 
 
-def patch_rows(diff: Diff, pages: list[Page], width: int, chosen: tuple[int, int] | None = None) -> list[Row]:
-    """A diff's lines read so far, each made safe and wrapped at `width` under its number, which its key is, and marked
-    where it is among the lines `chosen`; then the row that reads on, while the patch has lines past these, or at its
-    end, the words below it."""
+def patch_rows(diff: Diff, shown: int, width: int, chosen: tuple[int, int] | None = None) -> list[Row]:
+    """A diff's first `shown` lines, each made safe and wrapped at `width` under its number, which its key is, and
+    marked where it is among the lines `chosen`; then the row that draws on, while the patch has lines past these, or
+    at its end, the words below it."""
     first, last = chosen or (0, -1)
+    lines = diff.lines or ()
     rows = []
-    for line in (line for got in pages for line in got.lines):
+    for line in lines[:shown]:
         wrapped = SafeText(line.text, STYLES[line.tone]).wrap(max(width - NUMBER, 20)) or [Content("")]
         mark = ("┃", "cyan") if first <= line.number <= last else " "
         for at, part in enumerate(wrapped):
             number = (f"{line.number if at == 0 else '':>{NUMBER - 1}}", "dim")
             rows.append(Row(Content.assemble(number, mark, part), str(line.number)))
-    last = pages[-1] if pages else None
-    if last is not None and last.rest is not None:
-        shown = last.lines[-1].number if last.lines else 0
-        rows.append(Row(Content.styled(f"{last.total - shown} more lines: Enter reads on", "bold"), MORE))
+    if shown < len(lines):
+        rows.append(Row(Content.styled(f"{len(lines) - shown} more lines: Enter reads on", "bold"), MORE))
     elif diff.below is not None:
         rows.append(Row(SafeText(diff.below, "yellow")))
     return rows
@@ -137,9 +136,9 @@ class Review(ModalScreen[None]):
 
 class Patch(ModalScreen[None]):
     """The diff of `of`, a commit's patch or what a workspace holds uncommitted, asked for with `repo.diff` as it opens:
-    the runtime reads it, or gives the commit's patch it kept. Its lines are read a page at a time, as `blob.get` gives
-    them, each drawn through `SafeText`, and Enter on the last row reads on. The key that chooses chooses `chosen`
-    lines, and the key that comments opens a composer at the foot, whose words go to the change's maker citing them."""
+    the runtime reads it, or gives the commit's patch it kept. Its lines are drawn `PAGE` at a time, each through
+    `SafeText`, and Enter on the last row draws on. The key that chooses chooses `chosen` lines, and the key that
+    comments opens a composer at the foot, whose words go to the change's maker citing them."""
 
     BINDINGS = [*bindings("dialog"), *bindings("patch")]
 
@@ -148,7 +147,7 @@ class Patch(ModalScreen[None]):
         self._session = session
         self._of = of
         self.diff: Diff | None = None
-        self.pages: list[Page] = []
+        self.shown = 0
         self.chosen: tuple[int, int] | None = None
 
     def compose(self) -> ComposeResult:
@@ -175,30 +174,23 @@ class Patch(ModalScreen[None]):
             return
         said = [SafeText(self.diff.above[0], "bold"), *(SafeText(line, "dim") for line in self.diff.above[1:])]
         above.update(Content("\n").join(said))
-        self.pages = [] if self.diff.first is None else [self.diff.first]
+        self.shown = PAGE
         self._draw()
 
-    @work(exclusive=True, group="patch")
-    async def _read_on(self) -> None:
-        rest = self.pages[-1].rest if self.pages else None
-        if rest is None:
+    def _draw_on(self) -> None:
+        """Draw the patch's next page, the cursor on its first line."""
+        lines = self.diff.lines if self.diff else None
+        if lines is None or self.shown >= len(lines):
             return
-        try:
-            found = await review.page(self._session, rest)
-        except Refused as refused:
-            note(self, str(refused), severity="error")
-            return
-        if found is not None:
-            self.pages.append(found)
+        after, self.shown = self.shown, self.shown + PAGE
         self._draw()
-        if found is not None and found.lines:
-            self.query_one(Rows).move_to(str(found.lines[0].number))
+        self.query_one(Rows).move_to(str(lines[after].number))
 
     def _draw(self) -> None:
         if self.diff is None:
             return
         listing = self.query_one(Rows)
-        listing.show(patch_rows(self.diff, self.pages, listing.scrollable_content_region.width or 80, self.chosen))
+        listing.show(patch_rows(self.diff, self.shown, listing.scrollable_content_region.width or 80, self.chosen))
         self._keys()
 
     def _keys(self) -> None:
@@ -207,7 +199,8 @@ class Patch(ModalScreen[None]):
             said = "Enter: send it    Esc: back to the patch, keeping what you wrote"
         else:
             choose, comment = (key.shown for key in keys("patch"))
-            more = "Enter on the last row: read on    " if self.pages and self.pages[-1].rest else ""
+            lines = self.diff.lines if self.diff else None
+            more = "Enter on the last row: read on    " if lines and self.shown < len(lines) else ""
             said = f"{choose}: choose lines    {comment}: comment    {more}Esc: back to what changed"
         self.query_one("#keys", Static).update(Content.styled(said, "dim"))
 
@@ -280,7 +273,7 @@ class Patch(ModalScreen[None]):
 
     def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
         if chosen.key == MORE:
-            self._read_on()
+            self._draw_on()
 
     def action_leave(self) -> None:
         """Go back to the patch from the composer, keeping what it holds, and from the patch to what changed."""

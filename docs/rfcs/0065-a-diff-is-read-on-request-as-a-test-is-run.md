@@ -165,10 +165,11 @@ role in the review example. Both clients say what changed in the words of one mo
 - **A diff is asked for and awaited.** A client asks `repo.diff`, then follows the repository's streams and the effect's own past
   the effect's request until its `repo.diffed`, which it finds whether the effect reads now or read before, as `repo.diff` gives
   the effect either way. An effect that failed is said, with its error.
-- **A page at a time.** `blob.get` reads the patch by its record's ref, as much as a result holds, and gives the ref of the lines
-  after; a client reads on when the person asks. Each line is numbered as a citation names it and toned by what it is: a file's
+- **A page at a time.** A client reads the patch whole, by its record's body, which is at most 64 KiB, and draws it 500 lines at
+  a time, drawing on when the person asks. Each line is numbered as a citation names it, as the kernel numbers a body's lines,
+  and toned by what it is: a file's
   first line strong, what heads a file or a hunk faint, an added line good, a removed one bad, and git's `Binary files` line,
-  which names a file and shows none of it, warn. A page that begins past the first line is taken to begin in a hunk.
+  which names a file and shows none of it, warn.
 - **Above and below.** Above the patch, the record's gist, then where it was read, by `read_in` and the mode of that
   workspace: your repository or your checkout, an agent's worktree, a snapshot's own repository, or inside an isolation; and for
   an uncommitted diff when, as `What it held at 14:02:11, read in @ada's worktree.`, since it changes as its agent works. Below
@@ -185,14 +186,13 @@ role in the review example. Both clients say what changed in the words of one mo
   comment is disabled, saying so. A comment's text becomes its gist and body as the composer's does.
 - **The page reads through `x_read`** ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), with two panes more:
   `changes`, the lines of what changed, and `diff`, which by an `effect` holds until that effect's record is in the journal, for at
-  most the 25 s the feed holds, and gives the diff and its first page, and by a `ref` gives the page that ref names. A pane
-  reads, and the record by following the journal, which writes nothing either. Asking for a diff, testing and commenting go
+  most the 25 s the feed holds, and gives the diff with every line of its patch and how many the page draws at a time. A pane
+  reads, the record by following the journal and the patch by its body, which writes nothing either. Asking for a diff, testing and commenting go
   through `/x/command`, so on a view link and on history they are disabled, saying why, as every act is.
 
 ```text
 POST /v1/x_read {"pane": "changes"}                        -> {"repo", "lines"}
-POST /v1/x_read {"pane": "diff", "effect": 38}             -> {"reading": true} or {"diff"}
-POST /v1/x_read {"pane": "diff", "ref": "repo/app@12#L..."} -> {"page"}
+POST /v1/x_read {"pane": "diff", "effect": 38}             -> {"reading": true} or {"diff", "page"}
 ```
 
 The terminal's `/review` lists what changed, Enter opens a diff and `t` tests the chosen commit. In the diff Space chooses the
@@ -222,6 +222,7 @@ Shift and a click a range, and Comment sends what is written below.
 | Show untracked files through a scratch index, with `git add -N` | `git add -N` writes the empty blob into the workspace's object store, and the scratch index needs a place an isolated agent can write, from which the runtime would then remove it |
 | Leave untracked files out | A new file an agent has not added is often most of its uncommitted work, and a diff without it would mislead |
 | Read on past the bound to count a cut patch's length | A patch of gigabytes would cost the runtime the time to read it all. What a commit added and removed is on its `repo.committed`, and a workspace's paths on its `workspace.changed` |
+| Read a patch a page at a time through `blob.get`, as an agent reads a body | A line longer than one result holds, 12 KiB, as a minified file's can be, comes back with no text, so it and every line after it could not be read, and how a page's first lines are toned turns on the pages before it, which a page read alone does not know. A kept patch is at most 64 KiB, so a person's client reads it whole |
 | A query that gives a diff's record by its ref, for a client given a kept patch's ref alone | A concept more, for one use: the record is past its effect's request, so `repo.diff` giving the effect beside the ref lets a client follow the journal to it, whichever it was given |
 | A client that says where a commit's patch was read from the workspace its look found it in | Once that workspace has gone the runtime reads it in yours, and only the runtime knows which it did, so its record says |
 | A review, a noun with its own ops, states and verdicts | Nothing in milestone 4 needs a review to be more than the messages that cite what they are about, and the default pending the owner's ruling has none |

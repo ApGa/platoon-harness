@@ -682,8 +682,8 @@ document.addEventListener('submit', e => {
 // Review changes, in the pane the address names, `review=`: `changes`, what changed, in the words the terminal's
 // /review says, read through x_read's changes pane, each commit with Patch and Test and each workspace with Uncommitted
 // diff; or a commit's SHA or a workspace, its diff, asked for with repo.diff each time it opens, read through x_read's
-// diff pane a page at a time, its lines chosen by their numbers, and a comment on them sent below as a message to the
-// change's maker. What changed is read as it opens and again when Read again is pressed.
+// diff pane and drawn a page at a time, its lines chosen by their numbers, and a comment on them sent below as a
+// message to the change's maker. What changed is read as it opens and again when Read again is pressed.
 X.Review = class {
   constructor(name) {
     this.name = name;
@@ -719,35 +719,32 @@ X.Review = class {
     } catch (e) { return this.note(e.message); }
     if (this.dead) return;
     const d = this.diff = got.diff;
-    this.pages = d.first ? [d.first] : [];
+    this.page = got.page;
+    this.shown = Math.min(this.page, (d.lines || []).length);
     this.chosen = null;
-    this.box.innerHTML = html`<p class="x-about"><b>${d.above[0]}</b>${d.above.slice(1).map(line => html`<br>${line}`)}</p><div class="x-patch">${this.pages.map(X.patchPage)}</div><div class="x-end"></div><form class="x-comment"><p class="x-about"></p><textarea rows="3" aria-label="Comment" spellcheck="false"></textarea><div class="x-acts"><button class="btn primary" data-x-comment>Comment</button></div><p class="x-said" aria-live="polite"></p></form>`.s;
+    this.box.innerHTML = html`<p class="x-about"><b>${d.above[0]}</b>${d.above.slice(1).map(line => html`<br>${line}`)}</p><div class="x-patch">${X.patchLines((d.lines || []).slice(0, this.shown))}</div><div class="x-end"></div><form class="x-comment"><p class="x-about"></p><textarea rows="3" aria-label="Comment" spellcheck="false"></textarea><div class="x-acts"><button class="btn primary" data-x-comment>Comment</button></div><p class="x-said" aria-live="polite"></p></form>`.s;
     this.end();
     this.paint();
   }
   note(said) {
     if (!this.dead) this.box.innerHTML = html`<div class="note">${said}</div>`.s;
   }
-  // What follows the lines read so far: Read on while the patch has more, and at its end the words below it.
+  // What follows the lines drawn so far: Read on while the patch has more, and at its end the words below it.
   end() {
-    const last = this.pages[this.pages.length - 1], below = this.diff.below;
-    const shown = last && last.lines.length ? last.lines[last.lines.length - 1].number : 0;
-    $('.x-end', this.box).innerHTML = (last && last.rest
-      ? html`<button class="btn" data-x-more>${num(last.total - shown)} more lines: read on</button>`
+    const lines = this.diff.lines || [], below = this.diff.below;
+    $('.x-end', this.box).innerHTML = (this.shown < lines.length
+      ? html`<button class="btn" data-x-more>${num(lines.length - this.shown)} more lines: read on</button>`
       : below ? html`<p class="x-below">${below}</p>` : html``).s;
   }
-  async more(el) {
-    X.disable(el, X.WAITING);
-    let r;
-    try { r = await api('x_read', {pane: 'diff', ref: this.pages[this.pages.length - 1].rest}); } catch (e) {
-      X.disable(el, null);
-      return toast(e.message);
-    }
-    if (this.dead || !r.page) return;
-    this.pages.push(r.page);
-    $('.x-patch', this.box).insertAdjacentHTML('beforeend', X.patchPage(r.page).s);
+  // Draw the patch's next page, and focus its first line.
+  more() {
+    const lines = this.diff.lines || [], after = this.shown;
+    this.shown = Math.min(after + this.page, lines.length);
+    $('.x-patch', this.box).insertAdjacentHTML('beforeend', X.patchLines(lines.slice(after, this.shown)).s);
     this.end();
     this.mark();
+    const next = $(`.x-pl[data-n="${lines[after].number}"] [data-x-line]`, this.box);
+    if (next) next.focus();
   }
   // Choose line `n`, or with `extend` every line from the one chosen first to it. The one line chosen alone, chosen
   // again, chooses none.
@@ -797,8 +794,8 @@ X.change = (c, i) => {
   return html`<div class="x-change x-${c.kind}"><span>${c.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span>${acts.length ? html`<span class="x-acts">${acts}</span>` : ''}</div>`;
 };
 
-// A page of a patch: each line its number, a button that chooses it, and its words, drawn by its tone.
-X.patchPage = page => html`${page.lines.map(l => html`<div class="x-pl x-tone-${l.tone || 'plain'}" data-n="${l.number}"><button type="button" class="x-n" data-x-line="${l.number}" aria-pressed="false" title="Choose line ${l.number}, or with Shift every line from the one chosen first">${l.number}</button><span>${l.text}</span></div>`)}`;
+// Lines of a patch: each its number, a button that chooses it, and its words, drawn by its tone.
+X.patchLines = lines => html`${lines.map(l => html`<div class="x-pl x-tone-${l.tone || 'plain'}" data-n="${l.number}"><button type="button" class="x-n" data-x-line="${l.number}" aria-pressed="false" title="Choose line ${l.number}, or with Shift every line from the one chosen first">${l.number}</button><span>${l.text}</span></div>`)}`;
 
 // Test a commit, after one question, as its act's label says whose code it runs as you, and say what came of it.
 X.test = async el => {
@@ -1247,7 +1244,7 @@ onClick = e => {
     return go({review: d.xReview || d.xDiff, provenance: null, act: null, args: null, thread: null, knew: null}, true);
   }
   if (d.xTest) return X.test(el);
-  if ('xMore' in d) return S.pane.more(el);
+  if ('xMore' in d) return S.pane.more();
   if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);
   if ('xAgain' in d) return S.pane.list();
   if (d.xProvenance) return X.provenance(d.xProvenance, false);
