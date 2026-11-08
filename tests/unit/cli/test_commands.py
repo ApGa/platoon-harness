@@ -1,28 +1,36 @@
 """The command line made from the op registry and its schemas: a command for each op a person may run, by the name and
-with the arguments an agent's `ph` uses, and none for any other."""
+with the arguments an agent's `ph` uses, and none for any other. An installed extension's ops are commands too, made
+from that extension alone, which fake distributions on `sys.path` stand in for."""
 
+import asyncio
 import inspect
 import io
 import json
 import re
 import shlex
+import sys
 from pathlib import Path
 from typing import Any, get_args
 
 import pytest
-from cyclopts import CycloptsError
+from cyclopts import App, CycloptsError
 from rich.console import Console
 
+from platoon_harness import Session, Team
 from platoon_harness.annotations import Annotate
+from platoon_harness.extensions import EXTENSIONS
 from platoon_harness.kernel import GIST_LIMIT, Event, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.session import Reason
 from platoon_harness.tools.surface import body_fields
-from platoon_harness_cli.exits import ENDINGS, SHARED
-from platoon_harness_cli.main import build
+from platoon_harness_cli.exits import CONFIGURATION, ENDINGS, REFUSED, SHARED
+from platoon_harness_cli.main import build, extended, main
 from platoon_harness_cli.ops import _PURPOSES, command_line, cut, person_ops
 from platoon_harness_cli.output import event_line, safe
 from platoon_harness_cli.reference import reference
+
+from ..conftest import Site
+from ..runtime.support import scripted
 
 APP = build()
 OPS = registry(PRIMITIVES)
@@ -47,10 +55,10 @@ def needed(name: str) -> list[str]:
     return words
 
 
-def helped(words: list[str]) -> str:
+def helped(words: list[str], app: App = APP) -> str:
     """What `--help` says for a command, as a wide terminal shows it."""
     shown = io.StringIO()
-    APP([*words, "--help"], console=Console(file=shown, width=200), exit_on_error=False, result_action="return_value")
+    app([*words, "--help"], console=Console(file=shown, width=200), exit_on_error=False, result_action="return_value")
     return shown.getvalue()
 
 
@@ -240,3 +248,116 @@ def test_a_file_sent_as_a_body_is_named_in_the_gist_since_a_body_keeps_no_name()
     for text, name in ((words + "x", "notes.txt"), ("", "n" * (GIST_LIMIT - len("file ") + 1))):
         with pytest.raises(ValueError, match=f"of at most {GIST_LIMIT} characters, and these make {GIST_LIMIT + 1}"):
             cut(text, file=name)
+
+
+# An installed extension's ops.
+
+BALLOT = """
+from typing import Annotated, Literal
+
+from pydantic import Field
+
+from platoon_harness.kernel import Args, Extension, Txn, op
+
+
+class Vote(Args):
+    choice: Annotated[Literal["yes", "no"], Field(description="Yes or no.")]
+
+
+@op("ballot.cast", on=lambda a: "ballot/votes")
+def cast(txn: Txn, a: Vote) -> dict[str, str]:
+    \"\"\"Cast a vote, kept on the ballot's own stream. Refused by nothing of its own.\"\"\"
+    txn.emit("ballot.voted", "ballot/votes", gist=f"a vote for {a.choice}", data=a)
+    return {"choice": a.choice}
+
+
+extension = Extension("ballot", ops=[cast])
+"""
+"""An extension of one op, a vote, as a third party's package would give it."""
+NEVER = "raise RuntimeError('imported')"
+"""A module that says so when anything imports it."""
+
+
+def installed(site: Site, module: str, *never: str) -> None:
+    """The ballot extension, from the distribution `voting` 2.0.0, in `module`, and an extension of each name in
+    `never`, from a distribution of its own, whose module is never to be imported."""
+    site.module(module, BALLOT)
+    site.install("voting", "2.0.0", entry_points={EXTENSIONS: {"ballot": f"{module}:extension"}})
+    for name in never:
+        site.module(f"never_{name}", NEVER)
+        site.install(f"{name}-maker", entry_points={EXTENSIONS: {name: f"never_{name}:extension"}})
+
+
+def line(words: list[str]) -> tuple[Any, dict[str, Any]]:
+    """What `words` parse to on the command line `main` runs them on, with what is installed."""
+    command, bound, _ = extended(build(), words).parse_args(words, exit_on_error=False, print_error=False)
+    return command, bound.arguments
+
+
+def test_an_installed_extension_s_group_loads_only_that_extension(site: Site, capsys: pytest.CaptureFixture[str]):
+    """Named first on a command line, its group imports it, and nothing else installed: its op is a command made as an
+    op of the SDK's own is. A name two distributions define loads neither, saying both, and an entry point whose
+    extension has another name is refused, as no command of its name would name that extension's ops."""
+    installed(site, "ballot_alone", "other")
+    site.module("never_twice", NEVER)
+    for maker in ("one", "two"):
+        site.install(maker, entry_points={EXTENSIONS: {"twice": "never_twice:extension"}})
+    site.install("renamed", entry_points={EXTENSIONS: {"vote": "ballot_alone:extension"}})
+
+    command, arguments = line(["ballot", "cast", "fix-auth", "--choice", "yes"])
+    refused = [main([name, "--help"]) for name in ("twice", "vote")]
+
+    assert arguments == {"session": "fix-auth", "choice": "yes"}
+    assert (command.__doc__ or "").startswith("Cast a vote, kept on the ballot's own stream.")
+    assert "platoon-harness ballot cast SESSION --choice CHOICE" in (command.__doc__ or "")
+    assert "--key" in helped(["ballot", "cast"], extended(build(), ["ballot"]))
+    assert "ballot_alone" in sys.modules
+    assert refused == [CONFIGURATION, CONFIGURATION]
+    assert capsys.readouterr().err == (
+        "platoon-harness: extensions.twice: defined by more than one distribution: one 1.0.0, two 1.0.0, so this loads "
+        "neither: uninstall one\n"
+        "platoon-harness: extensions.vote: `ballot_alone:extension` is the extension ballot, whose ops no command of "
+        "vote would name\n"
+    )
+    assert not {"never_other", "never_twice"} & set(sys.modules)
+
+
+async def test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why(
+    site: Site, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """Installing activates nothing, so a session whose team does not name the extension holds none of its ops, and its
+    command is refused before anything is asked of the session. On one whose team names it, it runs."""
+    installed(site, "ballot_named")
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "home"))
+    roles = {"bob": {"harness": scripted()}}
+    vote = ["ballot", "cast", "--choice", "yes"]
+
+    async with (
+        Session.start(Team.model_validate({"roles": roles}), name="plain") as plain,
+        Session.start(Team.model_validate({"roles": roles, "extensions": ["ballot"]}), name="named") as named,
+    ):
+        refused = await asyncio.to_thread(main, [*vote[:2], "plain", *vote[2:]])
+        said = capsys.readouterr()
+        ran = await asyncio.to_thread(main, [*vote[:2], "named", *vote[2:]])
+        votes = [event.gist async for event in named.events() if event.type == "ballot.voted"]
+        held = [entry["name"] for entry in await plain.ops() if entry["name"].startswith("ballot.")]
+
+    assert refused == REFUSED and said.out == ""
+    assert said.err == (
+        "platoon-harness: refused not_found: session plain's team does not name the extension ballot, so it holds none "
+        "of its ops: a team names its extensions in `extensions`, and this one names none\n"
+    )
+    assert ran == 0 and json.loads(capsys.readouterr().out) == {"choice": "yes"}
+    assert votes == ["a vote for yes"] and held == []
+
+
+def test_help_lists_installed_extensions_from_metadata_without_importing_them(site: Site):
+    """Each by its distribution and version, which metadata gives, under Installed extensions, with none imported."""
+    site.module("never_ballot", NEVER)
+    site.install("voting", "2.0.0", entry_points={EXTENSIONS: {"ballot": "never_ballot:extension"}})
+
+    said = " ".join(helped([], extended(build(), [])).split())
+
+    assert "Installed extensions" in said
+    assert "ballot The ops of the extension ballot, from voting 2.0.0, on a session whose team names it." in said
+    assert "never_ballot" not in sys.modules

@@ -72,9 +72,8 @@ class Installed:
 
 def install(folder: Path, *projects: Path) -> Installed:
     """Every distribution of this checkout, and each of `projects`, a folder its `pyproject.toml` describes, built into
-    `folder / "dist"`, each wheel from its sdist, and the wheels installed with what they require in
-    `folder / "environment"`, on this interpreter's Python."""
-    dist, environment = folder / "dist", folder / "environment"
+    `folder / "dist"`, each wheel from its sdist, and the wheels installed as `install_wheels` installs them."""
+    dist = folder / "dist"
     uv("build", "--all-packages", "--no-sources", "--out-dir", str(dist), cwd=ROOT)
     for project in projects:
         uv("build", "--no-sources", "--out-dir", str(dist), str(project), cwd=folder)
@@ -82,6 +81,13 @@ def install(folder: Path, *projects: Path) -> Installed:
     wheels: dict[str, Path] = {}
     for name in (*PACKAGES, *named):
         [wheels[name]] = dist.glob(f"{name.replace('-', '_')}-*.whl")
+    return install_wheels(folder, wheels)
+
+
+def install_wheels(folder: Path, wheels: dict[str, Path]) -> Installed:
+    """`wheels`, by distribution, installed with what they require in `folder / "environment"`, on this interpreter's
+    Python."""
+    environment = folder / "environment"
     uv("venv", "--python", sys.executable, str(environment), cwd=folder)
     uv("pip", "install", "--python", str(environment / "bin" / "python"), *map(str, wheels.values()), cwd=folder)
     return Installed(wheels, environment)

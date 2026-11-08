@@ -28,6 +28,13 @@ tasks`. A read runs on a view credential, which writes nothing, and anything els
 the ops on a wait have no command, as a wait parks a turn and a person has none: `events --follow` watches a session,
 and a script has `Session.wait`. The [headless quickstart](../how-to/headless.md) shows them together.
 
+An installed extension's op is a command too, made in the same way under the extension's name: `ph ballot.cast --agent
+@author --choice yes`, the op of [the sample extension package](../../examples/extension-package/README.md), is
+`platoon-harness ballot cast SESSION --agent @author --choice yes`. `--help` lists each installed extension under
+Installed extensions, read from metadata with none imported, and a command line imports only the one it names first. Its
+op runs only on a session whose team names that extension, and is refused, with exit 1, on any other, saying so. This
+reference is made from the command line's own commands, so it lists no extension's.
+
 ## Exit codes
 
 `run` and `session resume` exit with how their session ended, as architecture section 12 lists it:

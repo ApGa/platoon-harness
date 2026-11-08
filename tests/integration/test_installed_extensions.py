@@ -2,17 +2,18 @@
 an environment of its own, beside the SDK's and the command line's wheels and a rival's, a distribution that registers
 an extension of the same name and records each import of it. There it activates nothing until a team names it, a team
 that names what both register is refused before either is imported, its op runs through the SDK, MCP and `ph`, the
-command line lists it from metadata and reads its votes back, and it passes `check_extension`. What the environment's
-Python does there is `installed_ballot.py`'s."""
+command line lists it from metadata and reads its votes back, and it passes `check_extension`. Installed without the
+rival, its op is a command of the command line. What the environment's Python does there is `installed_ballot.py`'s."""
 
 import json
+import re
 import textwrap
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from .installing import ROOT, Installed, install
+from .installing import ROOT, Installed, install, install_wheels
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
@@ -61,6 +62,14 @@ def installed(tmp_path_factory: pytest.TempPathFactory) -> Installed:
         (rival / path).parent.mkdir(exist_ok=True)
         (rival / path).write_text(textwrap.dedent(text).lstrip())
     return install(tmp_path_factory.mktemp("installed"), SAMPLE, rival)
+
+
+@pytest.fixture(scope="module")
+def alone(installed: Installed, tmp_path_factory: pytest.TempPathFactory) -> Installed:
+    """The same wheels but the rival's, in an environment of their own, as no command line can name `ballot` beside
+    it."""
+    wheels = {name: wheel for name, wheel in installed.wheels.items() if name != "rival"}
+    return install_wheels(tmp_path_factory.mktemp("alone"), wheels)
 
 
 @pytest.fixture
@@ -142,6 +151,29 @@ def test_extension_list_names_the_sample_from_metadata(installed: Installed, tmp
     ]
     assert found["problems"] == [BOTH]
     assert imports.read_text() == ""
+
+
+def test_the_sample_s_op_is_a_command_from_its_wheel(
+    installed: Installed, alone: Installed, tmp_path: Path, imports: Path
+):
+    """Beside the rival, `platoon-harness ballot` loads neither, saying both. Alone, `--help` lists it from metadata,
+    and `platoon-harness ballot cast` casts your vote on a session whose team names it, is refused the second time as
+    the SDK refuses it, and is refused on a session whose team names no extension, saying so, each from a process of
+    its own while a script owns both sessions."""
+    rivalled = installed.run("platoon-harness", "ballot", "--help", home=tmp_path / "home", cwd=tmp_path)
+    found = case(alone, "commanded", tmp_path)
+    first, again, plain = found["commands"]
+
+    assert rivalled.returncode == 78
+    assert f"{BOTH}, so this loads neither: uninstall one" in rivalled.stderr
+    assert imports.read_text() == ""
+    assert "ballot The ops of the extension ballot, from ballot 0.1.0, on a session whose team names it." in " ".join(
+        found["help"]["out"].split()
+    )
+    assert (first["code"], json.loads(first["out"])) == (0, {"choice": "yes"}), first["err"]
+    assert again["code"] == 1 and re.search(r"refused conflict on agent/author: you voted yes", again["err"])
+    assert plain["code"] == 1 and "session plain's team does not name the extension ballot" in plain["err"]
+    assert found["votes"] == [["human:you", "agent/author", "a vote on @author's work: yes"]]
 
 
 def test_the_sample_passes_check_extension(installed: Installed, tmp_path: Path, imports: Path):

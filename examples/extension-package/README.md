@@ -2,7 +2,7 @@
 
 **Goal:** add an op, a view and a preset to platoon-harness from a package of your own, with no core edit: install it
 beside platoon-harness, where it activates nothing until a team names it, and cast its vote from the SDK, from an agent
-through MCP or `ph`, and from the terminal's palette and the page's form.
+through MCP or `ph`, from the command line, and from the terminal's palette and the page's form.
 
 **Prerequisites:** a checkout of this repository with its packages installed, by `uv sync`, as
 [Install](../../docs/getting-started/install.md#install-from-a-checkout) says. The package needs no harness, key or model.
@@ -81,13 +81,15 @@ In a session of that team, a vote is cast from each surface, and none of them ha
 - **The SDK.** `await session.submit("ballot.cast", agent="@author", choice="yes")` casts yours.
 - **An agent.** The reviewer's harness is shown `ballot_cast` among our MCP tools, and its shell runs
   `ph ballot.cast --agent @author --choice yes`.
+- **The command line.** `uv run platoon-harness ballot cast SESSION --agent @author --choice yes` casts yours from a shell.
+  It imports `ballot` and nothing else installed, and is refused on a session whose team does not name it.
+  `uv run platoon-harness --help` lists `ballot` under Installed extensions, from metadata.
 - **The terminal UI.** The palette offers `ballot cast`, worded by the op's docstring, and runs it through a form made
   from its schema. It never asks first, as what is asked about first is the command line's list of its own ops.
 - **The page.** Commands offers the same form.
 
 Each vote is drawn by its gist, `a vote on @author's work: yes`: in the author's transcript in the terminal, and in its
-event's Provenance pane in the page. `platoon-harness events` reads each one back. The command line has no command for an
-extension's op yet, as it makes its commands from the SDK's own ops before any session exists.
+event's Provenance pane in the page. `platoon-harness events` reads each one back.
 
 ## 5. Check it
 
@@ -101,7 +103,8 @@ runs, its preset: nothing in it says the topology `pair_review` returns is valid
 wheel and installs it in a fresh environment beside a rival that registers an extension of the same name. There, it
 activates nothing until a team names it, a team that names `ballot` is refused before either is imported, its vote is
 cast through the SDK, MCP and `ph` and read back by `platoon-harness events`, `extension list` names it from metadata,
-and it passes `check_extension`.
+and it passes `check_extension`. In an environment of the same wheels without the rival, `--help` lists it and
+`platoon-harness ballot cast` casts a vote.
 
 [`tests/unit/tui/test_sample_extension.py`](../../tests/unit/tui/test_sample_extension.py) and
 [`tests/e2e/test_extension.py`](../../tests/e2e/test_extension.py) cast its vote from the palette and from the page's

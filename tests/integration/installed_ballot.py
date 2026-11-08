@@ -4,6 +4,7 @@ environment holds, and its roles' harnesses are attributes of this file, named a
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,35 @@ async def voted() -> dict[str, Any]:
     }
 
 
+async def command(*words: str) -> dict[str, Any]:
+    """What this environment's `platoon-harness` did with `words`, as a terminal 200 columns wide shows it."""
+    process = await asyncio.create_subprocess_exec(
+        Path(sys.executable).with_name("platoon-harness"),
+        *words,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "COLUMNS": "200"},
+    )
+    out, err = await process.communicate()
+    return {"code": process.returncode, "out": out.decode(), "err": err.decode()}
+
+
+async def commanded() -> dict[str, Any]:
+    """The help that lists the sample, then your vote as a command on a session whose team names it, twice, and on one
+    whose team names no extension, each a process of its own while this one owns both sessions."""
+    vote = ("--agent", "@author", "--choice", "yes")
+    async with Session.start(alone(SAMPLE), name="named") as named, Session.start(alone(), name="plain"):
+        listed = await command("--help")
+        ran = [await command("ballot", "cast", session, *vote) for session in ("named", "named", "plain")]
+        events = [event async for event in named.events()]
+    return {
+        "help": listed,
+        "commands": ran,
+        "votes": [[event.actor, event.stream, event.gist] for event in events if event.type == "ballot.voted"],
+    }
+
+
 async def checked() -> dict[str, Any]:
     """`check_extension` on the sample as installed, with a vote on each of two agents' work cast on its kernel."""
     refused: list[str] = []
@@ -121,7 +151,7 @@ async def checked() -> dict[str, Any]:
     return {"checks": checks, "unchecked": list(result.unchecked), "refused": refused}
 
 
-CASES = {"unnamed": unnamed, "rival": rival, "voted": voted, "checked": checked}
+CASES = {"unnamed": unnamed, "rival": rival, "voted": voted, "commanded": commanded, "checked": checked}
 
 if __name__ == "__main__":
     print(json.dumps(asyncio.run(CASES[sys.argv[1]]())))

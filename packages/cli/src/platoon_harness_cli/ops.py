@@ -1,6 +1,7 @@
 """A command for each op a person may run, made from the op registry and its schemas, so that the command line cannot
 drift from the ops. An agent's `ph task.claim --queue tasks` is a person's `platoon-harness task claim SESSION --queue
-tasks`: the op's name split at its dot, then the session, then a flag per argument. A form, in the terminal's palette
+tasks`: the op's name split at its dot, then the session, then a flag per argument. An installed extension's op is one
+too, made from that extension alone, found from metadata and loaded only when named. A form, in the terminal's palette
 and in the page's, is made from the same flags."""
 
 import inspect
@@ -8,7 +9,7 @@ import json
 import re
 import shlex
 import types
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
@@ -16,9 +17,13 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 from cyclopts import App, Parameter
 from pydantic import BaseModel
 
-from platoon_harness import Session
+from platoon_harness import ConfigError, Refused, Session
+from platoon_harness.config import Manifest
+from platoon_harness.extensions import EXTENSIONS, Component, discover, load
 from platoon_harness.kernel import GIST_LIMIT, Op, Outcome, registry
 from platoon_harness.primitives import BODY_REF, PRIMITIVES
+from platoon_harness.runtime.paths import MANIFEST, find_root, session_folder
+from platoon_harness.schema import Problem
 from platoon_harness.tools import OP_NAMED, taught
 
 from .exits import REFUSED, Usage
@@ -70,14 +75,15 @@ def _parks(name: str) -> bool:
     return name.partition(".")[0] == "wait"
 
 
+def _for_a_person(operation: Op) -> bool:
+    """Whether a person may run an op: one kept to neither the runtime nor an agent, but not `wait` or an op on a wait,
+    as a wait parks a turn and a person has none."""
+    return not (operation.runtime or operation.agent or _parks(operation.name))
+
+
 def person_ops() -> dict[str, Op]:
-    """The ops a person may run: every op the SDK holds that is kept to neither the runtime nor an agent, but `wait` and
-    the ops on a wait, as a wait parks a turn and a person has none."""
-    return {
-        name: operation
-        for name, operation in _OPS.items()
-        if not (operation.runtime or operation.agent or _parks(name))
-    }
+    """The ops of the SDK's own that a person may run."""
+    return {name: operation for name, operation in _OPS.items() if _for_a_person(operation)}
 
 
 _PERSON = frozenset(person_ops())
@@ -118,13 +124,68 @@ def groups(found: dict[str, App]) -> dict[str, App]:
         namespace, _, verb = name.partition(".")
         if namespace not in found:
             found[namespace] = App(name=namespace, help=_PURPOSES[namespace] if verb else None)
-        command = _command(operation)
-        if verb:
-            found[namespace].command(command, name=verb)
-        else:
-            found[namespace].default(command)
-            found[namespace].help = command.__doc__
+        _place(found[namespace], operation, _command(operation))
     return found
+
+
+def _place(group: App, operation: Op, command: Callable[..., Awaitable[int]]) -> None:
+    """An op's command in the group of its namespace: under its verb, or as the group itself for an op with no dot."""
+    verb = operation.name.partition(".")[2]
+    if verb:
+        group.command(command, name=verb)
+    else:
+        group.default(command)
+        group.help = command.__doc__
+
+
+def extension_groups(own: Collection[str], named: str | None) -> list[App]:
+    """A group of commands per installed extension, found from metadata, but for a name among the command line's `own`
+    commands. Only the group `named` is loaded, importing its extension and nothing else installed, and every other
+    says what its metadata says."""
+    found: dict[str, list[Component]] = {}
+    for component in discover():
+        if component.group == EXTENSIONS and component.name not in own:
+            found.setdefault(component.name, []).append(component)
+    listed = []
+    for name, components in found.items():
+        group = App(name=name, help=_purpose(components))
+        if name == named:
+            _load_commands(group, components)
+        listed.append(group)
+    return listed
+
+
+def _sources(components: Sequence[Component]) -> str:
+    return ", ".join(f"{component.distribution} {component.version}" for component in components)
+
+
+def _purpose(components: Sequence[Component]) -> str:
+    """What an installed extension's group is for, from its metadata alone."""
+    name = components[0].name
+    if len(components) > 1:
+        return f"Defined by more than one distribution, {_sources(components)}, so it loads neither: uninstall one."
+    return (
+        f"The ops of the extension {name}, from {_sources(components)}, on a session whose team names it.\n\n"
+        f"It is imported only when a command line names it, and nothing else installed is."
+    )
+
+
+def _load_commands(group: App, components: Sequence[Component]) -> None:
+    """Import the one installed extension of the group's name, and nothing else, and give the group a command per op of
+    its that a person may run, each run only on a session whose team names it."""
+    name = components[0].name
+    if len(components) > 1:
+        what = f"defined by more than one distribution: {_sources(components)}, so this loads neither: uninstall one"
+        raise ConfigError([Problem(f"extensions.{name}", what)])
+    extension = load(EXTENSIONS, name)
+    if extension.name != name:
+        what = f"`{components[0].value}` is the extension {extension.name}, whose ops no command of {name} would name"
+        raise ConfigError([Problem(f"extensions.{name}", what)])
+    ops = [operation for operation in extension.ops if _for_a_person(operation)]
+    for operation in sorted(ops, key=lambda operation: operation.name):
+        _place(group, operation, _command(operation, extension=name))
+    if not ops:
+        group.help = f"{group.help} It gives no op a person may run."
 
 
 @dataclass(frozen=True)
@@ -332,15 +393,16 @@ async def body_ref(session: Session, text: str) -> str:
     return text if re.fullmatch(BODY_REF, text) else await session.put_body(text.encode())
 
 
-def _command(operation: Op) -> Callable[..., Awaitable[int]]:
+def _command(operation: Op, *, extension: str | None = None) -> Callable[..., Awaitable[int]]:
     """One op as a command: a read on a view credential, which writes nothing, and anything else on a control one,
-    named by `--key`."""
+    named by `--key`. An op of the installed extension `extension` runs only on a session whose team names it."""
     reads = operation.query or operation.exposes
 
     async def run(attached: Session, args: dict[str, Any], given: Mapping[str, Any]) -> int:
         return said(await attached.submit(operation.name, key=given.get("key"), **args))
 
-    command: Any = derived(operation.name, operation.input, operation.fn.__doc__ or "", run, reads=reads)
+    doc = operation.fn.__doc__ or ""
+    command: Any = derived(operation.name, operation.input, doc, run, reads=reads, extension=extension)
     if not reads:
         signature = inspect.signature(command)
         command.__signature__ = signature.replace(parameters=[*signature.parameters.values(), _KEY])
@@ -354,14 +416,18 @@ def derived(
     run: Callable[[Session, dict[str, Any], Mapping[str, Any]], Awaitable[int]],
     *,
     reads: bool,
+    extension: str | None = None,
 ) -> Callable[..., Awaitable[int]]:
     """A command made from a schema as an op's is: the session, then a flag per field, with `doc` in a person's words as
     its help. `run` takes the session, attached on a view credential if it `reads`, the arguments, and the flags as
-    given."""
+    given. A session whose team does not name `extension`, where one is given, is refused before anything is asked of
+    it."""
     schema = input.model_json_schema()
     fields = _fields(schema)
 
     async def run_command(*named: str, **given: Any) -> int:
+        if extension is not None:
+            _refuse_unnamed(named[0], extension)
         async with Session.attach(named[0], view=reads) as attached:
             return await run(attached, await _arguments(attached, fields, given), given)
 
@@ -374,6 +440,17 @@ def derived(
         f"Parameters\n----------\nsession\n    {_SESSION_HELP}"
     )
     return command
+
+
+def _refuse_unnamed(session: str, extension: str) -> None:
+    """Refuse a session whose team does not name `extension`, as its manifest records, saying so: installing activates
+    nothing, so only such a session holds the extension's ops."""
+    components = Manifest.model_validate_json((session_folder(find_root(), session) / MANIFEST).read_bytes()).components
+    named = [component.name for component in components if component.group == EXTENSIONS]
+    if extension not in named:
+        names = ", ".join(named) or "none"
+        what = f"session {session}'s team does not name the extension {extension}, so it holds none of its ops"
+        raise Refused("not_found", f"{what}: a team names its extensions in `extensions`, and this one names {names}")
 
 
 def said(outcome: Outcome) -> int:

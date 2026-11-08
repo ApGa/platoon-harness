@@ -337,9 +337,8 @@ ballot = "ballot:extension"
 ```
 
 Installing it activates nothing: a team names it in `extensions = [...]`. It uses only the kernel's public names, as the
-core's primitives do, and its ops are usable through the SDK, MCP, `ph`, the terminal's palette and the page's form with
-no core edit, though the command line has no command for them yet
-([architecture §17](docs/architecture.md#17-extensions-and-configuration),
+core's primitives do, and its ops are usable through the SDK, MCP, `ph`, the command line, the terminal's palette and the
+page's form with no core edit ([architecture §17](docs/architecture.md#17-extensions-and-configuration),
 [STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)).
 [examples/extension-package](examples/extension-package/README.md) is one, a package of its own with an op, a view and a
 preset.

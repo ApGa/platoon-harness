@@ -15,7 +15,7 @@ from platoon_harness.version import __version__ as sdk_version
 
 from . import __version__, annotations, machine, running, sessions, teams
 from .exits import CONFIGURATION, INTERRUPTED, JOURNAL, REFUSED, USAGE, Usage
-from .ops import groups
+from .ops import extension_groups, groups
 from .output import note, refused
 from .running import stopping
 
@@ -23,7 +23,8 @@ HELP = """Bring the agent harnesses you already use together as a team, from a t
 
 On a terminal, `platoon-harness` alone opens the terminal UI, and `attach` opens one session there. A session is a
 folder holding a journal. `run` starts one and owns it until it settles, and `serve` keeps one for clients to attach
-to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does.
+to. Each command under Ops on a session runs one op there as a guest, as an agent's `ph` does, and each under Installed
+extensions an op of that extension's, on a session whose team names it.
 
 For example:
 
@@ -43,6 +44,7 @@ For example:
     platoon-harness session resume fix-auth"""
 
 _OPS = Group("Ops on a session", sort_key=1)
+_INSTALLED = Group("Installed extensions", sort_key=2)
 _FLAGS = Parameter(negative=(), show_default=False)
 """A flag as a person types it: no `--no-` form, and no default shown, as each command's help says what it is."""
 
@@ -182,6 +184,19 @@ def build() -> App:
     return app
 
 
+def extended(app: App, words: Sequence[str]) -> App:
+    """`app` with a group per installed extension, when `words` may name one, as any first word but one of its own
+    commands may. Each is found from metadata, and only the one `words` name is loaded."""
+    own = {name for name in app if not name.startswith("-")}
+    if words and words[0] in own:
+        return app
+    for group in extension_groups(own, words[0] if words else None):
+        group.group = (_INSTALLED,)
+        app.command(group)
+    _flags(app)
+    return app
+
+
 def _opened(app: App) -> Callable[[], int]:
     def opened() -> int:
         """Open the terminal UI on a terminal, and say this help anywhere else, as nothing prompts with none."""
@@ -198,8 +213,9 @@ def _opened(app: App) -> Callable[[], int]:
 def main(tokens: Sequence[str] | None = None) -> int:
     """Run one command line and return its exit code. Logs, refusals and problems go to stderr, and nothing prompts."""
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="platoon-harness: %(message)s")
+    words = sys.argv[1:] if tokens is None else tokens
     try:
-        code = build()(sys.argv[1:] if tokens is None else tokens, exit_on_error=False, result_action="return_value")
+        code = extended(build(), words)(words, exit_on_error=False, result_action="return_value")
     except CycloptsError:
         return USAGE
     except Usage as usage:
