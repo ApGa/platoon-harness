@@ -1083,6 +1083,9 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
   with no path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a limit in a unit a role's
   harness cannot measure, which holds on estimates, and a one-shot role over children that would end with its turn. It refuses a one-shot role that starts with the session, which has no goal to start on,
 and one that says it stays, and it says nothing of a `count` of zero, which was said on purpose, since a human or a program can spawn any role.
+Under `until = "program"` it warns of a role only the program starts, none with the session and no role by `may_spawn`, when no budget,
+the role's or the session's, sets a limit, as nothing in the team then bounds how many the program starts or what they spend
+([RFC 0070](rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md)).
 It warns of a role that lets its harness start agents of its own, saying what that gives up, and of what a preamble template
 leaves out or a user's words name that a role cannot hold. A harness that reaches none of our tools is told `instructions` alone, so it
 refuses a role's own template there and warns of its team's (§10).

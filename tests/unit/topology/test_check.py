@@ -524,6 +524,27 @@ def test_a_count_of_zero_was_said_on_purpose_and_is_no_warning():
     assert "never starts" not in text(warnings(team))
 
 
+def test_team_check_warns_when_no_budget_bounds_a_population_s_spawns():
+    swarm = PRESET_TEAMS["git-swarm"]
+    worker = swarm.roles["worker"]
+    said = (
+        "roles.worker.budget: only the program that owns the session starts `worker`, and no budget bounds how many it "
+        "starts or what they spend: give this role or the session a limit"
+    )
+    bounded = [
+        swarm.model_copy(update={"budget": Budget(wall="4h")}),
+        swarm.model_copy(update={"roles": {"worker": worker.model_copy(update={"budget": Budget(agents=32)})}}),
+    ]
+    unbounded_elsewhere = [
+        Team(roles={"worker": Role(harness="codex", count=0)}),
+        Team(roles={"worker": Role(harness="codex")}, topology=Topology(until="program")),
+    ]
+
+    assert said in warnings(swarm)
+    assert errors(swarm) == []
+    assert all("only the program" not in text(warnings(team)) for team in [*bounded, *unbounded_elsewhere])
+
+
 def test_a_one_shot_role_that_starts_with_the_session_has_no_goal_and_is_refused():
     one_shot = Capabilities()
     team = Team(roles={"lead": Role(harness="pi")})

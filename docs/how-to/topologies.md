@@ -15,7 +15,7 @@ checks that both forms build the same object and that `team.show()` prints what 
 each but git-swarm, whose session is its program's, [a script](#run-a-program-from-python) that starts it.
 
 ```python
-from platoon_harness.team import Role, Team
+from platoon_harness.team import Budget, Role, Team
 from platoon_harness.topology import (
     Queue,
     Topic,
@@ -255,9 +255,12 @@ A population with no messages and no roles to speak of: commits go to a shared r
 with at most `live` agents at once, which is the topology's `max_live`. Its program, a Python script that starts the session as
 `program:<name>`, starts the workers, writes each one's outcome on board `outcomes` and closes the session, so `run` and the terminal
 UI refuse this team, naming [the script way](#run-a-program-from-python). The program starts every worker, so the role starts with
-none: `count = 0`.
+none, `count = 0`, and a budget bounds what they spend, as `team check` warns of a population with none.
 
 ```toml
+[budget]
+wall = "4h"
+
 [roles.worker]
 harness = "codex"
 workspace = "worktree"
@@ -270,6 +273,7 @@ live = 8
 
 ```python
 team = Team(
+    budget=Budget(wall="4h"),
     roles={"worker": Role(harness="codex", workspace="worktree", count=0)},
     topology=git_swarm("worker", live=8),
 )
@@ -577,7 +581,9 @@ path to anyone, a relation no `may_spawn` makes true, an entry that can wake mor
 that can stay, a role that lets its harness start agents of its own, saying what that gives up, a preamble that leaves out `{tools}` or
 `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a harness that reaches none of our tools
 is never told. It says nothing of `until = "program"`, as it checks a team before anyone starts it: a person's start of such a team
-is refused, and a program's goes ahead.
+is refused, and a program's goes ahead. Under it, it warns of a role only the program starts, none with the session and no role by
+`may_spawn`, when no budget, the role's or the session's, sets a limit: nothing in the team then bounds how many the program starts,
+or what they spend. A program may bound them itself, as a population's `attempts` does, so it is a warning.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the

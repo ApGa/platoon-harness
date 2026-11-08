@@ -261,6 +261,11 @@ def _cycle(arcs: Mapping[str, Iterable[str]]) -> list[str] | None:
     return None
 
 
+def _limited(budget: Budget) -> bool:
+    """Whether a budget sets any limit, each of which a spawn is refused past."""
+    return any(value is not None for unit, value in budget if unit != "estimate")
+
+
 def _unestimated(budget: Budget, where: str, shared: Budget | None = None) -> Iterable[Problem]:
     """A limit in a unit a turn can go unmeasured in needs an amount to charge such a turn, or it could hold on none. A
     role's limit takes the shared estimate where the role has none, as a reservation does."""
@@ -383,6 +388,15 @@ def _warnings(team: Team) -> Iterable[Problem]:
     for name in sorted(team.roles.keys() - started):
         if team.roles[name].count != 0:  # Zero was said on purpose: a human or a program can spawn any role.
             yield Problem(f"roles.{name}", "never starts: nothing that starts can spawn it", "warning")
+
+    if team.topology.until == "program" and not _limited(team.budget):
+        for name in sorted(team.roles):
+            if not team.starts(name) and not team.spawners(name) and not _limited(team.roles[name].budget):
+                what = (
+                    f"only the program that owns the session starts `{name}`, and no budget bounds how many it starts "
+                    "or what they spend: give this role or the session a limit"
+                )
+                yield Problem(f"roles.{name}.budget", what, "warning")
 
     if len(team.roles) > 1:
         for name, targets in arcs(team).items():
