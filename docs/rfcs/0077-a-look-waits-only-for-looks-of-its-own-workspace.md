@@ -7,16 +7,18 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`tools/mcp.py`](../../packages/sdk/src/platoon_harness/tools/mcp.py), [architecture sections 4](../architecture.md#what-runs-at-once), [10](../architecture.md#10-tool-plane) and [13](../architecture.md#13-workspaces), [RFC 0005](0005-daemons-and-effects.md), [RFC 0009](0009-tools-only-mcp-server.md) and [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md) |
 | Discussion | The owner's request of 2026-11-08, that tool calls and their execution run in parallel across agents that share one tool server, as faster wall clock is one of the benefits of several agents. The request accepts no design: this one waits for the owner's acceptance |
-| Implementation | `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`, `test: Show agents' shell tools run at once on each real binary, and measure one response's calls` and `feat: Look at different workspaces at once, each after the shared one` |
+| Implementation | `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`, `test: Show agents' shell tools run at once on each real binary, and measure one response's calls`, `feat: Look at different workspaces at once, each after the shared one` and `fix: Run the host's git and files on threads of its own, so no round of looks holds up a query` |
 
 ## Summary
 
 A look at a workspace waits only for another look at the same workspace, and looks at different workspaces run at once. Each
 probe still looks at the shared workspace first and at its agent's own after, so a worker whose base holds the shared workspace's
 new commits finds them recorded before its own, as [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md) decided. Beside
-it, a query an agent calls runs on a reader thread off the event loop, as a person's already does, so a slow one holds up no other
-call. With both, what an agent does waits for another agent only where the two share a thing: the journal's one writer, the
-shared workspace's look, and a harness's own way of taking the calls of one response.
+it, a query an agent calls runs off the event loop on a thread of the loop's pool, as a person's already does, and the host's git
+and files run on threads of their own, so a slow query holds up no other call while a thread is free. With these, one agent waits
+for another only where the two share a thing: the journal's one writer, the shared workspace's look, the tool server's 1,024
+connections and the readers' pool of threads. How a harness takes the calls of one response is its own, and holds up no other
+agent.
 
 ## Motivation
 
@@ -27,7 +29,7 @@ gives each effect a task of its own. Two things did not.
 - **Looks ran one at a time in a session.** `Host._look` held one lock across both of a probe's looks, so the looks of a team of N
   agents in worktrees, each committing each turn, queued behind each other at every turn's end, though each reads its own work
   tree. A look's cost grows with the team, as it reads every workspace's HEAD reflog to say whose a new commit is, so a round of
-  looks grew faster than the team. Measured on 32 cores of a compute node, a round of such a team, from the person's message to
+  looks grew faster than the team. Measured on 32 hardware threads of a compute node, a round of such a team, from the person's message to
   every agent until every look after that turn had finished, took 0.74 to 0.77 s for 10 agents, 3.5 to 3.6 s for 30 and
   27 to 30 s for 100, against 0.36 to 0.42 s, 1.3 to 1.5 s and 8.6 to 10.3 s with looks one at a time per workspace. RFC 0032 had
   weighed concurrent looks only as looks deduplicated by the op, which "would race on the shared workspace's last look, which every
@@ -62,19 +64,24 @@ disk, under its own lock, so it starts from where the last look of that workspac
   serves, and whether its code is confined, which matters only for a commit an isolated agent made, and another workspace finds
   that only once it has fetched it from the isolated one.
 
-### 2. A query an agent calls runs off the event loop
+### 2. A query an agent calls runs off the event loop, and the host's work on threads of its own
 
-The tool server runs a query an agent calls on a reader of its own, in a thread of the loop's default pool, as the control link
-runs a person's. A query holds a read transaction of its own and writes nothing, so it can run beside the writer and other
-readers. Python sizes that pool by the machine's CPUs, four more than it has and 32 at most, and the looks' git and a person's
-queries share it, so past that many at once a query waits for a thread, and no other call waits behind it.
+The tool server runs a query an agent calls on a thread of the loop's default pool, as the control link runs a person's. A query
+holds a read transaction of its own and writes nothing, so it can run beside the writer and other readers. That pool has four
+threads more than the CPUs Python counts, and 32 at most: Python 3.12 counts the machine's CPUs, and 3.13 those the process may
+use. So a slow query holds up no other call while a thread is free, and past that, queries wait for one.
+
+Looks of different workspaces run at once (1), and each holds a thread for as long as its git runs, so in that pool a round of
+looks would leave every reader, an agent's query or a person's, waiting behind git. The host's blocking work, its git, the
+making of its drivers and its files, runs on a pool of its own instead, as many threads as the loop's and shared by the sessions
+of one process, and readers share the loop's pool with the kernel's blob writes alone.
 
 ### 3. Slow work in an extension is an effect its daemon performs
 
 An op runs inside the writer's transaction, one at a time with every other command of the session, and holds the writer while it
 runs, by [law 3](../architecture.md#3-laws). So an extension's op does what it can at once and requests an effect for anything
 slow, which a daemon of the extension's performs on the event loop, with its slow part in a thread or a process of its own, and
-reports back through an op. Its query is read off the loop, so a slow one holds up only its own call.
+reports back through an op. Its query is read off the loop, so a slow one holds up only its own call while a thread is free.
 
 ## Alternatives
 
@@ -83,14 +90,16 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
 | Keep looks one at a time in a session | A round of looks grew faster than the team: 27 to 30 s for 100 agents in worktrees, where per workspace it took 8.6 to 10.3 s |
 | Concurrent looks deduplicated by the op, RFC 0032's alternative | Two looks of one workspace would race on its last reading, which a lock per workspace prevents |
 | Look at the shared workspace once for the probes that queue on it together | What that queue costs apart from the rest of a look was not measured, and a probe would have to know that the look it shares began after its worker's base was made |
-| A thread pool of the tool server's own for queries | One more thing to size, for no case measured: the loop's pool already takes 32 at once |
+| A thread pool of the tool server's own for queries | Queries are not the loop's pool's only readers, as a person's queries and the kernel's blob writes are there too, and what would fill it is the host's git, so the host's work is what moves |
+| A cap on looks at once, in the loop's pool | One more number to choose, and the host's other git, a spawn's worktree, a stop's and a diff, would still share the readers' pool |
 
 ## Consequences
 
 - A team of agents in worktrees records its commits some three times sooner at 100 agents, and twice as soon at 10, on the node
   measured. A round of looks still grows with the team, as each look reads every workspace's HEAD reflog, and the shared
   workspace's looks still queue.
-- An agent's slow query costs only its own call; past the default pool's threads, queries wait for one.
+- An agent's slow query costs only its own call while a thread of the loop's pool is free; past its threads, queries wait for
+  one, behind other readers and blob writes and never behind the host's git. What a saturated pool costs is not measured.
 - The look's promise in architecture section 13 changes from one at a time in a session to one at a time in a workspace, and its
   test with it: `test_looks_run_one_at_a_time` becomes `test_looks_of_one_workspace_run_one_at_a_time`, beside
   `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`.
@@ -107,12 +116,16 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
 - The cost of the session-wide lock, a probe by hand on 2026-11-08 and not a test in this repository: one script ran a team of N
   scripted agents in worktrees of a repository of 200 files, each committing a file of its own each turn, for four rounds after
   the first, twice for each N, on the code of `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`
-  and on the same code with this `host.py`, on Git 2.47.3, Python 3.12.13 and xfs, in jobs of 32 cores on two nodes of two Intel
-  Xeon Platinum 8558, whose other cores other jobs used. [scale.md](../reference/scale.md#a-git-teams-looks) has the numbers.
+  and on the same code with the `host.py` of `feat: Look at different workspaces at once, each after the shared one`, on Git
+  2.47.3, Python 3.12.13 and xfs, in jobs of 32 hardware threads on two nodes of two Intel Xeon Platinum 8558, whose other threads
+  other jobs used. The looks' git ran in the event loop's pool there, which on those nodes has the 32 threads the host's own pool
+  has now; the code with the host's own pool was not measured. [scale.md](../reference/scale.md#a-git-teams-looks) has the
+  numbers.
 - Tests: [tests/unit/runtime/test_looks.py](../../tests/unit/runtime/test_looks.py),
   `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`, whose looks of two agents' own workspaces each wait until
   both are in, which fails under one lock in a session, and which finds a commit made in your checkout before both workspaces
-  recorded before either agent's, and `test_looks_of_one_workspace_run_one_at_a_time`;
+  recorded before either agent's, `test_looks_of_one_workspace_run_one_at_a_time`, and `test_a_held_look_holds_up_no_query`,
+  whose person's query answers while a look is held with the loop's pool cut to one thread;
   [tests/unit/tools/test_mcp.py](../../tests/unit/tools/test_mcp.py),
   `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`, whose queries each answer only once all are in,
   which a query on the loop never lets happen; and [tests/unit/tools/test_shim.py](../../tests/unit/tools/test_shim.py),

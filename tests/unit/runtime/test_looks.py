@@ -6,7 +6,7 @@ import asyncio
 import json
 import stat
 import threading
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -645,6 +645,33 @@ async def test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one(rep
     assert after_the_shared_one(entered) and sorted(entered) == ["ada", "bob", "shared", "shared"]
     assert found[0].data["sha"] == yours and found[0].data["made_in"] is None
     assert sorted(event.data["made_in"] for event in found[1:]) == ["@ada", "@bob"]
+
+
+async def test_a_held_look_holds_up_no_query(repo, tmp_path, monkeypatch):
+    """With the event loop's pool cut to one thread, a person's query answers while a look is held: the host's git runs
+    on threads of its own, so no round of looks can fill the pool that readers share."""
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(ThreadPoolExecutor(1))
+    inside, gate = asyncio.Event(), threading.Event()
+    real = host.look
+
+    def held(root: Path, **options: Any) -> Any:
+        loop.call_soon_threadsafe(inside.set)
+        assert gate.wait(SECONDS)
+        return real(root, **options)
+
+    monkeypatch.setattr(host, "look", held)
+    team = team_of(harness=working(lambda cwd: commit(cwd, "work")))
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
+        await session.spawn("ada", "worker", "work")
+        await asyncio.wait_for(inside.wait(), SECONDS)
+        try:
+            answered = await asyncio.wait_for(session.status("ada"), SECONDS)
+        finally:
+            gate.set()
+        await looked(session)
+
+    assert answered["agent"] == "ada"
 
 
 async def stops(session: Session) -> list[Any]:

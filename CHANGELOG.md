@@ -1303,9 +1303,11 @@ named here is closed.
   and `schemas`, `descriptions` and `public_api_only`, which need no kernel, run and report. A folder no kernel can open,
   one another runtime holds or on a network filesystem, is refused as `Kernel.open` refuses it, where it read as
   `names` and `naming_law` passed and nothing else.
-- **A slow query an agent calls holds up no other call.** The tool server ran a query an agent called on the runtime's event
-  loop, so a slow one, such as an extension's, held up every other agent's calls, every harness's reports and every daemon
-  until it returned. It now runs on a reader thread of its own, as a person's query already did.
+- **A slow query an agent calls holds up no other call while a thread is free.** The tool server ran a query an agent called
+  on the runtime's event loop, so a slow one, such as an extension's, held up every other agent's calls, every harness's
+  reports and every daemon until it returned. It now runs on a thread of the event loop's pool, as a person's query already
+  did, and the host's git and files run on threads of their own, so a round of looks, which now run at once across
+  workspaces, cannot fill the pool that readers use.
 - **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
   harness's `tmp` and the files its harness kept a credential in, so every copy of a session, which is its export, carried
   them. In the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and pi's caches in `tmp`,

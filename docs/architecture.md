@@ -207,9 +207,11 @@ Agents work at once, and wait for each other only where they share a thing. Acro
   On each real binary against FakeModel, three agents' shell calls each ended only once all three were running:
   `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
 - **The tool server takes each request on a connection and a task of its own,** up to 1,024 at once (§10), and a held `wait`
-  holds only its own. A query an agent calls runs on a reader thread off the event loop, in Python's default pool, four threads
-  more than the machine has CPUs and 32 at most, so a slow one holds up only its own call:
-  `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
+  holds only its own. A query an agent calls runs off the event loop on a thread of the loop's pool, as a person's does, so a slow
+  one holds up no other call while a thread is free: `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
+  That pool is Python's default, of four threads more than the CPUs Python counts and 32 at most, and readers share it with the
+  kernel's blob writes alone: the host's git and files run on threads of its own, so no round of looks fills it,
+  `test_a_held_look_holds_up_no_query`.
 - **Every write goes through the one writer,** in transactions of up to 64 commands with one fsync each (§5.1), so writes are
   ordered and never run at once, and the writer's queue is the one thing every call that writes shares: at 100 agents its ack took
   24 to 29 ms at the median ([scale.md](reference/scale.md)), and `test_a_batch_is_one_transaction_of_at_most_64_commands`. An op
@@ -1325,8 +1327,8 @@ against the official client and against each real harness.
   HTTP clients that have met it, connect through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
   only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.
 - One request per connection, answered with `Connection: close`, so an idle client holds no task, socket or state here. A client
-  that goes during a call drops the call, not what it asked for: a wait stays registered. A query runs on a reader thread off the
-  event loop, as a person's does, so a slow one holds up no other call (§4).
+  that goes during a call drops the call, not what it asked for: a wait stays registered. A query runs off the event loop on a
+  thread of its pool, as a person's does, so a slow one holds up no other call while a thread is free (§4).
 - A request is bounded before it is believed: a head of 16 KiB, then `Host`, and `Origin`, which must be the origin of that `Host`, and
   the bearer, and only then a body of at most 1 MiB, with a length and no chunking. Its head has 10 s on the kernel's clock to arrive, and
   each part of its body, and of its answer as it leaves, 10 s from the part before, so a slow link that keeps going is served and a

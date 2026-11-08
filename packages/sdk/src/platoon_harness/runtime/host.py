@@ -10,6 +10,7 @@ import shutil
 import socket
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -88,9 +89,19 @@ _RETRY_SECONDS = 1.0
 _RENEW_EVERY = 5.0
 _GOAL_BODY_LIMIT = 16 * 1024 * 1024
 
+_THREADS = ThreadPoolExecutor(thread_name_prefix="host")
+"""The host's own threads, for its git and its files, as many as an event loop's own pool has, and shared by every
+session in the process. A reader, an agent's query or a person's, runs in the loop's pool, so it never waits behind a
+look."""
+
 log = logging.getLogger("platoon_harness.runtime")
 
 __all__ = ["GRACE", "DriverLink", "Host"]
+
+
+async def _to_thread[**P, T](function: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> T:
+    """`asyncio.to_thread`, on the host's own threads."""
+    return await asyncio.get_running_loop().run_in_executor(_THREADS, partial(function, *args, **kwargs))
 
 
 def _pinned(role: Role, access: Access) -> str | None:
@@ -338,12 +349,12 @@ class Host:
         elif repo is None:
             raise GitError(f"`{mode}` needs a git work tree, and {self._cwd} was in none when the session opened")
         elif mode == "worktree":
-            made = await asyncio.to_thread(make_worktree, repo, folder, branch, effect.id)
+            made = await _to_thread(make_worktree, repo, folder, branch, effect.id)
         else:
-            if mode == "isolated" and (why := await asyncio.to_thread(self._refusal)) is not None:
+            if mode == "isolated" and (why := await _to_thread(self._refusal)) is not None:
                 raise DriverError(why)
             made_for = f"{self._folder.name}/{agent}"
-            made = await asyncio.to_thread(make_snapshot, repo, folder, branch, self._tips_at_open(repo), made_for)
+            made = await _to_thread(make_snapshot, repo, folder, branch, self._tips_at_open(repo), made_for)
             if mode == "isolated":
                 made = made.model_copy(update={"mode": "isolated", "assurance": "isolated"})
         return made.model_dump()
@@ -419,8 +430,8 @@ class Host:
                 f"`isolated` gives `{info.name}` a home of its own, where its {info.login} login is not: "
                 "give the role an auth profile"
             )
-        await asyncio.to_thread(present, workspace, wrap)
-        driver = await asyncio.to_thread(make_driver, self._team.roles[role], self._cwd)
+        await _to_thread(present, workspace, wrap)
+        driver = await _to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
         spec = self._spec(link, admission, resume, Path(workspace.path), wrap)
         self._links[agent] = link
@@ -485,7 +496,7 @@ class Host:
         """What a role's driver says of itself, kept, because a wire program says it by running."""
         if role not in self._described:
             make = partial(make_driver, self._team.roles[role], self._cwd)
-            self._described[role] = await asyncio.to_thread(lambda: make().describe())
+            self._described[role] = await _to_thread(lambda: make().describe())
         return self._described[role]
 
     async def capabilities(self) -> dict[str, Capabilities]:
@@ -690,7 +701,7 @@ class Host:
         base = repo.head if where == "shared" else self._workspace_of(agent).base
         root, wrap = makers.get(where, (self._root(where), ()))
         try:
-            seen = await asyncio.to_thread(
+            seen = await _to_thread(
                 look,
                 root,
                 base=base,
@@ -763,12 +774,10 @@ class Host:
                 assert repo is not None
                 top = Path(repo.top)
                 if mode == "worktree":
-                    ended = await asyncio.to_thread(end_worktree, workspace, folder, top, left)
+                    ended = await _to_thread(end_worktree, workspace, folder, top, left)
                 else:
                     wrap = await self._wrap(name, record["role"], workspace)
-                    ended = await asyncio.to_thread(
-                        end_snapshot, workspace, folder, top, left, retried=retried, wrap=wrap
-                    )
+                    ended = await _to_thread(end_snapshot, workspace, folder, top, left, retried=retried, wrap=wrap)
         finally:
             try:
                 await self._clean(name, record["role"])
@@ -786,7 +795,7 @@ class Host:
         except (ConfigError, DriverError) as error:
             log.error("%s's driver did not say where its harness keeps credentials, so they stay: %s", agent, error)
         finally:
-            for stays in await asyncio.to_thread(clean, agent_folder(self._folder, agent), credentials):
+            for stays in await _to_thread(clean, agent_folder(self._folder, agent), credentials):
                 log.error("%s's stop: %s", agent, stays)
 
     async def _test(self, effect: Effect) -> dict[str, Any]:
@@ -799,13 +808,13 @@ class Host:
         folder = self._folder / TESTS / str(effect.id)
         if effect.attempts:
             await reap(folder, GRACE)
-            await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
+            await _to_thread(shutil.rmtree, folder, ignore_errors=True)
             if (ref := self._recorded(effect.id, "repo.tested")) is not None:
                 return {"ref": ref}
         tmpdir(folder).mkdir(mode=0o700, parents=True)
         tested = {"effect": effect.id, "sha": sha, "command": test.command, "exit": None, "seconds": None}
         try:
-            await asyncio.to_thread(checkout, sha, folder / "checkout", self._testable(repo))
+            await _to_thread(checkout, sha, folder / "checkout", self._testable(repo))
             cwd = folder / "checkout" / repo.prefix
             if not cwd.is_dir():
                 raise GitError(f"{sha[:12]} holds no {repo.prefix}, where the session's command runs")
@@ -814,7 +823,7 @@ class Host:
         else:
             tested |= await self._run_test(test, cwd, folder)
         ref = (await self.insist("repo.record", tested)).result
-        await asyncio.to_thread(shutil.rmtree, folder)
+        await _to_thread(shutil.rmtree, folder)
         return {"ref": ref}
 
     def _testable(self, repo: Repo) -> list[str]:
@@ -872,10 +881,10 @@ class Host:
         try:
             root, wrap = await self._place(where)
             if sha is not None:
-                read = await asyncio.to_thread(patch, root, sha, wrap=wrap)
+                read = await _to_thread(patch, root, sha, wrap=wrap)
             else:
                 diffed["read_at"] = self._kernel.clock.now()
-                diffed["head"], read = await asyncio.to_thread(uncommitted, root, wrap=wrap)
+                diffed["head"], read = await _to_thread(uncommitted, root, wrap=wrap)
         except (GitError, OSError) as error:
             diffed["why"] = str(error)
         else:
@@ -938,7 +947,7 @@ class Host:
         for record in kernel.query(kernel.runtime, "agent.records", {}).result:
             if record["workspace"] and (made := Workspace.model_validate(record["workspace"])).repository:
                 repositories[made.repository] = await self._wrap(record["name"], record["role"], made)
-        return await asyncio.to_thread(write_bundle, self._folder, repo, commits, repositories)
+        return await _to_thread(write_bundle, self._folder, repo, commits, repositories)
 
     async def reconcile(self, agent: str | None, key: str) -> Reconciled:
         """What a harness says became of what it was sent. With no harness to ask, or none that says in time, nobody
@@ -1072,7 +1081,7 @@ class Host:
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
             allow_native_children=role.allow_native_children,
         )
-        kept = await asyncio.to_thread(read_conformance, root_of(self._folder), info.name)
+        kept = await _to_thread(read_conformance, root_of(self._folder), info.name)
         proof = kept if speaks_for(profile, kept) else None
         args = {
             "agent": link.agent,

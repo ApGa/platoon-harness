@@ -241,9 +241,10 @@ class ToolServer(Server[_Request]):
     async def _run(
         self, principal: Principal, tool: _Tool, arguments: dict[str, Any], key: str | None, native: Any
     ) -> Outcome:
-        """Run one call, through `submit` so enforcement happens here however the list was filtered. A query runs on a
-        reader of its own off the event loop, so however long one takes, no other call waits behind it. A query that
-        decoding refuses leaves no event, so an agent's is submitted too: `submit` refuses it and journals that."""
+        """Run one call, through `submit` so enforcement happens here however the list was filtered. A query runs off
+        the event loop on a thread of the loop's pool, which the host's git does not use, so a slow one holds up no
+        other call while a thread is free. A query that decoding refuses leaves no event, so an agent's is submitted
+        too: `submit` refuses it and journals that."""
         kernel = self._kernel
         name = tool.op.name
         if not tool.op.query:

@@ -152,7 +152,9 @@ worktrees of a repository of 200 files, each committing a file of its own at eac
 to every agent, from the first send until every agent's look after that turn has finished, timed four times after a
 first round that made the workspaces, in each of two runs of each, on 32 of the threads of a node of the kind above, one
 node for 10 and 30 agents, whose load was 69 to 70, and another for 100, whose load was 12 to 16, with Git 2.47.3 and
-the repository on xfs. A range is the least and the most of the eight rounds.
+the repository on xfs. A range is the least and the most of the eight rounds. The looks' git ran in the event loop's
+pool, which there has the 32 threads that the host's own pool has now; the code with the host's own pool was not
+measured.
 
 | Agents | One look at a time in a session | One look at a time in a workspace |
 |---|---|---|
