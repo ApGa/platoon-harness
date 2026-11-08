@@ -147,6 +147,13 @@ KEYMAP: tuple[Key, ...] = (
     Key("ctrl+b", "navigator", "navigator", "Show or hide the agents and channels", "workspace"),
     Key("f2", "inspector", "inspector", "Show or hide why the agent in view waits, and what it runs on", "workspace"),
     Key("ctrl+o", "open_line", "open-line", "Open or close the chosen line of the transcript", "workspace"),
+    Key(
+        "",
+        "copy_line",
+        "copy",
+        "Send the chosen line's text, each control as its escape, as OSC 52, which a terminal may put on the clipboard",
+        "workspace",
+    ),
     Key("pageup", "page_up", "page-up", "Scroll the transcript up", "workspace"),
     Key("pagedown", "page_down", "page-down", "Scroll the transcript down", "workspace"),
     Key("ctrl+home", "oldest", "oldest", "Go to the start of the transcript, read back from the journal", "workspace"),

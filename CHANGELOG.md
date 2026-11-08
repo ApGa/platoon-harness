@@ -13,6 +13,10 @@ named here is closed.
 
 ### New features
 
+- **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
+  transcript shows it and, while it is open, the text it opens on, each control shown as its escape, so what is pasted
+  acts on no terminal. Whether it reaches the clipboard is the terminal's, which it says. Before, the terminal copied
+  nothing of its own.
 - **Threads in the terminal.** `/thread` shows the thread of the chosen line's message in the focus pane, every message
   sent in it on any inbox or channel, and the composer replies to that message where the page's Reply sends one: in
   its topic or group, or back to the other of a direct exchange you are in, which the chip above it says. A message

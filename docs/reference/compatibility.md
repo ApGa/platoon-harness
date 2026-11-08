@@ -847,7 +847,8 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 - macOS: nothing has run. `F_FULLFSYNC` latency decides the journal's ack promise there.
 - Power loss, devices that ignore flush, and NFS, CIFS, GPFS or BeeGFS. Lustre with two hosts did not corrupt in short runs, but that is not evidence of safety, and it stalled up to 6.4 s.
 - Many sessions in one process, lagging followers at scale, payloads above 4 KiB, and soak beyond 60 s.
-- Real terminal throughput over SSH and tmux, and accessibility on an alternate screen.
+- Real terminal throughput over SSH and tmux, accessibility on an alternate screen, and whether a line `/copy` sends as
+  OSC 52 reaches the clipboard in any real terminal, through tmux or over SSH.
 - Shell-capable agents at one UID can read each other's tokens through `/proc`. Whether Codex's sandbox blocks that read is unknown.
 - Workspaces on git other than 2.47.3, on macOS, on a case-insensitive filesystem, where branch refs differing only in case may
   collide, and on a repository past 100,000 files or on Lustre. Where Claude Code 2.1.316 reports `cwd` in its init frame.

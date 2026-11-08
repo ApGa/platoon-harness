@@ -2,7 +2,9 @@
 socket."""
 
 import asyncio
+import base64
 import contextlib
+import re
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -20,6 +22,7 @@ from platoon_harness.primitives import delivery
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
+from platoon_harness_cli.output import safe
 from platoon_harness_cli.provenance import Line, shows
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
@@ -1354,3 +1357,34 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
             ("channel/notes", "agreed", "channel/notes@1", "channel/notes@1"),
             ("inbox/lead", "thanks", shows(to_you), shows(to_you)),
         ]
+
+
+async def test_copy_sends_the_chosen_line_s_text_as_osc_52_with_no_escape_in_it(root):
+    """`/copy` sends the chosen line's text as the transcript shows it, and once the line is open the text it opens on,
+    as text, each control shown as its escape, so pasting it acts on no terminal. It says that whether it reaches the
+    clipboard is the terminal's."""
+    body = f"# a heading\n\n{HOSTILE}\n\x1b[31mred\x1b[0m"
+    async with attached(with_notes(team()), root) as (owner, app, pilot):
+        written: list[str] = []
+        app._driver.write = written.append  # type: ignore[union-attr]
+        await owner.send("#notes", HOSTILE, body=body.encode())
+        await show_notes(pilot)
+        await drawn(pilot, lambda text: "\\x1b]0;owned" in text)
+
+        def copied() -> list[str]:
+            sent = re.findall("\x1b\\]52;c;([A-Za-z0-9+/=]*)\x07", "".join(written))
+            return [base64.b64decode(said).decode() for said in sent]
+
+        await pilot.press(*"/copy", "enter")
+        await drawn(pilot, lambda _: len(copied()) == 1)
+        await pilot.press(*"/open-line", "enter")
+        await drawn(pilot, lambda text: "a heading" in text)
+        await pilot.press(*"/copy", "enter")
+        await drawn(pilot, lambda _: len(copied()) == 2)
+        notices = [notice.message for notice in app._notifications]
+
+    line = f"@you → #notes  {safe(HOSTILE)} ▸"
+    assert copied() == [line, f"{line}\n{safe(body)}"]
+    assert not [char for char in UNSAFE if char in "".join(copied())]
+    terminal_s = "whether they reach your clipboard is your terminal's."
+    assert f"Sent the chosen line's {len(line)} characters as OSC 52: {terminal_s}" in notices

@@ -127,6 +127,15 @@ then Enter finds the next one back. Where no line holds them, back to the first 
 to following, or to the line it began from. A ref is opened through `/provenance`'s form, not found. That `/find` finds
 words alone, with Ctrl+F its shortcut, is the default pending the owner's ruling.
 
+### Copy a line
+
+`/copy` sends the chosen line's text to the terminal as OSC 52, the sequence a terminal may take as text for its
+clipboard: the line as the transcript shows it, and while it is open, the text it opens on, its body as read, its gist
+whole or an approval's ask, as text and never as Markdown. Each control in it is shown as its escape, as on the screen,
+so what you paste acts on no terminal. It says how many characters it sent. Whether they reach the clipboard is the
+terminal's, which may take no OSC 52, or none past a length of its own: no real terminal has been measured, nor tmux or
+SSH between. That `/copy` copies the chosen line is the default pending the owner's ruling.
+
 ### The composer
 
 Enter sends to the target shown above it, and a person's message steers: it lands at the earliest boundary the harness
@@ -375,6 +384,7 @@ before the session's. `^` is Ctrl.
 | `^B` | `/navigator` | Show or hide the agents and channels |
 | `F2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
 | `^O` | `/open-line` | Open or close the chosen line of the transcript |
+|  | `/copy` | Send the chosen line's text, each control as its escape, as OSC 52, which a terminal may put on the clipboard |
 | `PgUp` | `/page-up` | Scroll the transcript up |
 | `PgDn` | `/page-down` | Scroll the transcript down |
 | `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |
@@ -479,5 +489,5 @@ before the session's. `^` is Ctrl.
 Disabled where a control for it would be, or absent from the palette:
 image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
-the transcript, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+the transcript, as `/copy` copies only the chosen line, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.

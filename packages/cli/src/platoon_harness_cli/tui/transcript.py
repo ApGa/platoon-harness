@@ -28,6 +28,7 @@ from platoon_harness.primitives import Span
 from .. import approvals
 from ..approvals import Ask
 from ..calls import UNJOINED, Join
+from ..output import safe
 from ..provenance import REF_IN_TEXT, shows
 from .approvals import rows_of
 from .keymap import bindings
@@ -262,6 +263,18 @@ class Block:
     open: bool = False
     text: str | None = None
     ask: Ask | None = None
+
+
+def text_of(block: Block) -> str:
+    """A line's text, as `/copy` sends it: what it shows and, while it is open, the text it opens on, as text and never
+    as Markdown, each control shown as its escape."""
+    said = [block.line.plain]
+    if block.open and block.ask is not None:
+        said += [block.ask.gist if block.ask.text is None else block.ask.text]
+        said += [] if block.ask.below is None else [block.ask.below]
+    elif block.open:
+        said += [block.event.gist if block.text is None else block.text]
+    return safe("\n".join(said))
 
 
 class Tail:

@@ -5,11 +5,13 @@ from collections.abc import Callable
 from typing import Any
 
 from textual.app import App, ComposeResult
+from textual.content import Content
 
 from platoon_harness.kernel import Event, Page
 from platoon_harness.primitives import Span, Spans
+from platoon_harness_cli.approvals import Ask
 from platoon_harness_cli.tui import transcript as transcript_module
-from platoon_harness_cli.tui.transcript import Focus, Transcript
+from platoon_harness_cli.tui.transcript import Block, Focus, Transcript, text_of
 
 
 def event(
@@ -584,3 +586,19 @@ def test_a_thread_holds_its_messages_alone_and_a_reply_goes_where_the_page_s_rep
     assert [to("inbox/you", "@lead"), to("inbox/lead", "@you")] == ["@lead", "@lead"]
     assert to("inbox/you", "runtime", subject="worker") == "@worker"
     assert to("inbox/lead", "@worker") is None and to("inbox/you", "runtime") is None
+
+
+def test_a_line_s_text_is_what_it_shows_and_what_it_opens_on_each_control_as_its_escape():
+    """What `/copy` sends: the line, and while it is open its body as read, its gist whole while the body is read, or
+    an approval's ask as it was asked, with the words below it, never as Markdown."""
+    asked = event(2, "approval/a1", "approval.requested", "rm -rf \x1b[2J", {"body": "b"})
+    said = event(3, "inbox/you", "message.sent", "the  **gist**\x07", {"sender": "@lead", "body": "c"})
+    ask = Ask(agent="lead", gist="rm -rf", text="rm -rf \x1b[2J /\nand more", below="cut at 64 KiB")
+    shown = Block(2, asked, Content("@lead asks for approval  rm -rf \\x1b[2J"), open=True, ask=ask)
+    reading = Block(3, said, Content("@lead → @you  the **gist**\\x07 ▸"), open=True)
+    read = Block(3, said, reading.line, open=True, text="# the body\n\\x1b[31m")
+
+    assert text_of(Block(3, said, reading.line)) == "@lead → @you  the **gist**\\x07 ▸"
+    assert text_of(shown) == "@lead asks for approval  rm -rf \\x1b[2J\nrm -rf \\x1b[2J /\nand more\ncut at 64 KiB"
+    assert text_of(reading) == "@lead → @you  the **gist**\\x07 ▸\nthe  **gist**\\x07"
+    assert text_of(read) == "@lead → @you  the **gist**\\x07 ▸\n# the body\n\\x1b[31m"

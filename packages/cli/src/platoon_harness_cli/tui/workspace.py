@@ -38,7 +38,7 @@ from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .tasks import Tasks
-from .transcript import Focus, Transcript, page_of
+from .transcript import Focus, Transcript, page_of, text_of
 
 GROUPS = (
     ("needs_you", "Needs you", "⚠", "yellow"),
@@ -939,6 +939,19 @@ class Workspace(Screen[None]):
 
     def action_open_line(self) -> None:
         self.query_one(Transcript).toggle()
+
+    def action_copy_line(self) -> None:
+        """Send the chosen line's text to the terminal as OSC 52, each control shown as its escape, so pasting it acts
+        on no terminal. Whether it reaches the clipboard is the terminal's."""
+        chosen = self.query_one(Transcript).chosen
+        if chosen is None:
+            said = "No line is chosen, so nothing is copied: choose a line of the transcript, which Tab reaches."
+            note(self, said, severity="warning")
+            return
+        text = text_of(chosen)
+        self.app.copy_to_clipboard(text)
+        sent = f"Sent the chosen line's {len(text):,} characters as OSC 52"
+        note(self, f"{sent}: whether they reach your clipboard is your terminal's.")
 
     def action_page_up(self) -> None:
         self.query_one(Transcript).scroll_page_up(animate=False)
