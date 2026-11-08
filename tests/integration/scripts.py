@@ -205,7 +205,8 @@ def _answered(result: Any) -> Any:
 class Member(ScriptedDriver):
     """One of a ring of members, each turn at work as a team's member is: it tells the next member its news, waits to
     hear from the one before, reads what that one said and revises its notes citing it, adds a task and does one, and
-    tells the person. It keeps no tool's result, as it runs inside the runtime whose memory is measured."""
+    tells the person. It keeps no tool's result past its turn, though it keeps what each turn was told and each call's
+    id, as every ScriptedDriver does."""
 
     def __init__(self) -> None:
         super().__init__(itertools.repeat([Do(self._work), Say("done")]))

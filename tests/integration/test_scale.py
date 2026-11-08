@@ -1,7 +1,7 @@
-"""The brief's Scale case on the real stack: 100 ScriptedDriver agents on the real tool plane drive 100,000 events
-through the real kernel and runtime, and what that costs is measured and held to budgets twice the most
-docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes, so it runs by
-hand before each release and no CI job runs it. Each test prints what it measured."""
+"""The brief's Scale case on the real stack: 100 ScriptedDriver agents, each a process of its own on the real tool
+plane, drive 100,000 events through the real kernel and runtime, and what that costs is measured and held to budgets
+twice the most docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes,
+so it runs by hand before each release and no CI job runs it. Each test prints what it measured."""
 
 import asyncio
 import contextlib
@@ -235,10 +235,9 @@ async def run(root: Path) -> Measured:
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory: pytest.TempPathFactory) -> Measured:
-    """One run, which every test reads. Its runtime imports this checkout's harnesses."""
+    """One run, which every test reads."""
     root = tmp_path_factory.mktemp("scale")
     with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
         monkeypatch.setenv("PLATOON_HARNESS_HOME", str(root))
         done = asyncio.run(run(root))
     print("\nhardware:", ", ".join(f"{key} {value}" for key, value in done.hardware.items()))

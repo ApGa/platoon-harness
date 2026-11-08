@@ -1,5 +1,6 @@
-"""A team at the size of the brief's Scale case: 100 scripted members on the real tool plane, which a person wakes a
-round at a time until the journal holds 100,000 events, and what the run read as it went."""
+"""A team at the size of the brief's Scale case: 100 scripted members, each a process of its own on the real tool
+plane, which a person wakes a round at a time until the journal holds 100,000 events, and what the run read as it
+went."""
 
 import os
 import platform
@@ -13,18 +14,20 @@ from platoon_harness import Session, Team
 from platoon_harness.kernel import filesystem
 from platoon_harness.primitives import Metrics
 
-from .scripts import MEMBERS, inside
+from .scripts import MEMBERS, wire
 
 EVENTS = 100_000
 """How many events the brief's Scale case asks a journal to hold."""
 
 
 def team() -> Team:
-    """The members in a mesh, each woken by the person's post to `#rounds`, with a board for their notes and a queue for
-    their work. A member's inbox is pulled, so what the one before it says waits for its read and wakes nothing."""
+    """The members in a mesh, each a wire program in a process of its own, as a harness is, so what the runtime
+    measures of itself leaves them out. The person's post to `#rounds` wakes each, and they have a board for their notes
+    and a queue for their work. A member's inbox is pulled, so what the one before it says waits for its read and wakes
+    nothing."""
     return Team.model_validate(
         {
-            "roles": {"member": {"harness": inside("member"), "count": MEMBERS, "delivery": "pull"}},
+            "roles": {"member": {"harness": wire("member"), "count": MEMBERS, "delivery": "pull"}},
             "topology": {
                 "mesh": {"role": "member", "board": "notes"},
                 "channels": {
@@ -38,8 +41,9 @@ def team() -> Team:
 
 @dataclass(frozen=True)
 class Round:
-    """One round: the seconds from the person's post to the last member's end of turn, the round trip of a message the
-    person sent while the members worked, and `session.metrics` read at its end, with the seconds that read took."""
+    """One round: the seconds from the person's post to the last member's end of turn, the seconds from the person's
+    send of a message while the members worked until the runtime answered that it was recorded, and `session.metrics`
+    read at its end, with the seconds that read took."""
 
     seconds: float
     said: float
