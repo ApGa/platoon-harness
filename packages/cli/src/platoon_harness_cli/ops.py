@@ -159,6 +159,16 @@ def extension_groups(own: Collection[str], named: str | None) -> list[App]:
     return listed
 
 
+def commandless(components: Iterable[Component], own: Collection[str] = ()) -> list[Problem]:
+    """Why each installed extension among `components` has no commands, from its name alone: one named as an extension
+    every session holds, which no session can load, and one named as one of the command line's `own` commands."""
+    return [
+        refusal
+        for component in components
+        if component.group == EXTENSIONS and (refusal := _refused(component, own)) is not None
+    ]
+
+
 def _refused(component: Component, own: Collection[str]) -> Problem | None:
     """Why an installed extension has no commands, from its name alone, or None where its name leaves it some: no
     session can load one named as an extension every session holds, and one named as one of the command line's `own`

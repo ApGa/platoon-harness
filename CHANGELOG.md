@@ -22,8 +22,9 @@ named here is closed.
   neither, with exit 78, saying both. `--help` lists every installed extension under Installed extensions, from metadata,
   importing none. An extension named as one of the command line's own commands, such as `run`, gets none, and nor does one
   named as an extension every session holds, such as `task` or `lease`, which the kernel refuses in any session: discovery
-  refuses either before any import, and says why on stderr each time it looks for an extension's group. That an installed
-  extension's op gets a command is the default, pending the owner's ruling. See
+  refuses either before any import, and says why on stderr each time it looks for an extension's group, as `extension list`
+  does, and `doctor` too of the second, as it keeps a session whose team names it from running. That an installed extension's
+  op gets a command is the default, pending the owner's ruling. See
   [RFC 0071](docs/rfcs/0071-an-installed-extension-s-op-is-a-command.md), a draft.
 - **`check_extension` names what no check runs.** Its result is `ExtensionChecks`, whose `unchecked` names each part the
   extension declares that no check runs, its daemons, its presets and its isolation, each saying what that leaves

@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import socket
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
@@ -33,6 +34,7 @@ from platoon_harness.version import __version__ as sdk_version
 
 from . import __version__
 from .exits import CONFIGURATION, REFUSED
+from .ops import commandless
 from .output import note, safe, say, shown
 
 _NODE = (22, 19)
@@ -160,7 +162,10 @@ def _root() -> dict[str, Any]:
     return found
 
 
-def _installed() -> dict[str, Any]:
+def _installed(own: Collection[str] = ()) -> dict[str, Any]:
+    """What is installed, from metadata, and each problem among it: what `check_installed` finds, and each extension
+    with no commands, as one every session holds or one of the command line's `own` commands holds its name."""
+    found = discover()
     components = [
         {
             "kind": _LABELS[component.group],
@@ -168,9 +173,10 @@ def _installed() -> dict[str, Any]:
             "distribution": component.distribution,
             "version": component.version,
         }
-        for component in discover()
+        for component in found
     ]
-    return {"components": components, "problems": [str(problem) for problem in check_installed()]}
+    problems = [*check_installed(), *commandless(found, own)]
+    return {"components": components, "problems": [str(problem) for problem in problems]}
 
 
 def doctor(*, json: bool = False, check: bool = False) -> int:
@@ -350,14 +356,18 @@ For example:
 
 @extension.command(name="list")
 def list_installed(*, json: bool = False) -> int:
-    """List every installed driver and extension, with its distribution, and any problem among them.
+    """List every installed driver and extension, with its distribution, and any problem among them: two that share a
+    name, one that needs another SDK, and an extension with no commands, as a command of the command line's own or an
+    extension every session holds has its name.
 
     Parameters
     ----------
     json
         Say it as one JSON object.
     """
-    installed = _installed()
+    from .main import build  # It builds the command line, this command among it.
+
+    installed = _installed(set(build()))
     if json:
         say(shown(installed))
         return 0

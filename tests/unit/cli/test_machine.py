@@ -1,6 +1,8 @@
-"""`doctor`: what each harness's kept result says of the binary that runs, and a check going on past one that fails."""
+"""`doctor`: what each harness's kept result says of the binary that runs, a check going on past one that fails, and
+with `extension list`, each installed extension the command line gives no command."""
 
 import socket
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,8 +12,12 @@ from platoon_harness.drivers import DriverError
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import CHECKED, Check, Conformance
+from platoon_harness.extensions import EXTENSIONS
 from platoon_harness.runtime.paths import read_conformance, write_conformance
 from platoon_harness_cli import machine
+from platoon_harness_cli.exits import CONFIGURATION
+
+from ..conftest import Site
 
 
 class Foo(ClaudeDriver):
@@ -125,3 +131,31 @@ def test_doctor_says_unknown_where_the_binary_says_no_version(home, monkeypatch,
 
     said = lines(capsys.readouterr().out)["claude"]
     assert said.endswith("and this binary said no version, so whether that speaks for it is unknown")
+
+
+def test_extension_list_and_doctor_say_why_an_installed_extension_has_no_command(home, site: Site, capsys):
+    """`extension list` names each installed extension the command line gives no command, as a problem among what is
+    installed: one named as an extension every session holds, which no session can load, and one named as a command of
+    the command line's own. `doctor` names the first alone, as only it keeps a session from running, one whose team
+    names it, and neither is imported."""
+    for name in ("lease", "web"):
+        site.module(f"never_{name}", "raise RuntimeError('imported')")
+        site.install(f"{name}-maker", entry_points={EXTENSIONS: {name: f"never_{name}:extension"}})
+    held = (
+        "problem    extensions.lease: lease-maker 1.0.0's extension `lease` has no commands, and no session can load "
+        "it, as every session holds the SDK's own extension `lease`"
+    )
+    own = (
+        "problem    extensions.web: web-maker 1.0.0's extension `web` has no commands, as `web` is a command of the "
+        "command line's own: its ops run through the SDK, MCP, `ph` and the clients' palettes, on a session whose team "
+        "names it"
+    )
+
+    listed = machine.list_installed()
+    said = capsys.readouterr().out.splitlines()
+    usable = machine.doctor()
+    doctored = capsys.readouterr().out.splitlines()
+
+    assert listed == 0 and said[-2:] == [held, own]
+    assert usable == CONFIGURATION and doctored[-2:] == [held, "not usable"]
+    assert not {"never_lease", "never_web"} & set(sys.modules)

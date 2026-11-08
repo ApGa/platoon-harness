@@ -755,7 +755,7 @@ For example:
 platoon-harness extension list [OPTIONS]
 ```
 
-List every installed driver and extension, with its distribution, and any problem among them.
+List every installed driver and extension, with its distribution, and any problem among them: two that share a name, one that needs another SDK, and an extension with no commands, as a command of the command line's own or an extension every session holds has its name.
 
 **Parameters**:
 

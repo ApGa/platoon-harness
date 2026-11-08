@@ -26,7 +26,8 @@ not usable
 It exits 78. No harness it drives is on PATH, and the SDK's `openhands` extra is not installed either: install `claude`,
 `codex` or `pi` and sign it in as you usually do, or install the extra, as
 [Install](../getting-started/install.md#openhands) says. Its other problems are a root it cannot use, below, and a
-driver or an extension that more than one package defines, or one that needs another version of the SDK.
+driver or an extension that more than one package defines, one that needs another version of the SDK, or an extension
+named as one of the SDK's own, which every session holds, so that no session can load it.
 
 ## doctor's `openhands` line names an interpreter
 
