@@ -735,7 +735,8 @@ named here is closed.
   `stand_ins:lead`, `stand_ins:worker` and `stand_ins:merger`, with only the example's folder on `PYTHONPATH`, and leave
   the test suite. Its README says what such a run cannot show: what Codex's sandbox and each role's approvals let its git
   do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
-  harness, no module of the tests.
+  harness, no module of the tests. Its stand-ins and the review example's run each role's code as a `Do` step, and a
+  test holds every example to the SDK's public names.
 
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,

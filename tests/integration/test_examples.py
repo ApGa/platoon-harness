@@ -231,6 +231,29 @@ def test_no_example_imports_the_test_suite():
     assert ({path: names for path, names in importing.items() if names}, naming) == ({}, [])
 
 
+def private(name: str) -> bool:
+    """Whether a name is private: it starts with an underscore, and is no `__dunder__`."""
+    return name.startswith("_") and not (name.startswith("__") and name.endswith("__"))
+
+
+def test_every_example_reaches_the_sdk_by_public_names_alone():
+    """Each name an example imports from the SDK is in `tests/public_api.txt`, and no example reaches an attribute, or
+    defines a method, whose name is private, so an example teaches nothing a release may change without saying so."""
+    public = {line.partition("(")[0] for line in (ROOT / "tests" / "public_api.txt").read_text().split()}
+    imported, reached = [], []
+    for path in sorted((ROOT / "examples").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").partition(".")[0] == "platoon_harness":
+                imported += [f"{node.module}.{alias.name}" for alias in node.names]
+            names = [node.attr] if isinstance(node, ast.Attribute) else []
+            if isinstance(node, ast.ClassDef):
+                names = [item.name for item in node.body if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)]
+            reached += [f"{path.relative_to(ROOT)}: {name}" for name in names if private(name)]
+
+    assert len(imported) >= 5
+    assert ([name for name in imported if name not in public], reached) == ([], [])
+
+
 def ref(event: dict) -> str:
     return f"{event['stream']}@{event['version']}"
 

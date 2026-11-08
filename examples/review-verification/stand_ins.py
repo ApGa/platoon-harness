@@ -1,15 +1,22 @@
 """Scripted stand-ins for the review team's harnesses, which do what job.md and each role's instructions ask with git
 and no model at all. With this folder on `PYTHONPATH`, a role whose harness is `stand_ins:author`, `stand_ins:reviewer`
-or `stand_ins:verifier` runs one. They show the flow: a commit, its review, your test of it and a verdict, each citing
-what it rests on. Each runs in the runtime's own process, so none shows what a sandbox or an approval stops."""
+or `stand_ins:verifier` runs one: a `ScriptedDriver` whose every turn is one `Do` step, its role's code. They show the
+flow: a commit, its review, your test of it and a verdict, each citing what it rests on. Each runs in the runtime's own
+process, so none shows what a sandbox or an approval stops."""
 
 import asyncio
+import itertools
 import json
 import subprocess
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from platoon_harness.testing import ScriptedDriver
+from platoon_harness.drivers import AgentSpec
+from platoon_harness.testing import Do, ScriptedDriver
+
+type Caller = Callable[[str, Mapping[str, Any]], Awaitable[Any]]
+"""What a `Do` step's code calls a tool with: its name and arguments, for its MCP result."""
 
 FILES = {
     "slug.py": '''def slug(text):
@@ -48,28 +55,27 @@ def why(done: subprocess.CompletedProcess[str]) -> str:
     return said.splitlines()[0] if said else f"exit {done.returncode}"
 
 
-class Author(ScriptedDriver):
+class Author:
     """Its turn writes slug.py and its test, commits both on its branch, adds a task to `to-reviewer` naming the commit
     and citing the job, and finishes citing the task. If its commit fails, it finishes saying so and adds no task."""
 
-    async def _walk(self, steps: Any) -> str:
-        cwd = self._spec.cwd
+    async def turn(self, spec: AgentSpec, call: Caller) -> None:
+        cwd = spec.cwd
         for name, text in FILES.items():
             (cwd / name).write_text(text)
         await asyncio.to_thread(git, "add", *FILES, cwd=cwd)
         committed = await asyncio.to_thread(git, "commit", "-q", "-m", "Add slug and its test", cwd=cwd)
         if committed.returncode != 0:
-            await self._call("agent_finish", {"gist": f"git commit failed: {why(committed)}"})
-            return "stopped"
+            await call("agent_finish", {"gist": f"git commit failed: {why(committed)}"})
+            return
         sha = (await asyncio.to_thread(git, "rev-parse", "HEAD", cwd=cwd)).stdout.strip()
         task = {"queue": "to-reviewer", "gist": f"review {sha}", "based_on": [JOB]}
-        added = answer(await self._call("task_add", task))["ref"]
+        added = answer(await call("task_add", task))["ref"]
         gist = "Committed slug.py and its test, and handed the commit to the reviewer."
-        await self._call("agent_finish", {"gist": gist, "based_on": [added]})
-        return "stopped"
+        await call("agent_finish", {"gist": gist, "based_on": [added]})
 
 
-class Reviewer(ScriptedDriver):
+class Reviewer:
     """Its first turn claims the task on `to-reviewer`, and each reads the commit the task names through `git show` and
     `repo_commit`. A commit is recorded at the look after the turn that made it, which can come after this turn
     begins, so while `repo_commit` says it is not recorded yet, it waits a second for work on `to-reviewer` and asks
@@ -78,15 +84,15 @@ class Reviewer(ScriptedDriver):
 
     task: dict[str, Any] | None = None
 
-    async def _walk(self, steps: Any) -> str:
+    async def turn(self, spec: AgentSpec, call: Caller) -> None:
         if self.task is None:
-            self.task = answer(await self._call("task_claim", {"queue": "to-reviewer"}))
+            self.task = answer(await call("task_claim", {"queue": "to-reviewer"}))
         sha = self.task["gist"].removeprefix("review ")
-        shown = await asyncio.to_thread(git, "show", "--name-only", "--format=", sha, cwd=self._spec.cwd)
-        read = await self._call("repo_commit", {"sha": sha})
-        if read.get("isError"):
-            await self._call("wait", {"queue": ["to-reviewer"], "timeout": 1})
-            return "stopped"
+        shown = await asyncio.to_thread(git, "show", "--name-only", "--format=", sha, cwd=spec.cwd)
+        read = await call("repo_commit", {"sha": sha})
+        if read["isError"]:
+            await call("wait", {"queue": ["to-reviewer"], "timeout": 1})
+            return
         commit = answer(read)["ref"]
         changed = shown.stdout.split()
         if sorted(changed) == sorted(FILES):
@@ -94,54 +100,53 @@ class Reviewer(ScriptedDriver):
         else:
             review = f"It changes {', '.join(changed) or 'nothing'}, where the job asks for slug.py and its test."
         done = {"queue": "to-reviewer", "gist": review, "based_on": [commit]}
-        reviewed = answer(await self._call("task_complete", done))["ref"]
-        await self._call("task_add", {"queue": "to-verifier", "gist": f"verify {sha}", "based_on": [commit, reviewed]})
-        await self._call("agent_finish", {"gist": review, "based_on": [reviewed]})
-        return "stopped"
+        reviewed = answer(await call("task_complete", done))["ref"]
+        await call("task_add", {"queue": "to-verifier", "gist": f"verify {sha}", "based_on": [commit, reviewed]})
+        await call("agent_finish", {"gist": review, "based_on": [reviewed]})
 
 
-class Verifier(ScriptedDriver):
+class Verifier:
     """Its first turn claims the task on `to-verifier`, reads the commit it names through `repo_commit`, asks you to
     test it, citing it, and waits up to 20 minutes for your answer. Its next turn completes the task with a verdict that
     says what you answered, citing the commit, the task and your answer, and finishes with it, or with no answer from
-    you fails the task saying so. It declares Codex's read-only sandbox, so the team's verifier runs on it as written,
-    and runs no command, so it shows nothing of what that sandbox stops."""
+    you fails the task saying so. Its harness declares Codex's read-only sandbox, so the team's verifier runs on it as
+    written, and it runs no command, so it shows nothing of what that sandbox stops."""
 
     asked: tuple[str, list[str]] | None = None
     """The commit it asked you to test, and what it cites: that commit's ref and its task's."""
 
-    async def _walk(self, steps: Any) -> str:
+    async def turn(self, spec: AgentSpec, call: Caller) -> None:
         if self.asked is None:
-            task = answer(await self._call("task_claim", {"queue": "to-verifier"}))
+            task = answer(await call("task_claim", {"queue": "to-verifier"}))
             sha = task["gist"].removeprefix("verify ")
-            commit = answer(await self._call("repo_commit", {"sha": sha}))["ref"]
+            commit = answer(await call("repo_commit", {"sha": sha}))["ref"]
             self.asked = sha, [commit, task["ref"]]
             ask = f"Please test {sha[:12]} with `repo test`, and answer me citing its record."
-            await self._call("message_send", {"to": "@you", "gist": ask, "based_on": [commit]})
-            if answer(await self._call("wait", {"from": ["@you"], "timeout": PATIENCE}))["state"] != "released":
-                return "stopped"
+            await call("message_send", {"to": "@you", "gist": ask, "based_on": [commit]})
+            if answer(await call("wait", {"from": ["@you"], "timeout": PATIENCE}))["state"] != "released":
+                return
         sha, cited = self.asked
-        answers = answer(await self._call("message_read", {"sender": "you", "after": 0}))["entries"]
+        answers = answer(await call("message_read", {"sender": "you", "after": 0}))["entries"]
         if not answers:
             said = f"Not verified: nobody tested {sha[:12]}."
-            await self._call("task_fail", {"queue": "to-verifier", "gist": said, "based_on": cited})
-            await self._call("agent_finish", {"gist": said, "based_on": cited})
-            return "stopped"
+            await call("task_fail", {"queue": "to-verifier", "gist": said, "based_on": cited})
+            await call("agent_finish", {"gist": said, "based_on": cited})
+            return
         verdict = f"Reviewed, and tested by you: {answers[-1]['gist']}"
         cited = [*cited, answers[-1]["ref"]]
-        await self._call("task_complete", {"queue": "to-verifier", "gist": verdict, "based_on": cited})
-        await self._call("agent_finish", {"gist": verdict, "based_on": cited})
-        return "stopped"
+        await call("task_complete", {"queue": "to-verifier", "gist": verdict, "based_on": cited})
+        await call("agent_finish", {"gist": verdict, "based_on": cited})
 
 
 def author() -> ScriptedDriver:
-    return Author()
+    return ScriptedDriver(itertools.repeat([Do(Author().turn)]))
 
 
 def reviewer() -> ScriptedDriver:
-    return Reviewer()
+    return ScriptedDriver(itertools.repeat([Do(Reviewer().turn)]))
 
 
 def verifier() -> ScriptedDriver:
     declared = ScriptedDriver().describe().capabilities
-    return Verifier(capabilities=declared.model_copy(update={"sandboxes": frozenset({"read-only"})}))
+    read_only = declared.model_copy(update={"sandboxes": frozenset({"read-only"})})
+    return ScriptedDriver(itertools.repeat([Do(Verifier().turn)]), capabilities=read_only)
