@@ -6,7 +6,7 @@
 | Created | 2026-11-09 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`primitives/sessions.py`](../../packages/sdk/src/platoon_harness/primitives/sessions.py), [`primitives/tasks.py`](../../packages/sdk/src/platoon_harness/primitives/tasks.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [`tools/surface.py`](../../packages/sdk/src/platoon_harness/tools/surface.py), [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [architecture sections 7, 10, 11 and 14](../architecture.md#7-primitive-semantics), [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) |
-| Discussion | The owner's request of 2026-11-09, and the owner's rulings that the vocabulary is fixed per team and declared in configuration, that the creating agent decides a task's difficulty as it creates it, and that crafting-style work an agent does for a task earns credit through the task. The request accepts no design: this one waits for the owner's acceptance |
+| Discussion | The owner's request of 2026-11-09, and the owner's answer on it: "yes fixed vocab makes sense. For now difficulty can come at creation time decided by the agent". That the vocabulary is the team's, declared in its configuration, and that crafting-style work an agent does for a task earns credit through the task, are this design's, which the owner has not ruled on. The request accepts no design: this one waits for the owner's acceptance |
 | Implementation | `feat: Label tasks and spawns from a vocabulary the team declares`; `feat: Give each span the claims its agent held and the labels of its work`; `feat: Share what a claim and its result keep among the spans that held the claim`; and the fixes the review asked for |
 
 ## Summary
@@ -42,8 +42,8 @@ Today none of it can be said:
 - `propagate@3` keeps what a task's result keeps on the span whose call wrote it, and its claim's share on the span whose call
   claimed it. The crafting span, cut off by the progress message, gets the claim's share at most, and nothing of the result's,
   however the lead used the result: `test_an_uncited_report_keeps_what_reaches_it_on_the_span_that_wrote_it` shows the same for a
-  report. The owner ruled that such work earns credit through the task: the claimant completes it, and the creator reads or cites
-  the completion, so credit flows to the work.
+  report. Such work is the task's: the claimant completes it, and the creator reads or cites the completion, so credit should
+  flow through the task to the work.
 
 ## Proposal
 
@@ -79,13 +79,15 @@ runtime's adds and spawns meet the same check as an agent's.
 They are optional, label by label. The code gives reasons: the agents a session starts have no creator to decide anything of
 them, older sessions and teams with no vocabulary have none, and a label is evidence its creator gives, so one it was not sure of
 is honest absence, which a training system can tell from a value, where a required label would make it guess. Difficulty is
-decided by the creating agent as it creates the work, as the owner ruled, and nothing changes it after.
+decided by the creating agent as it creates the work, which the owner said will do "for now"; no op changes it after, and open
+question 5 asks whether one should.
 
 A tool that takes `labels` shows a model each label with its values, as an `enum`, with no other key allowed, and says them in
 its description too, which `ph` shows, so a model picks from them; with no vocabulary, the argument is left out of the schema, as
 no value could fill it. The op's own check is what holds, for a harness that does not enforce a tool's schema. The vocabulary is
-fixed at open and the tool list at launch, so the two always agree. No reader is shown a task's labels: `task.list` and
-`task.claim` say what they said before.
+fixed at open and the tool list at launch, so the two always agree. No claimant is shown its task's labels: `task.list` and
+`task.claim` say what they said before, the default pending the owner's ruling on open question 1. A person reading the record,
+and a training system reading `spans`, see them.
 
 ### 3. A span's labels
 
@@ -173,15 +175,14 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 
 | Alternative | Why not |
 |---|---|
-| Free-form labels | The owner ruled the vocabulary fixed per domain; a free label keys a baseline nothing else shares |
-| A vocabulary per queue, per role or per channel | Several places for one fact; the owner's vocabulary is the domain's, which a team is |
+| Free-form labels | The owner agreed a fixed vocabulary makes sense; a free label keys a baseline nothing else shares |
+| A vocabulary per queue, per role or per channel | Several places for one fact; a vocabulary is the domain's, which a team is |
 | Labels in `Topology` | The topology says who may reach whom; labels say what the work is |
 | Tags, a set of values with no labels | "Hard" and "search" are values of different questions, and a baseline keys each |
 | Required labels | Started agents, older sessions and an unsure creator have none to give honestly |
-| A new op to label work after it was added | Difficulty is decided at creation, as the owner ruled; a second write of one fact |
 | Labels shown in the preamble | A preamble is a snapshot of targets, and a schema is where a model picks a value |
 | Telling a claimant its task's labels | Nothing asked for it, and a worker told its task is easy may work it as one: an open question |
-| Merging two held tasks' labels, or taking the first | The owner ruled unknown; either guesses which task a call worked for |
+| Merging two held tasks' labels, or taking the first | Either guesses which task a call worked for, where the record says it does not know |
 | Placing claims by their commit seq among calls | It compares two report pipes (RFC 0061) |
 | Holding from the span a claim lies in | A claim made in the call that completed the task before lies in that task's span, which it never worked |
 | Weighting held spans by their calls | A span's call count is its harness's; one share each, as each edge has one |
@@ -223,6 +224,9 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
    that surely held a claim takes its claims' labels alone, pending the owner's ruling. A ruling for the spawn's work makes such
    a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
    looks at its queue before it claims would then have no key for the span that claims.
+5. Should work be labelled again after it is added, as by a new op, or by its claimant? The owner said difficulty comes at
+   creation "for now", so none is built: labels are given as work is created, and nothing changes them. An op to label work later
+   would be a second write of one fact, beside the first, and tears out nothing.
 
 ## Evidence
 

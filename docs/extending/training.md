@@ -235,14 +235,14 @@ for an entry that carries an event, as a child's report does, that event's, and 
 turn is one span; but what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it,
 is shared equally by the spans that held the claim, and kept by the event's own span only where none did. It writes, under the
 producer `platoon_harness.credit:propagate`, one local `credit` row per span it reached, on the span's name, and one per agent it
-reached, on that agent's first `agent.started`, holding all that agent's events kept. A span
-or an agent it never reached gets no row, so is unscored; a team reward that is not scored passes its status to each row; and a
-walk cut short, or one that meets an edge to an event no older than its own, makes every row `invalid`. What reached the events of
-no agent, or of one that never started, as one whose launch failed, which has no start for a row to target, is the reward less
-the agents' rows, and what an agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its
-spans' rows, and no span's row holds it. Its agent rows are those `propagate@3` wrote, and where no claimant's event of a claim is
-reached, so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose agent rows were
-`propagate@1`'s. Pin an earlier SDK to run an earlier version, as a run recorded on `propagate@3` does.
+reached, on that agent's first `agent.started`, holding all that agent's events kept. A span or an agent it never reached gets no
+row, so is unscored; a team reward that is not scored passes its status to each row; and a walk cut short, or one that meets an
+edge to an event no older than its own, makes every row `invalid`. What reached the events of no agent, or of one that never
+started, as one whose launch failed, which has no start for a row to target, is the reward less the agents' rows, and what an
+agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its spans' rows, and no span's
+row holds it. Its agent rows are those `propagate@3` wrote, and where no claimant's event of a claim is reached, so are its span
+rows; where no span took another principal's event, those are `propagate@2`'s, whose agent rows were `propagate@1`'s. Pin an
+earlier SDK to run an earlier version, as a run recorded on `propagate@3` does.
 
 What credit reaches depends on what you close on, so close each topology on what its team came to:
 

@@ -132,7 +132,7 @@ async def test_any_label_is_refused_where_the_team_declares_none(kernel):
         assert (found.code, found.detail) == ("invalid", "this team has no label kind: it declares none")
 
 
-async def test_no_reader_is_shown_a_task_s_labels(kernel):
+async def test_no_claimant_is_shown_its_task_s_labels(kernel):
     """Labels are for the record and a training system: a claimant is shown a task as it was before them."""
     lead = await spawn(kernel, "lead", role="lead")
     worker = await spawn(kernel, "w")

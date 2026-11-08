@@ -792,11 +792,12 @@ on `task.added` payload 2 and `agent.spawned` payload 4, by name, where an older
 - **Checked.** A label the team does not declare, or a value its label does not take, refuses the whole op `invalid`, saying what
   may be given, and a team that declares none refuses any. A person's, a program's and the runtime's work meets the same check.
 - **Optional.** A label left out is none: the agents a session starts have no creator to give one, and a creator unsure of one
-  leaves it out rather than guess. Whoever creates the work decides its labels then, and nothing changes them after.
+  leaves it out rather than guess. Whoever creates the work decides its labels then, as the owner said will do for now, and no op
+  changes them after.
 - **Shown as the values allowed.** A tool that takes `labels` shows each label with its values as an `enum`, and no other key, and
   says them in its description, which `ph` shows; where the team declares none, the argument is left out (§10).
-- **No reader is shown them.** `task.claim` and `task.list` show a task as they did: labels are for the record and the training
-  system that reads them on each span (§11).
+- **No claimant is shown them.** `task.claim` and `task.list` show a task as they did, the default pending the owner's ruling:
+  labels are for the record, which a person reads, and for the training system that reads them on each span (§11).
 
 See [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 
