@@ -1,7 +1,7 @@
 """How provenance reads, which the terminal and the browser say alike: one event's sources, its uses and the
-contributors to it, each link labelled by how it is known, from the four queries alone, and what estimators said of
-it, each by its producer and version. Every answer says the head it was read at, where it stops counting, whether its
-turn was still open, and what its page left out."""
+contributors to it, each link labelled by how it is known, from the four queries, and what estimators said of
+it, each by its producer and version, beside the span a model call lies in, from `spans`. Every answer says the head it
+was read at, where it stops counting, whether its turn was still open, and what its page left out."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -46,20 +46,43 @@ def shows(event: Event) -> str:
 
 
 async def read(session: Session, ref: str) -> Panel:
-    """What a panel shows of one event, asked of `session` now, each answer at a head of its own."""
+    """What a panel shows of one event, asked of `session` now, each answer at a head of its own, and for a model call
+    the spans of the turn it was reported in."""
     lineage = (await session.lineage(ref)).model_dump(mode="json")
     asked = lineage["event"]["ref"]
     uses, contributors = await session.uses(asked), await session.contributors(asked)
     said = [annotation.model_dump(mode="json") for annotation in await session.annotations(asked)]
     answers = (answer.model_dump(mode="json") for answer in (uses, contributors))
-    return Panel(lineage["event"], lines_of(session.name, lineage, *answers, said))
+    spans = await _spans_of(session, lineage["made"]) if lineage["event"]["type"] == "model.called" else None
+    return Panel(lineage["event"], lines_of(session.name, lineage, *answers, said, spans))
+
+
+async def _spans_of(session: Session, made: Answer) -> list[Answer]:
+    """The spans of the turn `made` names, oldest first, read a page at a time from an agent's first until that turn's
+    last: none for a call reported out of a turn."""
+    agent, turn = made["maker"].partition(":")[2], made["turn"]
+    if turn is None:
+        return []
+    found, after = [], None
+    while True:
+        page = await session.spans(f"@{agent}", after=after)
+        found += [span.model_dump(mode="json") for span in page.spans if span.turn == turn]
+        if page.cursor is None or (found and page.spans[-1].turn != turn):
+            return found
+        after = page.cursor
 
 
 def lines_of(
-    session: str, lineage: Answer, uses: Answer, contributors: Answer, estimates: Sequence[Answer]
+    session: str,
+    lineage: Answer,
+    uses: Answer,
+    contributors: Answer,
+    estimates: Sequence[Answer],
+    spans: Sequence[Answer] | None = None,
 ) -> list[Line]:
     """The lines of one event's panel: the event, then its sources, its uses, its contributors and what estimators
-    said of it."""
+    said of it. For a model call `spans` are the spans of the turn it was reported in, which say the span it lies in,
+    and for any other event None."""
     event = lineage["event"]
     asked = event["ref"]
     return [
@@ -67,7 +90,7 @@ def lines_of(
         *_sources(session, lineage),
         *_uses(session, asked, uses),
         *_contributors(session, asked, contributors),
-        *_estimates(estimates),
+        *_estimates(estimates, [] if spans is None else _span(lineage, spans)),
     ]
 
 
@@ -340,12 +363,60 @@ def _contributors(session: str, asked: str, contributors: Answer) -> list[Line]:
     return lines
 
 
-def _estimates(estimates: Sequence[Answer]) -> list[Line]:
+def _version(ref: str) -> int:
+    return int(ref.rpartition("@")[2])
+
+
+def _span(lineage: Answer, spans: Sequence[Answer]) -> list[Line]:
+    """What a credit row on a model call is about: the whole span the call names, from its first call to it, with the
+    writes the record ties to its calls, and for a turn of one span why nothing cut it; or the span a call that names
+    none lies in; or none, for a call out of a turn."""
+    asked, who = lineage["event"]["ref"], _who(lineage["made"]["maker"])
+    at = _version(asked)
+    span = next((span for span in spans if _version(span["first"]) <= at <= _version(span["ref"])), None)
+    if span is None:
+        said = "it lies in no span, so no credit row on it is a span's: a span holds only calls reported in a turn"
+        return [Line("", said)]
+    if span["ref"] != asked:
+        said = f"it names no span, so no credit row on it is a span's: it lies in the one {span['ref']} names"
+        return [Line("", said, span["ref"])]
+    turn, first = span["turn"], span["first"]
+    named = f"it names a span of {who}'s, so a credit row on it is the whole span's"
+    if first == asked:
+        lines = [Line("", f"{named}: this one model call, in turn {turn}")]
+    else:
+        lines = [Line("", f"{named}: the model calls in turn {turn} from {first} to this one", first)]
+    lines += [Line("", f"one of the span's calls chose the write {write}", write) for write in span["writes"]]
+    if not span["writes"]:
+        lines.append(Line("", "the record ties no write to the span's calls"))
+    if len(spans) == 1:
+        lines.append(Line("", _whole(who, span["writes"])))
+    if lineage["open"]:
+        lines.append(Line("", "its turn had not ended, so a later report can still cut it again", warn=True))
+    return lines
+
+
+def _whole(who: str, writes: Sequence[str]) -> str:
+    """Why nothing cut a turn of one span: a turn is cut after each call that chose a write the record ties to it, but
+    the last such call."""
+    if writes:
+        return (
+            "its turn is one span, as one call alone chose the writes the record ties to it, and a turn is cut after "
+            "each call that chose one but the last"
+        )
+    return (
+        f"its turn is one span, as the record ties no write of it to the call that chose it: {who} wrote nothing in "
+        "it, or its harness joins no tool call to the model call that chose it, which makes each of its turns one span"
+    )
+
+
+def _estimates(estimates: Sequence[Answer], span: list[Line]) -> list[Line]:
     """What estimators said of the event, each its producer's at its version and params, never a fact, and never
-    summed."""
+    summed, after what a row on a model call is about."""
     lines = [
         Line("heading", "Credit and rewards"),
         Line("", "what estimators said of it, beside the record: each an estimate by its producer at its version"),
+        *span,
     ]
     for said in estimates:
         by = f"by {said['producer']}, version {said['producer_version']}, params {said['params_hash'][:8]}"

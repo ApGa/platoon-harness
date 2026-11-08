@@ -106,6 +106,14 @@ the agent's latest turn has not ended, as a tool item reported late can still jo
 claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
 last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
 
+The terminal's and the browser's provenance say it on a model call, under Credit and rewards: on the call that names a span, that a
+credit row on it is the whole span's, the calls of its turn from its first to this one, with each write the record ties to them,
+and on any other call, which span it lies in. A turn of one span says why nothing cut it: one call alone chose the writes the
+record ties to it, or the record ties none, as when the agent wrote nothing in it or its harness joins no tool call to the model
+call that chose it, as OpenHands and Codex do not, which makes each of their turns one span. The panel reads `spans` a page at a
+time, from the agent's first to the one that holds that turn's last span, so on an agent of many spans it takes a page for each 32
+before it.
+
 ## Who reached whom
 
 `interactions`, `Session.interactions` and `platoon-harness interactions` count the agent interaction graph from the record: each

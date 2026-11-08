@@ -41,6 +41,11 @@ named here is closed.
   ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
   `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
+- **A span's credit row said to be the whole span's.** On a model call, the terminal's provenance panel and the page's
+  Provenance pane say under Credit and rewards which span the call lies in, read from `spans`: on the call that names a
+  span, that a credit row on it is the whole span's, from its first call to this one in its turn, with each write the
+  record ties to its calls; on any other call, the span it lies in; and on a turn of one span, why nothing cut it. Before,
+  a span's row showed as a statement about its last call alone.
 - **A task's or an entry's act opens its op's form, filled in.** In the terminal's `/tasks` and the page's Tasks and
   Entries, Add a task or Post an entry, Claim on an open or a failed task, Complete, Fail, Release and Renew on one you
   hold, Add it again on a dead one and Revise on an entry each open their op's form, the palette's in the terminal and the

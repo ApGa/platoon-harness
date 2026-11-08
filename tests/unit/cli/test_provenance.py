@@ -2,18 +2,19 @@
 how it is known, each answer's head, bound, open turn and what its page left out, unknown with its reasons, and credit
 only as what an estimator said."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from platoon_harness.kernel import Kernel, ManualClock
-from platoon_harness.primitives import PRIMITIVES
+from platoon_harness.primitives import PRIMITIVES, Spans
+from platoon_harness_cli import provenance
 from platoon_harness_cli.provenance import Line, lines_of
 
 from ..kernel.support import grant, result_of
-from ..primitives.support import ROLES, channel, confirm, of_type, report, send, spawn, start_turn
+from ..primitives.support import ROLES, channel, confirm, end_turn, of_type, report, send, spawn, start_turn
 from ..primitives.test_provenance import (
     CHILD,
     CITED,
@@ -28,6 +29,8 @@ from ..primitives.test_provenance import (
     stored,
     tool,
 )
+from ..primitives.test_spans import called, wrote
+from ..primitives.test_spans import team as spanned
 
 ESTIMATE = {"kind": "credit", "scope": "team", "status": "scored", "head_seq": 49, "producer_version": "0"}
 ESTIMATE |= {"params_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"}
@@ -57,10 +60,23 @@ async def kernel(tmp_path: Path, repo: dict[str, Any] | None) -> AsyncIterator[K
     found.close()
 
 
-def lines(kernel: Kernel, ref: str, estimates: list[dict[str, Any]] = ()) -> list[Line]:
+def lines(
+    kernel: Kernel, ref: str, estimates: Sequence[dict[str, Any]] = (), spans: list[dict[str, Any]] | None = None
+) -> list[Line]:
     """What a panel says of `ref`, from the queries' answers as both clients take them."""
     answers = [ask(kernel, query, ref=ref) for query in ("lineage", "uses", "contributors")]
-    return lines_of("s", *answers, list(estimates))
+    return lines_of("s", *answers, list(estimates), spans)
+
+
+def turn_of(kernel: Kernel, call: str) -> list[dict[str, Any]]:
+    """The spans of the turn `w`'s model call `call` was reported in, which a panel on it is given."""
+    turn = ask(kernel, "lineage", ref=call)["made"]["turn"]
+    return [span for span in ask(kernel, "spans", agent="@w")["spans"] if span["turn"] == turn]
+
+
+def credit(kernel: Kernel, call: str, *estimates: dict[str, Any]) -> list[Line]:
+    """What a panel on `w`'s model call `call` says under Credit and rewards."""
+    return part(lines(kernel, call, estimates, turn_of(kernel, call)), "Credit and rewards")
 
 
 def part(found: list[Line], heading: str) -> list[Line]:
@@ -371,3 +387,111 @@ async def test_estimates_that_differ_only_in_their_params_say_so(kernel):
         "0.25 by even-split, version 0, params 44136fa3",
         "0.75 by even-split, version 0, params e070fd00",
     ]
+
+
+async def test_a_span_s_credit_row_is_said_to_be_the_whole_span_s_with_its_bounds(kernel):
+    """A row on the model call that names a span is the whole span's, from its first call to that one, with the writes
+    the record ties to its calls; a call that names none says which span it lies in, one out of a turn lies in none, and
+    one in a turn still under way says that a later report can still cut it."""
+    await spanned(kernel)
+    outside = await called(kernel, "c0")
+    await start_turn(kernel, "w", "t1")
+    c1, c2 = await called(kernel, "c1"), await called(kernel, "c2")
+    one = await wrote(kernel, "c2", "one")
+    c3 = await called(kernel, "c3")
+    two = await wrote(kernel, "c3", "two")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    c4 = await called(kernel, "c4")
+    row = {**ESTIMATE, "scope": "local", "producer": "propagate", "value": 0.25}
+
+    named, alone, inside = credit(kernel, c2, row), credit(kernel, c3), credit(kernel, c1)
+    under_way, out_of_a_turn = credit(kernel, c4), credit(kernel, outside)
+
+    whole = "it names a span of @w's, so a credit row on it is the whole span's:"
+    assert named[1:] == [
+        Line("", f"{whole} the model calls in turn t1 from {c1} to this one", c1),
+        Line("", f"one of the span's calls chose the write {one}", one),
+        Line("credit", "0.25 by propagate, version 0, params 44136fa3, local, of the trace at head 49"),
+    ]
+    assert alone[1:] == [
+        Line("", f"{whole} this one model call, in turn t1"),
+        Line("", f"one of the span's calls chose the write {two}", two),
+        Line("", "no estimator has said anything of it"),
+    ]
+    assert inside[1:] == [
+        Line("", f"it names no span, so no credit row on it is a span's: it lies in the one {c2} names", c2),
+        Line("", "no estimator has said anything of it"),
+    ]
+    assert under_way[1] == Line("", f"{whole} this one model call, in turn t2")
+    assert under_way[-2] == Line("", "its turn had not ended, so a later report can still cut it again", warn=True)
+    assert out_of_a_turn[1:] == [
+        Line("", "it lies in no span, so no credit row on it is a span's: a span holds only calls reported in a turn"),
+        Line("", "no estimator has said anything of it"),
+    ]
+
+
+async def test_a_turn_of_one_span_says_why_its_harness_cuts_it_no_further(kernel):
+    """A turn whose writes the record ties to no call, as each turn of a harness that joins no tool call to its call
+    is, and one whose writes one call alone chose, are each one span, and say why."""
+    await spanned(kernel)
+    await start_turn(kernel, "w", "t1")
+    await called(kernel, "c1")
+    await wrote(kernel, "c1", "unanchored", how="unanchored")
+    c2 = await called(kernel, "c2")
+    await wrote(kernel, "c2", "unnamed", how="unnamed")
+    await end_turn(kernel, "w")
+    await start_turn(kernel, "w", "t2")
+    await called(kernel, "c3")
+    one, two = await wrote(kernel, "c3", "one"), await wrote(kernel, "c3", "two")
+    c4 = await called(kernel, "c4")
+    await end_turn(kernel, "w")
+
+    unjoined, chosen_once = credit(kernel, c2), credit(kernel, c4)
+
+    assert unjoined[2:] == [
+        Line("", "the record ties no write to the span's calls"),
+        Line(
+            "",
+            "its turn is one span, as the record ties no write of it to the call that chose it: @w wrote nothing in "
+            "it, or its harness joins no tool call to the model call that chose it, which makes each of its turns one "
+            "span",
+        ),
+        Line("", "no estimator has said anything of it"),
+    ]
+    assert [line.ref for line in chosen_once[2:4]] == [one, two]
+    assert chosen_once[4] == Line(
+        "",
+        "its turn is one span, as one call alone chose the writes the record ties to it, and a turn is cut after each "
+        "call that chose one but the last",
+    )
+
+
+async def test_a_span_is_found_on_whichever_page_of_its_agent_s_spans_holds_it(kernel):
+    """`spans` answers a page at a time, so the panel reads on until the turn of the call it asks about has ended, and
+    no further."""
+    asked: list[str | None] = []
+
+    class Asked:
+        """What the panel asks of a session for a model call's spans, answered by `kernel` as a session answers."""
+
+        async def spans(self, agent: str, *, after: str | None = None) -> Spans:
+            asked.append(after)
+            return Spans.model_validate(ask(kernel, "spans", agent=agent, after=after))
+
+    await spanned(kernel)
+    calls = []
+    for turn in range(40):
+        await start_turn(kernel, "w", f"t{turn}")
+        calls.append(await called(kernel, f"c{turn}"))
+        await end_turn(kernel, "w")
+
+    pages = []
+    for call in (calls[0], calls[33], calls[39]):
+        asked.clear()
+        made = ask(kernel, "lineage", ref=call)["made"]
+        found = await provenance._spans_of(Asked(), made)  # type: ignore[arg-type]
+        pages.append(len(asked))
+        assert [span["ref"] for span in found] == [call]
+
+    assert pages == [1, 2, 2]
