@@ -121,7 +121,9 @@ class DriverInfo(Model):
 
 `doctor --check` runs the SDK's checks as before, and for each other installed driver it finds whose `describe` names a check, that
 check, in the same folder under the root, keeping what it found the same way. `check_harness(name, folder)` runs either. A named
-check that returns a result of another class than the driver's is refused, as it would speak for a driver it did not check. A
+check that returns a result of another class than the driver's, or of another harness's name, is refused, as it would speak for a
+driver it did not check, and would replace what was kept of that harness. A check that breaks, or returns no `Conformance`, is
+refused too, saying why, as another distribution ships it, and `doctor --check` goes on past it. A
 result is pinned to the class that implements the driver, and for a class outside the SDK now also to the distribution and version
 that hold it, so that an upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
 ([RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md)).

@@ -624,7 +624,8 @@ The runtime earns an agent's levels from a result kept under the root, one for e
 check ships for, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. A check
 ships for each harness `levels.CHECKED` names, which the SDK drives, and for an installed driver whose `describe` names one in
 `DriverInfo.check`, as `module:function`: a coroutine function of the folder to run in that returns what `check_driver` found,
-imported only to run it, and refused if what it found is of another class than the driver's. The `opencode` driver names its own
+imported only to run it, and refused if what it found is of another class than the driver's or names another harness, or if it
+breaks. The `opencode` driver names its own
 this way. The host reads a kept result at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body,
 beside the levels it gave, where it speaks for that harness. A level with no result that speaks for the harness that runs says so,
 and names what makes one: `doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for

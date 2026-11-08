@@ -181,6 +181,21 @@ class Liar(ScriptedDriver):
         return DriverInfo(name="liar", check="doctor_named:lie")
 
 
+class Thief(ScriptedDriver):
+    def describe(self):
+        return DriverInfo(name="thief", check="doctor_named:steal")
+
+
+class Broken(ScriptedDriver):
+    def describe(self):
+        return DriverInfo(name="broken", check="doctor_named:breaks")
+
+
+class Odd(ScriptedDriver):
+    def describe(self):
+        return DriverInfo(name="odd", check="doctor_named:odd")
+
+
 def found(made, driver):
     checks = (Check(name="turn_end_reported", state="passed"),)
     pinned = {"implementation": made, "sdk": __version__, "host": socket.gethostname()}
@@ -194,26 +209,43 @@ async def check(folder):
 
 async def lie(folder):
     return found(implementation(Named()), "liar")
+
+
+async def steal(folder):
+    return found(implementation(Thief()), "named")
+
+
+async def breaks(folder):
+    raise RuntimeError("it fell over")
+
+
+async def odd(folder):
+    return "all good"
 """
-"""An installed distribution's two drivers, each naming a check: one of itself, and one of the other's class."""
+"""An installed distribution's drivers, each naming a check: one of itself, one of the first's class, one of its own
+class under the first's name, one that breaks, and one that finds no result."""
 
 
 def test_doctor_checks_an_installed_driver_that_names_its_check(home, tmp_path, monkeypatch, capsys):
     """`--check` runs the check an installed driver names, in the folder it keeps results beside, and keeps what it
     found, pinned to the driver's class and the release that holds it, as it does a check of the SDK's own. A check
-    whose result is of another class than its driver's speaks for a driver it did not check, so it keeps nothing."""
+    whose result is of another class than its driver's, or names another harness, speaks for a driver it did not check,
+    so it keeps nothing, and leaves that harness's result as it was; and one that breaks, or finds no result, keeps
+    nothing either, saying why, and doctor goes on."""
     site = tmp_path / "site"
     site.mkdir()
     (site / "doctor_named.py").write_text(NAMED)
     info = site / "doctor_named-2.0.0.dist-info"
     info.mkdir()
     (info / "METADATA").write_text("Metadata-Version: 2.1\nName: doctor-named\nVersion: 2.0.0\n")
-    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\nnamed = doctor_named:Named\nliar = doctor_named:Liar\n")
+    names = ("named", "liar", "thief", "broken", "odd")
+    points = "".join(f"{name} = doctor_named:{name.title()}\n" for name in names)
+    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\n{points}")
     monkeypatch.syspath_prepend(site)
-    for name in ("named", "liar"):
+    for name in names:
         (tmp_path / "bin" / name).write_text('#!/bin/sh\necho "1.0"\n')
         (tmp_path / "bin" / name).chmod(0o755)
-    monkeypatch.setattr(machine, "harnesses", lambda: [(name, load(DRIVERS, name)()) for name in ("named", "liar")])
+    monkeypatch.setattr(machine, "harnesses", lambda: [(name, load(DRIVERS, name)()) for name in names])
 
     machine.doctor()
     before = lines(capsys.readouterr().out)
@@ -225,8 +257,18 @@ def test_doctor_checks_an_installed_driver_that_names_its_check(home, tmp_path, 
     assert code == 0 and (home / "conformance" / "named" / "ran").read_text() == "here"
     assert kept is not None and kept.implementation == "doctor_named:Named, doctor-named 2.0.0"
     assert said["named"] == "1.0, login unknown, checked on 1.0: 1 passed, 0 skipped, none failed"
-    assert read_conformance(home, "liar") is None
+    assert [read_conformance(home, name) for name in ("liar", "thief", "broken", "odd")] == [None] * 4
     assert said["liar+"] == (
         "--check kept nothing: its check could not run: its check doctor_named:lie checked doctor_named:Named, "
         "doctor-named 2.0.0, and liar is doctor_named:Liar, doctor-named 2.0.0"
+    )
+    assert said["thief+"] == (
+        "--check kept nothing: its check could not run: its check doctor_named:steal checked named, and this is thief"
+    )
+    assert said["broken+"] == (
+        "--check kept nothing: its check could not run: its check doctor_named:breaks broke: RuntimeError: it fell over"
+    )
+    assert said["odd+"] == (
+        "--check kept nothing: its check could not run: its check doctor_named:odd found str, where `check_driver` "
+        "finds a Conformance"
     )

@@ -162,9 +162,10 @@ _HARNESSES: dict[str, tuple[Factory, Callable[[Path], dict[str, Any]]]] = {
 async def check_harness(name: str, folder: Path) -> Conformance:
     """Run every check on the harness `name` as it is installed here, against FakeModel, in `folder`, and say what it
     found, pinned to the driver, the harness version that answered, this SDK and this host: the SDK's own check of a
-    harness `CHECKED` names, or else the check the installed driver of that name names in its `DriverInfo.check`, which
-    is refused if what it found is of another class than that driver's, as it would speak for a driver it did not check.
-    A harness no check ships for is refused."""
+    harness `CHECKED` names, or else the check the installed driver of that name names in its `DriverInfo.check`. What
+    that check found is refused if it names another harness, or another class than that driver's, as it would speak for
+    a driver it did not check, and a check that breaks, or finds no `Conformance`, is refused, saying why. A harness no
+    check ships for is refused."""
     if name in CHECKED:
         factory, given = _HARNESSES[name]
         options: dict[str, Any] = given(folder)
@@ -175,10 +176,13 @@ async def check_harness(name: str, folder: Path) -> Conformance:
     if named is None:
         raise DriverError(f"no check of {name} ships with its driver: run `check_driver` on it")
     try:
-        check = metadata.EntryPoint(name, named, DRIVERS).load()
-    except (ImportError, AttributeError) as error:
-        raise DriverError(f"its check {named} cannot be loaded: {error}") from error
-    found: Conformance = await check(folder)
+        found = await metadata.EntryPoint(name, named, DRIVERS).load()(folder)
+    except Exception as error:  # A check another distribution ships, which no failure of its may take doctor down.
+        raise DriverError(f"its check {named} broke: {type(error).__name__}: {error}") from error
+    if not isinstance(found, Conformance):
+        raise DriverError(f"its check {named} found {type(found).__name__}, where `check_driver` finds a Conformance")
+    if found.driver != name:
+        raise DriverError(f"its check {named} checked {found.driver}, and this is {name}")
     if found.implementation != (made := implementation(driver)):
         raise DriverError(f"its check {named} checked {found.implementation}, and {name} is {made}")
     return found
