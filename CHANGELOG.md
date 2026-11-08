@@ -47,11 +47,13 @@ named here is closed.
   why, in the one wording both clients use. `p` in the transcript still shows the chosen line's provenance at once. This
   is the default pending the owner's ruling, in place of search by ref.
 - **A ref in a message's text opens its own provenance.** In the terminal's transcript each ref a line's words name is
-  underlined, and in the page each ref a message's text names is a button, and either opens that ref's own provenance,
-  which says first that it was opened from a ref in text, which records no link, or that the ref names no event. A ref is
-  found in text by one pattern both clients follow, standing apart from the words around it, so none is found inside a
-  link's address. The pane's address says `from=text`, and `x_read`'s `provenance` pane takes `from`. A refusal in the
-  pane now says why in the terminal's words, `… has no provenance to show: …`. Before, a ref in text was only words.
+  underlined, and in the page each ref a message's text names is a button, and either opens that ref's own provenance, which
+  says first that it was opened from a ref in text, which records no link, or that the ref names no event. A ref is found in
+  text by one pattern both clients follow, standing apart from the words around it, so none is found inside a link's
+  address. A ref in an opened line's body in the terminal is no link, nor in the page one in a fenced code block or in a
+  message Search draws with its matches marked. The pane's address says `from=text`, and `x_read`'s `provenance` pane takes
+  `from`. A refusal in the pane now says why in the terminal's words, `… has no provenance to show: …`. Before, a ref in
+  text was only words.
 - **A turn's cuts drawn in the terminal UI.** An agent's transcript draws a line where each span of a turn but its last
   ends, as `spans` cuts it, under what the span's calls made and above the next span's first call, naming the span by
   its last call, which `/provenance` on the line opens. The cuts are read as the agent is shown and again as each of its

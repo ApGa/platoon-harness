@@ -145,17 +145,20 @@ a plan login on loopback alone: see [Security](#security).
 - **Provenance.** Provenance among a message's actions opens a pane on the event the message shows, in the words the terminal's
   `/provenance` uses ([tui.md](tui.md) has them part by part): Sources, Uses, Contributors, and Credit and rewards. It begins
   "This is what the record holds: a citation is the agent's claim, being handed something is not using it, and what reached an
-  agent through a file or a shell leaves nothing here. An estimate is its producer's, never a fact." Each link is labelled by how it
-  is known, and choosing it, by a click or by Tab and Enter, shows that event's provenance, and when a chat shows the event, opens
-  that chat at its message too. A message's actions show while focus is in it, so Tab reaches Provenance.
-  The address names the event, so Back goes back a hop and a reload keeps it, and Esc or × closes the pane. It is read when it opens,
-  and again when its Provenance is pressed again. It is a read, so a view link has it, and on history it answers what the journal
-  holds. Credit is only what an estimator said, by producer, version and params. Each ref a message's text names, standing apart
-  from the words around it and in no link's address, is a button, which Tab reaches, and opens that ref's own pane, which says first
-  that it was opened from a ref in text, which records no link: naming an event in text is no citation. The address says so too,
-  `from=text`, so a reload keeps it. One that names no event says so in the pane. The pane's field holds the ref it shows, and a
-  ref typed there, `stream@version`, opens that event's pane, as the terminal's `/provenance` form does, or the pane says why it
-  opens none, in the terminal's words; the browser does not send a field that holds no ref, and says what it takes.
+  agent through a file or a shell leaves nothing here. An estimate is its producer's, never a fact." Each link is labelled by how
+  it is known, and choosing it, by a click or by Tab and Enter, shows that event's provenance, and when a chat shows the event,
+  opens that chat at its message too. A message's actions show while focus is in it, so Tab reaches Provenance. The address names
+  the event, so Back goes back a hop and a reload keeps it, and Esc or × closes the pane. It is read when it opens, and again when
+  its Provenance is pressed again. It is a read, so a view link has it, and on history it answers what the journal holds. Credit
+  is only what an estimator said, by producer, version and params. Each ref a message's text names, standing apart from the words
+  around it and in no link's address, is a button, which Tab reaches, and opens that ref's own pane, which says first that it was
+  opened from a ref in text, which records no link: naming an event in text is no citation. The address says so too, `from=text`,
+  so a reload keeps it. One that names no event says so in the pane. A ref in a fenced code block, or in a message Search draws
+  with its matches marked, is no button, as SwarmChat draws those apart from the rest of a message's text, where a mark or a
+  highlighted token could split a ref. The pane's field holds the ref it shows, and a ref typed there, `stream@version`, opens
+  that event's pane, as the terminal's `/provenance` form does, or the pane says why it opens none, in the terminal's words; the
+  browser does not send a field that holds no ref, and says what it takes. Opening a ref by hand, rather than searching by ref, is
+  the default pending the owner's ruling.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.

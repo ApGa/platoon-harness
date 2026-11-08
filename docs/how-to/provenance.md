@@ -165,9 +165,11 @@ A ref a message's text names is a link in both, a click on it in the terminal's 
 ref's own provenance, which says first that it was opened from a ref in text, which records no link. Naming an event in text is no
 citation, so nothing checks it, and one that names no event says so. A ref is found in text as `stream@version`, with `#La-b` for
 lines, standing apart from the words around it, so none is found inside a link's address, by one pattern both clients follow,
-`REF_IN_TEXT` in `platoon_harness_cli.provenance`. A ref can be opened by hand too: through `/provenance`'s form in the terminal,
-filled in with the chosen line's, and the pane's field in the page, each showing that event's provenance, or why there is none.
-Opening a ref by hand, rather than searching by ref, is the default pending the owner's ruling.
+`REF_IN_TEXT` in `platoon_harness_cli.provenance`. Not every ref a text names is a link: in the terminal, one in the body of an
+opened line is none, and in the page, one in a fenced code block or in a message Search draws with its matches marked. A ref can
+be opened by hand too: through `/provenance`'s form in the terminal, filled in with the chosen line's, and the pane's field in the
+page, each showing that event's provenance, or why there is none. Opening a ref by hand, rather than searching by ref, is the
+default pending the owner's ruling.
 
 ## What `unknown` means
 

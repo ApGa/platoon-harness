@@ -926,8 +926,9 @@ openAsPicker = anchor => {
 };
 
 // A ref a text names is a button, which opens that ref's own provenance, saying it was opened from text, which records
-// no link. Python's pattern finds it, so both clients find the same refs; a tag, and a link with its words, are passed
-// over, so no ref in an address becomes a button.
+// no link. Python's pattern finds it, so both clients find a ref alike; a tag, and a link with its words, are passed
+// over, so no ref in an address becomes a button. SwarmChat draws a fenced code block and a message Search marks apart
+// from this, so a ref in either is no button, as a mark or a highlighted token could split it.
 const baseInline = inline;
 inline = text => {
   if (!X.caps) return baseInline(text);
